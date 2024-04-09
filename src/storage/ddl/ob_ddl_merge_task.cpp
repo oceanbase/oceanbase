@@ -719,7 +719,7 @@ int get_sstables(ObTableStoreIterator &ddl_sstable_iter, const int64_t cg_idx, O
       if (OB_ISNULL(cur_co_sstable)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("current co sstable is null", K(ret), KP(cur_co_sstable));
-      } else if (cur_co_sstable->is_empty_co_table()) {
+      } else if (cur_co_sstable->is_cgs_empty_co_table()) {
         // skip
       } else if (OB_FAIL(cur_co_sstable->fetch_cg_sstable(cg_idx, cg_sstable_wrapper))) {
         LOG_WARN("get all tables failed", K(ret));
@@ -1050,7 +1050,7 @@ int compact_co_ddl_sstable(
       LOG_WARN("compact base sstable failed", K(ret));
     } else {
       // empty major co sstable, no need fill cg sstables
-      need_fill_cg_sstables = !static_cast<ObCOSSTableV2 *>(co_sstable_handle.get_table())->is_empty_co_table();
+      need_fill_cg_sstables = !static_cast<ObCOSSTableV2 *>(co_sstable_handle.get_table())->is_cgs_empty_co_table();
     }
     if (OB_SUCC(ret) && need_fill_cg_sstables) {
       if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(cg_index_read_info))) {

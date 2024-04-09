@@ -2151,7 +2151,10 @@ int ObRFInFilterMsg::prepare_query_ranges()
     // we need to deduplicate to avoid duplicate range
     ret = process_query_ranges_with_deduplicate();
   }
-  LOG_TRACE("in filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_), K(query_range_info_), K(is_empty_));
+  LOG_TRACE("in filter prepare query range", K(ret), K(is_query_range_ready_),
+            K(query_range_.count()), K(rows_set_.size()),
+            K(query_range_info_.prefix_col_idxs_.count()), K(col_cnt_), K(query_range_),
+            K(query_range_info_), K(is_empty_));
   return ret;
 }
 

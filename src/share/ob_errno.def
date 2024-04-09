@@ -704,6 +704,11 @@ DEFINE_ORACLE_ERROR(OB_ERR_INDEX_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4776,
 DEFINE_ORACLE_ERROR(OB_ERR_CHECK_CONSTRAINT_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4777, -1, "HY000", "CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION", 14118, "CHECK constraint mismatch in ALTER TABLE EXCHANGE PARTITION");
 DEFINE_ORACLE_ERROR(OB_ERR_FOREIGN_KEY_MISMATCH_ALTER_TABLE_EXCHANGE_PARTITION, -4778, -1, "HY000", "FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION", 14128, "FOREIGN KEY constraint mismatch in ALTER TABLE EXCHANGE PARTITION");
 DEFINE_ORACLE_ERROR(OB_ERR_EXCHANGE_COMPOSITE_PARTITION, -4779, ER_PARTITION_INSTEAD_OF_SUBPARTITION, "HY000", "Subpartitioned table, use subpartition instead of partition", 14291, "cannot EXCHANGE a composite partition with a non-partitioned table");
+DEFINE_ERROR(OB_SERVICE_NAME_NOT_FOUND, -4780, -1, "HY000", "This service_name is not found in the tenant");
+DEFINE_ERROR(OB_SERVICE_NOT_FULLY_STARTED, -4781, -1, "HY000", "The service has not started on all servers");
+DEFINE_ERROR(OB_NOT_PRIMARY_TENANT, -4782, -1, "HY000", "The tenant is not PRIMARY");
+DEFINE_ERROR(OB_SERVICE_STOPPED, -4783, -1, "HY000", "The service has stopped");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // RootServer错误码值域[-4500, -5000)

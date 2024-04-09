@@ -2490,6 +2490,7 @@ priv_select	bigint(20)	NO		0
 priv_index	bigint(20)	NO		0	
 priv_create_view	bigint(20)	NO		0	
 priv_show_view	bigint(20)	NO		0	
+priv_others	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2514,6 +2515,7 @@ priv_select	bigint(20)	YES		0
 priv_index	bigint(20)	YES		0	
 priv_create_view	bigint(20)	YES		0	
 priv_show_view	bigint(20)	YES		0	
+priv_others	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5411,6 +5413,8 @@ authorization	varchar(1024)	NO		NULL
 extension	varchar(512)	NO		NULL	
 check_file_name	varchar(256)	YES			
 last_check_time	bigint(20)	YES		0	
+max_iops	bigint(20)	NO		0	
+max_bandwidth	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_storage_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6157,6 +6161,8 @@ create_time	bigint(20)	NO		NULL
 zone_type	varchar(128)	NO		NULL	
 region	varchar(128)	NO		NULL	
 data_disk_size	bigint(20)	YES		NULL	
+max_net_bandwidth	bigint(20)	YES		NULL	
+net_bandwidth_weight	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_unit;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6957,6 +6963,8 @@ authorization	varchar(1024)	NO		NULL
 extension	varchar(512)	NO		NULL	
 check_file_name	varchar(256)	YES			
 last_check_time	bigint(20)	YES		0	
+max_iops	bigint(20)	NO		0	
+max_bandwidth	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_storage_info_history;
 IF(count(*) >= 0, 1, 0)
 1

@@ -675,6 +675,7 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     execute_single_row_(false),
     err_log_rt_def_(),
     dml_modify_rows_(ctx.get_allocator()),
+    last_store_row_(),
     saved_session_(NULL)
 {
   obj_print_params_ = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());

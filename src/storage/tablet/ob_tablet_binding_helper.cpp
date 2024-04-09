@@ -175,7 +175,8 @@ int ObTabletBindingHelper::get_tablet_for_new_mds(const ObLS &ls, const ObTablet
   const ObTabletMapKey key(ls.get_ls_id(), tablet_id);
   const bool for_replay = replay_scn.is_valid();
   if (for_replay) {
-    if (OB_FAIL(ls.replay_get_tablet_no_check(tablet_id, replay_scn, handle))) {
+    const bool replay_allow_tablet_not_exist = true;
+    if (OB_FAIL(ls.replay_get_tablet_no_check(tablet_id, replay_scn, replay_allow_tablet_not_exist, handle))) {
       if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
         ret = OB_NO_NEED_UPDATE;
         LOG_WARN("clog is obsolete, should skip replay", K(ret));
@@ -331,7 +332,11 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
       }
     } else {
       if (CLICK_FAIL(ls.get_tablet_svr()->set_ddl_info(tablet_id, std::move(data), user_ctx, 0/*lock_timeout_us*/))) {
-        LOG_WARN("failed to save tablet binding info", K(ret));
+        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+          ret = OB_EAGAIN;
+        } else {
+          LOG_WARN("failed to save tablet binding info", K(ret));
+        }
       }
     }
   }

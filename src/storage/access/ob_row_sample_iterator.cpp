@@ -17,57 +17,6 @@ namespace oceanbase
 using namespace common;
 namespace storage
 {
-ObRowSampleIterator::ObRowSampleIterator(const SampleInfo &sample_info)
-  : ObISampleIterator(sample_info),
-    iterator_(nullptr),
-    row_num_(0)
-{
-}
-
-ObRowSampleIterator::~ObRowSampleIterator()
-{
-}
-
-int ObRowSampleIterator::open(ObQueryRowIterator &iterator)
-{
-  int ret = OB_SUCCESS;
-  iterator_ = &iterator;
-  row_num_ = 0;
-  return ret;
-}
-
-void ObRowSampleIterator::reuse()
-{
-  row_num_ = 0;
-}
-
-int ObRowSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
-{
-  int ret = OB_SUCCESS;
-  bool found_next_row = false;
-  if (OB_ISNULL(iterator_)) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "row sample iterator is not inited", K(ret), KP_(iterator));
-  } else {
-    while (OB_SUCC(ret) && !found_next_row) {
-      if (OB_FAIL(iterator_->get_next_row(row))) {
-        if (OB_ITER_END != ret) {
-          STORAGE_LOG(WARN, "multiple merge failed to get next row", K(ret));
-        }
-      } else if (return_this_sample(row_num_++)) {
-        found_next_row = true;
-      }
-    }
-  }
-  return ret;
-}
-
-void ObRowSampleIterator::reset()
-{
-  iterator_ = nullptr;
-  row_num_ = 0;
-}
-
 int ObMemtableRowSampleIterator::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;

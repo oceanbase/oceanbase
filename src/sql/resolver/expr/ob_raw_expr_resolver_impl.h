@@ -202,6 +202,8 @@ private:
   int process_odbc_time_literals(const ObItemType dst_time_type,
                                  const ParseNode *expr_node,
                                  ObRawExpr *&expr);
+  int process_sql_udt_construct_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_sql_udt_attr_access_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_element_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_node(const ParseNode *node, ObRawExpr *&expr);
   int process_xml_attributes_values_node(const ParseNode *node, ObRawExpr *&expr);
@@ -305,7 +307,8 @@ inline bool ObRawExprResolverImpl::is_pseudo_column_valid_scope(ObStmtScope scop
       || scope == T_ORDER_SCOPE
       || scope == T_CONNECT_BY_SCOPE
       || scope == T_WITH_CLAUSE_SEARCH_SCOPE
-      || scope == T_WITH_CLAUSE_CYCLE_SCOPE;
+      || scope == T_WITH_CLAUSE_CYCLE_SCOPE
+      || scope == T_START_WITH_SCOPE;
 }
 
 

@@ -433,10 +433,15 @@ int ObSortOp::init_sort(int64_t tenant_id,
                         int64_t topn_cnt)
 {
   int ret = OB_SUCCESS;
+  int64_t est_rows = MY_SPEC.rows_;
+  if (OB_FAIL(ObPxEstimateSizeUtil::get_px_size(
+      &ctx_, MY_SPEC.px_est_size_factor_, est_rows, est_rows))) {
+    LOG_WARN("failed to get px size", K(ret));
+  }
   OZ(sort_impl_.init(tenant_id, &MY_SPEC.sort_collations_, &MY_SPEC.sort_cmp_funs_,
       &eval_ctx_, &ctx_, MY_SPEC.enable_encode_sortkey_opt_, MY_SPEC.is_local_merge_sort_,
       false /* need_rewind */, MY_SPEC.part_cnt_, topn_cnt, MY_SPEC.is_fetch_with_ties_,
-      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_));
+      ObChunkDatumStore::BLOCK_SIZE, MY_SPEC.compress_type_, &MY_SPEC.all_exprs_, est_rows));
   if (is_batch) {
     read_batch_func_ = &ObSortOp::sort_impl_next_batch;
   } else {

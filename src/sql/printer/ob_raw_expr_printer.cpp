@@ -20,6 +20,7 @@
 #include "lib/worker.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
+#include "lib/geo/ob_sdo_geo_object.h"
 
 namespace oceanbase
 {
@@ -1172,6 +1173,12 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       }
       break;
     }
+    case T_FUN_SYS_ST_ASMVT: {
+      if (OB_FAIL(print_st_asmvt(expr))) {
+        LOG_WARN("fail to print st asmvt.", K(ret));
+      }
+      break;
+    }
     case T_FUN_GROUP_RANK:
       SET_SYMBOL_IF_EMPTY("rank");
     case T_FUN_GROUP_DENSE_RANK:
@@ -1596,6 +1603,38 @@ int ObRawExprPrinter::print_json_return_type(ObRawExpr *expr)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprPrinter::print_st_asmvt(ObAggFunRawExpr *expr)
+{
+  INIT_SUCC(ret);
+  DATA_PRINTF("_st_asmvt(");
+  size_t param_count = expr->get_param_count();
+  if (param_count < 3) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count", K(param_count), K(ret));
+  } else {
+    int64_t extra_param_cnt = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_int() + 1;
+    if (extra_param_cnt >= param_count) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected extra param cnt", K(param_count), K(ret), K(extra_param_cnt));
+    } else if (expr->get_param_expr(extra_param_cnt)->get_expr_type() != T_REF_COLUMN) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param type", K(param_count), K(ret), K(extra_param_cnt), K(expr->get_param_expr(extra_param_cnt)->get_expr_type()));
+    } else {
+      ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr*>(expr->get_param_expr(extra_param_cnt));
+      PRINT_IDENT_WITH_QUOT(col_expr->get_database_name());
+      DATA_PRINTF(".");
+      PRINT_IDENT_WITH_QUOT(col_expr->get_table_name());
+      DATA_PRINTF(".*");
+    }
+    for (size_t i = 1; i < extra_param_cnt && OB_SUCC(ret); i++) {
+      DATA_PRINTF(" ,");
+      PRINT_EXPR(expr->get_param_expr(i));
+    }
+    DATA_PRINTF(")");
   }
   return ret;
 }
@@ -3263,6 +3302,15 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         PRINT_EXPR(expr->get_param_expr(2));
         break;
       }
+      // for bugfix: 52438113/52226266
+      case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
+        OZ(print_sql_udt_construct(expr));
+        break;
+      }
+      case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
+        OZ(print_sql_udt_attr_access(expr));
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));
@@ -4821,6 +4869,92 @@ int ObRawExprPrinter::print_xml_attributes_expr(ObSysFunRawExpr *expr)
   }
   return ret;
 }
+
+int ObRawExprPrinter::print_sql_udt_attr_access(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || (expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("doc type value isn't int value");
+  } else {
+    PRINT_EXPR(expr->get_param_expr(0));
+    DATA_PRINTF(".");
+    int64_t attr_idx = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+    switch (static_cast<ObSdoGeoAttrIdx>(attr_idx)) {
+      case ObSdoGeoAttrIdx::ObGtype: {
+        PRINT_IDENT_WITH_QUOT("SDO_GTYPE");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObSrid: {
+        PRINT_IDENT_WITH_QUOT("SDO_SRID");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointX: {
+        DATA_PRINTF("\"SDO_POINT\".\"X\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointY: {
+        DATA_PRINTF("\"SDO_POINT\".\"Y\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObPointZ: {
+        DATA_PRINTF("\"SDO_POINT\".\"Z\"");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObElemArray: {
+        PRINT_IDENT_WITH_QUOT("SDO_ELEM_INFO");
+        break;
+      }
+      case ObSdoGeoAttrIdx::ObOrdArray: {
+        PRINT_IDENT_WITH_QUOT("SDO_ORDINATES");
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid format type value", K(attr_idx), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+int ObRawExprPrinter::print_sql_udt_construct(ObSysFunRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || (expr->get_param_count() != 2)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param count of expr", K(ret), KPC(expr));
+  } else if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().is_int()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("doc type value isn't int value");
+  } else {
+    PRINT_EXPR(expr->get_param_expr(0));
+    DATA_PRINTF(".");
+    int64_t udt_id = static_cast<ObConstRawExpr*>(expr->get_param_expr(1))->get_value().get_int();
+    switch (static_cast<ObUDTType>(udt_id)) {
+      case ObUDTType::T_OBJ_SDO_POINT: {
+        PRINT_IDENT_WITH_QUOT("SDO_POINT");
+        break;
+      }
+      case ObUDTType::T_OBJ_SDO_ELEMINFO_ARRAY: {
+        PRINT_IDENT_WITH_QUOT("SDO_ELEM_INFO");
+        break;
+      }
+      case ObUDTType::T_OBJ_SDO_ORDINATE_ARRAY: {
+        PRINT_IDENT_WITH_QUOT("SDO_ORDINATES");
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid format type value", K(udt_id), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 
 } //end of namespace sql
 } //end of namespace oceanbase

@@ -29,6 +29,14 @@
 #include "lib/geo/ob_geo_func_isvalid.h"
 #include "lib/geo/ob_geo_func_distance_sphere.h"
 #include "lib/geo/ob_geo_func_within.h"
+#include "lib/geo/ob_geo_func_equals.h"
+#include "lib/geo/ob_geo_func_touches.h"
+#include "lib/geo/ob_geo_func_centroid.h"
+#include "lib/geo/ob_geo_func_crosses.h"
+#include "lib/geo/ob_geo_func_overlaps.h"
+#include "lib/geo/ob_geo_func_length.h"
+#include "lib/geo/ob_geo_func_symdifference.h"
+#include "lib/geo/ob_geo_func_dissolve_polygon.h"
 
 namespace oceanbase
 {
@@ -56,9 +64,16 @@ enum class ObGeoFuncType
   IsValid = 12,
   DistanceSphere = 13,
   Within = 14,
+  Equals = 15,
+  Touches = 16,
+  Centroid = 17,
+  Crosses = 18,
+  Overlaps = 19,
+  Length = 20,
+  SymDifference = 21,
+  DissolvePolygon = 22,
   ObGisFuncTypeMax
 };
-
 class ObGeoFuncNotImplemented
 {
 public:
@@ -158,6 +173,54 @@ template <>
 struct ObGeoFunc<ObGeoFuncType::Within>
 {
   typedef ObGeoFuncWithin gis_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Equals>
+{
+  typedef ObGeoFuncEquals geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Touches>
+{
+  typedef ObGeoFuncTouches geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Centroid>
+{
+  typedef ObGeoFuncCentroid geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Crosses>
+{
+  typedef ObGeoFuncCrosses geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Overlaps>
+{
+  typedef ObGeoFuncOverlaps geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::Length>
+{
+  typedef ObGeoFuncLength geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::SymDifference>
+{
+  typedef ObGeoFuncSymDifference geo_func;
+};
+
+template <>
+struct ObGeoFunc<ObGeoFuncType::DissolvePolygon>
+{
+  typedef ObGeoFuncDissolvePolygon geo_func;
 };
 
 } // sql

@@ -141,7 +141,8 @@ public:
                && !ob_is_geometry(static_cast<ObObjType>(type_))) {
       set_collation_level(CS_LEVEL_NUMERIC);
       set_collation_type(CS_TYPE_BINARY);
-    } else if (ObUserDefinedSQLType == type_) {
+    } else if (ObUserDefinedSQLType == type_ ||
+               ObCollectionSQLType == type_) {
       set_subschema_id(UINT_MAX16);
     }
   }
@@ -345,7 +346,11 @@ public:
   {
     return (ob_is_text_tc(get_type()) && CS_TYPE_BINARY == cs_type_);
   }
-  OB_INLINE bool is_lob_storage() const { return ob_is_large_text(get_type()) || ob_is_json_tc(get_type()) || ob_is_geometry_tc(get_type()); }
+  OB_INLINE bool is_lob_storage() const
+  { return ob_is_large_text(get_type())
+           || ob_is_json_tc(get_type())
+           || ob_is_geometry_tc(get_type())
+           || ob_is_collection_sql_type(get_type()); }
   OB_INLINE bool is_lob() const { return ob_is_text_tc(get_type()); }
   OB_INLINE bool is_inrow() const { return is_lob() && lob_scale_.is_in_row(); }
   OB_INLINE bool is_outrow() const { return is_lob() && lob_scale_.is_out_row(); }
@@ -411,7 +416,7 @@ public:
   OB_INLINE ObCollationLevel get_collation_level() const { return static_cast<ObCollationLevel>(cs_level_); }
   OB_INLINE ObCollationType get_collation_type() const {
     // ObUserDefinedSQLType reused cs_type as part of sub schema id, therefore always return CS_TYPE_BINARY
-    return is_user_defined_sql_type() ? CS_TYPE_BINARY : static_cast<ObCollationType>(cs_type_);
+    return (is_user_defined_sql_type() || is_collection_sql_type()) ? CS_TYPE_BINARY : static_cast<ObCollationType>(cs_type_);
   }
   OB_INLINE ObCharsetType get_charset_type() const {
     return ObCharset::charset_type_by_coll(get_collation_type());
@@ -479,6 +484,14 @@ public:
     }
   }
 
+  OB_INLINE bool is_expectd_udt_type(const uint16_t subschema_id) const { return (ObUserDefinedSQLType == type_ && get_subschema_id() == subschema_id); }
+  OB_INLINE bool is_collection_sql_type() const { return ObCollectionSQLType == type_; }
+  OB_INLINE void set_collection(const uint16_t subschema_id)
+  {
+    type_ = static_cast<uint8_t>(ObCollectionSQLType);
+    lob_scale_.set_in_row();
+    set_subschema_id(subschema_id);
+  }
 protected:
   uint8_t type_;
   union
@@ -1264,7 +1277,7 @@ public:
     }
     if (meta.has_lob_header() && oceanbase::is_lob_storage(get_type())) {
       set_has_lob_header();
-    } else if (meta.is_user_defined_sql_type()) {
+    } else if (meta.is_user_defined_sql_type()) { // Notice: collection type is lob storage type
       meta_.set_udt_flags(meta.get_udt_flags());
     }
   }
@@ -1440,6 +1453,8 @@ public:
   inline void set_inrow() { meta_.set_inrow(); }
   inline void set_outrow() { meta_.set_outrow(); }
   inline void set_has_lob_header() { meta_.set_has_lob_header(); }
+
+  inline void set_subschema_id(uint16_t subschema_id) { meta_.set_subschema_id(subschema_id); }
   void set_otimestamp_value(const ObObjType type, const ObOTimestampData &value);
   void set_otimestamp_value(const ObObjType type, const int64_t time_us, const uint32_t time_ctx_desc);
   void set_otimestamp_value(const ObObjType type, const int64_t time_us, const uint16_t time_desc);
@@ -1492,6 +1507,7 @@ public:
   }
 
   inline void set_sql_udt(const char* ptr, int32_t size, uint16_t subschema_id = 0, uint8_t udt_flags = 0);
+  inline void set_sql_collection(const char* ptr, int32_t size, uint16_t subschema_id = 0, uint8_t udt_flags = 0);
   inline void set_udt_value(const char* ptr, int32_t size);
   //@}
 
@@ -1810,7 +1826,10 @@ public:
   OB_INLINE bool is_geometry_inrow() const { return meta_.is_geometry_inrow(); }
   OB_INLINE bool is_geometry_outrow() const { return meta_.is_geometry_outrow(); }
   OB_INLINE bool is_user_defined_sql_type() const { return meta_.is_user_defined_sql_type(); }
-  OB_INLINE bool is_xml_sql_type() const { return meta_.is_user_defined_sql_type(); }
+  OB_INLINE bool is_xml_sql_type() const {
+    return meta_.is_user_defined_sql_type() && meta_.get_subschema_id() == ObXMLSqlType;
+  }
+  OB_INLINE bool is_collection_sql_type() const { return meta_.is_collection_sql_type(); }
 
   OB_INLINE bool is_timestamp_tz() const { return meta_.is_timestamp_tz(); }
   OB_INLINE bool is_timestamp_ltz() const { return meta_.is_timestamp_ltz(); }
@@ -2695,7 +2714,9 @@ inline void ObObj::set_lob_value(const ObObjType type, const ObLobCommon *value,
 {
   meta_.set_type(type);
   meta_.set_inrow();
-  meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  if (type != ObCollectionSQLType) {
+    meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  }
   v_.lob_ = value;
   val_len_ = length;
 }
@@ -2704,7 +2725,9 @@ inline void ObObj::set_lob_value(const ObObjType type, const char *ptr, const in
 {
   meta_.set_type(type);
   meta_.set_inrow();
-  meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  if (type != ObCollectionSQLType) {
+    meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  }
   v_.string_ = ptr;
   val_len_ = length;
 }
@@ -2897,6 +2920,14 @@ inline void ObObj::set_sql_udt(const char* ptr, int32_t size, uint16_t subschema
   val_len_ = size;
 }
 
+inline void ObObj::set_sql_collection(const char* ptr, int32_t size, uint16_t subschema_id, uint8_t udt_flags)
+{
+  meta_.set_collection(subschema_id);
+  // meta_.set_udt_flags(udt_flags);
+  v_.string_ = ptr;
+  val_len_ = size;
+}
+
 inline void ObObj::set_udt_value(const char* ptr, int32_t size)
 {
   v_.string_ = ptr;
@@ -2936,6 +2967,7 @@ inline bool ObObj::need_deep_copy()const
             || ob_is_geometry(meta_.get_type())
             || ob_is_raw(meta_.get_type())
             || ob_is_user_defined_sql_type(meta_.get_type())
+            || ob_is_collection_sql_type(meta_.get_type())
             || ob_is_rowid_tc(meta_.get_type())) && 0 != val_len_ && NULL != get_string_ptr())
             || (ob_is_number_tc(meta_.get_type())
              && 0 != nmb_desc_.len_ && NULL != get_number_digits())
@@ -3566,7 +3598,7 @@ inline const void *ObObj::get_data_ptr() const
 {
   const void *ret = NULL;
   if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
-      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type())) {
+      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())) {
     ret = const_cast<char *>(v_.string_);
   } else if (ob_is_number_tc(get_type())) {
     ret = const_cast<uint32_t *>(v_.nmb_digits_);
@@ -3583,7 +3615,7 @@ inline const void *ObObj::get_data_ptr() const
 inline void ObObj::set_data_ptr(void *data_ptr)
 {
   if (ob_is_string_type(get_type()) || ob_is_raw(get_type()) || ob_is_rowid_tc(get_type()) || ob_is_json(get_type())
-      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type())) {
+      || ob_is_geometry(get_type()) || ob_is_user_defined_sql_type(get_type()) || ob_is_collection_sql_type(get_type())) {
     v_.string_ = static_cast<char*>(data_ptr);
   } else if (ob_is_number_tc(get_type())) {
     v_.nmb_digits_ = static_cast<uint32_t*>(data_ptr);
@@ -3643,7 +3675,8 @@ inline int64_t ObObj::get_data_length() const
       ob_is_lob_locator(get_type()) ||
       ob_is_json(get_type()) ||
       ob_is_geometry(get_type()) ||
-      ob_is_user_defined_sql_type(get_type())) {
+      ob_is_user_defined_sql_type(get_type()) ||
+      ob_is_collection_sql_type(get_type())) {
     ret = val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret = nmb_desc_.len_ * sizeof(uint32_t);
@@ -4194,7 +4227,7 @@ OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
   if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()
-      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())) {
+      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())|| is_collection_sql_type()) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);
@@ -4247,6 +4280,27 @@ typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE,
                           ObWrapperAllocator,false,
                           ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
                           > ParamStore;
+
+class ObObjUDTUtil
+{
+// Utils for convert pl udt baisc attributes(obobjs) to sql udt format
+// basically, obj meta is store in subschema map
+// only value needs serialize into a continuous sql udt buffer
+public:
+  static int ob_udt_obj_value_serialize(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos);
+  static int ob_udt_obj_value_deserialize(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos);
+  static int ob_udt_obj_value_get_serialize_size(const ObObj &obj, int64_t &value_len);
+
+  static bool ob_is_supported_sql_udt(const uint64_t udt_id)
+  { // only oracle gis related udt is supported currently
+    return udt_id == T_OBJ_XML
+          || udt_id == T_OBJ_SDO_POINT
+          || udt_id == T_OBJ_SDO_GEOMETRY
+          || udt_id == T_OBJ_SDO_ELEMINFO_ARRAY
+          || udt_id == T_OBJ_SDO_ORDINATE_ARRAY;
+  }
+};
+
 }
 }
 

@@ -1311,7 +1311,8 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
       this->set_lob_locator(*res);
       pos += src.get_val_len();
     }
-  } else if (ob_is_user_defined_sql_type(src.get_type())) {
+  } else if (ob_is_user_defined_sql_type(src.get_type())
+             || ob_is_collection_sql_type(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1340,8 +1341,11 @@ int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &p
 void* ObObj::get_deep_copy_obj_ptr()
 {
   void * ptr = NULL;
-  if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())
-      || ob_is_geometry(this->get_type()) || ob_is_user_defined_sql_type(this->get_type())) {
+  if (ob_is_string_type(this->get_type())
+      || ob_is_json(this->get_type())
+      || ob_is_geometry(this->get_type())
+      || ob_is_user_defined_sql_type(this->get_type())
+      || ob_is_collection_sql_type(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
     // Therefore, reset it to NULL
     if (val_len_ != 0) {
@@ -1769,7 +1773,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
   DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
-  DEF_FUNC_ENTRY(ObDecimalIntType)     // 50, decimal int
+  DEF_FUNC_ENTRY(ObDecimalIntType),     // 50, decimal int
+  DEF_FUNC_ENTRY(ObCollectionSQLType), // 51, collection
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)
@@ -2487,4 +2492,37 @@ DEFINE_GET_SERIALIZE_SIZE(ObSqlArrayObj)
   OB_UNIS_ADD_LEN(element_);
   OB_UNIS_ADD_LEN_ARRAY(data_, count_);
   return len;
+}
+int ObObjUDTUtil::ob_udt_obj_value_serialize(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = OBJ_FUNCS[obj.get_meta().get_type()].serialize(obj, buf, buf_len, pos);
+  }
+  return ret;
+}
+
+int ObObjUDTUtil::ob_udt_obj_value_deserialize(ObObj &obj, const char* buf, const int64_t data_len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  // set meta before deserialize!
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    ret = OBJ_FUNCS[obj.get_meta().get_type()].deserialize(obj, buf, data_len, pos);
+  }
+  return ret;
+}
+
+int ObObjUDTUtil::ob_udt_obj_value_get_serialize_size(const ObObj &obj, int64_t &value_len)
+{
+  int ret = OB_SUCCESS;
+  if (obj.get_meta().is_invalid()) {
+    ret = OB_ERR_UNEXPECTED;
+  } else {
+    value_len = OBJ_FUNCS[obj.get_meta().get_type()].get_serialize_size(obj);
+  }
+  return ret;
 }

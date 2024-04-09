@@ -276,6 +276,14 @@ int ObAllVirtualUnit::inner_get_next_row(ObNewRow *&row)
         case CREATE_TIME:
           cur_row_.cells_[i].set_int(tenant_meta.unit_.create_timestamp_);
           break;
+        case MAX_NET_BANDWIDTH: {
+          cur_row_.cells_[i].set_int(ObUnitResource::DEFAULT_NET_BANDWIDTH);    // not used, keep default
+          break;
+        }
+        case NET_BANDWIDTH_WEIGHT: {
+          cur_row_.cells_[i].set_int(ObUnitResource::DEFAULT_NET_BANDWIDTH_WEIGHT);   // not used, keep default
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

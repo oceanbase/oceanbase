@@ -520,7 +520,7 @@ bool ObjectSet::check_has_unfree(char *first_label, char *first_bt)
 void ObjectSet::reset()
 {
   const bool context_check = mem_context_ != nullptr;
-  const static int buf_len = 256;
+  const static int buf_len = 512;
   char buf[buf_len] = {'\0'};
   char first_label[AOBJECT_LABEL_SIZE + 1] = {'\0'};
   char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
@@ -529,15 +529,14 @@ void ObjectSet::reset()
     if (context_check) {
       const StaticInfo &static_info = mem_context_->get_static_info();
       const DynamicInfo &dynamic_info = mem_context_->get_dynamic_info();
-      int64_t pos = snprintf(buf, buf_len,
-                             "context: %p, label: %s, backtrace: %s, static_id: 0x%lx, "
-                             "static_info:{filename: %s, line: %d, function: %s}, "
-                             "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
-                             mem_context_, first_label, first_bt,
-                             mem_context_->get_static_id(),
-                             static_info.filename_, static_info.line_, static_info.function_,
-                             dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
-      buf[pos] = '\0';
+      snprintf(buf, buf_len,
+          "context: %p, label: %s, backtrace: %s, static_id: 0x%lx, "
+          "static_info:{filename: %s, line: %d, function: %s}, "
+          "dynamic_info:{tid: %ld, cid: %ld, create_time: %ld}",
+          mem_context_, first_label, first_bt,
+          mem_context_->get_static_id(),
+          static_info.filename_, static_info.line_, static_info.function_,
+          dynamic_info.tid_, dynamic_info.cid_, dynamic_info.create_time_);
     }
     has_unfree_callback(buf);
   }

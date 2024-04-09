@@ -43,8 +43,9 @@ class ObExprObjAccess;
 
 struct ObSPICursor
 {
-  ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_()
+  ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
+    session_info_(session_info)
   {
     row_desc_.set_tenant_id(MTL_ID());
     complex_objs_.reset();
@@ -54,7 +55,7 @@ struct ObSPICursor
   ~ObSPICursor()
   {
     for (int64_t i = 0; i < complex_objs_.count(); ++i) {
-      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i)));
+      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i), session_info_));
     }
   }
 
@@ -64,6 +65,7 @@ struct ObSPICursor
   int64_t cur_;
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
+  sql::ObSQLSessionInfo* session_info_;
 };
 
 struct ObSPIOutParams
@@ -1011,7 +1013,8 @@ private:
                                 bool is_type_record);
 
   static int store_datums(ObObj &dest_addr, ObIArray<ObObj> &result,
-                          ObIAllocator *alloc, ObSQLSessionInfo *session_info, bool is_schema_object);
+                          ObIAllocator *alloc,  ObSQLSessionInfo *session_info,
+                          bool is_schema_object);
 
   static int store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSessionInfo *session_info);
 
@@ -1098,6 +1101,7 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+  static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
 };
 
 struct ObPLSubPLSqlTimeGuard

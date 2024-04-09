@@ -340,6 +340,28 @@
 #include "ob_expr_extract_cert_expired_time.h"
 #include "ob_expr_transaction_id.h"
 #include "ob_expr_inner_row_cmp_val.h"
+#include "ob_expr_sql_udt_construct.h"
+#include "ob_expr_priv_attribute_access.h"
+#include "ob_expr_temp_table_ssid.h"
+#include "ob_expr_priv_st_numinteriorrings.h"
+#include "ob_expr_priv_st_iscollection.h"
+#include "ob_expr_priv_st_equals.h"
+#include "ob_expr_priv_st_touches.h"
+#include "ob_expr_align_date4cmp.h"
+#include "ob_expr_priv_st_makeenvelope.h"
+#include "ob_expr_priv_st_clipbybox2d.h"
+#include "ob_expr_priv_st_pointonsurface.h"
+#include "ob_expr_priv_st_geometrytype.h"
+#include "ob_expr_st_crosses.h"
+#include "ob_expr_st_overlaps.h"
+#include "ob_expr_st_union.h"
+#include "ob_expr_st_length.h"
+#include "ob_expr_st_difference.h"
+#include "ob_expr_st_asgeojson.h"
+#include "ob_expr_st_centroid.h"
+#include "ob_expr_st_symdifference.h"
+#include "ob_expr_priv_st_asmvtgeom.h"
+#include "ob_expr_priv_st_makevalid.h"
 
 namespace oceanbase
 {
@@ -1074,26 +1096,26 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprXmlSequence::eval_xml_sequence                        /* 630 */
   NULL, //ObExprJsonAppend::eval_json_array_append                    /* 631 */
   NULL, //unused                                                      /* 632 */
-  NULL, //ObExprUdtConstruct::eval_udt_construct,                     /* 633 */
-  NULL, //ObExprUDTAttributeAccess::eval_attr_access,                 /* 634 */
-  NULL, //ObExprPrivSTNumInteriorRings::eval_priv_st_numinteriorrings,/* 635 */
-  NULL, //ObExprPrivSTIsCollection::eval_priv_st_iscollection,        /* 636 */
-  NULL, //ObExprPrivSTEquals::eval_priv_st_equals,                    /* 637 */
-  NULL, //ObExprPrivSTTouches::eval_priv_st_touches,                  /* 638 */
-  NULL, //ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope,        /* 639 */
-  NULL, //ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d,          /* 640 */
-  NULL, //ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface,    /* 641 */
-  NULL, //ObExprPrivSTGeometryType::eval_priv_st_geometrytype,        /* 642 */
-  NULL, //ObExprSTCrosses::eval_st_crosses,                           /* 643 */
-  NULL, //ObExprSTOverlaps::eval_st_overlaps,                         /* 644 */
-  NULL, //ObExprSTUnion::eval_st_union,                               /* 645 */
-  NULL, //ObExprSTLength::eval_st_length,                             /* 646 */
-  NULL, //ObExprSTDifference::eval_st_difference,                     /* 647 */
-  NULL, //ObExprSTAsGeoJson::eval_st_asgeojson,                       /* 648 */
-  NULL, //ObExprSTCentroid::eval_st_centroid,                         /* 649 */
-  NULL, //ObExprSTSymDifference::eval_st_symdifference,               /* 650 */
-  NULL, //ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,              /* 651 */
-  NULL, //ObExprPrivSTMakeValid::eval_priv_st_makevalid,              /* 652 */
+  ObExprUdtConstruct::eval_udt_construct,                             /* 633 */
+  ObExprUDTAttributeAccess::eval_attr_access,                         /* 634 */
+  ObExprPrivSTNumInteriorRings::eval_priv_st_numinteriorrings,        /* 635 */
+  ObExprPrivSTIsCollection::eval_priv_st_iscollection,                /* 636 */
+  ObExprPrivSTEquals::eval_priv_st_equals,                            /* 637 */
+  ObExprPrivSTTouches::eval_priv_st_touches,                          /* 638 */
+  ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope,                /* 639 */
+  ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d,                  /* 640 */
+  ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface,            /* 641 */
+  ObExprPrivSTGeometryType::eval_priv_st_geometrytype,                /* 642 */
+  ObExprSTCrosses::eval_st_crosses,                                   /* 643 */
+  ObExprSTOverlaps::eval_st_overlaps,                                 /* 644 */
+  ObExprSTUnion::eval_st_union,                                       /* 645 */
+  ObExprSTLength::eval_st_length,                                     /* 646 */
+  ObExprSTDifference::eval_st_difference,                             /* 647 */
+  ObExprSTAsGeoJson::eval_st_asgeojson,                               /* 648 */
+  ObExprSTCentroid::eval_st_centroid,                                 /* 649 */
+  ObExprSTSymDifference::eval_st_symdifference,                       /* 650 */
+  ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,                      /* 651 */
+  ObExprPrivSTMakeValid::eval_priv_st_makevalid,                      /* 652 */
   NULL, //ObExprAuditLogSetFilter::eval_set_filter,                   /* 653 */
   NULL, //ObExprAuditLogRemoveFilter::eval_remove_filter,             /* 654 */
   NULL, //ObExprAuditLogSetUser::eval_set_user,                       /* 655 */

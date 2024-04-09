@@ -610,6 +610,9 @@ public:
                          ObRawExprFactory &expr_factory,
                          ObRawExpr *&expr,
                          ObPLCompileUnitAST &unit_ast);
+  static int replace_udf_param_expr(ObObjAccessIdent &access_ident,
+                             ObIArray<ObQualifiedName> &columns,
+                             ObIArray<ObRawExpr*> &real_exprs);
 private:
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLDeclareVarStmt *stmt, ObPLFunctionAST &func_ast);
   int resolve_declare_var(const ObStmtNodeTree *parse_tree, ObPLPackageAST &package_ast);
@@ -921,7 +924,6 @@ private:
                                    ObPLForAllStmt *stmt,
                                    ObPLFunctionAST &func,
                                    ObIArray<ObObjAccessIdx> &access_idxs);
-
 private:
   int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value,
                                 bool &dup, ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc);
@@ -1113,9 +1115,6 @@ private:
   int replace_udf_param_expr(ObQualifiedName &q_name,
                              ObIArray<ObQualifiedName> &columns,
                              ObIArray<ObRawExpr*> &real_exprs);
-  int replace_udf_param_expr(ObObjAccessIdent &access_ident,
-                             ObIArray<ObQualifiedName> &columns,
-                             ObIArray<ObRawExpr*> &real_exprs);
   int get_names_by_access_ident(ObObjAccessIdent &access_ident,
                                 ObIArray<ObObjAccessIdx> &access_idxs,
                                 ObString &database_name,
@@ -1151,6 +1150,7 @@ private:
                                   ObIArray<ObObjAccessIdx> &access_idxs,
                                   ObPLCompileUnitAST &func);
 
+  int build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns);
   int build_current_access_idx(uint64_t parent_id,
                                ObObjAccessIdx &access_idx,
                                ObObjAccessIdent &access_ident,

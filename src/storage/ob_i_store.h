@@ -252,6 +252,15 @@ public:
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };
 
+struct ObSSTableRowState {
+  enum ObSSTableRowStateEnum {
+    UNKNOWN_STATE = 0,
+    NOT_EXIST,
+    IN_ROW_CACHE,
+    IN_BLOCK
+  };
+};
+
 struct ObStoreRow
 {
   OB_UNIS_VERSION(1);

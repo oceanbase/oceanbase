@@ -1295,6 +1295,34 @@ int ObTFMIndexBlockRowIterator::find_rowkeys_belong_to_same_idx_row(ObMicroIndex
   return ret;
 }
 
+int ObTFMIndexBlockRowIterator::find_rowkeys_belong_to_curr_idx_row(const int64_t rowkey_end_idx, int64_t &rowkey_idx, const ObRowKeysInfo *rowkeys_info)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Iter not opened yet", K(ret), KPC(this));
+  } else if (OB_ISNULL(rowkeys_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid rowkeys info", K(ret));
+  } else {
+    const int64_t current_idx = current_ - iter_step_;
+    const ObDatumRowkey *cur_rowkey = idx_data_header_->rowkey_array_ + current_idx;
+    for (; OB_SUCC(ret) && rowkey_idx < rowkey_end_idx; ++rowkey_idx) {
+      if (rowkeys_info->is_rowkey_not_exist(rowkey_idx)) {
+        continue;
+      }
+      const ObDatumRowkey &rowkey = rowkeys_info->get_rowkey(rowkey_idx);
+      int cmp_ret = 0;
+      if (OB_FAIL(rowkey.compare(*cur_rowkey, *datum_utils_, cmp_ret, false))) {
+        LOG_WARN("Failed to compare rowkey", K(ret), K(rowkey), KPC(cur_rowkey));
+      } else if (cmp_ret >= 0) {
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 /******************             ObIndexBlockRowScanner              **********************/
 ObIndexBlockRowScanner::ObIndexBlockRowScanner()
   : query_range_(nullptr), macro_id_(), allocator_(nullptr), raw_iter_(nullptr), transformed_iter_(nullptr),
@@ -1499,6 +1527,33 @@ int ObIndexBlockRowScanner::open(
 int ObIndexBlockRowScanner::open(
     const MacroBlockId &macro_id,
     const ObMicroBlockData &idx_block_data,
+    const ObRowKeysInfo *row_keys_info,
+    const int64_t rowkey_begin_idx,
+    const int64_t rowkey_end_idx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (OB_UNLIKELY(nullptr == row_keys_info || rowkey_begin_idx >= rowkey_end_idx)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to open an index micro block", K(ret), KP(row_keys_info), K(rowkey_begin_idx), K(rowkey_end_idx));
+  } else {
+    const ObDatumRowkey &first_rowkey = row_keys_info->get_rowkey(rowkey_begin_idx);
+    if (OB_FAIL(open(macro_id, idx_block_data, first_rowkey, rowkey_begin_idx))) {
+      LOG_WARN("Fail to open", K(ret));
+    } else {
+      rowkeys_info_ = row_keys_info;
+      rowkey_begin_idx_ = rowkey_begin_idx;
+      rowkey_end_idx_ = rowkey_end_idx;
+    }
+  }
+  return ret;
+}
+
+int ObIndexBlockRowScanner::open(
+    const MacroBlockId &macro_id,
+    const ObMicroBlockData &idx_block_data,
     const ObDatumRange &range,
     const int64_t range_idx,
     const bool is_left_border,
@@ -1540,7 +1595,8 @@ int ObIndexBlockRowScanner::open(
 
 int ObIndexBlockRowScanner::get_next(
     ObMicroIndexInfo &idx_block_row,
-    const bool is_multi_check)
+    const bool is_multi_check,
+    const bool is_sorted_multi_get)
 {
   int ret = OB_SUCCESS;
   idx_block_row.reset();
@@ -1560,6 +1616,16 @@ int ObIndexBlockRowScanner::get_next(
     }
   } else if (OB_FAIL(get_next_idx_row(idx_block_row))) {
     LOG_WARN("Failed to get next idx row", K(ret), K(is_multi_check));
+  } else if (is_sorted_multi_get) {
+    idx_block_row.rowkeys_info_ = rowkeys_info_;
+    idx_block_row.rowkey_begin_idx_ = rowkey_begin_idx_;
+    idx_block_row.rowkey_end_idx_ = rowkey_begin_idx_ + 1;
+    if (OB_ISNULL(iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("iter is null", K(index_format_), K(ret));
+    } else if (OB_FAIL(iter_->find_rowkeys_belong_to_curr_idx_row(rowkey_end_idx_, idx_block_row.rowkey_end_idx_, rowkeys_info_))) {
+      LOG_WARN("Failed to find rowkeys", K(ret));
+    }
   }
   return ret;
 }

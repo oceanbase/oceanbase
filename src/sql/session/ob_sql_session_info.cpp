@@ -64,6 +64,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::share;
 using namespace oceanbase::pl;
 using namespace oceanbase::obmysql;
+using namespace oceanbase::observer;
 
 static const int64_t DEFAULT_XA_END_TIMEOUT_SECONDS = 60;/*60s*/
 
@@ -522,6 +523,15 @@ int ObSQLSessionInfo::is_preserve_order_for_pagination_enabled(bool &enabled) co
     enabled = tenant_config->_preserve_order_for_pagination;
   }
   return ret;
+}
+
+bool ObSQLSessionInfo::is_pl_prepare_stage() const
+{
+  bool bret = false;
+  if (OB_NOT_NULL(cur_exec_ctx_) && OB_NOT_NULL(cur_exec_ctx_->get_sql_ctx())) {
+    bret = cur_exec_ctx_->get_sql_ctx()->is_prepare_stage_;
+  }
+  return bret;
 }
 
 bool ObSQLSessionInfo::is_index_skip_scan_enabled() const
@@ -2909,12 +2919,12 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return ret;
 }
 
-observer::ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   if (NULL == piece_cache_ && need_init) {
-    void *buf = get_session_allocator().alloc(sizeof(observer::ObPieceCache));
+    void *buf = get_session_allocator().alloc(sizeof(ObPieceCache));
     if (NULL != buf) {
-      MEMSET(buf, 0, sizeof(observer::ObPieceCache));
-      piece_cache_ = new (buf) observer::ObPieceCache();
+      MEMSET(buf, 0, sizeof(ObPieceCache));
+      piece_cache_ = new (buf) ObPieceCache();
       if (OB_SUCCESS != piece_cache_->init(get_effective_tenant_id())) {
         piece_cache_->~ObPieceCache();
         get_session_allocator().free(piece_cache_);

@@ -262,8 +262,9 @@ void ObRowsInfo::return_exist_iter(ObStoreRowIterator *exist_iter)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "Unexpected not init rowsinfo", K_(delete_count), KP_(rows), K(ret));
   } else if (OB_LIKELY(nullptr != exist_iter)) {
-    if (exist_helper_.table_access_context_.iter_pool_ != nullptr) {
-      exist_helper_.table_access_context_.iter_pool_->return_iter(exist_iter);
+    exist_iter->reuse();
+    if (exist_helper_.table_access_context_.get_stmt_iter_pool() != nullptr) {
+      exist_helper_.table_access_context_.get_stmt_iter_pool()->return_iter(exist_iter);
     } else {
       exist_iter->~ObStoreRowIterator();
       exist_helper_.table_access_context_.stmt_allocator_->free(exist_iter);

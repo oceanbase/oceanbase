@@ -1176,6 +1176,9 @@ int ObStaticEngineCG::generate_spec(
         } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
           ret = OB_ERR_INVALID_CMP_OP;
           LOG_WARN("select distinct json not allowed", K(ret));
+        } else if (is_oracle_mode() && OB_UNLIKELY(ObGeometryType == raw_expr->get_data_type())) {
+          ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+          LOG_WARN("select distinct geometry not allowed", K(ret));
         } else if (raw_expr->is_const_expr()) {
             // distinct const value, 这里需要注意：distinct 1被跳过了，
             // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -8040,6 +8043,18 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     }
   }
 #endif
+  // assgin subschema ctx
+  if (OB_SUCC(ret)
+      && (plan_ctx->get_subschema_ctx().is_inited()
+          && plan_ctx->get_subschema_ctx().get_subschema_count() > 0)) {
+    if (phy_plan.get_subschema_ctx_for_update().get_subschema_count() > 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("subschema ctx overwrite", K(ret));
+    } else if (OB_FAIL(phy_plan.get_subschema_ctx_for_update().assgin(plan_ctx->get_subschema_ctx()))) {
+      LOG_WARN("fail to assgin subschema ctx", K(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(log_plan.get_stmt())) {
       ret = OB_ERR_UNEXPECTED;

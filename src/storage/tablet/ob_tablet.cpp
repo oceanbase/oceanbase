@@ -4627,11 +4627,11 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
 {
   int ret = OB_SUCCESS;
   int64_t full_stored_col_cnt = 0;
-  common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TmpSchema"));
+
   ObStorageSchema *storage_schema = nullptr;
   ObSEArray<share::schema::ObColDesc, 16> cols_desc;
   tablet = (tablet == nullptr) ? this : tablet;
-  if (OB_FAIL(tablet->load_storage_schema(tmp_allocator, storage_schema))) {
+  if (OB_FAIL(tablet->load_storage_schema(allocator, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret));
   } else if (OB_FAIL(storage_schema->get_mulit_version_rowkey_column_ids(cols_desc))) {
     LOG_WARN("fail to get rowkey column ids", K(ret), KPC(storage_schema));
@@ -4646,7 +4646,7 @@ int ObTablet::build_read_info(common::ObArenaAllocator &allocator, const ObTable
                                              cols_desc))) {
     LOG_WARN("fail to init rowkey read info", K(ret), KPC(storage_schema));
   }
-  ObTabletObjLoadHelper::free(tmp_allocator, storage_schema);
+  ObTabletObjLoadHelper::free(allocator, storage_schema);
   return ret;
 }
 
@@ -4792,6 +4792,7 @@ int ObTablet::build_migration_sstable_param(
       mig_sstable_param.co_base_type_ = co_sstable->is_all_cg_base()
                                       ? ObCOSSTableBaseType::ALL_CG_TYPE
                                       : ObCOSSTableBaseType::ROWKEY_CG_TYPE;
+      mig_sstable_param.is_empty_cg_sstables_ = co_sstable->is_cgs_empty_co_table();
     }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_meta.get_col_checksum_cnt(); ++i) {
@@ -4971,6 +4972,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   ObLogHandler *log_handler = get_log_handler();
   palf::LSN lsn;
   const bool need_nonblock= false;
+  const bool allow_compression= false;
   const SCN ref_scn = SCN::min_scn();
   uint64_t new_autoinc_seq = 0;
   if (OB_FAIL(autoinc_seq.get_autoinc_seq_value(new_autoinc_seq))) {
@@ -4992,6 +4994,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
                                          buffer_size,
                                          ref_scn,
                                          need_nonblock,
+                                         allow_compression,
                                          cb,
                                          lsn,
                                          scn))) {
@@ -5223,6 +5226,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
 
     palf::LSN lsn;
     const bool need_nonblock= false;
+    const bool allow_compression = false;
     SCN ref_scn;
     ref_scn.set_min();
     scn.reset();
@@ -5240,6 +5244,7 @@ int ObTablet::write_tablet_schema_version_change_clog(
                                            buffer_size,
                                            ref_scn,
                                            need_nonblock,
+                                           allow_compression,
                                            cb,
                                            lsn,
                                            scn))) {
@@ -7295,7 +7300,7 @@ int ObTablet::get_column_store_sstable_checksum(common::ObIArray<int64_t> &colum
     }
 
     if (OB_FAIL(ret)) {
-    } else if (!co_sstable.is_empty_co_table()) {
+    } else if (!co_sstable.is_cgs_empty_co_table()) {
       common::ObArray<ObSSTableWrapper> cg_tables;
       if (OB_FAIL(co_sstable.get_all_tables(cg_tables))) {
         LOG_WARN("fail to get_all_tables", K(ret));

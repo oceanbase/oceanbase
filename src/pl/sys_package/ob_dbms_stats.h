@@ -579,9 +579,11 @@ private:
                                    const ObObjParam &table_name,
                                    ObTableStatParam &param);
 
-  static int get_table_index_infos(sql::ObExecContext &ctx,
-                                   const int64_t table_id,
-                                   ObIArray<ObAuxTableMetaInfo> &index_infos);
+  static int get_table_index_infos(share::schema::ObSchemaGetterGuard *schema_guard,
+                                   const uint64_t tenant_id,
+                                   const uint64_t table_id,
+                                   uint64_t *index_tid_arr,
+                                   int64_t &index_count);
 
   static int get_table_partition_infos(const ObTableSchema &table_schema,
                                        ObIAllocator &allocator,

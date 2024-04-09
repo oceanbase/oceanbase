@@ -52,7 +52,7 @@ int ObAdvanceLSCkptTask::try_advance_ls_ckpt_ts()
       ret = OB_INVALID_ARGUMENT;
     }
     TRANS_LOG(WARN, "get ls faild", K(ret), K(MTL(ObLSService *)));
-  } else if (ls_handle.get_ls()->advance_checkpoint_by_flush(target_ckpt_ts_)) {
+  } else if (OB_FAIL(ls_handle.get_ls()->advance_checkpoint_by_flush(target_ckpt_ts_))) {
     TRANS_LOG(WARN, "advance checkpoint ts failed", K(ret), K(ls_id_), K(target_ckpt_ts_));
   }
 

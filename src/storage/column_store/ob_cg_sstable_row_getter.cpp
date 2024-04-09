@@ -461,7 +461,7 @@ int ObCGSSTableRowGetter::fetch_rowkey_row(ObSSTableReadHandle &read_handle, con
   } else if (OB_FAIL(micro_getter_->get_row(
               read_handle,
               store_row,
-              macro_block_reader_))) {
+              &macro_block_reader_))) {
     LOG_WARN("Fail to get row", K(ret));
   }
   return ret;

@@ -1659,12 +1659,12 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
     //contain nested sql(pl udf or in nested sql)
     //trigger or foreign key in the top sql not force to use DAS TSC
     //has function table
-    if (force_das_tsc) {
-      create_das_path = true;
-      create_basic_path = false;
-    } else if (is_sample_stmt || is_online_ddl_insert) {
+    if (is_sample_stmt || is_online_ddl_insert) {
       create_das_path = false;
       create_basic_path = true;
+    } else if (force_das_tsc) {
+      create_das_path = true;
+      create_basic_path = false;
     } else if (OB_FAIL(get_plan()->get_log_plan_hint().check_use_das(table_id, hint_force_das,
                                                                      hint_force_no_das))) {
       LOG_WARN("table_item is null", K(ret), K(table_id));
@@ -4549,8 +4549,9 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
     if (OB_ISNULL(sel_expr = child_stmt->get_select_item(idx).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected expr", K(ret), K(idx), K(sel_expr));
-    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob() ||
-                ob_is_xml_sql_type(sel_expr->get_result_type().get_type(), sel_expr->get_result_type().get_subschema_id())) {
+    } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob()
+                || ob_is_xml_sql_type(sel_expr->get_result_type().get_type(), sel_expr->get_result_type().get_subschema_id())
+                || ob_is_geometry(sel_expr->get_result_type().get_type())) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
                                                           sel_expr,

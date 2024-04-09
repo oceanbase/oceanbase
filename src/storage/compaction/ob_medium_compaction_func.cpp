@@ -673,7 +673,7 @@ int ObMediumCompactionScheduleFunc::init_schema_changed(
   return ret;
 }
 
-int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
+int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_co_merge_type(
     const ObGetMergeTablesResult &result,
     ObMediumCompactionInfo &medium_info)
 {
@@ -729,6 +729,8 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
     // init is_schema_changed
     if (FAILEDx(init_schema_changed(medium_info))) {
       STORAGE_LOG(WARN, "failed to init schema changed", KR(ret), K(first_sstable));
+    } else if (!tablet->is_row_store() && OB_FAIL(init_co_major_merge_type(result, medium_info))) {
+      STORAGE_LOG(WARN, "failed to init co major merge type");
     }
 
     if (OB_FAIL(ret)) {
@@ -798,6 +800,70 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed(
   return ret;
 }
 
+int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
+    const ObGetMergeTablesResult &result,
+    ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  ObCOMajorMergePolicy::ObCOMajorMergeType major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
+  if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_merge_type(
+          result,
+          medium_info.storage_schema_,
+          tablet_handle_,
+          major_merge_type))) {
+    LOG_WARN("failed to decide co major merge type", K(ret));
+  } else {
+    medium_info.co_major_merge_type_ = major_merge_type;
+    LOG_DEBUG("chengkong debug: success to get ",
+      "major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(major_merge_type));
+  }
+
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::get_result_for_major(
+      ObTablet &tablet,
+      const ObMediumCompactionInfo &medium_info,
+      ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObSSTable *base_table = nullptr;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+
+  if (OB_FAIL(tablet.fetch_table_store(table_store_wrapper))) {
+    LOG_WARN("fail to fetch table store", K(ret));
+  } else if (OB_UNLIKELY(!table_store_wrapper.get_member()->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(medium_info), KPC(table_store_wrapper.get_member()));
+  } else if (OB_ISNULL(base_table = static_cast<ObSSTable*>(
+      table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(true/*last*/)))) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("major sstable not exist", K(ret), KPC(table_store_wrapper.get_member()));
+  } else if (base_table->get_snapshot_version() >= medium_info.medium_snapshot_) {
+    ret = OB_NO_NEED_MERGE;
+  } else if (OB_FAIL(result.handle_.add_sstable(base_table, table_store_wrapper.get_meta_handle()))) {
+    LOG_WARN("failed to add table into iterator", K(ret), KP(base_table));
+  } else {
+    const ObSSTableArray &minor_tables = table_store_wrapper.get_member()->get_minor_sstables();
+    bool start_add_table_flag = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
+      if (OB_ISNULL(minor_tables[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("table must not null", K(ret), K(i), K(minor_tables));
+      } else if (!start_add_table_flag
+        && minor_tables[i]->get_upper_trans_version() >= base_table->get_snapshot_version()) {
+        start_add_table_flag = true;
+      }
+      if (OB_SUCC(ret) && start_add_table_flag) {
+        if (OB_FAIL(result.handle_.add_sstable(minor_tables[i], table_store_wrapper.get_meta_handle()))) {
+          LOG_WARN("failed to add table", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMediumCompactionScheduleFunc::prepare_iter(
     const ObGetMergeTablesResult &result,
     ObTableStoreIterator &table_iter)
@@ -847,7 +913,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
       }
     }
   }
-  if (FAILEDx(init_parallel_range_and_schema_changed(result, medium_info))) {
+  if (FAILEDx(init_parallel_range_and_schema_changed_and_co_merge_type(result, medium_info))) {
     LOG_WARN("failed to init parallel range", K(ret), K(medium_info));
   } else {
     medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version();

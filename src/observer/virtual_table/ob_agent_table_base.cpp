@@ -126,8 +126,14 @@ int ObAgentTableBase::do_open()
     mapping_.set_block_allocator(ObWrapperAllocator(allocator_));
     FOREACH_CNT_X(c, scan_param_->column_ids_, OB_SUCC(ret)) {
       if (OB_ISNULL(table_schema_->get_column_schema(*c))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column id", K(ret), K(*c));
+        if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == *c) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("rowscn not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscn");
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column id", K(ret), K(*c));
+        }
       }
     }
     if (OB_FAIL(ret)) {

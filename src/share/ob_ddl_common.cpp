@@ -2667,7 +2667,7 @@ int ObCODDLUtil::get_column_checksums(
     }
     ObSSTableWrapper cg_sstable_wrapper;
     ObSSTable *cg_sstable = nullptr;
-    for (int64_t i = 0; !co_sstable->is_empty_co_table() && i < column_groups.count() && OB_SUCC(ret); i++) {
+    for (int64_t i = 0; !co_sstable->is_cgs_empty_co_table() && i < column_groups.count() && OB_SUCC(ret); i++) {
       const ObStorageColumnGroupSchema &column_group = column_groups.at(i);
       ObSSTableMetaHandle cg_table_meta_hdl;
       if (column_group.is_all_column_group()) {

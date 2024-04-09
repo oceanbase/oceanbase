@@ -170,6 +170,7 @@ drop table FF02;
 
 # 1. cases should share same plancache
 alter system flush plan cache;
+sleep 3;
 
 create table gis_point_plancache (x double, y double, poi geometry);
 
@@ -247,7 +248,7 @@ ST_GEOMFROMTEXT('POLYGON((0 0,0 0,0 0,0 0))'));
 
 # 
 create table tt1(id int,p point);
---error 1235
+--error 1416
 alter table tt1 change p p polygon;
 desc tt1;
 drop table tt1;
@@ -417,3 +418,28 @@ call dbms_stats.gather_table_stats('test','geek_poi_7');
 --enable_result_log
 
 explain SELECT p.p_id,0 as distance FROM geek_poi_7 as p WHERE p.geohash_code like 'ws0emp%' and p.p_delete_time = 0 AND ST_Contains(p.geog_poi,_ST_GeogFromText('POINT(113.42416381835938 23.11138916015625)'));
+drop table if exists t1;
+--enable_warnings
+delimiter //;
+create table t1( g geometry );//
+drop PROCEDURE IF EXISTS pro;//
+CREATE PROCEDURE pro()
+   BEGIN
+     DECLARE g blob;
+     select ST_SymDifference(point(2,3),ST_GeomFromText('MultiPolygon(((0 0,0 3,3 3,3 0,0 0),(0.5 1,1 2,2 2,2 1,0.5 1)))')) INTO g; 
+     insert into t1 values(g);     
+   END ;
+//
+
+call pro();//
+
+select ST_AsText(g) from t1;//
+
+DROP FUNCTION IF EXISTS getg;//
+CREATE FUNCTION getg(stuId blob) 
+RETURNS varchar(200)  DETERMINISTIC
+RETURN  ST_AsText(stuId) ; //
+select getg(ST_SymDifference(point(1,0),point(1,6)));//
+
+delimiter ;//
+drop table t1;

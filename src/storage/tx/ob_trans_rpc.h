@@ -267,7 +267,8 @@ int ObTxRPCCB<PC>::process()
           && !receiver_ls_id_.is_scheduler_ls()
           && receiver_ls_id_.is_valid()
           && need_refresh_location_cache_(status)) {
-        if (OB_FAIL(refresh_location_cache(receiver_ls_id_))) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(refresh_location_cache(receiver_ls_id_))) {
           TRANS_LOG(WARN, "refresh location cache error", KR(ret),
                     K_(trans_id), "ls", receiver_ls_id_, K(result), K(dst), K(status), K_(msg_type));
         } else if (REACH_TIME_INTERVAL(LOG_INTERVAL_US)) {

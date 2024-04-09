@@ -597,21 +597,24 @@ struct ObWideInteger<Bits, Signed>::_impl
         bool overflow = false;
         for (unsigned j = 0; j < inner_limit; j++) {
           for (unsigned i = 0; i < outter_limit; i++) {
-            carrier += res.items_[i + j] + static_cast<dw_type>(lval.items_[i]) *
-                                           static_cast<dw_type>(rval.items_[j]);
             if (i + j < ITEM_COUNT) {
+              carrier += res.items_[i + j] + static_cast<dw_type>(lval.items_[i]) *
+                                             static_cast<dw_type>(rval.items_[j]);
               res.items_[i+j] = static_cast<uint64_t>(carrier);
               carrier >>= 64;
             } else {
               overflow = true;
               break;
             }
-          }
-          if (carrier) {
+          } // end inner while
+          if (OB_UNLIKELY(overflow)) {
+            break;
+          } else if (carrier) {
             if (j + outter_limit < ITEM_COUNT) {
               res.items_[j + outter_limit] = static_cast<uint64_t>(carrier);
             } else {
               overflow = true;
+              break;
             }
             carrier = 0;
           }

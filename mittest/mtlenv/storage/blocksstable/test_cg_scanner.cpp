@@ -84,7 +84,7 @@ void TestCGScanner::prepare_cg_query_param(const bool is_reverse_scan, const ObV
   access_param_.iter_param_.vectorized_enabled_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
-  access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
   access_param_.iter_param_.read_info_ = &cg_read_info_;
 

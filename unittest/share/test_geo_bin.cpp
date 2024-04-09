@@ -13,6 +13,7 @@
 #include <gtest/gtest.h>
 #define BOOST_GEOMETRY_DISABLE_DEPRECATED_03_WARNING 1
 #define BOOST_ALLOW_DEPRECATED_HEADERS 1
+#define USING_LOG_PREFIX LIB
 #include <boost/geometry.hpp>
 #define private public
 #include "lib/geo/ob_geo_bin.h"
@@ -29,12 +30,22 @@
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
 #include "lib/geo/ob_srs_info.h"
 #include "lib/geo/ob_geo_utils.h"
+#include "lib/geo/ob_sdo_geo_func_to_wkb.h"
+#include "lib/geo/ob_sdo_geo_object.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "lib/geo/ob_geo_3d.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/random/ob_random.h"
+#include "lib/string/ob_hex_utils_base.h"
+#include "lib/geo/ob_wkb_to_json_visitor.h"
+#include "lib/geo/ob_wkb_byte_order_visitor.h"
+#include "lib/geo/ob_geo_interior_point_visitor.h"
+#include "lib/geo/ob_wkt_parser.h"
+#include "lib/geo/ob_geo_mvt_encode_visitor.h"
 #undef private
 
 #include <sys/time.h>
+#include <iostream>
 
 namespace oceanbase {
 
@@ -160,13 +171,14 @@ int append_double(ObJsonBuffer& data, double val, ObGeoWkbByteOrder bo = ObGeoWk
 }
 
 void append_random_inner_point(ObJsonBuffer& data, common::ObVector<double>& xv, common::ObVector<double>& yv,
-  GeogValueValidType type = GeogValueValidType::NOT_DEFINED)
+  GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
 {
     if (type == GeogValueValidType::NOT_DEFINED) {
         double x = static_cast<double>(rand())/static_cast<double>(rand());
         double y = static_cast<double>(rand())/static_cast<double>(rand());
-        ASSERT_EQ(OB_SUCCESS, append_double(data, x));
-        ASSERT_EQ(OB_SUCCESS, append_double(data, y));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
         xv.push_back(x);
         yv.push_back(y);
     } else if (type == GeogValueValidType::IN_RANGE) {
@@ -175,8 +187,8 @@ void append_random_inner_point(ObJsonBuffer& data, common::ObVector<double>& xv,
         x *= srs_item->angular_unit();
         double y = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(90));
         y *= srs_item->angular_unit();
-        ASSERT_EQ(OB_SUCCESS, append_double(data, x));
-        ASSERT_EQ(OB_SUCCESS, append_double(data, y));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
         xv.push_back(x);
         yv.push_back(y);
     } else {
@@ -185,8 +197,8 @@ void append_random_inner_point(ObJsonBuffer& data, common::ObVector<double>& xv,
         x += static_cast<double>(180);
         double y = static_cast<double>(rand())/static_cast<double>(rand());
         y += static_cast<double>(90);
-        ASSERT_EQ(OB_SUCCESS, append_double(data, x));
-        ASSERT_EQ(OB_SUCCESS, append_double(data, y));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
         xv.push_back(x);
         yv.push_back(y);
     }
@@ -201,39 +213,112 @@ void append_random_point(ObJsonBuffer& data, common::ObVector<double>& xv, commo
 }
 
 void append_ring(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
-    GeogValueValidType type = GeogValueValidType::NOT_DEFINED)
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
 {
-    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
     for (int k = 0; k < pnum; k++) {
         if (type == GeogValueValidType::OUT_RANGE && k == pnum - 1) {
-            append_random_inner_point(data, xv, yv, GeogValueValidType::OUT_RANGE);
+            append_random_inner_point(data, xv, yv, GeogValueValidType::OUT_RANGE, bo);
         } else {
-            append_random_inner_point(data, xv, yv, type);
+            append_random_inner_point(data, xv, yv, type, bo);
         }
-
     }
 }
 
 void append_line(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
-    GeogValueValidType type = GeogValueValidType::NOT_DEFINED)
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
 {
-    ASSERT_EQ(OB_SUCCESS, append_bo(data));
-    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING));
-    append_ring(data, pnum, xv, yv, type);
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING, bo));
+    append_ring(data, pnum, xv, yv, type, bo);
+}
+
+void append_random_inner_point_3d(ObJsonBuffer& data, common::ObVector<double>& xv, common::ObVector<double>& yv,
+  common::ObVector<double>& zv,
+  GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+  ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_TRUE(srs_item != NULL);
+    double x = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(180));
+    x *= srs_item->angular_unit();
+    double y = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(90));
+    y *= srs_item->angular_unit();
+    double z = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(180));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, z, bo));
+    xv.push_back(x);
+    yv.push_back(y);
+    zv.push_back(z);
+}
+
+void append_line_3d(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRINGZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
+    for (int k = 0; k < pnum; k++) {
+      append_random_inner_point_3d(data, xv, yv, zv, type, bo);
+    }
+}
+
+void append_ring_3d(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
+    for (int k = 0; k < pnum; k++) {
+      append_random_inner_point_3d(data, xv, yv, zv, type, bo);
+    }
+}
+
+void append_poly_3d(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGONZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    // push rings
+    for (int j = 0; j < lnum; j++) {
+        append_ring_3d(data, pnum, xv, yv, zv, type, bo);
+    }
+}
+
+void append_multi_line_3d(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTILINESTRINGZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    // push lines
+    for (int j = 0; j < lnum; j++) {
+        append_line_3d(data, pnum, xv, yv, zv, type, bo);
+    }
 }
 
 void append_poly(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
-    GeogValueValidType type = GeogValueValidType::NOT_DEFINED)
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
 {
-    ASSERT_EQ(OB_SUCCESS, append_bo(data));
-    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON));
-    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum));
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
     // push rings
     for (int j = 0; j < lnum; j++) {
         if (type == GeogValueValidType::OUT_RANGE && j == lnum - 1) {
-            append_ring(data, pnum, xv, yv, GeogValueValidType::OUT_RANGE);
+            append_ring(data, pnum, xv, yv, GeogValueValidType::OUT_RANGE, bo);
         } else {
-            append_ring(data, pnum, xv, yv, type);
+            append_ring(data, pnum, xv, yv, type, bo);
         }
     }
 }
@@ -254,14 +339,214 @@ void append_multi_point(ObJsonBuffer& data, uint32_t pnum, common::ObVector<doub
 }
 
 void append_multi_line(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
-    GeogValueValidType type = GeogValueValidType::NOT_DEFINED)
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
 {
-    ASSERT_EQ(OB_SUCCESS, append_bo(data));
-    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTILINESTRING));
-    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum));
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTILINESTRING, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
     // push lines
     for (int j = 0; j < lnum; j++) {
-        append_line(data, pnum, xv, yv, type);
+        append_line(data, pnum, xv, yv, type, bo);
+    }
+}
+
+void append_rectangle(ObJsonBuffer& data, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    uint32_t pnum = 5;
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
+    ASSERT_TRUE(srs_item != NULL);
+
+    double lower_left_x = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(180));
+    lower_left_x *= srs_item->angular_unit();
+    double lower_left_y = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(90));
+    lower_left_y *= srs_item->angular_unit();
+    xv.push_back(lower_left_x);
+    yv.push_back(lower_left_y);
+
+    double upper_right_x = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(180));
+    upper_right_x *= srs_item->angular_unit();
+    double upper_right_y = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(90));
+    upper_right_y *= srs_item->angular_unit();
+    xv.push_back(upper_right_x);
+    yv.push_back(upper_right_y);
+
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, upper_right_x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, upper_right_x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, upper_right_y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, upper_right_y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, lower_left_y, bo));
+}
+
+void append_sdo_multi_point(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOINT, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
+    for (int i = 0; i < pnum; i++) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT, bo));
+        append_random_inner_point(data, xv, yv, type, bo);
+    }
+}
+
+void append_sdo_multi_point_3d(ObJsonBuffer& data, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOINTZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum, bo));
+    for (int i = 0; i < pnum; i++) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINTZ, bo));
+        append_random_inner_point_3d(data, xv, yv, zv, type, bo);
+    }
+}
+
+void append_sdo_multi_poly_3d(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    common::ObVector<uint64_t>& pnumv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOLYGONZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    uint32_t fix_poly_num = 1;
+    // push rings
+    for (int j = 0; j < lnum; j++) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGONZ, bo));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, fix_poly_num, bo));
+        append_ring_3d(data, pnum, xv, yv, zv, type, bo);
+        pnumv.push_back(pnum);
+        // to do : rectangle
+    }
+}
+
+void append_sdo_multi_poly(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<uint64_t>& pnumv,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOLYGON, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    uint32_t fix_poly_num = 1;
+    // push rings
+    for (int j = 0; j < lnum; j++) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, fix_poly_num, bo));
+        if (rand() % 2) {
+            append_ring(data, pnum, xv, yv, type, bo); // 1604
+            pnumv.push_back(pnum);
+        } else {
+            append_rectangle(data, xv, yv, type, bo); // 84
+            pnumv.push_back(2);
+        }
+    }
+}
+
+void append_sdo_collection(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<ObGeoType>& types,
+    common::ObVector<uint64_t>& pnums,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTION, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    for (int j = 0; j < lnum; j++) {
+        if (rand() % 5 == 0) {
+            // point
+            double x = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(180));
+            x *= srs_item->angular_unit();
+            double y = fmod(static_cast<double>(rand())/static_cast<double>(rand()), static_cast<double>(90));
+            y *= srs_item->angular_unit();
+            xv.push_back(x);
+            yv.push_back(y);
+            ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+            ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT, bo));
+            ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+            ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+            types.push_back(ObGeoType::POINT);
+            pnums.push_back(1);
+        } else if (rand() % 5 == 1) {
+            // multipoint with pnum point
+            append_sdo_multi_point(data, pnum, xv, yv, type, bo);
+            types.push_back(ObGeoType::MULTILINESTRING);
+            pnums.push_back(pnum);
+        } else if (rand() % 5 == 2) {
+            // ring with pnum point
+            ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+            ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+            ASSERT_EQ(OB_SUCCESS, append_uint32(data, 1, bo));
+            append_ring(data, pnum, xv, yv, type, bo);
+            types.push_back(ObGeoType::POLYGON);
+            pnums.push_back(pnum);
+        } else if (rand() % 5 == 3) {
+            // rectangle
+            ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+            ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+            ASSERT_EQ(OB_SUCCESS, append_uint32(data, 1, bo));
+            append_rectangle(data, xv, yv, type, bo);
+            types.push_back(ObGeoType::POLYGON);
+            pnums.push_back(2);
+        } else {
+            // linestring with pnum point
+            append_line(data, pnum, xv, yv, type, bo);
+            types.push_back(ObGeoType::LINESTRING);
+            pnums.push_back(pnum);
+        }
+    }
+}
+
+void append_sdo_collection_3d(ObJsonBuffer& data, uint32_t lnum, uint32_t pnum, common::ObVector<double>& xv, common::ObVector<double>& yv,
+    common::ObVector<double>& zv,
+    common::ObVector<ObGeoType>& types,
+    common::ObVector<uint64_t>& pnums,
+    GeogValueValidType type = GeogValueValidType::NOT_DEFINED,
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian)
+{
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTIONZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum, bo));
+    for (int j = 0; j < lnum; j++) {
+        if (j % 4 == 0) {
+            // point
+            ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+            ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINTZ, bo));
+            append_random_inner_point_3d(data, xv, yv, zv, type, bo);
+            types.push_back(ObGeoType::POINTZ);
+            pnums.push_back(1);
+        } else if (j % 4 == 1) {
+            // multipoint with pnum point
+            append_sdo_multi_point_3d(data, pnum, xv, yv, zv,type, bo);
+            types.push_back(ObGeoType::MULTIPOINTZ);
+            pnums.push_back(pnum);
+        } else if (j % 4 == 2) {
+            // polygon
+            append_poly_3d(data, 1, 5, xv, yv, zv, type, bo);
+            types.push_back(ObGeoType::POLYGONZ);
+            pnums.push_back(5);
+        } else {
+            // linestring with pnum point
+            append_line_3d(data, pnum, xv, yv, zv, type, bo);
+            types.push_back(ObGeoType::LINESTRINGZ);
+            pnums.push_back(pnum);
+        }
     }
 }
 
@@ -317,6 +602,235 @@ TEST_F(TestGeoBin, point)
     ObWkbGeomPoint& p2 = *reinterpret_cast<ObWkbGeomPoint*>(data.ptr());
     ASSERT_EQ(3.321, p2.get<0>());
     ASSERT_EQ(4.444, p2.get<1>());
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_point)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 1.323));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 999.5456));
+
+    ObIWkbGeomPoint iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+
+    visitor.reset();
+    res.reset();
+    ObIWkbGeogPoint iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_linestring)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    uint32_t num = 5;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    append_line(data, num, xv, yv);
+
+    ObIWkbGeomLineString iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+
+    visitor.reset();
+    res.reset();
+    ObIWkbGeogLineString iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_polygon)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObString res;
+    ObJsonBuffer data(&allocator);
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    uint32_t rnum = 3;
+    uint32_t pnum = 2;
+    append_poly(data, rnum, pnum, xv, yv);
+
+    ObIWkbGeogPolygon iwkb_geog_poly;
+    iwkb_geog_poly.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog_poly.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+
+    visitor.reset();
+    res.reset();
+    ObIWkbGeomPolygon iwkb_geom_poly;
+    iwkb_geom_poly.set_data(data.string());
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom_poly.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json: " << std::string(res.ptr(), res.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_multi_point)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    uint32_t num = 2;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    append_multi_point(data, num, xv, yv);
+
+    ObIWkbGeogMultiPoint iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+
+    ObIWkbGeomMultiPoint iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    visitor.reset();
+    res.reset();
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_multi_line)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    uint32_t pnum = 2;
+    uint32_t lnum = 3;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    append_multi_line(data, lnum, pnum, xv, yv);
+
+    ObIWkbGeogMultiLineString iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+
+    ObIWkbGeomMultiLineString iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    visitor.reset();
+    res.reset();
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_multi_poly)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    uint32_t polynum = 2;
+    uint32_t lnum = 3;
+    uint32_t pnum = 2;
+    common::ObVector<double> xv[polynum];
+    common::ObVector<double> yv[polynum];
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOLYGON));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, polynum));
+    for (int i = 0; i < polynum; i++) {
+        append_poly(data, lnum, pnum, xv[i], yv[i]);
+    }
+
+    ObIWkbGeogMultiPolygon iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+
+    ObIWkbGeomMultiPolygon iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    visitor.reset();
+    res.reset();
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, wkb_to_json_visitor_geom_collection)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ObString res;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTION));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 7));
+    common::ObVector<double> xv[7];
+    common::ObVector<double> yv[7];
+    // point
+    append_random_point(data, xv[0], yv[0]);
+    // line
+    append_line(data, 2, xv[1], yv[1]);
+    // polygon
+    append_poly(data, 3, 2, xv[2], yv[2]);
+    // multipoint
+    append_multi_point(data, 3, xv[3], yv[3]);
+    // multiline
+    append_multi_line(data, 2, 2, xv[4], yv[4]);
+    // multipolygon
+    int64_t polygon_num = 2;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOLYGON));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, polygon_num));
+    for (int i = 0; i < polygon_num; i++) {
+        append_poly(data, 3, 2, xv[5], yv[5]);
+    }
+    // empty geometry
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTION));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 0));
+
+    ObIWkbGeogCollection iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObWkbToJsonVisitor visitor(&allocator);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
+
+    ObIWkbGeomCollection iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    visitor.reset();
+    res.reset();
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    visitor.get_geojson(res);
+    ASSERT_EQ(false, res.empty());
+    std::cout << "geo json:" << std::string(res.ptr(), res.length()) << std::endl;
 }
 
 TEST_F(TestGeoBin, linestring)
@@ -1811,6 +2325,214 @@ TEST_F(TestGeoBin, intersection_ml)
             ASSERT_EQ(2U, ml[i][j].get<1>());
 		}
 	}
+}
+
+TEST_F(TestGeoBin, mvt_encode_visitor_point)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 2));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+    ObVector<uint32_t> expect;
+    expect.push_back(9);
+    expect.push_back(4);
+    expect.push_back(6);
+
+    ObIWkbGeomPoint iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObGeoMvtEncodeVisitor visitor;
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    ObVector<uint32_t> &res = visitor.get_encode_buffer();
+    ASSERT_EQ(expect.size(), res.size());
+    for (int i = 0; i < res.size(); i++) {
+      ASSERT_EQ(expect.at(i), res.at(i));
+    }
+}
+
+TEST_F(TestGeoBin, mvt_encode_visitor_line)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+
+    ObVector<uint32_t> expect;
+    expect.push_back(9);
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(10);
+    expect.push_back(4);
+    expect.push_back(4);
+
+    ObIWkbGeomLineString iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObGeoMvtEncodeVisitor visitor;
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    ObVector<uint32_t> &res = visitor.get_encode_buffer();
+    ASSERT_EQ(expect.size(), res.size());
+    for (int i = 0; i < res.size(); i++) {
+      ASSERT_EQ(expect.at(i), res.at(i));
+    }
+}
+
+TEST_F(TestGeoBin, mvt_encode_visitor_multipoint)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOINT));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 3)); // point number
+
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 2));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 2));
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+
+    ObVector<uint32_t> expect;
+    expect.push_back(25);
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(2);
+
+    ObIWkbGeomMultiPoint iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObGeoMvtEncodeVisitor visitor;
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    ObVector<uint32_t> &res = visitor.get_encode_buffer();
+    ASSERT_EQ(expect.size(), res.size());
+    for (int i = 0; i < res.size(); i++) {
+      ASSERT_EQ(expect.at(i), res.at(i));
+    }
+}
+
+TEST_F(TestGeoBin, mvt_encode_visitor_multiline)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTILINESTRING));
+    uint32_t lnum = 2;
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, lnum));
+
+    uint32_t pnum = 3;
+    for (uint32_t i = 0; i < lnum; i++) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, pnum));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 1));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 3));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 5));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 5));
+    }
+    ObVector<uint32_t> expect;
+    expect.push_back(9); // move to
+    expect.push_back(2);
+    expect.push_back(2);
+    expect.push_back(18); // line to
+    expect.push_back(4);
+    expect.push_back(4);
+    expect.push_back(4);
+    expect.push_back(4);
+    expect.push_back(9);
+    expect.push_back(7);
+    expect.push_back(7);
+    expect.push_back(18);
+    expect.push_back(4);
+    expect.push_back(4);
+    expect.push_back(4);
+    expect.push_back(4);
+
+    ObIWkbGeomMultiLineString iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObGeoMvtEncodeVisitor visitor;
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    ObVector<uint32_t> &res = visitor.get_encode_buffer();
+    ASSERT_EQ(expect.size(), res.size());
+    for (int i = 0; i < res.size(); i++) {
+      ASSERT_EQ(expect.at(i), res.at(i));
+    }
+}
+
+
+TEST_F(TestGeoBin, mvt_encode_visitor_poly)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+  ASSERT_EQ(OB_SUCCESS, append_bo(data));
+  ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON));
+  ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2));
+  ASSERT_EQ(OB_SUCCESS, append_uint32(data, 4));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 160));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 200));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 310));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 20));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 20));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 20));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 160));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 200));
+
+  ASSERT_EQ(OB_SUCCESS, append_uint32(data, 4));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 160));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 200));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 260));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 40));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 70));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 40));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 160));
+  ASSERT_EQ(OB_SUCCESS, append_double(data, 200));
+
+  /* POLYGON((160 200,310 20,20 20,160 200),(160 200,260 40,70 40,160 200)) */
+
+  ObVector<uint32_t> expect;
+    expect.push_back(9); // move to
+    expect.push_back(320);
+    expect.push_back(400);
+    expect.push_back(18); // line to
+    expect.push_back(300);
+    expect.push_back(359);
+    expect.push_back(579);
+    expect.push_back(0);
+    expect.push_back(15);
+
+    expect.push_back(9); // move to
+    expect.push_back(280);
+    expect.push_back(360);
+    expect.push_back(18); // line to
+    expect.push_back(200);
+    expect.push_back(319);
+    expect.push_back(379);
+    expect.push_back(0);
+    expect.push_back(15);
+
+    ObIWkbGeomPolygon iwkb_geom;
+    iwkb_geom.set_data(data.string());
+    ObGeoMvtEncodeVisitor visitor;
+    ASSERT_EQ(OB_SUCCESS, iwkb_geom.do_visit(visitor));
+    ObVector<uint32_t> &res = visitor.get_encode_buffer();
+    ASSERT_EQ(expect.size(), res.size());
+    for (int i = 0; i < res.size(); i++) {
+      ASSERT_EQ(expect.at(i), res.at(i));
+    }
 }
 
 TEST_F(TestGeoBin, wkb_size_visitor_point)
@@ -4515,14 +5237,875 @@ TEST_F(TestGeoBin, mbr_polygon_2)
     ASSERT_EQ(ObGeoTypeUtil::get_mbr_polygon(allocator, &srsbound_max, iwkb_geogp2, geop2), OB_EMPTY_RESULT);
 }
 
+/*********************************************************/
+/*                test for ObSdoGeoToWkb                 */
+/*********************************************************/
+
+TEST_F(TestGeoBin, sdo_point) {
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeoStringBuffer data(&allocator);
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    double x = 19;
+    double y = 9.5456;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo)); // 00
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    ObString res = data.string();
+
+    // case 1: SDO_ELEM_INFO = NULL, SDO_POINT_TYPE = (x, y, NULL)
+    ObSdoPoint point(x, y);
+    ObSdoGeoObject geo(ObGeoType::POINT, point);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+
+    // case 2: SDO_ELEM_INFO = (1,1,1), SDO_ORDINATES = (x, y)
+    ObArray<uint64_t> elem_info;
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+
+    ObArray<double> ordinate;
+    ASSERT_EQ(OB_SUCCESS, ordinate.push_back(x));
+    ASSERT_EQ(OB_SUCCESS, ordinate.push_back(y));
+
+    // ObSdoGeoToWkb trans2(&allocator);
+    ObSdoGeoObject geo2(ObGeoType::POINT, elem_info, ordinate);
+    ObString wkb2;
+    trans.reset();
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo2, wkb2));
+    ASSERT_EQ(wkb2 == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_point_3d) {
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeoStringBuffer data(&allocator);
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    double x = 19;
+    double y = 9.5456;
+    double z = 18.5;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo)); // 00
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINTZ, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, z, bo));
+    ObString res = data.string();
+
+    // case 1: SDO_ELEM_INFO = NULL, SDO_POINT_TYPE = (x, y, NULL)
+    ObSdoPoint point(x, y, z);
+    ObSdoGeoObject geo(ObGeoType::POINTZ, point, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+
+    // case 2: SDO_ELEM_INFO = (1,1,1), SDO_ORDINATES = (x, y)
+    ObArray<uint64_t> elem_info;
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+
+    ObArray<double> ordinate;
+    ASSERT_EQ(OB_SUCCESS, ordinate.push_back(x));
+    ASSERT_EQ(OB_SUCCESS, ordinate.push_back(y));
+    ASSERT_EQ(OB_SUCCESS, ordinate.push_back(z));
+    // ObSdoGeoToWkb trans2(&allocator);
+    ObSdoGeoObject geo2(ObGeoType::POINTZ, elem_info, ordinate);
+    ObString wkb2;
+    trans.reset();
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo2, wkb2));
+    ASSERT_EQ(wkb2 == res, true);
+
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb2);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_linestring) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    uint32_t num = 1000000;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_line(data, num, xv, yv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(2));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ObArray<double> ordinate;
+    for (uint32_t k = 0; k < num; k++) {
+        ordinate.push_back(xv[k]);
+        ordinate.push_back(yv[k]);
+    }
+    ObSdoGeoObject geo(ObGeoType::LINESTRING, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_linestring_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    uint32_t num = 10;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_line_3d(data, num, xv, yv, zv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(2));
+    ASSERT_EQ(OB_SUCCESS, elem_info.push_back(1));
+    ObArray<double> ordinate;
+    for (uint32_t k = 0; k < num; k++) {
+        ordinate.push_back(xv[k]);
+        ordinate.push_back(yv[k]);
+        ordinate.push_back(zv[k]);
+    }
+    ObSdoGeoObject geo(ObGeoType::LINESTRINGZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_polygon) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line [lnum] inner line, every line has [pnum] point
+    uint32_t pnum = 100;
+    uint32_t lnum = 10001;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_poly(data, lnum, pnum, xv, yv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    for (uint64_t j = 0; j < lnum; j++) {
+        elem_info.push_back(ordinate.size() + 1);
+        if (j == 0) {
+            elem_info.push_back(1003); // ext ring
+        } else {
+            elem_info.push_back(2003); // inner ring
+        }
+
+        elem_info.push_back(1);
+
+        for (uint32_t k = 0; k < pnum; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+        }
+    }
+
+    ObSdoGeoObject geo(ObGeoType::POLYGON, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+}
+
+
+TEST_F(TestGeoBin, sdo_polygon_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line [lnum] inner line, every line has [pnum] point
+    uint32_t pnum = 5;
+    uint32_t lnum = 3;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_poly_3d(data, lnum, pnum, xv, yv, zv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    size_t z_idx = 0;
+    for (uint64_t j = 0; j < lnum; j++) {
+        elem_info.push_back(ordinate.size() + 1);
+        if (j == 0) {
+            elem_info.push_back(1003); // ext ring
+        } else {
+            elem_info.push_back(2003); // inner ring
+        }
+
+        elem_info.push_back(1);
+
+        for (uint32_t k = 0; k < pnum; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+            ordinate.push_back(zv[z_idx++]);
+        }
+    }
+
+    ObSdoGeoObject geo(ObGeoType::POLYGONZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_multipoint) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    uint32_t num = 1000000;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_multi_point(data, num, xv, yv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    for (uint32_t k = 0; k < num; k++) {
+        elem_info.push_back(k * 2 + 1);
+        elem_info.push_back(1);
+        elem_info.push_back(1);
+        ordinate.push_back(xv[k]);
+        ordinate.push_back(yv[k]);
+    }
+    ObSdoGeoObject geo(ObGeoType::MULTIPOINT, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_multipoint_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    uint32_t num = 10;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_multi_point_3d(data, num, xv, yv, zv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    elem_info.push_back(1);
+    elem_info.push_back(1);
+    elem_info.push_back(num);
+    for (uint32_t k = 0; k < num; k++) {
+        ordinate.push_back(xv[k]);
+        ordinate.push_back(yv[k]);
+        ordinate.push_back(zv[k]);
+    }
+    ObSdoGeoObject geo(ObGeoType::MULTIPOINTZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_multilinestring) {
+    get_srs_item(allocator_, 4326, srs_item);
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line 100 inner line, every line has 100 point
+    uint32_t pnum = 100;
+    uint32_t lnum = 10000;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    append_multi_line(data, lnum, pnum, xv, yv, type, bo);
+    ObString res = data.string();
+
+    // <index, 2, 1>
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    uint64_t index = 1;
+    for (size_t k = 0; k < lnum; k++) {
+        elem_info.push_back(index);
+        index += pnum * 2;
+        elem_info.push_back(2);
+        elem_info.push_back(1);
+        for (size_t j = 0; j < pnum; ++j) {
+            ordinate.push_back(xv[k * pnum + j]);
+            ordinate.push_back(yv[k * pnum + j]);
+        }
+    }
+
+    ObSdoGeoObject geo(ObGeoType::MULTILINESTRING, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_multilinestring_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line 100 inner line, every line has 100 point
+    uint32_t pnum = 10;
+    uint32_t lnum = 2;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    append_multi_line_3d(data, lnum, pnum, xv, yv, zv, type, bo);
+    ObString res = data.string();
+
+    // <index, 2, 1>
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    uint64_t index = 1;
+    for (size_t k = 0; k < lnum; k++) {
+        elem_info.push_back(index);
+        index += pnum * 3;
+        elem_info.push_back(2);
+        elem_info.push_back(1);
+        for (size_t j = 0; j < pnum; ++j) {
+            ordinate.push_back(xv[k * pnum + j]);
+            ordinate.push_back(yv[k * pnum + j]);
+            ordinate.push_back(zv[k * pnum + j]);
+        }
+    }
+
+    ObSdoGeoObject geo(ObGeoType::MULTILINESTRINGZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_multipolygon) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line [lnum] inner polygon, every polygon has [pnum] point
+    uint32_t pnum = 100;
+    uint32_t lnum = 10001;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<uint64_t> pnumv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_multi_poly(data, lnum, pnum, xv, yv, pnumv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    int rec_num = 0;
+    uint64_t ordinate_sum = 1;
+    for (uint64_t j = 0; j < lnum; j++) {
+        if (j == 0) {
+            elem_info.push_back(1);
+        } else {
+            ordinate_sum += pnumv[j - 1] * 2;
+            elem_info.push_back(ordinate_sum);
+        }
+        elem_info.push_back(1003);
+
+        if (pnumv[j] == 2) {
+            elem_info.push_back(3); // rectangle
+            ++rec_num;
+        } else {
+            elem_info.push_back(1);
+        }
+
+        for (uint32_t k = 0; k < pnumv[j]; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+        }
+    }
+    ObSdoGeoObject geo(ObGeoType::MULTIPOLYGON, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_multipolygon_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // 1 exterior line [lnum] inner polygon, every polygon has [pnum] point
+    uint32_t pnum = 5;
+    uint32_t lnum = 3;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    common::ObVector<uint64_t> pnumv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_multi_poly_3d(data, lnum, pnum, xv, yv, zv, pnumv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    size_t z_idx = 0;
+    int rec_num = 0;
+    uint64_t ordinate_sum = 1;
+    for (uint64_t j = 0; j < lnum; j++) {
+        if (j == 0) {
+            elem_info.push_back(1);
+        } else {
+            ordinate_sum += pnumv[j - 1] * 3;
+            elem_info.push_back(ordinate_sum);
+        }
+        elem_info.push_back(1003);
+        // to do : rectangle
+        elem_info.push_back(1);
+
+        for (uint32_t k = 0; k < pnumv[j]; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+            ordinate.push_back(zv[z_idx++]);
+        }
+    }
+    ObSdoGeoObject geo(ObGeoType::MULTIPOLYGONZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+
+TEST_F(TestGeoBin, sdo_collection) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // [lnum] geometry
+    uint32_t lnum = 1024;
+    uint32_t pnum = 100;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<ObGeoType> types;
+    common::ObVector<uint64_t> pnumv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_collection(data, lnum, pnum, xv, yv, types, pnumv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    int rec_num = 0;
+    uint64_t ordinate_sum = 1;
+    for (uint64_t j = 0; j < lnum; j++) {
+        elem_info.push_back(ordinate.size() + 1);
+        if (types[j] == ObGeoType::POINT) {
+            elem_info.push_back(1);
+            elem_info.push_back(1);
+        } else if (types[j] == ObGeoType::MULTILINESTRING) {
+            elem_info.push_back(1);
+            elem_info.push_back(pnum);
+        } else if (types[j] == ObGeoType::LINESTRING) {
+            elem_info.push_back(2);
+            elem_info.push_back(1);
+        } else if (types[j] == ObGeoType::POLYGON) {
+            elem_info.push_back(1003);
+            if (pnumv[j] == 2) {
+                elem_info.push_back(3); // rectangle
+                ++rec_num;
+            } else {
+                elem_info.push_back(1);
+            }
+        }
+        for (uint32_t k = 0; k < pnumv[j]; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+        }
+    }
+    ObSdoGeoObject geo(ObGeoType::GEOMETRYCOLLECTION, elem_info, ordinate);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb, res);
+    ASSERT_EQ(wkb == res, true);
+}
+
+TEST_F(TestGeoBin, sdo_collection_3d) {
+    get_srs_item(allocator_, 4326, srs_item);
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+    // [lnum] geometry
+    uint32_t lnum = 24;
+    uint32_t pnum = 6;
+    common::ObVector<double> xv;
+    common::ObVector<double> yv;
+    common::ObVector<double> zv;
+    common::ObVector<ObGeoType> types;
+    common::ObVector<uint64_t> pnumv;
+    GeogValueValidType type = GeogValueValidType::IN_RANGE;
+    ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::BigEndian;
+    append_sdo_collection_3d(data, lnum, pnum, xv, yv, zv, types, pnumv, type, bo);
+    ObString res = data.string();
+
+    ObArray<uint64_t> elem_info;
+    ObArray<double> ordinate;
+    size_t x_idx = 0;
+    size_t y_idx = 0;
+    size_t z_idx = 0;
+    int rec_num = 0;
+    uint64_t ordinate_sum = 1;
+    for (uint64_t j = 0; j < lnum; j++) {
+        elem_info.push_back(ordinate.size() + 1);
+        if (types[j] == ObGeoType::POINTZ) {
+            elem_info.push_back(1);
+            elem_info.push_back(1);
+        } else if (types[j] == ObGeoType::MULTIPOINTZ) {
+            elem_info.push_back(1);
+            elem_info.push_back(pnum);
+        } else if (types[j] == ObGeoType::LINESTRINGZ) {
+            elem_info.push_back(2);
+            elem_info.push_back(1);
+        } else if (types[j] == ObGeoType::POLYGONZ) {
+            elem_info.push_back(1003);
+            elem_info.push_back(1);
+            // to do rectangle
+        }
+        for (uint32_t k = 0; k < pnumv[j]; k++) {
+            ordinate.push_back(xv[x_idx++]);
+            ordinate.push_back(yv[y_idx++]);
+            ordinate.push_back(zv[z_idx++]);
+        }
+    }
+    ObSdoGeoObject geo(ObGeoType::GEOMETRYCOLLECTIONZ, elem_info, ordinate, 0);
+    ObSdoGeoToWkb trans(&allocator);
+    ObString wkb;
+    ASSERT_EQ(OB_SUCCESS, trans.translate(&geo, wkb));
+    ASSERT_EQ(wkb, res);
+    ASSERT_EQ(wkb == res, true);
+    ObGeometry3D geo_3d;
+    geo_3d.set_data(wkb);
+    ObSdoGeoObject geo3;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    ASSERT_EQ(geo == geo3, true);
+
+    ObString geo_json;
+    ASSERT_EQ(OB_SUCCESS, geo_3d.to_geo_json(&allocator, geo_json));
+    std::cout << "geo json: " << std::string(geo_json.ptr(), geo_json.length()) << std::endl;
+}
+/******************************************************************/
+/*                test for ObWkbByteOrderVisitor                  */
+/******************************************************************/
+ObString to_hex(const ObString &str) {
+    uint64_t out_str_len = str.length() * 2;
+    int64_t pos = 0;
+    char *data = static_cast<char *>(allocator_.alloc(out_str_len));
+    hex_print(str.ptr(), str.length(), data, out_str_len, pos);
+    return ObString(out_str_len, data);
+}
+
+void mock_wkb_collection(ObJsonBuffer& data, ObGeoWkbByteOrder bo) {
+    int geo_num = 6;
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::GEOMETRYCOLLECTION, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, geo_num, bo));
+    double x = 1.234;
+    double y = 5.678;
+    // point
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    // line with 2 point
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    for (int i = 0; i < 2; ++i) {
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    }
+    // polygon with 2 ring (1 polygon ring ,1 rectangle ring)
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 5, bo));
+    for (int i = 0; i < 5; ++i) {
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    }
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    for (int i = 0; i < 2; ++i) {
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    }
+    // multipoint with 2 point
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOINT, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    for (int i = 0; i < 2; ++i) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POINT, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+    }
+    // multilinestring with 2 linestring
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTILINESTRING, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    for (int j = 0; j < 2; ++j) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::LINESTRING, bo));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+        for (int i = 0; i < 2; ++i) {
+            ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+            ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+        }
+    }
+    // multipolygon with 2 polygon
+    ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::MULTIPOLYGON, bo));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+    for (int j = 0; j < 2; ++j) {
+        ASSERT_EQ(OB_SUCCESS, append_bo(data, bo));
+        ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON, bo));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, 5, bo));
+        for (int i = 0; i < 5; ++i) {
+            ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+            ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+        }
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, 2, bo));
+        for (int i = 0; i < 2; ++i) {
+            ASSERT_EQ(OB_SUCCESS, append_double(data, x, bo));
+            ASSERT_EQ(OB_SUCCESS, append_double(data, y, bo));
+        }
+    }
+}
+
+TEST_F(TestGeoBin, big_endian_collection) {
+    int ret = 1;
+    ObArenaAllocator allocator(ObModIds::TEST);
+
+    ObJsonBuffer big_data(&allocator);
+    mock_wkb_collection(big_data, ObGeoWkbByteOrder::BigEndian);
+    ObString big_wkb = big_data.string();
+
+    ObJsonBuffer little_data(&allocator);
+    mock_wkb_collection(little_data, ObGeoWkbByteOrder::LittleEndian);
+    ObString res_little_wkb = little_data.string();
+
+    ObGeometry *geo = NULL;
+    ASSERT_EQ(ObGeoTypeUtil::create_geo_by_type(allocator, ObGeoType::GEOMETRYCOLLECTION, false, true, geo), OB_SUCCESS);
+    ASSERT_EQ(geo != NULL, true);
+    geo->set_data(big_wkb);
+    ObWkbByteOrderVisitor be_visitor(&allocator, ObGeoWkbByteOrder::LittleEndian);
+    ASSERT_EQ(geo->do_visit(be_visitor), OB_SUCCESS);
+    ObString cal_little_wkb = be_visitor.get_wkb();
+    ASSERT_EQ(res_little_wkb == cal_little_wkb , true) << res_little_wkb.length() << cal_little_wkb.length();
+}
+
+/************************************************
+** test for ObGeoInteriorPointVisitor
+************************************************/
+TEST_F(TestGeoBin, interior_point_vistor_point)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeometry *geo = NULL;
+    ObGeometry *interior_point = NULL;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, "POINT(10 0)", geo, true, false), OB_SUCCESS);
+    ObGeoInteriorPointVisitor visitor(&allocator);
+    ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
+    ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
+    ASSERT_EQ(interior_point->type(), ObGeoType::POINT);
+    ObCartesianPoint *pt = reinterpret_cast<ObCartesianPoint *>(interior_point);
+    ASSERT_EQ(pt->x(), 10);
+    ASSERT_EQ(pt->y(), 0);
+}
+
+TEST_F(TestGeoBin, interior_point_vistor_line)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeometry *geo = NULL;
+    ObGeometry *interior_point = NULL;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, "LINESTRING(0 0, 5 0, 10 0)", geo, true, false), OB_SUCCESS);
+    ObGeoInteriorPointVisitor visitor(&allocator);
+    ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
+    ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
+    ASSERT_EQ(interior_point->type(), ObGeoType::POINT);
+    ObCartesianPoint *pt = reinterpret_cast<ObCartesianPoint *>(interior_point);
+    ASSERT_EQ(pt->x(), 5);
+    ASSERT_EQ(pt->y(), 0);
+}
+
+TEST_F(TestGeoBin, interior_point_vistor_poly)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeometry *geo = NULL;
+    ObGeometry *interior_point = NULL;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, "POLYGON(("
+                             "182635.760119718 141846.477712277,182826.153168283 141974.473039044,"
+                             "182834.952846998 141857.67730337,182862.151853936 141851.277537031,"
+                             "182860.551912351 141779.280165725,182824.553226698 141748.881275618,"
+                             "182814.953577191 141758.480925126,182766.155358861 141721.682268681,"
+                             "182742.156235092 141744.881421657,182692.558045971 141716.882443927,"
+                             "182635.760119718 141846.477712277))", geo, true, false), OB_SUCCESS);
+    ObGeoInteriorPointVisitor visitor(&allocator);
+    ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
+    ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
+    ASSERT_EQ(interior_point->type(), ObGeoType::POINT);
+    ObCartesianPoint *pt = reinterpret_cast<ObCartesianPoint *>(interior_point);
+    ASSERT_DOUBLE_EQ(pt->x(), 182755.89202988159);
+    ASSERT_DOUBLE_EQ(pt->y(), 141812.87893900101);
+}
+
+TEST_F(TestGeoBin, interior_point_vistor_empty)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObGeometry *geo = NULL;
+    ObGeometry *interior_point = NULL;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, "GEOMETRYCOLLECTION EMPTY", geo, true, false), OB_SUCCESS);
+    ObGeoInteriorPointVisitor visitor(&allocator);
+    ASSERT_EQ(geo->do_visit(visitor), OB_SUCCESS);
+    ASSERT_EQ(visitor.get_interior_point(interior_point) , OB_SUCCESS);
+    ASSERT_EQ(interior_point->type(), ObGeoType::GEOMETRYCOLLECTION);
+    ASSERT_EQ(interior_point->is_empty(), true);
+}
+
+void elevation_visitor_checker(ObIAllocator &allocator, const ObString &wkt1, const ObString &wkt2, const ObString &cal_wkt, const ObString &real_wkt)
+{
+    const double TOLERANCE = 0.00001;
+    ObGeometry *geo1 = nullptr;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, wkt1, geo1, true, false), OB_SUCCESS);
+    ASSERT_EQ(ObGeoTypeUtil::is_3d_geo_type(geo1->type()), true);
+    ObGeometry *geo2 = nullptr;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, wkt2, geo2, true, false), OB_SUCCESS);
+    ASSERT_EQ(ObGeoTypeUtil::is_3d_geo_type(geo2->type()), true);
+    ObGeometry *geo_cal = nullptr;
+    ASSERT_EQ(ObWktParser::parse_wkt(allocator, cal_wkt, geo_cal, true, false), OB_SUCCESS);
+    ASSERT_EQ(ObGeoTypeUtil::is_3d_geo_type(geo_cal->type()), false);
+
+    ObGeoElevationVisitor visitor(allocator, nullptr);
+    ObGeometry *res_geo = nullptr;
+    ASSERT_EQ(visitor.init(*geo1, *geo2), OB_SUCCESS);
+    ASSERT_EQ(geo_cal->do_visit(visitor), OB_SUCCESS);
+    ASSERT_EQ(visitor.get_geometry_3D(res_geo), OB_SUCCESS);
+    ObString wkt;
+    ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(res_geo);
+    ASSERT_EQ(geo_3d->to_wkt(allocator, wkt), OB_SUCCESS);
+    ASSERT_EQ(wkt == real_wkt, true);
+}
+
+TEST_F(TestGeoBin, elevation_visitor) {
+    ObArenaAllocator allocator(ObModIds::TEST);
+    elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(-1 11, 11 11, 0 10, 5 10, 10 10, 0 5, 5 5, 10 5, 0 0, 5 0, 10 0, -1 -1, 5 -1, 11 -1)",
+        "MULTIPOINT Z (-1 11 5,11 11 10,0 10 5,5 10 5,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 5,10 0 5,-1 -1 0,5 -1 5,11 -1 5)");
+    elevation_visitor_checker(allocator, "POLYGON Z ((1 6 50, 9 6 60, 9 4 50, 1 4 40, 1 6 50))", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 4,5 4,10 4,0 0,5 0,10 0)",
+        "MULTIPOINT Z (0 10 50,5 10 50,10 10 60,0 5 50,5 5 50,10 5 50,0 4 40,5 4 50,10 4 50,0 0 40,5 0 50,10 0 50)");
+    elevation_visitor_checker(allocator, "MULTILINESTRING Z ((0 0 0, 10 10 8), (1 2 2, 9 8 6))", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
+        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+    elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 8)", "LINESTRING Z (1 2 2, 9 8 6)",
+        "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
+        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+    elevation_visitor_checker(allocator, "LINESTRING Z (0 5 0, 10 5 10)", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
+        "MULTIPOINT Z (0 10 0,5 10 5,10 10 10,0 5 0,5 5 5,10 5 10,0 0 0,5 0 5,10 0 10)");
+    elevation_visitor_checker(allocator, "LINESTRING Z (5 0 0, 5 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
+        "MULTIPOINT Z (0 10 10,5 10 10,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 0,10 0 0)");
+    elevation_visitor_checker(allocator, "POINT Z (5 5 5)", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
+        "MULTIPOINT Z (0 9 5,5 9 5,9 9 5,0 5 5,5 5 5,9 5 5,0 0 5,5 0 5,9 0 5)");
+    elevation_visitor_checker(allocator, "MULTIPOINT Z ((5 5 5), (5 5 9))", "GEOMETRYCOLLECTION Z EMPTY",
+        "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
+        "MULTIPOINT Z (0 9 7,5 9 7,9 9 7,0 5 7,5 5 7,9 5 7,0 0 7,5 0 7,9 0 7)");
+    elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
+        "LINESTRING (1 1, 9 9)",
+        "LINESTRING Z (1 1 0,9 9 10)");
+    elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
+        "POLYGON ((1 9, 9 9, 9 1, 1 1, 1 9))",
+        "POLYGON Z ((1 9 5,9 9 10,9 1 5,1 1 0,1 9 5))");
+}
 } // namespace common
 } // namespace oceanbase
 
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
-  // system("rm -f test_geo_bin.log");
-  // OB_LOGGER.set_file_name("test_geo_bin.log");
-  // OB_LOGGER.set_log_level("INFO");
+  system("rm -f test_geo_bin.log");
+  OB_LOGGER.set_file_name("test_geo_bin.log");
+  OB_LOGGER.set_log_level("DEBUG");
   return RUN_ALL_TESTS();
 }

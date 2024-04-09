@@ -959,12 +959,13 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = NULL;
+  int64_t process_point = 0; // for test
   if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("log stream is null, unexpected error");
-  } else if (OB_FAIL(ls->offline())) {
+  } else if (OB_BREAK_FAIL(ls->offline())) {
     LOG_WARN("ls offline failed", K(ret), KP(ls));
-  } else if (OB_FAIL(ls->stop())) {
+  } else if (OB_BREAK_FAIL(ls->stop())) {
     LOG_WARN("stop ls failed", K(ret), KP(ls));
   } else if (FALSE_IT(ls->wait())) {
   } else {
@@ -979,16 +980,18 @@ int ObLSService::safe_remove_ls_(ObLSHandle handle, const bool remove_from_disk)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else if (FALSE_IT(task = new(task) ObLSSafeDestroyTask())) {
-    } else if (remove_from_disk && OB_FAIL(ls->set_remove_state())) {
+    } else if (OB_BREAK_FAIL(ret)) {
+      LOG_WARN("break fail for malloc", K(ret));
+    } else if (remove_from_disk && OB_BREAK_FAIL(ls->set_remove_state())) {
       LOG_WARN("ls set remove state failed", KR(ret), K(ls_id));
-    } else if (OB_FAIL(task->init(MTL_ID(),
-                                  handle,
-                                  this))) {
+    } else if (OB_BREAK_FAIL(task->init(MTL_ID(),
+                                        handle,
+                                        this))) {
       LOG_WARN("init safe destroy task failed", K(ret));
     } else {
       remove_ls_(ls, remove_from_disk, write_slog);
       // try until success.
-      while (OB_FAIL(gc_service->add_safe_destroy_task(*task))) {
+      while (OB_BREAK_FAIL(gc_service->add_safe_destroy_task(*task))) {
         if (REACH_TIME_INTERVAL(1_min)) { // every minute
           LOG_WARN("add safe destroy task failed, retry", K(ret), KPC(task));
         }

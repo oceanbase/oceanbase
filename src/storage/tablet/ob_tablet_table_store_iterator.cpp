@@ -286,8 +286,8 @@ int ObTableStoreIterator::add_tables(
       } else if (sstable_array[i]->is_co_sstable() && unpack_co_table) {
         ObCOSSTableV2 *co_table = static_cast<ObCOSSTableV2 *>(sstable_array[i]);
         ObSSTableMetaHandle meta_handle;
-        if (co_table->is_empty_co_table()) {
-          // empty co table, no need to call this func recursively
+        if (co_table->is_cgs_empty_co_table()) {
+          // all_cg only co table, no need to call this func recursively
         } else if (OB_FAIL(co_table->get_meta(meta_handle))) {
           LOG_WARN("failed to get co meta handle", K(ret), KPC(co_table));
         } else {

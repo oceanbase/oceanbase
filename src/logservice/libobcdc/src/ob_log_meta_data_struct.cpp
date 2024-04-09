@@ -335,6 +335,36 @@ int ObDictTenantInfo::replace_dict_table_meta(
   return ret;
 }
 
+int ObDictTenantInfo::remove_table_meta(const uint64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
+  } else {
+    MetaDataKey meta_data_key(table_id);
+    datadict::ObDictTableMeta *old_table_meta = nullptr;
+    if (OB_FAIL(get_table_meta(table_id, old_table_meta))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        LOG_ERROR("tenant_info get_table_meta failed", KR(ret), K(table_id), K(old_table_meta));
+      } else {
+        // Does not exist locally, insert directly
+        ret = OB_SUCCESS;
+      }
+    } else {
+      // Exist locally, free it
+      if (OB_FAIL(free_dict_table_meta(old_table_meta))) {
+        LOG_ERROR("free_dict_table_meta failed", KR(ret), K(table_id));
+      } else if (OB_FAIL(table_map_.erase(meta_data_key))) {
+        LOG_ERROR("db_map_ erase failed", KR(ret), K(meta_data_key));
+      } else {
+        LOG_INFO("remove_table_meta success", K(table_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDictTenantInfo::get_tenant_schema_info(TenantSchemaInfo &tenant_schema_info)
 {
   int ret = OB_SUCCESS;

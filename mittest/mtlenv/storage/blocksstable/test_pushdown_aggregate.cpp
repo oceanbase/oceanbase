@@ -191,7 +191,7 @@ void TestPushdownAggregate::prepare_access_param(const bool is_reverse_scan, ObI
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_group_by_ = true;
-  access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = false;
   read_info_.reset();
   ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_,

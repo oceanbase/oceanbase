@@ -331,7 +331,8 @@ public:
                                        common::ObString &name);
   static int cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_guard,
                                 const ObSQLSessionInfo *session,
-                                common::ObString &name);
+                                common::ObString &name,
+                                ObIAllocator *allocator);
   static int check_and_convert_table_name(const common::ObCollationType cs_type,
                                           const bool preserve_lettercase,
                                           common::ObString &name,

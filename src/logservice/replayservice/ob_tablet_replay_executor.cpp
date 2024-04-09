@@ -132,7 +132,8 @@ int ObTabletReplayExecutor::replay_get_tablet_(
   } else {
     const share::ObLSID &ls_id = ls->get_ls_id();
     if (is_replay_update_tablet_status_()) {
-      if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, tablet_handle))) {
+      const bool allow_tablet_not_exist = replay_allow_tablet_not_exist_();
+      if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, allow_tablet_not_exist, tablet_handle))) {
         CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
       }
     } else if (OB_FAIL(ls->replay_get_tablet(tablet_id, scn, is_update_mds_table, tablet_handle))) {

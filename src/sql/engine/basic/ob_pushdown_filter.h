@@ -63,6 +63,7 @@ enum PushdownFilterType
   WHITE_FILTER,
   AND_FILTER,
   OR_FILTER,
+  SAMPLE_FILTER,
   DYNAMIC_FILTER,
   MAX_FILTER_TYPE
 };
@@ -73,6 +74,7 @@ enum PushdownExecutorType
   WHITE_FILTER_EXECUTOR,
   AND_FILTER_EXECUTOR,
   OR_FILTER_EXECUTOR,
+  SAMPLE_FILTER_EXECUTOR,
   DYNAMIC_FILTER_EXECUTOR,
   MAX_EXECUTOR_TYPE
 };
@@ -175,15 +177,18 @@ public:
   OB_INLINE void set_filter_pushdown(const bool filter) { pd_filter_ = filter; }
   OB_INLINE void set_aggregate_pushdown(const bool aggregate) { pd_aggregate_ = aggregate; }
   OB_INLINE void set_group_by_pushdown(const bool groupby) { pd_group_by_ = groupby; }
+  OB_INLINE void set_filter_reorder(const bool filter_reorder) { pd_filter_reorder_ = filter_reorder; }
   OB_INLINE void set_enable_skip_index(const bool skip_index) { enable_skip_index_ = skip_index; }
-  OB_INLINE void set_use_iter_pool(const bool use_pool) { use_iter_pool_ = use_pool; }
+  OB_INLINE void set_use_stmt_iter_pool(const bool use_pool) { use_stmt_iter_pool_ = use_pool; }
   OB_INLINE void set_use_column_store(const bool use_cs) { use_column_store_ = use_cs; }
   OB_INLINE void set_enable_prefetch_limiting(const bool enable_limit) { enable_prefetch_limiting_ = enable_limit; }
+  OB_INLINE void set_use_global_iter_pool(const bool use_iter_mgr) { use_global_iter_pool_ = use_iter_mgr; }
   OB_INLINE void set_flags(const bool block_scan, const bool filter, const bool skip_index,
-                           const bool use_cs, const bool enable_limit)
+                           const bool use_cs, const bool enable_limit, const bool filter_reorder = true)
   {
     set_blockscan_pushdown(block_scan);
     set_filter_pushdown(filter);
+    set_filter_reorder(filter_reorder);
     set_enable_skip_index(skip_index);
     set_use_column_store(use_cs);
     set_enable_prefetch_limiting(enable_limit);
@@ -193,10 +198,12 @@ public:
   OB_INLINE bool is_filter_pushdown() const { return pd_filter_; }
   OB_INLINE bool is_aggregate_pushdown() const { return pd_aggregate_; }
   OB_INLINE bool is_group_by_pushdown() const { return pd_group_by_; }
+  OB_INLINE bool is_filter_reorder() const { return pd_filter_reorder_; }
   OB_INLINE bool is_apply_skip_index() const { return enable_skip_index_; }
-  OB_INLINE bool is_use_iter_pool() const { return use_iter_pool_; }
+  OB_INLINE bool is_use_stmt_iter_pool() const { return use_stmt_iter_pool_; }
   OB_INLINE bool is_use_column_store() const { return use_column_store_; }
   OB_INLINE bool is_enable_prefetch_limiting() const { return enable_prefetch_limiting_; }
+  OB_INLINE bool is_use_global_iter_pool() const { return use_global_iter_pool_; }
   TO_STRING_KV(K_(pd_flag));
 
   union {
@@ -205,11 +212,13 @@ public:
       int32_t pd_filter_ : 1;
       int32_t pd_aggregate_ : 1;
       int32_t pd_group_by_ : 1;
+      int32_t pd_filter_reorder_ : 1;
       int32_t enable_skip_index_ : 1;
-      int32_t use_iter_pool_:1;
+      int32_t use_stmt_iter_pool_:1;
       int32_t use_column_store_:1;
       int32_t enable_prefetch_limiting_ : 1;
-      int32_t reserved_ : 24;
+      int32_t use_global_iter_pool_:1;
+      int32_t reserved_ : 22;
     };
     int32_t pd_flag_;
   };
@@ -237,7 +246,6 @@ public:
       : alloc_(alloc), type_(type), n_child_(0), childs_(nullptr),
       col_ids_(alloc)
   {}
-
   PushdownFilterType get_type() const { return type_; }
   common::ObIArray<uint64_t> &get_col_ids() { return col_ids_; }
   void set_type(PushdownFilterType type) { type_ = type; }
@@ -296,7 +304,6 @@ public:
   INHERIT_TO_STRING_KV("ObPushdownBlackFilterNode", ObPushdownFilterNode,
                        K_(column_exprs), K_(filter_exprs));
 
-private:
   int64_t get_filter_expr_count()
   { return filter_exprs_.empty() ? 1 : filter_exprs_.count(); }
 public:
@@ -541,7 +548,8 @@ public:
   {
     return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR;
   }
-  virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node(); }
+  virtual OB_INLINE bool is_sample_node() const { return type_ == SAMPLE_FILTER_EXECUTOR; }
+  virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
   virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR; }
   virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node(); }
@@ -579,7 +587,7 @@ public:
   OB_INLINE ObCommonFilterTreeStatus get_status() const { return filter_tree_status_; }
   virtual common::ObIArray<uint64_t> &get_col_ids() = 0;
   OB_INLINE int64_t get_col_count() const { return n_cols_; }
-  OB_INLINE ObPushdownOperator & get_op() { return op_; }
+  OB_INLINE virtual ObPushdownOperator & get_op() { return op_; }
   OB_INLINE const common::ObIArray<int32_t> &get_col_offsets(const bool is_cg = false) const
   {
     return is_cg ? cg_col_offsets_ : col_offsets_;
@@ -903,7 +911,7 @@ public:
   virtual void clear_in_datums()
   {
     if (WHITE_OP_IN == filter_.get_op_type()) {
-      datum_params_.reset();
+      datum_params_.clear();
       param_set_.destroy();
     }
   }
@@ -1167,7 +1175,7 @@ struct PushdownFilterInfo
   OB_INLINE bool is_valid()
   {
     bool ret = is_inited_;
-    if (is_pd_filter_ && nullptr != filter_) {
+    if (is_pd_filter_ && nullptr != filter_ && !filter_->is_sample_node()) {
       ret = ret && (nullptr != datum_buf_);
     }
     if (0 < batch_size_) {

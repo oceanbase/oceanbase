@@ -296,6 +296,7 @@ public:
   ColChecksumArray column_default_checksums_;
   bool is_small_sstable_;
   // The following two members are used only for co sstable
+  bool is_empty_cg_sstables_;
   int32_t column_group_cnt_;
   int32_t full_column_cnt_;
   int32_t co_base_type_;

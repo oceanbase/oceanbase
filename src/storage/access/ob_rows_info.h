@@ -274,6 +274,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRowsInfo);
 };
 
+struct ObRowKeysInfo
+{
+  OB_INLINE bool is_rowkey_not_exist(const int64_t idx) const
+  {
+    return row_states_->at(idx) == ObSSTableRowState::NOT_EXIST;
+  }
+  OB_INLINE void set_rowkey_not_exist(const int64_t idx)
+  {
+    row_states_->at(idx) = ObSSTableRowState::NOT_EXIST;
+  }
+  OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey(const int64_t idx) const
+  {
+    return rowkeys_->at(idx);
+  }
+  const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_;
+  common::ObIArray<int8_t> *row_states_;
+};
+
 } // namespace storage
 } // namespace oceanbase
 #endif

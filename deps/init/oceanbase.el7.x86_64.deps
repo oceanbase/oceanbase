@@ -33,6 +33,7 @@ devdeps-icu-69.1-72022112416.el7.x86_64.rpm
 devdeps-cos-c-sdk-5.0.16-52023070517.el7.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el7.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.x86_64.rpm
+devdeps-protobuf-c-1.4.1-100000062023102016.el7.x86_64.rpm
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el7.x86_64.rpm

@@ -70,6 +70,13 @@ const char *const compress_funcs[] =
   "zlib_lite_1.0",
 };
 
+const char *const perf_compress_funcs[] =
+{
+  "lz4_1.0",
+  "zstd_1.0",
+  "zstd_1.3.8",
+};
+
 } /* namespace common */
 } /* namespace oceanbase */
 

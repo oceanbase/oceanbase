@@ -5179,6 +5179,8 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprCopier &copier,
                                             output_expr,
                                             &replacer))) {
     LOG_WARN("failed to copy and replace expr", K(ret));
+  } else if (OB_FAIL(output_expr->pull_relation_id())) {
+    LOG_WARN("failed to pull releation id", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
@@ -6555,6 +6557,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                     && (ob_is_oracle_temporal_type(right_type.get_type())))
                 || (left_type.is_urowid() && right_type.is_urowid())
                 || (is_oracle_mode() && left_type.is_lob() && right_type.is_lob() && left_type.get_collation_type() == right_type.get_collation_type())
+                || (is_oracle_mode() && left_type.is_geometry() && right_type.is_geometry())
                 || (is_oracle_mode() && left_type.is_lob_locator() && right_type.is_lob_locator() && left_type.get_collation_type() == right_type.get_collation_type())
                 || (is_oracle_mode() && (ob_is_user_defined_sql_type(left_type.get_type()) || ob_is_user_defined_pl_type(left_type.get_type()))
                                      && (ob_is_user_defined_sql_type(right_type.get_type()) || ob_is_user_defined_pl_type(right_type.get_type()))))) {
@@ -6586,6 +6589,10 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
                 LOG_WARN("character set mismatch", K(ret), K(left_cs), K(right_cs));
               }
             }
+          } else if (lib::is_oracle_mode() && is_distinct
+                     && (right_type.is_geometry() || left_type.is_geometry())) {
+            ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
+            LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
           }
           LOG_DEBUG("data type check for each select item in set operator", K(left_type),
                                                                             K(right_type));
@@ -6643,6 +6650,9 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
         LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
       } else if (lib::is_oracle_mode() && is_distinct && right_type.is_json()) {
         ret = OB_ERR_INVALID_CMP_OP;
+        LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
+      } else if (lib::is_oracle_mode() && is_distinct && right_type.is_geometry()) {
+        ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
         LOG_WARN("column type incompatible", K(ret), K(left_type), K(right_type));
       } else {
         res_type = left_type;

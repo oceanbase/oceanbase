@@ -102,11 +102,18 @@ protected:
     const ObGetMergeTablesResult &result,
     const int64_t schema_version,
     ObMediumCompactionInfo &medium_info);
-  int init_parallel_range_and_schema_changed(
+  int init_parallel_range_and_schema_changed_and_co_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);
   int init_schema_changed(
     ObMediumCompactionInfo &medium_info);
+  int init_co_major_merge_type(
+      const ObGetMergeTablesResult &result,
+      ObMediumCompactionInfo &medium_info);
+  static int get_result_for_major(
+      ObTablet &tablet,
+      const ObMediumCompactionInfo &medium_info,
+      ObGetMergeTablesResult &result);
   int prepare_iter(
       const ObGetMergeTablesResult &result,
       ObTableStoreIterator &table_iter);

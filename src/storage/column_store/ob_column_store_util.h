@@ -59,6 +59,11 @@ struct ObCSRange
     start_row_id_ = start;
     end_row_id_ = start + count - 1;
   }
+  OB_INLINE void set(const ObCSRowId start, const ObCSRowId end)
+  {
+    start_row_id_ = start;
+    end_row_id_ = end;
+  }
   OB_INLINE ObCSRowId begin() const { return start_row_id_; }
   OB_INLINE ObCSRowId end() const { return end_row_id_; }
   OB_INLINE void reset() { start_row_id_ = OB_INVALID_CS_ROW_ID; end_row_id_ = OB_INVALID_CS_ROW_ID; }

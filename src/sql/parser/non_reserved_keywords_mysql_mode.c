@@ -1019,6 +1019,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"kv_attributes", KV_ATTRIBUTES},
   {"RESOURCE_POOL", RESOURCE_POOL},
   {"clone", CLONE},
+  {"_st_asmvt", _ST_ASMVT},
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

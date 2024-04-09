@@ -433,6 +433,7 @@ public:
   static int extract_contain_exprs(ObRawExpr *raw_expr,
                                    const common::ObIArray<ObRawExpr*> &src_exprs,
                                    common::ObIArray<ObRawExpr *> &contain_exprs);
+  static int extract_invalid_sequence_expr(ObRawExpr *raw_expr, ObRawExpr *&sequence_expr);
   static int mark_column_explicited_reference(ObRawExpr &expr);
   static int extract_column_ids(const ObIArray<ObRawExpr*> &exprs, common::ObIArray<uint64_t> &column_ids);
   static int extract_column_ids(const ObRawExpr *raw_expr, common::ObIArray<uint64_t> &column_ids);

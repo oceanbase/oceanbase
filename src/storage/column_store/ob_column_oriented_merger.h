@@ -88,6 +88,16 @@ private:
       const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       ObTabletMergeInfo **merge_infos,
       ObSSTable &sstable);
+  int alloc_single_writer(
+      const blocksstable::ObDatumRow &default_row,
+      const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
+      ObTabletMergeInfo **merge_infos,
+      ObSSTable &sstable);
+  int alloc_row_writers(
+      const blocksstable::ObDatumRow &default_row,
+      const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
+      ObTabletMergeInfo **merge_infos,
+      ObSSTable &sstable);
   int write_residual_data();
 private:
   ObPartitionMergeIter *row_store_iter_;

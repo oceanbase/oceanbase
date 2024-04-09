@@ -31,7 +31,9 @@ struct ObWriteFlag
   #define OBWF_BIT_INSERT_UP        1
   #define OBWF_BIT_WRITE_ONLY_INDEX 1
   #define OBWF_BIT_CHECK_ROW_LOCKED 1
-  #define OBWF_BIT_RESERVED         57
+  #define OBWF_BIT_LOB_AUX          1
+  #define OBWF_BIT_SKIP_FLUSH_REDO  1
+  #define OBWF_BIT_RESERVED         55
 
   static const uint64_t OBWF_MASK_TABLE_API = (0x1UL << OBWF_BIT_TABLE_API) - 1;
   static const uint64_t OBWF_MASK_TABLE_LOCK = (0x1UL << OBWF_BIT_TABLE_LOCK) - 1;
@@ -53,6 +55,8 @@ struct ObWriteFlag
       uint64_t is_insert_up_        : OBWF_BIT_INSERT_UP;        // 0: false(default), 1: true
       uint64_t is_write_only_index_ : OBWF_BIT_WRITE_ONLY_INDEX; // 0: false(default), 1: true
       uint64_t is_check_row_locked_ : OBWF_BIT_CHECK_ROW_LOCKED; // 0: false(default), 1: true
+      uint64_t is_lob_aux_          : OBWF_BIT_LOB_AUX;          // 0: false(default), 1: true
+      uint64_t is_skip_flush_redo_  : OBWF_BIT_SKIP_FLUSH_REDO;  // 0: false(default), 1: true
       uint64_t reserved_            : OBWF_BIT_RESERVED;
     };
   };
@@ -73,6 +77,11 @@ struct ObWriteFlag
   inline void set_is_write_only_index() { is_write_only_index_ = true; }
   inline bool is_check_row_locked() const { return is_check_row_locked_; }
   inline void set_check_row_locked() { is_check_row_locked_ = true; }
+  inline bool is_lob_aux() const { return is_lob_aux_; }
+  inline void set_lob_aux() { is_lob_aux_ = true; }
+  inline bool is_skip_flush_redo() const { return is_skip_flush_redo_; }
+  inline void set_skip_flush_redo() { is_skip_flush_redo_ = true; }
+  inline void unset_skip_flush_redo() { is_skip_flush_redo_ = false; }
 
   TO_STRING_KV("is_table_api", is_table_api_,
                "is_table_lock", is_table_lock_,
@@ -80,7 +89,9 @@ struct ObWriteFlag
                "is_dml_batch_opt", is_dml_batch_opt_,
                "is_insert_up", is_insert_up_,
                "is_write_only_index", is_write_only_index_,
-               "is_check_row_locked", is_check_row_locked_);
+               "is_check_row_locked", is_check_row_locked_,
+               "is_lob_aux", is_lob_aux_,
+               "is_skip_flush_redo", is_skip_flush_redo_);
 
   OB_UNIS_VERSION(1);
 };

@@ -70,6 +70,15 @@ void ObLogBaseHeader::reset()
   replay_hint_ = 0;
 }
 
+void ObLogBaseHeader::set_compressed()
+{
+  flag_ = flag_ | PAYLOAD_IS_COMPRESSED;
+}
+
+bool ObLogBaseHeader::is_compressed() const
+{
+  return flag_ & PAYLOAD_IS_COMPRESSED;
+}
 bool ObLogBaseHeader::is_valid() const
 {
   return version_ > 0 && log_type_ > 0;

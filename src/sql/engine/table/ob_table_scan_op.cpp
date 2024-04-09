@@ -2172,6 +2172,8 @@ int ObTableScanOp::inner_get_next_batch_for_tsc(const int64_t max_row_cnt)
   if (OB_SUCC(ret)) {
     const ExprFixedArray &storage_output = MY_CTDEF.get_das_output_exprs();
     if (!MY_SPEC.is_global_index_back()) {
+      ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+      guard.set_batch_size(brs_.size_);
       PRINT_VECTORIZED_ROWS(SQL, DEBUG, eval_ctx_, storage_output, brs_.size_, brs_.skip_,
                             K(MY_CTDEF.scan_ctdef_.ref_table_id_));
     }

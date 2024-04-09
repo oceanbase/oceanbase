@@ -994,7 +994,7 @@ int ObStorageSchema::generate_column_group_array(const ObTableSchema &input_sche
   return ret;
 }
 
-int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type)
+int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema &column_group, const ObRowStoreType row_store_type) const
 {
   int ret = OB_SUCCESS;
 
@@ -1014,6 +1014,93 @@ int ObStorageSchema::generate_all_column_group_schema(ObStorageColumnGroupSchema
     column_group.block_size_ = block_size_;
     column_group.compressor_type_ = compressor_type_;
     column_group.row_store_type_ = row_store_type;
+  }
+
+  return ret;
+}
+
+int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_store_cg) const
+{
+  // if cache mocked_row_store_cg in storage schema, cached value will become invalid when ddl happen, so re-build every time
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(generate_all_column_group_schema(mocked_row_store_cg, row_store_type_))) {
+    STORAGE_LOG(WARN, "fail to mock row store cg schema", K(ret));
+  }
+  return ret;
+}
+
+int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_group_cnt = column_group_array_.count();
+  cg_idx = OB_INVALID_INDEX; // -1
+  if (OB_UNLIKELY(1 >= column_group_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "No column group exist", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(column_group_cnt > INT32_MAX)) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(ERROR, "column group count is overflow", K(column_group_cnt));
+  } else {
+    for (int32_t i = 0; (OB_INVALID_INDEX == cg_idx) && i < column_group_cnt; i++) {
+      if (column_group_array_.at(i).is_rowkey_column_group() || column_group_array_.at(i).is_all_column_group()) {
+         cg_idx = i;
+      }
+    }
+    if (OB_INVALID_INDEX == cg_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to find base/rowkey cg", K(ret), K(column_group_array_));
+    }
+  }
+  return ret;
+}
+
+int ObStorageSchema::get_column_group_index(
+    const uint64_t &column_id,
+    const int32_t &column_idx,
+    int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_group_cnt = column_group_array_.count();
+  const bool is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id
+                                 || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id;
+  cg_idx = OB_INVALID_INDEX; // -1
+  if (OB_UNLIKELY(1 >= column_group_cnt)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "No column group exist", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(column_group_cnt > INT32_MAX)) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(ERROR, "column group count is overflow", K(column_group_cnt));
+  } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM &&
+      common::OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID != column_id &&
+      common::OB_HIDDEN_SESSION_ID_COLUMN_ID != column_id &&
+      common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
+    if (is_multi_version_col) {
+      if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
+        STORAGE_LOG(WARN, "Fail to get base/rowkey column group index", K(ret), K(column_id));
+      }
+    } else {
+      // TODO: check the following
+      // TODO: after check, also see ObTableSchema::get_column_group_index
+      // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
+      // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
+      cg_idx = OB_INVALID_INDEX;
+    }
+  } else {
+    const uint16_t *column_idxs = nullptr;
+    for (int32_t i = 0; OB_SUCC(ret) && (OB_INVALID_INDEX == cg_idx) && i < column_group_cnt; i++) {
+      const ObStorageColumnGroupSchema &cg_schema = column_group_array_.at(i);
+      if (!cg_schema.is_single_column_group()) { // now only support single cg
+      } else if (OB_ISNULL(column_idxs = cg_schema.column_idxs_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "invalid empty cg", K(ret), K(cg_schema));
+      } else if (column_idxs[0] == column_idx) {
+        cg_idx = i;
+      }
+    }
+    if (OB_SUCC(ret) && (OB_INVALID_INDEX == cg_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "failed to find column group", K(ret), K(column_id), K(column_idx), K(column_group_array_));
+    }
   }
 
   return ret;

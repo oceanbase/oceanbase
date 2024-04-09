@@ -290,7 +290,7 @@ int ObXAEndRPCRequest::init(const ObTransID &tx_id,
       (!ObXAFlag::is_valid(end_flag, ObXAReqType::XA_END))) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), K(xid), K(end_flag));
-  } else if (MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_)) {
+  } else if (OB_FAIL(MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_))) {
     TRANS_LOG(WARN, "get tx stmt info failed", KR(ret));
   // } else if (OB_FAIL(trans_desc_.trans_deep_copy(trans_desc))) {
   //   TRANS_LOG(WARN, "deep copy trans desc failed", KR(ret));
@@ -441,7 +441,7 @@ int ObXAStartStmtRPCResponse::init(const ObTransID &tx_id,
   if (!tx_id.is_valid() || !tx_desc.is_valid() || 0 > response_id) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), K(response_id));
-  } else if (MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_)) {
+  } else if (OB_FAIL(MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_))) {
     TRANS_LOG(WARN, "get tx stmt info failed", KR(ret));
   } else {
     tx_id_ = tx_id;
@@ -487,7 +487,7 @@ int ObXAEndStmtRPCRequest::init(const ObTransID &tx_id,
   if (!tx_id.is_valid() || !tx_desc.is_valid() || !xid.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", KR(ret), K(tx_id), K(xid));
-  } else if (MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_)) {
+  } else if (OB_FAIL(MTL(ObTransService *)->get_tx_stmt_info(tx_desc, stmt_info_))) {
     TRANS_LOG(WARN, "get tx stmt info failed", KR(ret));
   } else {
     tx_id_ = tx_id;

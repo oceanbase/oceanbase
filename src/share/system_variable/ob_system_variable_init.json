@@ -4937,5 +4937,20 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "information_schema_stats_expiry": {
+    "id": 10252,
+    "name": "information_schema_stats_expiry",
+    "default_value": "86400",
+    "base_value": "86400",
+    "data_type": "uint",
+    "info": "The number of seconds after which the server will fetch data from storage engine and replace the data in cache.",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "min_val": "0",
+    "max_val": "31536000",
+    "publish_version": "424"
   }
 }

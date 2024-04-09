@@ -352,6 +352,9 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));
         }
+        ObStmtScope scope_backup = current_scope_;
+        current_scope_ = T_FROM_SCOPE;
+        DEFER(current_scope_ = scope_backup);
         OZ (resolve_function_table_item(*table_node, table_item));
         break;
       }

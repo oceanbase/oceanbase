@@ -65,7 +65,7 @@ int ObExprSTSRID::calc_result_typeN(ObExprResType& type,
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_name());
     } else {
-      type.set_uint32();
+      type.set_int32();
     }
     if (OB_SUCC(ret) && param_num > 1) {
       types_stack[1].set_calc_type(ObIntType);
@@ -145,7 +145,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb, geo, srs, func_name, false, false, false))) {
+        } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb, geo, srs, func_name, ObGeoBuildFlag::GEO_CHECK_RANGE))) {
           LOG_WARN("failed to parse geometry from wkb", K(ret));
         } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
           LOG_WARN("failed to get srid from wkb", K(ret));
@@ -154,7 +154,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
           LOG_WARN("srs not found");
         }
       } else {
-        if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb, geo, srs, func_name, false, false, false))) {
+        if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_allocator, wkb, geo, srs, func_name, ObGeoBuildFlag::GEO_CHECK_RANGE))) {
           LOG_WARN("fail to create geo", K(ret), K(wkb));
         } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*geo, expr, ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
@@ -167,7 +167,7 @@ int ObExprSTSRID::eval_st_srid_common(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   } else if (is_null_result) {
     res.set_null();
   } else if (num_args == 1) {
-    res.set_uint32(srid);
+    res.set_int32(srid);
   } else if (OB_ISNULL(geo)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null geometry", K(ret));

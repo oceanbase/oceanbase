@@ -1005,9 +1005,10 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
     CLOG_LOG(WARN, "failed to get gts", K(ret), K(ref_scn));
   } else {
     {
+      const bool allow_compression = false;
       ObSpinLockGuard guard(rec_scn_lock_);
       if (OB_FAIL(ls_->append(buffer, buffer_size, ref_scn, need_nonblock,
-                              &cb, lsn, scn))) {
+                              allow_compression, &cb, lsn, scn))) {
         CLOG_LOG(WARN, "failed to submit log", K(buffer_size), K(pos));
       } else {
         cb.scn_ = scn;

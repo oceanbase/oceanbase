@@ -499,6 +499,7 @@ void TestCOMerge::prepare_merge_context(const ObMergeType &merge_type,
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_parallel_merge_ctx());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_static_param_and_desc());
+  ASSERT_EQ(OB_SUCCESS, merge_context.init_read_info());
   ASSERT_EQ(OB_SUCCESS, merge_context.init_tablet_merge_info());
 }
 
@@ -2108,7 +2109,7 @@ TEST_F(TestCOMerge, test_merge_range_with_empty)
     ObSSTable *merged_sstable = static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
     if (NULL != merged_sstable) {
       EXPECT_EQ(true, merged_sstable->is_co_sstable());
-      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_empty_co_table());
+      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_cgs_empty_co_table());
     }
   }
 }
@@ -2387,7 +2388,7 @@ TEST_F(TestCOMerge, test_merge_range_with_beyond_range)
     ObSSTable *merged_sstable = static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(i));
     if (NULL != merged_sstable) {
       EXPECT_EQ(true, merged_sstable->is_co_sstable());
-      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_empty_co_table());
+      EXPECT_EQ(true, static_cast<ObCOSSTableV2 *>(merged_sstable)->is_cgs_empty_co_table());
     }
   }
 

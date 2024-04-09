@@ -1760,7 +1760,7 @@ int ObTenantTabletScheduler::update_major_progress(const int64_t merge_version)
       LOG_WARN("failed to finish progress", KR(ret), K(merge_version));
     }
   }
-  if (OB_FAIL(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
+  if (FAILEDx(MTL(ObTenantCompactionProgressMgr *)->update_progress_status(
       merge_version, share::ObIDag::DAG_STATUS_NODE_RUNNING))) {
     LOG_WARN("failed to update progress", KR(ret), K(merge_version));
   }

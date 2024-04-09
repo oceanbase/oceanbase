@@ -2873,7 +2873,7 @@ ObColumnSchemaV2* ObTableSchema::get_xml_hidden_column_schema(uint64_t column_id
 }
 
 int ObTableSchema::get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
-                                                       common::ObSEArray<ObColumnSchemaV2 *, 1> &column_group) const
+                                                       common::ObIArray<ObColumnSchemaV2 *> &column_group) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; udt_set_id > 0 && OB_SUCC(ret) && i < column_cnt_; ++i) {
@@ -8670,6 +8670,7 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       }
     } else {
       // TODO: check the following
+      // TODO: after check, also see ObStorageSchema::get_column_group_index
       // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
       // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
       cg_idx = -1;

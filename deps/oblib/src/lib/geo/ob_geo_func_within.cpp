@@ -85,10 +85,23 @@ static int apply_bg_within(const ObGeometry *g1,
                            bool &result)
 {
   UNUSED(context);
-  const GeoType1 *geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
-  const GeoType2 *geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
-  result = bg::within(*geo1, *geo2);
-  return OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  const GeoType1 *geo1 = nullptr;
+  const GeoType2 *geo2 = nullptr;
+  if (!g1->is_tree()) {
+    geo1 = reinterpret_cast<const GeoType1 *>(g1->val());
+    geo2 = reinterpret_cast<const GeoType2 *>(g2->val());
+  } else {
+    geo1 = reinterpret_cast<GeoType1 *>(const_cast<ObGeometry *>(g1));
+    geo2 = reinterpret_cast<GeoType2 *>(const_cast<ObGeometry *>(g2));
+  }
+  if (OB_ISNULL(geo1) || OB_ISNULL(geo2)) {
+    ret = OB_ERR_NULL_VALUE;
+    LOG_WARN("geometry can not be null", K(ret), K(geo1), K(geo2));
+  } else {
+    result = bg::within(*geo1, *geo2);
+  }
+  return ret;
 }
 
 template <typename GeoType1, typename GeoType2>
@@ -1576,6 +1589,11 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncWithinImpl, ObWkbGeogCollection, ObWkbGeo
     }
   }
   return ret;
+} OB_GEO_FUNC_END;
+
+OB_GEO_CART_TREE_FUNC_BEGIN(ObGeoFuncWithinImpl, ObCartesianPoint, ObCartesianPolygon, bool)
+{
+  return apply_bg_within<ObCartesianPoint, ObCartesianPolygon>(g1, g2, context, result);
 } OB_GEO_FUNC_END;
 
 int ObGeoFuncWithin::eval(const ObGeoEvalCtx &gis_context, bool &result)

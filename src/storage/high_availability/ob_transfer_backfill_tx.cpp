@@ -705,7 +705,7 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
       ret = OB_EAGAIN;
     }
     if (OB_NOT_NULL(replace_logical_dag)) {
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(replace_logical_dag, backfill_tx_dag))) {
+      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(replace_logical_dag))) {
         LOG_WARN("failed to cancel replace logical dag", K(tmp_ret), KPC(backfill_tx_dag));
       } else {
         replace_logical_dag = nullptr;
@@ -1130,7 +1130,7 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
         ret = OB_EAGAIN;
       }
       if (OB_NOT_NULL(tablet_backfill_tx_dag)) {
-        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_backfill_tx_dag, backfill_tx_dag))) {
+        if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(tablet_backfill_tx_dag))) {
           LOG_WARN("failed to cancel tablet backfill tx dag", K(tmp_ret), KPC(backfill_tx_dag));
         } else {
           tablet_backfill_tx_dag = nullptr;

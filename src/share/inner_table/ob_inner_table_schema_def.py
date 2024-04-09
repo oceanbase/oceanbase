@@ -580,6 +580,7 @@ all_table_privilege_def = dict(
       ('priv_index', 'int', 'false', '0'),
       ('priv_create_view', 'int', 'false', '0'),
       ('priv_show_view', 'int', 'false', '0'),
+      ('priv_others', 'int', 'false', '0'),
     ],
 )
 
@@ -813,6 +814,8 @@ def_table_schema(
         ('min_iops', 'int'),
         ('iops_weight', 'int'),
         ('data_disk_size', 'int', 'false', '-1'),
+        ('max_net_bandwidth', 'int', 'false', '9223372036854775807'), # INT64_MAX
+        ('net_bandwidth_weight', 'int', 'false', '0'),
     ],
 )
 
@@ -3753,6 +3756,8 @@ def_table_schema(
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
     ('last_check_time', 'int', 'true', '0'),
+    ('max_iops', 'int', 'false', '0'),
+    ('max_bandwidth', 'int', 'false', '0'),
   ],
 )
 
@@ -5072,6 +5077,8 @@ def_table_schema(
     ('extension', 'varchar:OB_MAX_BACKUP_EXTENSION_LENGTH'),
     ('check_file_name', 'varchar:OB_MAX_BACKUP_CHECK_FILE_NAME_LENGTH', 'true', ''),
     ('last_check_time', 'int', 'true', '0'),
+    ('max_iops', 'int', 'false', '0'),
+    ('max_bandwidth', 'int', 'false', '0'),
   ],
 )
 
@@ -6948,6 +6955,7 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 515 : __all_user_proxy_role_info_history
 # 516 : __all_service
 # 517 : __all_storage_io_usage
+# 518 : __all_mview_dep
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -11730,6 +11738,8 @@ def_table_schema(
       ('zone_type', 'varchar:MAX_ZONE_TYPE_LENGTH'),
       ('region', 'varchar:MAX_REGION_LENGTH'),
       ('data_disk_size', 'int', 'true'),
+      ('max_net_bandwidth', 'int', 'true'),
+      ('net_bandwidth_weight', 'int', 'true'),
     ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13885,7 +13895,7 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   table_name = '__all_virtual_tenant_snapshot_ls_replica_history',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_tenant_snapshot_ls_replica_history']))
-# 12465: __all_virtual_shared_storage_quota_assignment
+# 12465: __all_virtual_shared_storage_quota
 # 12466: enabled_roles
 # 12467: __all_virtual_ls_replica_task_history
 # 12468: __all_virtual_session_ps_info
@@ -14385,7 +14395,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
-# 15441: __all_virtual_shared_storage_quota_assignment
+# 15441: __all_virtual_shared_storage_quota
 # 15442: __all_virtual_column_group
 # 15443: __all_virtual_ls_replica_task_history
 # 15444: __all_virtual_session_ps_info
@@ -14501,7 +14511,7 @@ def_table_schema(
   rowkey_columns = [],
   view_definition = """
   SELECT 'def' AS CATALOG_NAME,
-         DATABASE_NAME AS SCHEMA_NAME,
+         DATABASE_NAME collate utf8mb4_name_case AS SCHEMA_NAME,
          b.charset AS DEFAULT_CHARACTER_SET_NAME,
          b.collation AS DEFAULT_COLLATION_NAME,
          CAST(NULL AS CHAR(512)) as SQL_PATH,
@@ -14570,11 +14580,11 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
   SELECT CAST('def' AS             CHAR(512))    AS TABLE_CATALOG,
-         V.TABLE_SCHEMA                          AS TABLE_SCHEMA,
-         V.TABLE_NAME                            AS TABLE_NAME,
+         V.TABLE_SCHEMA collate utf8mb4_name_case AS TABLE_SCHEMA,
+         V.TABLE_NAME collate utf8mb4_name_case  AS TABLE_NAME,
          CAST(V.NON_UNIQUE AS      SIGNED)       AS NON_UNIQUE,
-         V.INDEX_SCHEMA                          AS INDEX_SCHEMA,
-         V.INDEX_NAME                            AS INDEX_NAME,
+         V.INDEX_SCHEMA collate utf8mb4_name_case AS INDEX_SCHEMA,
+         V.INDEX_NAME collate utf8mb4_name_case  AS INDEX_NAME,
          CAST(V.SEQ_IN_INDEX AS    UNSIGNED)     AS SEQ_IN_INDEX,
          V.COLUMN_NAME                           AS COLUMN_NAME,
          CAST('A' AS               CHAR(1))      AS COLLATION,
@@ -14758,8 +14768,8 @@ def_table_schema(
 
   view_definition = """select
                    cast('def' as CHAR(64)) AS TABLE_CATALOG,
-                   d.database_name as TABLE_SCHEMA,
-                   t.table_name as TABLE_NAME,
+                   d.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
+                   t.table_name collate utf8mb4_name_case as TABLE_NAME,
                    t.view_definition as VIEW_DEFINITION,
                    case t.view_check_option when 1 then 'LOCAL' when 2 then 'CASCADED' else 'NONE' end as CHECK_OPTION,
                    case t.view_is_updatable when 1 then 'YES' else 'NO' end as IS_UPDATABLE,
@@ -14807,8 +14817,8 @@ def_table_schema(
   view_definition = """
                     select /*+ leading(a) no_use_nl(ts)*/
                     cast('def' as char(512)) as TABLE_CATALOG,
-                    cast(b.database_name as char(64)) as TABLE_SCHEMA,
-                    cast(a.table_name as char(64)) as TABLE_NAME,
+                    cast(b.database_name as char(64)) collate utf8mb4_name_case as TABLE_SCHEMA,
+                    cast(a.table_name as char(64)) collate utf8mb4_name_case as TABLE_NAME,
                     cast(case when (a.database_id = 201002 or a.table_type = 1) then 'SYSTEM VIEW'
                          when a.table_type in (0, 2) then 'SYSTEM TABLE'
                          when a.table_type = 4 then 'VIEW'
@@ -14952,10 +14962,10 @@ def_table_schema(
   rowkey_columns = [],
   view_definition = """
                     (select 'def' as CONSTRAINT_CATALOG,
-                    c.database_name as  CONSTRAINT_SCHEMA,
+                    c.database_name collate utf8mb4_name_case as  CONSTRAINT_SCHEMA,
                     'PRIMARY' as CONSTRAINT_NAME, 'def' as TABLE_CATALOG,
-                    c.database_name as TABLE_SCHEMA,
-                    a.table_name as TABLE_NAME,
+                    c.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
+                    a.table_name collate utf8mb4_name_case as TABLE_NAME,
                     b.column_name as COLUMN_NAME,
                     b.rowkey_position as ORDINAL_POSITION,
                     CAST(NULL AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
@@ -14978,11 +14988,11 @@ def_table_schema(
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
-                    d.database_name as CONSTRAINT_SCHEMA,
+                    d.database_name collate utf8mb4_name_case as CONSTRAINT_SCHEMA,
                     substr(a.table_name, 2 + length(substring_index(a.table_name,'_',4))) as CONSTRAINT_NAME,
                     'def' as TABLE_CATALOG,
-                    d.database_name as TABLE_SCHEMA,
-                    c.table_name as TABLE_NAME,
+                    d.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
+                    c.table_name collate utf8mb4_name_case as TABLE_NAME,
                     b.column_name as COLUMN_NAME,
                     b.index_position as ORDINAL_POSITION,
                     CAST(NULL AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
@@ -15005,11 +15015,11 @@ def_table_schema(
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
-                    d.database_name as CONSTRAINT_SCHEMA,
+                    d.database_name collate utf8mb4_name_case as CONSTRAINT_SCHEMA,
                     f.foreign_key_name as CONSTRAINT_NAME,
                     'def' as TABLE_CATALOG,
-                    d.database_name as TABLE_SCHEMA,
-                    t.table_name as TABLE_NAME,
+                    d.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
+                    t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
                     CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
@@ -15036,11 +15046,11 @@ def_table_schema(
 
                     union all
                     (select 'def' as CONSTRAINT_CATALOG,
-                    d.database_name as CONSTRAINT_SCHEMA,
+                    d.database_name collate utf8mb4_name_case as CONSTRAINT_SCHEMA,
                     f.foreign_key_name as CONSTRAINT_NAME,
                     'def' as TABLE_CATALOG,
-                    d.database_name as TABLE_SCHEMA,
-                    t.table_name as TABLE_NAME,
+                    d.database_name collate utf8mb4_name_case as TABLE_SCHEMA,
+                    t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
                     CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
@@ -15107,7 +15117,7 @@ def_table_schema(
   view_definition = """select
                       CAST(mp.specific_name AS CHAR(64)) AS SPECIFIC_NAME,
                       CAST('def' AS CHAR(512)) as ROUTINE_CATALOG,
-                      CAST(mp.db AS CHAR(64)) as ROUTINE_SCHEMA,
+                      CAST(mp.db AS CHAR(64)) collate utf8mb4_name_case as ROUTINE_SCHEMA,
                       CAST(mp.name AS CHAR(64)) as ROUTINE_NAME,
                       CAST(mp.type AS CHAR(9)) as ROUTINE_TYPE,
                       CAST(lower(v.data_type_str) AS CHAR(64)) AS DATA_TYPE,
@@ -15234,6 +15244,9 @@ def_table_schema(
 )
 
 # 20016: PROFILING
+# 20017: OPTIMIZER_TRACE
+# 20018: PLUGINS
+# 20019: INNODB_SYS_COLUMNS
 
 def_table_schema(
   owner = 'yuzhong.zhao',
@@ -16823,8 +16836,8 @@ def_table_schema(
   gm_columns = [],
   rowkey_columns = [],
   view_definition = """SELECT TABLE_CATALOG,
-                    TABLE_SCHEMA,
-                    TABLE_NAME,
+                    TABLE_SCHEMA collate utf8mb4_name_case as TABLE_SCHEMA,
+                    TABLE_NAME collate utf8mb4_name_case as TABLE_NAME,
                     COLUMN_NAME,
                     ORDINAL_POSITION,
                     COLUMN_DEFAULT,
@@ -18151,10 +18164,10 @@ def_table_schema(
   view_definition = """
     select
     cast('def' as CHAR(64)) AS VIEW_CATALOG,
-    v.VIEW_SCHEMA as VIEW_SCHEMA,
-    v.VIEW_NAME as VIEW_NAME,
-    t.TABLE_SCHEMA as TABLE_SCHEMA,
-    t.TABLE_NAME as TABLE_NAME,
+    v.VIEW_SCHEMA collate utf8mb4_name_case as VIEW_SCHEMA,
+    v.VIEW_NAME collate utf8mb4_name_case as VIEW_NAME,
+    t.TABLE_SCHEMA collate utf8mb4_name_case as TABLE_SCHEMA,
+    t.TABLE_NAME collate utf8mb4_name_case as TABLE_NAME,
     cast('def' as CHAR(64)) AS TABLE_CATALOG
     from
     (select o.tenant_id,
@@ -26660,8 +26673,8 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-  select CAST(db.database_name AS CHAR(128)) as TABLE_SCHEMA,
-         CAST(tbl.table_name AS CHAR(256)) as TABLE_NAME,
+  select CAST(db.database_name AS CHAR(128)) collate utf8mb4_name_case as TABLE_SCHEMA,
+         CAST(tbl.table_name AS CHAR(256)) collate utf8mb4_name_case as TABLE_NAME,
          CAST(col.column_name AS CHAR(128)) as COLUMN_NAME,
          CAST(srs.srs_name AS CHAR(128)) as SRS_NAME,
          CAST(if ((col.srs_id >> 32) = 4294967295, NULL, col.srs_id >> 32) AS UNSIGNED) as SRS_ID,
@@ -28053,7 +28066,7 @@ def_table_schema(
   rowkey_columns = [],
   in_tenant_space = True,
   view_definition = """select CAST('def' AS CHAR(512)) AS SPECIFIC_CATALOG,
-                        CAST(d.database_name AS CHAR(128)) AS SPECIFIC_SCHEMA,
+                        CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS SPECIFIC_SCHEMA,
                         CAST(r.routine_name AS CHAR(64)) AS SPECIFIC_NAME,
                         CAST(rp.param_position AS signed) AS ORDINAL_POSITION,
                         CAST(CASE rp.param_position WHEN 0 THEN NULL
@@ -28170,8 +28183,8 @@ def_table_schema(
   SELECT
          CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,
          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,
-         CAST(V.DATABASE_NAME AS CHAR(128)) AS TABLE_SCHEMA ,
-         CAST(V.TABLE_NAME AS CHAR(64)) AS TABLE_NAME,
+         CAST(V.DATABASE_NAME AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA ,
+         CAST(V.TABLE_NAME AS CHAR(64)) collate utf8mb4_name_case AS TABLE_NAME,
          CAST(V.PRIVILEGE_TYPE AS CHAR(64)) AS PRIVILEGE_TYPE ,
          CAST(V.IS_GRANTABLE AS CHAR(3)) AS IS_GRANTABLE
   FROM
@@ -28422,7 +28435,7 @@ def_table_schema(
   view_definition = """
   SELECT CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,
          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,
-         CAST(V.DATABASE_NAME AS CHAR(128)) AS TABLE_SCHEMA ,
+         CAST(V.DATABASE_NAME AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA ,
          CAST(V.PRIVILEGE_TYPE AS CHAR(64)) AS PRIVILEGE_TYPE ,
          CAST(V.IS_GRANTABLE AS CHAR(3)) AS IS_GRANTABLE
   FROM
@@ -28509,7 +28522,7 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """
     SELECT CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-           CAST(d.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
            CAST(c.constraint_name AS CHAR(64)) AS CONSTRAINT_NAME,
            CAST(c.check_expr AS CHAR(2048)) AS CHECK_CLAUSE
     FROM oceanbase.__all_database d
@@ -28537,10 +28550,10 @@ def_table_schema(
 
     select
     CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-    CAST(cd.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+    CAST(cd.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
     CAST(f.foreign_key_name AS CHAR(128)) AS CONSTRAINT_NAME,
     CAST('def' AS CHAR(64)) AS UNIQUE_CONSTRAINT_CATALOG,
-    CAST(pd.database_name AS CHAR(128)) AS UNIQUE_CONSTRAINT_SCHEMA,
+    CAST(pd.database_name AS CHAR(128)) collate utf8mb4_name_case AS UNIQUE_CONSTRAINT_SCHEMA,
     CAST(CASE WHEN f.ref_cst_type = 1 THEN 'PRIMARY'
          ELSE NULL END AS CHAR(128)) AS UNIQUE_CONSTRAINT_NAME,
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
@@ -28571,10 +28584,10 @@ def_table_schema(
 
     select
     CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-    CAST(cd.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+    CAST(cd.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
     CAST(f.foreign_key_name AS CHAR(128)) AS CONSTRAINT_NAME,
     CAST('def' AS CHAR(64)) AS UNIQUE_CONSTRAINT_CATALOG,
-    CAST(pd.database_name AS CHAR(128)) AS UNIQUE_CONSTRAINT_SCHEMA,
+    CAST(pd.database_name AS CHAR(128)) collate utf8mb4_name_case AS UNIQUE_CONSTRAINT_SCHEMA,
     CAST(SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_')) AS CHAR(128)) AS UNIQUE_CONSTRAINT_NAME,
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
@@ -28604,10 +28617,10 @@ def_table_schema(
 
     select
     CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-    CAST(cd.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+    CAST(cd.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
     CAST(f.foreign_key_name AS CHAR(128)) AS CONSTRAINT_NAME,
     CAST('def' AS CHAR(64)) AS UNIQUE_CONSTRAINT_CATALOG,
-    CAST(pd.database_name AS CHAR(128)) AS UNIQUE_CONSTRAINT_SCHEMA,
+    CAST(pd.database_name AS CHAR(128)) collate utf8mb4_name_case AS UNIQUE_CONSTRAINT_SCHEMA,
     CAST(NULL AS CHAR(128)) AS UNIQUE_CONSTRAINT_NAME,
     CAST('NONE' AS CHAR(64)) AS MATCH_OPTION,
     CAST(CASE WHEN f.update_action = 1 THEN 'RESTRICT'
@@ -28649,10 +28662,10 @@ def_table_schema(
 
     SELECT
            CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-           CAST(d.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
            CAST('PRIMARY' AS CHAR(256)) AS CONSTRAINT_NAME,
-           CAST(d.database_name AS CHAR(128)) AS TABLE_SCHEMA,
-           CAST(t.table_name AS CHAR(256)) AS TABLE_NAME,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA,
+           CAST(t.table_name AS CHAR(256)) collate utf8mb4_name_case AS TABLE_NAME,
            CAST('PRIMARY KEY' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST('YES' AS CHAR(3)) AS ENFORCED
     FROM oceanbase.__all_database d
@@ -28666,10 +28679,10 @@ def_table_schema(
 
     SELECT
            CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-           CAST(d.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
            CAST(SUBSTR(it.table_name, 7 + INSTR(SUBSTR(it.table_name, 7), '_')) AS CHAR(256)) AS CONSTRAINT_NAME,
-           CAST(d.database_name AS CHAR(128)) AS TABLE_SCHEMA,
-           CAST(ut.table_name AS CHAR(256)) AS TABLE_NAME,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA,
+           CAST(ut.table_name AS CHAR(256)) collate utf8mb4_name_case AS TABLE_NAME,
            CAST('UNIQUE' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST('YES' AS CHAR(3)) AS ENFORCED
     FROM oceanbase.__all_database d
@@ -28683,10 +28696,10 @@ def_table_schema(
 
     SELECT
            CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-           CAST(d.database_name AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
            CAST(c.constraint_name AS CHAR(256)) AS CONSTRAINT_NAME,
-           CAST(d.database_name AS CHAR(128)) AS TABLE_SCHEMA,
-           CAST(t.table_name AS CHAR(256)) AS TABLE_NAME,
+           CAST(d.database_name AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA,
+           CAST(t.table_name AS CHAR(256)) collate utf8mb4_name_case AS TABLE_NAME,
            CAST('CHECK' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST(CASE WHEN c.enable_flag = 1 THEN 'YES'
                 ELSE 'NO' END AS CHAR(3)) AS ENFORCED
@@ -28701,10 +28714,10 @@ def_table_schema(
 
     SELECT
            CAST('def' AS CHAR(64)) AS CONSTRAINT_CATALOG,
-           CAST(f.constraint_schema AS CHAR(128)) AS CONSTRAINT_SCHEMA,
+           CAST(f.constraint_schema AS CHAR(128)) collate utf8mb4_name_case AS CONSTRAINT_SCHEMA,
            CAST(f.constraint_name AS CHAR(256)) AS CONSTRAINT_NAME,
-           CAST(f.constraint_schema AS CHAR(128)) AS TABLE_SCHEMA,
-           CAST(f.table_name AS CHAR(256)) AS TABLE_NAME,
+           CAST(f.constraint_schema AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA,
+           CAST(f.table_name AS CHAR(256)) collate utf8mb4_name_case AS TABLE_NAME,
            CAST('FOREIGN KEY' AS CHAR(11)) AS CONSTRAINT_TYPE,
            CAST('YES' AS CHAR(3)) AS ENFORCED
     FROM information_schema.REFERENTIAL_CONSTRAINTS f
@@ -28825,15 +28838,15 @@ def_table_schema(
     gm_columns      = [],
     in_tenant_space = True,
     view_definition = """SELECT CAST('def' AS CHAR(512)) AS TRIGGER_CATALOG,
-      CAST(db.database_name AS CHAR(64)) AS TRIGGER_SCHEMA,
+      CAST(db.database_name AS CHAR(64)) collate utf8mb4_name_case AS TRIGGER_SCHEMA,
       CAST(trg.trigger_name AS CHAR(64)) AS TRIGGER_NAME,
       CAST((case when trg.trigger_events=1 then 'INSERT'
                 when trg.trigger_events=2 then 'UPDATE'
                 when trg.trigger_events=4 then 'DELETE' end)
             AS CHAR(6)) AS EVENT_MANIPULATION,
       CAST('def' AS CHAR(512)) AS EVENT_OBJECT_CATALOG,
-      CAST(db.database_name AS CHAR(64)) AS EVENT_OBJECT_SCHEMA,
-      CAST(t.table_name AS CHAR(64)) AS EVENT_OBJECT_TABLE,
+      CAST(db.database_name AS CHAR(64)) collate utf8mb4_name_case AS EVENT_OBJECT_SCHEMA,
+      CAST(t.table_name AS CHAR(64)) collate utf8mb4_name_case AS EVENT_OBJECT_TABLE,
       CAST(trg.action_order AS SIGNED) AS ACTION_ORDER,
       CAST(NULL AS CHAR(4194304)) AS ACTION_CONDITION,
       CAST(trg.trigger_body AS CHAR(4194304)) AS ACTION_STATEMENT,
@@ -28878,8 +28891,8 @@ def_table_schema(
   in_tenant_space = True,
   view_definition = """SELECT
   CAST('def' as CHAR(4096)) AS TABLE_CATALOG,
-  DB.DATABASE_NAME AS TABLE_SCHEMA,
-  T.TABLE_NAME AS TABLE_NAME,
+  DB.DATABASE_NAME collate utf8mb4_name_case AS TABLE_SCHEMA,
+  T.TABLE_NAME collate utf8mb4_name_case AS TABLE_NAME,
   P.PART_NAME AS PARTITION_NAME,
   SP.SUB_PART_NAME AS SUBPARTITION_NAME,
   CAST(PART_POSITION AS UNSIGNED) AS PARTITION_ORDINAL_POSITION,
@@ -32366,8 +32379,8 @@ SELECT job_id AS CLONE_JOB_ID,
 FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 """.replace("\n", " ")
 )
-#21520: GV$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
-#21521: V$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
+#21520: GV$OB_SHARED_STORAGE_QUOTA
+#21521: V$OB_SHARED_STORAGE_QUOTA
 #21522: CDB_UNUSED_COL_TABS
 #21523: DBA_OB_LS_REPLICA_TASK_HISTORY
 #21524: CDB_OB_LS_REPLICA_TASK_HISTORY
@@ -36096,7 +36109,7 @@ SELECT
         45, 'UROWID',
         46, 'LOB',
         47, 'JSON',
-        48, 'GEOMETRY',
+        48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
@@ -36113,6 +36126,7 @@ SELECT
             WHEN TC.DATA_TYPE = 36 THEN 13
             WHEN TC.DATA_TYPE IN (0,22,43,46) AND TC.DATA_PRECISION = 1 THEN LEAST(32767, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
             WHEN TC.DATA_TYPE IN (23,44) AND TC.DATA_PRECISION = 1 THEN LEAST(2000, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
+            WHEN TC.DATA_TYPE = 48 THEN 1
             ELSE TC.DATA_LENGTH END AS NUMBER) AS DATA_LENGTH,
   CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
@@ -36310,7 +36324,7 @@ SELECT
         45, 'UROWID',
         46, 'LOB',
         47, 'JSON',
-        48, 'GEOMETRY',
+        48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
@@ -36327,6 +36341,7 @@ SELECT
             WHEN TC.DATA_TYPE = 36 THEN 13
             WHEN TC.DATA_TYPE IN (0,22,43,46) AND TC.DATA_PRECISION = 1 THEN LEAST(32767, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
             WHEN TC.DATA_TYPE IN (23,44) AND TC.DATA_PRECISION = 1 THEN LEAST(2000, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
+            WHEN TC.DATA_TYPE = 48 THEN 1
             ELSE TC.DATA_LENGTH END AS NUMBER) AS DATA_LENGTH,
   CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
@@ -36521,7 +36536,7 @@ SELECT
         45, 'UROWID',
         46, 'LOB',
         47, 'JSON',
-        48, 'GEOMETRY',
+        48, 'SDO_GEOMETRY',
         49, DECODE(TC.SUB_DATA_TYPE, 300001, 'XMLTYPE', 'UDT'),
         50, 'NUMBER',
         'UNDEFINED') AS VARCHAR2(128)) AS  DATA_TYPE,
@@ -36538,6 +36553,7 @@ SELECT
             WHEN TC.DATA_TYPE = 36 THEN 13
             WHEN TC.DATA_TYPE IN (0,22,43,46) AND TC.DATA_PRECISION = 1 THEN LEAST(32767, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
             WHEN TC.DATA_TYPE IN (23,44) AND TC.DATA_PRECISION = 1 THEN LEAST(2000, TC.DATA_LENGTH * DECODE(TC.COLLATION_TYPE, 63, 1, 249, 4, 248, 4, 87, 2,28, 2, 55, 2, 54, 4, 101, 2, 46, 4, 45, 4, 224, 4, 1))
+            WHEN TC.DATA_TYPE = 48 THEN 1
             ELSE TC.DATA_LENGTH END AS NUMBER) AS DATA_LENGTH,
   CAST(CASE WHEN TC.DATA_TYPE IN (0,11,12,17,18,19,22,23,27,28,29,30,36,37,38,43,44)
             THEN NULL
@@ -43851,6 +43867,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -43908,6 +43925,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -43965,6 +43983,7 @@ WHERE
                         UPPER('hierarchy'),
                         UPPER('arrtibute dimension'),
                         UPPER('analytic view'))
+  AND e.error_number != 0
   """.replace("\n", " ")
 )
 def_table_schema(
@@ -60457,8 +60476,8 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
-# 28217: GV$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
-# 28218: V$OB_SHARED_STORAGE_QUOTA_ASSIGNMENT
+# 28217: GV$OB_SHARED_STORAGE_QUOTA
+# 28218: V$OB_SHARED_STORAGE_QUOTA
 # 28219: GV$OB_SESSION_PS_INFO
 # 28220: V$OB_SESSION_PS_INFO
 # 28221: GV$OB_TRACEPOINT_INFO

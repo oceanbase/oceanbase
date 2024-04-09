@@ -809,6 +809,11 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore from version 4.0 is not allowd", K(ret), K(backup_file_desc.tenant_compatible_), K(data_version));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from version 4.0 is");
+  } else if (!ObUpgradeChecker::check_data_version_valid_for_backup(backup_file_desc.tenant_compatible_)) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("restore from backup with unsupported data version",
+             KR(ret), K(backup_file_desc.tenant_compatible_), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "restore from backup with unsupported data version is");
   }
   return ret;
 }

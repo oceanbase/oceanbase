@@ -14,6 +14,7 @@
 #include "ob_imicro_block_writer.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_table_schema.h"
+#include "ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -23,6 +24,52 @@ namespace blocksstable
  /**
  * -------------------------------------------------------------------ObMicroBlockHashIndexBuilder----------------------------------------------------------
  */
+int ObMicroBlockHashIndexBuilder::check_need_build_hash_index(const ObDataStoreDesc &data_store_desc, bool &need_build)
+{
+  int ret = OB_SUCCESS;
+  need_build = false;
+  const common::ObIArray<share::schema::ObColDesc> &rowkey_col_descs = data_store_desc.get_rowkey_col_descs();
+  const int64_t schema_rowkey_col_cnt = data_store_desc.get_schema_rowkey_col_cnt();
+  int64_t int_column_count = 0;
+  if (OB_UNLIKELY(schema_rowkey_col_cnt > rowkey_col_descs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected schema rowkey col cnt", K(ret), K(schema_rowkey_col_cnt), K(rowkey_col_descs));
+  } else {
+    for (int64_t i = 0; i < schema_rowkey_col_cnt; ++i) {
+      if (rowkey_col_descs.at(i).col_type_.is_integer_type()) {
+        int_column_count++;
+      }
+    }
+    if (int_column_count != schema_rowkey_col_cnt || int_column_count >= ObMicroBlockHashIndex::MIN_INT_COLUMNS_NEEDED) {
+      need_build = true;
+    }
+  }
+  return ret;
+}
+
+
+int ObMicroBlockHashIndexBuilder::init_if_needed(const ObDataStoreDesc *data_store_desc)
+{
+  int ret = OB_SUCCESS;
+  bool need_build = false;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "Micro_hash_index_builder is inited twice", K(ret));
+  } else if (OB_UNLIKELY(nullptr == data_store_desc || !data_store_desc->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "Invalid argument to init micro hash index block builder", K(ret), KPC(data_store_desc));
+  } else if (OB_FAIL(check_need_build_hash_index(*data_store_desc, need_build))) {
+    STORAGE_LOG(WARN, "Failed to check if need build has index", K(ret));
+  } else if (need_build) {
+    row_index_ = 0;
+    count_ = 0;
+    last_key_with_L_flag_ = false;
+    data_store_desc_ = data_store_desc;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
 int ObMicroBlockHashIndexBuilder::add(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -99,30 +146,6 @@ int ObMicroBlockHashIndexBuilder::build_block(ObMicroBufferWriter &buffer)
     }
   }
   STORAGE_LOG(DEBUG, "Build hash index block", K(count_), K(ret));
-  return ret;
-}
-
-int ObMicroBlockHashIndexBuilder::need_build_hash_index(
-    const ObMergeSchema &merge_schema,
-    bool &need_build)
-{
-  int ret = OB_SUCCESS;
-  need_build = false;
-  common::ObSEArray<share::schema::ObColDesc, common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER> rowkey_col_desc_array;
-  if (OB_FAIL(merge_schema.get_rowkey_column_ids(rowkey_col_desc_array))) {
-    STORAGE_LOG(WARN, "Failed to get rowkey column ids", K(ret));
-  } else {
-    int64_t int_column_count = 0;
-    for (int64_t i = 0; i < rowkey_col_desc_array.count(); ++i) {
-      if (rowkey_col_desc_array[i].col_type_.is_integer_type()) {
-        int_column_count++;
-      }
-    }
-    if (int_column_count != rowkey_col_desc_array.count()
-            || int_column_count >= ObMicroBlockHashIndex::MIN_INT_COLUMNS_NEEDED) {
-      need_build = true;
-    }
-  }
   return ret;
 }
 

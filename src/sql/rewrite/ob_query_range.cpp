@@ -580,9 +580,9 @@ int ObQueryRange::extract_basic_info(const ObRawExpr *l_expr,
     uint64_t table_id = common::OB_INVALID_ID;
 
     const ObRawExpr *calc_urowid_expr = NULL;
-    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID))) {
+    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID) && l_expr->is_const_expr())) {
       calc_urowid_expr = r_expr;
-    } else if (l_expr->has_flag(IS_ROWID)) {
+    } else if (l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr()) {
       calc_urowid_expr = l_expr;
     }
     if (OB_FAIL(get_extract_rowid_range_infos(calc_urowid_expr,
@@ -1521,12 +1521,12 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
     uint64_t part_column_id = common::OB_INVALID_ID;
 
     const ObRawExpr *calc_urowid_expr = NULL;
-    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID))) {
+    if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID) && l_expr->is_const_expr())) {
       const_expr = l_expr;
       c_type = (T_OP_LE == cmp_type ? T_OP_GE : (T_OP_GE == cmp_type ? T_OP_LE :
                                                  (T_OP_LT == cmp_type ? T_OP_GT : (T_OP_GT == cmp_type ? T_OP_LT : cmp_type))));
       calc_urowid_expr = r_expr;
-    } else if (l_expr->has_flag(IS_ROWID)) {
+    } else if (l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr()) {
       const_expr = r_expr;
       c_type = cmp_type;
       calc_urowid_expr = l_expr;
@@ -3642,7 +3642,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
     common::ObGeoRelationType op_type;
     if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-    } else if (l_expr->has_flag(IS_COLUMN) && r_expr->has_flag(IS_COLUMN)) {
+    } else if (l_expr->has_flag(CNT_COLUMN) && r_expr->has_flag(CNT_COLUMN)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
@@ -8907,6 +8907,8 @@ common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
 {
   common::ObGeoRelationType rel_type = common::ObGeoRelationType::T_INVALID;
   switch (type) {
+    case T_FUN_SYS_PRIV_ST_EQUALS :
+    case T_FUN_SYS_PRIV_ST_TOUCHES :
     case T_FUN_SYS_ST_INTERSECTS : {
       rel_type = common::ObGeoRelationType::T_INTERSECTS;
       break;
@@ -8922,6 +8924,14 @@ common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
     }
     case T_FUN_SYS_ST_WITHIN : {
       rel_type = common::ObGeoRelationType::T_COVEREDBY;
+      break;
+    }
+    case T_FUN_SYS_ST_CROSSES : {
+      rel_type = common::ObGeoRelationType::T_INTERSECTS;
+      break;
+    }
+    case T_FUN_SYS_ST_OVERLAPS : {
+      rel_type = common::ObGeoRelationType::T_INTERSECTS;
       break;
     }
     default:
@@ -9045,7 +9055,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         }
       }
 
-      if (OB_SUCC(ret) && (geo_type != ObGeoType::POINT || !std::isnan(distance))) {
+      if (OB_SUCC(ret) && ((geo_type != ObGeoType::POINT && geo_type != ObGeoType::POINTZ) || !std::isnan(distance))) {
         // build keypart to index child_of_cellid
         for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
           uint64_t cellid = cells.at(i);

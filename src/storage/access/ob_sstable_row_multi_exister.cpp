@@ -28,29 +28,30 @@ ObSSTableRowMultiExister::~ObSSTableRowMultiExister()
   }
 }
 
+#define FREE_EXISTER_AND_BLOCK_READER(ptr, ctx, T)     \
+  if (NULL != ptr) {                                   \
+    ptr->~T();                                         \
+    if (ctx && ctx->allocator_) {                      \
+      ctx->allocator_->free(ptr);                      \
+    }                                                  \
+    ptr = NULL;                                        \
+  }
+
 void ObSSTableRowMultiExister::reset()
 {
   ObSSTableRowMultiGetter::reset();
-  if (NULL != micro_exister_) {
-    micro_exister_->~ObMicroBlockRowExister();
-    if (access_ctx_ && access_ctx_->allocator_) {
-      access_ctx_->allocator_->free(micro_exister_);
-    }
-    micro_exister_ = NULL;
-  }
+  FREE_EXISTER_AND_BLOCK_READER(micro_exister_, access_ctx_, ObMicroBlockRowExister);
+  FREE_EXISTER_AND_BLOCK_READER(macro_block_reader_, access_ctx_, ObMacroBlockReader);
 }
 
 void ObSSTableRowMultiExister::reuse()
 {
   ObSSTableRowMultiGetter::reuse();
-  if (NULL != micro_exister_) {
-    micro_exister_->~ObMicroBlockRowExister();
-    if (access_ctx_ && access_ctx_->allocator_) {
-      access_ctx_->allocator_->free(micro_exister_);
-    }
-    micro_exister_ = NULL;
-  }
+  FREE_EXISTER_AND_BLOCK_READER(micro_exister_, access_ctx_, ObMicroBlockRowExister);
+  FREE_EXISTER_AND_BLOCK_READER(macro_block_reader_, access_ctx_, ObMacroBlockReader);
 }
+
+#undef FREE_EXISTER_AND_BLOCK_READER
 
 int ObSSTableRowMultiExister::fetch_row(ObSSTableReadHandle &read_handle, const ObDatumRow *&store_row)
 {
@@ -101,12 +102,19 @@ int ObSSTableRowMultiExister::exist_block_row(ObSSTableReadHandle &read_handle, 
       LOG_WARN("Fail to init micro exister, ", K(ret));
     }
   }
+  if (OB_FAIL(ret)) {
+  } else if (nullptr == macro_block_reader_) {
+    if (OB_ISNULL(macro_block_reader_ = OB_NEWx(ObMacroBlockReader, access_ctx_->allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate macro block reader", K(ret));
+    }
+  }
 
   if (OB_SUCC(ret)) {
     bool exist = false;
     bool found = false;
     ObMicroBlockData block_data;
-    if (OB_FAIL(read_handle.get_block_data(macro_block_reader_, block_data))) {
+    if (OB_FAIL(read_handle.get_block_data(*macro_block_reader_, block_data))) {
       LOG_WARN("Fail to get block data", K(ret), K(read_handle));
     } else if (OB_FAIL(micro_exister_->is_exist(
                 *read_handle.rowkey_,

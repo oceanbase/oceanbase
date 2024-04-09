@@ -909,6 +909,8 @@ private:
   int check_mds_memory_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item);
   int check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item);
+  int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

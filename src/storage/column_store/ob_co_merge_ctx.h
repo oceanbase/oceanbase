@@ -59,6 +59,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int init_tablet_merge_info(const bool need_check = true) override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
+  virtual int build_ctx(bool &finish_flag) override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
   {
     return exe_stat_.finish_count_ == array_count_;
@@ -106,11 +107,18 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx,
     const bool check_info_ready) const;
+  int init_major_sstable_status();
+  int init_table_read_info();
   int inner_loop_prepare_index_tree(
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx);
   virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
+  int prepare_mocked_row_store_cg_schema();
+  bool should_mock_row_store_cg_schema();
+  OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
+  OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
+  int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat));
 
@@ -133,6 +141,8 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   lib::ObMutex cg_tables_handle_lock_;
   // store merged cg major sstables for random order, just hold table ref
   storage::ObTablesHandleArray merged_cg_tables_handle_;
+  ObStorageColumnGroupSchema mocked_row_store_cg_;
+  ObTableReadInfo table_read_info_; // read info for merge from col store to row store
 };
 
 } // namespace compaction

@@ -260,6 +260,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
   {"dbms_mview", "dbms_mview.sql", "dbms_mview_body.sql"},
   {"dbms_mview_stats", "dbms_mview_stats.sql", "dbms_mview_stats_body.sql"},
+  {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
 #endif
 };
 
@@ -804,9 +805,11 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                          new_var_val), K(package_id), K(var_idx), K(var_val));
     if (OB_FAIL(ret)) {
     } else if (var->get_type().is_cursor_type()) {
-      OV (var_val.is_tinyint() || var_val.is_number(), OB_ERR_UNEXPECTED, K(var_val));
+      OV (var_val.is_tinyint() || var_val.is_number() || var_val.is_decimal_int(), OB_ERR_UNEXPECTED, K(var_val));
       if (OB_SUCC(ret)
-          && (var_val.is_tinyint() ? var_val.get_bool() : !var_val.is_zero_number())) {
+          && (var_val.is_tinyint()
+              ? var_val.get_bool()
+                : (var_val.is_number() ? !var_val.is_zero_number() : !var_val.is_zero_decimalint()))) {
         if (from_proxy) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("can not sync package open cursor from proxy,"

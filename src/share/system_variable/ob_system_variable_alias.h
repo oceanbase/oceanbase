@@ -352,6 +352,7 @@ namespace share
   static const char* const OB_SV_TRANSACTION_ALLOW_BATCHING = "transaction_allow_batching";
   static const char* const OB_SV_TRANSACTION_PREALLOC_SIZE = "transaction_prealloc_size";
   static const char* const OB_SV_TRANSACTION_WRITE_SET_EXTRACTION = "transaction_write_set_extraction";
+  static const char* const OB_SV_INFORMATION_SCHEMA_STATS_EXPIRY = "information_schema_stats_expiry";
 
 }
 }

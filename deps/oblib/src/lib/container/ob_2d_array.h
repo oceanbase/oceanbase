@@ -272,7 +272,7 @@ void Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free,
   if (!use_trivial_ctor) {
     MyOp::array_construct(ptr, cnt);
   } else {
-    memset(ptr, 0, sizeof(T) * cnt);
+    memset(static_cast<void *> (ptr), 0, sizeof(T) * cnt);
   }
 }
 

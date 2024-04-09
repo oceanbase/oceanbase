@@ -122,6 +122,11 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.payloadSigningPolicy = Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never;
     config.endpointOverride = account.endpoint_;
     config.executor = nullptr;
+
+    // Default maxRetries is 10
+    std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
+        Aws::MakeShared<Aws::Client::DefaultRetryStrategy>(S3_SDK, 1/*maxRetries*/);
+    config.retryStrategy = retryStrategy;
   }
   return ret;
 }

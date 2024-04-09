@@ -685,7 +685,7 @@ void ObBitmap::reuse(const bool is_all_true)
 int ObBitmap::set_bitmap_batch(const int64_t offset, const int64_t count, const bool value)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(valid_bytes_ < (offset + count))) {
+  if (OB_UNLIKELY(count < 0 || valid_bytes_ < (offset + count))) {
     ret = OB_INVALID_ARGUMENT;
     LIB_LOG(WARN, "Invalid argument", K(ret), K_(valid_bytes), K(offset), K(count));
   } else if (value) {

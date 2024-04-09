@@ -397,8 +397,7 @@ int ObCGPrefetcher::prefetch_micro_data()
           } else if (!contain_rows(block_info.get_row_range())) {
             // continue if no rows contained
           } else if (nullptr != sstable_index_filter_
-                     && block_info.has_agg_data()
-                     && block_info.is_filter_uncertain()
+                     && can_index_filter_skip(block_info)
                      && OB_FAIL(sstable_index_filter_->check_range(
                              iter_param_->read_info_, block_info, *(access_ctx_->allocator_)))) {
             LOG_WARN("Fail to check if can skip prefetch", K(ret), K(block_info));
@@ -523,8 +522,7 @@ int ObCGPrefetcher::ObCSIndexTreeLevelHandle::prefetch(
       } else if (!prefetcher.contain_rows(index_info.get_row_range())) {
         // continue if no rows contained
       } else if (nullptr != prefetcher.sstable_index_filter_
-                 && index_info.has_agg_data()
-                 && index_info.is_filter_uncertain()
+                 && prefetcher.can_index_filter_skip(index_info)
                  && OB_FAIL(prefetcher.sstable_index_filter_->check_range(
                          prefetcher.iter_param_->read_info_,
                          index_info,

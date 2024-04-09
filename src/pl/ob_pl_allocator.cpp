@@ -34,6 +34,9 @@ void* ObPLAllocator::alloc(const int64_t size, const ObMemAttr &attr)
   }
   if (OB_SUCC(ret)) {
     ptr = curr_->alloc(size, attr);
+    if (curr_->used() > 100 * 1024 * 1024) {
+      LOG_INFO("[WARNING] PlTemp memory hold too much, should check...", K(curr_->used()), K(lbt()));
+    }
   }
   return ptr;
 }

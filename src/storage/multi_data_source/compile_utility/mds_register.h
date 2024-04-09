@@ -119,6 +119,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           TRANSFER_DEST_PREPARE)
   // UNBIND_LOB_TABLET: ID = 29 for drop lob tablet when drop column instant.
   // CHANGE_TABLET_TO_TABLE_MDS: ID = 30 for exchange tablet to table bind relationship after exchanging partition.
+  // TABLET_SPLIT: ID = 31 for auto_split.
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/

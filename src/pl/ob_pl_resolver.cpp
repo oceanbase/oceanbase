@@ -2534,12 +2534,14 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
       const ObColumnSchemaV2 &column_schema = **cs_iter;
       if (!column_schema.is_hidden() && !(column_schema.is_invisible_column() && !with_rowid)) {
         ObPLDataType pl_type;
-        if (column_schema.get_meta_type().is_user_defined_sql_type()) {
+        if (column_schema.get_meta_type().is_user_defined_sql_type()
+            || (lib::is_oracle_mode() && column_schema.get_meta_type().is_geometry())) { // oracle sdo_geometry
+          uint64_t udt_id = column_schema.get_meta_type().is_geometry() ? ObUDTType::T_OBJ_SDO_GEOMETRY : column_schema.get_sub_data_type();
           const ObUDTTypeInfo *udt_info = NULL;
           const ObUserDefinedType *user_type = NULL;
           ObArenaAllocator allocator;
-          uint64_t tenant_id = get_tenant_id_by_object_id(column_schema.get_sub_data_type());
-          OZ (schema_guard.get_udt_info(tenant_id, column_schema.get_sub_data_type(), udt_info));
+          uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+          OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
           CK (OB_NOT_NULL(udt_info));
           OZ (udt_info->transform_to_pl_type(allocator, user_type));
           CK (OB_NOT_NULL(user_type));
@@ -11817,7 +11819,9 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    OZ (formalize_expr(*expr));
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
+      OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
+    }
     OZ(ObTransformPreProcess::transform_expr(unit_ast.get_expr_factory(),
                                               resolve_ctx_.session_info_, expr,
                                               transformed));
@@ -13890,9 +13894,11 @@ int ObPLResolver::check_routine_callable(const ObPLBlockNS &ns,
         if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("failed to clear flag", K(ret));
         }
-      } else if (expr_params.count() > 0
-                 && expr_params.at(0)->get_result_type().is_xml_sql_type()
-                 && (T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_)) {
+      } else if (expr_params.count() > 0 &&
+                 ((expr_params.at(0)->get_result_type().is_xml_sql_type() &&
+                   T_OBJ_XML == access_idxs.at(access_idxs.count() - 1).var_index_) ||
+                  (expr_params.at(0)->get_result_type().is_geometry() &&
+                    T_OBJ_SDO_GEOMETRY == access_idxs.at(access_idxs.count() - 1).var_index_))) {
         // select 'head' || xmlparse(document '<a>123</a>').getclobval() into a from dual;
         if (OB_FAIL(expr_params.at(0)->clear_flag(IS_UDT_UDF_SELF_PARAM))) {
           LOG_WARN("failed to clear flag", K(ret));
@@ -14046,26 +14052,16 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   return ret;
 }
 
-int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
-                                              const ObPLBlockNS &ns,
-                                              ObIArray<ObObjAccessIdx> &access_idxs,
-                                              ObPLCompileUnitAST &func)
+int ObPLResolver::build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns)
 {
   int ret = OB_SUCCESS;
   const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
-
-  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
-      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
-      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
-
-    ObObjAccessIdx self_access_idx;
-    ObObjAccessIdx elem_access_idx;
-
-    const ObUserDefinedType *self_user_type = NULL;
+  CK (OB_NOT_NULL(udt_routine_ns));
+  CK (OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param()));
+  if (OB_SUCC(ret)) {
     const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
     ObPLDataType self_data_type = self_var->get_type();
     int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
-    uint64_t user_type_id = udt_routine_ns->get_package_id();
 
     // Construct A Self AccessIdx
     new (&self_access_idx) ObObjAccessIdx(self_data_type,
@@ -14089,6 +14085,32 @@ int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
                                                    self_access_idx.get_sysfunc_,
                                                    &resolve_ctx_.session_info_));
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
+                                              const ObPLBlockNS &ns,
+                                              ObIArray<ObObjAccessIdx> &access_idxs,
+                                              ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
+
+  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
+      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
+      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
+
+    ObObjAccessIdx self_access_idx;
+    ObObjAccessIdx elem_access_idx;
+
+    const ObUserDefinedType *self_user_type = NULL;
+    const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
+    ObPLDataType self_data_type = self_var->get_type();
+    int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
+    uint64_t user_type_id = udt_routine_ns->get_package_id();
+
+    OZ (build_self_access_idx(self_access_idx, ns));
     OZ (ns.get_pl_data_type_by_id(self_data_type.get_user_type_id(), self_user_type));
     CK (OB_NOT_NULL(self_user_type));
     OZ (self_user_type->get_all_depended_user_type(resolve_ctx_, ns));
@@ -14321,15 +14343,30 @@ int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
         LOG_WARN("deduce type failed for sys func ident", K(ret));
       }
     }
+    uint64_t udt_id = 0;
     if (OB_FAIL(ret)) {
-    } else if (!access_ident.sys_func_expr_->get_result_type().is_xml_sql_type()
-                && !(access_ident.sys_func_expr_->get_result_type().is_ext())) {
+    } else if (access_ident.sys_func_expr_->get_result_type().is_user_defined_sql_type()) {
+      uint16_t subschema_id = access_ident.sys_func_expr_->get_result_type().get_subschema_id();
+      if (subschema_id == ObXMLSqlType) {
+        udt_id = T_OBJ_XML;
+      } else {
+        udt_id = access_ident.sys_func_expr_->get_result_type().get_udt_id();
+      }
+    } else if (access_ident.sys_func_expr_->get_result_type().is_ext()) {
+      udt_id = access_ident.sys_func_expr_->get_result_type().get_udt_id();
+    } else if (access_ident.sys_func_expr_->get_result_type().is_geometry() && lib::is_oracle_mode()) {
+      // oracle gis
+      udt_id = T_OBJ_SDO_GEOMETRY;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)
+               && !(access_ident.sys_func_expr_->get_result_type().is_ext())) {
       ret = OB_ERR_NOT_OBJ_REF;
       LOG_WARN("unsupported sys func ident",
-        K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()),
-        K(access_ident.sys_func_expr_->get_result_type().get_udt_id()));
-    } else { // only xmltype is supported
-      OZ (ns.get_pl_data_type_by_id(T_OBJ_XML, user_type));
+        K(ret), K(access_ident), K(access_ident.sys_func_expr_->get_result_type()), K(udt_id));
+    } else {
+      OZ (ns.get_pl_data_type_by_id(udt_id, user_type));
     }
   }
   CK (OB_NOT_NULL(user_type));
@@ -14456,6 +14493,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
       }
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
+               || (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && is_routine)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
@@ -14463,8 +14501,22 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                || (ObPLExternalNS::PKG_NS == type && is_routine)
                || (ObPLExternalNS::DBLINK_PKG_NS == type && is_routine)) {
       if (is_routine) {
-        OZ (resolve_routine(access_ident, ns, access_idxs, func),
-          K(access_ident), K(access_idxs));
+        if (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && access_idxs.empty()) {
+          ObObjAccessIdx self_access_idx;
+          ObSEArray<ObObjAccessIdx, 4> tmp_access_idxs;
+          OZ (build_self_access_idx(self_access_idx, ns));
+          OZ (tmp_access_idxs.push_back(self_access_idx));
+          OZ (resolve_routine(access_ident, ns, tmp_access_idxs, func));
+          if (OB_SUCC(ret)) {
+            int64_t i = (tmp_access_idxs.at(0) == self_access_idx) ? 1 : 0;
+            for (; OB_SUCC(ret) && i < tmp_access_idxs.count(); ++i) {
+              OZ (access_idxs.push_back(tmp_access_idxs.at(i)));
+            }
+          }
+        } else {
+          OZ (resolve_routine(access_ident, ns, access_idxs, func),
+            K(access_ident), K(access_idxs));
+        }
       } else { // [self.]element, user can access element without self prefix, handle it in here.
         OZ (resolve_self_element_access(access_ident, ns, access_idxs, func),
           K(access_ident), K(access_idxs), K(type), K(is_routine));

@@ -60,6 +60,11 @@ ObTableIterParam::ObTableIterParam()
 ObTableIterParam::~ObTableIterParam()
 {
   cg_read_info_handle_.reset();
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
+  ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
 void ObTableIterParam::reset()
@@ -79,7 +84,10 @@ void ObTableIterParam::reset()
   need_trans_info_ = false;
   is_same_schema_column_ = false;
   pd_storage_flag_ = 0;
-  pushdown_filter_ = nullptr;
+  if (nullptr != pushdown_filter_) {
+    pushdown_filter_->clear();
+    pushdown_filter_ = nullptr;
+  }
   ss_rowkey_prefix_cnt_ = 0;
   op_ = nullptr;
   output_exprs_ = nullptr;
@@ -261,8 +269,7 @@ int ObTableAccessParam::init(
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
-    if (scan_param.sample_info_.is_no_sample() &&
-        iter_param_.is_use_column_store() &&
+    if (iter_param_.is_use_column_store() &&
         nullptr != table_param.get_read_info().get_cg_idxs() &&
         !iter_param_.need_fill_group_idx()) { // not use column store in group rescan
       iter_param_.set_use_column_store();
@@ -271,7 +278,7 @@ int ObTableAccessParam::init(
     }
     if (scan_param.need_switch_param_ ||
         iter_param_.is_use_column_store()) {
-      iter_param_.set_use_iter_pool_flag();
+      iter_param_.set_use_stmt_iter_pool();
     }
 
     if (OB_UNLIKELY(iter_param_.enable_pd_group_by() && scan_param.use_index_skip_scan())) {

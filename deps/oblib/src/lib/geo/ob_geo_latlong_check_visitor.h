@@ -37,6 +37,8 @@ public:
   template<typename Geo_type>
   int calculate_point_range(Geo_type *geo);
 
+  static double ob_normalize_latitude(double lat);
+  static double ob_normalize_longitude(double lon);
 private:
   const ObSrsItem *srs_;
   bool changed_;

@@ -47,9 +47,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/monitor/flt/ob_flt_utils.h"
 #include "sql/session/ob_sess_info_verify.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#endif
 namespace oceanbase
 {
 using namespace share;
@@ -519,7 +517,10 @@ int ObMPBase::check_and_refresh_schema(uint64_t login_tenant_id,
 int ObMPBase::response_row(ObSQLSessionInfo &session,
                            common::ObNewRow &row,
                            const ColumnsFieldIArray *fields,
-                           bool is_packed)
+                           bool is_packed,
+                           ObExecContext *exec_ctx,
+                           bool is_ps_protocol,
+                           ObSchemaGetterGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator;
@@ -536,7 +537,8 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
       ObCharsetType charset_type = CHARSET_INVALID;
       ObCharsetType ncharset_type = CHARSET_INVALID;
       // need at ps mode
-      if (!is_packed && value.get_type() != fields->at(i).type_.get_type()) {
+      if (!is_packed && value.get_type() != fields->at(i).type_.get_type()
+          && !(value.is_geometry() && lib::is_oracle_mode())) {// oracle gis will do cast in process_sql_udt_results
         ObCastCtx cast_ctx(&allocator, NULL, CM_WARN_ON_FAIL, fields->at(i).type_.get_collation_type());
         if (ObDecimalIntType == fields->at(i).type_.get_type()) {
           cast_ctx.res_accuracy_ = const_cast<ObAccuracy*>(&fields->at(i).accuracy_);
@@ -581,20 +583,22 @@ int ObMPBase::response_row(ObSQLSessionInfo &session,
                                     &allocator,
                                     &session))) {
           LOG_WARN("convert lob locator to longtext failed", K(ret));
-#ifdef OB_BUILD_ORACLE_XML
-        } else if (value.is_user_defined_sql_type()
+        } else if ((value.is_user_defined_sql_type() || value.is_collection_sql_type() || value.is_geometry())
                    && OB_FAIL(ObXMLExprHelper::process_sql_udt_results(value,
                                     &allocator,
-                                    &session))) {
+                                    &session,
+                                    exec_ctx,
+                                    is_ps_protocol,
+                                    fields,
+                                    schema_guard))) {
           LOG_WARN("convert udt to client format failed", K(ret), K(value.get_udt_subschema_id()));
-#endif
         }
       }
     }
 
     if (OB_SUCC(ret)) {
       const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(&session);
-      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields);
+      ObSMRow sm_row(obmysql::BINARY, tmp_row, dtc_params, fields, schema_guard);
       sm_row.set_packed(is_packed);
       obmysql::OMPKRow rp(sm_row);
       rp.set_is_packed(is_packed);

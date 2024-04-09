@@ -538,7 +538,7 @@ int ObSSTableMeta::init(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to check meta", K(ret), K(*this));
   } else if (param.table_key_.is_co_sstable()) {
-    if (param.is_empty_co_table_) {
+    if (param.is_co_table_without_cgs_) {
       // empty co sstable no need to init cg
     } else if (OB_FAIL(cg_sstables_.init_empty_array_for_cg(allocator, param.column_group_cnt_ - 1/*exclude basic cg*/))) {
       LOG_WARN("failed to alloc memory for cg sstable array", K(ret), K(param));
@@ -761,6 +761,7 @@ ObMigrationSSTableParam::ObMigrationSSTableParam()
     table_key_(),
     column_default_checksums_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator_)),
     is_small_sstable_(false),
+    is_empty_cg_sstables_(false),
     column_group_cnt_(0),
     full_column_cnt_(0),
     co_base_type_(0)
@@ -779,6 +780,7 @@ void ObMigrationSSTableParam::reset()
   column_default_checksums_.reset();
   basic_meta_.reset();
   is_small_sstable_ = false;
+  is_empty_cg_sstables_ = false;
   column_group_cnt_ = 0;
   full_column_cnt_ = 0;
   co_base_type_ = 0;
@@ -801,6 +803,7 @@ int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
     basic_meta_ = param.basic_meta_;
     table_key_ = param.table_key_;
     is_small_sstable_ = param.is_small_sstable_;
+    is_empty_cg_sstables_ = param.is_empty_cg_sstables_;
     column_group_cnt_ = param.column_group_cnt_;
     full_column_cnt_ = param.full_column_cnt_;
     co_base_type_ = param.co_base_type_;
@@ -859,6 +862,8 @@ int ObMigrationSSTableParam::serialize_(char *buf, const int64_t buf_len, int64_
     LOG_WARN("fail to serialize full_column_cnt_", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_i32(buf, buf_len, pos, co_base_type_))) {
     LOG_WARN("fail to serialize co_base_type_", K(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, is_empty_cg_sstables_))) {
+    LOG_WARN("fail to serialize is_empty_cg_sstables_", K(ret), KP(buf), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -913,6 +918,8 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
     LOG_WARN("fail to deserialize full_column_cnt_", K(ret), KP(buf), K(data_len), K(pos));
   } else if (pos < data_len && OB_FAIL(serialization::decode_i32(buf, data_len, pos, &co_base_type_))) {
     LOG_WARN("fail to deserialize co_base_type_", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_empty_cg_sstables_))) {
+    LOG_WARN("fail to deserialize is_empty_cg_sstables_", K(ret), KP(buf), K(data_len), K(pos));
   }
   return ret;
 }
@@ -938,6 +945,7 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
   len += serialization::encoded_length_i32(column_group_cnt_);
   len += serialization::encoded_length_i32(full_column_cnt_);
   len += serialization::encoded_length_i32(co_base_type_);
+  len += serialization::encoded_length_bool(is_empty_cg_sstables_);
   return len;
 }
 

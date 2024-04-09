@@ -152,9 +152,6 @@ int ObPsCache::deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item/*=false*/
     if (erase_item) { // dec cached ref
       if (OB_FAIL(erase_stmt_item(stmt_id, ps_sql_key))) {
         LOG_WARN("fail to erase stmt", K(ret));
-      } else if (ps_info->try_set_erase_flag() && OB_SUCCESS != (tmp_ret = deref_stmt_info(stmt_id))) {
-        ret = tmp_ret;
-        LOG_WARN("deref stmt info failed", K(ret), K(stmt_id), K(ps_sql_key));
       }
     } else { // dec session ref
       if (OB_ISNULL(ps_info->get_ps_item())) {
@@ -163,12 +160,13 @@ int ObPsCache::deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item/*=false*/
       } else {
         ps_info->get_ps_item()->dec_ref_count_check_erase();
       }
-      if (OB_SUCCESS != (tmp_ret = deref_stmt_info(stmt_id))) {
-        ret = tmp_ret; //previous ret ignore
-        LOG_WARN("deref stmt info failed", K(ret), K(stmt_id), K(ps_sql_key));
-      } else {
-        LOG_TRACE("deref stmt info success", K(stmt_id), K(ps_sql_key), K(ret));
-      }
+    }
+
+    if (OB_SUCCESS != (tmp_ret = deref_stmt_info(stmt_id))) {
+      ret = tmp_ret; //previous ret ignore
+      LOG_WARN("deref stmt info failed", K(ret), K(stmt_id), K(ps_sql_key));
+    } else {
+      LOG_TRACE("deref stmt info success", K(stmt_id), K(ps_sql_key), K(ret));
     }
   }
   return ret;

@@ -473,6 +473,7 @@ int ObDefaultValueUtils::build_expr_default_expr(const ColumnItem *column,
 {
   int ret = OB_SUCCESS;
   ObRawExpr *temp_expr = NULL;
+  ObRawExpr *seq_expr = nullptr;
   if (OB_ISNULL(column)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguemnt", K(column));
@@ -483,6 +484,11 @@ int ObDefaultValueUtils::build_expr_default_expr(const ColumnItem *column,
                                                 input_expr,
                                                 temp_expr))) {
     LOG_WARN("failed to copy expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_invalid_sequence_expr(temp_expr, seq_expr))) {
+    LOG_WARN("fail to get invalid sequence expr", K(ret));
+  } else if (nullptr != seq_expr) {
+    ret = OB_ERR_SEQ_NOT_EXIST;
+    LOG_WARN("sequence not exist", K(ret));
   } else {
     const_expr = temp_expr;
   }

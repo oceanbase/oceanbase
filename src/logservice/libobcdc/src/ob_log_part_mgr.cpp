@@ -169,7 +169,8 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(const int64_t timeout)
         }
       }
 
-      if (OB_SUCC(ret) && OB_FAIL(add_user_table_info_(schema_guard, table_schema, timeout))) {
+      if (OB_SUCC(ret) && enable_white_black_list_ && OB_FAIL(add_user_table_info_(schema_guard,
+          table_schema, timeout))) {
         LOG_ERROR("add_user_table_info failed", KR(ret), K_(tenant_id), KPC(table_schema));
       }
     }
@@ -209,7 +210,8 @@ int ObLogPartMgr::add_all_user_tablets_and_tables_info(
         }
       }
 
-      if (OB_SUCC(ret) && OB_FAIL(add_user_table_info_(tenant_info, table_meta, timeout))) {
+      if (OB_SUCC(ret) && enable_white_black_list_ && OB_FAIL(add_user_table_info_(tenant_info,
+          table_meta, timeout))) {
         LOG_ERROR("add_user_table_info failed", KR(ret), K_(tenant_id), KPC(table_meta));
       }
     }
@@ -384,6 +386,17 @@ int ObLogPartMgr::add_table(const uint64_t table_id,
     } else {
       ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
           K(tenant_name), K(database_name), K(table_name));
+    }
+
+    if (OB_SUCC(ret) && TCONF.enable_hbase_mode) {
+      // add hbase table
+      if (OB_FAIL(try_add_hbase_table_(table_id, table_name, new_schema_version, timeout))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_WARN("try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name), K(new_schema_version));
+        }
+      } else {
+        LOG_INFO("try_add_hbase_table_ success", K(table_id), K(table_name), K(new_schema_version));
+      }
     }
   }
   return ret;
@@ -1607,6 +1620,22 @@ int ObLogPartMgr::add_user_table_info_(ObLogSchemaGuard &schema_guard,
       ISTAT("insert table_id into cache success", K_(tenant_id), K(table_id),
           K(database_id), K(tenant_name), K(database_name), K(table_name));
     }
+
+    if (OB_SUCC(ret) && TCONF.enable_hbase_mode) {
+      // add hbase table
+      const ObTableSchema *full_table_schema = NULL;
+      if (OB_FAIL(get_full_table_schema_(table_id, timeout, schema_guard, full_table_schema))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_ERROR("get full table_schema failed", KR(ret), "table_id", table_id);
+        }
+      } else if (OB_FAIL(try_add_hbase_table_(full_table_schema, table_name, timeout))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_WARN("try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
+        }
+      } else {
+        LOG_INFO("try_add_hbase_table_ success", K(table_id), K(table_name));
+      }
+    }
   }
   return ret;
 }
@@ -1643,6 +1672,17 @@ int ObLogPartMgr::add_user_table_info_(ObDictTenantInfo *tenant_info,
     } else {
       ISTAT("insert table_id into cache success", K_(tenant_id), K(table_id),
           K(database_id), K(tenant_name), K(database_name), K(table_name));
+    }
+
+    if (OB_SUCC(ret) && TCONF.enable_hbase_mode) {
+      // add hbase table
+      if (OB_FAIL(try_add_hbase_table_(table_meta, table_name, timeout))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_WARN("try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
+        }
+      } else {
+        LOG_INFO("try_add_hbase_table_ success", K(table_id), K(table_name));
+      }
     }
   }
   return ret;
@@ -1735,17 +1775,17 @@ int ObLogPartMgr::filter_table_(const ObSimpleTableSchemaV2 *table_schema,
     // 1. When manipulating a global index table/unique index table, the primary schema should be valid
     // 2. The global index table/unique index table is filtered based on the primary table, if the primary table matches, the global index table also matches
     if (OB_ISNULL(primary_table_schema)) {
-      LOG_ERROR("invalid argument", K(primary_table_schema), KPC(table_schema),
-          K(db_name), K(tenant_name));
       ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid argument", KR(ret), K(primary_table_schema), KPC(table_schema),
+          K(db_name), K(tenant_name));
     } else {
       target_table_schema = primary_table_schema;
     }
   } else if (table_schema->is_user_hidden_table()) {
     if (OB_ISNULL(primary_table_schema)) {
-      LOG_ERROR("invalid argument", K(primary_table_schema), KPC(table_schema),
-          K(db_name), K(tenant_name));
       ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid argument", KR(ret), K(primary_table_schema), KPC(table_schema),
+          K(db_name), K(tenant_name));
     } else {
       target_table_schema = primary_table_schema;
     }
@@ -2268,8 +2308,8 @@ int ObLogPartMgr::get_schema_info_of_table_id_(const uint64_t table_id,
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("get schema_guard and table_schema failed", KR(ret), K(table_id), K(schema_version));
       }
-    } else if (inner_get_table_info_of_table_schema_(schema_guard, table_schema, tenant_name,
-        database_name, table_name, database_id, is_user_table, timeout)) {
+    } else if (OB_FAIL(inner_get_table_info_of_table_schema_(schema_guard, table_schema, tenant_name,
+        database_name, table_name, database_id, is_user_table, timeout))) {
       if (OB_TIMEOUT != ret) {
         LOG_ERROR("inner get table info failed", KR(ret), KPC(table_schema));
       }
@@ -2286,8 +2326,11 @@ int ObLogPartMgr::get_schema_info_of_table_id_(const uint64_t table_id,
     } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tenant_info is nullptr", KR(ret), K_(tenant_id));
-    } else if (inner_get_table_info_of_table_meta_(tenant_info, table_meta, tenant_name,
-        database_name, table_name, database_id, is_user_table)) {
+    } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get table_meta failed", KR(ret), K_(tenant_id), K(table_id));
+    } else if (OB_FAIL(inner_get_table_info_of_table_meta_(tenant_info, table_meta, tenant_name,
+        database_name, table_name, database_id, is_user_table))) {
       LOG_ERROR("inner get table info failed", KR(ret), KPC(tenant_info));
     } else {
       // succ
@@ -2365,10 +2408,14 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   int ret = OB_SUCCESS;
   uint64_t table_id = OB_INVALID_ID;
   const ObSimpleTableSchemaV2 *final_table_schema = NULL;
+  bool is_index_table = false;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table_schema is NULL", KR(ret), K(table_schema));
   } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
+  } else if (table_schema->is_index_table()) {
+    is_index_table = true;
+    LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_schema));
   } else if (table_schema->is_user_hidden_table()) {
     const ObSimpleTableSchemaV2 *origin_table_schema = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_schema_(*table_schema, schema_guard,
@@ -2433,15 +2480,19 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
     final_table_schema = table_schema;
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(inner_get_table_info_of_table_schema_(schema_guard, final_table_schema, tenant_name,
-      database_name, table_name, database_id, is_user_table, timeout))) {
-    if (OB_TIMEOUT != ret) {
-      LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_schema));
+  if (OB_SUCC(ret)) {
+    if (is_index_table) {
+      is_user_table = false;
+    } else if (OB_FAIL(inner_get_table_info_of_table_schema_(schema_guard, final_table_schema, tenant_name,
+        database_name, table_name, database_id, is_user_table, timeout))) {
+      if (OB_TIMEOUT != ret) {
+        LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_schema));
+      }
+    } else {
+      LOG_INFO("get table info of table_schema finished", KR(ret), K(table_id), K(tenant_name),
+          K(database_name), K(table_name), K(database_id), K(is_user_table));
     }
   }
-
-  LOG_INFO("get table info of table_schema finished", KR(ret), K(table_id), K(tenant_name),
-      K(database_name), K(table_name), K(database_id), K(is_user_table));
   return ret;
 }
 
@@ -2457,6 +2508,7 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   int ret = OB_SUCCESS;
   uint64_t table_id = OB_INVALID_ID;
   const datadict::ObDictTableMeta *final_table_meta = NULL;
+  bool is_index_table = false;
   if (OB_ISNULL(tenant_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant_info is NULL", KR(ret), K_(tenant_id));
@@ -2464,6 +2516,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table_meta is NULL", KR(ret), K(table_meta));
   } else if (FALSE_IT(table_id = table_meta->get_table_id())) {
+  } else if (table_meta->is_index_table()) {
+    is_index_table = true;
+    LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_meta));
   } else if (table_meta->is_user_hidden_table()) {
     datadict::ObDictTableMeta *origin_table_meta = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_meta_(*table_meta, tenant_info,
@@ -2517,13 +2572,19 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     final_table_meta = table_meta;
   }
 
-  if (OB_SUCC(ret) && OB_FAIL(inner_get_table_info_of_table_meta_(tenant_info, final_table_meta,
-      tenant_name, database_name, table_name, database_id, is_user_table))) {
-    LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_meta));
+  if (OB_SUCC(ret)) {
+    if (is_index_table) {
+      is_user_table = false;
+    } else if (OB_FAIL(inner_get_table_info_of_table_meta_(tenant_info, final_table_meta,
+        tenant_name, database_name, table_name, database_id, is_user_table))) {
+      if (OB_TIMEOUT != ret) {
+        LOG_ERROR("inner get table info failed", KR(ret), KPC(final_table_meta));
+      }
+    } else {
+      LOG_INFO("get table info of table_meta success", K(table_id), K(tenant_name),
+          K(database_name), K(table_name), K(database_id), K(is_user_table));
+    }
   }
-
-  LOG_INFO("get table info of table_meta success", K(table_id), K(tenant_name),
-      K(database_name), K(table_name), K(database_id), K(is_user_table));
   return ret;
 }
 
@@ -2590,6 +2651,78 @@ int ObLogPartMgr::inner_get_table_info_of_table_meta_(ObDictTenantInfo *tenant_i
     is_user_table = table_meta->is_user_table();
     LOG_INFO("inner_get_table_info_of_table_meta_ success", K(tenant_name), K(database_name),
         K(table_name), K(database_id), K(is_user_table));
+  }
+  return ret;
+}
+
+int ObLogPartMgr::try_add_hbase_table_(const uint64_t table_id,
+    const char *table_name,
+    const int64_t schema_version,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  ObString tb_name_str(table_name);
+  // if table_name contains '$', it may be hbase table
+  if (NULL != tb_name_str.find('$')) {
+    if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+      IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+      ObLogSchemaGuard schema_guard;
+      const ObTableSchema *full_table_schema = NULL;
+      if (OB_ISNULL(schema_getter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("schema_getter is NULL", KR(ret), K(schema_getter));
+      } else if (OB_FAIL(schema_getter->get_schema_guard_and_full_table_schema(
+          tenant_id_, table_id, schema_version, timeout, schema_guard, full_table_schema))) {
+        if (OB_TIMEOUT != ret) {
+          LOG_ERROR("get_schema_guard_and_full_table_schema failed", KR(ret), K(table_id), KPC(full_table_schema));
+        }
+      } else if (OB_FAIL(try_add_hbase_table_(full_table_schema, table_name, timeout))) {
+        LOG_ERROR("inner try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
+      } else {
+        // succ
+      }
+    } else {
+      ObDictTenantInfoGuard dict_tenant_info_guard;
+      ObDictTenantInfo *tenant_info = nullptr;
+      datadict::ObDictTableMeta *table_meta = nullptr;
+      if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id_, dict_tenant_info_guard))) {
+        LOG_ERROR("get tenant_info_guard failed", KR(ret), K_(tenant_id));
+      } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("tenant_info is nullptr", K_(tenant_id));
+      } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
+        LOG_ERROR("tenant_info get table_meta failed", KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(try_add_hbase_table_(table_meta, table_name, timeout))) {
+        LOG_ERROR("inner try_add_hbase_table_ failed", KR(ret), K(table_id), K(table_name));
+      } else {
+        // succ
+      }
+    }
+  }
+  return ret;
+}
+
+template<class TABLE_SCHEMA>
+int ObLogPartMgr::try_add_hbase_table_(const TABLE_SCHEMA *table_schema,
+    const char *table_name,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  ObString tb_name_str(table_name);
+  // if table_name contains '$', it may be hbase table
+  if (NULL != tb_name_str.find('$')) {
+    uint64_t table_id = OB_INVALID_ID;
+    if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("table_schema is NULL", KR(ret), K(table_schema));
+    } else if (FALSE_IT(table_id = table_schema->get_table_id())) {
+    } else if (table_schema->is_in_recyclebin()) {
+      LOG_INFO("table is in recyclebin, no need to add", K(table_id), K(table_name));
+    } else if (OB_FAIL(TCTX.hbase_util_.add_hbase_table_id(*table_schema))) {
+      LOG_ERROR("hbase_util_ add_hbase_table_id", KR(ret), K(table_id), K(table_name));
+    } else {
+      // succ
+    }
   }
   return ret;
 }

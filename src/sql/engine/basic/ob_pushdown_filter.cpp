@@ -37,6 +37,7 @@ ObPushdownFilterFactory::PDFilterAllocFunc ObPushdownFilterFactory::PD_FILTER_AL
   ObPushdownFilterFactory::alloc<ObPushdownWhiteFilterNode, WHITE_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownAndFilterNode, AND_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownOrFilterNode, OR_FILTER>,
+  ObPushdownFilterFactory::alloc<ObPushdownSampleFilterNode, SAMPLE_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownDynamicFilterNode, DYNAMIC_FILTER>
 };
 
@@ -46,6 +47,7 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObWhiteFilterExecutor, ObPushdownWhiteFilterNode, WHITE_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObAndFilterExecutor, ObPushdownAndFilterNode, AND_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObOrFilterExecutor, ObPushdownOrFilterNode, OR_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObSampleFilterExecutor, ObPushdownSampleFilterNode, SAMPLE_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>
 };
 
@@ -505,7 +507,7 @@ int ObPushdownFilterConstructor::deduplicate_filter_node(
         --n_node;
       }
     }
-    if (0 < merged_node.count()) {
+    if (OB_SUCC(ret) && 0 < merged_node.count()) {
       if (OB_ISNULL(filter_nodes.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter node is null", K(ret), K(i));
@@ -2706,10 +2708,7 @@ void PushdownFilterInfo::reset()
     }
     allocator_ = nullptr;
   }
-  if (OB_NOT_NULL(filter_)) {
-    filter_->clear();
-    filter_ = nullptr;
-  }
+  filter_ = nullptr;
   param_ = nullptr;
   context_ = nullptr;
   is_inited_ = false;

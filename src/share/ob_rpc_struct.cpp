@@ -6114,6 +6114,24 @@ bool ObDropUDTArg::is_valid() const
   return OB_INVALID_ID != tenant_id_ && !db_name_.empty() && !udt_name_.empty();
 }
 
+int ObDropUDTArg::assign(const ObDropUDTArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("fail to assign ddl arg", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    db_name_ = other.db_name_;
+    udt_name_ = other.udt_name_;
+    if_exist_ = other.if_exist_;
+    is_type_body_ = other.is_type_body_;
+    force_or_validate_ = other.force_or_validate_;
+    exist_valid_udt_ = other.exist_valid_udt_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER((ObDropUDTArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
@@ -8850,6 +8868,7 @@ void ObBatchCreateTabletArg::reset()
   create_tablet_schemas_.reset();
   allocator_.reset();
   tablet_extra_infos_.reset();
+  clog_checkpoint_scn_.reset();
 }
 
 int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
@@ -8896,6 +8915,7 @@ int ObBatchCreateTabletArg::assign(const ObBatchCreateTabletArg &arg)
     major_frozen_scn_ = arg.major_frozen_scn_;
     need_check_tablet_cnt_ = arg.need_check_tablet_cnt_;
     is_old_mds_ = arg.is_old_mds_;
+    clog_checkpoint_scn_ = arg.clog_checkpoint_scn_;
   }
   return ret;
 }
@@ -9089,7 +9109,7 @@ int ObBatchCreateTabletArg::is_old_mds(const char *buf,
 DEF_TO_STRING(ObBatchCreateTabletArg)
 {
   int64_t pos = 0;
-  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos));
+  J_KV(K_(id), K_(major_frozen_scn), K_(need_check_tablet_cnt), K_(is_old_mds), K_(tablets), K_(tablet_extra_infos), K_(clog_checkpoint_scn));
   return pos;
 }
 
@@ -9103,6 +9123,7 @@ OB_DEF_SERIALIZE(ObBatchCreateTabletArg)
   } else {
     OB_UNIS_ENCODE_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, clog_checkpoint_scn_);
   return ret;
 }
 
@@ -9112,6 +9133,7 @@ OB_DEF_SERIALIZE_SIZE(ObBatchCreateTabletArg)
   LST_DO_CODE(OB_UNIS_ADD_LEN, id_, major_frozen_scn_, tablets_, table_schemas_, need_check_tablet_cnt_, is_old_mds_);
   len += get_serialize_size_for_create_tablet_schemas();
   OB_UNIS_ADD_LEN_ARRAY(tablet_extra_infos_, tablet_extra_infos_.count());
+  LST_DO_CODE(OB_UNIS_ADD_LEN, clog_checkpoint_scn_);
   return len;
 }
 
@@ -9139,6 +9161,7 @@ OB_DEF_DESERIALIZE(ObBatchCreateTabletArg)
       }
     }
   }
+  LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_);
   return ret;
 }
 

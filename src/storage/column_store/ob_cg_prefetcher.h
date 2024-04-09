@@ -68,6 +68,10 @@ public:
     return micro_data_prefetch_idx_  - cur_micro_data_read_idx_ == max_micro_handle_cnt_
         || access_ctx_->micro_block_handle_mgr_.reach_hold_limit();
   }
+  OB_INLINE bool can_index_filter_skip(blocksstable::ObMicroIndexInfo &index_info)
+  {
+    return index_info.has_agg_data() && index_info.is_filter_uncertain();
+  }
   void recycle_block_data();
   void set_cg_agg_cells(ObCGAggCells &cg_agg_cells) { cg_agg_cells_ = &cg_agg_cells; }
   void set_project_type(const bool project_without_filter) { is_project_without_filter_ = project_without_filter; }

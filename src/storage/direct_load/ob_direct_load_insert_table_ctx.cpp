@@ -407,7 +407,8 @@ int ObDirectLoadInsertTabletContext::close_sstable_slice(const int64_t slice_id)
     slice_info.data_tablet_id_ = param_.tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = param_.context_id_;
-    if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info))) {
+    blocksstable::ObMacroDataSeq unused_seq;
+    if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, unused_seq))) {
       LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id),
                K(param_.tablet_id_));
     }
@@ -430,7 +431,8 @@ int ObDirectLoadInsertTabletContext::close_lob_sstable_slice(const int64_t slice
     slice_info.data_tablet_id_ = param_.tablet_id_;
     slice_info.slice_id_ = slice_id;
     slice_info.context_id_ = param_.context_id_;
-    if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info))) {
+    blocksstable::ObMacroDataSeq unused_seq;
+    if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, unused_seq))) {
       LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id),
                 K(param_.tablet_id_));
     }

@@ -607,7 +607,7 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
           } else if (OB_FAIL(ObSQLUtils::check_and_convert_db_name(
                       cs_type, perserve_lettercase, db_name))) {
             LOG_WARN("fail to check and convert database name", K(db_name), K(ret));
-          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name))) {
+          } else if (OB_FAIL(ObSQLUtils::cvt_db_name_to_org(schema_guard, &session, db_name, NULL/*allocator*/))) {
             LOG_WARN("fail to convert db name to org");
           } else {
             login_info.db_ = db_name;
@@ -1975,7 +1975,7 @@ int ObMPConnect::verify_connection(const uint64_t tenant_id) const
         } else if (Worker::CompatMode::MYSQL == compat_mode) {
           check_max_sess = user_name_.compare(OB_SYS_USER_NAME) != 0;
         } else if (Worker::CompatMode::ORACLE == compat_mode) {
-          check_max_sess = user_name_.compare(OB_ORA_SYS_USER_NAME) != 0;
+          check_max_sess = user_name_.case_compare(OB_ORA_SYS_USER_NAME) != 0;
         }
       }
       if (OB_SUCC(ret) && check_max_sess) {

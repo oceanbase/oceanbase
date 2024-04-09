@@ -967,7 +967,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
 
   INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit, enable_sort_by_seq_no, *trans_stat_mgr_);
 
-  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison);
+  INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison,
+      TCONF.enable_white_black_list);
 
   INIT(sequencer_, ObLogSequencer, TCONF.sequencer_thread_num, CDC_CFG_MGR.get_sequencer_queue_length(),
       *trans_ctx_mgr_, *trans_stat_mgr_, *committer_, *trans_redo_dispatcher_, *trans_msg_sorter_, *err_handler);
@@ -997,7 +998,7 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
-              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler,
+              sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler, *part_trans_parser_,
               cluster_info.cluster_id_, TCONF, start_seq))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }

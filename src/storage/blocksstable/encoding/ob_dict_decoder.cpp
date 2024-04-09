@@ -1351,7 +1351,8 @@ int ObDictDecoder::in_operator(
         ++traverse_it;
         ++dict_ref;
       }
-      if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, col_data,
+      if (OB_FAIL(ret)) {
+      } else if (found && OB_FAIL(set_res_with_bitset(parent, col_ctx, col_data,
           ref_bitset, pd_filter_info, result_bitmap))) {
         LOG_WARN("Failed to set result bitmap", K(ret));
       }

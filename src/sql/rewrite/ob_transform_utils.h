@@ -313,11 +313,7 @@ public:
                             ObRawExprFactory &expr_factory,
                             const ObDMLStmt *stmt,
                             ObDMLStmt *&new_stmt);
-  static int create_udt_hidden_columns(ObTransformerCtx *ctx,
-                                       ObDMLStmt *stmt,
-                                       const ObColumnRefRawExpr &udt_expr,
-                                       ObColumnRefRawExpr *&col_expr,
-                                       bool &need_transform);
+
   /**
    * @brief joined_table需要维护一个基表的table id列表
    * 对于它的左右子节点，如果是基表 或者generated table，直接使用其table id；
@@ -1877,6 +1873,7 @@ public:
   static int pushdown_qualify_filters(ObSelectStmt *stmt);
   // check if a constant or parameterized constant is NULL.
   static bool is_const_null(ObRawExpr &expr);
+  static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

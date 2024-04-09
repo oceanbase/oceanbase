@@ -28,7 +28,7 @@ namespace sql
 {
 
 // The length of array need to be equal to the number of types defined at ObObjType
-static const int32_t CAST_STRING_DEFUALT_LENGTH[52] = {
+static const int32_t CAST_STRING_DEFUALT_LENGTH[53] = {
   0, //null
   4, //tinyint
   6, //smallint
@@ -80,6 +80,7 @@ static const int32_t CAST_STRING_DEFUALT_LENGTH[52] = {
   1,//geometry
   1,//udt
   11, // decimal int
+  1,//collection
   0//max, invalid type, or count of obj type
 };
 
@@ -177,7 +178,7 @@ private:
                                   ObExpr **subquery_row,
                                   ObEvalCtx *subquery_ctx,
                                   ObSubQueryIterator *subquery_iter);
-  int adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type) const;
+  int adjust_udt_cast_type(const ObExprResType &src_type, ObExprResType &dst_type, ObExprTypeCtx &type_ctx) const;
 
 private:
   int get_cast_string_len(ObExprResType &type1,

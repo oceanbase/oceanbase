@@ -118,6 +118,7 @@ const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_CHAR_COST,           // geometry
   VECTOR_CMP_CHAR_COST,           // user defined type
   VECTOR_CMP_NUMBER_COST,         // ObDecimalIntTC
+  VECTOR_CMP_CHAR_COST,           // collection sql type
 };
 
 const static double hash_params_vector[ObMaxTC+1] = {
@@ -147,6 +148,7 @@ const static double hash_params_vector[ObMaxTC+1] = {
   VECTOR_HASH_CHAR_COST,           // geometry
   VECTOR_HASH_CHAR_COST,           // user defined type
   VECTOR_HASH_NUMBER_COST,         // ObDecimalIntTC
+  VECTOR_HASH_CHAR_COST,           // collection sql type
 };
 
 const static double project_params_vector[2][2][MAX_PROJECT_TYPE] = {

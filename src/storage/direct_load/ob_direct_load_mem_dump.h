@@ -17,6 +17,7 @@
 #include "storage/direct_load/ob_direct_load_mem_define.h"
 #include "storage/direct_load/ob_direct_load_multi_map.h"
 #include "storage/direct_load/ob_direct_load_sstable_builder.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -61,7 +62,8 @@ public:
   };
 
 public:
-  ObDirectLoadMemDump(ObDirectLoadMemContext *mem_ctx,
+  ObDirectLoadMemDump(observer::ObTableLoadTableCtx *ctx,
+                      ObDirectLoadMemContext *mem_ctx,
                       const RangeType &range,
                       table::ObTableLoadHandle<Context> context_ptr, int64_t range_idx);
   ~ObDirectLoadMemDump();
@@ -91,6 +93,7 @@ private:
 private:
   // data members
   ObArenaAllocator allocator_;
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMemContext *mem_ctx_;
   RangeType range_;
   table::ObTableLoadHandle<Context> context_ptr_;

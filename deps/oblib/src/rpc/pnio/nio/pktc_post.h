@@ -127,7 +127,7 @@ static int pktc_handle_req_queue(pktc_t* io) {
       if (PN_CMD_TERMINATE_PKT == cmd_req->cmd) {
         // make rpc callback executed in advance
         rk_info("hand cmd req, cmd=%ld, arg=%ld", cmd_req->cmd, cmd_req->arg);
-        pktc_resp_cb_on_terminate(io, (uint32_t)cmd_req->arg);
+        pktc_resp_cb_on_terminate(io, cmd_req->arg);
       }
       cfifo_free(cmd_req);
     } else {

@@ -71,6 +71,9 @@ int ObBlockRowStore::init(const ObTableAccessParam &param)
     LOG_WARN("Invalid argument to init store pushdown filter", K(ret));
   } else if (OB_FAIL(pd_filter_info_.init(param.iter_param_, *context_.stmt_allocator_))) {
     LOG_WARN("Fail to init pd filter info", K(ret));
+  } else if (nullptr != context_.sample_filter_
+              && OB_FAIL(context_.sample_filter_->combine_to_filter_tree(pd_filter_info_.filter_))) {
+      LOG_WARN("Failed to combine sample filter to filter tree", K(ret), K_(pd_filter_info), KP_(context_.sample_filter));
   } else {
     is_inited_ = true;
     iter_param_ = &param.iter_param_;

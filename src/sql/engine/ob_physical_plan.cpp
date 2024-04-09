@@ -33,6 +33,7 @@
 #include "share/ob_truncated_string.h"
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 
 namespace oceanbase
 {
@@ -137,7 +138,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     all_local_session_vars_(&allocator_),
     udf_has_dml_stmt_(false),
     mview_ids_(&allocator_),
-    enable_inc_direct_load_(false)
+    enable_inc_direct_load_(false),
+    enable_replace_(false)
 {
 }
 
@@ -235,6 +237,7 @@ void ObPhysicalPlan::reset()
   udf_has_dml_stmt_ = false;
   mview_ids_.reset();
   enable_inc_direct_load_ = false;
+  enable_replace_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -797,7 +800,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     udf_has_dml_stmt_,
                     stat_.format_sql_id_,
                     mview_ids_,
-                    enable_inc_direct_load_);
+                    enable_inc_direct_load_,
+                    enable_replace_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

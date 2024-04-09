@@ -1028,7 +1028,8 @@ public:
   int prepare_spi_cursor(sql::ObSPICursor *&spi_cursor,
                           uint64_t tenant_id,
                           uint64_t mem_limit,
-                          bool is_local_for_update = false);
+                          bool is_local_for_update = false,
+                          sql::ObSQLSessionInfo* session_info = nullptr);
   ObCurTraceId::TraceId *get_sql_trace_id() { return &sql_trace_id_; }
 
 

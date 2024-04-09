@@ -178,7 +178,7 @@ void TestCGGroupByScanner::prepare_access_param(const bool is_reverse_scan, ObIA
   access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
   access_param_.iter_param_.pd_storage_flag_.pd_group_by_ = true;
-  access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
   read_info_.reset();
   ASSERT_EQ(OB_SUCCESS, read_info_.init(allocator_,
@@ -228,7 +228,7 @@ void TestCGGroupByScanner::prepare_cg_access_param(const bool is_reverse_scan)
   cg_access_param_.iter_param_.vectorized_enabled_ = true;
   cg_access_param_.iter_param_.pd_storage_flag_.pd_blockscan_ = true;
   cg_access_param_.iter_param_.pd_storage_flag_.pd_filter_ = true;
-  cg_access_param_.iter_param_.pd_storage_flag_.use_iter_pool_ = true;
+  cg_access_param_.iter_param_.pd_storage_flag_.use_stmt_iter_pool_ = true;
   cg_access_param_.iter_param_.pd_storage_flag_.use_column_store_ = true;
   cg_access_param_.iter_param_.read_info_ = &cg_read_info_;
 

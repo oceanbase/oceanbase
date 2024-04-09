@@ -9,83 +9,16 @@ connection sys;
 
 # change tenant primary zone to RANDOM
 let $saved_primary_zone=`select primary_zone from oceanbase.__all_tenant where tenant_name = 'mysql'`;
---echo change mysql tenant primary_zone from $saved_primary_zone to RANDOM
+--echo change mysql tenant primary_zone to RANDOM
 alter tenant mysql set primary_zone = 'RANDOM';
 
 let $tenant_id=`select tenant_id from oceanbase.__all_tenant where tenant_name = 'mysql'`;
 
-# check tenant has multiple ls
-let $break_loop=0;
-let $i=0;
-let $fail = 0;
-while ($break_loop == 0)
-{
- --inc $i
- let $ls_cnt=`select count(ls_id) from oceanbase.__all_virtual_ls where tenant_id = $tenant_id and ls_id != 1 and status = "NORMAL" and flag not like "%DUPLICATE%"`;
- if ($ls_cnt > 1) {
-    --inc $break_loop
- }
- if ($i >= 300) {
-    --inc $fail
-    --inc $break_loop
- }
- --sleep 0.2
-}
-if ($fail > 0) {
-   --echo "tenant normal ls not distributed to multiple server"
-   eval select * from oceanbase.__all_virtual_ls where tenant_id = $tenant_id;
-}
+let $tenant_name=mysql;
+
+--source tx_free_route.inc
 
 connection conn0;
-
---disable_warnings
-drop table if exists t;
---enable_warnings
-create table t(id int primary key) partition by range(id)
- (partition p0 values less than (10000), partition p1 values less than (3000000000));
-
-# insert rows to ensure tablet created
---disable_result_log
---disable_query_log
-insert into t values(9999),(99999);
-commit;
---enable_result_log
---enable_query_log
-
-# check tablet of target table distributed to multiple ls
-let $table_id=`select table_id from oceanbase.__all_virtual_table where table_name = 't' and tenant_id = $tenant_id`;
-let $break_loop=0;
-let $i=0;
-let $fail=0;
-while ($break_loop == 0)
-{
-  --inc $i
-  let $ls_count=`select count(distinct ls_id) from oceanbase.__all_tablet_to_ls where table_id = $table_id`;
-  if ($ls_cnt > 1) {
-       --inc $break_loop
-  }
-  if ($i  >= 300) {
-    --inc $fail
-    --inc $break_loop
-  }
- --sleep 0.2
-}
-
-if ($fail > 0) {
-  --echo "error, table should distributed to all ls"
-  eval select * from oceanbase.__all_tablet_to_ls where table_id = $table_id;
-  select * from oceanbase.__all_ls;
-}
-
-# check ls leader distributed to multiple server
-let $check_ts=`select now()`;
-let $svr_cnt=`select count(distinct svr_ip,svr_port) from oceanbase.__all_virtual_ls_meta_table where role = 1 and ls_id in (select distinct ls_id from oceanbase.__all_tablet_to_ls where table_id = $table_id)`;
-if ($svr_cnt <= 1) {
-  --echo "ls leader not distributed to all server, check_ts=$check_ts, table_id=$table_id, ls_count=$ls_count"
-  eval select * from oceanbase.__all_tablet_to_ls where table_id = $table_id;
-  select * from oceanbase.__all_virtual_ls_meta_table where role = 1 order by ls_id;
-  select * from oceanbase.__all_ls;
-}
 
 --echo "-------------- 1 - basic in txn free route -----------------"
 #--------------------------------------------------------------------------
@@ -912,8 +845,10 @@ disconnect conn100;
 connection conn0;
 drop table t;
 connection sys;
---echo recovery primary_zone settings for mysql tenant to : $saved_primary_zone
+--echo recovery primary_zone settings for mysql tenant
+--disable_query_log
 eval alter tenant mysql set primary_zone = "$saved_primary_zone";
+--enable_query_log
 --sleep 5
 disconnect conn0;
 disconnect conn1;

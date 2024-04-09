@@ -455,6 +455,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "hostname",
   "identity",
   "ignore_builtin_innodb",
+  "information_schema_stats_expiry",
   "init_connect",
   "innodb_adaptive_flushing",
   "innodb_adaptive_flushing_lwm",
@@ -794,6 +795,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_HOSTNAME,
   SYS_VAR_IDENTITY,
   SYS_VAR_IGNORE_BUILTIN_INNODB,
+  SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY,
   SYS_VAR_INIT_CONNECT,
   SYS_VAR_INNODB_ADAPTIVE_FLUSHING,
   SYS_VAR_INNODB_ADAPTIVE_FLUSHING_LWM,
@@ -1374,7 +1376,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "transaction_alloc_block_size",
   "transaction_allow_batching",
   "transaction_prealloc_size",
-  "transaction_write_set_extraction"
+  "transaction_write_set_extraction",
+  "information_schema_stats_expiry"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1879,6 +1882,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarTransactionAllowBatching)
         + sizeof(ObSysVarTransactionPreallocSize)
         + sizeof(ObSysVarTransactionWriteSetExtraction)
+        + sizeof(ObSysVarInformationSchemaStatsExpiry)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -4909,6 +4913,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarTransactionWriteSetExtraction));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInformationSchemaStatsExpiry())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInformationSchemaStatsExpiry", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInformationSchemaStatsExpiry));
       }
     }
 
@@ -8614,6 +8627,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTransactionWriteSetExtraction())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarTransactionWriteSetExtraction", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INFORMATION_SCHEMA_STATS_EXPIRY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInformationSchemaStatsExpiry)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInformationSchemaStatsExpiry)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInformationSchemaStatsExpiry())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInformationSchemaStatsExpiry", K(ret));
       }
       break;
     }

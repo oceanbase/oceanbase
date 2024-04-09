@@ -397,11 +397,18 @@ int ObTransferHandler::check_self_is_leader_(bool &is_leader)
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
   const uint64_t tenant_id = MTL_ID();
+  bool is_primary_tenant = true;
   is_leader = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::check_is_primary_tenant(tenant_id, is_primary_tenant))) {
+    //Setting the tenant as the primary tenant from the standby tenant and changing the leader attribute of palf are not atomic.
+    //The attributes of palf will change first, and then the attributes of the tenant will change.
+    LOG_WARN("failed to check is primary tenant", K(ret), K(tenant_id));
+  } else if (!is_primary_tenant) {
+    is_leader = false;
   } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KPC(ls_));
   } else if (is_strong_leader(role)) {

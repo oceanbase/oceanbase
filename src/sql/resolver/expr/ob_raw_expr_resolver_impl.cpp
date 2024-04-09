@@ -763,8 +763,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_ORA_JSON_ARRAYAGG:
       case T_FUN_ORA_JSON_OBJECTAGG:
       case T_FUN_ORA_XMLAGG:
-      case T_FUN_SUM_OPNSIZE:{
-
+      case T_FUN_SUM_OPNSIZE:
+      case T_FUN_SYS_ST_ASMVT: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -1180,6 +1180,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
+        if (OB_FAIL(process_sql_udt_construct_node(node, expr))) {
+          LOG_WARN("fail to process sql udt construct node", K(ret), K(node));
+        }
+        break;
+      }
       case T_REMOTE_SEQUENCE: {
         if (OB_FAIL(process_remote_sequence_node(node, expr))) {
           LOG_WARN("failed to process remote sequence node", K(ret));
@@ -1189,6 +1195,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_DBLINK_UDF: {
         if (OB_FAIL(process_dblink_udf_node(node, expr))) {
           LOG_WARN("failed to process dblink udf node", K(ret), K(node));
+          }
+        break;
+      }
+      case T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS: {
+        if (OB_FAIL(process_sql_udt_attr_access_node(node, expr))) {
+          LOG_WARN("fail to process sql udt access attr node", K(ret), K(node));
         }
         break;
       }
@@ -1257,6 +1269,132 @@ int ObRawExprResolverImpl::process_ident_node(const ParseNode &node, ObRawExpr *
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sql_udt_construct_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if(T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node->type_ error", K(node->type_));
+  } else if (2 > node->num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(node->num_child_));
+  } else {
+    ObSysFunRawExpr *sys_udt_construct = NULL;
+    ObUDTConstructorRawExpr * udt_construct = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT, sys_udt_construct))) {
+      LOG_WARN("failed to create fun sys_udt_construct expr", K(ret));
+    } else if (OB_ISNULL(sys_udt_construct)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_udt_construct expr is null", K(ret));
+    } else {
+      sys_udt_construct->set_func_name(ObString::make_string("_udt_construct"));
+      udt_construct = static_cast<ObUDTConstructorRawExpr *>(sys_udt_construct);
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+      const ParseNode *expr_node = node->children_[i];
+      if (OB_ISNULL(expr_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node is null", K(ret));
+      } else if (expr_node->type_ == T_INT) {
+        if (i == node->num_child_ - 3) {
+          // udt_id
+          udt_construct->set_root_udt_id(expr_node->value_);
+        } else if (i == node->num_child_ - 2) {
+          // sub_udt_id
+          ObExprResType res_type;
+          res_type.set_type(ObUserDefinedSQLType);
+          res_type.set_udt_id(expr_node->value_);
+          udt_construct->set_result_type(res_type);
+          udt_construct->set_udt_id(expr_node->value_);
+          ObRawExpr *para_expr = NULL;
+          OZ(recursive_resolve(expr_node, para_expr));
+          CK(OB_NOT_NULL(para_expr));
+          OZ(sys_udt_construct->add_param_expr(para_expr));
+        } else if (i == node->num_child_ - 1) {
+          // schema_version
+          udt_construct->set_coll_schema_version(expr_node->value_);
+          if (udt_construct->need_add_dependency()) {
+            ObSchemaObjVersion udt_version;
+            if (OB_FAIL(udt_construct->get_schema_object_version(udt_version))) {
+              LOG_WARN("get udt construct schema version failed", K(ret));
+            } else if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(udt_version))) {
+              LOG_WARN("add udt type dependency failed", K(ret), K(udt_version));
+            }
+          }
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected node type", K(ret), K(i), K(node->num_child_));
+        }
+      } else {
+        ObRawExpr *para_expr = NULL;
+        OZ(recursive_resolve(expr_node, para_expr));
+        CK(OB_NOT_NULL(para_expr));
+        OZ(sys_udt_construct->add_param_expr(para_expr));
+      }
+    }
+    OX(expr = sys_udt_construct);
+  }
+  return ret;
+}
+
+int ObRawExprResolverImpl::process_sql_udt_attr_access_node(const ParseNode *node, ObRawExpr *&expr)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is null", K(ret));
+  } else if(T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS != node->type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node->type_ error", K(node->type_));
+  } else if (2 > node->num_child_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected param num", K(node->num_child_));
+  } else {
+    ObSysFunRawExpr *sys_attr_access = NULL;
+    ObUDTAttributeAccessRawExpr * attr_access_expr = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_PRIV_SQL_UDT_ATTR_ACCESS, sys_attr_access))) {
+      LOG_WARN("failed to create fun sys_attr_access expr", K(ret));
+    } else if (OB_ISNULL(sys_attr_access)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sys_attr_access expr is null", K(ret));
+    } else {
+      sys_attr_access->set_func_name(ObString::make_string(N_PRIV_UDT_ATTR_ACCESS));
+      attr_access_expr = static_cast<ObUDTAttributeAccessRawExpr *>(sys_attr_access);
+    }
+    for (int32_t i = 0; OB_SUCC(ret) && i < node->num_child_; i++) {
+      const ParseNode *expr_node = node->children_[i];
+      if (OB_ISNULL(expr_node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node is null", K(ret));
+      } else if (i == 1) {
+        // udt_id
+        attr_access_expr->set_udt_id(expr_node->value_);
+      } else if (i == 3) {
+        // schema_version
+        attr_access_expr->set_schema_object_version(expr_node->value_);
+        if (attr_access_expr->need_add_dependency()) {
+          ObSchemaObjVersion udt_version;
+          if (OB_FAIL(attr_access_expr->get_schema_object_version(udt_version))) {
+            LOG_WARN("get udt construct schema version failed", K(ret));
+          } else if (OB_FAIL(ctx_.stmt_->add_global_dependency_table(udt_version))) {
+            LOG_WARN("add udt type dependency failed", K(ret), K(udt_version));
+          }
+        }
+      } else {
+        ObRawExpr *para_expr = NULL;
+        OZ(recursive_resolve(expr_node, para_expr));
+        CK(OB_NOT_NULL(para_expr));
+        OZ(sys_attr_access->add_param_expr(para_expr));
+      }
+    }
+    OX(expr = sys_attr_access);
   }
   return ret;
 }
@@ -2016,6 +2154,7 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
         LOG_INFO("failed to resolve external symbol", K(q_name), K(ret));
         if (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret) {
           ret = OB_SUCCESS;
+          ob_reset_tsi_warning_buffer();
         }
       } else if (OB_ISNULL(var)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2459,6 +2598,21 @@ int ObRawExprResolverImpl::process_pseudo_column_node(const ParseNode &node, ObR
   } else if (OB_UNLIKELY(false == is_pseudo_column_valid_scope(ctx_.current_scope_))) {
     ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
     LOG_WARN("pseudo column at invalid scope", K(ctx_.current_scope_), K(ret));
+  } else if (T_START_WITH_SCOPE == ctx_.current_scope_) {
+    // Oracle supports LEVEL column in START WITH, and the value of LEVEL is 0.
+    // But, other pseudo columns in START WITH scope are not allowed.
+    ObConstRawExpr *c_expr = NULL;
+    if (OB_UNLIKELY(T_LEVEL != pseudo_column_node->type_)) {
+      ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+      LOG_WARN("invalid pseudo column at START WITH scope", K(pseudo_column_node->type_), K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(ctx_.expr_factory_,
+                                                               ObObjType::ObNumberType,
+                                                               number::ObNumber::get_zero(),
+                                                               c_expr))) {
+      LOG_WARN("failed to create const number expr", K(ret));
+    } else {
+      expr = c_expr;
+    }
   } else if (OB_FAIL(check_pseudo_column_exist(pseudo_column_node->type_, pseudo_column_expr))) {
     LOG_WARN("fail to check pseudo column exist", K(ret));
   } else if (pseudo_column_expr != NULL) {
@@ -4463,6 +4617,17 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
           LOG_WARN("fail to add param expr to agg expr", K(ret));
         }
       } // end for
+    } else if (T_FUN_SYS_ST_ASMVT == node->type_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+        sub_expr = NULL;
+        if (OB_ISNULL(node->children_[i])) {
+          // do nothing
+        } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[i], sub_expr)))) {
+          LOG_WARN("fail to recursive resolve expr list item", K(ret));
+        } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+          LOG_WARN("fail to add param expr to agg expr", K(ret));
+        }
+      } // end for
     } else if (T_FUN_ORA_XMLAGG == node->type_) {
       sub_expr = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
@@ -5059,7 +5224,17 @@ int ObRawExprResolverImpl::process_collation_node(const ParseNode *node, ObRawEx
   } else {
     ObConstRawExpr *c_expr = NULL;
     ObString collation(node->str_len_, node->str_value_);
-    ObCollationType collation_type = ObCharset::collation_type(collation);
+    ObCollationType collation_type = CS_TYPE_INVALID;
+    if (lib::is_mysql_mode() && 0 == collation.case_compare("utf8mb4_name_case")) {
+      if (OB_ORIGIN_AND_SENSITIVE == ctx_.case_mode_) {
+        collation_type = CS_TYPE_UTF8MB4_BIN;
+      } else if (OB_ORIGIN_AND_INSENSITIVE == ctx_.case_mode_ ||
+                 OB_LOWERCASE_AND_INSENSITIVE == ctx_.case_mode_) {
+        collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+      }
+    } else {
+      collation_type = ObCharset::collation_type(collation);
+    }
     if (CS_TYPE_INVALID == collation_type) {
       ret = OB_ERR_UNKNOWN_COLLATION;
       LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, (int)node->str_len_, node->str_value_);

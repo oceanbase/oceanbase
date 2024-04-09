@@ -3879,6 +3879,7 @@ public:
   common::ObSArray<storage::ObCreateTabletSchema*> create_tablet_schemas_;
   ObArenaAllocator allocator_;
   common::ObSArray<ObCreateTabletExtraInfo> tablet_extra_infos_;
+  share::SCN clog_checkpoint_scn_;
 };
 
 struct ObBatchRemoveTabletArg
@@ -7221,6 +7222,7 @@ public:
       exist_valid_udt_(false) {}
   virtual ~ObDropUDTArg() {}
   bool is_valid() const;
+  int assign(const ObDropUDTArg &other);
   virtual bool is_allow_when_upgrade() const { return true; }
   TO_STRING_KV(K_(tenant_id),
                K_(db_name),

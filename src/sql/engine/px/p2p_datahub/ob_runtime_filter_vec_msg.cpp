@@ -206,10 +206,7 @@ OB_DEF_DESERIALIZE(ObRFInFilterVecMsg)
       LOG_WARN("fail to init in hash set", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
-      // when deserialize, we do not need to compare, insert directly
-      bool has_compared = true;
-      ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, row_store_.get_row(i), nullptr,
-                            &has_compared);
+      ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, row_store_.get_row(i), nullptr);
       if (OB_FAIL(rows_set_.set_refactored(node))) {
         LOG_WARN("fail to insert in filter node", K(ret));
       }
@@ -1057,9 +1054,8 @@ int ObRFInFilterVecMsg::assign(const ObP2PDatahubMsgBase &msg)
     if (0 == row_cnt) {
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; ++i) {
-        bool has_compared = true;
-        ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_,
-                              row_store_.get_row(i), nullptr, &has_compared);
+        ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, row_store_.get_row(i),
+                              nullptr);
         if (OB_FAIL(rows_set_.set_refactored(node))) {
           LOG_WARN("fail to insert in filter node", K(ret));
         }
@@ -1136,10 +1132,8 @@ int ObRFInFilterVecMsg::insert_by_row_vector(
         }
       }
       if (OB_SUCC(ret) && !ignore_null) {
-        // has_compared will be set as true after exist_refactored
-        bool has_compared = false;
         ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, nullptr /*compact_row*/,
-                              &cur_row, &has_compared);
+                              &cur_row);
         if (OB_FAIL(try_insert_node(node, expr_array, eval_ctx))) {
           LOG_WARN("fail to insert node", K(ret));
         }
@@ -1271,12 +1265,15 @@ int ObRFInFilterVecMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
 // so the compare function relies on the other node.
 bool ObRFInFilterVecMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &other) const
 {
+  int ret = OB_SUCCESS;
   int cmp_ret = 0;
-  bool ret = true;
-  if (nullptr != other.has_compared_ && *other.has_compared_) {
-    // already compared (insert a node into hash set, but arealy compared because when call
-    // exist_refactored), or when deserialize in rpc, compared is not necessary)
-    ret = false;
+  bool bool_ret = true;
+  uint64_t self_hash = 0;
+  uint64_t other_hash = 0;
+  if (OB_FAIL(hash(self_hash)) || OB_FAIL(other.hash(other_hash))) {
+    LOG_WARN("faild to hash", K(ret));
+  } else if (self_hash != other_hash) {
+    bool_ret = false;
   } else if (nullptr != other.compact_row_) {
     // comapre the row in the hashset (during merge process, merge other's hashset into own hashset)
     // compare other.compact_row_ with self.compact_row_
@@ -1298,13 +1295,10 @@ bool ObRFInFilterVecMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &ot
             other_payload, other_len, other.compact_row_->is_null(i),
             self_payload, self_len, compact_row_->is_null(i), cmp_ret);
         if (cmp_ret != 0) {
-          ret = false;
+          bool_ret = false;
           break;
         }
       }
-    }
-    if (OB_NOT_NULL(other.has_compared_)) {
-      *other.has_compared_ = true;
     }
   } else if (nullptr != other.row_with_hash_) {
     // judge whether in the hashset (insert process / probe process)
@@ -1329,16 +1323,13 @@ bool ObRFInFilterVecMsg::ObRFInFilterNode::operator==(const ObRFInFilterNode &ot
             other_payload, other_len, other_datum.is_null(),
             self_payload, self_len, compact_row_->is_null(i), cmp_ret);
         if (cmp_ret != 0) {
-          ret = false;
+          bool_ret = false;
           break;
         }
       }
     }
-    if (OB_NOT_NULL(other.has_compared_)) {
-      *other.has_compared_ = true;
-    }
   }
-  return ret;
+  return bool_ret;
 }
 
 int ObRFInFilterVecMsg::merge(ObP2PDatahubMsgBase &msg)
@@ -1352,11 +1343,9 @@ int ObRFInFilterVecMsg::merge(ObP2PDatahubMsgBase &msg)
     for (int64_t i = 0; i < other_msg.row_store_.get_row_cnt() && OB_SUCC(ret); ++i) {
       ObCompactRow *cur_row = other_msg.row_store_.get_row(i);
       int64_t row_size = other_msg.row_store_.get_row_size(i);
-      bool has_compared = false;
       // when merge, we must compare the node exist or not
-      // has_compared will be set as true after exist_refactored
       ObRFInFilterNode node(&build_row_cmp_info_, &build_row_meta_, cur_row,
-                            nullptr /*row_with_hash*/, &has_compared);
+                            nullptr /*row_with_hash*/);
       if (OB_FAIL(try_merge_node(node, row_size))) {
         LOG_WARN("fail to insert node", K(ret));
       }
@@ -1747,7 +1736,8 @@ int ObRFInFilterVecMsg::prepare_query_ranges()
     // we need to deduplicate to avoid duplicate range
     ret = process_query_ranges_with_deduplicate();
   }
-  LOG_TRACE("in filter prepare query range", K(ret), K(is_query_range_ready_), K(query_range_));
+  LOG_TRACE("in filter prepare query range", K(ret), K(query_range_.count()), K(rows_set_.size()),
+            K(query_range_info_), K(is_query_range_ready_), K(query_range_));
   return ret;
 }
 

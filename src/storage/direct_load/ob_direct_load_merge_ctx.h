@@ -24,6 +24,7 @@
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
 {
@@ -81,7 +82,8 @@ class ObDirectLoadMergeCtx
 public:
   ObDirectLoadMergeCtx();
   ~ObDirectLoadMergeCtx();
-  int init(const ObDirectLoadMergeParam &param,
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &param,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
            const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids);
   const common::ObIArray<ObDirectLoadTabletMergeCtx *> &get_tablet_merge_ctxs() const
@@ -93,6 +95,7 @@ private:
                              const common::ObIArray<table::ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids);
 private:
   common::ObArenaAllocator allocator_;
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMergeParam param_;
   common::ObArray<ObDirectLoadTabletMergeCtx *> tablet_merge_ctx_array_;
   bool is_inited_;
@@ -103,8 +106,10 @@ class ObDirectLoadTabletMergeCtx
 public:
   ObDirectLoadTabletMergeCtx();
   ~ObDirectLoadTabletMergeCtx();
-  int init(const ObDirectLoadMergeParam &param, const table::ObTableLoadLSIdAndPartitionId &ls_partition_id,
-      const table::ObTableLoadLSIdAndPartitionId &target_ls_partition_id);
+  int init(observer::ObTableLoadTableCtx *ctx,
+           const ObDirectLoadMergeParam &param,
+           const table::ObTableLoadLSIdAndPartitionId &ls_partition_id,
+           const table::ObTableLoadLSIdAndPartitionId &target_ls_partition_id);
   int build_rescan_task(int64_t thread_count);
   int build_merge_task(const common::ObIArray<ObIDirectLoadPartitionTable *> &table_array,
                        const common::ObIArray<share::schema::ObColDesc> &col_descs,
@@ -159,6 +164,7 @@ private:
   int get_autoincrement_value(uint64_t count, share::ObTabletCacheInterval &interval);
 private:
   common::ObArenaAllocator allocator_;
+  observer::ObTableLoadTableCtx *ctx_;
   ObDirectLoadMergeParam param_;
   uint64_t target_partition_id_;
   common::ObTabletID tablet_id_;

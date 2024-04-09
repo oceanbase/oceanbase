@@ -50,8 +50,7 @@ private:
                                         const blocksstable::MacroBlockId &bf_macro_id,
                                         ObTabletCreateSSTableParam &param,
                                         const ObStorageColumnGroupSchema *cg_schema = nullptr,
-                                        const int64_t column_group_idx = 0,
-                                        const bool is_main_table = false);
+                                        const int64_t column_group_idx = 0);
 
   static int record_start_tx_scn_for_tx_data(const ObBasicTabletMergeCtx &ctx, ObTabletCreateSSTableParam &param);
 private:
