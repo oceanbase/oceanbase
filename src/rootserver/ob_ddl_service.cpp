@@ -27484,8 +27484,6 @@ int ObDDLService::drop_resource_pool_pre(const uint64_t tenant_id,
     LOG_WARN("get_pool_names_of_tenant failed", K(tenant_id), KR(ret));
   } else if (OB_FAIL(unit_mgr_->revoke_pools(trans, drop_ug_id_array, pool_names, tenant_id))) {
     LOG_WARN("revoke_pools failed", K(pool_names), K(tenant_id), KR(ret));
-  } else if (OB_FAIL(unit_mgr_->try_complete_shrink_tenant_pool_unit_num_rs_job(tenant_id, trans))) {
-    LOG_WARN("complete shrinking tenant job failed", K(pool_names), K(tenant_id), KR(ret));
   }
   return ret;
 }
