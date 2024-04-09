@@ -181,7 +181,7 @@ int ObTTLService::check_inner_stat()
 int ObTTLService::mtl_init(ObTTLService *&service)
 {
   int ret = OB_SUCCESS;
-  if (service->init(MTL_ID())) {
+  if (OB_FAIL(service->init(MTL_ID()))) {
     LOG_WARN("fail to ini ttl service", KR(ret));
   }
   return ret;
