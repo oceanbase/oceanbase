@@ -393,10 +393,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                     uint64_t dep_obj_id = ctx_.view_ref_id_;
                     if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
                       LOG_WARN("failed to add global dependency", K(ret));
-                    } else if (stmt->add_ref_obj_version(dep_obj_id, db_id,
-                                                         ObObjectType::VIEW,
-                                                         udt_schema_version,
-                                                         ctx_.expr_factory_.get_allocator())) {
+                    } else if (OB_FAIL(stmt->add_ref_obj_version(dep_obj_id, db_id,
+                                                             ObObjectType::VIEW, udt_schema_version,
+                                                             ctx_.expr_factory_.get_allocator()))) {
                       LOG_WARN("failed to add ref obj version", K(ret));
                     }
                   }
@@ -3508,6 +3507,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
           SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
         } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
         }
       }

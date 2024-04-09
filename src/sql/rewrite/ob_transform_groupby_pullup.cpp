@@ -784,9 +784,7 @@ int ObTransformGroupByPullup::do_groupby_pull_up(ObSelectStmt *stmt, PullupHelpe
       subquery->get_group_exprs().reset();
       subquery->get_aggr_items().reset();
       subquery->get_having_exprs().reset();
-      if (OB_FAIL(subquery->adjust_subquery_list())) {
-        LOG_WARN("failed to adjust subquery list", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt, table_item))) {
+      if (OB_FAIL(ObTransformUtils::generate_select_list(ctx_, stmt, table_item))) {
         LOG_WARN("failed to generate select list", K(ret));
       } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
         LOG_WARN("failed to formalize stmt", K(ret));

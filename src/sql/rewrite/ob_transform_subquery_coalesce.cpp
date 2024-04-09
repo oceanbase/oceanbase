@@ -905,15 +905,9 @@ int ObTransformSubqueryCoalesce::coalesce_diff_any_all_exprs(ObDMLStmt *stmt,
           LOG_WARN("failed to remove item", K(ret));
         } else if (OB_FAIL(cond_exprs.push_back(new_any_all_expr))) {
           LOG_WARN("failed to push back new any all expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), any_ref_expr))) {
-          LOG_WARN("failed to remove subquery ref expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_subquery_exprs(), all_ref_expr))) {
-          LOG_WARN("failed to remove subquery ref expr", K(ret));
         } else if (OB_ISNULL(new_any_all_query = get_any_all_query_expr(new_any_all_expr))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the new any all expr is invalid", K(ret));
-        } else if (OB_FAIL(stmt->get_subquery_exprs().push_back(new_any_all_query))) {
-          LOG_WARN("failed to push back new any all query", K(ret));
         } else if (OB_FAIL(stmt->pull_all_expr_relation_id())) {
           LOG_WARN("failed to form pull up expr id and level", K(ret));
         } else if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
@@ -933,14 +927,13 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = NULL;
   ObStmtFactory *stmt_factory = NULL;
-  ObSEArray<ObRawExpr *, 4> old_cols;
-  ObSEArray<ObRawExpr *, 4> new_cols;
   ObSEArray<ObRawExpr *, 4> extra_conds;
   ObQueryRefRawExpr *exist_query_ref = NULL;
   ObQueryRefRawExpr *not_exist_query_ref = NULL;
   ObQueryRefRawExpr *new_query_ref = NULL;
   ObSelectStmt *exist_stmt = NULL;
   ObSelectStmt *not_exist_stmt = NULL;
+  ObDMLStmt *tmp_stmt = NULL;
   ObSelectStmt *new_exist_stmt = NULL;
   ObSEArray<ObRawExpr *, 4> old_exec_params;
   ObSEArray<ObRawExpr *, 4> new_exec_params;
@@ -967,85 +960,67 @@ int ObTransformSubqueryCoalesce::merge_exists_subqueries(TransformParam &trans_p
     LOG_WARN("failed to create query ref expr", K(ret));
   } else if (OB_FAIL(new_query_ref->assign(*exist_query_ref))) {
     LOG_WARN("failed to assign query ref expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::copy_stmt(*stmt_factory,
-                                                 exist_stmt,
-                                                 reinterpret_cast<ObDMLStmt *&>(new_exist_stmt)))) {
-    LOG_WARN("failed to copy exist stmt", K(ret));
-  } else if (OB_FAIL(new_exist_stmt->adjust_statement_id(ctx_->allocator_,
-                                                         ctx_->src_qb_name_,
-                                                         ctx_->src_hash_val_))) {
-    LOG_WARN("failed to adjust statement id", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*stmt_factory, *expr_factory, exist_stmt,
+                                                      tmp_stmt))) {
+    LOG_WARN("failed to deep copy stmt", K(ret));
   } else {
+    new_exist_stmt = static_cast<ObSelectStmt*>(tmp_stmt);
     new_query_ref->set_ref_stmt(new_exist_stmt);
     new_exist_expr->get_param_expr(0) = new_query_ref;
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(merge_exec_params(not_exist_query_ref,
-                                  new_query_ref,
-                                  old_exec_params,
-                                  new_exec_params))) {
-      LOG_WARN("failed to merge exec params", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < not_exist_stmt->get_column_size(); ++i) {
-    ColumnItem &col_item = not_exist_stmt->get_column_items().at(i);
-    ObColumnRefRawExpr *col_expr = not_exist_stmt->get_column_items().at(i).expr_;
-    ObRawExpr *new_expr = NULL;
-    TableItem *new_table_item = NULL;
-    ObRawExpr *error_expr = NULL;
-    ObRawExpr *empty_expr = NULL;
-    int64_t idx = not_exist_stmt->get_table_bit_index(col_item.table_id_) - 1;
-    if (idx < 0 || idx >= map_info.table_map_.count() ||
-        map_info.table_map_.at(idx) < 0 ||
-        map_info.table_map_.at(idx) >= new_exist_stmt->get_table_size() ||
-        OB_ISNULL(new_table_item = new_exist_stmt->get_table_item(map_info.table_map_.at(idx)))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not mapped", K(ret), K(idx));
-    } else if (OB_NOT_NULL(new_expr = new_exist_stmt->get_column_expr_by_id(new_table_item->table_id_,
-                                                                            col_item.column_id_))) {
-      // do nothing
-    } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.expr_, new_expr))) {
-      LOG_WARN("failed to copy expr node", K(ret));
-    } else if (OB_NOT_NULL(col_item.default_value_expr_)
-               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_value_expr_, error_expr))) {
-      LOG_WARN("failed to error expr node", K(ret));
-    } else if (OB_NOT_NULL(col_item.default_empty_expr_)
-               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_empty_expr_, empty_expr))) {
-      LOG_WARN("failed to empty expr node", K(ret));
-    } else {
-      ColumnItem new_col_item;
-      new_col_item.table_id_ = new_table_item->table_id_;
-      new_col_item.column_id_ = col_item.column_id_;
-      new_col_item.column_name_ = col_item.column_name_;
-      new_col_item.default_value_expr_ = error_expr;
-      new_col_item.default_empty_expr_ = empty_expr;
-      new_col_item.expr_ = static_cast<ObColumnRefRawExpr *>(new_expr);
-      new_col_item.expr_->set_table_id(new_table_item->table_id_);
-      new_col_item.expr_->set_table_name(new_table_item->table_name_);
-      new_col_item.is_geo_ = col_item.is_geo_;
-      new_col_item.col_idx_= col_item.col_idx_;
-      if (OB_FAIL(new_exist_stmt->add_column_item(new_col_item))) {
-        LOG_WARN("failed to add column item", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(old_cols.push_back(col_expr))) {
-        LOG_WARN("failed to append column expr", K(ret));
-      } else if (OB_FAIL(new_cols.push_back(new_expr))) {
-        LOG_WARN("failed to append column expr", K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     ObRawExprCopier copier(*expr_factory);
-    if (OB_FAIL(copier.add_replaced_expr(old_exec_params, new_exec_params))) {
+    if (OB_FAIL(merge_exec_params(not_exist_query_ref, new_query_ref,
+                                  old_exec_params, new_exec_params))) {
+      LOG_WARN("failed to merge exec params", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(old_exec_params, new_exec_params))) {
       LOG_WARN("failed to add replace pair", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(old_cols, new_cols))) {
-      LOG_WARN("failed to add replace pair", K(ret));
+    } else { /* do nothing */ }
+    for (int64_t i = 0; OB_SUCC(ret) && i < not_exist_stmt->get_column_size(); ++i) {
+      ColumnItem &col_item = not_exist_stmt->get_column_items().at(i);
+      ColumnItem new_col_item;
+      ObRawExpr *new_expr = NULL;
+      TableItem *new_table_item = NULL;
+      int64_t idx = not_exist_stmt->get_table_bit_index(col_item.table_id_) - 1;
+      if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
+                      map_info.table_map_.at(idx) < 0 ||
+                      map_info.table_map_.at(idx) >= new_exist_stmt->get_table_size()) ||
+          OB_ISNULL(new_table_item = new_exist_stmt->get_table_item(map_info.table_map_.at(idx)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is not mapped", K(ret), K(idx));
+      } else if (OB_NOT_NULL(new_expr = new_exist_stmt->get_column_expr_by_id(
+                                                 new_table_item->table_id_, col_item.column_id_))) {
+        if (OB_FAIL(copier.add_replaced_expr(col_item.expr_, new_expr))) {
+          LOG_WARN("failed to add replace pair", K(ret));
+        }
+      } else { /* do nothing */ }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < not_exist_stmt->get_column_size(); ++i) {
+      ColumnItem &col_item = not_exist_stmt->get_column_items().at(i);
+      ColumnItem new_col_item;
+      ObRawExpr *new_expr = NULL;
+      TableItem *new_table_item = NULL;
+      int64_t idx = not_exist_stmt->get_table_bit_index(col_item.table_id_) - 1;
+      if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
+                      map_info.table_map_.at(idx) < 0 ||
+                      map_info.table_map_.at(idx) >= new_exist_stmt->get_table_size()) ||
+          OB_ISNULL(new_table_item = new_exist_stmt->get_table_item(map_info.table_map_.at(idx)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is not mapped", K(ret), K(idx));
+      } else if (OB_NOT_NULL(new_expr = new_exist_stmt->get_column_expr_by_id(
+                                                 new_table_item->table_id_, col_item.column_id_))) {
+        /* do nothing */
+      } else if (OB_FAIL(new_col_item.deep_copy(copier, col_item))) {
+        LOG_WARN("failed to deep copy column items", K(ret));
+      } else if (OB_ISNULL(new_col_item.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item isn't init", K(ret));
+      } else {
+        new_col_item.table_id_ = new_table_item->table_id_;
+        new_col_item.expr_->set_table_id(new_table_item->table_id_);
+        new_col_item.expr_->set_table_name(new_table_item->table_name_);
+        if (OB_FAIL(new_exist_stmt->add_column_item(new_col_item))) {
+          LOG_WARN("failed to add column item", K(ret));
+        }
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < not_exist_stmt->get_condition_size(); ++i) {
       ObRawExpr *new_cond_expr = NULL;
@@ -1124,14 +1099,13 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = NULL;
   ObStmtFactory *stmt_factory = NULL;
-  ObSEArray<ObRawExpr *, 4> old_cols;
-  ObSEArray<ObRawExpr *, 4> new_cols;
   ObSEArray<ObRawExpr *, 4> extra_conds;
   ObSEArray<ObRawExpr *, 4> old_exec_params;
   ObSEArray<ObRawExpr *, 4> new_exec_params;
   ObQueryRefRawExpr *new_query_ref = NULL;
   ObSelectStmt *any_stmt = NULL;
   ObSelectStmt *all_stmt = NULL;
+  ObDMLStmt *tmp_stmt = NULL;
   ObSelectStmt *new_any_stmt = NULL;
   const ObStmtMapInfo &map_info = trans_param.map_info_;
   if (OB_ISNULL(ctx_) ||
@@ -1147,90 +1121,74 @@ int ObTransformSubqueryCoalesce::merge_any_all_subqueries(ObQueryRefRawExpr *any
     LOG_WARN("any/all exprs are not valid", K(ret), K(expr_factory), K(stmt_factory),
              K(any_query_ref), K(all_query_ref), K(any_stmt), K(all_stmt));
   } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory,
-                                             trans_param.any_expr_,
-                                             new_any_all_query))) {
+                                                     trans_param.any_expr_,
+                                                     new_any_all_query))) {
     LOG_WARN("failed to copy expr node", K(ret));
   } else if (OB_FAIL(expr_factory->create_raw_expr(T_REF_QUERY, new_query_ref))) {
     LOG_WARN("failed to create query ref expr", K(ret));
   } else if (OB_FAIL(new_query_ref->assign(*any_query_ref))) {
     LOG_WARN("failed to assign query ref expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::copy_stmt(*stmt_factory,
-                                                 any_stmt,
-                                                 reinterpret_cast<ObDMLStmt *&>(new_any_stmt)))) {
-    LOG_WARN("failed to copy any stmt", K(ret));
-  } else if (OB_FAIL(new_any_stmt->adjust_statement_id(ctx_->allocator_,
-                                                       ctx_->src_qb_name_,
-                                                       ctx_->src_hash_val_))) {
-    LOG_WARN("failed to adjust statement id", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*stmt_factory, *expr_factory, any_stmt,
+                                                      tmp_stmt))) {
+    LOG_WARN("failed to deep copy stmt", K(ret));
   } else {
+    new_any_stmt = static_cast<ObSelectStmt*>(tmp_stmt);
     new_query_ref->set_ref_stmt(new_any_stmt);
     new_any_all_query->get_param_expr(1) = new_query_ref;
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(merge_exec_params(all_query_ref,
-                                  any_query_ref,
-                                  old_exec_params,
-                                  new_exec_params))) {
-      LOG_WARN("failed to merge exec params", K(ret));
-    }
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < all_stmt->get_column_size(); ++i) {
-    ColumnItem &col_item = all_stmt->get_column_items().at(i);
-    ObColumnRefRawExpr *col_expr = all_stmt->get_column_items().at(i).expr_;
-    ObRawExpr *new_expr = NULL;
-    TableItem *new_table_item = NULL;
-    ObRawExpr *error_expr = NULL;
-    ObRawExpr *empty_expr = NULL;
-    int64_t idx = all_stmt->get_table_bit_index(col_item.table_id_) - 1;
-    if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
-        map_info.table_map_.at(idx) < 0 ||
-        map_info.table_map_.at(idx) >= new_any_stmt->get_table_size() ||
-        OB_ISNULL(new_table_item = new_any_stmt->get_table_item(map_info.table_map_.at(idx))))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not mapped", K(ret), K(idx));
-    } else if (OB_NOT_NULL(new_expr = new_any_stmt->get_column_expr_by_id(new_table_item->table_id_,
-                                                                            col_item.column_id_))) {
-      // do nothing
-    } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.expr_, new_expr))) {
-      LOG_WARN("failed to copy expr node", K(ret));
-    } else if (OB_NOT_NULL(col_item.default_value_expr_)
-               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_value_expr_, error_expr))) {
-      LOG_WARN("failed to error expr node", K(ret));
-    } else if (OB_NOT_NULL(col_item.default_empty_expr_)
-               && OB_FAIL(ObRawExprCopier::copy_expr_node(*expr_factory, col_item.default_empty_expr_, empty_expr))) {
-      LOG_WARN("failed to empty expr node", K(ret));
-    } else {
-      ColumnItem new_col_item;
-      new_col_item.table_id_ = new_table_item->table_id_;
-      new_col_item.column_id_ = col_item.column_id_;
-      new_col_item.column_name_ = col_item.column_name_;
-      new_col_item.expr_ = static_cast<ObColumnRefRawExpr *>(new_expr);
-      new_col_item.expr_->set_table_id(new_table_item->table_id_);
-      new_col_item.expr_->set_table_name(new_table_item->table_name_);
-      new_col_item.is_geo_ = col_item.is_geo_;
-      new_col_item.default_value_expr_ = error_expr;
-      new_col_item.default_empty_expr_ = empty_expr;
-      new_col_item.col_idx_= col_item.col_idx_;
-      if (OB_FAIL(new_any_stmt->add_column_item(new_col_item))) {
-        LOG_WARN("failed to add column item", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(old_cols.push_back(col_expr))) {
-        LOG_WARN("failed to append column expr", K(ret));
-      } else if (OB_FAIL(new_cols.push_back(new_expr))) {
-        LOG_WARN("failed to append column expr", K(ret));
-      }
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     ObRawExprCopier copier(*expr_factory);
-    if (OB_FAIL(copier.add_replaced_expr(old_exec_params, new_exec_params))) {
+    if (OB_FAIL(merge_exec_params(all_query_ref, any_query_ref,
+                                  old_exec_params, new_exec_params))) {
+      LOG_WARN("failed to merge exec params", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(old_exec_params, new_exec_params))) {
       LOG_WARN("failed to add replace pair", K(ret));
-    } else if (OB_FAIL(copier.add_replaced_expr(old_cols, new_cols))) {
-      LOG_WARN("failed to add replace pair", K(ret));
+    } else { /* do nothing */ }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_stmt->get_column_size(); ++i) {
+      ColumnItem &col_item = all_stmt->get_column_items().at(i);
+      ColumnItem new_col_item;
+      ObRawExpr *new_expr = NULL;
+      TableItem *new_table_item = NULL;
+      int64_t idx = all_stmt->get_table_bit_index(col_item.table_id_) - 1;
+      if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
+                      map_info.table_map_.at(idx) < 0 ||
+                      map_info.table_map_.at(idx) >= new_any_stmt->get_table_size()) ||
+          OB_ISNULL(new_table_item = new_any_stmt->get_table_item(map_info.table_map_.at(idx)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is not mapped", K(ret), K(idx));
+      } else if (OB_NOT_NULL(new_expr = new_any_stmt->get_column_expr_by_id(
+                                                 new_table_item->table_id_, col_item.column_id_))) {
+        if (OB_FAIL(copier.add_replaced_expr(col_item.expr_, new_expr))) {
+          LOG_WARN("failed to add replace pair", K(ret));
+        }
+      } else { /* do nothing */ }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_stmt->get_column_size(); ++i) {
+      ColumnItem &col_item = all_stmt->get_column_items().at(i);
+      ColumnItem new_col_item;
+      ObRawExpr *new_expr = NULL;
+      TableItem *new_table_item = NULL;
+      int64_t idx = all_stmt->get_table_bit_index(col_item.table_id_) - 1;
+      if (OB_UNLIKELY(idx < 0 || idx >= map_info.table_map_.count() ||
+                      map_info.table_map_.at(idx) < 0 ||
+                      map_info.table_map_.at(idx) >= new_any_stmt->get_table_size()) ||
+          OB_ISNULL(new_table_item = new_any_stmt->get_table_item(map_info.table_map_.at(idx)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is not mapped", K(ret), K(idx));
+      } else if (OB_NOT_NULL(new_expr = new_any_stmt->get_column_expr_by_id(
+                                                 new_table_item->table_id_, col_item.column_id_))) {
+        /* do nothing */
+      } else if (OB_FAIL(new_col_item.deep_copy(copier, col_item))) {
+        LOG_WARN("failed to deep copy column items", K(ret));
+      } else if (OB_ISNULL(new_col_item.expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column item isn't init", K(ret));
+      } else {
+        new_col_item.table_id_ = new_table_item->table_id_;
+        new_col_item.expr_->set_table_id(new_table_item->table_id_);
+        new_col_item.expr_->set_table_name(new_table_item->table_name_);
+        if (OB_FAIL(new_any_stmt->add_column_item(new_col_item))) {
+          LOG_WARN("failed to add column item", K(ret));
+        }
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < all_stmt->get_condition_size(); ++i) {
       ObRawExpr *new_cond_expr = NULL;
