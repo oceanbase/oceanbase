@@ -8429,7 +8429,8 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     }
 
     // allocate push down sort if necessary
-    if ((exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
+    if (OB_SUCC(ret) &&
+        (exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
         (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;

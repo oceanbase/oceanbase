@@ -4351,6 +4351,7 @@ int ObSelectLogPlan::allocate_plan_top()
   } else {
     bool need_limit = true;
     bool for_update_is_allocated = false;
+    bool need_alloc_select_item = true;
     ObSEArray<OrderItem, 4> order_items;
     LOG_TRACE("start to allocate operators for ", "sql", optimizer_context_.get_query_ctx()->get_sql_stmt());
     // step. allocate subplan filter if needed, mainly for the subquery in where statement
@@ -4446,13 +4447,24 @@ int ObSelectLogPlan::allocate_plan_top()
     // step. allocate 'order-by' if needed
     if (OB_SUCC(ret) && select_stmt->has_order_by() && !select_stmt->is_order_siblings() &&
         !get_optimizer_context().is_online_ddl()) {
-      candidates_.is_final_sort_ = true;
-      if (OB_FAIL(candi_allocate_order_by(need_limit, order_items))) {
-        LOG_WARN("failed to allocate order by operator", K(ret));
-      } else {
-        candidates_.is_final_sort_ = false;
-        LOG_TRACE("succeed to allocate order by operator",
+      if (!select_stmt->has_limit()) {
+        if (OB_FAIL(candi_allocate_subplan_filter_for_select_item(order_items))) {
+          LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
+        } else {
+          need_alloc_select_item = false;
+          LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
+                    K(candidates_.candidate_plans_.count()));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        candidates_.is_final_sort_ = true;
+        if (OB_FAIL(candi_allocate_order_by(need_limit, order_items))) {
+          LOG_WARN("failed to allocate order by operator", K(ret));
+        } else {
+          candidates_.is_final_sort_ = false;
+          LOG_TRACE("succeed to allocate order by operator",
             K(candidates_.candidate_plans_.count()));
+        }
       }
     }
 
@@ -4477,8 +4489,8 @@ int ObSelectLogPlan::allocate_plan_top()
     }
 
     // step. allocate subplan filter if needed, mainly for subquery in select item
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(candi_allocate_subplan_filter_for_select_item())) {
+    if (OB_SUCC(ret) && need_alloc_select_item) {
+      if (OB_FAIL(candi_allocate_subplan_filter_for_select_item(order_items))) {
         LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
       } else {
         LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
@@ -4603,7 +4615,7 @@ int ObSelectLogPlan::generate_raw_plan_for_expr_values()
   return ret;
 }
 
-int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item()
+int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item(ObIArray<OrderItem> &order_items)
 {
   int ret = OB_SUCCESS;
   const ObSelectStmt *select_stmt = NULL;
@@ -4616,7 +4628,16 @@ int ObSelectLogPlan::candi_allocate_subplan_filter_for_select_item()
     LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(candi_allocate_subplan_filter(select_exprs))) {
     LOG_WARN("failed to candi allocate subplan filter for exprs", K(ret));
-  } else {
+  } else if (!order_items.empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
+      // create sort operator if needed
+      if (OB_FAIL(create_order_by_plan(candidates_.candidate_plans_.at(i).plan_tree_,
+                                       order_items, NULL, false))) {
+        LOG_WARN("failed to create order by plan", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     LOG_TRACE("succeed to allocate subplan filter for select item", K(select_stmt->get_stmt_id()));
   }
   return ret;

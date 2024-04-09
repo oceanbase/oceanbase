@@ -473,7 +473,7 @@ private:
    * @return
    */
   //    int process_subplan();
-  int candi_allocate_subplan_filter_for_select_item();
+  int candi_allocate_subplan_filter_for_select_item(common::ObIArray<OrderItem> &order_items);
 
   struct WinFuncOpHelper
   {

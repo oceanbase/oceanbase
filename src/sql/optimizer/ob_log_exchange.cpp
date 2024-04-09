@@ -344,6 +344,13 @@ int ObLogExchange::print_annotation_keys(char *buf,
   return ret;
 }
 
+/* If using merge sort, then set local = False, range = False
+ * If using task sort and range order is True, then set local = False, range = False
+ * Otherwise,
+ * local,range    | inherit          | inherit          | True, False      | True, False |
+ * EXCHANGE IN    | LOCAL/REMOTE/ALL | DISTRUBUTE       | LOCAL/REMOTE/ALL | DISTRUBUTE  |
+ * EXCHANGE OUT   | LOCAL/REMOTE/ALL | LOCAL/REMOTE/ALL | DISTRUBUTE       | DISTRUBUTE  |
+*/
 int ObLogExchange::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
@@ -368,6 +375,9 @@ int ObLogExchange::compute_op_ordering()
         is_local_order_ = false;
         is_range_order_ = false;
       }
+    } else if (is_task_order_) {
+      is_local_order_ = false;
+      is_range_order_ = false;
     } else if (!get_op_ordering().empty() && child->is_distributed()) {
       is_local_order_ = true;
       is_range_order_ = false;
