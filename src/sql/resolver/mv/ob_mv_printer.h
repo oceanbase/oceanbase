@@ -144,7 +144,8 @@ private:
   int gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &target_columns,
                              const ObIArray<ObRawExpr*> &values_exprs,
                              const TableItem *source_table,
-                             ObIArray<ObAssignment> &assignments);
+                             ObIArray<ObAssignment> &assignments,
+                             const bool for_mysql_update = false);
   int gen_merge_conds(ObMergeStmt &merge_stmt);
   int gen_simple_mav_delta_mv_view(ObSelectStmt *&view_stmt);
   int init_expr_copier_for_delta_mv_view(const TableItem &table, ObRawExprCopier &copier);

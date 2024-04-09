@@ -295,7 +295,7 @@ int ObMVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(create_simple_table_item(update_stmt, DELTA_BASIC_MAV_VIEW_NAME, source_table, delta_mv_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(gen_update_assignments(mv_columns, values, source_table, table_info->assignments_))) {
+  } else if (OB_FAIL(gen_update_assignments(mv_columns, values, source_table, table_info->assignments_, true))) {
     LOG_WARN("failed gen update assignments", K(ret));
   } else if (OB_FAIL(gen_update_conds(mv_columns, values, update_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
@@ -646,7 +646,8 @@ int ObMVPrinter::get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
 int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &target_columns,
                                         const ObIArray<ObRawExpr*> &values_exprs,
                                         const TableItem *source_table,
-                                        ObIArray<ObAssignment> &assignments)
+                                        ObIArray<ObAssignment> &assignments,
+                                        const bool for_mysql_update /* default false */)
 {
   int ret = OB_SUCCESS;
   assignments.reuse();
@@ -659,6 +660,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
   const ObIArray<ObRawExpr*> &group_by_exprs = mv_checker_.get_stmt().get_group_exprs();
   const ObIArray<SelectItem> &select_items = mv_checker_.get_stmt().get_select_items();
   ObAssignment assign;
+  ObSEArray<ObAssignment, 4> inner_assigns;
   if (OB_ISNULL(source_table) ||
       OB_UNLIKELY(target_columns.count() != select_items.count()
                   || target_columns.count() != values_exprs.count())) {
@@ -681,7 +683,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
     } else if (OB_FAIL(ObRawExprUtils::build_add_expr(expr_factory_, target_columns.at(i), values_exprs.at(i), op_expr))) {
       LOG_WARN("failed to build add expr", K(ret));
     } else if (OB_FALSE_IT(assign.expr_ = op_expr)) {
-    } else if (OB_FAIL(assignments.push_back(assign))) {
+    } else if (OB_FAIL(inner_assigns.push_back(assign))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(expr, assign.expr_))) {
       LOG_WARN("failed to add replace pair", K(ret));
@@ -705,7 +707,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
     } else if (OB_FAIL(gen_calc_expr_for_update_clause_sum(target_count, source_count, target_columns.at(i),
                                                            source_sum, assign.expr_))) {
       LOG_WARN("failed to gen calc expr for aggr sum", K(ret));
-    } else if (OB_FAIL(assignments.push_back(assign))) {
+    } else if (OB_FAIL(inner_assigns.push_back(assign))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(expr, assign.expr_))) {
       LOG_WARN("failed to add replace pair", K(ret));
@@ -733,8 +735,25 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
         /* do nothing */
       } else if (OB_FAIL(copier.copy_on_replace(expr, assign.expr_))) {
         LOG_WARN("failed to generate group by exprs", K(ret));
-      } else if (OB_FAIL(assignments.push_back(assign))) {
+      } else if (OB_FAIL(inner_assigns.push_back(assign))) {
         LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !inner_assigns.empty()) {
+    if (!for_mysql_update) {
+      if (OB_FAIL(assignments.assign(inner_assigns))) {
+        LOG_WARN("failed to assign array", K(ret));
+      }
+    } else if (OB_FAIL(assignments.prepare_allocate(inner_assigns.count()))) {
+      LOG_WARN("failed to prepare allocate array", K(ret));
+    } else {
+      int64_t idx = inner_assigns.count() - 1;
+      for (int64_t i = 0; OB_SUCC(ret) && i < inner_assigns.count(); ++i) {
+        if (OB_FAIL(assignments.at(i).assign(inner_assigns.at(idx - i)))) {
+          LOG_WARN("failed to assign ObAssignment", K(ret));
+        }
       }
     }
   }
