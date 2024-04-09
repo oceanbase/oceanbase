@@ -118,6 +118,7 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   int get_used_pq_set_hint(const ObPQSetHint *&used_hint);
   int construct_pq_set_hint(ObPQSetHint &hint);
+  int append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set);
 private:
   bool is_distinct_;
   bool is_recursive_union_;
