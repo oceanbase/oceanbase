@@ -1704,7 +1704,7 @@ const int64_t OB_MAX_TIMESTAMP_TZ_PRECISION = 9;
 
 // TODO@hanhui lob handle length will be much shorter in 2.0
 const int64_t OB_MAX_LOB_INLINE_LENGTH = OB_MAX_VARCHAR_LENGTH;
-const int64_t OB_MAX_LOB_HANDLE_LENGTH = 2 * 1024L;
+const int64_t OB_MAX_LOB_HANDLE_LENGTH = 512L;
 const int64_t OB_MAX_TINYTEXT_LENGTH = 256;  // mysql (1LL << 8)
 const int64_t OB_MAX_TEXT_LENGTH = 64 * 1024L;  // mysql (1LL << 16)
 const int64_t OB_MAX_MEDIUMTEXT_LENGTH = 16 *  1024 * 1024L;  // mysql (1LL << 24)

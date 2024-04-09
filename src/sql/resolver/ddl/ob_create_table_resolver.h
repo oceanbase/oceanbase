@@ -137,6 +137,7 @@ private:
       const bool is_auxiliary_part);
 
   int add_inner_index_for_heap_gtt();
+  int check_max_row_data_length(const ObTableSchema &table_schema);
 
 private:
   // data members

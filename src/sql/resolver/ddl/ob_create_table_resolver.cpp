@@ -672,6 +672,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {
               SQL_RESV_LOG(WARN, "set table option to schema failed", K(ret));
+            } else if (OB_FAIL(check_max_row_data_length(table_schema))) {
+              SQL_RESV_LOG(WARN, "check max row data length failed", K(ret));
             } else {
               table_schema.set_collation_type(collation_type_);
               table_schema.set_charset_type(charset_type_);
@@ -1309,14 +1311,14 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                           true, /* allow_sequence */
                                           schema_checker_))) {
             SQL_RESV_LOG(WARN, "failed to cast default value!", K(ret));
-          } else if (column.is_string_type()) {
+          } else if (column.is_string_type() || is_lob_storage(column.get_data_type())) {
             int64_t length = 0;
             if (OB_FAIL(column.get_byte_length(length, is_oracle_mode, false))) {
               SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
             } else if (ob_is_string_tc(column.get_data_type()) && length > OB_MAX_VARCHAR_LENGTH) {
               ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
               LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(), static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
-            } else if (ob_is_text_tc(column.get_data_type())) {
+            } else if (is_lob_storage(column.get_data_type())) {
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length();
               if (length > max_length) {
@@ -1324,7 +1326,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                 LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(),
                     ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length());
               } else {
-                length = min(length, table_schema.get_lob_inrow_threshold());
+                // table lob inrow theshold has not been parsed, so use handle length check
+                // will recheck after parsing table lob inrow theshold
+                length = min(length, OB_MAX_LOB_HANDLE_LENGTH);
               }
             }
             if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
@@ -3400,6 +3404,42 @@ int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
       OZ (generate_index_arg());
       OZ (create_table_stmt->get_index_arg_list().push_back(index_arg_));
       OZ (create_table_stmt->get_index_partition_resolve_results().push_back(ObPartitionResolveResult()));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_data_length = 0;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+    int64_t length = 0;
+    const ObColumnSchemaV2 *column = table_schema.get_column_schema_by_idx(i);
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column is null", K(ret), K(table_schema));
+    } else if (! column->is_string_type() && ! is_lob_storage(column->get_data_type()) ) { // skip non string or lob storage type
+    } else if (OB_FAIL(column->get_byte_length(length, is_oracle_mode, false))) {
+      SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
+    } else if (ob_is_string_tc(column->get_data_type()) && length > OB_MAX_VARCHAR_LENGTH) {
+      ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(), static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
+    } else if (is_lob_storage(column->get_data_type())) {
+      ObLength max_length = 0;
+      max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length();
+      if (length > max_length) {
+        ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(),
+            ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length());
+      } else {
+        length = min(length, max(table_schema.get_lob_inrow_threshold(), OB_MAX_LOB_HANDLE_LENGTH));
+      }
+    }
+    if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
+      ret = OB_ERR_TOO_BIG_ROWSIZE;
+      SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(i), K(row_data_length), K(length));
     }
   }
   return ret;

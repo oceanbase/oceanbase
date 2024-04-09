@@ -336,6 +336,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(),              // urowid
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
   }
 };
