@@ -1214,7 +1214,7 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
 
   ParseNode *node = const_cast<ParseNode*>(&parse_tree);
   ObGrantStmt *grant_stmt = NULL;
-  if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(params_.session_info_)) {
+  if (OB_ISNULL(params_.schema_checker_) || OB_ISNULL(params_.session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("schema_checker or session_info not inited", "schema_checker", params_.schema_checker_,
                                                           "session_info", params_.session_info_,
@@ -1252,7 +1252,8 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                                          params_.session_info_->get_database_name(),
                                          db, 
                                          table, 
-                                         grant_level))) {
+                                         grant_level,
+                                         *allocator_))) {
             LOG_WARN("Resolve priv_level node error", K(ret));
           } else if (OB_FAIL(check_and_convert_name(db, table))) {
             LOG_WARN("Check and convert name error", K(db), K(table), K(ret));
@@ -1434,7 +1435,8 @@ int ObGrantResolver::resolve_priv_level(
     const ObString &session_db,
     ObString &db,
     ObString &table,
-    ObPrivLevel &grant_level)
+    ObPrivLevel &grant_level,
+    ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(node)) {
@@ -1476,14 +1478,14 @@ int ObGrantResolver::resolve_priv_level(
         grant_level = OB_PRIV_DB_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db));
+	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else if (T_IDENT == node->children_[0]->type_ && T_IDENT == node->children_[1]->type_) {
         grant_level = OB_PRIV_TABLE_LEVEL;
         db.assign_ptr(node->children_[0]->str_value_,
                       static_cast<const int32_t>(node->children_[0]->str_len_));
         table.assign_ptr(node->children_[1]->str_value_,
                          static_cast<const int32_t>(node->children_[1]->str_len_));
-	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db));
+	    OZ (ObSQLUtils::cvt_db_name_to_org(*guard, session, db, &allocator));
       } else {
         ret = OB_ERR_PARSE_SQL;
         LOG_WARN("sql_parser error", K(ret));
