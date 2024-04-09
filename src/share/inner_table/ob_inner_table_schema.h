@@ -569,6 +569,7 @@ public:
   static int all_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ncomp_dll_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_schema(share::schema::ObTableSchema &table_schema);
@@ -2402,6 +2403,7 @@ public:
   static int all_import_table_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ncomp_dll_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2686,6 +2688,7 @@ public:
   static int all_import_table_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ncomp_dll_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3179,6 +3182,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_import_table_task_history_schema,
   ObInnerTableSchema::all_clone_job_schema,
   ObInnerTableSchema::all_clone_job_history_schema,
+  ObInnerTableSchema::all_ncomp_dll_schema,
   ObInnerTableSchema::all_aux_stat_schema,
   ObInnerTableSchema::all_index_usage_info_schema,
   ObInnerTableSchema::all_transfer_partition_task_schema,
@@ -5207,6 +5211,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TID,
   OB_ALL_CLONE_JOB_TID,
   OB_ALL_CLONE_JOB_HISTORY_TID,
+  OB_ALL_NCOMP_DLL_TID,
   OB_ALL_AUX_STAT_TID,
   OB_ALL_INDEX_USAGE_INFO_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_TID,
@@ -6867,6 +6872,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TID,
   OB_ALL_CLONE_JOB_AUX_LOB_META_TID,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_NCOMP_DLL_AUX_LOB_META_TID,
   OB_ALL_AUX_STAT_AUX_LOB_META_TID,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_META_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_META_TID,
@@ -7129,6 +7135,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_CLONE_JOB_AUX_LOB_PIECE_TID,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,
   OB_ALL_AUX_STAT_AUX_LOB_PIECE_TID,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_PIECE_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_PIECE_TID,
@@ -7689,6 +7696,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_TNAME,
   OB_ALL_CLONE_JOB_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_TNAME,
+  OB_ALL_NCOMP_DLL_TNAME,
   OB_ALL_AUX_STAT_TNAME,
   OB_ALL_INDEX_USAGE_INFO_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_TNAME,
@@ -9349,6 +9357,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_CLONE_JOB_AUX_LOB_META_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_NCOMP_DLL_AUX_LOB_META_TNAME,
   OB_ALL_AUX_STAT_AUX_LOB_META_TNAME,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_META_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_META_TNAME,
@@ -9611,6 +9620,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_IMPORT_TABLE_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_CLONE_JOB_AUX_LOB_PIECE_TNAME,
   OB_ALL_CLONE_JOB_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TNAME,
   OB_ALL_AUX_STAT_AUX_LOB_PIECE_TNAME,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_PIECE_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_PIECE_TNAME,
@@ -12325,6 +12335,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_NCOMP_DLL_TID,
+    OB_ALL_NCOMP_DLL_AUX_LOB_META_TID,
+    OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ncomp_dll_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ncomp_dll_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_AUX_STAT_TID,
     OB_ALL_AUX_STAT_AUX_LOB_META_TID,
     OB_ALL_AUX_STAT_AUX_LOB_PIECE_TID,
@@ -12417,12 +12435,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 281;
+const int64_t OB_SYS_TABLE_COUNT = 282;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 786;
 const int64_t OB_SYS_VIEW_COUNT = 854;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1926;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1927;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1929;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1930;
 
 } // end namespace share
 } // end namespace oceanbase

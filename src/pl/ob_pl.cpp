@@ -70,24 +70,25 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
   jit::ObLLVMHelper::initialize();
-  jit::ObLLVMHelper::add_symbol(ObString("spi_calc_expr"),
-                                (void*)(sql::ObSPIService::spi_calc_expr));
+
+  jit::ObLLVMHelper::add_symbol(ObString("spi_calc_expr_at_idx"),
+                                (void*)(sql::ObSPIService::spi_calc_expr_at_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_calc_package_expr"),
                                 (void*)(sql::ObSPIService::spi_calc_package_expr));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_set_variable"),
-                                (void*)(sql::ObSPIService::spi_set_variable));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_query"),
-                                (void*)(sql::ObSPIService::spi_query));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_set_variable_to_expr"),
+                                (void*)(sql::ObSPIService::spi_set_variable_to_expr));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_query_into_expr_idx"),
+                                (void*)(sql::ObSPIService::spi_query_into_expr_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_autonomous_trans"),
                                 (void*)(sql::ObSPIService::spi_check_autonomous_trans));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_execute"),
-                                (void*)(sql::ObSPIService::spi_execute));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_execute_with_expr_idx"),
+                                (void*)(sql::ObSPIService::spi_execute_with_expr_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_execute_immediate"),
                                 (void*)(sql::ObSPIService::spi_execute_immediate));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_init"),
                                 (void*)(sql::ObSPIService::spi_cursor_init));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_open"),
-                                (void*)(sql::ObSPIService::spi_cursor_open));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_open_with_param_idx"),
+                                (void*)(sql::ObSPIService::spi_cursor_open_with_param_idx));
   jit::ObLLVMHelper::add_symbol(ObString("spi_dynamic_open"),
                                 (void*)(sql::ObSPIService::spi_dynamic_open));
   jit::ObLLVMHelper::add_symbol(ObString("spi_cursor_fetch"),
@@ -106,8 +107,6 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_process_resignal));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_collection"),
                                 (void*)(sql::ObSPIService::spi_destruct_collection));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_init_collection"),
-                                (void*)(sql::ObSPIService::spi_init_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_reset_collection"),
                                 (void*)(sql::ObSPIService::spi_reset_collection));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
@@ -144,8 +143,6 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_update_package_change_info));
   jit::ObLLVMHelper::add_symbol(ObString("spi_check_composite_not_null"),
                                 (void*)(sql::ObSPIService::spi_check_composite_not_null));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_update_location"),
-                                (void*)(sql::ObSPIService::spi_update_location)),
   jit::ObLLVMHelper::add_symbol(ObString("pl_execute"),
                                 (void*)(ObPL::execute_proc));
   jit::ObLLVMHelper::add_symbol(ObString("set_user_type_var"),
@@ -183,8 +180,6 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(ObPLEH::eh_debug_obj));
   jit::ObLLVMHelper::add_symbol(ObString("eh_debug_objparam"),
                                 (void*)(ObPLEH::eh_debug_objparam));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_copy_ref_cursor"),
-                                (void*)(sql::ObSPIService::spi_copy_ref_cursor));
   jit::ObLLVMHelper::add_symbol(ObString("spi_add_ref_cursor_refcount"),
                                 (void*)(sql::ObSPIService::spi_add_ref_cursor_refcount));
   jit::ObLLVMHelper::add_symbol(ObString("spi_handle_ref_cursor_refcount"),
@@ -4540,6 +4535,14 @@ int ObPL::check_session_alive(const ObBasicSessionInfo &session) {
     ret = OB_ERR_SESSION_INTERRUPTED;
     LOG_WARN("session is killed", K(ret));
   }
+  return ret;
+}
+
+int ObPLFunction::gen_action_from_precompiled(const ObString &name, size_t length,
+                                       const char *ptr) {
+  int ret = OB_SUCCESS;
+  OZ (helper_.add_compiled_object(length, ptr));
+  OX (set_action(helper_.get_function_address(name)));
   return ret;
 }
 

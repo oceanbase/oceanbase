@@ -498,6 +498,8 @@ public:
   */
   int is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &flag);
 
+  int gen_action_from_precompiled(const ObString &name, size_t length, const char *ptr);
+
   common::ObFixedArray<ObPLSqlInfo, common::ObIAllocator>& get_sql_infos()
   {
     return sql_infos_;

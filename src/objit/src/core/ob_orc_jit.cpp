@@ -61,7 +61,7 @@ ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
   : DebugBuf(nullptr),
     DebugLen(0),
     JITAllocator(),
-    NotifyLoaded(Allocator, DebugBuf, DebugLen),
+    NotifyLoaded(Allocator, DebugBuf, DebugLen, SoObject),
     TheContext(),
     ObResolver(createLegacyLookupResolver(
              ObES,
@@ -148,6 +148,11 @@ void ObNotifyLoaded::operator()(
   const object::ObjectFile &Obj,
   const RuntimeDyld::LoadedObjectInfo &Info)
 {
+  char *obj_buf = static_cast<char*>(Allocator.alloc(Obj.getData().size()));
+  if (OB_NOT_NULL(obj_buf)) {
+    MEMCPY(obj_buf, Obj.getData().data(), Obj.getData().size());
+    SoObject.assign_ptr(obj_buf, Obj.getData().size());
+  }
   // object::ObjectFile *ObjBinary = Obj.getBinary();
   // if (ObjBinary != nullptr) {
     object::OwningBinary<object::ObjectFile> DebugObj = Info.getObjectForDebug(Obj);
@@ -164,6 +169,15 @@ void ObNotifyLoaded::operator()(
   // }
 }
 
-} // core
+void ObOrcJit::add_compiled_object(size_t length, const char *ptr)
+{
+  ObVModuleKey Key = ObES.allocateVModule();
+
+  cantFail(ObObjectLayer.addObject(
+      Key, MemoryBuffer::getMemBuffer(StringRef(ptr, length), "", false)));
+  ObModuleKeys.push_back(Key);
+}
+
+} // namespace core
 } // objit
 } // oceanbase

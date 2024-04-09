@@ -562,6 +562,8 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         ObPLRoutineInfo *routine_info = NULL;
         if (OB_FAIL(resolve_routine_decl(parse_tree, func, routine_info, false))) {
           LOG_WARN("resolve routine declaration failed", K(parse_tree), K(ret));
+        } else {
+          func.set_is_all_sql_stmt(false);
         }
       }
         break;
@@ -570,6 +572,8 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
         // must be nested routine, because udt member is process in package ast resolve
         if (OB_FAIL(resolve_routine_def(parse_tree, func, false))) {
           LOG_WARN("resolve procedure definition failed", K(parse_tree), K(ret));
+        } else {
+          func.set_is_all_sql_stmt(false);
         }
       }
         break;

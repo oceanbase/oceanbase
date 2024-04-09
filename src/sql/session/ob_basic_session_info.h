@@ -466,6 +466,7 @@ public:
   uint64_t get_local_auto_increment_increment() const;
   uint64_t get_local_auto_increment_offset() const;
   uint64_t get_local_last_insert_id() const;
+  bool get_local_ob_enable_pl_cache() const;
   bool get_local_ob_enable_plan_cache() const;
   bool get_local_ob_enable_sql_audit() const;
   bool get_local_cursor_sharing_mode() const;
@@ -1589,6 +1590,7 @@ public:
         foreign_key_checks_(0),
         default_password_lifetime_(0),
         tx_read_only_(false),
+        ob_enable_pl_cache_(false),
         ob_enable_plan_cache_(false),
         optimizer_use_sql_plan_baselines_(false),
         optimizer_capture_sql_plan_baselines_(false),
@@ -1646,6 +1648,7 @@ public:
       foreign_key_checks_ = 0;
       default_password_lifetime_ = 0;
       tx_read_only_ = false;
+      ob_enable_pl_cache_ = false;
       ob_enable_plan_cache_ = false;
       optimizer_use_sql_plan_baselines_ = false;
       optimizer_capture_sql_plan_baselines_ = false;
@@ -1701,6 +1704,7 @@ public:
             foreign_key_checks_ == other.foreign_key_checks_ &&
             default_password_lifetime_ == other.default_password_lifetime_ &&
             tx_read_only_ == other.tx_read_only_ &&
+            ob_enable_pl_cache_ == other.ob_enable_pl_cache_ &&
             ob_enable_plan_cache_ == other.ob_enable_plan_cache_ &&
             optimizer_use_sql_plan_baselines_ == other.optimizer_use_sql_plan_baselines_ &&
             optimizer_capture_sql_plan_baselines_ == other.optimizer_capture_sql_plan_baselines_ &&
@@ -1866,6 +1870,7 @@ public:
     int64_t foreign_key_checks_;
     uint64_t default_password_lifetime_;
     bool tx_read_only_;
+    bool ob_enable_pl_cache_;
     bool ob_enable_plan_cache_;
     bool optimizer_use_sql_plan_baselines_;
     bool optimizer_capture_sql_plan_baselines_;
@@ -1987,6 +1992,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, foreign_key_checks);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, default_password_lifetime);
     DEF_SYS_VAR_CACHE_FUNCS(bool, tx_read_only);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_pl_cache);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_plan_cache);
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_use_sql_plan_baselines);
     DEF_SYS_VAR_CACHE_FUNCS(bool, optimizer_capture_sql_plan_baselines);
@@ -2097,6 +2103,7 @@ private:
         bool inc_enable_rich_vector_format_:1;
         bool inc_ncharacter_set_connection_:1;
         bool inc_default_lob_inrow_threshold_:1;
+        bool inc_ob_enable_pl_cache_:1;
       };
     };
   };
@@ -2413,6 +2420,11 @@ inline uint64_t ObBasicSessionInfo::get_local_auto_increment_offset() const
 inline uint64_t ObBasicSessionInfo::get_local_last_insert_id() const
 {
   return sys_vars_cache_.get_last_insert_id();
+}
+
+inline bool ObBasicSessionInfo::get_local_ob_enable_pl_cache() const
+{
+  return sys_vars_cache_.get_ob_enable_pl_cache();
 }
 
 inline bool ObBasicSessionInfo::get_local_ob_enable_plan_cache() const

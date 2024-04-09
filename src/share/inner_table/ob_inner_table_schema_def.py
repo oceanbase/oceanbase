@@ -6795,7 +6795,27 @@ def_table_schema(**all_clone_job_history_def)
 # 490: __all_routine_privilege
 # 491: __all_routine_privilege_history
 # 492: __wr_sqlstat
-# 493: __all_ncomp_dll
+
+all_ncomp_dll = dict(
+  owner = 'hr351303',
+  table_name = '__all_ncomp_dll',
+  table_id = '493',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('database_id', 'int', 'false'),
+    ('key_id', 'int'),
+    ('compile_db_id', 'int'),
+    ('arch_type', 'int'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('merge_version', 'int'),
+    ('dll', 'longblob', 'true',''),
+  ],
+)
+def_table_schema(**all_ncomp_dll)
 
 def_table_schema(
   owner = 'zhenling.zzg',

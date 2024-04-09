@@ -2329,6 +2329,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_tx_read_only(int_val != 0));
       break;
     }
+    case SYS_VAR_OB_ENABLE_PL_CACHE: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_ob_enable_pl_cache(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_ENABLE_PLAN_CACHE: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);

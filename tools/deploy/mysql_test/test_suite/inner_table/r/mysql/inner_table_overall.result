@@ -277,6 +277,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 480	__all_import_table_task_history	0	201001	1
 485	__all_clone_job	0	201001	1
 486	__all_clone_job_history	0	201001	1
+493	__all_ncomp_dll	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
 498	__all_transfer_partition_task	0	201001	1

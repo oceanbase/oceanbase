@@ -87,13 +87,13 @@ public:
                                            uint64_t dep_obj_id,
                                            uint64_t schema_version,
                                            share::schema::ObObjectType dep_obj_type);
-private:
-  int init_function(const share::schema::ObRoutineInfo *proc, ObPLFunction &func);
-
   static int init_function(share::schema::ObSchemaGetterGuard &schema_guard,
                            const sql::ObExecEnv &exec_env,
                            const ObPLRoutineInfo &routine_signature,
                            ObPLFunction &routine);
+private:
+  int init_function(const share::schema::ObRoutineInfo *proc, ObPLFunction &func);
+
   int generate_package_cursors(const ObPLPackageAST &package_ast,
                                const ObPLCursorTable &ast_cursor_table,
                                ObPLPackage &package);

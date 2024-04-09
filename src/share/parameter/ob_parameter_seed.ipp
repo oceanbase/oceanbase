@@ -1810,6 +1810,10 @@ DEF_BOOL(enable_kv_ttl, OB_TENANT_PARAMETER, "False",
 DEF_INT(ttl_thread_score, OB_TENANT_PARAMETER, "0", "[0,100]",
         "the current work thread score of ttl thread. Range: [0,100] in integer. Especially, 0 means default value",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_persistent_compiled_routine, OB_CLUSTER_PARAMETER, "true",
+         "specifies whether the feature of storeing dll to disk is turned on. "
+         "The default value is TRUE. Value: TRUE: turned on FALSE: turned off",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR_WITH_CHECKER(sql_protocol_min_tls_version, OB_CLUSTER_PARAMETER, "none",
                      common::ObConfigSQLTlsVersionChecker,

@@ -331,6 +331,7 @@
 # 480: __all_import_table_task_history
 # 485: __all_clone_job
 # 486: __all_clone_job_history
+# 493: __all_ncomp_dll
 # 494: __all_aux_stat
 # 495: __all_index_usage_info
 # 498: __all_transfer_partition_task

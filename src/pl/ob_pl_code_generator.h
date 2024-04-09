@@ -60,22 +60,20 @@ public:
 public:
   struct ObPLSPIService
   {
-    jit::ObLLVMFunction spi_calc_expr_;
+    jit::ObLLVMFunction spi_calc_expr_at_idx_;
     jit::ObLLVMFunction spi_calc_package_expr_;
-    jit::ObLLVMFunction spi_set_variable_;
-    jit::ObLLVMFunction spi_query_;
-    jit::ObLLVMFunction spi_prepare_;
-    jit::ObLLVMFunction spi_execute_;
+    jit::ObLLVMFunction spi_set_variable_to_expr_;
+    jit::ObLLVMFunction spi_query_into_expr_idx_;
+    jit::ObLLVMFunction spi_execute_with_expr_idx_;
     jit::ObLLVMFunction spi_execute_immediate_;
     jit::ObLLVMFunction spi_extend_collection_;
     jit::ObLLVMFunction spi_delete_collection_;
     jit::ObLLVMFunction spi_cursor_init_;
-    jit::ObLLVMFunction spi_cursor_open_;
+    jit::ObLLVMFunction spi_cursor_open_with_param_idx_;
     jit::ObLLVMFunction spi_dynamic_open_;
     jit::ObLLVMFunction spi_cursor_fetch_;
     jit::ObLLVMFunction spi_cursor_close_;
     jit::ObLLVMFunction spi_destruct_collection_;
-    jit::ObLLVMFunction spi_init_collection_;
     jit::ObLLVMFunction spi_reset_collection_;
     jit::ObLLVMFunction spi_copy_datum_;
     jit::ObLLVMFunction spi_destruct_obj_;
@@ -94,12 +92,10 @@ public:
     jit::ObLLVMFunction spi_trim_collection_;
     jit::ObLLVMFunction spi_interface_impl_;
     jit::ObLLVMFunction spi_process_nocopy_params_;
-    jit::ObLLVMFunction spi_copy_ref_cursor_;
     jit::ObLLVMFunction spi_add_ref_cursor_refcount_;
     jit::ObLLVMFunction spi_handle_ref_cursor_refcount_;
     jit::ObLLVMFunction spi_update_package_change_info_;
     jit::ObLLVMFunction spi_check_composite_not_null_;
-    jit::ObLLVMFunction spi_update_location_;
     jit::ObLLVMFunction spi_process_resignal_error_;
     jit::ObLLVMFunction spi_check_autonomous_trans_;
   };
@@ -665,6 +661,8 @@ public:
                                 int64_t expr_idx,
                                 const ObPLStmt &s,
                                 jit::ObLLVMValue &p_result_obj);
+  int prepare_expression(ObPLCompileUnit &pl_func);
+  int final_expression(ObPLCompileUnit &pl_func);
 
 private:
   int init_spi_service();
@@ -678,8 +676,6 @@ private:
   int prepare_local_user_type();
   int prepare_external();
   int prepare_subprogram(ObPLFunction &pl_func);
-  int prepare_expression(ObPLCompileUnit &pl_func);
-  int final_expression(ObPLCompileUnit &pl_func);
   int generate_get_attr(jit::ObLLVMValue &param_array,
                         const common::ObIArray<ObObjAccessIdx> &obj_access,
                         bool for_write,
@@ -786,6 +782,7 @@ public:
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
   int generate_di_local_variable(const ObString &name, jit::ObLLVMDIType &di_type,
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
+  bool get_debug_mode() { return debug_mode_; }
 private:
   int init_di_adt_service();
   int generate_di_prototype();

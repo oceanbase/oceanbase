@@ -241,6 +241,7 @@ DEFINE_LOG_SUB_MOD(PACK)               // package
 DEFINE_LOG_SUB_MOD(TYPE)               // type
 DEFINE_LOG_SUB_MOD(DEBUG)              // debug
 DEFINE_LOG_SUB_MOD(CACHE)              // cache
+DEFINE_LOG_SUB_MOD(STORAGEROUTINE)     // storage routine
 LOG_MOD_END(PL)
 
 } //namespace common
@@ -628,7 +629,10 @@ LOG_MOD_END(PL)
                                                                     info_string, ##args)
 #define _PL_CACHE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, CACHE, level,                     \
                                                                 _fmt_, ##args)
-
+#define PL_STORAGEROUTINE_LOG(level, info_string, args...) OB_SUB_MOD_LOG(PL, STORAGEROUTINE, level,                 \
+                                                                    info_string, ##args)
+#define _PL_STORAGEROUTINE_LOG(level, _fmt_, args...) _OB_SUB_MOD_LOG(PL, STORAGEROUTINE, level,                     \
+                                                                _fmt_, ##args)
 
 #define RPC_FRAME_LOG(level, _fmt_, args...)    \
   OB_SUB_MOD_LOG(RPC, FRAME, level, _fmt_, ##args)

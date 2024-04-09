@@ -24,6 +24,7 @@
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_package.h"
 #include "lib/alloc/malloc_hook.h"
+#include "pl/ob_pl_persistent.h"
 
 namespace oceanbase {
 using namespace common;
@@ -481,16 +482,60 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                func.get_di_helper(),
                lib::is_oracle_mode()) {
   #endif
+    ObRoutinePersistentInfo routine_storage(tenant_id,
+                                        proc->get_database_id(),
+                                        session_info_.get_database_id(),
+                                        func_ast.get_id());
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
-        // check session status after get lock
+        ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
+        bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() &&
+              !cg.get_debug_mode() && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
+        OZ (cg.init());
+        // Step 4: try to obtain dll from disk
+        if (need_read_dll) {
+          OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, func.get_exec_env(), func_ast, func, op));
+        }
+
+#define SET_FUNC    \
+  do {              \
+    OZ (cg.prepare_expression(func));    \
+    OZ (cg.final_expression(func));      \
+    OZ (func.set_variables(func_ast.get_symbol_table()));   \
+    OZ (func.set_types(func_ast.get_user_type_table()));    \
+    OZ (func.get_dependency_table().assign(func_ast.get_dependency_table()));  \
+    OZ (func.add_members(func_ast.get_flag()));                                \
+    OX (func.set_pipelined(func_ast.get_pipelined()));                         \
+    OX (func.set_can_cached(func_ast.get_can_cached()));                       \
+    OX (func.set_is_all_sql_stmt(func_ast.get_is_all_sql_stmt()));             \
+    OX (func.set_has_parallel_affect_factor(func_ast.has_parallel_affect_factor()));  \
+  } while (0)
+
+        if (OB_FAIL(ret)) {
+        } else if (0 != func.get_action()) {
+          SET_FUNC;
+        } else {
+          ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
+          if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
+            LOG_WARN("query or session is killed after get PL jit lock", K(ret));
+          }
+
+          if (OB_SUCC(ret) && need_read_dll) {
+            OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, func.get_exec_env(), func_ast, func, op));
+          }
+          // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
           LOG_WARN("query or session is killed after get PL jit lock", K(ret));
-        } else if (OB_FAIL(cg.init())) {
-          LOG_WARN("failed to init code generator", K(ret));
-        } else if (OB_FAIL(cg.generate(func))) {
-          LOG_WARN("failed to code generate for stmt", K(ret));
-        } else {
+        } else if (OB_FAIL(ret)) {
+          } else if (0 != func.get_action()) {
+            SET_FUNC;
+          } else {
+            OZ (cg.generate(func));
+            if (need_read_dll) {
+              OZ (routine_storage.process_storage_dll(allocator_, schema_guard_, func, op));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
           int64_t tenant_id = session_info_.get_effective_tenant_id();
           int64_t tenant_schema_version = OB_INVALID_VERSION;
           int64_t sys_schema_version = OB_INVALID_VERSION;
@@ -744,12 +789,45 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
   CK (OB_NOT_NULL(session_info_.get_pl_engine()));
   if (OB_SUCC(ret)) {
     WITH_CONTEXT(package.get_mem_context()) {
+      ObRoutinePersistentInfo routine_storage(get_tenant_id_by_object_id(package.get_id()),
+                                        session_info_.get_database_id(),
+                                        session_info_.get_database_id(),
+                                        package.get_id());
+      ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
+      bool need_read_dll = GCONF._enable_persistent_compiled_routine
+                             && package_ast.get_can_cached()
+                             && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
       OZ (generate_package_vars(package_ast, package_ast.get_symbol_table(), package));
       OZ (generate_package_types(package_ast.get_user_type_table(), package));
-      OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
+      if (need_read_dll) {
+        sql::ObExecEnv env;
+        OZ (env.init(exec_env));
+        OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
+      }
+      if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
+        //do nothing
+      } else {
+        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+        OZ (ObPL::check_session_alive(session_info_));
+        if (OB_SUCC(ret)) {
+          if (need_read_dll) {
+            sql::ObExecEnv env;
+            OZ (env.init(exec_env));
+            OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
+          }
+          if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
+            //do nothing
+          } else {
+            OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
+            if (need_read_dll) {
+              OZ (routine_storage.process_storage_dll(allocator_, schema_guard_, package, op));
+            }
+          }
+        }
+      }
       OZ (generate_package_cursors(package_ast, package_ast.get_cursor_table(), package));
     }
   }
@@ -797,8 +875,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                       package_ast, package_info.is_for_trigger()));
 
   {
-    ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
-    // check session status after get lock
+      // check session status after get lock
     if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
       LOG_WARN("query or session is killed after get PL jit lock", K(ret));
     }
@@ -817,6 +894,10 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                 lib::is_oracle_mode()) {
 #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
+        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+        // check session status after get lock
+        OZ (ObPL::check_session_alive(session_info_));
+
         OZ (cg.init());
         OZ (cg.generate(package));
       }
@@ -1302,6 +1383,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
       ObPLFunction *routine = NULL;
       if (OB_ISNULL(routine
         = static_cast<ObPLFunction *>(compile_unit.get_allocator().alloc(sizeof(ObPLFunction))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
       } else {
         new (routine) ObPLFunction(compile_unit.get_mem_context());
@@ -1423,6 +1505,7 @@ void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info
   bool need_set_db = true;
   OX (need_reset_exec_env_ = false);
   OX (need_reset_default_database_ = false);
+  OX (old_db_id_ = OB_INVALID_ID);
   OZ (old_exec_env_.load(session_info_));
   OZ (env.init(info.get_exec_env()));
   if (OB_SUCC(ret) && old_exec_env_ != env) {

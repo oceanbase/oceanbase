@@ -305,8 +305,9 @@ int ObCallProcedureResolver::find_call_proc_info(ObCallProcedureStmt &stmt)
       ret = OB_ERR_UNEXPECTED != ret ? OB_SUCCESS : ret;
   } else {
     call_proc_info = static_cast<ObCallProcedureInfo*>(stmt.get_cacheobj_guard().get_cache_obj());
-    CK (OB_NOT_NULL(call_proc_info));
-    OX (stmt.set_call_proc_info(call_proc_info));
+    if (OB_NOT_NULL(call_proc_info)) {
+      OX (stmt.set_call_proc_info(call_proc_info));
+    }
   }
   return ret;
 }

@@ -90,6 +90,46 @@ namespace sql
     } \
   } while (0)
 
+#define MAKE_EXPR_BUFFER(allocator, expr_idx, expr_count, result)              \
+  do {                                                                         \
+    CK (OB_NOT_NULL(ctx));                                                     \
+    CK (OB_NOT_NULL(ctx->func_));                                              \
+    if (OB_SUCC(ret) && expr_idx != nullptr && expr_count > 0) {               \
+      int64_t alloc_size = expr_count * sizeof(decltype(*result));             \
+      result = static_cast<decltype(result)>(allocator.alloc(alloc_size));     \
+      if (OB_ISNULL(result)) {                                                 \
+        ret = OB_ALLOCATE_MEMORY_FAILED;                                       \
+        LOG_WARN("failed to alloc memory for sql expr buffer", K(expr_count)); \
+      } else {                                                                 \
+        MEMSET(result, 0, alloc_size);                                         \
+        for (int64_t i = 0; OB_SUCC(ret) && i < expr_count; ++i) {             \
+          if (OB_UNLIKELY(expr_idx[i] == OB_INVALID_ID)) {                     \
+            ret = OB_ERR_UNEXPECTED;                                           \
+            LOG_WARN("invalid expr idx", K(expr_idx), K(expr_count), K(i));    \
+          } else {                                                             \
+            CK (OB_LIKELY(0 <= expr_idx[i]                                     \
+                 && expr_idx[i] < ctx->func_->get_expressions().count()));     \
+            OX (result[i] = ctx->func_->get_expressions().at(expr_idx[i]);)    \
+          }                                                                    \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
+  } while (0)
+
+#define GET_NULLABLE_EXPR_BY_IDX(ctx, expr_idx, result)                        \
+  do {                                                                         \
+    CK (OB_NOT_NULL(ctx));                                                     \
+    CK (OB_NOT_NULL(ctx->func_));                                              \
+    if (OB_FAIL(ret)) {                                                        \
+    } else if (expr_idx == OB_INVALID_ID) {                                    \
+      result = nullptr;                                                        \
+    } else {                                                                   \
+      CK (OB_LIKELY(0 <= expr_idx &&                                           \
+                   expr_idx < ctx->func_->get_expressions().count()));         \
+      OX (result = ctx->func_->get_expressions().at(expr_idx);)                \
+    }                                                                          \
+  } while (0)
+
 int ObSPIService::PLPrepareResult::init(sql::ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
@@ -802,6 +842,22 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
+                                       const int64_t expr_idx,
+                                       const int64_t result_idx,
+                                       ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
+  const ObSqlExpression *expr = nullptr;
+  OX (expr = ctx->func_->get_expressions().at(expr_idx));
+  OZ (spi_calc_expr(ctx, expr, result_idx, result));
+  return ret;
+}
+
 int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
                                 const ObSqlExpression *expr,
                                 const int64_t result_idx,
@@ -1196,6 +1252,23 @@ int ObSPIService::spi_set_package_variable(
   }
   OZ (spi_set_package_variable(
     ctx->exec_ctx_, ctx->guard_, package_id, var_idx, value, allocator, need_deep_copy));
+  return ret;
+}
+
+int ObSPIService::spi_set_variable_to_expr(ObPLExecCtx *ctx,
+                                          const int64_t expr_idx,
+                                           const ObObjParam *value,
+                                          bool is_default,
+                                          bool need_copy)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
+  const ObSqlExpression *expr = nullptr;
+  OX (expr = ctx->func_->get_expressions().at(expr_idx));
+  OZ (spi_set_variable(ctx, expr, value, is_default, need_copy));
   return ret;
 }
 
@@ -2092,6 +2165,33 @@ int ObSPIService::spi_check_autonomous_trans(pl::ObPLExecCtx *ctx)
   return ret;
 }
 
+int ObSPIService::spi_query_into_expr_idx(ObPLExecCtx *ctx,
+                                          const char *sql,
+                                          int64_t type,
+                                          const int64_t *into_exprs_idx,
+                                          int64_t into_count,
+                                          const ObDataType *column_types,
+                                          int64_t type_count,
+                                          const bool *exprs_not_null_flag,
+                                          const int64_t *pl_integer_ranges,
+                                          bool is_bulk,
+                                          bool is_type_record,
+                                          bool for_update)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator alloc("SpiTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const ObSqlExpression **into_exprs = nullptr;
+
+  MAKE_EXPR_BUFFER(alloc, into_exprs_idx, into_count, into_exprs);
+
+  OZ (spi_query(ctx, sql, type, into_exprs, into_count, column_types,
+                type_count, exprs_not_null_flag, pl_integer_ranges, is_bulk,
+                is_type_record, for_update));
+
+  return ret;
+}
+
 int ObSPIService::spi_query(ObPLExecCtx *ctx,
                             const char *sql,
                             int64_t type,
@@ -2116,6 +2216,38 @@ int ObSPIService::spi_query(ObPLExecCtx *ctx,
   return ret;
 }
 
+int ObSPIService::spi_execute_with_expr_idx(ObPLExecCtx *ctx,
+                              const char *ps_sql,
+                              int64_t type,
+                              const int64_t *param_exprs_idx,
+                              int64_t param_count,
+                              const int64_t *into_exprs_idx,
+                              int64_t into_count,
+                              const ObDataType *column_types,
+                              int64_t type_count,
+                              const bool *exprs_not_null_flag,
+                              const int64_t *pl_integer_ranges,
+                              bool is_bulk,
+                              bool is_forall,
+                              bool is_type_record,
+                              bool for_update)
+{
+  int ret = OB_SUCCESS;
+
+  ObArenaAllocator alloc("SpiTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const ObSqlExpression **param_exprs = nullptr;
+  const ObSqlExpression **into_exprs = nullptr;
+
+  MAKE_EXPR_BUFFER(alloc, param_exprs_idx, param_count, param_exprs);
+  MAKE_EXPR_BUFFER(alloc, into_exprs_idx, into_count, into_exprs);
+
+  OZ (spi_execute(ctx, ps_sql, type, param_exprs, param_count, into_exprs,
+                  into_count, column_types, type_count, exprs_not_null_flag,
+                  pl_integer_ranges, is_bulk, is_forall, is_type_record,
+                  for_update));
+
+  return ret;
+}
 int ObSPIService::spi_execute(ObPLExecCtx *ctx,
                               const char *ps_sql,
                               int64_t type,
@@ -2714,11 +2846,11 @@ int ObSPIService::dynamic_out_params(
 }
 
 int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
-                                        const ObSqlExpression *sql,
+                                        const int64_t sql_idx,
                                         common::ObObjParam **params,
                                         const int64_t *params_mode,
                                         int64_t param_count,
-                                        const ObSqlExpression **into_exprs,
+                                        const int64_t *into_exprs_idx,
                                         int64_t into_count,
                                         const ObDataType *column_types,
                                         int64_t type_count,
@@ -2733,9 +2865,13 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
     bool need_execute_sql = true;
     ObSQLSessionInfo *session = NULL;
     ObMySQLProxy *sql_proxy = NULL;
+    const ObSqlExpression *sql = nullptr;
+    const ObSqlExpression **into_exprs = nullptr;
     ObSqlString sql_str;
+
     ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_DYNAMIC_SQL_EXEC), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObPLSubPLSqlTimeGuard guard(ctx);
+
     HEAP_VAR(ObSPIResultSet, spi_result) {
       stmt::StmtType stmt_type = stmt::T_NONE;
       ObString ps_sql;
@@ -2752,13 +2888,18 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
 
       stmt::StmtType saved_stmt_type = stmt::T_NONE;
       CK (OB_NOT_NULL(ctx), ctx->valid());
+      CK (OB_NOT_NULL(ctx->func_));
       CK ((OB_NOT_NULL(params) && param_count > 0) || (OB_ISNULL(params) && 0 == param_count));
       CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
       CK (OB_NOT_NULL(sql_proxy = ctx->exec_ctx_->get_sql_proxy()));
+      CK (sql_idx != OB_INVALID_ID);
+      CK (OB_LIKELY(0 <= sql_idx && sql_idx < ctx->func_->get_expressions().count()));
+      OX (sql = ctx->func_->get_expressions().at(sql_idx));
       CK (OB_NOT_NULL(sql));
       CK (OB_NOT_NULL(GCTX.sql_engine_));
       OZ(spi_result.init(*session));
       OX(saved_stmt_type = session->get_stmt_type());
+      MAKE_EXPR_BUFFER(allocator, into_exprs_idx, into_count, into_exprs);
       // Step1: Prepare dynamic SQL! Only prepare once!
       OZ (prepare_dynamic(ctx,
                           sql,
@@ -3460,8 +3601,8 @@ int ObSPIService::spi_get_cursor_info(ObPLExecCtx *ctx, int64_t index,
 }
 
 int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
-                                  const ObSqlExpression *sql,
-                                  const ObSqlExpression **sql_param_exprs,
+                                  const int64_t sql_idx,
+                                  const int64_t *sql_param_exprs_idx,
                                   int64_t sql_param_count,
                                   uint64_t package_id,
                                   uint64_t routine_id,
@@ -3477,8 +3618,13 @@ int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
   int64_t inner_into_cnt = 0;
   bool skip_locked = false;
 
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (sql_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= sql_idx && sql_idx < ctx->func_->get_expressions().count()));
+
   OZ (prepare_dynamic(ctx,
-                      sql,
+                      ctx->func_->get_expressions().at(sql_idx),
                       allocator,
                       false/*not returning*/,
                       sql_param_count,
@@ -3489,21 +3635,29 @@ int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
                       hidden_rowid,
                       inner_into_cnt,
                       skip_locked));
-  OZ (spi_cursor_open(ctx,
-                      sql_param_count > 0 ? NULL : sql_str.ptr(),
-                      ps_sql.ptr(),//trans to c-stype
-                      stmt_type,
-                      for_update,
-                      hidden_rowid,
-                      sql_param_exprs,
-                      sql_param_count,
-                      package_id,
-                      routine_id,
-                      cursor_index,
-                      NULL/*formal_param_idxs*/,
-                      NULL/*actual_param_exprs*/,
-                      0/*cursor_param_count*/,
-                      skip_locked));
+
+  if (OB_SUCC(ret)) {
+    const ObSqlExpression **sql_param_exprs = nullptr;
+    ObArenaAllocator alloc("SpiTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+
+    MAKE_EXPR_BUFFER(alloc, sql_param_exprs_idx, sql_param_count, sql_param_exprs);
+
+    OZ (spi_cursor_open(ctx,
+                        sql_param_count > 0 ? NULL : sql_str.ptr(),
+                        ps_sql.ptr(),//trans to c-stype
+                        stmt_type,
+                        for_update,
+                        hidden_rowid,
+                        sql_param_exprs,
+                        sql_param_count,
+                        package_id,
+                        routine_id,
+                        cursor_index,
+                        NULL/*formal_param_idxs*/,
+                        NULL/*actual_param_exprs*/,
+                        0/*cursor_param_count*/,
+                        skip_locked));
+  }
 
   return ret;
 }
@@ -3573,6 +3727,40 @@ int ObSPIService::prepare_cursor_parameters(ObPLExecCtx *ctx,
         session_info, package_id, routine_id, formal_param_idxs[i], dummy_result));
     }
   }
+
+  return ret;
+}
+
+int ObSPIService::spi_cursor_open_with_param_idx(ObPLExecCtx *ctx,
+                                  const char *sql,
+                                  const char *ps_sql,
+                                  int64_t type,
+                                  bool for_update,
+                                  bool has_hidden_rowid,
+                                  const int64_t *sql_param_idx,
+                                  int64_t sql_param_count,
+                                  uint64_t package_id,
+                                  uint64_t routine_id,
+                                  int64_t cursor_index,
+                                  const int64_t *formal_param_idxs,
+                                  const int64_t *actual_param_idx,
+                                  int64_t cursor_param_count,
+                                  bool skip_locked)
+{
+  int ret = OB_SUCCESS;
+
+  const ObSqlExpression **sql_param_exprs = nullptr;
+  const ObSqlExpression **actual_param_exprs = nullptr;
+  ObArenaAllocator alloc("SpiTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+
+  MAKE_EXPR_BUFFER(alloc, sql_param_idx, sql_param_count, sql_param_exprs);
+  MAKE_EXPR_BUFFER(alloc, actual_param_idx, cursor_param_count,
+                    actual_param_exprs);
+
+  OZ(spi_cursor_open(ctx, sql, ps_sql, type, for_update, has_hidden_rowid,
+                      sql_param_exprs, sql_param_count, package_id, routine_id,
+                      cursor_index, formal_param_idxs, actual_param_exprs,
+                      cursor_param_count, skip_locked));
 
   return ret;
 }
@@ -4542,7 +4730,7 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
                                    uint64_t package_id,
                                    uint64_t routine_id,
                                    int64_t cursor_index,
-                                   const ObSqlExpression **into_exprs,
+                                   const int64_t *into_exprs_idx,
                                    int64_t into_count,
                                    const ObDataType *column_types,
                                    int64_t type_count,
@@ -4558,6 +4746,9 @@ int ObSPIService::spi_cursor_fetch(ObPLExecCtx *ctx,
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cur_var;
   ObCusorDeclareLoc loc;
+  ObArenaAllocator alloc("SpiTemp", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  const ObSqlExpression **into_exprs = nullptr;
+  MAKE_EXPR_BUFFER(alloc, into_exprs_idx, into_count, into_exprs);
   OZ (spi_get_cursor_info(ctx, package_id, routine_id, cursor_index, cursor, cur_var, loc));
   if (OB_SUCC(ret) && OB_ISNULL(cursor)) {
       ret = OB_ERR_INVALID_CURSOR;
@@ -4960,14 +5151,29 @@ if (OB_SUCC(ret)) {                                   \
 }
 
 int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
-                                        const ObSqlExpression *collection_expr,
+                                        const int64_t collection_expr_idx,
                                         int64_t column_count,
-                                        const ObSqlExpression *n_expr,
-                                        const ObSqlExpression *i_expr,
+                                        const int64_t n_expr_idx,
+                                        const int64_t i_expr_idx,
                                         uint64_t package_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx)
+  const ObSqlExpression *collection_expr = nullptr;
+  const ObSqlExpression *n_expr = nullptr;
+  const ObSqlExpression *i_expr = nullptr;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (collection_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= collection_expr_idx && collection_expr_idx < ctx->func_->get_expressions().count()));
+  CK (n_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= n_expr_idx && n_expr_idx < ctx->func_->get_expressions().count()));
+  OX (collection_expr = ctx->func_->get_expressions().at(collection_expr_idx));
+  OX (n_expr = ctx->func_->get_expressions().at(n_expr_idx));
+  OX (GET_NULLABLE_EXPR_BY_IDX(ctx, i_expr_idx, i_expr));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  }else if (OB_ISNULL(ctx)
       || OB_ISNULL(ctx->exec_ctx_)
       || OB_ISNULL(ctx->exec_ctx_->get_my_session())
       || OB_ISNULL(collection_expr)
@@ -5072,17 +5278,26 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
 }
 
 int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
-                                              const ObSqlExpression *errcode_expr,
-                                              const ObSqlExpression *errmsg_expr)
+                                              const int64_t errcode_expr_idx,
+                                              const int64_t errmsg_expr_idx)
 {
   int ret = OB_SUCCESS;
   ObObjParam errcode_result;
   ObObjParam errmsg_result;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
   ObSQLSessionInfo *session_info = NULL;
+  const ObSqlExpression *errcode_expr = nullptr;
+  const ObSqlExpression *errmsg_expr = nullptr;
   CK (OB_NOT_NULL(ctx), ctx->valid());
+  CK (OB_NOT_NULL(ctx->func_));
   CK (OB_NOT_NULL(session_info = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
+  CK (errcode_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= errcode_expr_idx && errcode_expr_idx < ctx->func_->get_expressions().count()));
+  CK (errmsg_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= errmsg_expr_idx && errmsg_expr_idx < ctx->func_->get_expressions().count()));
+  OX (errcode_expr = ctx->func_->get_expressions().at(errcode_expr_idx));
+  OX (errmsg_expr = ctx->func_->get_expressions().at(errmsg_expr_idx));
 
 #define CALC(expr, type, result) \
   do { \
@@ -5139,8 +5354,8 @@ int ObSPIService::spi_raise_application_error(pl::ObPLExecCtx *ctx,
 }
 
 int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
-                                       const ObSqlExpression *errcode_expr,
-                                       const ObSqlExpression *errmsg_expr,
+                                       const int64_t errcode_expr_idx,
+                                       const int64_t errmsg_expr_idx,
                                        const char *sql_state,
                                        int *error_code,
                                        const char *resignal_sql_state,
@@ -5155,12 +5370,17 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
   int cur_err_code = OB_SUCCESS;
   static const uint32_t STR_LEN = 128;
   char err_msg[STR_LEN] = {0};
+  const ObSqlExpression *errcode_expr = nullptr;
+  const ObSqlExpression *errmsg_expr = nullptr;
 
   CK (OB_NOT_NULL(ctx), ctx->valid());
+  CK (OB_NOT_NULL(ctx->func_));
   CK (OB_NOT_NULL(session_info = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
   OX (wb = common::ob_get_tsi_warning_buffer());
   CK (OB_NOT_NULL(error_code));
+  OX (GET_NULLABLE_EXPR_BY_IDX(ctx, errcode_expr_idx, errcode_expr));
+  OX (GET_NULLABLE_EXPR_BY_IDX(ctx, errmsg_expr_idx, errmsg_expr));
 
 #define CALC(expr, type, result) \
   do { \
@@ -5280,17 +5500,24 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
 }
 
 int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
-                                   const ObSqlExpression *collection_expr,
+                                   const int64_t collection_expr_idx,
                                    int64_t row_size,
-                                   const ObSqlExpression *n_expr)
+                                   const int64_t n_expr_idx)
 {
   int ret = OB_SUCCESS;
+  const ObSqlExpression *collection_expr = nullptr;
+  const ObSqlExpression *n_expr = nullptr;
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, collection_expr, row_size, n_expr);
+  UNUSEDx(ctx, collection_expr_idx, row_size, n_expr_idx);
 #else
   UNUSED(row_size);
   CK (OB_NOT_NULL(ctx),
       OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (collection_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= collection_expr_idx && collection_expr_idx < ctx->func_->get_expressions().count()));
+  OX (collection_expr = ctx->func_->get_expressions().at(collection_expr_idx));
+  OX (GET_NULLABLE_EXPR_BY_IDX(ctx, n_expr_idx, n_expr));
   if (OB_SUCC(ret)) {
     ObObjParam result;
     ObPLCollection *table = NULL;
@@ -5339,23 +5566,34 @@ int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
 }
 
 int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
-                                        const ObSqlExpression *collection_expr,
+                                        const int64_t collection_expr_idx,
                                         int64_t row_size,
-                                        const ObSqlExpression *m_expr,
-                                        const ObSqlExpression *n_expr)
+                                        const int64_t m_expr_idx,
+                                        const int64_t n_expr_idx)
 {
   int ret = OB_SUCCESS;
 #ifndef OB_BUILD_ORACLE_PL
-  UNUSEDx(ctx, collection_expr, row_size, m_expr, n_expr);
+  UNUSEDx(ctx, collection_expr_idx, row_size, m_expr_idx, n_expr_idx);
 #else
   UNUSED(row_size);
+  const ObSqlExpression *collection_expr = nullptr;
+  const ObSqlExpression *m_expr = nullptr;
+  const ObSqlExpression *n_expr = nullptr;
   CK (OB_NOT_NULL(ctx),
       OB_NOT_NULL(ctx->exec_ctx_));
+  CK (OB_NOT_NULL(ctx->func_));
+  CK (collection_expr_idx != OB_INVALID_ID);
+  CK (OB_LIKELY(0 <= collection_expr_idx && collection_expr_idx < ctx->func_->get_expressions().count()));
+
   if (OB_SUCC(ret)) {
     ObObjParam result;
     ObPLCollection *table = NULL;
     int64_t m = OB_INVALID_INDEX;
     int64_t n = OB_INVALID_INDEX;
+
+    collection_expr = ctx->func_->get_expressions().at(collection_expr_idx);
+    OX (GET_NULLABLE_EXPR_BY_IDX(ctx, m_expr_idx, m_expr));
+    OX (GET_NULLABLE_EXPR_BY_IDX(ctx, n_expr_idx, n_expr));
 
     OZ (spi_calc_expr(ctx, collection_expr, OB_INVALID_INDEX, &result));
     CK (OB_LIKELY(result.get_type() == ObExtendType));
