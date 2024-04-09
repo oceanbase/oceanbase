@@ -10936,7 +10936,7 @@ int ObDMLResolver::add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval
         exist = true;
       }
     }
-    if (!exist) {
+    if (!exist && sequence_id != OB_INVALID_ID) {
       // 如果是 CURRVAL 表达式，则指示 stmt 生成 SEQUENCE 算子，但不做具体事情
       //
       // 如果是 NEXTVAL 表达式，则添加到 STMT 中，提示 SEQUENCE 算子为它计算 NEXTVALUE
