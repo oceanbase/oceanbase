@@ -5342,22 +5342,8 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.is_set_nullable_) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_WARN("can't set primary key nullable", K(ret));
-        } else if (ObGeometryType == origin_col_schema->get_data_type()
-                   && ObGeometryType == alter_column_schema.get_data_type()
-                   && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
-                   && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
-                   && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-          ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
-          LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
-          LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
-                  K(alter_column_schema.get_geo_type()));
-        } else if (ObGeometryType == origin_col_schema->get_data_type()
-                   && ObGeometryType == alter_column_schema.get_data_type()
-                   && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support alter srid");
-          LOG_WARN("not support alter srid now", K(ret),
-                  K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+        } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
+          LOG_WARN("modify geo column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -5474,6 +5460,36 @@ int ObAlterTableResolver::check_modify_column_allowed(
         SQL_RESV_LOG(WARN, "failed to check_column_in_foreign_key", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::check_alter_geo_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                                         const share::schema::ObColumnSchemaV2 &origin_col_schema)
+{
+  int ret = OB_SUCCESS;
+  if (ObGeometryType != origin_col_schema.get_data_type()) {
+    // do nothing
+  } else if (origin_col_schema.is_spatial_index_column()
+            && ObGeometryType != alter_column_schema.get_data_type()) {
+    ret = OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL;
+    LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
+    LOG_WARN("can't not alter geometry col with spatial index", K(ret), K(origin_col_schema.get_geo_type()),
+            K(alter_column_schema.get_geo_type()));
+  } else if (ObGeometryType == alter_column_schema.get_data_type()
+              && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+              && origin_col_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+              && origin_col_schema.get_geo_type() != alter_column_schema.get_geo_type()) {
+    ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+    LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    LOG_WARN("can't not alter geometry type", K(ret), K(origin_col_schema.get_geo_type()),
+            K(alter_column_schema.get_geo_type()));
+  } else if (ObGeometryType == alter_column_schema.get_data_type()
+            && origin_col_schema.get_srid() != alter_column_schema.get_srid()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter geometry srid");
+    LOG_WARN("can't not alter geometry srid", K(ret),
+            K(origin_col_schema.get_srid()), K(alter_column_schema.get_srid()));
   }
   return ret;
 }
@@ -5625,22 +5641,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.is_set_nullable_) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_WARN("can't set primary key nullable", K(ret));
-          } else if (ObGeometryType == origin_col_schema->get_data_type()
-                     && ObGeometryType == alter_column_schema.get_data_type()
-                     && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
-                     && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
-                     && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-            ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
-            LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
-            LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
-                    K(alter_column_schema.get_geo_type()));
-          } else if (ObGeometryType == origin_col_schema->get_data_type()
-                     && ObGeometryType == alter_column_schema.get_data_type()
-                     && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
-            LOG_WARN("can't not modify geometry srid", K(ret),
-                    K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+          } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
+            LOG_WARN("modify geo column not allowed", K(ret));
           }
         }
       }

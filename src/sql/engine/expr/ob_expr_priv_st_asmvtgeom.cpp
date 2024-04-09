@@ -47,7 +47,7 @@ int ObExprPrivSTAsMVTGeom::calc_result_typeN(ObExprResType &type, ObExprResType 
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_ASMVTGEOM);
     LOG_WARN("invalid type", K(ret), K(obj_type1));
-  } else if (ObHexStringType != obj_type1 && !ob_is_geometry(obj_type2)) {
+  } else if (ObHexStringType != obj_type2 && !ob_is_geometry(obj_type2)) {
     if (ob_is_null(obj_type2)) {
       ret = OB_ERR_NULL_INPUT;
       LOG_WARN("_ST_AsMVTGeom: Geometric bounds cannot be null", K(ret), K(obj_type2));
