@@ -2023,7 +2023,6 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::inner_get_next_row(const ObDat
     // set delete/insert committed row compacted
     row_.set_compacted_multi_version_row();
   }
-
   return ret;
 }
 

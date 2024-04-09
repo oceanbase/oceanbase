@@ -1604,10 +1604,12 @@ int ObPartitionMinorRowMergeIter::next()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
     }
+/* TODO is_rowkey_first_row_already_output_ is not right, can't skip ghost row now
   } else if (OB_FAIL(skip_ghost_row())) {
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("Failed to skip_ghost_row", K(ret));
     }
+*/
   } else if (need_recycle_mv_row()) {
     if (OB_FAIL(compact_old_row())) {
       LOG_WARN("Failed to compact_old_row", K(ret));
@@ -1619,7 +1621,6 @@ int ObPartitionMinorRowMergeIter::next()
   if (OB_SUCC(ret) && curr_row_ != nullptr && curr_row_->is_last_multi_version_row()) {
     check_committing_trans_compacted_ = true;
   }
-
   return ret;
 }
 
