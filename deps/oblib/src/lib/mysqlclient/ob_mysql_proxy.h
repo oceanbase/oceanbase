@@ -56,7 +56,7 @@ public:
   static const int64_t IS_TABLE_HIDDEN_BIT = 1;
   static const int64_t IS_HEAP_TABLE_DDL_BIT = 1;
   static const int64_t IS_DDL_CHECK_DEFAULT_VALUE_BIT = 1;
-  static const int64_t RESERVED_BIT = sizeof(int64_t) - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT;
+  static const int64_t RESERVED_BIT = 64 - IS_DDL_BIT - 2 * IS_TABLE_HIDDEN_BIT - IS_HEAP_TABLE_DDL_BIT - IS_DDL_CHECK_DEFAULT_VALUE_BIT;
   union {
     uint64_t ddl_info_;
     struct {
