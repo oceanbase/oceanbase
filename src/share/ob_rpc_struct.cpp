@@ -2709,7 +2709,8 @@ DEF_TO_STRING(ObTableItem)
   J_OBJ_START();
   J_KV(K_(database_name),
        K_(table_name),
-       K_(is_hidden));
+       K_(is_hidden),
+       K_(table_id));
   J_OBJ_END();
   return pos;
 }
@@ -2723,7 +2724,8 @@ bool ObTableItem::operator==(const ObTableItem &r) const
       //todo compare using case mode @hualong
       //ret = ObCharset::case_mode_equal(mode_, table_name_, r.table_name_) &&
       //    ObCharset::case_mode_equal(mode_, database_name_, r.database_name_);
-      ret = table_name_ == r.table_name_ && database_name_ == r.database_name_ && is_hidden_ == r.is_hidden_;
+      ret = table_name_ == r.table_name_ && database_name_ == r.database_name_ && is_hidden_ == r.is_hidden_
+        && table_id_ == r.table_id_;
     }
   }
   return ret;
@@ -2732,7 +2734,8 @@ bool ObTableItem::operator==(const ObTableItem &r) const
 OB_SERIALIZE_MEMBER(ObTableItem,
                     database_name_,
                     table_name_,
-                    is_hidden_);
+                    is_hidden_,
+                    table_id_);
 
 bool ObDropTableArg::is_valid() const
 {

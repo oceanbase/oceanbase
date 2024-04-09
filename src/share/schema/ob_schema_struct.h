@@ -129,6 +129,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define GENERATED_DOC_ID_COLUMN_FLAG (INT64_C(1) << 22)
 #define MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 23) // for multivalue index
 #define MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG (INT64_C(1) << 24) // for multivalue index
+#define GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG (INT64_C(1) << 25) // word segment column for full-text search flag
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -139,6 +140,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
    c1 and c2 has flag TABLE_PART_KEY_COLUMN_ORG_FLAG */
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
 #define SPATIAL_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 38) // for spatial index
+#define GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG (INT64_C(1) << 39) // doc length column for full-text search index
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF

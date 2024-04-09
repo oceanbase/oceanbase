@@ -2270,7 +2270,8 @@ public:
       mode_(common::OB_NAME_CASE_INVALID), //for compare
       database_name_(),
       table_name_(),
-      is_hidden_(false)
+      is_hidden_(false),
+      table_id_(OB_INVALID_ID)
   {}
   bool operator==(const ObTableItem &table_item) const;
   inline uint64_t hash() const;
@@ -2280,6 +2281,7 @@ public:
     database_name_.reset();
     table_name_.reset();
     is_hidden_ = false;
+    table_id_ = OB_INVALID_ID;
   }
   DECLARE_TO_STRING;
 
@@ -2287,6 +2289,7 @@ public:
   common::ObString database_name_;
   common::ObString table_name_;
   bool is_hidden_;
+  uint64_t table_id_;
 };
 
 inline uint64_t ObTableItem::hash() const
