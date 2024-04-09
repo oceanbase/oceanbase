@@ -171,6 +171,12 @@ int ObBackupSetTaskMgr::process()
         }
         break;
       }
+      case ObBackupStatus::Status::BEFORE_BACKUP_LOG: {
+        if (OB_FAIL(before_backup_log_())) {
+          LOG_WARN("[DATA_BACKUP]failed to before backup log", K(ret), K(set_task_attr_));
+        }
+        break;
+      }
       case ObBackupStatus::Status::BACKUP_LOG: {
         if (OB_FAIL(backup_completing_log_())) {
           LOG_WARN("[DATA_BACKUP]failed to backup completing log", K(ret), K(set_task_attr_));
@@ -1031,6 +1037,10 @@ int ObBackupSetTaskMgr::get_next_status_(const share::ObBackupStatus &cur_status
       break;
     }
     case ObBackupStatus::Status::BACKUP_DATA_MAJOR: {
+      next_status = ObBackupStatus::Status::BEFORE_BACKUP_LOG;
+      break;
+    }
+    case ObBackupStatus::Status::BEFORE_BACKUP_LOG: {
       next_status = ObBackupStatus::Status::BACKUP_LOG;
       break;
     }
@@ -1582,6 +1592,10 @@ int ObBackupSetTaskMgr::convert_task_type_(const ObIArray<ObBackupLSTaskAttr> &l
       break;
     }
     case ObBackupStatus::Status::BACKUP_DATA_MAJOR: {
+      type.type_ = ObBackupDataTaskType::Type::BEFORE_PLUS_ARCHIVE_LOG;
+      break;
+    }
+    case ObBackupStatus::Status::BEFORE_BACKUP_LOG: {
       type.type_ = ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG;
       break;
     }
@@ -1696,7 +1710,7 @@ int ObBackupSetTaskMgr::do_failed_ls_task_(ObMySQLTransaction &trans, const ObIA
   return ret;
 }
 
-int ObBackupSetTaskMgr::backup_completing_log_()
+int ObBackupSetTaskMgr::before_backup_log_()
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupLSTaskAttr> ls_task;
@@ -1725,6 +1739,90 @@ int ObBackupSetTaskMgr::backup_completing_log_()
     finish_cnt = ls_task.count();
   }
   
+  if (OB_SUCC(ret) && ls_task.count() == finish_cnt) {
+    if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
+      LOG_WARN("fail to start trans", K(ret), K(meta_tenant_id_));
+    } else {
+      ObBackupStatus next_status = ObBackupStatus::BACKUP_LOG;
+      share::ObBackupDataTaskType type(share::ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG);
+      if (OB_FAIL(stat_all_ls_backup_log_(trans_))) {
+        LOG_WARN("[DATA_BACKUP]fail to stat all ls backup log", K(ret));
+      } else if (OB_FAIL(convert_task_type_(ls_task))) {
+        LOG_WARN("[DATA_BACKUP]fail to update task type to backup data", K(ret));
+      } else if (OB_FAIL(advance_status_(trans_, next_status, OB_SUCCESS, set_task_attr_.end_scn_, set_task_attr_.end_ts_))) {
+        LOG_WARN("[DATA_BACKUP]failed to advance status to BACKUP_PLUS_ARCHIVE_LOG", K(ret), K(next_status));
+      }
+
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(trans_.end(true))) {
+          LOG_WARN("fail to commit trans", K(ret));
+        } else {
+          set_task_attr_.status_ = next_status;
+          ROOTSERVICE_EVENT_ADD("backup_data", "before backup completing log succeed", "tenant_id",
+            job_attr_->tenant_id_, "job_id", job_attr_->job_id_, "task_id", set_task_attr_.task_id_);
+          backup_service_->wakeup();
+        }
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans_.end(false))) {
+          LOG_WARN("fail to rollback", K(ret), K(tmp_ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::stat_all_ls_backup_log_(ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const bool for_update = true;
+  ObArray<ObBackupLSTaskAttr> ls_attrs;
+  share::ObBackupSetTaskAttr old_set_task_attr;
+  share::ObBackupStats new_backup_set_stats;
+  if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans,
+      job_attr_->job_id_, job_attr_->tenant_id_, for_update, old_set_task_attr))) {
+    LOG_WARN("failed to get backup task", K(ret));
+  } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(trans,
+      job_attr_->job_id_, job_attr_->tenant_id_, for_update, ls_attrs))) {
+    LOG_WARN("failed to get ls tasks", K(ret), KPC_(job_attr));
+  } else {
+    int64_t total_compl_log_file_count = 0;
+    ARRAY_FOREACH_X(ls_attrs, idx, cnt, OB_SUCC(ret)) {
+      const ObBackupLSTaskAttr &ls_attr = ls_attrs.at(idx);
+      total_compl_log_file_count += ls_attr.stats_.log_file_count_;
+    }
+    new_backup_set_stats = old_set_task_attr.stats_;
+    new_backup_set_stats.log_file_count_ = total_compl_log_file_count;
+    if (FAILEDx(ObBackupTaskOperator::update_stats(trans, set_task_attr_.task_id_,
+        job_attr_->tenant_id_, new_backup_set_stats))) {
+      LOG_WARN("failed to update stats", K(ret));
+    } else {
+      LOG_INFO("update stats", K(new_backup_set_stats));
+    }
+  }
+  return ret;
+}
+
+int ObBackupSetTaskMgr::backup_completing_log_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObBackupLSTaskAttr> ls_task;
+  ObTenantArchiveRoundAttr round_attr;
+  int64_t finish_cnt = 0;
+  if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, true/*update*/, ls_task))) {
+    LOG_WARN("[DATA_BACKUP]failed to get log stream tasks", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
+  } else if (ls_task.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[DATA_BACKUP]no logstream task", K(ret), K(ls_task));
+  } else if (job_attr_->plus_archivelog_) {
+    if (OB_FAIL(do_backup_completing_log_(ls_task, finish_cnt))) {
+      LOG_WARN("[DATA_BACKUP]failed to do backup ls task", K(ret), K(set_task_attr_), K(ls_task));
+    }
+  } else {
+    finish_cnt = ls_task.count();
+  }
+
   if (OB_SUCC(ret) && ls_task.count() == finish_cnt) {
     ObBackupStatus next_status = ObBackupStatus::COMPLETED;
     set_task_attr_.end_ts_ = ObTimeUtility::current_time();

@@ -5604,6 +5604,8 @@ comment	varchar(4096)	YES
 path	varchar(4096)	YES			
 minor_turn_id	bigint(20)	NO		0	
 major_turn_id	bigint(20)	NO		0	
+log_file_count	bigint(20)	NO		0	
+finish_log_file_count	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5639,6 +5641,8 @@ comment	varchar(4096)	YES
 path	varchar(4096)	YES			
 minor_turn_id	bigint(20)	NO		0	
 major_turn_id	bigint(20)	NO		0	
+log_file_count	bigint(20)	NO		0	
+finish_log_file_count	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_task_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5675,6 +5679,8 @@ retry_id	bigint(20)	YES		0
 result	bigint(20)	YES		0	
 comment	varchar(4096)	YES			
 max_tablet_checkpoint_scn	bigint(20) unsigned	NO		NULL	
+log_file_count	bigint(20)	NO		0	
+finish_log_file_count	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_ls_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -5711,6 +5717,8 @@ retry_id	bigint(20)	YES		0
 result	bigint(20)	YES		0	
 comment	varchar(4096)	YES			
 max_tablet_checkpoint_scn	bigint(20) unsigned	NO		NULL	
+log_file_count	bigint(20)	NO		0	
+finish_log_file_count	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_backup_ls_task_history;
 IF(count(*) >= 0, 1, 0)
 1

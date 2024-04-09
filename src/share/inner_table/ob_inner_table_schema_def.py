@@ -3910,6 +3910,8 @@ def_table_schema(
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('minor_turn_id', 'int', 'false', '0'),
     ('major_turn_id', 'int', 'false', '0'),
+    ('log_file_count', 'int', 'false', '0'),
+    ('finish_log_file_count', 'int', 'false', '0'),
     ],
 )
 def_table_schema(
@@ -3953,6 +3955,8 @@ def_table_schema(
     ('path', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('minor_turn_id', 'int', 'false', '0'),
     ('major_turn_id', 'int', 'false', '0'),
+    ('log_file_count', 'int', 'false', '0'),
+    ('finish_log_file_count', 'int', 'false', '0'),
     ],
 )
 def_table_schema(
@@ -3997,6 +4001,8 @@ def_table_schema(
     ('result', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('max_tablet_checkpoint_scn', 'uint'),
+    ('log_file_count', 'int', 'false', '0'),
+    ('finish_log_file_count', 'int', 'false', '0'),
     ],
 )
 def_table_schema(
@@ -4041,6 +4047,8 @@ def_table_schema(
     ('result', 'int', 'true', '0'),
     ('comment', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true', ''),
     ('max_tablet_checkpoint_scn', 'uint'),
+    ('log_file_count', 'int', 'false', '0'),
+    ('finish_log_file_count', 'int', 'false', '0'),
     ],
 )
 def_table_schema(
@@ -18361,7 +18369,14 @@ def_table_schema(
         WHEN MACRO_BLOCK_COUNT = 0 THEN 0.00
         WHEN FINISH_MACRO_BLOCK_COUNT > MACRO_BLOCK_COUNT THEN 99.99
         ELSE ROUND((FINISH_MACRO_BLOCK_COUNT / MACRO_BLOCK_COUNT) * 100, 2)
-    END AS DATA_PROGRESS
+    END AS DATA_PROGRESS,
+    LOG_FILE_COUNT,
+    FINISH_LOG_FILE_COUNT,
+    CASE
+        WHEN LOG_FILE_COUNT = 0 THEN 0.00
+        WHEN FINISH_LOG_FILE_COUNT > LOG_FILE_COUNT THEN 99.99
+        ELSE ROUND((FINISH_LOG_FILE_COUNT / LOG_FILE_COUNT) * 100, 2)
+    END AS LOG_PROGRESS
     FROM OCEANBASE.__all_virtual_backup_task
 """.replace("\n", " ")
 )

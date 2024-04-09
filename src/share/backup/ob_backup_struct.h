@@ -312,6 +312,8 @@ const char *const OB_STR_MACRO_BLOCK_BYTES = "major_block_bytes";
 const char *const OB_STR_FINISH_MACRO_BLOCK_BYTES = "finish_major_block_bytes";
 const char *const OB_STR_MINOR_BLOCK_BYTES = "minor_block_bytes";
 const char *const OB_STR_FINISH_MINOR_BLOCK_BYTES = "finish_minor_block_bytes";
+const char *const OB_STR_LOG_FILE_COUNT = "log_file_count";
+const char *const OB_STR_FINISH_LOG_FILE_COUNT = "finish_log_file_count";
 
 const char *const OB_STR_START_REPLAY_LSN = "start_replay_lsn";
 const char *const OB_STR_LAST_REPLAY_LSN = "last_replay_lsn";
@@ -1229,7 +1231,8 @@ public:
     BACKUP_DATA_SYS = 9,
     BACKUP_DATA_MINOR = 10,
     BACKUP_DATA_MAJOR = 11,
-    BACKUP_LOG = 12,
+    BEFORE_BACKUP_LOG = 12,
+    BACKUP_LOG = 13,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1242,7 +1245,7 @@ public:
   bool is_backup_meta() const { return BACKUP_SYS_META == status_ || BACKUP_USER_META == status_; }
   bool is_backup_major() const { return BACKUP_DATA_MAJOR == status_; }
   bool is_backup_minor() const { return BACKUP_DATA_MINOR == status_; }
-  bool is_backup_log() const { return BACKUP_LOG == status_; }
+  bool is_backup_log() const { return BEFORE_BACKUP_LOG == status_ || BACKUP_LOG == status_; }
   bool is_backup_sys() const { return BACKUP_DATA_SYS == status_; }
   bool is_backup_finish() const { return COMPLETED == status_ || FAILED == status_ || CANCELED == status_; }
   const char* get_str() const;
@@ -1300,7 +1303,8 @@ public:
   void cum_with(const ObBackupStats &other);
   void reset();
   TO_STRING_KV(K_(input_bytes), K_(output_bytes), K_(tablet_count), K_(finish_tablet_count),
-      K_(macro_block_count), K_(finish_macro_block_count), K_(extra_bytes), K_(finish_file_count));
+      K_(macro_block_count), K_(finish_macro_block_count), K_(extra_bytes), K_(finish_file_count),
+      K_(log_file_count), K_(finish_log_file_count));
   int64_t input_bytes_;
   int64_t output_bytes_;
   int64_t tablet_count_;
@@ -1445,8 +1449,9 @@ struct ObBackupDataTaskType final
     BACKUP_META_FINISH = 1,
     BACKUP_DATA_MINOR = 2,
     BACKUP_DATA_MAJOR = 3,
-    BACKUP_PLUS_ARCHIVE_LOG = 4,
-    BACKUP_BUILD_INDEX = 5,
+    BEFORE_PLUS_ARCHIVE_LOG = 4,
+    BACKUP_PLUS_ARCHIVE_LOG = 5,
+    BACKUP_BUILD_INDEX = 6,
     BACKUP_MAX
   };
   ObBackupDataTaskType() : type_(Type::BACKUP_MAX) {}

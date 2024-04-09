@@ -65,8 +65,9 @@ struct ObLSBackupDagNetInitParam : public share::ObIDagInitParam {
   ObBackupReportCtx report_ctx_;
   share::SCN start_scn_;               // for backup meta
   share::ObBackupDataType backup_data_type_;   // for build index
-  share::SCN compl_start_scn_;         // for complemnt log
-  share::SCN compl_end_scn_;           // for complemet log
+  share::SCN compl_start_scn_;         // for complement log
+  share::SCN compl_end_scn_;           // for complement log
+  bool is_only_calc_stat_;             // for complement log
 };
 
 struct ObLSBackupDagInitParam : public share::ObIDagInitParam {
@@ -201,6 +202,7 @@ private:
   ObBackupReportCtx report_ctx_;
   share::SCN compl_start_scn_;
   share::SCN compl_end_scn_;
+  bool is_only_calc_stat_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
 };
 
@@ -372,7 +374,8 @@ public:
   virtual ~ObLSBackupComplementLogDag();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
-      const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn, const ObBackupReportCtx &report_ctx);
+      const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn,
+      const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx);
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -394,6 +397,7 @@ private:
   int64_t retry_id_;
   share::SCN compl_start_scn_;
   share::SCN compl_end_scn_;
+  bool is_only_calc_stat_;
   ObBackupReportCtx report_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDag);
@@ -682,7 +686,8 @@ public:
   virtual ~ObLSBackupComplementLogTask();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const int64_t dest_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const share::SCN &start_scn,
-      const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx);
+      const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
+      const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx);
   virtual int process() override;
 
 private:
@@ -711,6 +716,10 @@ private:
   int get_src_backup_piece_dir_(const share::ObLSID &ls_id, const ObTenantArchivePieceAttr &piece_attr, share::ObBackupPath &backup_path);
   int get_src_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
   int get_dst_backup_file_path_(const BackupPieceFile &piece_file, share::ObBackupPath &backup_path);
+  int update_ls_task_stat_(const share::ObBackupStats &old_backup_stat,
+      const int64_t compl_log_file_count, share::ObBackupStats &new_backup_stat);
+  int report_progress_();
+  int report_complement_log_stat_(const common::ObIArray<BackupPieceFile> &list);
   int backup_complement_log_(const common::ObIArray<BackupPieceFile> &path);
   int inner_backup_complement_log_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
   int transfer_clog_file_(const share::ObBackupPath &src_path, const share::ObBackupPath &dst_path);
@@ -749,7 +758,7 @@ private:
   int64_t turn_id_;
   int64_t retry_id_;
   share::ObBackupDest archive_dest_;
-
+  bool is_only_calc_stat_;
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogTask);
 };

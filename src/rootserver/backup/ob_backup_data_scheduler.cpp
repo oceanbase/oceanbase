@@ -202,6 +202,7 @@ int ObBackupDataScheduler::build_task_(
     }
     break;
   }
+  case ObBackupDataTaskType::Type::BEFORE_PLUS_ARCHIVE_LOG:
   case ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG: {
     HEAP_VAR(ObBackupComplLogTask, tmp_task) {
       if (OB_FAIL(do_build_task_(job, set_task_attr, ls_task, allocator, tmp_task, task))) {

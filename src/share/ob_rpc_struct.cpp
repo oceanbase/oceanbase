@@ -7381,8 +7381,8 @@ bool ObBackupComplLogArg::is_valid() const
       && ls_id_.is_valid()
       && dst_server_.is_valid()
       && !backup_path_.is_empty()
-      && start_scn_.is_valid()
-      && end_scn_.is_valid();
+      && start_scn_.is_valid_and_not_min()
+      && end_scn_.is_valid_and_not_min();
 }
 
 int ObBackupComplLogArg::assign(const ObBackupComplLogArg &arg)

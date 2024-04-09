@@ -134,6 +134,7 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
       }
       break;
     }
+    case ObBackupDataTaskType::Type::BEFORE_PLUS_ARCHIVE_LOG:
     case ObBackupDataTaskType::Type::BACKUP_PLUS_ARCHIVE_LOG: {
       if (OB_FAIL(gen_and_add_backup_compl_log_())) {
         LOG_WARN("[DATA_BACKUP]failed to gen and add backup complement task", K(ret), KPC(ls_attr_));

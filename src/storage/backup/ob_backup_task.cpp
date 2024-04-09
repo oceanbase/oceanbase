@@ -188,7 +188,8 @@ ObLSBackupDagNetInitParam::ObLSBackupDagNetInitParam()
       start_scn_(),
       backup_data_type_(),
       compl_start_scn_(),
-      compl_end_scn_()
+      compl_end_scn_(),
+      is_only_calc_stat_(false)
 {}
 
 ObLSBackupDagNetInitParam::~ObLSBackupDagNetInitParam()
@@ -221,6 +222,7 @@ int ObLSBackupDagNetInitParam::assign(const ObLSBackupDagNetInitParam &other)
     backup_data_type_ = other.backup_data_type_;
     compl_start_scn_ = other.compl_start_scn_;
     compl_end_scn_ = other.compl_end_scn_;
+    is_only_calc_stat_ = other.is_only_calc_stat_;
   }
   return ret;
 }
@@ -268,9 +270,10 @@ int ObLSBackupDagNetInitParam::convert_to(ObLSBackupDagInitParam &init_param)
 
 bool ObLSBackupDagNetInitParam::operator==(const ObLSBackupDagNetInitParam &other) const
 {
-  return job_desc_ == other.job_desc_ && backup_dest_ == other.backup_dest_ && tenant_id_ == other.tenant_id_ &&
-         backup_set_desc_ == other.backup_set_desc_ && ls_id_ == other.ls_id_ &&
-         turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && dest_id_ == other.dest_id_;
+  return job_desc_ == other.job_desc_ && backup_dest_ == other.backup_dest_ && tenant_id_ == other.tenant_id_
+      && backup_set_desc_ == other.backup_set_desc_ && ls_id_ == other.ls_id_
+      && turn_id_ == other.turn_id_ && retry_id_ == other.retry_id_ && dest_id_ == other.dest_id_
+      && is_only_calc_stat_ == other.is_only_calc_stat_;
 }
 
 /* ObLSBackupDagInitParam */
@@ -993,6 +996,7 @@ int ObLSBackupComplementLogDagNet::init_by_param(const share::ObIDagInitParam *p
     report_ctx_ = init_param.report_ctx_;
     compl_start_scn_ = init_param.compl_start_scn_;
     compl_end_scn_ = init_param.compl_end_scn_;
+    is_only_calc_stat_ = init_param.is_only_calc_stat_;
     is_inited_ = true;
   }
   return ret;
@@ -1025,6 +1029,7 @@ int ObLSBackupComplementLogDagNet::start_running()
                  param_.retry_id_,
                  compl_start_scn_,
                  compl_end_scn_,
+                 is_only_calc_stat_,
                  report_ctx_))) {
     LOG_WARN("failed to init child dag", K(ret), K_(param), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(complement_dag->create_first_task())) {
@@ -1836,6 +1841,7 @@ ObLSBackupComplementLogDag::ObLSBackupComplementLogDag()
       retry_id_(-1),
       compl_start_scn_(),
       compl_end_scn_(),
+      is_only_calc_stat_(false),
       report_ctx_()
 {}
 
@@ -1845,7 +1851,7 @@ ObLSBackupComplementLogDag::~ObLSBackupComplementLogDag()
 int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const int64_t turn_id, const int64_t retry_id, const SCN &start_scn, const SCN &end_scn,
-    const ObBackupReportCtx &report_ctx)
+    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -1876,6 +1882,7 @@ int ObLSBackupComplementLogDag::init(const ObBackupJobDesc &job_desc, const ObBa
     compl_start_scn_ = start_scn;
     compl_end_scn_ = end_scn;
     report_ctx_ = report_ctx;
+    is_only_calc_stat_ = is_only_calc_stat;
     is_inited_ = true;
   }
   return ret;
@@ -1888,7 +1895,7 @@ int ObLSBackupComplementLogDag::create_first_task()
   if (OB_FAIL(alloc_task(task))) {
     LOG_WARN("failed to alloc task", K(ret));
   } else if (OB_FAIL(task->init(job_desc_, backup_dest_, tenant_id_, dest_id_, backup_set_desc_, ls_id_, compl_start_scn_,
-      compl_end_scn_, turn_id_, retry_id_, report_ctx_))) {
+      compl_end_scn_, turn_id_, retry_id_, is_only_calc_stat_, report_ctx_))) {
     LOG_WARN("failed to init task", K(ret), K_(tenant_id), K_(backup_set_desc), K_(ls_id), K_(compl_start_scn), K_(compl_end_scn));
   } else if (OB_FAIL(add_task(*task))) {
     LOG_WARN("failed to add task", K(ret));
@@ -1932,7 +1939,7 @@ bool ObLSBackupComplementLogDag::operator==(const ObIDag &other) const
       const ObLSBackupComplementLogDag &other_dag = static_cast<const ObLSBackupComplementLogDag &>(other);
       bret = job_desc_ == other_dag.job_desc_ && backup_dest_ == other_dag.backup_dest_ &&
                 tenant_id_ == other_dag.tenant_id_ && dest_id_ == other_dag.dest_id_ && backup_set_desc_ == other_dag.backup_set_desc_ &&
-                ls_id_ == other_dag.ls_id_;
+                ls_id_ == other_dag.ls_id_ && is_only_calc_stat_ == other_dag.is_only_calc_stat_;
   }
   return bret;
 }
@@ -1945,6 +1952,7 @@ int64_t ObLSBackupComplementLogDag::hash() const
   hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
   hash_value = common::murmurhash(&backup_set_desc_, sizeof(backup_set_desc_), hash_value);
   hash_value = common::murmurhash(&ls_id_, sizeof(ls_id_), hash_value);
+  hash_value = common::murmurhash(&is_only_calc_stat_, sizeof(is_only_calc_stat_), hash_value);
   return hash_value;
 }
 
@@ -4864,14 +4872,14 @@ ObLSBackupComplementLogTask::~ObLSBackupComplementLogTask()
 int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObBackupDest &backup_dest,
     const uint64_t tenant_id, const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
     const SCN &start_scn, const SCN &end_scn, const int64_t turn_id, const int64_t retry_id,
-    const ObBackupReportCtx &report_ctx)
+    const bool is_only_calc_stat, const ObBackupReportCtx &report_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ls backup complement log task init twice", K(ret));
   } else if (!job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id ||
-             !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid() || !end_scn.is_valid()) {
+             !backup_set_desc.is_valid() || !ls_id.is_valid() || !start_scn.is_valid_and_not_min() || !end_scn.is_valid_and_not_min()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args",
         K(ret),
@@ -4894,6 +4902,7 @@ int ObLSBackupComplementLogTask::init(const ObBackupJobDesc &job_desc, const ObB
     compl_end_scn_ = end_scn;
     turn_id_ = turn_id;
     retry_id_ = retry_id;
+    is_only_calc_stat_ = is_only_calc_stat;
     report_ctx_ = report_ctx;
     is_inited_ = true;
   }
@@ -5005,8 +5014,16 @@ int ObLSBackupComplementLogTask::inner_process_(
     LOG_WARN("failed to make parent dir", K(ret), K(backup_path), K(backup_dest_));
   } else if (OB_FAIL(calc_backup_file_range_(archive_dest_id, ls_id, file_list))) {
     LOG_WARN("failed to calc backup file range", K(ret), K(archive_dest_id), K(ls_id));
-  } else if (OB_FAIL(backup_complement_log_(file_list))) {
-    LOG_WARN("failed to backup complement log", K(ret), K(file_list));
+  } else {
+    if (is_only_calc_stat_) {
+      if (OB_FAIL(report_complement_log_stat_(file_list))) {
+        LOG_WARN("failed to report complement log stat", K(ret), K(file_list));
+      }
+    } else {
+      if (OB_FAIL(backup_complement_log_(file_list))) {
+        LOG_WARN("failed to backup complement log", K(ret), K(file_list));
+      }
+    }
   }
   return ret;
 }
@@ -5472,6 +5489,60 @@ int ObLSBackupComplementLogTask::get_dst_backup_file_path_(
   return ret;
 }
 
+int ObLSBackupComplementLogTask::update_ls_task_stat_(const share::ObBackupStats &old_backup_stat,
+    const int64_t compl_log_file_count, share::ObBackupStats &new_backup_stat)
+{
+  int ret = OB_SUCCESS;
+  new_backup_stat.input_bytes_ = old_backup_stat.input_bytes_;
+  new_backup_stat.output_bytes_ = old_backup_stat.output_bytes_;
+  new_backup_stat.tablet_count_ = old_backup_stat.tablet_count_;
+  new_backup_stat.macro_block_count_ = old_backup_stat.macro_block_count_;
+  new_backup_stat.finish_macro_block_count_ = old_backup_stat.finish_macro_block_count_;
+  new_backup_stat.finish_tablet_count_ = old_backup_stat.finish_tablet_count_;
+  new_backup_stat.finish_macro_block_count_ = new_backup_stat.finish_macro_block_count_;
+  new_backup_stat.log_file_count_ += compl_log_file_count;
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::report_complement_log_stat_(const common::ObIArray<BackupPieceFile> &file_list)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const int64_t compl_log_file_count = file_list.count();
+  ObMySQLTransaction trans;
+  int64_t max_file_id = 0;
+  const bool for_update = true;
+  const int64_t job_id = job_desc_.job_id_;
+  const int64_t task_id = job_desc_.task_id_;
+  const uint64_t tenant_id = tenant_id_;
+  const share::ObLSID &ls_id = ls_id_;
+  if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    share::ObBackupStats new_ls_task_stat;
+    if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret));
+    } else if (OB_FAIL(update_ls_task_stat_(old_ls_task_attr.stats_, compl_log_file_count, new_ls_task_stat))) {
+      LOG_WARN("failed to update ls task stat", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stat))) {
+      LOG_WARN("failed to update stat", K(ret));
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      }
+    } else {
+      if (OB_TMP_FAIL(trans.end(false /* commit*/))) {
+        LOG_WARN("failed to rollback trans", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<BackupPieceFile> &src_file_list)
 {
   int ret = OB_SUCCESS;
@@ -5508,7 +5579,9 @@ int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<B
       LOG_WARN("failed to mk parent dir", K(ret), K(dst_path));
     } else if (OB_FAIL(inner_backup_complement_log_(src_path, dst_path))) {
       LOG_WARN("failed to inner backup complement log", K(ret), K(src_path), K(dst_path));
-    }else {
+    } else if (OB_FAIL(report_progress_())) {
+      LOG_WARN("failed to make progress", K(ret));
+    } else {
       SERVER_EVENT_ADD("backup", "backup_complement_log_file",
                       "tenant_id", tenant_id_,
                       "backup_set_id", backup_set_desc_.backup_set_id_,
@@ -5516,7 +5589,54 @@ int ObLSBackupComplementLogTask::backup_complement_log_(const common::ObIArray<B
                       "round_id", piece_file.round_id_,
                       "piece_id", piece_file.piece_id_,
                       "file_id", piece_file.file_id_);
+      DEBUG_SYNC(AFTER_REPORT_BACKUP_COMPL_LOG);
       LOG_INFO("inner backup complement log", K(piece_file), K(src_path), K(dst_path));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupComplementLogTask::report_progress_()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  const bool for_update = true;
+  if (OB_FAIL(trans.start(report_ctx_.sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
+    LOG_WARN("failed to start transaction", K(ret));
+  } else {
+    const int64_t job_id = job_desc_.job_id_;
+    const int64_t task_id = job_desc_.task_id_;
+    const uint64_t tenant_id = tenant_id_;
+    const share::ObLSID &ls_id = ls_id_;
+    share::ObBackupSetTaskAttr old_set_task_attr;
+    share::ObBackupLSTaskAttr old_ls_task_attr;
+    share::ObBackupStats new_ls_task_stat;
+    share::ObBackupStats new_backup_set_stats;
+    if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans, job_id, tenant_id, for_update, old_set_task_attr))) {
+      LOG_WARN("failed to get backup task", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_task(trans, for_update,
+              task_id, tenant_id, ls_id, old_ls_task_attr))) {
+      LOG_WARN("failed to get ls task", K(ret));
+    } else if (OB_FALSE_IT(new_backup_set_stats = old_set_task_attr.stats_)) {
+    } else if (OB_FALSE_IT(new_backup_set_stats.finish_log_file_count_++)) {
+    } else if (OB_FALSE_IT(new_ls_task_stat = old_ls_task_attr.stats_)) {
+    } else if (OB_FALSE_IT(new_ls_task_stat.finish_log_file_count_++)) {
+    } else if (OB_FAIL(ObBackupLSTaskOperator::update_stats(trans, task_id, tenant_id, ls_id, new_ls_task_stat))) {
+      LOG_WARN("failed to update stat", K(ret));
+    } else if (OB_FAIL(ObBackupTaskOperator::update_stats(trans, task_id, tenant_id, new_backup_set_stats))) {
+      LOG_WARN("failed to update stats", K(ret), K(task_id), K(tenant_id));
+    } else {
+      LOG_INFO("make progress", K(new_backup_set_stats), K(new_ls_task_stat));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true /*commit*/))) {
+        LOG_WARN("failed to commit", K(ret));
+      }
+    } else {
+      if (OB_TMP_FAIL(trans.end(false /* commit*/))) {
+        LOG_WARN("failed to rollback trans", K(tmp_ret));
+      }
     }
   }
   return ret;
