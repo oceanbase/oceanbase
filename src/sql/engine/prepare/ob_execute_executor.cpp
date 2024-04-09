@@ -58,6 +58,7 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
     }
 
     if (OB_SUCC(ret)) {
+      ObSqlCtx sql_ctx;
       SMART_VAR(ObResultSet, result_set, *ctx.get_my_session(), ctx.get_allocator()) {
         result_set.set_ps_protocol();
         ObTaskExecutorCtx *task_ctx = result_set.get_exec_context().get_task_executor_ctx();
@@ -73,7 +74,6 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
                     OB_SYS_TENANT_ID, sys_version))) {
           LOG_WARN("fail get sys schema version", K(ret));
         } else {
-          ObSqlCtx sql_ctx;
           sql_ctx.retry_times_ = 0;
           sql_ctx.session_info_ = ctx.get_my_session();
           sql_ctx.disable_privilege_check_ = true;
