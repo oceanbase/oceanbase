@@ -400,7 +400,7 @@ public:
     // pl must has lob header
     bool has_lob_header = true;
     ObTextStringObObjResult text_result(ObLongTextType, nullptr, &output, has_lob_header);
-    if(OB_FAIL(text_result.init(input.length(), &allocator))) {
+    if (OB_FAIL(text_result.init(input.length(), &allocator))) {
       COMMON_LOG(WARN, "init lob result failed", K(ret));
     } else if (OB_FAIL(text_result.append(input.ptr(), input.length()))) {
       COMMON_LOG(WARN, "failed to append realdata", K(ret), K(input), K(text_result));
