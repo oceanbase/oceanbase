@@ -676,6 +676,7 @@ public:
   { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
   int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
   int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
+  bool has_conflict_txs() const { return cflict_txs_.count() > 0; }
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }

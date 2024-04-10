@@ -395,7 +395,6 @@ const int64_t OB_MAX_TABLE_NUM_PER_STMT = 256;
 const int32_t OB_TMP_BUF_SIZE_256 = 256;
 const int64_t OB_SCHEMA_MGR_MAX_USED_TID_MAP_BUCKET_NUM = 64;
 const int64_t OB_MAX_SLAVE_READ_DELAY_TS = 5 * 1000 * 1000;
-const int64_t OB_SKIP_RANGE_LIMIT = 256;
 
 const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle

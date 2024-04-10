@@ -173,8 +173,7 @@ ObMemtableScanIterator::ObMemtableScanIterator()
       memtable_(NULL),
       cur_range_(),
       row_iter_(),
-      row_(),
-      iter_flag_(0)
+      row_()
 {
   GARL_ADD(&active_resource_, "scan_iter");
 }
@@ -293,7 +292,6 @@ int ObMemtableScanIterator::prepare_scan()
     } else if (OB_FAIL(bitmap_.init(read_info_->get_request_count(), read_info_->get_schema_rowkey_count()))) {
       TRANS_LOG(WARN, "Failed to init bitmap ", K(ret));
     } else {
-      iter_flag_ = 0;
       is_scan_start_ = true;
       TRANS_LOG(DEBUG, "mvcc engine scan success",
                 K_(memtable), K(mvcc_scan_range), KPC(context_->store_ctx_),
@@ -364,7 +362,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(prepare_scan())) {
     TRANS_LOG(WARN, "prepare scan fail", K(ret));
-  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, iter_flag_, lock_state))
+  } else if (OB_FAIL(row_iter_.get_next_row(key, value_iter, lock_state))
       || NULL == key || NULL == value_iter) {
     if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_TRANSACTION_SET_VIOLATION == ret) {
       if (!context_->query_flag_.is_for_foreign_key_check()) {
@@ -387,7 +385,7 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
       TRANS_LOG(WARN, "row_iter_ get_next_row fail", K(ret), KP(key), KP(value_iter));
     }
   } else {
-    TRANS_LOG(DEBUG, "chaser debug memtable next row", KPC(key), K(iter_flag_), K(bitmap_.get_nop_cnt()));
+    TRANS_LOG(DEBUG, "chaser debug memtable next row", KPC(key), K(bitmap_.get_nop_cnt()));
     const ObStoreRowkey *rowkey = NULL;
     int64_t row_scn = 0;
     key->get_rowkey(rowkey);
@@ -427,9 +425,6 @@ int ObMemtableScanIterator::inner_get_next_row(const ObDatumRow *&row)
       row = &row_;
     }
   }
-  if (OB_FAIL(ret)) {
-    iter_flag_ = 0;
-  }
   return ret;
 }
 
@@ -444,7 +439,6 @@ void ObMemtableScanIterator::reset()
   cur_range_.reset();
   row_.reset();
   bitmap_.reuse();
-  iter_flag_ = 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

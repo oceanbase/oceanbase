@@ -15,7 +15,6 @@
 
 #include "lib/container/ob_fixed_array.h"
 #include "lib/thread/ob_async_task_queue.h"
-#include "share/schema/ob_dependency_info.h"
 #include "lib/hash/ob_hashset.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/schema/ob_schema_struct.h"

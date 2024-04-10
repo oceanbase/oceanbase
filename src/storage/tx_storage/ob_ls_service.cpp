@@ -34,6 +34,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
 {
@@ -1013,6 +1014,7 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
   static const int64_t SLEEP_TS = 100_ms;
   int64_t retry_cnt = 0;
   int64_t success_step = 0;
+  transaction::ObTransService *tx_svr = MTL(transaction::ObTransService*);
 
   do {
     // We must do prepare_for_safe_destroy to remove tablets from ObLSTabletService before writing the remove_ls_slog,
@@ -1046,6 +1048,13 @@ void ObLSService::remove_ls_(ObLS *ls, const bool remove_from_disk, const bool w
         LOG_WARN("remove log stream from map fail", K(ret), K(ls_id));
       } else {
         success_step = 4;
+      }
+    }
+    if (success_step < 5 && OB_SUCC(ret)) {
+      if (OB_FAIL(tx_svr->remove_tablet(ls_id))) {
+        LOG_WARN("remove tablet cache fail", K(ret), K(ls_id));
+      } else {
+        success_step = 5;
       }
     }
     if (OB_FAIL(ret)) {

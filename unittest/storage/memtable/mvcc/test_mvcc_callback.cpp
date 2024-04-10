@@ -102,7 +102,7 @@ public:
       mt_counter_(0),
       mt_ctx_(),
       cb_allocator_(),
-      mgr_(mt_ctx_, cb_allocator_),
+      mgr_(mt_ctx_, cb_allocator_, mt_ctx_.mem_ctx_obj_pool_),
       callback_list_(mgr_, 101) { }
   virtual void SetUp() override
   {
@@ -1275,7 +1275,7 @@ TEST_F(TestTxCallbackList, log_cursor) {
 
 namespace memtable
 {
-void ObMemtableCtx::callback_free(ObITransCallback *cb)
+void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
 {
   if (OB_ISNULL(cb)) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));

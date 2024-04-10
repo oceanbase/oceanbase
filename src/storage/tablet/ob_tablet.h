@@ -357,11 +357,6 @@ public:
       ObStoreCtx &store_ctx,
       const blocksstable::ObDatumRowkey &rowkey,
       bool &locked);
-  int try_update_storage_schema(
-      const int64_t table_id,
-      const int64_t schema_version,
-      ObIAllocator &allocator,
-      const int64_t timeout_ts);
   int get_tablet_first_second_level_meta_ids(ObIArray<blocksstable::MacroBlockId> &meta_ids) const;
   // table operation
   /* When need_unpack is true, if tablet is column store type, we should flatten the co sstable, and add all cg tables to iter.

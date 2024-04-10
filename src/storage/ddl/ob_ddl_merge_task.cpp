@@ -812,8 +812,7 @@ int ObDDLMacroBlockIterator::open(ObSSTable *sstable, const ObDatumRange &query_
             ObDatumRowkeyWrapper(&query_range.get_start_key(), &read_info.get_datum_utils()),
             query_range.is_left_open(),
             ObDatumRowkeyWrapper(&query_range.get_end_key(), &read_info.get_datum_utils()),
-            query_range.is_right_open(),
-            INT64_MAX/*version*/))) {
+            query_range.is_right_open()))) {
       LOG_WARN("ddl memtable locate range failed", K(ret));
     }
   } else if (sstable->is_ddl_merge_sstable()) { // co ddl partial data, need scan macro block

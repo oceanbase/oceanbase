@@ -1794,7 +1794,7 @@ int ObIndexBlockRowScanner::locate_range(
     }
   } else {
     range_ = &range;
-    LOG_TRACE("Locate range in index block by range", K(ret), K(range), KPC(iter_),
+    LOG_DEBUG("Locate range in index block by range", K(ret), K(range), KPC(iter_),
       K(is_left_border), K(is_right_border), KP(this));
   }
   return ret;

@@ -19,12 +19,12 @@
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/mvcc/ob_query_engine.h"
 #include "storage/memtable/ob_row_compactor.h"
+#include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
 {
 namespace storage
 {
-class ObRowPurgeHandle;
 struct ObPartitionEst;
 }
 
@@ -32,7 +32,7 @@ namespace memtable
 {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 struct ObRowData;
-class ObIMemtableCtx;
+class ObMemtableCtx;
 class ObMvccAccessCtx;
 class RowHeaderGetter;
 class ObMemtableData;
@@ -57,6 +57,7 @@ public:
   // Return the ObMvccRow according to the memtable key or create
   // the new one if the memtable key is not exist.
   int create_kv(const ObMemtableKey *key,
+                const bool is_insert,
                 ObMemtableKey *stored_key,
                 ObMvccRow *&value,
                 RowHeaderGetter &getter,
@@ -67,8 +68,7 @@ public:
   // OB_TRY_LOCK_ROW_CONFLICT if encountering write-write conflict or
   // OB_TRANSACTION_SET_VIOLATION if encountering lost update. The interesting
   // implementation about mvcc_write is located in ob_mvcc_row.cpp/.h
-  int mvcc_write(ObIMemtableCtx &ctx,
-                 const concurrent_control::ObWriteFlag write_flag,
+  int mvcc_write(storage::ObStoreCtx &ctx,
                  const transaction::ObTxSnapshot &snapshot,
                  ObMvccRow &value,
                  const ObTxNodeArg &arg,

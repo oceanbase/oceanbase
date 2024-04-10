@@ -22,6 +22,7 @@
 #include "storage/tablelock/ob_lock_memtable.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 #include "table_lock_common_env.h"
+#include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
 {
@@ -48,7 +49,7 @@ public:
   TestMemCtxTableLock()
     : ls_id_(1),
       fake_t3m_(common::OB_SERVER_TENANT_ID),
-      mem_ctx_(allocator_)
+      mem_ctx_(fake_memtable_ctx_)
   {
     LOG_INFO("construct TestMemCtxTableLock");
   }
@@ -81,6 +82,7 @@ public:
 
   void init_mem_ctx()
   {
+    ASSERT_EQ(OB_SUCCESS, fake_memtable_ctx_.init(common::OB_SERVER_TENANT_ID));
     ASSERT_EQ(OB_SUCCESS, mem_ctx_.init(handle_));
   }
 
@@ -89,8 +91,8 @@ private:
   ObLockMemtable memtable_;
   ObTableHandleV2 handle_;
   ObTenantMetaMemMgr fake_t3m_;
+  memtable::ObMemtableCtx fake_memtable_ctx_;
   ObFreezer freezer_;
-
   ObLockMemCtx mem_ctx_;
   ObArenaAllocator allocator_;
 };

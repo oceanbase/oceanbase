@@ -1029,7 +1029,7 @@ public:
   // New members of ObCreateTableArg need to pay attention to the implementation of is_allow_when_upgrade
   bool is_alter_view_;
   ObSequenceDDLArg sequence_ddl_arg_;
-  common::ObSArray<share::schema::ObDependencyInfo> dep_infos_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dep_infos_;
   common::ObSArray<ObMVAdditionalInfo> mv_ainfo_;
 };
 
@@ -1109,7 +1109,7 @@ ObCreateSynonymArg():
   share::schema::ObSynonymInfo synonym_info_;
   common::ObString db_name_;
   common::ObString obj_db_name_;
-  share::schema::ObDependencyInfo dependency_info_;
+  oceanbase::share::schema::ObDependencyInfo dependency_info_;
 };
 
 struct ObDropSynonymArg : ObDDLArg
@@ -6861,7 +6861,7 @@ public:
   share::schema::ObPackageInfo package_info_;
   common::ObSArray<share::schema::ObRoutineInfo> public_routine_infos_;
   share::schema::ObErrorInfo error_info_;
-  common::ObSArray<share::schema::ObDependencyInfo> dependency_infos_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
 };
 
 struct ObAlterPackageArg : public ObDDLArg

@@ -62,7 +62,7 @@ int ObDASCtx::init(const ObPhysicalPlan &plan, ObExecContext &ctx)
       }
     }
   }
-  LOG_TRACE("init das context finish", K(ret), K(normal_locations), K(das_locations), K(table_locs_));
+  LOG_DEBUG("init das context finish", K(ret), K(normal_locations), K(das_locations), K(table_locs_));
   return ret;
 }
 
@@ -121,6 +121,7 @@ ObDASTableLoc *ObDASCtx::get_table_loc_by_id(uint64_t table_loc_id, uint64_t ref
     if ((*tmp_node)->loc_meta_->table_loc_id_ == table_loc_id &&
         (*tmp_node)->loc_meta_->ref_table_id_ == ref_table_id) {
       table_loc = *tmp_node;
+      break;
     }
   }
   return table_loc;
@@ -231,21 +232,24 @@ int ObDASCtx::check_same_server(const ObDASTabletLoc *tablet_loc)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet location is null", KR(ret), KP(tablet_loc));
   } else if (same_server_) {
-    ObDASTabletLoc *first_tablet = NULL;
-    FOREACH_X(table_node, table_locs_, NULL == first_tablet) {
-      ObDASTableLoc *cur_table_loc = *table_node;
-      for (DASTabletLocListIter tablet_node = cur_table_loc->tablet_locs_begin();
-           NULL == first_tablet && tablet_node != cur_table_loc->tablet_locs_end();
-           ++tablet_node) {
-        first_tablet = *tablet_node;
+    if (!same_tablet_addr_.is_valid()) {
+      ObDASTabletLoc *first_tablet = NULL;
+      FOREACH_X(table_node, table_locs_, NULL == first_tablet)
+      {
+        ObDASTableLoc *cur_table_loc = *table_node;
+        for (DASTabletLocListIter tablet_node = cur_table_loc->tablet_locs_begin();
+        NULL == first_tablet && tablet_node != cur_table_loc->tablet_locs_end(); ++tablet_node) {
+          first_tablet = *tablet_node;
+        }
+      }
+      if (OB_ISNULL(first_tablet)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("first tablet location is null", KR(ret), KP(first_tablet));
+      } else {
+        same_tablet_addr_ = first_tablet->server_;
       }
     }
-    if (OB_ISNULL(first_tablet)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("first tablet location is null", KR(ret), KP(first_tablet));
-    } else if (tablet_loc->server_ != first_tablet->server_) {
-      same_server_ = false;
-    }
+    same_server_ = (tablet_loc->server_ == same_tablet_addr_);
   }
   return ret;
 }
@@ -425,7 +429,51 @@ int ObDASCtx::add_candi_table_loc(const ObDASTableLocMeta &loc_meta,
       LOG_WARN("extended tablet loc failed", K(ret));
     }
   }
-  LOG_TRACE("das table loc assign finish", K(candi_table_loc), K(loc_meta), K(table_loc->get_tablet_locs()));
+  LOG_DEBUG("das table loc assign finish", K(candi_table_loc), K(loc_meta), K(table_loc->get_tablet_locs()));
+  return ret;
+}
+
+int ObDASCtx::add_final_table_loc(const ObDASTableLocMeta &loc_meta,
+                                  const ObIArray<ObTabletID> &tablet_ids,
+                                  const ObIArray<ObObjectID> &partition_ids,
+                                  const ObIArray<ObObjectID> &first_level_part_ids)
+{
+  int ret = OB_SUCCESS;
+  ObDASTableLoc *table_loc = nullptr;
+  ObDASTableLocMeta *final_meta = nullptr;
+  LOG_DEBUG("das table loc assign begin", K(loc_meta));
+  if (OB_FAIL(ObDASUtils::build_table_loc_meta(allocator_, loc_meta, final_meta))) {
+    LOG_WARN("build table loc meta failed", K(ret));
+  } else if (OB_FAIL(extended_table_loc(*final_meta, table_loc))) {
+    LOG_WARN("extended table loc failed", K(ret), K(loc_meta));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+    ObDASTabletLoc *tablet_loc = nullptr;
+    ObObjectID first_level_part_id =
+        first_level_part_ids.empty() ? OB_INVALID_ID : first_level_part_ids.at(i);
+    if (OB_FAIL(extended_tablet_loc(*table_loc,
+                                    tablet_ids.at(i),
+                                    tablet_loc,
+                                    partition_ids.at(i),
+                                    first_level_part_id))) {
+      LOG_WARN("extended tablet loc failed", K(ret));
+    }
+  }
+  LOG_DEBUG("das table loc assign finish", K(loc_meta), K(table_loc->get_tablet_locs()));
+
+  if (OB_FAIL(ret)) {
+    clear_all_location_info();
+  }
+  return ret;
+}
+
+int ObDASCtx::build_table_loc_meta(const ObDASTableLocMeta &src,
+                                    ObDASTableLocMeta *&dst)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDASUtils::build_table_loc_meta(allocator_, src, dst))) {
+    LOG_WARN("build table loc meta failed", K(ret));
+  }
   return ret;
 }
 

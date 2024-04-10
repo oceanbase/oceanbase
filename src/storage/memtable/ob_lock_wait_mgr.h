@@ -358,6 +358,7 @@ private:
   DeadlockedSessionArray deadlocked_sessions_[2];
 private:
   RowHolderMapper row_holder_mapper_;
+  int64_t total_wait_node_;
 };
 
 class LockHashHelper {

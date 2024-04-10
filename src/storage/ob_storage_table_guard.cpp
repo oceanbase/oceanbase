@@ -47,7 +47,7 @@ ObStorageTableGuard::ObStorageTableGuard(
     replay_scn_(replay_scn),
     for_multi_source_data_(for_multi_source_data)
 {
-  init_ts_ = ObTimeUtility::current_time();
+  init_ts_ = ObClockGenerator::getClock();
   share::memstore_throttled_alloc() = 0;
 }
 

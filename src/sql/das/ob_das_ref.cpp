@@ -278,7 +278,7 @@ int ObDASRef::execute_all_task()
         LOG_WARN("failed to process all async remote tasks", KR(ret));
       }
       ret = COVER_SUCC(tmp_ret);
-      if (check_rcode_can_retry(ret)) {
+      if (OB_FAIL(ret) && check_rcode_can_retry(ret)) {
         ret = OB_SUCCESS;
       }
       if (OB_SUCC(ret)) {

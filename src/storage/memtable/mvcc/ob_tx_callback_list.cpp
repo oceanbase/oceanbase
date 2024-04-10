@@ -258,7 +258,11 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           ++remove_count;
 
           if (iter->is_need_free()) {
-            callback_mgr_.get_ctx().callback_free(iter);
+            if (iter->is_table_lock_callback()) {
+              callback_mgr_.get_ctx().free_table_lock_callback(iter);
+            } else {
+              callback_mgr_.get_ctx().free_mvcc_row_callback(iter);
+            }
           }
         }
       }

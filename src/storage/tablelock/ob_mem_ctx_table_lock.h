@@ -14,16 +14,25 @@
 #define OCEANBASE_STORAGE_TABLELOCK_OB_MEM_CTX_TABLE_LOCK_
 
 #include "share/scn.h"
+#include "storage/ob_arena_object_pool.h"
+#include "storage/ob_i_table.h"
 #include "storage/memtable/mvcc/ob_mvcc_ctx.h"
 #include "storage/tablelock/ob_table_lock_common.h"
 #include "storage/tablelock/ob_table_lock_callback.h"
-#include "storage/tablelock/ob_arena_object_pool.h"
-#include "storage/ob_i_table.h"
 
 namespace oceanbase
 {
+
+namespace memtable
+{
+class ObITransCallback;
+class ObIMvccCtx;
+};
+
 namespace transaction
 {
+class ObMemtableCtxObjPool;
+
 namespace tablelock
 {
 class ObLockMemtable;
@@ -50,9 +59,8 @@ class ObLockMemCtx
 private:
   static const int64_t MAGIC_NUM = -0xBEEF;
 public:
-  ObLockMemCtx(common::ObIAllocator &allocator) :
-      node_pool_(allocator),
-      callback_pool_(allocator),
+  ObLockMemCtx(memtable::ObMemtableCtx &host) :
+      host_(host),
       lock_list_(),
       is_killed_(false),
       max_durable_scn_(),
@@ -60,7 +68,9 @@ public:
       add_lock_latch_() {}
   ObLockMemCtx() = delete;
   ~ObLockMemCtx() { reset(); }
-  int init(storage::ObTableHandleV2 &handle);
+  int init(ObLSTxCtxMgr *ls_tx_ctx_mgr);
+  // for mintest
+  int init(ObTableHandleV2 &handle);
   int get_lock_memtable(ObLockMemtable *&memtable);
   void reset();
   int add_lock_record(
@@ -95,8 +105,6 @@ public:
       const share::SCN &commit_version,
       const share::SCN &commit_scn);
   int rollback_table_lock(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no);
-  void *alloc_lock_op_callback();
-  void free_lock_op_callback(void *cb);
   int sync_log_succ(const share::SCN &scn);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
   int get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list);
@@ -106,6 +114,8 @@ public:
   // used to check whether the tx is killed by deadlock detector.
   bool is_killed() const
   { return is_killed_; }
+
+  ObOBJLockCallback *create_table_lock_callback(memtable::ObIMvccCtx &ctx, ObLockMemtable *memtable);
 
 public:
  class AddLockGuard
@@ -130,17 +140,17 @@ public:
    ObLockMemCtx *ctx_;
  };
 private:
-  void *alloc_lock_op();
-  void free_lock_op(void *op);
-  void free_lock_op_(void *op);
   void print() const;
   int rollback_table_lock_(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no);
   int commit_table_lock_(const share::SCN &commit_version, const share::SCN &commit_scn);
   void abort_table_lock_();
+
+  void *alloc_lock_link_node_();
+  void *alloc_table_lock_callback_();
+  void free_lock_link_node_(void *ptr);
+  void free_table_lock_callback_(memtable::ObITransCallback *cb);
 private:
-  // for performance.
-  ObArenaObjPool<ObMemCtxLockOpLinkNode, 1> node_pool_;
-  ObArenaObjPool<ObOBJLockCallback, 1> callback_pool_;
+  memtable::ObMemtableCtx &host_;
   // protect the lock_list_
   RWLock list_rwlock_;
   // the lock list of this tx.

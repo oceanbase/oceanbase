@@ -62,14 +62,12 @@ struct ObMtStat
   ObMtStat() { reset(); }
   ~ObMtStat() = default;
   void reset() { memset(this, 0, sizeof(*this));}
-  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count), K_(purge_row_count),
-               K_(purge_queue_count), K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
+  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
+               K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
                K_(release_time), K_(last_print_time), K_(row_size));
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
-  int64_t purge_row_count_;
-  int64_t purge_queue_count_;
   int64_t frozen_time_;
   int64_t ready_for_flush_time_;
   int64_t create_flush_dag_time_;

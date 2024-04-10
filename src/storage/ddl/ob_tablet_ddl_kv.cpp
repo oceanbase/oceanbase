@@ -231,7 +231,6 @@ void ObBlockMetaTree::destroy()
 void ObBlockMetaTree::destroy_tree_value()
 {
   int ret = OB_SUCCESS;
-  const int64_t version = INT64_MAX;
   blocksstable::DDLBtreeIterator tmp_iter;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -239,8 +238,7 @@ void ObBlockMetaTree::destroy_tree_value()
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, datum_utils_),
                                                false,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, datum_utils_),
-                                               false,
-                                               version))) {
+                                               false))) {
     LOG_WARN("locate range failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -320,7 +318,6 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
 {
   int ret = OB_SUCCESS;
   meta_array.reset();
-  const int64_t version = INT64_MAX;
   blocksstable::DDLBtreeIterator tmp_iter;
 
   if (OB_UNLIKELY(!is_inited_)) {
@@ -330,8 +327,7 @@ int ObBlockMetaTree::get_sorted_meta_array(ObIArray<ObDDLBlockMeta> &meta_array)
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, datum_utils_),
                                                false,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, datum_utils_),
-                                               false,
-                                               version))) {
+                                               false))) {
     LOG_WARN("locate range failed", K(ret));
   } else if (OB_FAIL(meta_array.reserve(macro_blocks_.count()))) {
     LOG_WARN("reserve meta array failed", K(ret), K(macro_blocks_.count()));
@@ -419,7 +415,6 @@ int ObBlockMetaTree::lower_bound(const blocksstable::ObDatumRowkey *target_rowke
   int ret = OB_SUCCESS;
   rowkey = nullptr;
   tree_value = nullptr;
-  const int64_t version = INT64_MAX;
   bool find = false;
   blocksstable::DDLBtreeIterator tmp_iter;
   if (OB_ISNULL(target_rowkey)) {
@@ -429,8 +424,7 @@ int ObBlockMetaTree::lower_bound(const blocksstable::ObDatumRowkey *target_rowke
                                                ObDatumRowkeyWrapper(target_rowkey, &datum_utils),
                                                false,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, &datum_utils),
-                                               false,
-                                               version))) {
+                                               false))) {
     LOG_WARN("locate range failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -468,7 +462,6 @@ int ObBlockMetaTree::upper_bound(const blocksstable::ObDatumRowkey *target_rowke
   int ret = OB_SUCCESS;
   rowkey = nullptr;
   tree_value = nullptr;
-  const int64_t version = INT64_MAX;
   bool find = false;
   blocksstable::DDLBtreeIterator tmp_iter;
   if (OB_ISNULL(target_rowkey)) {
@@ -478,8 +471,7 @@ int ObBlockMetaTree::upper_bound(const blocksstable::ObDatumRowkey *target_rowke
                                            ObDatumRowkeyWrapper(target_rowkey, &datum_utils),
                                            true,
                                            ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, &datum_utils),
-                                           false,
-                                           version))) {
+                                           false))) {
     LOG_WARN("locate range failed", K(ret));
   } else {
     while (OB_SUCC(ret)) {
@@ -516,7 +508,6 @@ int ObBlockMetaTree::locate_key(const blocksstable::ObDatumRange &range,
 {
   int ret = OB_SUCCESS;
   cur_tree_value = nullptr;
-  const int64_t version = INT64_MAX;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -533,8 +524,7 @@ int ObBlockMetaTree::locate_key(const blocksstable::ObDatumRange &range,
                                             ObDatumRowkeyWrapper(rowkey, &datum_utils),
                                             true,
                                             ObDatumRowkeyWrapper(rowkey, &datum_utils),
-                                            true,
-                                            version))) {
+                                            true))) {
         LOG_WARN("locate range failed", K(ret));
       } else {
         cur_tree_value = tree_value;
@@ -554,7 +544,6 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
 {
   int ret = OB_SUCCESS;
   cur_tree_value = nullptr;
-  const int64_t version = INT64_MAX;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -606,8 +595,7 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
                                                 ObDatumRowkeyWrapper(start_rowkey /*ObDatumRowkey::MIN_ROWKEY*/, &datum_utils),
                                                 false,
                                                 ObDatumRowkeyWrapper(end_rowkey, &datum_utils),
-                                                false,
-                                                version))) {
+                                                false))) {
             LOG_WARN("locate range failed", K(ret));
           } else if (OB_FAIL(iter.get_next(rowkey_wrapper_left, tree_value_left))) {
             if (OB_ITER_END != ret) {
@@ -630,8 +618,7 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
                                                       ObDatumRowkeyWrapper(start_rowkey, &datum_utils),
                                                       true,
                                                       ObDatumRowkeyWrapper(end_rowkey, &datum_utils),
-                                                      false,
-                                                      version))) {
+                                                      false))) {
             LOG_WARN("locate range failed", K(ret));
           } else {
             cur_tree_value = start_tree_value;
@@ -645,8 +632,7 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
                                                 ObDatumRowkeyWrapper(end_rowkey /*ObDatumRowkey::MAX_ROWKEY*/, &datum_utils),
                                                 false,
                                                 ObDatumRowkeyWrapper(start_rowkey, &datum_utils),
-                                                false,
-                                                version))) {
+                                                false))) {
             LOG_WARN("locate range failed", K(ret));
           } else if (OB_FAIL(iter.get_next(rowkey_wrapper_right, tree_value_right))) {
             if (OB_ITER_END != ret) {
@@ -669,8 +655,7 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
                                                        ObDatumRowkeyWrapper(end_rowkey, &datum_utils),
                                                        true,
                                                        ObDatumRowkeyWrapper(start_rowkey, &datum_utils),
-                                                       false,
-                                                       version))) {
+                                                       false))) {
             LOG_WARN("locate range failed", K(ret));
           } else {
             cur_tree_value = end_tree_value;
@@ -759,7 +744,6 @@ int ObBlockMetaTree::get_next_tree_value(blocksstable::DDLBtreeIterator &iter,
 int ObBlockMetaTree::get_last_rowkey(const ObDatumRowkey *&last_rowkey)
 {
   int ret = OB_SUCCESS;
-  const int64_t version = INT64_MAX;
   last_rowkey = nullptr;
   blocksstable::DDLBtreeIterator tmp_iter;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -770,8 +754,7 @@ int ObBlockMetaTree::get_last_rowkey(const ObDatumRowkey *&last_rowkey)
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MIN_ROWKEY, datum_utils_),
                                                false,
                                                ObDatumRowkeyWrapper(&ObDatumRowkey::MAX_ROWKEY, datum_utils_),
-                                               false,
-                                               version))) {
+                                               false))) {
     LOG_WARN("locate range failed", K(ret));
   } else {
     bool find = false;

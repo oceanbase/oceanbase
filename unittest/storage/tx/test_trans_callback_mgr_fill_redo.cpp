@@ -98,7 +98,7 @@ public:
   ObTestRedoFill():
     mem_ctx_(),
     cb_allocator_(),
-    callback_mgr_(mem_ctx_, cb_allocator_) {}
+    callback_mgr_(mem_ctx_, cb_allocator_, mem_ctx_.mem_ctx_obj_pool_) {}
   virtual void SetUp() override
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);

@@ -165,13 +165,14 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
 
     mt_ctx_.set_trans_ctx(this);
     mt_ctx_.set_for_replay(is_follower_());
-
     if (!GCONF.enable_record_trace_log) {
       tlog_ = NULL;
     } else {
       tlog_ = &trace_log_;
     }
-
+#ifdef ENABLE_DEBUG_LOG
+    tlog_ = &trace_log_;
+#endif
     is_inited_ = true;
   } else {
     // reset immediately
@@ -206,15 +207,10 @@ int ObPartTransCtx::init_for_transfer_move(const ObTxCtxMoveArg &arg)
 int ObPartTransCtx::init_memtable_ctx_(const uint64_t tenant_id, const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  ObTableHandleV2 lock_memtable;
   if (OB_FAIL(mt_ctx_.init(tenant_id))) {
     TRANS_LOG(WARN, "memtable context init fail", KR(ret));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_lock_memtable(lock_memtable))) {
-    TRANS_LOG(WARN, "get lock_memtable fail", KR(ret));
-  } else if (OB_FAIL(mt_ctx_.enable_lock_table(lock_memtable))) {
+  } else if (OB_FAIL(mt_ctx_.enable_lock_table(ls_tx_ctx_mgr_))) {
     TRANS_LOG(WARN, "enable_lock_table fail", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table_guard(*(mt_ctx_.get_tx_table_guard())))) {
-    TRANS_LOG(WARN, "get tx_table guard fail", KR(ret), KPC(this));
   } else {
     // the elr_handler.mt_ctx_ is used to notify the lock_wait_mgr for early lock release txn
     elr_handler_.set_memtable_ctx(&mt_ctx_);
@@ -6869,7 +6865,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
     }
   }
 
-  TRANS_LOG(TRACE, "submit MDS redo", K(ret), K(trans_id_), KPC(log_cb), K(mds_cache_),
+  TRANS_LOG(DEBUG, "submit MDS redo", K(ret), K(trans_id_), KPC(log_cb), K(mds_cache_),
             K(exec_info_.multi_data_source_));
 
   return ret;

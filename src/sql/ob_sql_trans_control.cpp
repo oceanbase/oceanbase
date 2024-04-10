@@ -439,7 +439,10 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
   transaction::ObTxDesc *&tx_ptr = session->get_tx_desc();
   bool is_detector_exist = false;
   int tmp_ret = OB_SUCCESS;
-  if (OB_ISNULL(MTL(share::detector::ObDeadLockDetectorMgr*))) {
+  const int64_t lcl_op_interval = GCONF._lcl_op_interval;
+  if (lcl_op_interval <= 0) {
+    // do nothing
+  } else if (OB_ISNULL(MTL(share::detector::ObDeadLockDetectorMgr*))) {
     tmp_ret = OB_BAD_NULL_ERROR;
     DETECT_LOG(WARN, "MTL ObDeadLockDetectorMgr is NULL", K(tmp_ret), K(tx_ptr->tid()));
   } else if (OB_TMP_FAIL(MTL(share::detector::ObDeadLockDetectorMgr*)->
@@ -795,17 +798,23 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
     share::ObLSID first_ls_id;
     bool local_single_ls_plan = false;
+    bool is_single_tablet = false;
     const bool local_single_ls_plan_maybe = plan->is_local_plan() &&
                                             OB_PHY_PLAN_LOCAL == plan->get_location_type();
     if (local_single_ls_plan_maybe) {
-      if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id))) {
+      if (OB_FAIL(get_first_lsid(das_ctx, first_ls_id, is_single_tablet))) {
       } else if (!first_ls_id.is_valid()) {
         // do nothing
+      // get_ls_read_snapshot may degenerate into get_gts, so it can be used even if the ls is not local.
+      // This is mainly to solve the problem of strong reading performance in some single-tablet scenarios.
       } else if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc,
                                                    session->get_tx_isolation(),
                                                    first_ls_id,
                                                    stmt_expire_ts,
                                                    snapshot))) {
+      } else if (is_single_tablet) {
+        // performance for single tablet scenario
+        local_single_ls_plan = true;
       } else {
         local_single_ls_plan = has_same_lsid(das_ctx, snapshot, first_ls_id);
       }
@@ -935,7 +944,7 @@ uint32_t ObSqlTransControl::get_real_session_id(ObSQLSessionInfo &session)
   return session.get_xid().empty() ? 0 : (session.get_proxy_sessid() != 0 ? session.get_proxy_sessid() : session.get_sessid());
 }
 
-int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid)
+int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &first_lsid, bool &is_single_tablet)
 {
   int ret = OB_SUCCESS;
   const DASTableLocList &table_locs = das_ctx.get_table_loc_list();
@@ -946,6 +955,7 @@ int ObSqlTransControl::get_first_lsid(const ObDASCtx &das_ctx, share::ObLSID &fi
       const ObDASTabletLoc *tablet_loc = tablet_locs.get_first();
       first_lsid = tablet_loc->ls_id_;
     }
+    is_single_tablet = (1 == table_locs.size() && 1 == tablet_locs.size());
   }
   return ret;
 }

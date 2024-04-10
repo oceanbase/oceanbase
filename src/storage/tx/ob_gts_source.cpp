@@ -283,7 +283,7 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
 {
   int ret = OB_SUCCESS;
   int64_t tmp_gts = 0;
-  const MonotonicTs srr = MonotonicTs::current_time();
+  const MonotonicTs cur_ts = MonotonicTs::current_time();
 
   ObTimestampAccess *timestamp_access = MTL(ObTimestampAccess *);
   if (OB_ISNULL(timestamp_access)) {
@@ -297,18 +297,17 @@ int ObGtsSource::get_gts_from_local_timestamp_service_(ObAddr &leader,
         gts_cache_leader_.reset();
     }
   } else {
-    if (leader.is_valid()) {
+    if (gts_cache_leader_ != leader) {
       gts_cache_leader_ = leader;
     }
-    const MonotonicTs tmp_receive_gts_ts = MonotonicTs::current_time();
-    if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(srr,
+    if (OB_FAIL(gts_local_cache_.update_gts_and_check_barrier(cur_ts,
                                                               tmp_gts,
-                                                              tmp_receive_gts_ts))) {
-      TRANS_LOG(WARN, "update gts fail", K(srr), K(gts), K(receive_gts_ts), KR(ret));
+                                                              cur_ts))) {
+      TRANS_LOG(WARN, "update gts fail", K(cur_ts), K(gts), K(receive_gts_ts), KR(ret));
     } else {
       // get gts success, need to overwrite the OB_EAGAIN error code to OB_SUCCESS
       gts = tmp_gts;
-      receive_gts_ts = tmp_receive_gts_ts;
+      receive_gts_ts = cur_ts;
     }
   }
 

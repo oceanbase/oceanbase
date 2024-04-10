@@ -134,7 +134,7 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
         LOG_WARN("project new storage row failed", K(ret));
       } else {
         row = old_row_;
-        LOG_TRACE("DAS update get old row",
+        LOG_DEBUG("DAS update get old row",
                   K_(das_ctdef_->old_row_projector),
                   K_(das_ctdef_->new_row_projector),
                   "table_id", das_ctdef_->table_id_,

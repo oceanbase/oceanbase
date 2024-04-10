@@ -163,6 +163,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
   } else if (OB_FAIL(rollback_sp_msg_mgr_.init(lib::ObMemAttr(tenant_id, "RollbackSPMgr")))) {
     TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
+  } else if (OB_FAIL(tablet_to_ls_cache_.init(tenant_id, &tx_ctx_mgr_))) {
+    TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -176,7 +178,7 @@ int ObTransService::init(const ObAddr &self,
     server_tracer_ = server_tracer;
     rollback_sp_msg_sequence_ = ObTimeUtil::current_time();
     is_inited_ = true;
-    TRANS_LOG(INFO, "transaction service inited success", KP(this), K(tenant_memory_limit));
+    TRANS_LOG(INFO, "transaction service inited success", KPC(this), K(tenant_memory_limit), K_(tablet_to_ls_cache));
   }
   if (OB_SUCC(ret)) {
 #ifdef ENABLE_DEBUG_LOG
@@ -318,6 +320,7 @@ void ObTransService::destroy()
       use_def_ = false;
     }
     gti_source_->destroy();
+    tablet_to_ls_cache_.destroy();
     tx_ctx_mgr_.destroy();
     tx_desc_mgr_.destroy();
     dup_table_rpc_->destroy();
@@ -329,7 +332,7 @@ void ObTransService::destroy()
     }
 #endif
     is_inited_ = false;
-    TRANS_LOG(INFO, "transaction service destroyed", KPC(this));
+    TRANS_LOG(INFO, "transaction service destroyed", KPC(this), K_(tablet_to_ls_cache));
   }
 }
 

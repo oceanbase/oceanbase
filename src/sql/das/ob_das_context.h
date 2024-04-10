@@ -52,6 +52,7 @@ public:
       savepoint_(),
       write_branch_id_(0),
       del_ctx_list_(allocator),
+      same_tablet_addr_(),
       jump_read_group_id_(-1),
       flags_(0)
   {
@@ -93,6 +94,11 @@ public:
                           ObDASTabletLoc *&talet_loc);
   int extended_table_loc(const ObDASTableLocMeta &loc_meta, ObDASTableLoc *&table_loc);
   int add_candi_table_loc(const ObDASTableLocMeta &loc_meta, const ObCandiTableLoc &candi_table_loc);
+  int add_final_table_loc(const ObDASTableLocMeta &loc_meta,
+                          const ObIArray<ObTabletID> &tablet_ids,
+                          const ObIArray<ObObjectID> &partition_ids,
+                          const ObIArray<ObObjectID> &first_level_part_ids);
+  int build_table_loc_meta(const ObDASTableLocMeta &src, ObDASTableLocMeta *&dst);
   int get_das_tablet_mapper(const uint64_t ref_table_id,
                             ObDASTabletMapper &tablet_mapper,
                             const DASTableIDArrayWrap *related_table_ids = nullptr);
@@ -113,6 +119,7 @@ public:
     table_locs_.clear();
     related_tablet_map_.clear();
     external_table_locs_.clear();
+    same_tablet_addr_.reset();
     same_server_ = 1;
   }
   ObDASTaskFactory &get_das_factory() { return das_factory_; }
@@ -124,6 +131,7 @@ public:
   int build_external_table_location(
       uint64_t table_loc_id, uint64_t ref_table_id, common::ObIArray<ObAddr> &locations);
   int build_related_tablet_map(const ObDASTableLocMeta &loc_meta);
+  const ObAddr &same_tablet_addr() const { return same_tablet_addr_; }
 
   TO_STRING_KV(K_(table_locs),
                K_(external_table_locs),
@@ -154,6 +162,7 @@ private:
   int16_t write_branch_id_;
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
+  ObAddr same_tablet_addr_;
 public:
   int64_t jump_read_group_id_;
   union {

@@ -26,10 +26,15 @@
 
 namespace oceanbase
 {
+namespace transaction
+{
+class ObMemtableCtxObjPool;
+}
 namespace common
 {
 class ObTabletID;
 };
+
 namespace memtable
 {
 class ObMemtableCtxCbAllocator;
@@ -186,9 +191,12 @@ public:
     PARALLEL_STMT = -1
   };
 public:
-  ObTransCallbackMgr(ObIMvccCtx &host, ObMemtableCtxCbAllocator &cb_allocator)
+  ObTransCallbackMgr(ObIMvccCtx &host,
+                     ObMemtableCtxCbAllocator &cb_allocator,
+                     transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool)
     : host_(host),
       skip_checksum_(false),
+      mem_ctx_obj_pool_(mem_ctx_obj_pool),
       callback_list_(*this, 0),
       callback_lists_(NULL),
       rwlock_(ObLatchIds::MEMTABLE_CALLBACK_LIST_MGR_LOCK),
@@ -217,8 +225,8 @@ public:
   ~ObTransCallbackMgr() {}
   void reset();
   ObIMvccCtx &get_ctx() { return host_; }
-  void *callback_alloc(const int64_t size);
-  void callback_free(ObITransCallback *cb);
+  void *alloc_mvcc_row_callback();
+  void free_mvcc_row_callback(ObITransCallback *cb);
   int append(ObITransCallback *node);
   void before_append(ObITransCallback *node);
   void after_append(ObITransCallback *node, const int ret_code);
@@ -366,6 +374,7 @@ private:
   // for incomplete replay, checksum is not need
   // for tx is aborted, checksum is not need
   bool skip_checksum_;
+  transaction::ObMemtableCtxObjPool &mem_ctx_obj_pool_;
   ObTxCallbackList callback_list_;   // default
   ObTxCallbackList *callback_lists_; // extends for parallel write
   common::SpinRWLock rwlock_;

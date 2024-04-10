@@ -33,56 +33,66 @@ class ObMvccRow;
 
 typedef keybtree::ObKeyBtree<ObStoreRowkeyWrapper, ObMvccRow *> ObMemtableKeyBtree;
 
+// Interface for the memtable iterator. You can iter the desired key and value
+// through the iterator. Among this, the key is ObMemtableKey and the value is
+// ObMvccRow.
 class ObIQueryEngineIterator
 {
 public:
   ObIQueryEngineIterator() {}
   virtual ~ObIQueryEngineIterator() {}
 public:
-  virtual int next(const bool skip_purge_memtable) = 0;
-  virtual int next_internal(const bool skip_purge_memtable) = 0;
+  // next() will iterate to the next nonempty ObMvccRow, so user can expect the
+  // real mvcc data from the value.
+  virtual int next() = 0;
+  // next_internal() will directly iterate to the next ObMvccRow, so there may be
+  // no mvcc data on it and use it carefully!!!
+  virtual int next_internal() = 0;
+  // get_key() fetch the ObMemtableKey currently iterated to
   virtual const ObMemtableKey *get_key() const = 0;
+  // get_value() fetch the ObMvccRow currently iterated to
   virtual ObMvccRow *get_value() const = 0;
-  virtual void reset() = 0;
-  virtual void set_version(int64_t version) = 0;
-  virtual uint8_t get_iter_flag() const = 0;
+  // is_reverse_scan() return the order of the scan
   virtual bool is_reverse_scan() const = 0;
+  // reset() will reset the iteration, you need restart init the iterator
+  virtual void reset() = 0;
 };
 
+// ObQueryEngine consists of hashtable and btree. We will maintain key and value
+// into both of the hashtable and btree and use them to complete efficient
+// point select and range query operations
 class ObQueryEngine
 {
-#define NOT_PLACE_HOLDER(ptr) OB_UNLIKELY(PLACE_HOLDER != ptr)
-
 public:
-  enum {
-    INIT_TABLE_INDEX_COUNT = (1 << 10),
-    MAX_SAMPLE_ROW_COUNT = 500
-  };
+  // btree for range scan
   typedef keybtree::ObKeyBtree<ObStoreRowkeyWrapper, ObMvccRow *> KeyBtree;
-  typedef keybtree::BtreeIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeIterator;
+  // Used for data allocation
   typedef keybtree::BtreeNodeAllocator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeNodeAllocator;
+  // Used for query
+  typedef keybtree::BtreeIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeIterator;
+  // Used only for estimation.
   typedef keybtree::BtreeRawIterator<ObStoreRowkeyWrapper, ObMvccRow *> BtreeRawIterator;
+  // hashtable for point select
   typedef ObMtHash KeyHash;
 
+  // ObQueryEngine Iterator implements the iterator interface
   template <typename BtreeIterator>
   class Iterator : public ObIQueryEngineIterator
   {
   public:
-    Iterator(): value_(NULL), iter_flag_(0), version_(0) {}
+    Iterator(): value_(NULL) {}
     ~Iterator() {}
   public:
-    void set_version(int64_t version) { version_ = version; }
-    int next(const bool skip_purge_memtable)
+    int next()
     {
       int ret = common::OB_SUCCESS;
-      while (OB_SUCC(next_internal(skip_purge_memtable))
-             && value_->is_empty())
-// TODO: handora.qc
-//             && !value_->row_lock_.is_locked())
-        ;
+      while (OB_SUCC(next_internal())
+             && value_->is_empty()) {
+        // get next non-empty mvcc row
+      }
       return ret;
     }
-    int next_internal(const bool skip_purge_memtable)
+    int next_internal()
     {
       int ret = common::OB_SUCCESS;
       ObStoreRowkeyWrapper key_wrapper(key_.get_rowkey());
@@ -93,13 +103,8 @@ public:
       } else {
         key_.encode(key_wrapper.get_rowkey());
         BTREE_ASSERT(((uint64_t)value_ & 7ULL) == 0);
-        iter_flag_ = 0;
         if (OB_ISNULL(value_)) {
           ret = common::OB_ITER_END;
-        } else {
-          if (skip_purge_memtable || value_->is_partial(version_)) {
-            iter_flag_ |= STORE_ITER_ROW_PARTIAL;
-          }
         }
       }
       if (common::OB_ITER_END == ret) {
@@ -115,18 +120,13 @@ public:
       btree_iter_.reset();
       key_.reset();
       value_ = nullptr;
-      iter_flag_ = 0;
-      version_ = 0;
     }
     BtreeIterator &get_read_handle() { return btree_iter_; }
-    inline uint8_t get_iter_flag() const { return iter_flag_; }
   private:
     DISALLOW_COPY_AND_ASSIGN(Iterator);
     BtreeIterator btree_iter_;
     ObMemtableKey key_;
     ObMvccRow *value_;
-    uint8_t iter_flag_;
-    int64_t version_;
   };
 
   template <typename BtreeIterator>
@@ -142,27 +142,43 @@ public:
   };
 
 public:
-  enum { ESTIMATE_CHILD_COUNT_THRESHOLD = 1024, MAX_RANGE_SPLIT_COUNT = 1024 * 1024};
+  enum {
+    MAX_SAMPLE_ROW_COUNT = 500,
+    ESTIMATE_CHILD_COUNT_THRESHOLD = 1024,
+    MAX_RANGE_SPLIT_COUNT = 1024 * 1024
+  };
+
   explicit ObQueryEngine(ObIAllocator &memstore_allocator)
-      : is_inited_(false),
-        is_expanding_(false),
-        tenant_id_(common::OB_SERVER_TENANT_ID),
-        memstore_allocator_(memstore_allocator),
-        btree_allocator_(memstore_allocator_),
-        keybtree_(btree_allocator_),
-        keyhash_(memstore_allocator_) {}
+    : is_inited_(false),
+    memstore_allocator_(memstore_allocator),
+    btree_allocator_(memstore_allocator_),
+    keybtree_(btree_allocator_),
+    keyhash_(memstore_allocator_) {}
   ~ObQueryEngine() { destroy(); }
-  int init(const uint64_t tenant_id);
+  int init();
   void destroy();
   void pre_batch_destroy_keybtree();
+
+  // ===================== Ob Query Engine User Operation Interface =====================
+  // The concurrency control alogorithm of query engine is as following steps:
+  // 1. Firstly, we use the atomic hashtable to ensure that only one thread can
+  //    create the ObMvccRow and support efficient point select(through set())
+  // 2. Then we can operate the ObMvccRow according to the operation semantics
+  // 3. After above operation, we need atomically insert the ObMvccRow into the
+  //    btree to support the efficient range query(through ensure())
   int set(const ObMemtableKey *key, ObMvccRow *value);
-  int get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
   int ensure(const ObMemtableKey *key, ObMvccRow *value);
-  int check_and_purge(const ObMemtableKey *key, ObMvccRow *row, int64_t version, bool &purged);
-  int purge(const ObMemtableKey *key, int64_t version);
+  // get() will use the hashtable to support fast point select
+  int get(const ObMemtableKey *parameter_key, ObMvccRow *&row, ObMemtableKey *returned_key);
+  // scan() will use the btree to support fast range query
   int scan(const ObMemtableKey *start_key, const bool start_exclude, const ObMemtableKey *end_key,
-           const bool end_exclude, const int64_t version, ObIQueryEngineIterator *&ret_iter);
+           const bool end_exclude, ObIQueryEngineIterator *&ret_iter);
   void revert_iter(ObIQueryEngineIterator *iter);
+
+
+  // ===================== Ob Query Engine Estimation =====================
+  // Estimate the size and row count of the memtable, the estimzation is not
+  // particularly precise and it is mainly used for sql optimizor
   int estimate_size(const ObMemtableKey *start_key,
                     const ObMemtableKey *end_key,
                     int64_t& total_bytes,
@@ -176,21 +192,32 @@ public:
                          const ObMemtableKey *end_key, const int end_exclude,
                          int64_t &logical_row_count, int64_t &physical_row_count);
 
+  // ===================== Ob Query Engine Debug Tool =====================
+  // Check whether all nodes in the btree is cleanout or delay_cleanout and
+  // return the count of the nodes. It is currenly used for case test, use it
+  // carefully!!!
+  void check_cleanout(bool &is_all_cleanout,
+                      bool &is_all_delay_cleanout,
+                      int64_t &count);
+  // Dump the hash table and btree to the file.
+  void dump2text(FILE *fd);
   int dump_keyhash(FILE *fd) const;
   int dump_keybtree(FILE *fd);
+  // Btree statistics used for virtual table
   int64_t hash_size() const;
   int64_t hash_alloc_memory() const;
   int64_t btree_size() const;
   int64_t btree_alloc_memory() const;
-  void check_cleanout(bool &is_all_cleanout,
-                      bool &is_all_delay_cleanout,
-                      int64_t &count);
-  void dump2text(FILE *fd);
 private:
-  int sample_rows(Iterator<BtreeRawIterator> *iter, const ObMemtableKey *start_key,
-                  const int start_exclude, const ObMemtableKey *end_key, const int end_exclude,
+  int sample_rows(Iterator<BtreeRawIterator> *iter,
+                  const ObMemtableKey *start_key,
+                  const int start_exclude,
+                  const ObMemtableKey *end_key,
+                  const int end_exclude,
                   const transaction::ObTransID &tx_id,
-                  int64_t &logical_row_count, int64_t &physical_row_count, double &ratio);
+                  int64_t &logical_row_count,
+                  int64_t &physical_row_count,
+                  double &ratio);
   int init_raw_iter_for_estimate(Iterator<BtreeRawIterator>*& iter,
                                  const ObMemtableKey *start_key,
                                  const ObMemtableKey *end_key);
@@ -215,15 +242,18 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryEngine);
+
   bool is_inited_;
-  bool is_expanding_;
-  uint64_t tenant_id_;
+  // allocator for keyhash and btree
   ObIAllocator &memstore_allocator_;
   BtreeNodeAllocator btree_allocator_;
+  // The btree optimized for fast range scan
+  KeyBtree keybtree_;
+  // The hashtable optimized for fast point select
+  KeyHash keyhash_;
+  // Iterator allocator for read and estimation
   IteratorAlloc<BtreeIterator> iter_alloc_;
   IteratorAlloc<BtreeRawIterator> raw_iter_alloc_;
-  KeyBtree keybtree_;
-  KeyHash keyhash_;
 };
 
 } // namespace memtable

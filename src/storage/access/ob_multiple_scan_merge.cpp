@@ -246,7 +246,7 @@ int ObMultipleScanMerge::locate_blockscan_border()
       if (OB_ISNULL(iter)) {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected null iter", K(ret), K(iter));
-      } else if (OB_FAIL(iter->get_next_row_ext(item.row_, item.iter_flag_))) {
+      } else if (OB_FAIL(iter->get_next_row(item.row_))) {
         if (OB_ITER_END != ret) {
           LOG_WARN("Failed to get next row from iterator", K(ret), "index", iter_idx, "iterator", *iter);
         } else {
@@ -277,7 +277,7 @@ int ObMultipleScanMerge::locate_blockscan_border()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("item or row is null", K(ret), KP(top_item));
       } else {
-        LOG_DEBUG("get top item", K(top_item->iter_idx_), KPC(top_item->row_), K(top_item->iter_flag_));
+        LOG_DEBUG("get top item", K(top_item->iter_idx_), KPC(top_item->row_));
         const int64_t rowkey_cnt = access_param_->iter_param_.get_schema_rowkey_count();
         if (OB_FAIL(border_key.assign(top_item->row_->storage_datums_, rowkey_cnt))) {
           LOG_WARN("Fail to assign border key", K(ret), K(rowkey_cnt));
@@ -347,7 +347,7 @@ int ObMultipleScanMerge::supply_consume()
     if (NULL == iter) {
       ret = common::OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "Unexpected error", K(ret), K(iter));
-    } else if (OB_FAIL(iter->get_next_row_ext(item.row_, item.iter_flag_))) {
+    } else if (OB_FAIL(iter->get_next_row(item.row_))) {
       if (OB_ITER_END != ret) {
         if (OB_PUSHDOWN_STATUS_CHANGED != ret) {
           STORAGE_LOG(WARN, "failed to get next row from iterator", K(ret), "index", iter_idx, "iterator", *iter);
@@ -416,7 +416,7 @@ int ObMultipleScanMerge::inner_get_next_row(ObDatumRow &row)
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "Unexpected null iter", K(ret), K_(consumer_cnt));
         } else if (iter->can_blockscan()) {
-          if (OB_FAIL(iter->get_next_row_ext(item.row_, item.iter_flag_))) {
+          if (OB_FAIL(iter->get_next_row(item.row_))) {
             if (OB_ITER_END == ret) {
               consumer_cnt_ = 0;
               ret = OB_SUCCESS;
@@ -506,7 +506,7 @@ int ObMultipleScanMerge::inner_merge_row(ObDatumRow &row)
       STORAGE_LOG(WARN, "item or row is null", K(ret), KP(top_item));
     } else {
       STORAGE_LOG(DEBUG, "top_item", K(top_item->iter_idx_), K(*top_item->row_), K(row),
-          K(has_same_rowkey), K(first_row), K(top_item->iter_flag_));
+                  K(has_same_rowkey), K(first_row));
     }
 
     if (OB_SUCC(ret)) {
