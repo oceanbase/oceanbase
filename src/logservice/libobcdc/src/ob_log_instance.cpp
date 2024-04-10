@@ -25,6 +25,7 @@
 #include "sql/ob_sql_init.h"                // init_sql_factories
 #include "observer/omt/ob_tenant_timezone_mgr.h"  // OTTZ_MGR
 #include "common/ob_clock_generator.h"
+#include "lib/alloc/ob_malloc_sample_struct.h"
 
 #include "ob_log_common.h"
 #include "ob_log_config.h"                // ObLogConfig
@@ -58,6 +59,7 @@
 #include "ob_log_tenant_mgr.h"            // IObLogTenantMgr
 #include "ob_log_rocksdb_store_service.h" // RocksDbStoreService
 #include "ob_cdc_auto_config_mgr.h"       // CDC_CFG_MGR
+#include "ob_cdc_malloc_sample_info.h"    // ObCDCMallocSampleInfo
 
 #include "ob_log_trace_id.h"
 #include "share/ob_simple_mem_limit_getter.h"
@@ -2184,6 +2186,7 @@ void ObLogInstance::timer_routine()
             print_refresh_mode(refresh_mode_),
             print_fetching_mode(fetching_mode_));
         print_tenant_memory_usage_();
+        dump_malloc_sample_();
         if (is_online_refresh_mode(refresh_mode_)) {
           schema_getter_->print_stat_info();
         }
@@ -2469,6 +2472,32 @@ void ObLogInstance::print_tenant_memory_usage_()
         mallocator->print_tenant_ctx_memory_usage(tenant_id);
       }
     }
+  }
+}
+
+void ObLogInstance::dump_malloc_sample_()
+{
+  int ret = OB_SUCCESS;
+  static int64_t last_print_ts = 0;
+  lib::ObMallocSampleMap malloc_sample_map;
+  ObCDCMallocSampleInfo sample_info;
+  const int64_t cur_time = get_timestamp();
+  const int64_t print_interval = TCONF.print_mod_memory_usage_interval.get();
+
+  if (OB_LIKELY(last_print_ts + print_interval > cur_time)) {
+  } else if (OB_FAIL(malloc_sample_map.create(1000, "MallocInfoMap", "MallocInfoMap"))) {
+    LOG_WARN("init malloc_sample_map failed", KR(ret));
+  } else if (OB_FAIL(ObMemoryDump::get_instance().load_malloc_sample_map(malloc_sample_map))) {
+    LOG_WARN("load_malloc_sample_map failed", KR(ret));
+  } else if (OB_FAIL(sample_info.init(malloc_sample_map))) {
+    LOG_ERROR("init ob_cdc_malloc_sample_info failed", KR(ret));
+  } else {
+    const static int64_t top_mem_usage_mod_print_num = 5;
+    const int64_t print_mod_memory_usage_threshold = TCONF.print_mod_memory_usage_threshold.get();
+    const char *print_mod_memory_usage_label = TCONF.print_mod_memory_usage_label;
+    sample_info.print_topk(top_mem_usage_mod_print_num);
+    sample_info.print_with_filter(print_mod_memory_usage_label, print_mod_memory_usage_threshold);
+    last_print_ts = cur_time;
   }
 }
 
