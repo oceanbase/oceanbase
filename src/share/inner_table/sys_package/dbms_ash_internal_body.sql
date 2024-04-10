@@ -61,6 +61,10 @@ CREATE OR REPLACE PACKAGE BODY dbms_ash_internal AS
   BEGIN
     RETVAL := 'SELECT * FROM    (' || IN_MEMORY_ASH_VIEW_SQL ||
               '            and  a.sample_time between :ash_mem_btime and :ash_mem_etime ' ||
+              '  AND   (:ash_svr_ip IS NULL ' ||
+              '         OR svr_ip like :ash_svr_ip) ' ||
+              '  AND   (:ash_svr_port IS NULL ' ||
+              '         OR svr_port like :ash_svr_port) ' ||
               '         ) unified_ash ' ||
               'WHERE  sample_time between :ash_begin_time ' ||
               '                        and :ash_end_time ' ||

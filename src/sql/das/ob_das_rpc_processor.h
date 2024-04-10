@@ -45,7 +45,8 @@ public:
       is_enable_sqlstat_(false),
       sqlstat_key_(),
       sqlstat_record_(),
-      bkgd_ash_stat_sess_id_(0)
+      bkgd_ash_stat_sess_id_(0),
+      sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
   {
     RpcProcessor::set_preserve_recv_data();
   }
@@ -70,6 +71,8 @@ protected:
   ObSqlStatRecordKey sqlstat_key_;
   ObExecutingSqlStatRecord sqlstat_record_;
   int64_t bkgd_ash_stat_sess_id_;
+  ObSessionStatEstGuard sess_stat_guard_;
+
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {
