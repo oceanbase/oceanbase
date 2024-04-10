@@ -258,7 +258,6 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
 
   // fetch new data from storage layer.
   while (OB_SUCC(ret) && MIN_GROUP_INDEX == available_group_idx_) {
-    reset_expr_datum_ptr();
     if (OB_FAIL(iter_tree_->get_next_rows(storage_count, capacity))) {
       if (OB_ITER_END == ret) {
         if (storage_count > 0) {

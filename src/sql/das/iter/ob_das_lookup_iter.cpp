@@ -80,6 +80,8 @@ int ObDASLookupIter::inner_release()
 
 void ObDASLookupIter::reset_lookup_state()
 {
+  lookup_rowkey_cnt_ = 0;
+  lookup_row_cnt_ = 0;
   if (OB_NOT_NULL(data_table_iter_)) {
     data_table_iter_->reuse();
   }
@@ -98,8 +100,6 @@ int ObDASLookupIter::inner_get_next_row()
   do {
     switch (state_) {
       case INDEX_SCAN: {
-        lookup_rowkey_cnt_ = 0;
-        lookup_row_cnt_ = 0;
         reset_lookup_state();
         while (OB_SUCC(ret) && !index_end_ && lookup_rowkey_cnt_ < default_row_batch_cnt) {
           if (OB_FAIL(index_table_iter_->get_next_row())) {
@@ -178,8 +178,6 @@ int ObDASLookupIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   do {
     switch (state_) {
       case INDEX_SCAN: {
-        lookup_rowkey_cnt_ = 0;
-        lookup_row_cnt_ = 0;
         reset_lookup_state();
         int64_t storage_count = 0;
         int64_t index_capacity = 0;

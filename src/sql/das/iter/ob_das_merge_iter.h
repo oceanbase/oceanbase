@@ -40,6 +40,52 @@ public:
   }
 };
 
+class MergeStoreRows
+{
+public:
+  MergeStoreRows()
+    : exprs_(nullptr),
+      eval_ctx_(nullptr),
+      group_id_idx_(OB_INVALID_INDEX),
+      max_size_(1),
+      saved_size_(0),
+      cur_idx_(OB_INVALID_INDEX),
+      store_rows_(nullptr)
+  {}
+  MergeStoreRows(const common::ObIArray<ObExpr*> *exprs,
+                 ObEvalCtx *eval_ctx,
+                 int64_t group_id_idx,
+                 int64_t max_size)
+    : exprs_(exprs),
+      eval_ctx_(eval_ctx),
+      group_id_idx_(group_id_idx),
+      max_size_(max_size),
+      saved_size_(0),
+      cur_idx_(OB_INVALID_INDEX),
+      store_rows_(nullptr)
+  {}
+
+  int init(common::ObIAllocator &allocator);
+  int save(bool is_vectorized, int64_t size);
+  int to_expr(bool is_vectorized, int64_t size);
+  bool have_data() const { return cur_idx_ != OB_INVALID_INDEX && cur_idx_ < saved_size_; }
+  int64_t cur_group_idx();
+  void reuse();
+  void reset();
+  TO_STRING_KV(K_(saved_size),
+               K_(cur_idx));
+
+public:
+  typedef ObChunkDatumStore::LastStoredRow LastDASStoreRow;
+  const common::ObIArray<ObExpr*> *exprs_;
+  ObEvalCtx *eval_ctx_;
+  int64_t group_id_idx_;
+  int64_t max_size_;
+  int64_t saved_size_;
+  int64_t cur_idx_;
+  LastDASStoreRow *store_rows_;
+};
+
 class ObDASMergeIter : public ObDASIter
 {
 public:
@@ -62,7 +108,7 @@ public:
       group_id_idx_(OB_INVALID_INDEX),
       need_prepare_sort_merge_info_(false),
       merge_state_arr_(),
-      store_rows_(nullptr)
+      merge_store_rows_arr_()
   {}
   virtual ~ObDASMergeIter() {}
 
@@ -136,7 +182,7 @@ private:
   char das_ref_buf_[sizeof(ObDASRef)];
   common::ObArenaAllocator *iter_alloc_;
   char iter_alloc_buf_[sizeof(common::ObArenaAllocator)];
-  typedef common::ObSEArray<ObIDASTaskOp*, 16> DasTaskArray;
+  typedef common::ObSEArray<ObIDASTaskOp*, 8> DasTaskArray;
   DasTaskArray das_tasks_arr_;
   int (ObDASMergeIter::*get_next_row_)();
   int (ObDASMergeIter::*get_next_rows_)(int64_t&, int64_t);
@@ -154,7 +200,7 @@ private:
      : row_store_have_data_(false),
        das_task_iter_end_(false)
     {}
-    void reset()
+    void reuse()
     {
       row_store_have_data_ = false;
       das_task_iter_end_ = false;
@@ -162,12 +208,13 @@ private:
     TO_STRING_KV(K_(row_store_have_data),
                  K_(das_task_iter_end));
   };
-  typedef common::ObSEArray<MergeState, 16> MergeStateArray;
-  typedef ObChunkDatumStore::LastStoredRow LastDASStoreRow;
+
   int64_t group_id_idx_;
   bool need_prepare_sort_merge_info_;
+  typedef common::ObSEArray<MergeState, 8> MergeStateArray;
+  typedef common::ObSEArray<MergeStoreRows, 8> MergeStoreRowsArray;
   MergeStateArray merge_state_arr_;
-  LastDASStoreRow *store_rows_;
+  MergeStoreRowsArray merge_store_rows_arr_;
   /********* SORT MERGE END *********/
 };
 

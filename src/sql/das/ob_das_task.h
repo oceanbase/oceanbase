@@ -137,6 +137,8 @@ public:
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
+  // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
+  // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
   const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
   inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
@@ -252,7 +254,9 @@ protected:
   };
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  const ObDASTabletLoc *tablet_loc_; //does not need serialize it
+  // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
+  // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
+  const ObDASTabletLoc *tablet_loc_;
   common::ObIAllocator &op_alloc_;
   //in DML DAS Task,related_ctdefs_ means related local index ctdefs
   //in Scan DAS Task, related_ctdefs_ have only one element, means the lookup ctdef
