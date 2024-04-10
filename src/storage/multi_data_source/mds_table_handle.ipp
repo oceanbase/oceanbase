@@ -14,6 +14,7 @@
 #define STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_IPP
 
 #include "lib/ob_errno.h"
+#include "storage/multi_data_source/mds_node.h"
 #ifndef STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_H_IPP
 #define STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_H_IPP
 #include "mds_table_handle.h"
@@ -235,6 +236,30 @@ int MdsTableHandle::get_latest(OP &&read_op, bool &is_committed, const int64_t r
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
         MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id), K(read_seq));
       }
+    }
+  }
+  return ret;
+}
+
+template <typename OP>
+struct GetTabletStatusNodeOpWrapper {
+  GetTabletStatusNodeOpWrapper(OP &op) : op_(op) {}
+  int operator()(void *tablet_status_node) {
+    return op_(*reinterpret_cast<const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData> *>(tablet_status_node));
+  }
+  OP &op_;
+};
+template <typename OP,
+          typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP,
+                   int(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData>&)), bool>::type>
+int MdsTableHandle::get_tablet_status_node(OP &&read_op, const int64_t read_seq) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  ObFunction<int(void *)> function = GetTabletStatusNodeOpWrapper<OP>(read_op);
+  if (OB_FAIL(p_mds_table_base_->get_tablet_status_node(function, read_seq))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(read_seq));
     }
   }
   return ret;

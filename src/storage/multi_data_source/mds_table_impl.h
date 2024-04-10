@@ -118,6 +118,8 @@ public:
                          ObFunction<int(void *)> &op,
                          bool &is_committed,
                          const int64_t read_seq) const override;
+  virtual int get_tablet_status_node(ObFunction<int(void *)> &op,
+                                     const int64_t read_seq) const override;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,
