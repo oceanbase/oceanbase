@@ -442,9 +442,9 @@ struct ObTableStatParam {
     return global_data_part_id_ != INVALID_GLOBAL_PART_ID;
   }
 
-  bool is_specify_partition_gather() const;
+  bool is_specify_partition() const;
 
-  bool is_specify_column_gather() const;
+  bool is_specify_column() const;
 
   uint64_t tenant_id_;
 

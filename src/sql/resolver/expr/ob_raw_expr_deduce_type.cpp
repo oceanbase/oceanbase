@@ -1616,7 +1616,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           } else if (ob_is_oracle_datetime_tc(from_type) || ob_is_interval_tc(from_type)
                      || ob_is_float_tc(from_type) || ob_is_double_tc(from_type)) {
             keep_from_type = true;
-          } else if (ob_is_oracle_numeric_type(from_type)) {
+          } else if (ob_is_oracle_numeric_type(from_type) || ob_is_null(from_type)) {
             keep_from_type = false;
           } else {
             ret = OB_ERR_ARGUMENT_SHOULD_NUMERIC_DATE_DATETIME_TYPE;

@@ -738,6 +738,7 @@ int ObOptStatSqlService::delete_table_stat(const uint64_t exec_tenant_id,
                     where_str.string().ptr()))) {
     LOG_WARN("failed to append sql", K(ret));
   }
+  LOG_TRACE("delete table stat", K(delete_tstat), K(delete_cstat), K(delete_hist));
   if (OB_SUCC(ret)) {
     if (OB_FAIL(trans.start(mysql_proxy_, exec_tenant_id))) {
       LOG_WARN("fail to start transaction", K(ret));

@@ -801,7 +801,7 @@ int ObDbmsStats::delete_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get no invalidate", K(ret));
   } else if (!params.at(10).is_null() && OB_FAIL(params.at(10).get_bool(stat_param.force_))) {
     LOG_WARN("failed to get no invalidate", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && params.count() > 11 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else if (!cascade_columns) {
@@ -886,7 +886,7 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
                                               ctx.get_my_session()->get_dtc_params(),
                                               col_stat_type))) {
     LOG_WARN("failed to convert vaild ident name", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && params.count() > 11 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else if (0 == col_stat_type.case_compare("ALL")) {
@@ -962,7 +962,7 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
           LOG_WARN("failed to get no invalidate", K(ret));
         } else if (!params.at(5).is_null() && OB_FAIL(params.at(5).get_bool(stat_param.force_))) {
           LOG_WARN("failed to get no invalidate", K(ret));
-        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+        } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && params.count() > 6 &&
                    OB_FAIL(parse_degree_option(ctx, params.at(6), stat_param))) {
           LOG_WARN("parse degree param failed", K(ret));
         } else {
@@ -1049,7 +1049,7 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
     LOG_WARN("failed to get no invalidate", K(ret));
   } else if (!params.at(9).is_null() && OB_FAIL(params.at(9).get_bool(index_stat_param.force_))) {
     LOG_WARN("failed to get force", K(ret));
-  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 && params.count() > 11 &&
              OB_FAIL(parse_degree_option(ctx, params.at(11), index_stat_param))) {
     LOG_WARN("parse degree param failed", K(ret));
   } else {

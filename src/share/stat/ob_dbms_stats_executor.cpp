@@ -1021,8 +1021,9 @@ int ObDbmsStatsExecutor::delete_table_stats(ObExecContext &ctx,
   ObSEArray<int64_t, 4> no_stats_partition_ids;
   ObSEArray<uint64_t, 4> part_stattypes;
   uint64_t table_id = param.table_id_;
+  bool is_specify_partition = param.is_specify_partition();
   if (param.global_stat_param_.need_modify_) {
-    if (OB_FAIL(part_ids.push_back(param.global_part_id_))) {
+    if (is_specify_partition && OB_FAIL(part_ids.push_back(param.global_part_id_))) {
       LOG_WARN("failed to push back partition id", K(ret));
     } else if (param.stattype_ == NULL_TYPE) {
       /*do nothing*/
@@ -1034,7 +1035,7 @@ int ObDbmsStatsExecutor::delete_table_stats(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && param.part_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.part_infos_.count(); ++i) {
-      if (OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
+      if (is_specify_partition && OB_FAIL(part_ids.push_back(param.part_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back partition id", K(ret));
       } else if (param.part_infos_.at(i).part_stattype_ == NULL_TYPE) {
         /*do nothing*/
@@ -1047,7 +1048,7 @@ int ObDbmsStatsExecutor::delete_table_stats(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && param.subpart_stat_param_.need_modify_) {
     for (int64_t i = 0; OB_SUCC(ret) && i < param.subpart_infos_.count(); ++i) {
-      if (OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
+      if (is_specify_partition && OB_FAIL(part_ids.push_back(param.subpart_infos_.at(i).part_id_))) {
         LOG_WARN("failed to push back partition id", K(ret));
       } else if (param.subpart_infos_.at(i).part_stattype_ == NULL_TYPE) {
         /*do nothing*/

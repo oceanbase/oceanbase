@@ -258,7 +258,7 @@ int ObOptStatGatherParam::assign(const ObOptStatGatherParam &other)
   return ret;
 }
 
-bool ObTableStatParam::is_specify_partition_gather() const
+bool ObTableStatParam::is_specify_partition() const
 {
   bool is_specify = false;
   if (part_level_ == share::schema::PARTITION_LEVEL_ZERO) {
@@ -272,7 +272,7 @@ bool ObTableStatParam::is_specify_partition_gather() const
   return is_specify;
 }
 
-bool ObTableStatParam::is_specify_column_gather() const
+bool ObTableStatParam::is_specify_column() const
 {
   bool is_specify = false;
   for (int64_t i = 0; !is_specify && i < column_params_.count(); ++i) {
