@@ -567,6 +567,8 @@ public:
   static int all_import_table_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_error_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_perf_diagnose_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_schema(share::schema::ObTableSchema &table_schema);
@@ -996,6 +998,8 @@ public:
   static int all_virtual_column_group_mapping_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_group_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_group_mapping_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_storage_ha_error_diagnose_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_storage_ha_perf_diagnose_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_clone_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_clone_job_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_checkpoint_diagnose_memtable_info_schema(share::schema::ObTableSchema &table_schema);
@@ -2401,6 +2405,8 @@ public:
   static int all_import_table_job_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_error_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_perf_diagnose_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2686,6 +2692,8 @@ public:
   static int all_import_table_job_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_import_table_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_error_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_storage_ha_perf_diagnose_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_clone_job_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ncomp_dll_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3180,6 +3188,8 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_import_table_job_history_schema,
   ObInnerTableSchema::all_import_table_task_schema,
   ObInnerTableSchema::all_import_table_task_history_schema,
+  ObInnerTableSchema::all_storage_ha_error_diagnose_history_schema,
+  ObInnerTableSchema::all_storage_ha_perf_diagnose_history_schema,
   ObInnerTableSchema::all_clone_job_schema,
   ObInnerTableSchema::all_clone_job_history_schema,
   ObInnerTableSchema::all_ncomp_dll_schema,
@@ -3612,6 +3622,8 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_column_group_mapping_schema,
   ObInnerTableSchema::all_virtual_column_group_history_schema,
   ObInnerTableSchema::all_virtual_column_group_mapping_history_schema,
+  ObInnerTableSchema::all_virtual_storage_ha_error_diagnose_schema,
+  ObInnerTableSchema::all_virtual_storage_ha_perf_diagnose_schema,
   ObInnerTableSchema::all_virtual_clone_job_schema,
   ObInnerTableSchema::all_virtual_clone_job_history_schema,
   ObInnerTableSchema::all_virtual_checkpoint_diagnose_memtable_info_schema,
@@ -9683,7 +9695,9 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_HA_DIAGNOSE_TID,
   OB_ALL_VIRTUAL_IO_SCHEDULER_TID,
   OB_ALL_VIRTUAL_TX_DATA_TID,
-  OB_ALL_VIRTUAL_STORAGE_LEAK_INFO_TID,  };
+  OB_ALL_VIRTUAL_STORAGE_LEAK_INFO_TID,
+  OB_ALL_VIRTUAL_STORAGE_HA_ERROR_DIAGNOSE_TID,
+  OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID,  };
 
 const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PROCESSLIST_TID,
@@ -12319,6 +12333,22 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_TID,
+    OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_STORAGE_HA_ERROR_DIAGNOSE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_storage_ha_error_diagnose_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_storage_ha_error_diagnose_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_STORAGE_HA_PERF_DIAGNOSE_HISTORY_TID,
+    OB_ALL_STORAGE_HA_PERF_DIAGNOSE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_STORAGE_HA_PERF_DIAGNOSE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_storage_ha_perf_diagnose_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_storage_ha_perf_diagnose_history_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_CLONE_JOB_TID,
     OB_ALL_CLONE_JOB_AUX_LOB_META_TID,
     OB_ALL_CLONE_JOB_AUX_LOB_PIECE_TID,
@@ -12435,12 +12465,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 282;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 786;
+const int64_t OB_SYS_TABLE_COUNT = 284;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 788;
 const int64_t OB_SYS_VIEW_COUNT = 854;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1927;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1931;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1930;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1934;
 
 } // end namespace share
 } // end namespace oceanbase

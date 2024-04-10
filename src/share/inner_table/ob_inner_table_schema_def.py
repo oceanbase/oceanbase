@@ -6725,8 +6725,60 @@ def_table_schema(
 
 # 481 : __all_import_stmt_exec_history
 # 482 : __all_tablet_reorganize_history
-# 483 : __all_storage_ha_error_diagnose_history
-# 484 : __all_storage_ha_perf_diagnose_history
+def_table_schema(
+  owner = 'zhixing.yh',
+  table_name    = '__all_storage_ha_error_diagnose_history',
+  table_id      = '483',
+  table_type = 'SYSTEM_TABLE',
+  in_tenant_space = False,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('gmt_create', 'timestamp', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int')
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('module', 'varchar:OB_MODULE_NAME_LENGTH'),
+    ('type', 'varchar:OB_SYS_TASK_TYPE_LENGTH'),
+    ('task_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('retry_id', 'int'),
+    ('create_time', 'timestamp'),
+    ('result_code', 'int'),
+    ('result_msg', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+    ('info', 'longtext')
+  ],
+)
+
+def_table_schema(
+  owner = 'zhixing.yh',
+  table_name    = '__all_storage_ha_perf_diagnose_history',
+  table_id      = '484',
+  table_type = 'SYSTEM_TABLE',
+  in_tenant_space = False,
+  gm_columns    = [],
+  rowkey_columns = [
+    ('gmt_create', 'timestamp', 'false'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int')
+  ],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('module', 'varchar:OB_MODULE_NAME_LENGTH'),
+    ('type', 'varchar:OB_SYS_TASK_TYPE_LENGTH'),
+    ('task_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('retry_id', 'int'),
+    ('start_timestamp', 'timestamp'),
+    ('end_timestamp', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('tablet_count', 'int'),
+    ('result_code', 'int'),
+    ('result_msg', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+    ('info', 'longtext'),
+  ],
+)
 
 def_table_schema(
   owner = 'chensen.cs',
@@ -13737,8 +13789,60 @@ def_table_schema(**gen_iterate_virtual_table_def(
     keywords = all_def_keywords['__all_column_group_mapping_history'],
     in_tenant_space = True))
 
-# 12433: __all_virtual_storage_ha_error_diagnose
-# 12434: __all_virtual_storage_ha_perf_diagnose
+def_table_schema(
+  owner = 'zhixing.yh',
+  table_name    = '__all_virtual_storage_ha_error_diagnose',
+  table_id      = '12433',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = False,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('module', 'varchar:OB_MODULE_NAME_LENGTH'),
+    ('type', 'varchar:OB_SYS_TASK_TYPE_LENGTH'),
+    ('task_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('retry_id', 'int'),
+    ('create_time', 'timestamp'),
+    ('result_code', 'int'),
+    ('result_msg', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+    ('info', 'longtext')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'zhixing.yh',
+  table_name    = '__all_virtual_storage_ha_perf_diagnose',
+  table_id      = '12434',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = False,
+  gm_columns    = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('module', 'varchar:OB_MODULE_NAME_LENGTH'),
+    ('type', 'varchar:OB_SYS_TASK_TYPE_LENGTH'),
+    ('task_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('retry_id', 'int'),
+    ('start_timestamp', 'timestamp'),
+    ('end_timestamp', 'timestamp'),
+    ('tablet_id', 'int'),
+    ('tablet_count', 'int'),
+    ('result_code', 'int'),
+    ('result_msg', 'varchar:OB_DIAGNOSE_INFO_LENGTH'),
+    ('info', 'longtext'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12435',

@@ -34,7 +34,11 @@
 #include "rootserver/ob_tenant_info_loader.h"
 #include "src/observer/omt/ob_tenant_config.h"
 #include "common/errsim_module/ob_errsim_module_type.h"
+#include "ob_storage_ha_diagnose_mgr.h"
+#include "share/ob_storage_ha_diagnose_struct.h"
 #include "common/ob_role.h"
+#include "share/rc/ob_tenant_base.h"
+#include "observer/omt/ob_tenant.h"
 
 using namespace oceanbase::share;
 
@@ -700,6 +704,448 @@ int ObTransferUtils::check_ls_replay_scn(
     }
   }
   return ret;
+}
+
+void ObTransferUtils::add_transfer_error_diagnose_in_backfill(
+    const share::ObLSID &dest_ls_id,
+    const share::SCN &log_sync_scn,
+    const int result_code,
+    const common::ObTabletID &tablet_id,
+    const share::ObStorageHACostItemName result_msg)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!dest_ls_id.is_valid()
+      || !log_sync_scn.is_valid()
+      || OB_SUCCESS == result_code
+      || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_ls_id), K(result_code), K(tablet_id), K(log_sync_scn));
+  } else {
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    if (OB_FAIL(get_ls_migrate_status_(ls_handle, dest_ls_id, migration_status))) { //in migrate status
+      LOG_WARN("fail to get migration status", K(ret), K(dest_ls_id));
+    } else if (OB_FAIL(get_transfer_handler_(ls_handle, dest_ls_id, transfer_handler))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+    } else if (OB_FAIL(transfer_handler->record_error_diagnose_info_in_backfill(
+          log_sync_scn, dest_ls_id, result_code, tablet_id, migration_status, result_msg))) {
+      LOG_WARN("failed to record diagnose info", K(ret), K(log_sync_scn),
+          K(dest_ls_id), K(result_code), K(tablet_id), K(migration_status), K(result_msg));
+    }
+  }
+}
+
+void ObTransferUtils::add_transfer_error_diagnose_in_replay(
+    const share::ObTransferTaskID &task_id,
+    const share::ObLSID &dest_ls_id,
+    const int result_code,
+    const bool clean_related_info,
+    const share::ObStorageHADiagTaskType type,
+    const share::ObStorageHACostItemName result_msg)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!task_id.is_valid()) {
+    // do nothing
+  } else if (!dest_ls_id.is_valid()
+      || type < ObStorageHADiagTaskType::TRANSFER_START
+      || type >= ObStorageHADiagTaskType::MAX_TYPE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_ls_id), K(type));
+  } else if (OB_FAIL(get_transfer_handler_(ls_handle, dest_ls_id, transfer_handler))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+  } else if (OB_FAIL(transfer_handler->record_error_diagnose_info_in_replay(
+        task_id, dest_ls_id, result_code, clean_related_info, type, result_msg))) {
+    LOG_WARN("failed to record diagnose info", K(ret), K(dest_ls_id),
+        K(task_id), K(result_code), K(clean_related_info), K(type), K(result_msg));
+  }
+}
+
+void ObTransferUtils::set_transfer_related_info(
+    const share::ObLSID &dest_ls_id,
+    const share::ObTransferTaskID &task_id,
+    const share::SCN &start_scn)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!dest_ls_id.is_valid() || !task_id.is_valid() || !start_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dest_ls_id), K(task_id), K(start_scn));
+  } else if (OB_FAIL(get_transfer_handler_(ls_handle, dest_ls_id, transfer_handler))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+  } else if (OB_FAIL(transfer_handler->set_related_info(task_id, start_scn))) {
+    LOG_WARN("failed to set transfer related info", K(ret), K(dest_ls_id), K(task_id), K(start_scn));
+  }
+}
+
+int ObTransferUtils::get_ls_(
+    ObLSHandle &ls_handle,
+    const share::ObLSID &dest_ls_id,
+    ObLS *&ls)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = MTL(ObLSService*);
+  ls = nullptr;
+  if (!dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dest_ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret), K(dest_ls_id), K(ls_handle));
+  }
+  return ret;
+}
+
+int ObTransferUtils::get_ls_migrate_status_(
+    ObLSHandle &ls_handle,
+    const share::ObLSID &dest_ls_id,
+    ObMigrationStatus &migration_status)
+{
+  int ret = OB_SUCCESS;
+  migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  ObLS *ls = nullptr;
+  if (!dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dest_ls_id));
+  } else if (OB_FAIL(get_ls_(ls_handle, dest_ls_id, ls))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+    LOG_WARN("fail to get migration status", K(ret), K(dest_ls_id));
+  }
+
+  return ret;
+}
+
+int ObTransferUtils::get_transfer_handler_(
+    ObLSHandle &ls_handle,
+    const share::ObLSID &dest_ls_id,
+    ObTransferHandler *&transfer_handler)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  transfer_handler = nullptr;
+  if (!dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dest_ls_id));
+  } else if (OB_FAIL(get_ls_(ls_handle, dest_ls_id, ls))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(dest_ls_id));
+  } else {
+    transfer_handler = ls->get_transfer_handler();
+  }
+  return ret;
+}
+
+void ObTransferUtils::reset_related_info(const share::ObLSID &dest_ls_id)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!dest_ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(dest_ls_id));
+  } else if (OB_FAIL(get_transfer_handler_(ls_handle, dest_ls_id, transfer_handler))) {
+    LOG_WARN("failed to get ls", K(ls_handle), K(ret), K(dest_ls_id));
+  } else {
+    transfer_handler->reset_related_info();
+  }
+}
+
+void ObTransferUtils::add_transfer_perf_diagnose_in_replay_(
+    const share::ObStorageHAPerfDiagParams &params,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!params.is_valid()
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(params), K(start_ts));
+  } else if (OB_FAIL(get_transfer_handler_(ls_handle, params.dest_ls_id_, transfer_handler))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(params.dest_ls_id_));
+  } else if (OB_FAIL(transfer_handler->record_perf_diagnose_info_in_replay(
+        params, result, timestamp, start_ts, is_report))) {
+    LOG_WARN("failed to record perf diagnose info",
+        K(ret), K(params), K(result), K(timestamp), K(start_ts), K(is_report));
+  }
+}
+
+void ObTransferUtils::add_transfer_perf_diagnose_in_backfill(
+    const share::ObStorageHAPerfDiagParams &params,
+    const share::SCN &log_sync_scn,
+    const int result_code,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  ObTransferHandler *transfer_handler = nullptr;
+  ObLSHandle ls_handle;
+  if (!params.is_valid()
+      || !log_sync_scn.is_valid()
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(params), K(log_sync_scn), K(start_ts));
+  } else {
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    if (OB_FAIL(get_ls_migrate_status_(ls_handle, params.dest_ls_id_, migration_status))) { //in migrate status
+      LOG_WARN("fail to get migration status", K(ret), K(params.dest_ls_id_));
+    } else if (OB_FAIL(get_transfer_handler_(ls_handle, params.dest_ls_id_, transfer_handler))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_handle), K(params.dest_ls_id_));
+    } else if (OB_FAIL(transfer_handler->record_perf_diagnose_info_in_backfill(
+        params, log_sync_scn, result_code, migration_status, timestamp, start_ts, is_report))) {
+      LOG_WARN("failed to record perf diagnose info",
+          K(ret), K(params), K(result_code), K(timestamp), K(start_ts), K(is_report));
+    }
+  }
+}
+
+void ObTransferUtils::construct_perf_diag_backfill_params_(
+    const share::ObLSID &dest_ls_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName item_name,
+    share::ObStorageHAPerfDiagParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (!dest_ls_id.is_valid()
+      || !tablet_id.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || item_name >= ObStorageHACostItemName::MAX_NAME
+      || item_name < ObStorageHACostItemName::TRANSFER_START_BEGIN) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_ls_id), K(tablet_id), K(item_type), K(item_name));
+  } else {
+    params.dest_ls_id_ = dest_ls_id;
+    params.task_type_ = ObStorageHADiagTaskType::TRANSFER_BACKFILLED;
+    params.item_type_ = item_type;
+    params.name_ = item_name;
+    params.tablet_id_ = tablet_id;
+    params.tablet_count_ = 1;
+  }
+}
+
+void ObTransferUtils::construct_perf_diag_replay_params_(
+    const share::ObLSID &dest_ls_id,
+    const share::ObTransferTaskID &task_id,
+    const share::ObStorageHADiagTaskType task_type,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName item_name,
+    const int64_t tablet_count,
+    share::ObStorageHAPerfDiagParams &params)
+{
+  int ret = OB_SUCCESS;
+  if (!dest_ls_id.is_valid()
+      || !task_id.is_valid()
+      || task_type >= ObStorageHADiagTaskType::MAX_TYPE
+      || task_type < ObStorageHADiagTaskType::TRANSFER_START
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || item_name >= ObStorageHACostItemName::MAX_NAME
+      || item_name < ObStorageHACostItemName::TRANSFER_START_BEGIN
+      || tablet_count < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(dest_ls_id), K(task_type), K(item_type), K(item_name), K(tablet_count));
+  } else {
+    params.dest_ls_id_ = dest_ls_id;
+    params.task_id_ = task_id;
+    params.task_type_ = task_type;
+    params.item_type_ = item_type;
+    params.name_ = item_name;
+    params.tablet_count_ = tablet_count;
+  }
+}
+
+void ObTransferUtils::process_backfill_perf_diag_info(
+    const share::ObLSID &dest_ls_id,
+    const common::ObTabletID &tablet_id,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName name,
+    share::ObStorageHAPerfDiagParams &params)
+{
+  int ret = OB_SUCCESS;
+  params.reset();
+  if (!tablet_id.is_valid()
+      || !dest_ls_id.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || name >= ObStorageHACostItemName::MAX_NAME
+      || name < ObStorageHACostItemName::TRANSFER_START_BEGIN) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(dest_ls_id), K(name), K(item_type), K(tablet_id));
+  } else  {
+    construct_perf_diag_backfill_params_(
+                                  dest_ls_id,
+                                  tablet_id,
+                                  item_type,
+                                  name,
+                                  params);
+  }
+}
+
+void ObTransferUtils::process_start_out_perf_diag_info(
+    const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName name,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (!tx_start_transfer_out_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_start_transfer_out_info.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || name >= ObStorageHACostItemName::MAX_NAME
+      || name < ObStorageHACostItemName::TRANSFER_START_BEGIN
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_start_transfer_out_info), K(name), K(item_type), K(start_ts));
+  } else {
+    share::ObStorageHAPerfDiagParams params;
+    construct_perf_diag_replay_params_(
+                                    tx_start_transfer_out_info.dest_ls_id_,
+                                    tx_start_transfer_out_info.task_id_,
+                                    ObStorageHADiagTaskType::TRANSFER_START_OUT,
+                                    item_type,
+                                    name,
+                                    tx_start_transfer_out_info.tablet_list_.count(),
+                                    params);
+    add_transfer_perf_diagnose_in_replay_(
+                                    params,
+                                    result,
+                                    timestamp,
+                                    start_ts,
+                                    is_report);
+  }
+}
+
+void ObTransferUtils::process_start_in_perf_diag_info(
+    const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName name,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (!tx_start_transfer_in_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_start_transfer_in_info.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || name >= ObStorageHACostItemName::MAX_NAME
+      || name < ObStorageHACostItemName::TRANSFER_START_BEGIN
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_start_transfer_in_info), K(name), K(item_type), K(start_ts));
+  } else {
+    share::ObStorageHAPerfDiagParams params;
+    construct_perf_diag_replay_params_(
+                                    tx_start_transfer_in_info.dest_ls_id_,
+                                    tx_start_transfer_in_info.task_id_,
+                                    ObStorageHADiagTaskType::TRANSFER_START_IN,
+                                    item_type,
+                                    name,
+                                    tx_start_transfer_in_info.tablet_meta_list_.count(),
+                                    params);
+    add_transfer_perf_diagnose_in_replay_(
+                                    params,
+                                    result,
+                                    timestamp,
+                                    start_ts,
+                                    is_report);
+  }
+}
+
+void ObTransferUtils::process_finish_in_perf_diag_info(
+    const ObTXFinishTransferInInfo &tx_finish_transfer_in_info,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName name,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (!tx_finish_transfer_in_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_finish_transfer_in_info.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || name >= ObStorageHACostItemName::MAX_NAME
+      || name < ObStorageHACostItemName::TRANSFER_START_BEGIN
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_finish_transfer_in_info), K(name), K(item_type), K(start_ts));
+  } else {
+    share::ObStorageHAPerfDiagParams params;
+    construct_perf_diag_replay_params_(
+                                    tx_finish_transfer_in_info.dest_ls_id_,
+                                    tx_finish_transfer_in_info.task_id_,
+                                    ObStorageHADiagTaskType::TRANSFER_FINISH_IN,
+                                    item_type,
+                                    name,
+                                    tx_finish_transfer_in_info.tablet_list_.count(),
+                                    params);
+    add_transfer_perf_diagnose_in_replay_(
+                                    params,
+                                    result,
+                                    timestamp,
+                                    start_ts,
+                                    is_report);
+  }
+}
+
+void ObTransferUtils::process_finish_out_perf_diag_info(
+    const ObTXFinishTransferOutInfo &tx_finish_transfer_out_info,
+    const share::ObStorageHACostItemType item_type,
+    const share::ObStorageHACostItemName name,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (!tx_finish_transfer_out_info.task_id_.is_valid()) {
+    // do nothing
+  } else if (!tx_finish_transfer_out_info.is_valid()
+      || item_type >= ObStorageHACostItemType::MAX_TYPE
+      || item_type < ObStorageHACostItemType::ACCUM_COST_TYPE
+      || name >= ObStorageHACostItemName::MAX_NAME
+      || name < ObStorageHACostItemName::TRANSFER_START_BEGIN
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tx_finish_transfer_out_info), K(name), K(item_type), K(start_ts));
+  } else {
+    share::ObStorageHAPerfDiagParams params;
+    construct_perf_diag_replay_params_(
+                                    tx_finish_transfer_out_info.dest_ls_id_,
+                                    tx_finish_transfer_out_info.task_id_,
+                                    ObStorageHADiagTaskType::TRANSFER_FINISH_OUT,
+                                    item_type,
+                                    name,
+                                    tx_finish_transfer_out_info.tablet_list_.count(),
+                                    params);
+    add_transfer_perf_diagnose_in_replay_(
+                                    params,
+                                    result,
+                                    timestamp,
+                                    start_ts,
+                                    is_report);
+  }
 }
 
 } // end namespace storage

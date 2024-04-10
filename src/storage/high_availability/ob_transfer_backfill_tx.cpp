@@ -24,6 +24,7 @@
 #include "share/ob_debug_sync_point.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/high_availability/ob_transfer_handler.h"
 
 namespace oceanbase
@@ -1692,6 +1693,7 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
   ObTablet *tablet = nullptr;
   ObTabletCreateDeleteMdsUserData user_data;
   DEBUG_SYNC(TRANSFER_REPLACE_TABLE_BEFORE);
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::TRANSFER_REPLACE_BEGIN;
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls is nullptr", K(ret));
@@ -1701,6 +1703,9 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
       const ObTabletBackfillInfo tablet_info = ctx_->tablet_infos_.at(i);
       bool in_migration = false;
       ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+      const int64_t start_ts = ObTimeUtility::current_time();
+      process_transfer_perf_diagnose_(start_ts, start_ts, false/*is_report*/, ls->get_ls_id(),
+          ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_BEGIN);
       if (ctx_->is_failed()) {
         int tmp_ret = OB_SUCCESS;
         if (OB_SUCCESS != (tmp_ret = ctx_->get_result(ret))) {
@@ -1739,6 +1744,12 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
                          "dest_ls_id", ctx_->dest_ls_id_.id(),
                          "tablet_id", tablet_info.tablet_id_.id());
 #endif
+        const int64_t end_ts = ObTimeUtility::current_time();
+        process_transfer_perf_diagnose_(end_ts, start_ts, true/*is_report*/, ls->get_ls_id(),
+            ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_END);
+      }
+      if (OB_FAIL(ret)) {
+        ObTransferUtils::add_transfer_error_diagnose_in_backfill(ls->get_ls_id(), ctx_->backfill_scn_, ret, tablet_info.tablet_id_, diagnose_result_msg);
       }
     }
   }
@@ -1818,6 +1829,22 @@ int ObTransferReplaceTableTask::build_migration_param_(
     }
   }
   return ret;
+}
+
+void ObTransferReplaceTableTask::process_transfer_perf_diagnose_(
+    const int64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report,
+    const share::ObLSID &dest_ls_id,
+    const share::SCN &log_sync_scn,
+    const common::ObTabletID &tablet_id,
+    const share::ObStorageHACostItemName name) const
+{
+  int ret = OB_SUCCESS;
+  ObStorageHAPerfDiagParams params;
+  ObTransferUtils::process_backfill_perf_diag_info(dest_ls_id, tablet_id,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, name, params);
+  ObTransferUtils::add_transfer_perf_diagnose_in_backfill(params, log_sync_scn, ret, timestamp, start_ts, is_report);
 }
 
 }

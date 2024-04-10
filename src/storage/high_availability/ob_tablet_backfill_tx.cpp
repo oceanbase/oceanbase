@@ -18,6 +18,8 @@
 #include "storage/ob_storage_struct.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/compaction/ob_partition_merger.h"
 
 namespace oceanbase
@@ -442,7 +444,10 @@ int ObTabletBackfillTXTask::process()
 {
   int ret = OB_SUCCESS;
   LOG_INFO("start to do tablet backfill tx task", KPC(ha_dag_net_ctx_), K(tablet_info_), K(ls_id_));
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::TRANSFER_BACKFILL_START;
+  process_transfer_perf_diagnose_(start_ts, start_ts, false/*is_report*/,
+      share::ObStorageHACostItemName::TRANSFER_BACKFILL_START, ret);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet backfill tx task task do not init", K(ret));
@@ -455,11 +460,18 @@ int ObTabletBackfillTXTask::process()
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     ObTabletBackfillTXDag *tablet_backfill_tx_dag = static_cast<ObTabletBackfillTXDag *>(this->get_dag());
+    share::ObLSID dest_ls_id;
+    share::SCN log_sync_scn;
     if (OB_ISNULL(tablet_backfill_tx_dag)) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tablet backfill tx dag should not be NULL", K(tmp_ret), KP(tablet_backfill_tx_dag));
     } else if (OB_SUCCESS != (tmp_ret = tablet_backfill_tx_dag->set_result(ret))) {
       LOG_WARN("failed to set result", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_info_));
+    }
+    if (OB_TMP_FAIL(get_diagnose_support_info_(dest_ls_id, log_sync_scn))) {
+      LOG_WARN("failed to get diagnose support info", K(tmp_ret));
+    } else {
+      ObTransferUtils::add_transfer_error_diagnose_in_backfill(dest_ls_id, log_sync_scn, ret, tablet_info_.tablet_id_, diagnose_result_msg);
     }
   }
   return ret;
@@ -692,6 +704,7 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
       ObSSTableMetaHandle sst_meta_hdl;
       ObTabletTableBackfillTXTask *table_backfill_tx_task = nullptr;
       bool is_add_task = false;
+
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KPC(table));
@@ -738,6 +751,41 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
     }
   }
   return ret;
+}
+
+int ObTabletBackfillTXTask::get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const
+{
+  int ret = OB_SUCCESS;
+  dest_ls_id.reset();
+  log_sync_scn.reset();
+  if (ObIHADagNetCtx::TRANSFER_BACKFILL_TX != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type", K(ret), "ctx type", ha_dag_net_ctx_->get_dag_net_ctx_type());
+  } else {
+    dest_ls_id = static_cast<const ObTransferBackfillTXCtx *>(ha_dag_net_ctx_)->get_ls_id();
+    log_sync_scn = backfill_tx_ctx_->log_sync_scn_;
+  }
+  return ret;
+}
+
+void ObTabletBackfillTXTask::process_transfer_perf_diagnose_(
+    const int64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report,
+    const ObStorageHACostItemName name,
+    const int result) const
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID dest_ls_id;
+  share::SCN log_sync_scn;
+  if (OB_FAIL(get_diagnose_support_info_(dest_ls_id, log_sync_scn))) {
+    LOG_WARN("failed to get diagnose support info", K(ret));
+  } else {
+    ObStorageHAPerfDiagParams params;
+    ObTransferUtils::process_backfill_perf_diag_info(dest_ls_id, tablet_info_.tablet_id_,
+        ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, name, params);
+    ObTransferUtils::add_transfer_perf_diagnose_in_backfill(params, log_sync_scn, result, timestamp, start_ts, is_report);
+  }
 }
 
 /******************ObTabletTableBackfillTXTask*********************/
@@ -802,7 +850,10 @@ int ObTabletTableBackfillTXTask::process()
   int ret = OB_SUCCESS;
   LOG_INFO("start do tablet table backfill tx task", K(ls_id_), K(tablet_id_), K(table_handle_));
   bool need_merge = true;
-
+  const int64_t start_ts = ObTimeUtility::current_time();
+  share::ObStorageHACostItemName diagnose_result_msg = share::ObStorageHACostItemName::MAX_NAME;
+  process_transfer_perf_diagnose_(start_ts, start_ts, false/*is_report*/,
+      ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::TRANSFER_BACKFILLED_TABLE_BEGIN, ret);
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet table backfill tx task do not init", K(ret));
@@ -813,11 +864,13 @@ int ObTabletTableBackfillTXTask::process()
   } else if (!need_merge) {
     LOG_INFO("tablet table no need merge", K(ret), K_(tablet_handle));
   } else if (OB_FAIL(prepare_merge_ctx_())) {
+    diagnose_result_msg = share::ObStorageHACostItemName::PREPARE_MERGE_CTX;
     LOG_WARN("failed to prepare merge ctx", K(ret), KPC(this));
   } else if (OB_FAIL(do_backfill_tx_())) {
     if (OB_NO_NEED_MERGE == ret) {
       ret = OB_SUCCESS;
     } else {
+      diagnose_result_msg = share::ObStorageHACostItemName::DO_BACKFILL_TX;
       LOG_WARN("failed to do backfill tx", K(ret), KPC(this));
     }
   }
@@ -831,6 +884,30 @@ int ObTabletTableBackfillTXTask::process()
     } else if (OB_SUCCESS != (tmp_ret = tablet_backfill_tx_dag->set_result(ret))) {
       LOG_WARN("failed to set result", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_id_));
     }
+  }
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_TRANSFER_DIAGNOSE_BACKFILL_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_TRANSFER_DIAGNOSE_BACKFILL_FAILED", K(ret));
+    }
+  }
+#endif
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    share::ObLSID dest_ls_id;
+    share::SCN log_sync_scn;
+    if (OB_TMP_FAIL(get_diagnose_support_info_(dest_ls_id, log_sync_scn))) {
+      LOG_WARN("failed to get diagnose support info", K(tmp_ret));
+    } else {
+      ObTransferUtils::add_transfer_error_diagnose_in_backfill(dest_ls_id, log_sync_scn, ret, tablet_id_, diagnose_result_msg);
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t end_ts = ObTimeUtility::current_time();
+    process_transfer_perf_diagnose_(end_ts, start_ts, false/*is_report*/,
+        ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::TX_BACKFILL, ret);
   }
   return ret;
 }
@@ -851,7 +928,7 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
   } else {
     // init tablet merge dag param
     static_param.dag_param_.ls_id_ = ls_id_;
-    static_param.dag_param_.merge_type_ = table_handle_.get_table()->is_memtable() ? ObMergeType::MINI_MERGE : ObMergeType::BACKFILL_TX_MERGE;
+    static_param.dag_param_.merge_type_ = table_handle_.get_table()->is_memtable() ? compaction::ObMergeType::MINI_MERGE : compaction::ObMergeType::BACKFILL_TX_MERGE;
     static_param.report_ = nullptr;
     static_param.dag_param_.tablet_id_ = tablet_id_;
     // init version range and sstable
@@ -982,6 +1059,42 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
     }
   }
   return ret;
+}
+
+int ObTabletTableBackfillTXTask::get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const
+{
+  int ret = OB_SUCCESS;
+  dest_ls_id.reset();
+  log_sync_scn.reset();
+  if (ObIHADagNetCtx::TRANSFER_BACKFILL_TX != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected type", K(ret), "ctx type", ha_dag_net_ctx_->get_dag_net_ctx_type());
+  } else {
+    dest_ls_id = static_cast<const ObTransferBackfillTXCtx *>(ha_dag_net_ctx_)->get_ls_id();
+    log_sync_scn = backfill_tx_ctx_->log_sync_scn_;
+  }
+  return ret;
+}
+
+void ObTabletTableBackfillTXTask::process_transfer_perf_diagnose_(
+    const int64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report,
+    const ObStorageHACostItemType type,
+    const ObStorageHACostItemName name,
+    const int result) const
+{
+  int ret = OB_SUCCESS;
+  share::ObLSID dest_ls_id;
+  share::SCN log_sync_scn;
+  if (OB_FAIL(get_diagnose_support_info_(dest_ls_id, log_sync_scn))) {
+    LOG_WARN("failed to get diagnose support info", K(ret));
+  } else {
+    ObStorageHAPerfDiagParams params;
+    ObTransferUtils::process_backfill_perf_diag_info(dest_ls_id, tablet_id_,
+        type, name, params);
+    ObTransferUtils::add_transfer_perf_diagnose_in_backfill(params, log_sync_scn, result, timestamp, start_ts, is_report);
+  }
 }
 
 /******************ObFinishTabletBackfillTXTask*********************/

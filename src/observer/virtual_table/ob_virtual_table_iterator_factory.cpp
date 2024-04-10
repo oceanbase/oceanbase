@@ -219,7 +219,9 @@
 #include "observer/virtual_table/ob_all_virtual_activity_metrics.h"
 #include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_info.h"
 #include "observer/virtual_table/ob_all_virtual_checkpoint_diagnose_memtable_info.h"
-
+#include "observer/virtual_table/ob_all_virtual_storage_ha_error_diagnose.h"
+#include "observer/virtual_table/ob_all_virtual_storage_ha_perf_diagnose.h"
+#include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
@@ -2655,6 +2657,24 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "failed to init ObAllVirtualNicInfo", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(nic_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_STORAGE_HA_ERROR_DIAGNOSE_TID: {
+            ObAllVirtualStorageHAErrorDiagnose *storage_ha_error_diagnose = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageHAErrorDiagnose, storage_ha_error_diagnose))) {
+              SERVER_LOG(ERROR, "ObAllVirtualStorageHAErrorDiagnose construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_ha_error_diagnose);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID: {
+            ObAllVirtualStorageHAPerfDiagnose *storage_ha_perf_diagnose = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualStorageHAPerfDiagnose, storage_ha_perf_diagnose))) {
+              SERVER_LOG(ERROR, "ObAllVirtualStorageHAPerfDiagnose construct failed", K(ret));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(storage_ha_perf_diagnose);
             }
             break;
           }

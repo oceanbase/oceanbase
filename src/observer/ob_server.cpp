@@ -110,6 +110,7 @@
 #include "observer/ob_startup_accel_task_handler.h"
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_table_ttl_task.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_service.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/palf_env_lite_mgr.h"
 #include "logservice/arbserver/ob_arb_srv_network_frame.h"
@@ -506,6 +507,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_WARN("init ObDetectManagerThread failed", KR(ret));
     } else if (OB_FAIL(wr_service_.init())) {
       LOG_WARN("failed to init wr service", K(ret));
+    } else if (OB_FAIL(ObStorageHADiagService::instance().init(GCTX.sql_proxy_))) {
+      LOG_WARN("init storage ha diagnose service failed", K(ret));
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
     }
@@ -771,6 +774,9 @@ void ObServer::destroy()
     palf::election::GLOBAL_REPORT_TIMER.destroy();
     FLOG_INFO("global election report timer destroyed");
 
+    ObStorageHADiagService::instance().destroy();
+    FLOG_INFO("storage ha diagnose destroy");
+
     FLOG_INFO("begin to destroy virtual tenant manager");
     ObVirtualTenantManager::get_instance().destroy();
     FLOG_INFO("virtual tenant manager destroyed");
@@ -963,6 +969,12 @@ int ObServer::start()
       FLOG_INFO("success to start imc tasks");
     }
 #endif
+
+    if (FAILEDx(ObStorageHADiagService::instance().start())) {
+      LOG_ERROR("fail to start storage ha diagnose service", KR(ret));
+    } else {
+      FLOG_INFO("success to start storage ha diagnose service");
+    }
 
     if (FAILEDx(unix_domain_listener_.start())) {
       LOG_ERROR("fail to start unix domain listener", KR(ret));
@@ -1446,6 +1458,10 @@ int ObServer::stop()
       FLOG_INFO("rpc network shutdowned");
     }
 
+    FLOG_INFO("begin to stop storage ha diagnose service");
+    ObStorageHADiagService::instance().stop();
+    FLOG_INFO("storage ha diagnose service stopped");
+
     FLOG_INFO("begin to shutdown high priority rpc");
     if (OB_FAIL(net_frame_.high_prio_rpc_shutdown())) {
       FLOG_WARN("fail to shutdown high priority rpc", KR(ret));
@@ -1758,6 +1774,10 @@ int ObServer::wait()
     FLOG_INFO("begin to wait clock generator");
     ObClockGenerator::get_instance().wait();
     FLOG_INFO("wait clock generator success");
+
+    FLOG_INFO("begin to wait storage ha diagnose");
+    ObStorageHADiagService::instance().wait();
+    FLOG_INFO("wait storage ha diagnose success");
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));

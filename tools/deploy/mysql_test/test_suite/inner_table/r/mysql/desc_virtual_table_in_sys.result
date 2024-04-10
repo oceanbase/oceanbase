@@ -9011,6 +9011,49 @@ is_deleted	bigint(20)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_group_mapping_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_storage_ha_error_diagnose;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+module	varchar(64)	NO		NULL	
+type	varchar(64)	NO		NULL	
+task_id	varchar(64)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+retry_id	bigint(20)	NO		NULL	
+create_time	timestamp(6)	NO		NULL	
+result_code	bigint(20)	NO		NULL	
+result_msg	varchar(1024)	NO		NULL	
+info	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_storage_ha_error_diagnose;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_storage_ha_error_diagnose runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_storage_ha_perf_diagnose;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+module	varchar(64)	NO		NULL	
+type	varchar(64)	NO		NULL	
+task_id	varchar(64)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+retry_id	bigint(20)	NO		NULL	
+start_timestamp	timestamp(6)	NO		NULL	
+end_timestamp	timestamp(6)	NO		NULL	
+tablet_id	bigint(20)	NO		NULL	
+tablet_count	bigint(20)	NO		NULL	
+result_code	bigint(20)	NO		NULL	
+result_msg	varchar(1024)	NO		NULL	
+info	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_storage_ha_perf_diagnose;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_storage_ha_perf_diagnose runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_clone_job;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

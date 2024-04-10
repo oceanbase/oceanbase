@@ -329,6 +329,8 @@
 # 478: __all_import_table_job_history
 # 479: __all_import_table_task
 # 480: __all_import_table_task_history
+# 483: __all_storage_ha_error_diagnose_history
+# 484: __all_storage_ha_perf_diagnose_history
 # 485: __all_clone_job
 # 486: __all_clone_job_history
 # 493: __all_ncomp_dll
@@ -1049,6 +1051,8 @@
 # 12432: __all_virtual_column_group_mapping_history
 # 12432: __all_column_group_mapping  # BASE_TABLE_NAME
 # 12432: __all_column_group_mapping_history  # BASE_TABLE_NAME1
+# 12433: __all_virtual_storage_ha_error_diagnose
+# 12434: __all_virtual_storage_ha_perf_diagnose
 # 12435: __all_virtual_clone_job
 # 12435: __all_clone_job  # BASE_TABLE_NAME
 # 12436: __all_virtual_clone_job_history

@@ -203,6 +203,8 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_rebuild_service.cpp
   high_availability/ob_tablet_transfer_info.cpp
   high_availability/ob_ls_block_tx_service.cpp
+  high_availability/ob_storage_ha_diagnose_mgr.cpp
+  high_availability/ob_storage_ha_diagnose_service.cpp
 )
 
 ob_set_subtarget(ob_storage restore

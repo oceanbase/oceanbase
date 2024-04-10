@@ -14,6 +14,8 @@
 #include "common/ob_tablet_id.h"
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "ob_storage_ha_struct.h"
+#include "share/ob_storage_ha_diagnose_struct.h"
+#include "ob_transfer_struct.h"
 
 namespace oceanbase
 {
@@ -23,7 +25,8 @@ class SCN;
 }
 namespace storage
 {
-
+class ObBackfillTXCtx;
+class ObTransferHandler;
 class ObStorageHAUtils
 {
 public:
@@ -65,6 +68,7 @@ private:
 
 struct ObTransferUtils
 {
+public:
   static bool is_need_retry_error(const int err);
   static int block_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &gts_scn);
   static int kill_tx(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &gts_scn);
@@ -84,6 +88,107 @@ struct ObTransferUtils
       const common::ObIArray<ObAddr> &member_addr_list,
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
+  static void add_transfer_error_diagnose_in_replay(
+      const share::ObTransferTaskID &task_id,
+      const share::ObLSID &dest_ls_id,
+      const int result_code,
+      const bool clean_related_info,
+      const share::ObStorageHADiagTaskType type,
+      const share::ObStorageHACostItemName result_msg);
+  static void add_transfer_error_diagnose_in_backfill(
+      const share::ObLSID &dest_ls_id,
+      const share::SCN &log_sync_scn,
+      const int result_code,
+      const common::ObTabletID &tablet_id,
+      const share::ObStorageHACostItemName result_msg);
+  static void set_transfer_related_info(
+      const share::ObLSID &dest_ls_id,
+      const share::ObTransferTaskID &task_id,
+      const share::SCN &start_scn);
+  static void reset_related_info(const share::ObLSID &dest_ls_id);
+
+  static void add_transfer_perf_diagnose_in_backfill(
+              const share::ObStorageHAPerfDiagParams &params,
+              const share::SCN &log_sync_scn,
+              const int result_code,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+
+  static void process_backfill_perf_diag_info(
+              const share::ObLSID &dest_ls_id,
+              const common::ObTabletID &tablet_id,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName name,
+              share::ObStorageHAPerfDiagParams &params);
+
+  static void process_start_out_perf_diag_info(
+              const ObTXStartTransferOutInfo &tx_start_transfer_out_info,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName name,
+              const int result,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+  static void process_start_in_perf_diag_info(
+              const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName name,
+              const int result,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+  static void process_finish_out_perf_diag_info(
+              const ObTXFinishTransferOutInfo &tx_finish_transfer_out_info,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName name,
+              const int result,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+  static void process_finish_in_perf_diag_info(
+              const ObTXFinishTransferInInfo &tx_finish_transfer_in_info,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName name,
+              const int result,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+private:
+  static int get_ls_(
+      ObLSHandle &ls_handle,
+      const share::ObLSID &dest_ls_id,
+      ObLS *&ls);
+  static int get_transfer_handler_(
+      ObLSHandle &ls_handle,
+      const share::ObLSID &dest_ls_id,
+      ObTransferHandler *&transfer_handler);
+  static int get_ls_migrate_status_(
+      ObLSHandle &ls_handle,
+      const share::ObLSID &dest_ls_id,
+      ObMigrationStatus &migration_status);
+
+  static void construct_perf_diag_replay_params_(
+              const share::ObLSID &dest_ls_id_,
+              const share::ObTransferTaskID &task_id_,
+              const share::ObStorageHADiagTaskType task_type_,
+              const share::ObStorageHACostItemType item_type_,
+              const share::ObStorageHACostItemName item_name,
+              const int64_t tablet_count,
+              share::ObStorageHAPerfDiagParams &params);
+
+  static void add_transfer_perf_diagnose_in_replay_(
+              const share::ObStorageHAPerfDiagParams &params,
+              const int result,
+              const uint64_t timestamp,
+              const int64_t start_ts,
+              const bool is_report);
+  static void construct_perf_diag_backfill_params_(
+              const share::ObLSID &dest_ls_id,
+              const common::ObTabletID &tablet_id,
+              const share::ObStorageHACostItemType item_type,
+              const share::ObStorageHACostItemName item_name,
+              share::ObStorageHAPerfDiagParams &params);
 };
 
 } // end namespace storage

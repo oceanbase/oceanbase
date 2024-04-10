@@ -336,6 +336,7 @@ _force_skip_encoding_partition_id
 _global_enable_rich_vector_format
 _hash_area_size
 _hash_join_enabled
+_ha_diagnose_history_recycle_interval
 _ha_rpc_timeout
 _ha_tablet_info_batch_count
 _hidden_sys_tenant_memory

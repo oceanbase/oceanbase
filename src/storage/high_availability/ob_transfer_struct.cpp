@@ -20,6 +20,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
 
 using namespace oceanbase;
 using namespace share;
@@ -588,6 +589,421 @@ int ObTransferTaskLockInfo::set(const uint64_t tenant_id, const share::ObLSID &l
     task_id_ = task_id;
     status_ = status;
     lock_owner_ = lock_owner;
+  }
+  return ret;
+}
+
+ObTransferRelatedInfo::ObTransferRelatedInfo()
+  : is_inited_(false),
+    task_id_(),
+    start_scn_(),
+    start_out_log_replay_num_(0),
+    start_in_log_replay_num_(0),
+    finish_out_log_replay_num_(0),
+    finish_in_log_replay_num_(0),
+    map_(),
+    lock_()
+{
+}
+
+ObTransferRelatedInfo::~ObTransferRelatedInfo()
+{
+  destroy();
+}
+
+int ObTransferRelatedInfo::init()
+{
+  int ret = OB_SUCCESS;
+  const int64_t BUCKET_NUM = 100;
+  ObMemAttr attr(MTL_ID(), "TXBFRetryId");
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret));
+  } else if (OB_FAIL(map_.create(BUCKET_NUM, attr))) {
+    LOG_WARN("fail to create hash map", K(ret), K(BUCKET_NUM));
+  } else {
+    start_out_log_replay_num_ = 0;
+    start_in_log_replay_num_ = 0;
+    finish_in_log_replay_num_ = 0;
+    finish_out_log_replay_num_ = 0;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+bool ObTransferRelatedInfo::is_valid() const
+{
+  return task_id_.is_valid()
+         && start_scn_.is_valid()
+         && start_out_log_replay_num_ >= 0
+         && start_in_log_replay_num_ >= 0
+         && finish_in_log_replay_num_ >= 0
+         && finish_out_log_replay_num_ >= 0
+         && is_inited_;
+}
+
+void ObTransferRelatedInfo::reset_()
+{
+  task_id_.reset();
+  start_scn_.reset();
+  start_out_log_replay_num_ = 0;
+  start_in_log_replay_num_ = 0;
+  finish_in_log_replay_num_ = 0;
+  finish_out_log_replay_num_ = 0;
+}
+
+void ObTransferRelatedInfo::destroy()
+{
+  common::SpinWLockGuard guard(lock_);
+  is_inited_ = false;
+  reset_();
+  map_.destroy();
+}
+
+void ObTransferRelatedInfo::reset()
+{
+  common::SpinWLockGuard guard(lock_);
+  reset_();
+  map_.reuse();
+}
+
+int ObTransferRelatedInfo::reset(const share::ObTransferTaskID &task_id)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(lock_);
+  if (task_id != get_task_id_()) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("infos already are clean", K(ret), K(task_id), K(task_id_));
+  } else {
+    reset_();
+    map_.reuse();
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::inc_tx_backfill_retry_num_(const ObTabletID &id, int64_t &retry_num)
+{
+  int ret = OB_SUCCESS;
+  retry_num = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument!", K(ret), K(id));
+  } else {
+    if (OB_FAIL(map_.get_refactored(id, retry_num))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to get retry id from map", K(ret), K(id));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(map_.set_refactored(id, ++retry_num, 1/*overwrite*/))) {
+      LOG_WARN("fail to set retry_num", K(ret), K(id), K(retry_num));
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::set_info(
+    const share::ObTransferTaskID &task_id,
+    const share::SCN &start_scn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!task_id.is_valid() || !start_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(start_scn));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    reset_();
+    map_.reuse();
+    start_scn_ = start_scn;
+    task_id_ = task_id;
+  }
+  return ret;
+}
+
+const share::ObTransferTaskID &ObTransferRelatedInfo::get_task_id_() const
+{
+  return task_id_;
+}
+
+const share::SCN &ObTransferRelatedInfo::get_start_scn_() const
+{
+  return start_scn_;
+}
+
+int ObTransferRelatedInfo::get_replay_retry_num_(
+    const share::ObStorageHADiagTaskType type, const bool inc_retry_num, int64_t &retry_num)
+{
+  int ret = OB_SUCCESS;
+  retry_num = 0;
+  switch (type) {
+    case ObStorageHADiagTaskType::TRANSFER_START_IN: {
+      if (inc_retry_num) {
+        start_out_log_replay_num_++;
+      }
+      retry_num = start_out_log_replay_num_;
+      break;
+    }
+    case ObStorageHADiagTaskType::TRANSFER_START_OUT: {
+      if (inc_retry_num) {
+        start_in_log_replay_num_++;
+      }
+      retry_num = start_in_log_replay_num_;
+      break;
+    }
+    case ObStorageHADiagTaskType::TRANSFER_FINISH_IN: {
+      if (inc_retry_num) {
+        finish_in_log_replay_num_++;
+      }
+      retry_num = finish_in_log_replay_num_;
+      break;
+    }
+    case ObStorageHADiagTaskType::TRANSFER_FINISH_OUT: {
+      if (inc_retry_num) {
+        finish_out_log_replay_num_++;
+      }
+      retry_num = finish_out_log_replay_num_;
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected type", K(ret), K(type));
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::record_error_diagnose_info_in_backfill(
+    const share::SCN &log_sync_scn,
+    const share::ObLSID &dest_ls_id,
+    const int result_code,
+    const ObTabletID &tablet_id,
+    const ObMigrationStatus &migration_status,
+    const share::ObStorageHACostItemName result_msg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!log_sync_scn.is_valid()
+      || !dest_ls_id.is_valid()
+      || !tablet_id.is_valid()
+      || OB_SUCCESS == result_code
+      || migration_status < ObMigrationStatus::OB_MIGRATION_STATUS_NONE
+      || migration_status >= ObMigrationStatus::OB_MIGRATION_STATUS_MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(log_sync_scn), K(dest_ls_id),
+        K(result_code), K(tablet_id), K(migration_status));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (log_sync_scn != get_start_scn_()) {
+      if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("dest ls in migration", K(ret), K(dest_ls_id), K(migration_status));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("related_info already change", K(ret), K(start_scn_), K(log_sync_scn));
+      }
+    } else {
+      int64_t retry_num = 0;
+      if (OB_FAIL(inc_tx_backfill_retry_num_(tablet_id, retry_num))) {
+        LOG_WARN("fail to get retry id", K(ret), K(tablet_id));
+      } else if (OB_FAIL(ObStorageHADiagMgr::add_transfer_error_diagnose_info(get_task_id_(), dest_ls_id,
+          share::ObStorageHADiagTaskType::TRANSFER_BACKFILLED, retry_num, result_code, tablet_id, result_msg))) {
+        LOG_WARN("failed to add error diagnose info", K(ret), K(get_task_id_()), K(dest_ls_id),
+            K(retry_num), K(result_code), K(tablet_id), K(result_msg));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::record_error_diagnose_info_in_replay(
+    const share::ObTransferTaskID &task_id,
+    const share::ObLSID &dest_ls_id,
+    const int result_code,
+    const bool clean_related_info,
+    const share::ObStorageHADiagTaskType type,
+    const share::ObStorageHACostItemName result_msg)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!task_id.is_valid()
+      || !dest_ls_id.is_valid()
+      || type < share::ObStorageHADiagTaskType::TRANSFER_START
+      || type >= share::ObStorageHADiagTaskType::MAX_TYPE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id), K(dest_ls_id), K(type));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (OB_SUCCESS == result_code) {
+      // do nothing
+    } else {
+      int64_t log_replay_num = 0;
+      if (OB_FAIL(get_replay_retry_num_(type, true/*inc_retry_num*/, log_replay_num))) {
+        LOG_WARN("fail to inc retry num", K(ret), K(type), K(log_replay_num));
+      } else if (OB_FAIL(ObStorageHADiagMgr::add_transfer_error_diagnose_info(task_id, dest_ls_id,
+          type, log_replay_num, result_code, result_msg))) {
+        LOG_WARN("failed to add error diagnose info", K(ret),
+            K(task_id), K(dest_ls_id), K(type), K(log_replay_num), K(result_code), K(result_msg));
+      }
+    }
+    if (OB_SUCCESS == result_code && clean_related_info) {
+      reset_();
+      map_.reuse();
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::construct_perf_diag_info_(
+    const share::ObStorageHAPerfDiagParams &params,
+    const uint64_t timestamp,
+    const int64_t retry_num,
+    const share::ObTransferTaskID &task_id,
+    const int result,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc;
+  ObTransferPerfDiagInfo info;
+  ObStorageHACostAccumItem accum_item;
+  ObStorageHATimestampItem ts_item;
+  ObIStorageHACostItem *item = nullptr;
+  if (ObStorageHACostItemType::ACCUM_COST_TYPE == params.item_type_) {
+    item = &accum_item;
+    static_cast<ObStorageHACostAccumItem *>(item)->cost_time_ = timestamp;
+  } else {
+    item = &ts_item;
+    static_cast<ObStorageHATimestampItem *>(item)->timestamp_ = timestamp;
+  }
+  item->name_ = params.name_;
+  item->type_ = params.item_type_;
+  item->retry_id_ = retry_num + 1;
+  share::ObStorageHADiagTaskKey key;
+  if (OB_FAIL(info.init(&alloc, MTL_ID()))) {
+    LOG_WARN("fail to init info", K(ret));
+  } else if (OB_FAIL(info.add_item(*item))) {
+    LOG_WARN("fail to add item", K(ret), KPC(item));
+  } else if (OB_FAIL(ObStorageHADiagMgr::construct_diagnose_info_key(
+      task_id, ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE,
+      params.task_type_, ObStorageHADiagType::PERF_DIAGNOSE, retry_num + 1, params.tablet_id_, key))) {
+    LOG_WARN("failed to construct error diagnose info key",
+        K(ret), K(task_id), K(retry_num), K(params.tablet_id_));
+  } else if (OB_FAIL(ObStorageHADiagMgr::construct_diagnose_info(task_id, params.dest_ls_id_,
+      params.task_type_, retry_num + 1, result, ObStorageHADiagModule::TRANSFER_PERF_DIAGNOSE, info))) {
+    LOG_WARN("failed to construct diagnose info", K(ret), K(params), K(retry_num), K(result));
+  } else if (OB_FAIL(ObStorageHADiagMgr::append_perf_diagnose_info(params.tablet_id_, info))) {
+    LOG_WARN("fail to append diagnose info", K(ret), K(params.tablet_id_));
+  } else if (OB_FAIL(ObStorageHADiagMgr::add_transfer_perf_diagnose_info(
+        key, start_ts, params.tablet_count_, is_report, info))) {
+    LOG_WARN("failed to add perf diagnose info", K(ret),
+        K(key), K(info), K(timestamp), K(start_ts), K(is_report));
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::record_perf_diagnose_info_in_replay(
+    const share::ObStorageHAPerfDiagParams &params,
+    const int result,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!params.is_valid()
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(params), K(start_ts));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    int64_t log_replay_num = 0;
+    if (OB_FAIL(get_replay_retry_num_(params.task_type_, false/*inc_retry_num*/, log_replay_num))) {
+      LOG_WARN("fail to inc retry num", K(ret), K(params.task_type_), K(log_replay_num));
+    } else if (OB_FAIL(construct_perf_diag_info_(params, timestamp,
+        log_replay_num, params.task_id_, result, start_ts, is_report))) {
+      LOG_WARN("fail to construct perf diag info", K(ret), K(params), K(timestamp),
+          K(log_replay_num), K(result), K(start_ts), K(is_report));
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::record_perf_diagnose_info_in_backfill(
+    const share::ObStorageHAPerfDiagParams &params,
+    const share::SCN &log_sync_scn,
+    const int result_code,
+    const ObMigrationStatus &migration_status,
+    const uint64_t timestamp,
+    const int64_t start_ts,
+    const bool is_report)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (!params.is_valid()
+      ||!log_sync_scn.is_valid()
+      || migration_status < ObMigrationStatus::OB_MIGRATION_STATUS_NONE
+      || migration_status >= ObMigrationStatus::OB_MIGRATION_STATUS_MAX
+      || start_ts < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(log_sync_scn), K(start_ts), K(params), K(migration_status));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (log_sync_scn != get_start_scn_()) {
+      if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("dest ls in migration", K(ret), K(migration_status));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("related_info already change", K(ret), K(start_scn_), K(log_sync_scn));
+      }
+    } else {
+      int64_t retry_num = 0;
+      if (OB_FAIL(map_.get_refactored(params.tablet_id_, retry_num))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to get retry id from map", K(ret), K(params.tablet_id_));
+        }
+      }
+      if (OB_FAIL(ret)) {
+        //do nothing
+      } else if (OB_FAIL(construct_perf_diag_info_(params, timestamp,
+          retry_num, get_task_id_(), result_code, start_ts, is_report))) {
+        LOG_WARN("fail to construct perf diag info", K(ret), K(params), K(timestamp),
+            K(retry_num), K(result_code), K(start_ts), K(is_report));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransferRelatedInfo::get_related_info_task_id(share::ObTransferTaskID &task_id) const
+{
+  int ret = OB_SUCCESS;
+  task_id.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls transfer handler do not init", K(ret));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    task_id = get_task_id_();
   }
   return ret;
 }
