@@ -5,35 +5,32 @@
 </p>
 
 <p align="center">
-    <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase/releases/latest">
-        <img alt="license" src="https://img.shields.io/badge/dynamic/json?color=blue&label=release&query=tag_name&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase%2Freleases%2Flatest" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase">
-        <img alt="stars" src="https://img.shields.io/badge/dynamic/json?color=blue&label=stars&query=stargazers_count&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase">
-        <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
-    </a>
     <a href="https://en.oceanbase.com/docs/oceanbase-database">
         <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
     </a>
     <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
         <img alt="Chinese doc" src="https://img.shields.io/badge/文档-简体中文-blue" />
     </a>
-    <a href="https://github.com/oceanbase/oceanbase/actions/workflows/compile.yml">
-        <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
-    </a>
     <a href="https://github.com/oceanbase/oceanbase/commits/master">
         <img alt="last commit" src="https://img.shields.io/github/last-commit/oceanbase/oceanbase/master" />
     </a>
+    <a href="https://github.com/oceanbase/oceanbase">
+        <img alt="stars" src="https://img.shields.io/badge/dynamic/json?color=blue&label=stars&query=stargazers_count&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/actions/workflows/compile.yml">
+        <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
+        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
+    </a>
+</p>
+
+<p align="center">
     <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
-        <img alt="Ask on Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
 </p>
 
@@ -108,12 +105,11 @@ See also [Quick experience](https://en.oceanbase.com/docs/community-observer-en-
 You can deploy and manage OceanBase Database instance in kubernetes cluster with [ob-operator](https://github.com/oceanbase/ob-operator) quickly. Refer to the document [Quick Start for ob-operator](https://oceanbase.github.io/ob-operator) to see details.
 
 ## 👨‍💻 Start developing
-
-See [OceanBase Developer Document](https://github.com/oceanbase/oceanbase/wiki/Compile) to learn how to compile and deploy a manually compiled observer.
+See [OceanBase Developer Document](https://oceanbase.github.io/oceanbase/build-and-run.html) to learn how to compile and deploy a manually compiled observer.
 
 # Roadmap
 
-For future plans, see [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364). See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects) for more details.
+For future plans, see [Product Iteration Progress](https://github.com/oceanbase/oceanbase/issues/1839). See also [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects/4) for more details.
 
 # Case study
 
@@ -127,7 +123,7 @@ See also [success stories](https://en.oceanbase.com/customer/home) and [Who is u
 
 # Contributing
 
-Contributions are highly appreciated. Read the [development guide](docs/README.md) to get started.
+Contributions are highly appreciated. Read the [development guide](https://oceanbase.github.io/oceanbase) to get started.
 
 # License
 

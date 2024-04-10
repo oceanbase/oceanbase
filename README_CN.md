@@ -4,35 +4,32 @@
     </a>
 </p>
 <p align="center">
-    <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
-        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase/releases/latest">
-        <img alt="license" src="https://img.shields.io/badge/dynamic/json?color=blue&label=release&query=tag_name&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase%2Freleases%2Flatest" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase">
-        <img alt="stars" src="https://img.shields.io/badge/dynamic/json?color=blue&label=stars&query=stargazers_count&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
-    </a>
-    <a href="https://github.com/oceanbase/oceanbase">
-        <img alt="forks" src="https://img.shields.io/badge/dynamic/json?color=blue&label=forks&query=forks&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
+    <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
+        <img alt="Chinese doc" src="https://img.shields.io/badge/文档-简体中文-blue" />
     </a>
     <a href="https://en.oceanbase.com/docs/oceanbase-database">
         <img alt="English doc" src="https://img.shields.io/badge/docs-English-blue" />
     </a>
-    <a href="https://www.oceanbase.com/docs/oceanbase-database-cn">
-        <img alt="Chinese doc" src="https://img.shields.io/badge/文档-简体中文-blue" />
+    <a href="https://github.com/oceanbase/oceanbase/commits/master">
+        <img alt="last commit" src="https://img.shields.io/github/last-commit/oceanbase/oceanbase/master" />
+    </a>
+    <a href="https://github.com/oceanbase/oceanbase">
+        <img alt="stars" src="https://img.shields.io/badge/dynamic/json?color=blue&label=stars&query=stargazers_count&url=https%3A%2F%2Fapi.github.com%2Frepos%2Foceanbase%2Foceanbase" />
     </a>
     <a href="https://github.com/oceanbase/oceanbase/actions/workflows/compile.yml">
         <img alt="building status" src="https://img.shields.io/github/actions/workflow/status/oceanbase/oceanbase/compile.yml?branch=master" />
     </a>
-    <a href="https://github.com/oceanbase/oceanbase/commits/master">
-        <img alt="last commit" src="https://img.shields.io/github/last-commit/oceanbase/oceanbase/master" />
+    <a href="https://github.com/oceanbase/oceanbase/blob/master/LICENSE">
+        <img alt="license" src="https://img.shields.io/badge/license-MulanPubL--2.0-blue" />
     </a>
+</p>
+
+<p align="center">
     <a href="https://join.slack.com/t/oceanbase/shared_invite/zt-1e25oz3ol-lJ6YNqPHaKwY_mhhioyEuw">
         <img alt="Join Slack" src="https://img.shields.io/badge/slack-Join%20Oceanbase-brightgreen?logo=slack" />
     </a>
     <a href="https://stackoverflow.com/questions/tagged/oceanbase">
-        <img alt="Ask on Stack Overflow" src="https://img.shields.io/badge/Stack-Ask%20on%20Stack%20Overflow-brightgreen?logo=stackoverflow" />
+        <img alt="Stack Overflow" src="https://img.shields.io/badge/Stack-Stack%20Overflow-brightgreen?logo=stackoverflow" />
     </a>
 </p>
 
@@ -108,11 +105,11 @@ obd demo
 
 ## 👨‍💻 使用源码编译部署
 
-参考 [OceanBase 开发者文档](https://github.com/oceanbase/oceanbase/wiki/Compile)了解如何编译和部署手动编译的observer。
+参考 [OceanBase 开发者文档](https://oceanbase.github.io/oceanbase/build-and-run.html)了解如何编译和部署手动编译的observer。
 
 # Roadmap
 
-请参考 [Roadmap 2023](https://github.com/oceanbase/oceanbase/issues/1364) 了解OceanBase规划。 更多详细信息请参考 [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects)。
+请参考 [产品迭代进展](https://github.com/oceanbase/oceanbase/issues/1839) 了解OceanBase规划。 更多详细信息请参考 [OceanBase Roadmap](https://github.com/orgs/oceanbase/projects/4)。
 
 # 案例
 
@@ -126,7 +123,7 @@ OceanBase 已服务超过 1000 家来自不同行业的客户，包括金融服�
 
 # 社区贡献
 
-非常欢迎社区贡献。请阅读[开发指南](docs/README.md)。
+非常欢迎社区贡献。请阅读[开发指南](https://oceanbase.github.io/oceanbase)。
 
 # License
 
