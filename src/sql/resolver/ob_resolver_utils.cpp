@@ -676,8 +676,10 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     OZ (schema_checker.get_database_id(tenant_id, real_db_name, database_id));
     OX (object_db_id = database_id);
     OX (object_name = routine_name);
-    GET_STANDALONE_ROUTINE();
-    TRY_SYNONYM(routine_name);
+    if (OB_SUCC(ret)) {
+      GET_STANDALONE_ROUTINE();
+      TRY_SYNONYM(routine_name);
+    }
     if (OB_SUCC(ret) && need_try_synonym) {
       GET_STANDALONE_ROUTINE();
       if (OB_SUCC(ret) && OB_ISNULL(routine_info) && OB_NOT_NULL(resolve_ctx)) {
