@@ -532,6 +532,23 @@ int ObTableScanIterator::init_and_open_get_merge_iter_()
   return ret;
 }
 
+int ObTableScanIterator::sort_sample_ranges()
+{
+  int ret = OB_SUCCESS;
+  const ObStorageDatumUtils &datum_utils = scan_param_->table_param_->get_read_info().get_datum_utils();
+  if (OB_UNLIKELY(!datum_utils.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected error for invalid datum utils", K(ret), KPC(scan_param_->table_param_));
+  } else if (sample_ranges_.count() > 1 && scan_param_->scan_flag_.is_ordered_scan()) {
+    ObDatumComparor<ObDatumRange> comparor(datum_utils, ret, scan_param_->scan_flag_.is_reverse_scan());
+    std::sort(sample_ranges_.begin(), sample_ranges_.end(), comparor);
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "Failed to sort datum ranges", K(ret), K_(sample_ranges));
+    }
+  }
+  return ret;
+}
+
 int ObTableScanIterator::init_and_open_scan_merge_iter_()
 {
   int ret = OB_SUCCESS;
@@ -543,6 +560,8 @@ int ObTableScanIterator::init_and_open_scan_merge_iter_()
       ObGetSampleIterHelper sample_iter_helper(table_scan_range_, main_table_ctx_, *scan_param_, get_table_param_);
       if (OB_FAIL(sample_iter_helper.check_scan_range_count(need_scan_multiple_range, sample_ranges_))) {
         STORAGE_LOG(WARN, "check scan range count failed", KR(ret), KPC(scan_param_));
+      } else if (OB_FAIL(sort_sample_ranges())) {
+        STORAGE_LOG(WARN, "failed to sort sample ranges", K(ret));
       } else if (need_scan_multiple_range) {
         // this branch means the sample is row(memtable row) sample
         if (!scan_param_->sample_info_.is_row_sample()) {

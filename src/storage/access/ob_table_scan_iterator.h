@@ -96,6 +96,7 @@ private:
   int init_and_open_block_sample_iter_();
   int init_and_open_row_sample_iter_();
   int init_and_open_memtable_row_sample_iter_(const ObIArray<blocksstable::ObDatumRange> &scan_ranges);
+  int sort_sample_ranges();
 
 private:
   bool is_inited_;
