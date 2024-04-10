@@ -189,7 +189,8 @@ public:
     di_adt_service_(di_helper),
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
-    oracle_mode_(oracle_mode)
+    oracle_mode_(oracle_mode),
+    out_params_(allocator)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -783,6 +784,10 @@ public:
   int generate_di_local_variable(const ObString &name, jit::ObLLVMDIType &di_type,
                                  uint32_t arg_no, uint32_t line, jit::ObLLVMValue &value);
   bool get_debug_mode() { return debug_mode_; }
+
+  inline ObPLSEArray<jit::ObLLVMValue> &get_out_params() { return out_params_; }
+  inline void reset_out_params() { out_params_.reset(); }
+  inline int add_out_params(jit::ObLLVMValue &value) { return out_params_.push_back(value); }
 private:
   int init_di_adt_service();
   int generate_di_prototype();
@@ -792,6 +797,7 @@ private:
   ObLLVMDITypeMap di_user_type_map_;
   bool debug_mode_;
   bool oracle_mode_;
+  ObPLSEArray<jit::ObLLVMValue> out_params_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor
