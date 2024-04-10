@@ -2367,11 +2367,11 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[166].default_value_ = "0" ;
+      ObSysVars[166].default_value_ = "1" ;
       ObSysVars[166].info_ = "enable batching of the RHS IO in NLJ" ;
       ObSysVars[166].name_ = "_nlj_batching_enabled" ;
       ObSysVars[166].data_type_ = ObIntType ;
-      ObSysVars[166].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[166].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::QUERY_SENSITIVE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::INFLUENCE_PLAN ;
       ObSysVars[166].id_ = SYS_VAR__NLJ_BATCHING_ENABLED ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__NLJ_BATCHING_ENABLED)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR__NLJ_BATCHING_ENABLED] = 166 ;
