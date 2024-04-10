@@ -83,6 +83,10 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
   OB_UNIS_ENCODE(session_id_);
   OB_UNIS_ENCODE(plan_id_);
   OB_UNIS_ENCODE(plan_hash_);
+
+  // placeholder for serialize the reference relationship between ctdefs and rtdefs.
+  // Full logic here requires some complicated data structure refactor on fts branch for ver 4.3.1.
+  // double check compatiblity before merge to master
   return ret;
 }
 
@@ -177,6 +181,10 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
   OB_UNIS_DECODE(session_id_);
   OB_UNIS_DECODE(plan_id_);
   OB_UNIS_DECODE(plan_hash_);
+
+  // placeholder for serialize the reference relationship between ctdefs and rtdefs.
+  // Full logic here requires some complicated data structure refactor on fts branch for ver 4.3.1.
+  // double check compatiblity before merge to master
   return ret;
 }
 
@@ -216,6 +224,10 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   OB_UNIS_ADD_LEN(session_id_);
   OB_UNIS_ADD_LEN(plan_id_);
   OB_UNIS_ADD_LEN(plan_hash_);
+
+  // placeholder for serialize the reference relationship between ctdefs and rtdefs.
+  // Full logic here requires some complicated data structure refactor on fts branch for ver 4.3.1.
+  // double check compatiblity before merge to master
   return len;
 }
 
@@ -277,7 +289,9 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     ls_id_,
                     related_ctdefs_,
                     related_rtdefs_,
-                    related_tablet_ids_);
+                    related_tablet_ids_,
+                    attach_ctdef_,
+                    attach_rtdef_);
 
 ObDASTaskArg::ObDASTaskArg()
   : timeout_ts_(0),
