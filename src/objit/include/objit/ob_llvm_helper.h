@@ -351,7 +351,8 @@ public:
 
 public:
   ObLLVMHelper(common::ObIAllocator &allocator)
-    : allocator_(allocator),
+    : is_inited_(false),
+      allocator_(allocator),
       jc_(NULL),
       jit_(NULL){}
   virtual ~ObLLVMHelper();
@@ -452,6 +453,7 @@ private:
   static int init_llvm();
 
 private:
+  bool is_inited_;
   common::ObIAllocator &allocator_;
   core::JitContext *jc_;
   core::ObOrcJit *jit_;
