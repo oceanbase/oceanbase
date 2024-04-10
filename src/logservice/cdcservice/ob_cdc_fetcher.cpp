@@ -620,6 +620,7 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
           ret = OB_SUCCESS;
         } else if (OB_ALREADY_IN_NOARCHIVE_MODE == ret || OB_ENTRY_NOT_EXIST == ret) {
           // archive is not on or lsn less than the start_lsn in archive
+          ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "LSReplicaMayMigrate");
           ret = OB_ERR_OUT_OF_LOWER_BOUND;
         } else {
           // other error code, retry because various error code would be returned, retry could fix some problem
@@ -631,6 +632,8 @@ int ObCdcFetcher::ls_fetch_log_(const ObLSID &ls_id,
             retry_count++;
             need_init_iter = true;
             ret = OB_SUCCESS;
+          } else {
+            ctx.set_fetch_mode(FetchMode::FETCHMODE_ONLINE, "LSReplicaMayMigrate");
           }
         }
       } else { // OB_SUCCESS
