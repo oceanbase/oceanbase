@@ -175,6 +175,9 @@ int ObSampleFilterExecutor::build_row_id_handle(
   } else if (nullptr != index_row_id_handle_) {
     MEMSET(static_cast<void *>(index_row_id_handle_), 0, sizeof(ObIndexRowIdHandle) * index_handle_max_cnt);
     MEMSET(static_cast<void *>(data_row_id_handle_), 0, sizeof(int64_t) * data_handle_max_cnt);
+    row_id_handle_cap_ = height;
+    index_prefetch_depth_ = index_handle_cnt;
+    data_prefetch_depth_ = data_handle_cnt;
   } else if (OB_ISNULL(buf = allocator_->alloc(sizeof(ObIndexRowIdHandle) * index_handle_max_cnt + sizeof(int64_t) * data_handle_max_cnt))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to alloc memory for index_row_id_handle and data_row_id_handle", K(ret), K(index_handle_max_cnt), K(data_handle_max_cnt));

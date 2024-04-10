@@ -67,10 +67,10 @@ public:
 
 TEST_F(ObRowSampleFilterTest, test_filter_single_row)
 {
-  bool result[20] = {0, 0, 1, 0,
-                     1, 1, 0, 0,
+  bool result[20] = {0, 1, 0, 0,
+                     0, 0, 1, 1,
                      0, 0, 1, 0,
-                     1, 1, 0, 0,
+                     0, 1, 1, 0,
                      1, 1, 0, 0};
   bool filtered = false;
   for(int row_num = 0; row_num < 20; row_num++) {
@@ -82,18 +82,18 @@ TEST_F(ObRowSampleFilterTest, test_filter_single_row)
 TEST_F(ObRowSampleFilterTest, test_filter_range)
 {
   ObMicroIndexInfo index_info;
-  check_sample_range(0, 1, index_info, true);
-  check_sample_range(3, 3, index_info, true);
-  check_sample_range(6, 9, index_info, true);
-  check_sample_range(11, 11, index_info, true);
-  check_sample_range(14, 15, index_info, true);
+  check_sample_range(0, 0, index_info, true);
+  check_sample_range(2, 5, index_info, true);
+  check_sample_range(8, 9, index_info, true);
+  check_sample_range(11, 12, index_info, true);
+  check_sample_range(15, 15, index_info, true);
   check_sample_range(18, 19, index_info, true);
 
   check_sample_range(0, 2, index_info, false);
   check_sample_range(0, 4, index_info, false);
-  check_sample_range(4, 4, index_info, false);
+  check_sample_range(5, 6, index_info, false);
   check_sample_range(5, 9, index_info, false);
-  check_sample_range(6, 10, index_info, false);
+  check_sample_range(7, 9, index_info, false);
   check_sample_range(12, 13, index_info, false);
   check_sample_range(15, 16, index_info, false);
   check_sample_range(17, 17, index_info, false);
@@ -102,10 +102,10 @@ TEST_F(ObRowSampleFilterTest, test_filter_range)
 
 TEST_F(ObRowSampleFilterTest, test_set_sample_bitmap)
 {
-  bool result[20] = {0, 0, 1, 0,
-                     1, 1, 0, 0,
+  bool result[20] = {0, 1, 0, 0,
+                     0, 0, 1, 1,
                      0, 0, 1, 0,
-                     1, 1, 0, 0,
+                     0, 1, 1, 0,
                      1, 1, 0, 0};
   ObBitmap *result_bitmap = nullptr;
   ASSERT_EQ(OB_SUCCESS, sample_executor_->init_bitmap(20, result_bitmap));

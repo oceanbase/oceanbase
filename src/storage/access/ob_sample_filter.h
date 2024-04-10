@@ -103,7 +103,7 @@ public:
     count_ = std::floor(static_cast<double>((interval_id_ + 1) * interval_length_) * percent_ / 100)
               - std::floor(static_cast<double>(interval_id_ * interval_length_) * percent_ / 100);
     uint64_t hash_value = murmurhash(&interval_id_, sizeof(interval_id_), static_cast<uint64_t>(seed_));
-    uint64_t offset = interval_length_ <= count_ ? 0 : hash_value % (interval_length_ - count_);
+    uint64_t offset = interval_length_ <= count_ ? 0 : hash_value % (interval_length_ - count_ + 1);
     left_ = static_cast<int64_t>(interval_length_ * interval_id_ + offset) + start_;
     right_ = left_ + count_ - 1;
   }
