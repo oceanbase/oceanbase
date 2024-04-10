@@ -1191,6 +1191,7 @@ public:
   static int all_virtual_ls_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_flt_config_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_scheduler_job_run_detail_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_session_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_scheduler_job_class_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_recover_table_job_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_recover_table_job_history_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1552,6 +1553,8 @@ public:
   static int dba_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_tenant_event_history_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_flt_trace_config_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_session_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_session_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_pl_cache_object_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_pl_cache_object_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_ob_recover_table_jobs_schema(share::schema::ObTableSchema &table_schema);
@@ -1997,6 +2000,8 @@ public:
   static int v_ob_timestamp_service_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ls_log_restore_status_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_flt_trace_config_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_session_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_session_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_pl_cache_object_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_pl_cache_object_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3644,6 +3649,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_ls_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_flt_config_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_scheduler_job_run_detail_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_session_info_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_scheduler_job_class_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_recover_table_job_ora_schema,
   ObInnerTableSchema::all_virtual_recover_table_job_history_ora_schema,
@@ -4089,6 +4095,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_tenant_event_history_schema,
   ObInnerTableSchema::cdb_ob_tenant_event_history_schema,
   ObInnerTableSchema::gv_ob_flt_trace_config_schema,
+  ObInnerTableSchema::gv_ob_session_schema,
+  ObInnerTableSchema::v_ob_session_schema,
   ObInnerTableSchema::gv_ob_pl_cache_object_schema,
   ObInnerTableSchema::v_ob_pl_cache_object_schema,
   ObInnerTableSchema::cdb_ob_recover_table_jobs_schema,
@@ -4534,6 +4542,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_timestamp_service_ora_schema,
   ObInnerTableSchema::v_ob_ls_log_restore_status_ora_schema,
   ObInnerTableSchema::gv_ob_flt_trace_config_ora_schema,
+  ObInnerTableSchema::gv_ob_session_ora_schema,
+  ObInnerTableSchema::v_ob_session_ora_schema,
   ObInnerTableSchema::gv_ob_pl_cache_object_ora_schema,
   ObInnerTableSchema::v_ob_pl_cache_object_ora_schema,
   NULL,};
@@ -4959,6 +4969,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS_TID,
   OB_ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_COMPACTION_SUGGESTION_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_TID,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_TID,
   OB_ALL_VIRTUAL_SERVER_COMPACTION_EVENT_HISTORY_TID,
   OB_SESSION_VARIABLES_TID,
@@ -5338,6 +5349,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LS_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_FLT_CONFIG_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_SCHEDULER_JOB_CLASS_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_ORA_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_ORA_TID,
@@ -5603,6 +5615,8 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_LS_HISTORY_TID,
   OB_DBA_OB_TENANT_EVENT_HISTORY_TID,
   OB_GV_OB_FLT_TRACE_CONFIG_TID,
+  OB_GV_OB_SESSION_TID,
+  OB_V_OB_SESSION_TID,
   OB_GV_OB_PL_CACHE_OBJECT_TID,
   OB_V_OB_PL_CACHE_OBJECT_TID,
   OB_DBA_OB_RECOVER_TABLE_JOBS_TID,
@@ -6038,6 +6052,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TIMESTAMP_SERVICE_ORA_TID,
   OB_V_OB_LS_LOG_RESTORE_STATUS_ORA_TID,
   OB_GV_OB_FLT_TRACE_CONFIG_ORA_TID,
+  OB_GV_OB_SESSION_ORA_TID,
+  OB_V_OB_SESSION_ORA_TID,
   OB_GV_OB_PL_CACHE_OBJECT_ORA_TID,
   OB_V_OB_PL_CACHE_OBJECT_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
@@ -6819,6 +6835,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_WR_CONTROL_TID,
   OB_ALL_VIRTUAL_TENANT_EVENT_HISTORY_TID,
   OB_ALL_VIRTUAL_FLT_CONFIG_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_TID,
@@ -6957,6 +6974,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_WR_CONTROL_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_EVENT_HISTORY_ORA_TID
 ,  OB_ALL_VIRTUAL_FLT_CONFIG_ORA_TID
+,  OB_ALL_VIRTUAL_SESSION_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_ORA_TID
 ,  OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_ORA_TID
 ,  OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_ORA_TID
@@ -7287,6 +7305,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS_TNAME,
   OB_ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO_TNAME,
   OB_ALL_VIRTUAL_COMPACTION_SUGGESTION_TNAME,
+  OB_ALL_VIRTUAL_SESSION_INFO_TNAME,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_TNAME,
   OB_ALL_VIRTUAL_SERVER_COMPACTION_EVENT_HISTORY_TNAME,
   OB_SESSION_VARIABLES_TNAME,
@@ -7666,6 +7685,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LS_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_FLT_CONFIG_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_SESSION_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_SCHEDULER_JOB_CLASS_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_ORA_TNAME,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_ORA_TNAME,
@@ -7931,6 +7951,8 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_LS_HISTORY_TNAME,
   OB_DBA_OB_TENANT_EVENT_HISTORY_TNAME,
   OB_GV_OB_FLT_TRACE_CONFIG_TNAME,
+  OB_GV_OB_SESSION_TNAME,
+  OB_V_OB_SESSION_TNAME,
   OB_GV_OB_PL_CACHE_OBJECT_TNAME,
   OB_V_OB_PL_CACHE_OBJECT_TNAME,
   OB_DBA_OB_RECOVER_TABLE_JOBS_TNAME,
@@ -8366,6 +8388,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TIMESTAMP_SERVICE_ORA_TNAME,
   OB_V_OB_LS_LOG_RESTORE_STATUS_ORA_TNAME,
   OB_GV_OB_FLT_TRACE_CONFIG_ORA_TNAME,
+  OB_GV_OB_SESSION_ORA_TNAME,
+  OB_V_OB_SESSION_ORA_TNAME,
   OB_GV_OB_PL_CACHE_OBJECT_ORA_TNAME,
   OB_V_OB_PL_CACHE_OBJECT_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
@@ -9042,7 +9066,6 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_MASTER_KEY_VERSION_INFO_TID,
   OB_ALL_VIRTUAL_DAG_TID,
   OB_ALL_VIRTUAL_DAG_SCHEDULER_TID,
-  OB_ALL_VIRTUAL_SESSION_INFO_TID,
   OB_ALL_VIRTUAL_IO_CALIBRATION_STATUS_TID,
   OB_ALL_VIRTUAL_IO_BENCHMARK_TID,
   OB_ALL_VIRTUAL_IO_QUOTA_TID,
@@ -9111,6 +9134,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_TABLET_COMPACTION_PROGRESS_TID,
   OB_ALL_VIRTUAL_COMPACTION_DIAGNOSE_INFO_TID,
   OB_ALL_VIRTUAL_COMPACTION_SUGGESTION_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_TID,
   OB_ALL_VIRTUAL_TABLET_COMPACTION_HISTORY_TID,
   OB_ALL_VIRTUAL_SERVER_COMPACTION_EVENT_HISTORY_TID,
   OB_ALL_VIRTUAL_LOCK_WAIT_STAT_TID,
@@ -9224,6 +9248,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PX_P2P_DATAHUB_ORA_TID,
   OB_ALL_VIRTUAL_TIMESTAMP_SERVICE_ORA_TID,
   OB_ALL_VIRTUAL_LS_LOG_RESTORE_STATUS_ORA_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_ORA_TID,
   OB_ALL_VIRTUAL_LS_INFO_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
@@ -9337,6 +9362,7 @@ const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_WR_CONTROL_ORA_TID,
   OB_ALL_VIRTUAL_FLT_CONFIG_ORA_TID,
+  OB_ALL_VIRTUAL_SESSION_INFO_ORA_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_ORA_TID,
   OB_ALL_VIRTUAL_RECOVER_TABLE_JOB_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_IMPORT_TABLE_JOB_ORA_TID,
@@ -11625,11 +11651,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 259;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 742;
-const int64_t OB_SYS_VIEW_COUNT = 798;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1804;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 743;
+const int64_t OB_SYS_VIEW_COUNT = 802;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1809;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1807;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1812;
 
 } // end namespace share
 } // end namespace oceanbase

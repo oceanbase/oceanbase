@@ -6569,7 +6569,7 @@ def_table_schema(
   ('db', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
   ('command', 'varchar:OB_MAX_COMMAND_LENGTH', 'false', ''),
   ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-  ('time', 'int', 'false', '0'),
+  ('time', 'double', 'false'),
   ('state', 'varchar:OB_MAX_SESSION_STATE_LENGTH', 'true'),
   ('info', 'varchar:MAX_COLUMN_VARCHAR_LENGTH', 'true'),
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
@@ -6584,7 +6584,7 @@ def_table_schema(
   ('ssl_cipher', 'varchar:OB_MAX_COMMAND_LENGTH', 'true'),
   ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true', ''),
   ('trans_state', 'varchar:OB_MAX_TRANS_STATE_LENGTH', 'true'),
-  ('total_time', 'int', 'false', '0'),
+  ('total_time', 'double', 'false'),
   ('retry_cnt', 'int', 'false', '0'),
   ('retry_info', 'int', 'false', '0'),
   ('action', 'varchar:MAX_VALUE_LENGTH', 'true', ''),
@@ -6601,7 +6601,11 @@ def_table_schema(
   ('lb_vip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
   ('lb_vport', 'int', 'true'),
   ('in_bytes', 'bigint'),
-  ('out_bytes', 'bigint')
+  ('out_bytes', 'bigint'),
+  ('user_client_port', 'int', 'false', '0'),
+  ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+  ('service_name', 'varchar:64', 'true'),
+  ('total_cpu_time', 'double', 'false'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -8810,6 +8814,7 @@ def_table_schema(
   table_type = 'VIRTUAL_TABLE',
   gm_columns = [],
   rowkey_columns = [],
+  in_tenant_space = True,
 
   normal_columns = [
   ('id', 'uint', 'false', '0'),
@@ -8819,7 +8824,7 @@ def_table_schema(
   ('db', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
   ('command', 'varchar:OB_MAX_COMMAND_LENGTH', 'false', ''),
   ('sql_id', 'varchar:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-  ('time', 'int', 'false', '0'),
+  ('time', 'double', 'false'),
   ('state', 'varchar:OB_MAX_SESSION_STATE_LENGTH', 'true'),
   ('info', 'varchar:MAX_COLUMN_VARCHAR_LENGTH', 'true'),
   ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
@@ -8836,6 +8841,8 @@ def_table_schema(
   ('ref_count', 'int'),
   ('backtrace', 'varchar:16384', 'true', ''),
   ('trans_state', 'varchar:OB_MAX_TRANS_STATE_LENGTH', 'true'),
+  ('user_client_port', 'int', 'false', '0'),
+  ('total_cpu_time', 'double', 'false')
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -13287,7 +13294,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15403'
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15404', all_def_keywords['__all_tenant_scheduler_job_run_detail']))
 
-# 15405: __all_virtual_session_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15405', all_def_keywords['__all_virtual_session_info'])))
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15406', all_def_keywords['__all_tenant_scheduler_job_class']))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15407', all_def_keywords['__all_virtual_recover_table_job'])))
@@ -13843,7 +13850,7 @@ def_table_schema(
   table_type = 'SYSTEM_VIEW',
   gm_columns = [],
   rowkey_columns = [],
-  view_definition = """SELECT id AS ID, user AS USER, host AS HOST, db AS DB, command AS COMMAND, time AS TIME, state AS STATE, info AS INFO FROM oceanbase.__all_virtual_processlist WHERE  is_serving_tenant(svr_ip, svr_port, effective_tenant_id())
+  view_definition = """SELECT id AS ID, user AS USER, host AS HOST, db AS DB, command AS COMMAND, cast(time as SIGNED) AS TIME, state AS STATE, info AS INFO FROM oceanbase.__all_virtual_processlist WHERE  is_serving_tenant(svr_ip, svr_port, effective_tenant_id())
 """.replace("\n", " "),
 
   in_tenant_space = True,
@@ -21363,7 +21370,8 @@ SELECT
   LB_VIP,
   LB_VPORT,
   IN_BYTES,
-  OUT_BYTES
+  OUT_BYTES,
+  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -21378,7 +21386,41 @@ def_table_schema(
   gm_columns      = [],
   in_tenant_space = True,
   view_definition = """
-    SELECT *
+    SELECT SVR_IP, SVR_PORT, SQL_PORT,
+    ID,
+    USER,
+    HOST,
+    DB,
+    TENANT,
+    COMMAND,
+    TIME,
+    TOTAL_TIME,
+    STATE,
+    INFO,
+    PROXY_SESSID,
+    MASTER_SESSID,
+    USER_CLIENT_IP,
+    USER_HOST,
+    RETRY_CNT,
+    RETRY_INFO,
+    SQL_ID,
+    TRANS_ID,
+    THREAD_ID,
+    SSL_CIPHER,
+    TRACE_ID,
+    TRANS_STATE,
+    ACTION,
+    MODULE,
+    CLIENT_INFO,
+    LEVEL,
+    SAMPLE_PERCENTAGE,
+    RECORD_POLICY,
+    LB_VID,
+    LB_VIP,
+    LB_VPORT,
+    IN_BYTES,
+    OUT_BYTES,
+    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -29216,8 +29258,78 @@ def_table_schema(
   WHERE a.tenant_id = b.tenant_id
   """.replace("\n", " ")
 )
-# 21459：GV$OB_SESSION
-# 21460：V$OB_SESSION
+
+def_table_schema(
+  owner = 'jingfeng.jf',
+  table_name      = 'GV$OB_SESSION',
+  table_id        = '21459',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """select
+                         id as ID,
+                         user as USER,
+                         tenant as TENANT,
+                         host as HOST,
+                         db as DB,
+                         command as COMMAND,
+                         sql_id as SQL_ID,
+                         cast(time as SIGNED) as TIME,
+                         state as STATE,
+                         info as INFO,
+                         svr_ip as SVR_IP,
+                         svr_port as SVR_PORT,
+                         sql_port as SQL_PORT,
+                         proxy_sessid as PROXY_SESSID,
+                         user_client_ip as USER_CLIENT_IP,
+                         user_host as USER_HOST,
+                         trans_id as TRANS_ID,
+                         thread_id as THREAD_ID,
+                         trace_id as TRACE_ID,
+                         ref_count as REF_COUNT,
+                         backtrace as BACKTRACE,
+                         trans_state as TRANS_STATE,
+                         cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
+                     from oceanbase.__all_virtual_session_info
+""".replace("\n", " "),
+  normal_columns  = [],
+)
+def_table_schema(
+  owner = 'jingfeng.jf',
+  table_name      = 'V$OB_SESSION',
+  table_id        = '21460',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+			id as ID,
+                         user as USER,
+                         tenant as TENANT,
+                         host as HOST,
+                         db as DB,
+                         command as COMMAND,
+                         sql_id as SQL_ID,
+                         cast(time as SIGNED) as TIME,
+                         state as STATE,
+                         info as INFO,
+                         svr_ip as SVR_IP,
+                         svr_port as SVR_PORT,
+                         sql_port as SQL_PORT,
+                         proxy_sessid as PROXY_SESSID,
+                         user_client_ip as USER_CLIENT_IP,
+                         user_host as USER_HOST,
+                         trans_id as TRANS_ID,
+                         thread_id as THREAD_ID,
+                         trace_id as TRACE_ID,
+                         ref_count as REF_COUNT,
+                         backtrace as BACKTRACE,
+                         trans_state as TRANS_STATE,
+                         cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME 		FROM oceanbase.gv$ob_session WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+""".replace("\n", " "),
+  normal_columns  = [],
+)
 
 def_table_schema(
     owner = 'hr351303',
@@ -55064,8 +55176,84 @@ def_table_schema(
   WHERE a.TENANT_ID = b.TENANT_ID;
   """.replace("\n", " ")
 )
-# 28196: GV$OB_SESSION
-# 28197: V$OB_SESSION
+
+def_table_schema(
+  owner = 'jingfeng.jf',
+  table_name      = 'GV$OB_SESSION',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28196',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                         id ID,
+                         "USER",
+                         tenant TENANT,
+                         host HOST,
+                         db DB,
+                         command COMMAND,
+                         sql_id SQL_ID,
+                         CAST(time AS INT) TIME,
+                         state STATE,
+                         info INFO,
+                         svr_ip SVR_IP,
+                         svr_port SVR_PORT,
+                         sql_port SQL_PORT,
+                         proxy_sessid PROXY_SESSID,
+                         user_client_ip as USER_CLIENT_IP,
+                         user_host as USER_HOST,
+                         trans_id as TRANS_ID,
+                         thread_id as THREAD_ID,
+                         trace_id as TRACE_ID,
+                         ref_count as REF_COUNT,
+                         backtrace as BACKTRACE,
+                         trans_state as TRANS_STATE,
+                         CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
+                    FROM SYS.ALL_VIRTUAL_SESSION_INFO
+""".replace("\n", " ")
+)
+def_table_schema(
+  owner = 'jingfeng.jf',
+  table_name      = 'V$OB_SESSION',
+  name_postfix = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28197',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+                         id ID,
+                         "USER",
+                         tenant TENANT,
+                         host HOST,
+                         db DB,
+                         command COMMAND,
+                         sql_id SQL_ID,
+                         CAST(time AS INT) TIME,
+                         state STATE,
+                         info INFO,
+                         svr_ip SVR_IP,
+                         svr_port SVR_PORT,
+                         sql_port SQL_PORT,
+                         proxy_sessid PROXY_SESSID,
+                         user_client_ip as USER_CLIENT_IP,
+                         user_host as USER_HOST,
+                         trans_id as TRANS_ID,
+                         thread_id as THREAD_ID,
+                         trace_id as TRACE_ID,
+                         ref_count as REF_COUNT,
+                         backtrace as BACKTRACE,
+                         trans_state as TRANS_STATE,
+                         CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
+                     FROM SYS.GV$OB_SESSION WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
 
 def_table_schema(
     owner = 'hr351303',

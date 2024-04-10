@@ -408,6 +408,15 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       ObSQLSessionInfo::LockGuard query_guard(session_info_->get_query_lock());
       ObSQLSessionInfo::LockGuard data_guard(session_info_->get_thread_data_lock());
       OB_UNIS_DECODE(*session_info_);
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(session_info_->set_session_state(QUERY_ACTIVE))) {
+        LOG_WARN("set session state failed", K(ret));
+      } else if (OB_FAIL(session_info_->store_query_string(
+          ObString::make_string("REMOTE PLAN SCHEDULING")))) {
+        LOG_WARN("store query string failed", K(ret));
+      } else {
+        session_info_->set_mysql_cmd(obmysql::COM_QUERY);
+      }
       OB_UNIS_DECODE(remote_sql_info_->is_batched_stmt_);
     }
     dependency_tables_.set_allocator(&(exec_ctx_->get_allocator()));

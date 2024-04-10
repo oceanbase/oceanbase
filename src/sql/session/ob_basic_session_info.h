@@ -781,6 +781,18 @@ public:
   bool get_is_in_retry_for_dup_tbl() {
     return SESS_IN_RETRY_FOR_DUP_TBL == thread_data_.is_in_retry_;
   }
+  void set_retry_active_time(int64_t time)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.retry_active_time_ = time;
+  }
+  int64_t get_retry_active_time() const { return thread_data_.retry_active_time_; }
+  void set_is_request_end(bool is_request_end)
+  {
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.is_request_end_ = is_request_end;
+  }
+  bool get_is_request_end() const { return thread_data_.is_request_end_; }
   obmysql::ObMySQLCmd get_mysql_cmd() const { return thread_data_.mysql_cmd_; }
   char const *get_mysql_cmd_str() const { return obmysql::get_mysql_cmd_str(thread_data_.mysql_cmd_); }
   int store_query_string(const common::ObString &stmt);
@@ -1225,6 +1237,14 @@ public:
   int get_sync_sys_vars_size(common::ObIArray<share::ObSysVarClassType> &sys_var_delta_ids, int64_t &len) const;
   bool is_sync_sys_var(share::ObSysVarClassType sys_var_id) const;
   bool is_exist_error_sync_var(share::ObSysVarClassType sys_var_id) const;
+  // record session state from active to anothe state. for record total_cpu_time.
+  bool is_active_state_change(ObSQLSessionState last_state, ObSQLSessionState curr_state) {
+    if (last_state == QUERY_ACTIVE && curr_state != QUERY_ACTIVE) {
+      return true;
+    } else {
+      return false;
+    }
+  }
 
   // nested session and sql execute for foreign key.
   bool is_nested_session() const { return nested_count_ > 0; }
@@ -1409,7 +1429,9 @@ protected:
                          interactive_timeout_(0),
                          max_packet_size_(MultiThreadData::DEFAULT_MAX_PACKET_SIZE),
                          is_shadow_(false),
-                         is_in_retry_(SESS_NOT_IN_RETRY)
+                         is_in_retry_(SESS_NOT_IN_RETRY),
+                         retry_active_time_(0),
+                         is_request_end_(true)
     {
       CHAR_CARRAY_INIT(database_name_);
     }
@@ -1446,6 +1468,8 @@ protected:
       max_packet_size_ = MultiThreadData::DEFAULT_MAX_PACKET_SIZE;
       is_shadow_ = false;
       is_in_retry_ = SESS_NOT_IN_RETRY;
+      retry_active_time_ = 0;
+      is_request_end_ = true;
     }
     ~MultiThreadData ()
     {
@@ -1479,6 +1503,13 @@ protected:
     int64_t max_packet_size_;
     bool is_shadow_;
     ObSessionRetryStatus is_in_retry_;//标识当前session是否处于query retry的状态
+    // In the retry scenario, record the cumulative active time except the current state,
+    // and use it to count the CPU time. For example, 1. The current request status is Sleep,
+    // waiting for retry, it will record the cumulative time of Active during previous execution.
+    // 2. The current request status is Active, and it is retrying. It will ignore the active time
+    // of the current status and record the cumulative time of Active during previous execution.
+    int64_t retry_active_time_;
+    bool is_request_end_; // This flag is used to distinguish whether the current request is over.
   };
 
 public:

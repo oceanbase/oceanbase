@@ -388,7 +388,12 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
                                bool async_resp_used) const
 {
   int ret = OB_SUCCESS;
-
+  if (session.get_is_in_retry()) {
+    // do nothing.
+  } else {
+    session.set_is_request_end(true);
+    session.set_retry_active_time(0);
+  }
   // reset warning buffers
   // 注意，此处req_has_wokenup_可能为true，不能再访问req对象
   // @todo 重构wb逻辑
