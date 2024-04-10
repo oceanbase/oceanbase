@@ -5081,6 +5081,8 @@ int ObOptimizerUtil::convert_subplan_scan_expr(ObRawExprCopier &copier,
                                             output_expr,
                                             &replacer))) {
     LOG_WARN("failed to copy and replace expr", K(ret));
+  } else if (OB_FAIL(output_expr->pull_relation_id())) {
+    LOG_WARN("failed to pull releation id", K(ret));
   } else { /*do nothing*/ }
   return ret;
 }
