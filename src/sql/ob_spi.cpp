@@ -8118,6 +8118,7 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
         } else if (OB_FAIL(ObExprColumnConv::convert_with_null_check(tmp_obj, obj, result_type, is_strict, cast_ctx, type_info))) {
           LOG_WARN("fail to convert with null check", K(ret));
         } else if (tmp_obj.is_null()
+                   && !ob_is_string_tc(result_type.get_type())
                    && (current_type.at(i).get_meta_type().is_xml_sql_type()
                       || (current_type.at(i).get_meta_type().is_ext() && current_type.at(i).get_accuracy().get_accuracy() == T_OBJ_XML))) {
 #ifdef OB_BUILD_ORACLE_PL
