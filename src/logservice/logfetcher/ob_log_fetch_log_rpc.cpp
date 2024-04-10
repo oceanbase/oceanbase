@@ -740,7 +740,7 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
       if (IDLE == state_) {
         host_.switch_state(FetchStream::State::IDLE);
       }
-      if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess"))) {
+      if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess", true))) {
         LOG_ERROR_RET(tmp_ret, "dispatch stream task fail", KR(ret));
       }
     }
