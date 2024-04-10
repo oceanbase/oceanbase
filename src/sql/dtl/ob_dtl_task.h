@@ -115,7 +115,7 @@ class ObDtlChTotalInfo
 public:
   ObDtlChTotalInfo()
     : start_channel_id_(0), transmit_exec_server_(), receive_exec_server_(),
-      channel_count_(0), tenant_id_(common::OB_INVALID_ID)
+      channel_count_(0), tenant_id_(common::OB_INVALID_ID), is_local_shuffle_(false)
   {}
   int assign(const ObDtlChTotalInfo &other);
   void reset()
@@ -135,13 +135,15 @@ public:
               K_(transmit_exec_server),
               K_(receive_exec_server),
               K_(channel_count),
-              K_(tenant_id));
+              K_(tenant_id),
+              K_(is_local_shuffle));
 public:
   int64_t start_channel_id_;
   ObDtlExecServer transmit_exec_server_;
   ObDtlExecServer receive_exec_server_;
   int64_t channel_count_;   // 理论上要等于 tranmit_total_task_cnt_ * receive_total_task_cnt_
   uint64_t tenant_id_;
+  bool is_local_shuffle_;
 };
 
 class ObDtlTask

@@ -705,7 +705,6 @@ void ObSerialDfoScheduler::clean_dtl_interm_result(ObExecContext &exec_ctx)
 int ObParallelDfoScheduler::do_schedule_dfo(ObExecContext &exec_ctx, ObDfo &dfo) const
 {
   int ret = OB_SUCCESS;
-
   ObArray<ObPxSqcMeta *> sqcs;
   if (OB_FAIL(dfo.get_sqcs(sqcs))) {
     LOG_WARN("fail get qc-sqc channel for QC", K(ret));
@@ -1468,6 +1467,13 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
                   exec_ctx,
                   child, parent))) {
             LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));
+          }
+        } else if (child.is_slave_mapping()) {
+          if (OB_UNLIKELY(ObPQDistributeMethod::HASH != child.get_dist_method())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected dist method for slave mapping", K(ret), K(parent), K(child));
+          } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_child_distribution(child, parent))) {
+            LOG_WARN("alloc by child distribution failed", K(ret));
           }
         } else if (OB_FAIL(ObPXServerAddrUtil::alloc_by_random_distribution(exec_ctx, child, parent))) {
           LOG_WARN("fail alloc addr by data distribution", K(parent), K(child), K(ret));

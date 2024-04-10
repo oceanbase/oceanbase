@@ -295,7 +295,7 @@ int ObDfo::fill_channel_info_by_sqc(
   ch_servers.total_task_cnt_ = 0;
   OZ(ch_servers.prefix_task_counts_.push_back(ch_servers.total_task_cnt_));
   OZ(ch_servers.add_exec_addr(sqc.get_exec_addr()));
-  ch_servers.total_task_cnt_ = 1;
+  ch_servers.total_task_cnt_ = sqc.get_task_count();
   return ret;
 }
 

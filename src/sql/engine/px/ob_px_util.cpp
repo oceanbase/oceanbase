@@ -3049,21 +3049,31 @@ int ObSlaveMapUtil::build_mn_channel_per_sqcs(
   if (OB_ISNULL(dfo_ch_total_infos)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transmit or receive mn channel info is null", KP(dfo_ch_total_infos));
+  } else if (OB_UNLIKELY(child.get_sqcs_count() != parent.get_sqcs_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sqc count not match in slave mapping plan", K(ret), K(parent), K(child));
   } else {
     OZ(dfo_ch_total_infos->prepare_allocate(sqc_count));
     if (OB_SUCC(ret)) {
       for (int64_t i = 0; i < sqc_count && OB_SUCC(ret); ++i) {
         ObDtlChTotalInfo &transmit_ch_info = dfo_ch_total_infos->at(i);
-        OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs()));
-        OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs()));
-        transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.total_task_cnt_
-                                        * transmit_ch_info.receive_exec_server_.total_task_cnt_;
-        transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)
-                                           - transmit_ch_info.channel_count_ + 1;
-        transmit_ch_info.tenant_id_ = tenant_id;
+        transmit_ch_info.is_local_shuffle_ = true;
+        if (OB_UNLIKELY(parent.get_sqcs().at(i).get_exec_addr() != child.get_sqcs().at(i).get_exec_addr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("addr not match", K(ret));
+        } else {
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.transmit_exec_server_, child.get_sqcs().at(i)));
+          OZ(ObDfo::fill_channel_info_by_sqc(transmit_ch_info.receive_exec_server_, parent.get_sqcs().at(i)));
+          transmit_ch_info.channel_count_ = transmit_ch_info.transmit_exec_server_.total_task_cnt_
+                                          * transmit_ch_info.receive_exec_server_.total_task_cnt_;
+          transmit_ch_info.start_channel_id_ = ObDtlChannel::generate_id(transmit_ch_info.channel_count_)
+                                            - transmit_ch_info.channel_count_ + 1;
+          transmit_ch_info.tenant_id_ = tenant_id;
+        }
       }
     }
   }
+  LOG_DEBUG("build mn channel per sqcs", K(parent), K(child), KPC(dfo_ch_total_infos));
   return ret;
 }
 
@@ -3618,7 +3628,7 @@ int ObSlaveMapUtil::get_pkey_table_locations(int64_t table_location_key,
   return ret;
 }
 
-int ObDtlChannelUtil::get_receive_dtl_channel_set(
+int ObDtlChannelUtil::get_mn_receive_dtl_channel_set(
   const int64_t sqc_id,
   const int64_t task_id,
   ObDtlChTotalInfo &ch_total_info,
@@ -3647,6 +3657,7 @@ int ObDtlChannelUtil::get_receive_dtl_channel_set(
       LOG_WARN("fail reserve memory for channels", K(ret),
                "channels", ch_total_info.transmit_exec_server_.total_task_cnt_);
     }
+    // 遍历transmit的所有server，逐个构建当前这个receive task和它们的channel
     for (int64_t i = 0; i < prefix_task_counts.count() && OB_SUCC(ret); ++i) {
       int64_t prefix_task_count = 0;
       if (i + 1 == prefix_task_counts.count()) {
@@ -3656,6 +3667,8 @@ int ObDtlChannelUtil::get_receive_dtl_channel_set(
       }
       ObAddr &dst_addr = ch_total_info.transmit_exec_server_.exec_addrs_.at(i);
       bool is_local = dst_addr == GCONF.self_addr_;
+      // [pre_prefix_task_count, prefix_task_count)表示transmit的第i个sqc中的transmit tasks，
+      // 在所有sqcs的transmit tasks中的编号
       for (int64_t j = pre_prefix_task_count; j < prefix_task_count && OB_SUCC(ret); ++j) {
         ObDtlChannelInfo ch_info;
         chid = base_chid + receive_task_cnt * j;
@@ -3674,10 +3687,45 @@ int ObDtlChannelUtil::get_receive_dtl_channel_set(
         K(ch_total_info.transmit_exec_server_.total_task_cnt_), K(sqc_id), K(task_id));
     }
   }
+  LOG_DEBUG("get mn receive dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
   return ret;
 }
 
-int ObDtlChannelUtil::get_transmit_dtl_channel_set(
+int ObDtlChannelUtil::get_sm_receive_dtl_channel_set(
+  const int64_t sqc_id,
+  const int64_t task_id,
+  ObDtlChTotalInfo &ch_total_info,
+  ObDtlChSet &ch_set)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(sqc_id);
+  int64_t receive_task_cnt = ch_total_info.receive_exec_server_.total_task_cnt_;
+  int64_t transmit_task_cnt = ch_total_info.transmit_exec_server_.total_task_cnt_;
+  if (OB_UNLIKELY(1 != ch_total_info.receive_exec_server_.exec_addrs_.count()
+                  || 1 != ch_total_info.transmit_exec_server_.exec_addrs_.count()
+                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) !=
+                      ch_total_info.transmit_exec_server_.exec_addrs_.at(0)
+                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) != GCONF.self_addr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected exec addrs count", K(ret), K(ch_total_info), K(GCONF.self_addr_));
+  } else if (OB_FAIL(ch_set.reserve(transmit_task_cnt))) {
+    LOG_WARN("fail reserve memory for channels", K(ret), K(transmit_task_cnt));
+  } else {
+    ObAddr &dst_addr = ch_total_info.transmit_exec_server_.exec_addrs_.at(0);
+    bool is_local = true;
+    int64_t chid = 0;
+    for (int64_t i = 0; i < transmit_task_cnt && OB_SUCC(ret); ++i) {
+      ObDtlChannelInfo ch_info;
+      chid = ch_total_info.start_channel_id_ + task_id + receive_task_cnt * i;
+      ObDtlChannelGroup::make_receive_channel(ch_total_info.tenant_id_, dst_addr, chid, ch_info, is_local);
+      OZ(ch_set.add_channel_info(ch_info));
+    }
+  }
+  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
+  return ret;
+}
+
+int ObDtlChannelUtil::get_mn_transmit_dtl_channel_set(
   const int64_t sqc_id,
   const int64_t task_id,
   ObDtlChTotalInfo &ch_total_info,
@@ -3726,6 +3774,41 @@ int ObDtlChannelUtil::get_transmit_dtl_channel_set(
         K(ch_total_info.transmit_exec_server_.total_task_cnt_));
     }
   }
+  LOG_DEBUG("get transmit dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
+  return ret;
+}
+
+int ObDtlChannelUtil::get_sm_transmit_dtl_channel_set(
+  const int64_t sqc_id,
+  const int64_t task_id,
+  ObDtlChTotalInfo &ch_total_info,
+  ObDtlChSet &ch_set)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(sqc_id);
+  int64_t receive_task_cnt = ch_total_info.receive_exec_server_.total_task_cnt_;
+  int64_t transmit_task_cnt = ch_total_info.transmit_exec_server_.total_task_cnt_;
+  if (OB_UNLIKELY(1 != ch_total_info.receive_exec_server_.exec_addrs_.count()
+                  || 1 != ch_total_info.transmit_exec_server_.exec_addrs_.count()
+                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) !=
+                      ch_total_info.transmit_exec_server_.exec_addrs_.at(0)
+                  || ch_total_info.receive_exec_server_.exec_addrs_.at(0) != GCONF.self_addr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected exec addrs count", K(ret), K(ch_total_info), K(GCONF.self_addr_));
+  } else if (OB_FAIL(ch_set.reserve(receive_task_cnt))) {
+    LOG_WARN("fail reserve memory for channels", K(ret), K(receive_task_cnt));
+  } else {
+    ObAddr &dst_addr = ch_total_info.receive_exec_server_.exec_addrs_.at(0);
+    bool is_local = true;
+    int64_t chid = 0;
+    for (int64_t i = 0; i < transmit_task_cnt && OB_SUCC(ret); ++i) {
+      ObDtlChannelInfo ch_info;
+      chid = ch_total_info.start_channel_id_ + receive_task_cnt * task_id + i;
+      ObDtlChannelGroup::make_transmit_channel(ch_total_info.tenant_id_, dst_addr, chid, ch_info, is_local);
+      OZ(ch_set.add_channel_info(ch_info));
+    }
+  }
+  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
   return ret;
 }
 
