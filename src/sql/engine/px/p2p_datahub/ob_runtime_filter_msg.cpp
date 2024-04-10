@@ -1410,7 +1410,7 @@ int ObRFRangeFilterMsg::get_max(ObCmpFunc &func, ObDatum &l, ObDatum &r, int64_t
 {
   int ret = OB_SUCCESS;
   int cmp = 0;
-  if (is_empty_ || OB_ISNULL(l.ptr_)) {
+  if (is_empty_) {
     if (OB_FAIL(dynamic_copy_cell(r, l, cell_size))) {
       LOG_WARN("fail to deep copy datum");
     }

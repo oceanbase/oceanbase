@@ -447,7 +447,7 @@ int ObRFRangeFilterVecMsg::update_max(ObRFCmpInfo &cmp_info, ObDatum &l, ObDatum
 {
   int ret = OB_SUCCESS;
   int cmp = 0;
-  if (is_empty_ || OB_ISNULL(l.ptr_)) {
+  if (is_empty_) {
     if (OB_FAIL(dynamic_copy_cell(r, l, cell_size))) {
       LOG_WARN("fail to deep copy datum");
     }
