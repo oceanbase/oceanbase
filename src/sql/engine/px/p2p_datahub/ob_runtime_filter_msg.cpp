@@ -243,6 +243,21 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
       need_free = true;
     } else {
       need_merge = false; // set success, not need to merge
+      int reg_dm_ret = OB_SUCCESS;
+#ifdef ERRSIM
+      int reg_dm_ret = OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS;
+      if (OB_SUCCESS != reg_dm_ret) {
+        LOG_WARN("p2p msg reg dm failed by design", K(ret));
+        reg_dm_ret = OB_ALLOCATE_MEMORY_FAILED;
+      }
+#endif
+      if (OB_SUCCESS == reg_dm_ret) {
+        reg_dm_ret = ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(
+            register_dm_info_, dh_key, dm_cb_node_seq_id_);
+      }
+      if (OB_SUCCESS != reg_dm_ret) {
+        LOG_WARN("[DM] failed to register check item to dm", K(reg_dm_ret));
+      }
     }
 
     // merge piece bloom filter
@@ -261,9 +276,6 @@ int ObRFBloomFilterMsg::process_msg_internal(bool &need_free)
         // after merge, dec ref_count
         rf_msg_in_map->dec_ref_count();
       }
-    }
-    if (OB_SUCC(ret) && !need_merge) {
-      (void)check_finish_receive();
     }
     if (need_free) {
        // msg not in map, dec ref count
