@@ -383,7 +383,7 @@ public:
       const bool replay_allow_tablet_not_exist,
       ObTabletHandle &tablet_handle) const;
 
-  int flush_if_need(const bool need_flush);
+  int flush_to_recycle_clog();
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   int check_can_replay_clog(bool &can_replay);
   int check_ls_need_online(bool &need_online);
@@ -402,7 +402,6 @@ private:
   int stop_();
   void wait_();
   int prepare_for_safe_destroy_();
-  int flush_if_need_(const bool need_flush);
   int offline_(const int64_t start_ts);
   int offline_compaction_();
   int online_compaction_();

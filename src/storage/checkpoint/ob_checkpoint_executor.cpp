@@ -226,26 +226,23 @@ int ObCheckpointExecutor::update_clog_checkpoint()
   return ret;
 }
 
-int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn)
+int ObCheckpointExecutor::advance_checkpoint_by_flush(const share::SCN input_recycle_scn)
 {
   int ret = OB_SUCCESS;
   const ObLSID ls_id = ls_->get_ls_id();
-  const LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
-  const SCN clog_checkpoint_scn = ls_->get_clog_checkpoint_scn();
+  SCN recycle_scn = input_recycle_scn;
+  SCN max_decided_scn;
 
   RLockGuard guard(rwlock_);
   if (update_checkpoint_enabled_) {
-    // calculate recycle_scn if it is invalid(called by clog disk full situation)
-    if (!recycle_scn.is_valid() &&
-        OB_FAIL(calculate_recycle_scn_(clog_checkpoint_lsn, clog_checkpoint_scn, recycle_scn))) {
+    if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
+      STORAGE_LOG(WARN, "failed to get_max_decided_scn", K(ls_id));
+    } else if (!recycle_scn.is_valid() && OB_FAIL(calculate_recycle_scn_(max_decided_scn, recycle_scn))) {
       STORAGE_LOG(WARN, "calculate recycle scn failed", KR(ret));
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(check_need_flush_(clog_checkpoint_scn, recycle_scn))) {
+    } else if (OB_FAIL(check_need_flush_(max_decided_scn, recycle_scn))) {
       STORAGE_LOG(WARN, "no need flush");
     } else {
-      STORAGE_LOG(INFO, "start flush", K(recycle_scn), K(clog_checkpoint_scn), K(ls_id));
+      STORAGE_LOG(INFO, "start flush", K(recycle_scn), K(input_recycle_scn), K(ls_id));
       for (int i = 1; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
         int tmp_ret = OB_SUCCESS;
         if (OB_NOT_NULL(handlers_[i]) && OB_TMP_FAIL(handlers_[i]->flush(recycle_scn))) {
@@ -260,12 +257,13 @@ int ObCheckpointExecutor::advance_checkpoint_by_flush(SCN recycle_scn)
   return ret;
 }
 
-int ObCheckpointExecutor::calculate_recycle_scn_(const LSN clog_checkpoint_lsn,
-                                                 const SCN clog_checkpoint_scn,
-                                                 SCN &recycle_scn)
+int ObCheckpointExecutor::calculate_recycle_scn_(const SCN max_decided_scn, SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
   LSN end_lsn;
+  const ObLSID ls_id = ls_->get_ls_id();
+  const LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
+  const SCN clog_checkpoint_scn = ls_->get_clog_checkpoint_scn();
   // locate_by_lsn_coarsely may return a recycle_scn less than checkpoint_scn
   // so if prev_recycle_scn_ <= clog_checkpoint_scn, the recycle_scn is still needed to be calculated again
   if (prev_clog_checkpoint_lsn_.is_valid() && (prev_clog_checkpoint_lsn_ == clog_checkpoint_lsn) &&
@@ -282,18 +280,22 @@ int ObCheckpointExecutor::calculate_recycle_scn_(const LSN clog_checkpoint_lsn,
                 K(clog_checkpoint_lsn),
                 K(recycle_scn));
   } else if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
-    STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_->get_ls_id()));
+    STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_id));
   } else {
     LSN calcu_recycle_lsn = clog_checkpoint_lsn + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
     if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
-      STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn), K(recycle_scn), K(ls_->get_ls_id()));
+      STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn), K(recycle_scn), K(ls_id));
     } else {
+      // recycle_scn must less than max_decided_scn
+      recycle_scn = MIN(recycle_scn, max_decided_scn);
+
       prev_clog_checkpoint_lsn_ = clog_checkpoint_lsn;
       prev_recycle_scn_ = recycle_scn;
       reuse_recycle_scn_times_ = 0;
       STORAGE_LOG(INFO,
                   "advance checkpoint by flush to avoid clog disk full",
                   K(recycle_scn),
+                  K(max_decided_scn),
                   K(end_lsn),
                   K(clog_checkpoint_lsn),
                   K(calcu_recycle_lsn),
@@ -304,11 +306,11 @@ int ObCheckpointExecutor::calculate_recycle_scn_(const LSN clog_checkpoint_lsn,
   return ret;
 }
 
-int ObCheckpointExecutor::check_need_flush_(const SCN clog_checkpoint_scn, const SCN recycle_scn)
+int ObCheckpointExecutor::check_need_flush_(const SCN max_decided_scn, const SCN recycle_scn)
 {
   int ret = OB_SUCCESS;
-  SCN max_decided_scn;
   const ObLSID ls_id = ls_->get_ls_id();
+  const SCN clog_checkpoint_scn = ls_->get_clog_checkpoint_scn();
   if (recycle_scn.is_max()) {
     // must do flush
   } else if (recycle_scn < clog_checkpoint_scn) {
@@ -318,8 +320,6 @@ int ObCheckpointExecutor::check_need_flush_(const SCN clog_checkpoint_scn, const
                 K(recycle_scn),
                 K(clog_checkpoint_scn),
                 K(ls_id));
-  } else if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
-    STORAGE_LOG(WARN, "failed to get_max_decided_scn", K(recycle_scn), K(clog_checkpoint_scn), K(ls_id));
   } else if (recycle_scn > max_decided_scn) {
     ret = OB_EAGAIN;
     STORAGE_LOG(WARN,
