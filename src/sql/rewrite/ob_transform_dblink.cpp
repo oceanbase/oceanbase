@@ -1708,7 +1708,8 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null param", K(ret));
       } else if (!table_item->is_link_table()
-                 || TableItem::NOT_USING != table_item->flashback_query_type_) {
+                 || TableItem::NOT_USING != table_item->flashback_query_type_
+                 || table_item->for_update_) {
       // do nothing if not dblink table or already have flashback query
       } else if (FALSE_IT(dblink_id = table_item->dblink_id_)) {
       } else if (table_item->is_reverse_link_) {
