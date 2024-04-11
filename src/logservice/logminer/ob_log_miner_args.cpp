@@ -59,6 +59,7 @@ void ObLogMinerCmdArgs::print_usage(const char *prog_name)
   "   -z, --timezone         Specifies the timezone, default is \"+8:00\".\n"
   "   -f, --record_format    Specifies the record format, default is \"CSV\".\n"
   "                          Options including CSV, REDO_ONLY, UNDO_ONLY, JSON.\n"
+  "   -T, --trans_id         Specifies the trans_id for filtering condition, default not to filter.\n"
   "   -L  --log_level        Specifies the log level, default is \"ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN\".\n"
   "\n",
   prog_name, prog_name
@@ -84,6 +85,7 @@ void ObLogMinerCmdArgs::reset()
   log_level_ = nullptr;
   timezone_ = nullptr;
   record_format_ = nullptr;
+  trans_id_ = nullptr;
   verbose_ = false;
   print_usage_ = false;
 }
@@ -92,7 +94,7 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
 {
   int ret = OB_SUCCESS;
   int opt = -1;
-  const char *short_opts = "m:c:u:p:a:l:C:s:e:O:o:r:t:S:hL:z:f:v";
+  const char *short_opts = "m:c:u:p:a:l:C:s:e:O:o:r:t:S:hL:z:f:T:v";
   const struct option long_opts[] = {
     {"mode", 1, NULL, 'm'},
     {"cluster-addr", 1, NULL, 'c'},
@@ -112,6 +114,7 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
     {"log_level", 1, NULL, 'L'},
     {"timezone", 1, NULL, 'z'},
     {"record_format", 1, NULL, 'f'},
+    {"trans_id", 1, NULL, 'T'},
     {"verbose", 0, NULL, 'v'},
     {0, 0, 0, 0},
   };
@@ -219,6 +222,11 @@ int ObLogMinerCmdArgs::init(int argc, char **argv)
         break;
       }
 
+      case 'T': {
+        trans_id_ = optarg;
+        break;
+      }
+
       case 'v': {
         verbose_ = true;
         break;
@@ -314,6 +322,7 @@ const char *AnalyzerArgs::START_TIME_US_KEY = "start_time_us";
 const char *AnalyzerArgs::END_TIME_US_KEY = "end_time_us";
 const char *AnalyzerArgs::TIMEZONE_KEY = "timezone";
 const char *AnalyzerArgs::RECORD_FORMAT_KEY = "record_format";
+const char *AnalyzerArgs::TRANS_ID_KEY = "trans_id";
 void AnalyzerArgs::reset()
 {
   cluster_addr_ = nullptr;
@@ -329,6 +338,7 @@ void AnalyzerArgs::reset()
   end_time_us_ = OB_INVALID_TIMESTAMP;
   timezone_ = nullptr;
   record_format_ = RecordFileFormat::INVALID;
+  trans_id_ = nullptr;
   alloc_.reset();
 }
 
@@ -357,6 +367,8 @@ int AnalyzerArgs::init(const ObLogMinerCmdArgs &args)
       LOG_ERROR("failed to deep copy table list", K(args));
     } else if (OB_FAIL(deep_copy_cstring(alloc_, args.column_cond_, column_cond_))) {
       LOG_ERROR("failed to deep copy column cond", K(args));
+    } else if (OB_FAIL(deep_copy_cstring(alloc_, args.trans_id_, trans_id_))) {
+      LOG_ERROR("failed to deep copy trans_id", K(args));
     } else if (OB_FAIL(deep_copy_cstring(alloc_, operations, operations_))) {
       LOG_ERROR("failed to deep copy operations", K(args));
     } else if (OB_FAIL(deep_copy_cstring(alloc_, args.output_, output_dst_))) {
@@ -568,6 +580,9 @@ int AnalyzerArgs::serialize(char *buf, const int64_t buf_len, int64_t &pos) cons
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", COLUMN_COND_KEY,
       empty_str_wrapper(column_cond_)))) {
     LOG_ERROR("failed to print column cond", KCSTRING(column_cond_), K(buf_len), K(pos));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", TRANS_ID_KEY,
+      empty_str_wrapper(trans_id_)))) {
+    LOG_ERROR("failed to print trans_id", KCSTRING(trans_id_), K(buf_len), K(pos));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s=%s\n", OPERATIONS_KEY,
       empty_str_wrapper(operations_)))) {
     LOG_ERROR("failed to print operations", KCSTRING(operations_), K(buf_len), K(pos));
@@ -610,6 +625,8 @@ int AnalyzerArgs::deserialize(const char *buf, const int64_t data_len, int64_t &
     LOG_ERROR("failed to get table_list", K(data_len), K(pos));
   } else if (OB_FAIL(parse_line(COLUMN_COND_KEY, buf, data_len, pos, alloc_, column_cond_))) {
     LOG_ERROR("failed to get column_cond", K(data_len), K(pos));
+  } else if (OB_FAIL(parse_line(TRANS_ID_KEY, buf, data_len, pos, alloc_, trans_id_))) {
+    LOG_ERROR("failed to get trans_id", K(data_len), K(pos));
   } else if (OB_FAIL(parse_line(OPERATIONS_KEY, buf, data_len, pos, alloc_, operations_))) {
     LOG_ERROR("failed to get operations", K(data_len), K(pos));
   } else if (OB_FAIL(parse_line(OUTPUT_DST_KEY, buf, data_len, pos, alloc_, output_dst_))) {
@@ -644,6 +661,7 @@ int64_t AnalyzerArgs::get_serialize_size() const
   size += strlen(ARCHIVE_DEST_KEY) + 1 + strlen(empty_str_wrapper(archive_dest_)) + 1;
   size += strlen(TABLE_LIST_KEY) + 1 + strlen(empty_str_wrapper(table_list_)) + 1;
   size += strlen(COLUMN_COND_KEY) + 1 + strlen(empty_str_wrapper(column_cond_)) + 1;
+  size += strlen(TRANS_ID_KEY) + 1 + strlen(empty_str_wrapper(trans_id_)) + 1;
   size += strlen(OPERATIONS_KEY) + 1 + strlen(empty_str_wrapper(operations_)) + 1;
   size += strlen(OUTPUT_DST_KEY) + 1 + strlen(empty_str_wrapper(output_dst_)) + 1;
   size += strlen(LOG_LEVEL_KEY) + 1 + strlen(empty_str_wrapper(log_level_)) + 1;

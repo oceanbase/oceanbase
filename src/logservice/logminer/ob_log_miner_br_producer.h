@@ -55,6 +55,7 @@ public:
   { destroy(); }
   int init(const AnalyzerArgs &args,
       ILogMinerBRFilter *filter,
+      ILogMinerDataManager *data_manager,
       ILogMinerErrorHandler *err_handle);
 
 private:
@@ -74,6 +75,7 @@ private:
   libobcdc::ObCDCFactory cdc_factory_;
   libobcdc::IObCDCInstance *cdc_instance_;
   ILogMinerBRFilter *br_filter_;
+  ILogMinerDataManager *data_manager_;
   ILogMinerErrorHandler *err_handle_;
 };
 
