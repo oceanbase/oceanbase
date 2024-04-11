@@ -1939,6 +1939,13 @@ int ObMvccRowCallback::trans_abort()
   ObRowLatchGuard guard(value_.latch_);
 
   if (NULL != tnode_) {
+    if (NULL == tnode_->prev_ && NULL == tnode_->next_) {
+      // If after the abort, the ObMvccRow is empty, we recorded it for later
+      // possible fast freeze. You can read check_tombstone_need_fast_freeze for
+      // detailed strategy.
+      memtable_->get_mt_stat().empty_mvcc_row_count_++;
+    }
+
     if (!(tnode_->is_committed() || tnode_->is_aborted())) {
       tnode_->trans_abort(ctx_.get_tx_end_scn());
       wakeup_row_waiter_if_need_();

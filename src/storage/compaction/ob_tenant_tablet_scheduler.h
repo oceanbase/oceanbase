@@ -77,6 +77,8 @@ private:
   static const int64_t FAST_FREEZE_INTERVAL_US = 300 * 1000 * 1000L;  //300s
   static const int64_t PRINT_LOG_INVERVAL = 2 * 60 * 1000 * 1000L; // 2m
   static const int64_t TOMBSTONE_DEFAULT_ROW_COUNT = 250000;
+  static const int64_t EMPTY_MVCC_ROW_COUNT = 1000;
+  static const int64_t EMPTY_MVCC_ROW_PERCENTAGE = 50;
   static const int64_t TOMBSTONE_MAX_ROW_COUNT = 500000;
   static const int64_t TOMBSTONE_STEP_ROW_COUNT = 50000;
   static const int64_t FAST_FREEZE_TABLET_STAT_KEY_BUCKET_NUM = OB_MAX_LS_NUM_PER_TENANT_PER_SERVER * 1024;

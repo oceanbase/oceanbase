@@ -62,12 +62,20 @@ struct ObMtStat
   ObMtStat() { reset(); }
   ~ObMtStat() = default;
   void reset() { memset(this, 0, sizeof(*this));}
-  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
-               K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
-               K_(release_time), K_(last_print_time), K_(row_size));
+  TO_STRING_KV(K_(insert_row_count),
+               K_(update_row_count),
+               K_(delete_row_count),
+               K_(empty_mvcc_row_count),
+               K_(frozen_time),
+               K_(ready_for_flush_time),
+               K_(create_flush_dag_time),
+               K_(release_time),
+               K_(last_print_time),
+               K_(row_size));
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
+  int64_t empty_mvcc_row_count_;
   int64_t frozen_time_;
   int64_t ready_for_flush_time_;
   int64_t create_flush_dag_time_;
@@ -396,6 +404,7 @@ public:
   int set_freezer(storage::ObFreezer *handler);
   storage::ObFreezer *get_freezer() { return freezer_; }
   int get_ls_id(share::ObLSID &ls_id);
+  ObLSHandle &get_ls_handle() { return ls_handle_; }
   int set_memtable_mgr_(storage::ObTabletMemtableMgr *mgr);
   storage::ObTabletMemtableMgr *get_memtable_mgr_();
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
