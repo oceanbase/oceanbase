@@ -413,6 +413,7 @@ public:
   // get current scn from dblink. return OB_INVALID_ID if remote server not support current_scn
   int get_link_current_scn(uint64_t dblink_id, uint64_t tenant_id, ObSQLSessionInfo *session_info,
                            uint64_t &current_scn);
+  bool check_is_under_oracle12c(uint64_t dblink_id);
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
@@ -423,6 +424,7 @@ private:
   uint64_t next_link_table_id_;
   // key is dblink_id, value is current scn.
   common::hash::ObHashMap<uint64_t, uint64_t> dblink_scn_;
+  common::ObSEArray<uint64_t, 1> dblink_ids_under_oracle12c_;
 };
 
 #ifndef OB_BUILD_SPM

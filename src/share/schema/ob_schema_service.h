@@ -1179,7 +1179,8 @@ public:
                                     sql::ObSQLSessionInfo *session_info,
                                     const common::ObString &dblink_name,
                                     bool is_reverse_link,
-                                    uint64_t *current_scn) = 0;
+                                    uint64_t *current_scn,
+                                    bool &is_under_oracle12c) = 0;
 
   static bool is_formal_version(const int64_t schema_version);
   static bool is_sys_temp_version(const int64_t schema_version);
