@@ -23287,6 +23287,8 @@ int ObDDLService::create_tenant(
                arg, schema_guard, user_tenant_schema,
                meta_tenant_schema, init_configs))) {
       LOG_WARN("fail to create tenant schema", KR(ret), K(arg));
+    } else if (OB_FAIL(add_extra_tenant_init_config_(user_tenant_id, init_configs))) {
+      LOG_WARN("fail to add_extra_tenant_init_config", KR(ret), K(user_tenant_id));
     } else {
       DEBUG_SYNC(BEFORE_CREATE_META_TENANT);
       // create ls/tablet/schema in tenant space
@@ -37998,6 +38000,35 @@ bool ObDDLService::need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alte
   return (alter_table_arg.is_alter_columns_
           || (alter_table_arg.is_alter_options_
               && alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)));
+}
+
+int ObDDLService::add_extra_tenant_init_config_(
+                  const uint64_t tenant_id,
+                  common::ObIArray<common::ObConfigPairs> &init_configs)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  ObString config_name("_parallel_ddl_control");
+  ObSqlString config_value;
+  if (OB_FAIL(ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(config_value))) {
+    LOG_WARN("fail to generate parallel ddl control config value", KR(ret));
+  }
+  for (int index = 0 ; !find && OB_SUCC(ret) && index < init_configs.count(); ++index) {
+    if (tenant_id == init_configs.at(index).get_tenant_id()) {
+      find = true;
+      common::ObConfigPairs &parallel_table_config = init_configs.at(index);
+      if (OB_FAIL(parallel_table_config.add_config(config_name, config_value.string()))) {
+        LOG_WARN("fail to add config", KR(ret), K(config_name), K(config_value));
+      }
+    }
+  }
+  // ---- Add new tenant init config above this line -----
+  // At the same time, to verify modification, you need modify test case tenant_init_config(_oracle).test
+  if (OB_SUCC(ret) && !find) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("no matched tenant config", KR(ret), K(tenant_id), K(init_configs));
+  }
+  return ret;
 }
 
 } // end namespace rootserver

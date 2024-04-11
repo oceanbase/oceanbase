@@ -338,6 +338,7 @@ public:
   int is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel);
   static int is_parallel_ddl_enable(const ObParallelDDLType ddl_type, const uint64_t tenant_id, bool &is_parallel);
   static int string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type);
+  static int generate_parallel_ddl_control_config_for_create_tenant(ObSqlString &config_value);
 private:
   bool check_mode_valid_(uint8_t mode) { return mode > MASK ? false : true; }
   uint64_t value_;

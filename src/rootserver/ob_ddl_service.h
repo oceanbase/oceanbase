@@ -2622,6 +2622,11 @@ private:
 
   int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
                                           ObSimpleTableSchemaV2 &inc_table_schema);
+  // this function is used for add extra tenant config init during create excepet data version
+  // The addition of new configuration items requires the addition or modification of related test cases to ensure their effectiveness.
+  int add_extra_tenant_init_config_(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
 
 private:
   int check_locality_compatible_(ObTenantSchema &schema);
