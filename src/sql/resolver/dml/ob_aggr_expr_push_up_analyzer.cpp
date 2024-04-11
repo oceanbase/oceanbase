@@ -73,7 +73,7 @@ int ObAggrExprPushUpAnalyzer::analyze_and_push_up_aggr_expr(ObRawExprFactory &ex
     } else if (final_aggr_resolver == &cur_resolver_) {
       final_aggr = aggr_expr;
     } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(expr_factory,
-                                                           final_aggr_resolver->get_subquery(),
+                                                           final_aggr_resolver->get_query_ref_exec_params(),
                                                            aggr_expr,
                                                            final_aggr))) {
       LOG_WARN("failed to get exec param expr", K(ret));
@@ -431,13 +431,13 @@ int ObAggrExprPushUpAnalyzer::get_exec_params(ObDMLResolver *resolver,
                                               ObIArray<ObExecParamRawExpr *> &my_exec_params)
 {
   int ret = OB_SUCCESS;
-  ObQueryRefRawExpr *query_ref = NULL;
-  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref = resolver->get_subquery())) {
+  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
+  if (OB_ISNULL(resolver) || OB_ISNULL(query_ref_exec_params = resolver->get_query_ref_exec_params())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref));
+    LOG_WARN("params have null", K(ret), K(resolver), K(query_ref_exec_params));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < all_exec_params.count(); ++i) {
-    if (!ObRawExprUtils::find_expr(query_ref->get_exec_params(), all_exec_params.at(i))) {
+    if (!ObRawExprUtils::find_expr(*query_ref_exec_params, all_exec_params.at(i))) {
       // do nothing
     } else if (OB_FAIL(my_exec_params.push_back(all_exec_params.at(i)))) {
       LOG_WARN("failed to push back exec param", K(ret));

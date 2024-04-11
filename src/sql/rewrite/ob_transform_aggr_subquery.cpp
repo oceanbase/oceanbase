@@ -493,7 +493,7 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObQueryRefRawExpr &query_
     LOG_TRACE("select list is invalid", K(is_valid));
     OPT_TRACE("subquery select item contain subquery");
     // 3. check from list is not correlated
-  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(query_ref,
+  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(query_ref.get_exec_params(),
                                                                 *subquery,
                                                                 is_correlated))) {
     LOG_WARN("failed to check table item correlated or not", K(ret));
@@ -502,7 +502,7 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObQueryRefRawExpr &query_
     OPT_TRACE("subquery`s table item is correlated");
     // 4. check correlated join on contiditons
     // 5. check correlated semi contiditons
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref,
+  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref.get_exec_params(),
                                                                      subquery,
                                                                      is_correlated))) {
     LOG_WARN("failed to check is join condition correlated", K(ret));
@@ -660,7 +660,7 @@ int ObTransformAggrSubquery::check_join_first_condition_for_limit_1(ObQueryRefRa
       LOG_WARN("condition expr is null", K(ret));
     } else if (has_equal_correlation) {
       // do nothing
-    } else if (OB_FAIL(ObTransformUtils::is_equal_correlation(query_ref,
+    } else if (OB_FAIL(ObTransformUtils::is_equal_correlation(query_ref.get_exec_params(),
                                                               cond,
                                                               is_eq_correlation))) {
       LOG_WARN("failed to check is equal correlation", K(ret));
@@ -739,7 +739,7 @@ int ObTransformAggrSubquery::check_subquery_conditions(ObQueryRefRawExpr &query_
       } else if (!cond->has_flag(CNT_COLUMN) || cond->has_flag(CNT_SUB_QUERY)) {
         is_valid = false;
         OPT_TRACE("subquery`s condition has subquery");
-      } else if (OB_FAIL(ObTransformUtils::is_equal_correlation(query_ref,
+      } else if (OB_FAIL(ObTransformUtils::is_equal_correlation(query_ref.get_exec_params(),
                                                                 cond,
                                                                 is_valid,
                                                                 &outer_expr,
@@ -811,7 +811,7 @@ int ObTransformAggrSubquery::choose_pullup_method(ObIArray<ObRawExpr *> &filters
     } else if (OB_ISNULL(expr = subquery->get_select_item(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select expr is null", K(ret), K(expr));
-    } else if (OB_FAIL(extract_nullable_exprs(expr, vars))) {
+    } else if (OB_FAIL(ObTransformUtils::extract_nullable_exprs(expr, vars))) {
       LOG_WARN("failed to extract nullable exprs", K(ret));
     } else if (vars.count() <= 0) {
       // do nothing
@@ -965,7 +965,12 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
 
   if (OB_SUCC(ret)) {
     // 2. 推导原始的子查询计算结果
-    if (OB_FAIL(deduce_query_values(stmt, param, select_exprs, view_columns, real_values))) {
+    if (OB_FAIL(ObTransformUtils::deduce_query_values(*ctx_,
+                                                      stmt,
+                                                      param.is_null_prop_,
+                                                      param.not_null_expr_,
+                                                      use_outer_join(param.pullup_flag_),
+                                                      select_exprs, view_columns, real_values))) {
       LOG_WARN("failed to deduce subquery output", K(ret));
     } else if (OB_FAIL(stmt.replace_relation_exprs(param.query_refs_, real_values))) {
       LOG_WARN("failed to replace inner stmt expr", K(ret));
@@ -979,117 +984,6 @@ int ObTransformAggrSubquery::transform_upper_stmt(ObDMLStmt &stmt, TransformPara
       // 4. post process
     } else if (OB_FAIL(stmt.formalize_stmt(ctx_->session_info_))) {
       LOG_WARN("failed to formalize stmt", K(ret));
-    }
-  }
-  return ret;
-}
-
-class ReplaceColumnsAndAggrs : public ObIRawExprReplacer
-{
-public:
-  int generate_new_expr(ObRawExprFactory &expr_factory,
-                        ObRawExpr *old_expr,
-                        ObRawExpr *&new_expr)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(old_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret), K(old_expr));
-    } else if (old_expr->get_expr_type() == T_FUN_COUNT) {
-      ObConstRawExpr *const_zero = NULL;
-      if (OB_FAIL(ObTransformUtils::build_const_expr_for_count(expr_factory, 0, const_zero))) {
-        LOG_WARN("failed to replace count with 0", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory,
-                                                                 session_,
-                                                                 *const_zero,
-                                                                 old_expr->get_result_type(),
-                                                                 new_expr))) {
-        LOG_WARN("failed to add cast expr above", K(ret));
-      }
-    } else if (old_expr->is_column_ref_expr() || old_expr->is_aggr_expr()) {
-      // replace with NULL
-      ObRawExpr *null_expr = NULL;
-      if (OB_FAIL(ObRawExprUtils::build_null_expr(expr_factory, null_expr))) {
-        LOG_WARN("failed to replace variable with null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(&expr_factory,
-                                                                 session_,
-                                                                 *null_expr,
-                                                                 old_expr->get_result_type(),
-                                                                 new_expr))) {
-        LOG_WARN("failed to add cast expr above", K(ret));
-      }
-    } else if (old_expr->is_const_or_param_expr()) {
-      if (OB_FAIL(expr_factory.create_raw_expr(old_expr->get_expr_class(),
-                                               old_expr->get_expr_type(),
-                                               new_expr))) {
-        LOG_WARN("failed to create raw expr", K(ret));
-      } else if (OB_FAIL(new_expr->assign(*old_expr))) {
-        LOG_WARN("failed to assign old expr", K(ret));
-      }
-    }
-    return ret;
-  }
-
-  ObSQLSessionInfo *session_;
-};
-
-int ObTransformAggrSubquery::deduce_query_values(ObDMLStmt &stmt,
-                                                 TransformParam &param,
-                                                 ObIArray<ObRawExpr *> &view_select,
-                                                 ObIArray<ObRawExpr *> &view_columns,
-                                                 ObIArray<ObRawExpr *> &real_values)
-{
-  int ret = OB_SUCCESS;
-  ObRawExpr *not_null_expr = param.not_null_expr_;
-  ObIArray<bool> &is_null_prop = param.is_null_prop_;
-  const bool is_outer_join = use_outer_join(param.pullup_flag_);
-  if (OB_ISNULL(ctx_) ||
-      OB_ISNULL(ctx_->session_info_) ||
-      OB_ISNULL(ctx_->expr_factory_) ||
-      OB_UNLIKELY(is_null_prop.count() > view_select.count()) ||
-      OB_UNLIKELY(is_null_prop.count() > view_columns.count())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid session or invalid array size", K(ret));
-  } else {
-    ObRawExprCopier copier(*ctx_->expr_factory_);
-    ReplaceColumnsAndAggrs replacer;
-    replacer.session_ = ctx_->session_info_;
-    for (int64_t i = 0; OB_SUCC(ret) && i < is_null_prop.count(); ++i) {
-      // replace_columns_and_aggrs() may change expr result type, e.g.: sum() from ObNumberType
-      // to ObNullType. This may cause operand implicit cast be added twice, so we erase it first.
-      ObRawExpr *default_expr = NULL;
-      ObRawExpr *case_when_expr = NULL;
-      if (OB_FAIL(real_values.push_back(view_columns.at(i)))) {
-        LOG_WARN("failed to push back view columns", K(ret));
-      } else if (is_null_prop.at(i) || !is_outer_join) {
-        continue;
-      } else if (OB_ISNULL(not_null_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("not null expr is null", K(ret));
-      } else if (OB_FAIL(copier.copy_on_replace(view_select.at(i),
-                                                default_expr,
-                                                &replacer))) {
-        LOG_WARN("failed to generate default expr", K(ret));
-        // link.zt, shall we add a cast here
-      } else if (OB_FAIL(default_expr->formalize(ctx_->session_info_))) {
-        LOG_WARN("failed to formalize default expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::build_case_when_expr(stmt,
-                                                                not_null_expr,
-                                                                view_columns.at(i),
-                                                                default_expr,
-                                                                case_when_expr,
-                                                                ctx_))) {
-        LOG_WARN("failed to build case when expr", K(ret));
-      } else if (OB_ISNULL(case_when_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("case when expr is null", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::try_add_cast_expr_above(ctx_->expr_factory_,
-                                                                 ctx_->session_info_,
-                                                                 *case_when_expr,
-                                                                 view_columns.at(i)->get_result_type(),
-                                                                 real_values.at(i)))) {
-        LOG_WARN("failed to add cast expr", K(ret));
-      }
     }
   }
   return ret;
@@ -1127,28 +1021,6 @@ int ObTransformAggrSubquery::transform_from_list(ObDMLStmt &stmt,
       LOG_WARN("joined table is null", K(ret));
     } else if (OB_FAIL(stmt.add_from_item(joined_table->table_id_, true))) {
       LOG_WARN("failed to add from item", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObTransformAggrSubquery::extract_nullable_exprs(
-    const ObRawExpr *expr, ObIArray<const ObRawExpr *> &vars)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expr is null", K(ret));
-  } else if (expr->is_column_ref_expr() ||
-             (expr->is_aggr_expr() && expr->get_expr_type() != T_FUN_COUNT)) {
-    if (OB_FAIL(vars.push_back(expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(extract_nullable_exprs(expr->get_param_expr(i), vars)))) {
-        LOG_WARN("failed to extract nullable expr", K(ret));
-      }
     }
   }
   return ret;
@@ -1529,14 +1401,16 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
     // never reach
   // 3. check from list is not correlated
   } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(
-                       query_ref, *subquery, is_correlated))) {
+                       query_ref.get_exec_params(), *subquery, is_correlated))) {
     LOG_WARN("failed to check subquery table item is correlated", K(ret));
   } else if (is_correlated) {
     is_valid = false;
     OPT_TRACE("subquery`s table item is correlated");
     // 4. check correlated join on contiditons
     // 5. check correlated semi contiditons
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref, subquery, is_correlated))) {
+  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref.get_exec_params(),
+                                                                     subquery,
+                                                                     is_correlated))) {
     LOG_WARN("failed to check join condition correlated", K(ret));
   } else if (is_correlated) {
     is_valid = false;
@@ -1676,7 +1550,7 @@ int ObTransformAggrSubquery::choose_pullup_method_for_exists(ObQueryRefRawExpr *
       } else if (!(IS_COMMON_COMPARISON_OP(cur_expr->get_expr_type())
                   && T_OP_NSEQ != cur_expr->get_expr_type())) {
         is_valid = false;
-      } else if (OB_FAIL(extract_nullable_exprs(cur_expr, vars))) {
+      } else if (OB_FAIL(ObTransformUtils::extract_nullable_exprs(cur_expr, vars))) {
         LOG_WARN("failed to extract nullable exprs", K(ret));
       } else if (vars.count() <= 0) {
         // do nothing

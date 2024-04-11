@@ -2319,7 +2319,9 @@ int ObSelectResolver::expand_target_list(
     if (OB_FAIL(resolve_all_basic_table_columns(table_item, false, &column_items))) {
       LOG_WARN("resolve all basic table columns failed", K(ret), K(table_item));
     }
-  } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
+  } else if (table_item.is_generated_table() ||
+             table_item.is_temp_table() ||
+             table_item.is_lateral_table()) {
     if (OB_FAIL(resolve_all_generated_table_columns(table_item, &column_items))) {
       LOG_WARN("resolve all generated table columns failed", K(ret));
     }
@@ -4936,6 +4938,7 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
       OB_ERR_BAD_FIELD_ERROR == ret && cur_resolver != NULL;
       cur_resolver = cur_resolver->get_parent_namespace_resolver()) {
     ObRawExpr *exec_param = NULL;
+    ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
     //for insert into t1 values((select c1 from dual)) ==> can't check column c1 in t1;
     if (cur_resolver->get_basic_stmt() != NULL &&
         cur_resolver->get_basic_stmt()->is_insert_stmt()) {
@@ -4951,11 +4954,11 @@ int ObSelectResolver::resolve_column_ref_in_all_namespace(
     }
     if (OB_FAIL(ret)) {
       //do nothing
-    } else if (OB_ISNULL(query_ref = cur_resolver->get_subquery())) {
+    } else if (OB_ISNULL(query_ref_exec_params = cur_resolver->get_query_ref_exec_params())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("no subquery is found", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
-                                                           query_ref,
+                                                           query_ref_exec_params,
                                                            real_ref_expr,
                                                            exec_param))) {
       LOG_WARN("failed to get exec param expr", K(ret));
@@ -5432,7 +5435,7 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subq
     subquery_resolver.set_is_sub_stmt(true);
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_current_view_level(current_view_level_);
-    set_query_ref_expr(info.ref_expr_);
+    set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     resolve_alias_for_subquery_ = !(T_FIELD_LIST_SCOPE == current_scope_
                                    && info.parents_expr_info_.has_member(IS_AGG));
     if (OB_FAIL(subquery_resolver.add_parent_gen_col_exprs(gen_col_exprs_))) {
@@ -5446,7 +5449,7 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subq
       subquery_resolver.set_parent_aggr_level(parent_aggr_level_);
     }
     OZ ( do_resolve_subquery_info(info, subquery_resolver) );
-    set_query_ref_expr(NULL);
+    set_query_ref_exec_params(NULL);
   }
   return ret;
 }

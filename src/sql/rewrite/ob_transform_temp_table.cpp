@@ -908,6 +908,31 @@ int ObTransformTempTable::get_non_correlated_subquery(ObDMLStmt *stmt,
       LOG_WARN("failed to check exec param level", K(ret));
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+    TableItem *table_item = stmt->get_table_item(i);
+    if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret));
+    } else if (!table_item->is_lateral_table()) {
+      // do nothing
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_item->exec_params_.count(); ++j) {
+        ObRawExpr *exec_param = table_item->exec_params_.at(j);
+        uint64_t key = reinterpret_cast<uint64_t>(exec_param);
+        if (OB_ISNULL(exec_param)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("exec param is null", K(ret));
+        } else if (OB_FAIL(param_level.set_refactored(key, recursive_level))) {
+          if (ret == OB_HASH_EXIST) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("failed to add exec param into map", K(ret));
+          }
+        }
+      }
+    }
+
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
     ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
     if (OB_ISNULL(query_ref)) {
@@ -2283,7 +2308,8 @@ int ObTransformTempTable::get_stmt_pointers(ObDMLStmt &root_stmt,
         if (OB_ISNULL(table_item)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table_item is null", K(i));
-        } else if (table_item->is_generated_table()) {
+        } else if (table_item->is_generated_table() ||
+                   table_item->is_lateral_table()) {
           if (parent_stmt.pos_ == pos) {
             is_find = true;
             OZ(stmt_ptr.add_ref(&table_item->ref_query_));

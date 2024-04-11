@@ -382,7 +382,7 @@ private:
   int append_condition_array(ObIArray<ObRawExprCondition *> &conditions, int count, ObRawExprCondition *value);
 
   int gather_basic_qualify_filter(ObSelectStmt &stmt, ObIArray<ObRawExpr*> &preds);
-
+  int filter_lateral_correlated_preds(TableItem &table_item, ObIArray<ObRawExpr*> &preds);
 private:
   typedef ObSEArray<ObRawExpr *, 4> PullupPreds;
   ObArenaAllocator allocator_;

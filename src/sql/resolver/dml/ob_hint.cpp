@@ -972,6 +972,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_PULLUP_EXPR :       return T_PULLUP_EXPR;
     case T_NO_AGGR_FIRST_UNNEST:           return T_AGGR_FIRST_UNNEST;
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
+    case T_NO_DECORRELATE :       return T_DECORRELATE;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -1028,6 +1029,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_PULLUP_EXPR :        return is_enable_hint ? "PULLUP_EXPR" : "NO_PULLUP_EXPR";
     case T_AGGR_FIRST_UNNEST:           return is_enable_hint ? "AGGR_FIRST_UNNEST" : "NO_AGGR_FIRST_UNNEST";
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
+    case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";

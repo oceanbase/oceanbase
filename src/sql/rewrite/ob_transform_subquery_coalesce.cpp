@@ -1555,8 +1555,8 @@ int ObTransformSubqueryCoalesce::check_expr_can_be_coalesce(ObDMLStmt *stmt,
       can_be = true;
     } else if (OB_FAIL(ObTransformUtils::check_correlated_condition_isomorphic(l_subquery,
                                                                                r_subquery,
-                                                                               *l_subquery_expr,
-                                                                               *r_subquery_expr,
+                                                                               l_subquery_expr->get_exec_params(),
+                                                                               r_subquery_expr->get_exec_params(),
                                                                                can_be,
                                                                                left_exprs,
                                                                                right_exprs))) {
@@ -1592,7 +1592,9 @@ int ObTransformSubqueryCoalesce::check_subquery_validity(ObQueryRefRawExpr *quer
   } else if (contain_subquery) {
     //do nothing
     LOG_WARN("select item contain subquery, can not be coalesced");
-  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(*query_ref, *subquery, valid))) {
+  } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(query_ref->get_exec_params(),
+                                                                         *subquery,
+                                                                         valid))) {
     LOG_WARN("failed to check correlated expr can be pullup", K(ret));
   } else if (!valid) {
     OPT_TRACE("correlated exprs can not pullup, will not coalesce subquery");

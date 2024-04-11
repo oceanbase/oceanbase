@@ -175,6 +175,7 @@ PROJECT_PRUNE NO_PROJECT_PRUNE SIMPLIFY_SET NO_SIMPLIFY_SET OUTER_TO_INNER NO_OU
 COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LEFT_TO_ANTI
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
+DECORRELATE NO_DECORRELATE
 // optimize hint
 INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
 INDEX_SS_HINT INDEX_SS_ASC_HINT INDEX_SS_DESC_HINT
@@ -299,7 +300,7 @@ END_P SET_VAR DELIMITER
 
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
 
-        LAG LANGUAGE LAST LAST_VALUE LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
+        LAG LANGUAGE LAST LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
         LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
 
         LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
@@ -10437,6 +10438,14 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_JOIN_FIRST_UNNEST, 1, $2);
 }
+| DECORRELATE opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DECORRELATE, 1, $2);
+}
+| NO_DECORRELATE opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_DECORRELATE, 1, $2);
+}
 ;
 
 multi_qb_name_list:
@@ -11414,6 +11423,11 @@ tbl_name
 {
   $$ = $1;
 }
+| LATERAL table_subquery
+{
+  $$ = $2;
+  $$->value_ = 1; //lateral
+}
 | select_with_parens %prec LOWER_PARENS
 {
   ParseNode *unname_node = NULL;
@@ -11421,12 +11435,28 @@ tbl_name
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $1, unname_node);
   unname_node->sql_str_off_ = @1.first_column;
 }
+| LATERAL select_with_parens %prec LOWER_PARENS
+{
+  ParseNode *unname_node = NULL;
+  make_name_node(unname_node, result->malloc_pool_, "");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 2, $2, unname_node);
+  unname_node->sql_str_off_ = @2.first_column;
+  $$->value_ = 1; //lateral
+}
 | select_with_parens use_flashback %prec LOWER_PARENS
 {
   ParseNode *unname_node = NULL;
   make_name_node(unname_node, result->malloc_pool_, "");
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $1, unname_node, unname_node, unname_node, unname_node, $2);
   unname_node->sql_str_off_ = @1.first_column;
+}
+| LATERAL select_with_parens use_flashback %prec LOWER_PARENS
+{
+  ParseNode *unname_node = NULL;
+  make_name_node(unname_node, result->malloc_pool_, "");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALIAS, 6, $2, unname_node, unname_node, unname_node, unname_node, $3);
+  unname_node->sql_str_off_ = @2.first_column;
+  $$->value_ = 1; //lateral
 }
 | '(' table_references ')'
 {
@@ -20147,6 +20177,7 @@ ACCOUNT
 |       KEY_BLOCK_SIZE
 |       KEY_VERSION
 |       LAG
+|       LATERAL %prec LOWER_PARENS
 |       LANGUAGE
 |       LAST
 |       LAST_VALUE

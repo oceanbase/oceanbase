@@ -81,7 +81,7 @@ ObDMLResolver::ObDMLResolver(ObResolverParams &params)
       sequence_namespace_checker_(params),
       gen_col_exprs_(),
       from_items_order_(),
-      query_ref_(NULL),
+      query_ref_exec_params_(NULL),
       has_ansi_join_(false),
       has_oracle_join_(false),
       with_clause_without_record_(false),
@@ -4072,7 +4072,11 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         } else {
           bool tmp_have_same_table = params_.have_same_table_name_;
           params_.have_same_table_name_ = false;
-          if (OB_FAIL(resolve_generate_table(*table_node, alias_node, table_item))) {
+          if (parse_tree.value_ == 1 &&
+              OB_FAIL(resolve_lateral_generated_table(*table_node, alias_node, table_item))) {
+            LOG_WARN("failed to resolve lateral generate table", K(ret));
+          } else if (parse_tree.value_ != 1 &&
+                     OB_FAIL(resolve_generate_table(*table_node, alias_node, table_item))) {
             LOG_WARN("resolve generate table failed", K(ret));
           } else if (OB_FAIL(resolve_transpose_table(transpose_node, table_item))) {
             LOG_WARN("resolve_transpose_table failed", K(ret));
@@ -4581,7 +4585,7 @@ int ObDMLResolver::resolve_single_table_column_item(const TableItem &table_item,
     if (OB_FAIL(resolve_basic_column_item(table_item, column_name, include_hidden, col_item))) {
       LOG_WARN("resolve basic column item failed", K(ret));
     } else { /*do nothing*/ }
-  } else if (table_item.is_generated_table() || table_item.is_temp_table()) {
+  } else if (table_item.is_generated_table() || table_item.is_temp_table() || table_item.is_lateral_table()) {
     if (OB_FAIL(resolve_generated_table_column_item(table_item, column_name, col_item))) {
       LOG_WARN("resolve generated table column failed", K(ret));
     }
@@ -4640,18 +4644,23 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
   JoinedTable *child_table = NULL;
   TableItem *table_item = NULL;
   ObSelectStmt *select_stmt = static_cast<ObSelectStmt*>(stmt_);
-
+  bool reverse_parse = false;
   if (OB_ISNULL(select_stmt) || OB_UNLIKELY(parse_node.type_ != T_JOINED_TABLE)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(select_stmt), K_(parse_node.type));
   } else if (OB_FAIL(alloc_joined_table_item(cur_table))) {
     LOG_WARN("create joined table item failed", K(ret));
+  } else if (parse_node.children_[0]->type_ == T_JOIN_RIGHT &&
+             OB_FAIL(check_contain_lateral_node(&parse_node,
+                                                reverse_parse))) {
+    LOG_WARN("failed to check contain lateral node", K(ret));
   } else {
     cur_table->table_id_ = generate_table_id();
     cur_table->type_ = TableItem::JOINED_TABLE;
   }
   /* resolve table */
-  for (uint64_t i = 1; OB_SUCC(ret) && i <= 2; i++) {
+  for (uint64_t index = 1; OB_SUCC(ret) && index <= 2; index++) {
+    uint64_t i = reverse_parse ? 3 - index : index;
     table_node = parse_node.children_[i];
     // nested join case or normal join case
     if (T_JOINED_TABLE == table_node->type_) {
@@ -4688,7 +4697,8 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
        * cte不能出现在right join的左面，不能出现在left join的右边，不能使用full join，
        * 可以出现在inner join的两边
        * */
-      if (1 == i) {
+      if ((!reverse_parse && 1 == i) ||
+           (reverse_parse && 2 == i)) {
         column_namespace_checker_.add_current_joined_table(NULL);
       }
       if (OB_FAIL(resolve_table(*table_node, table_item))) {
@@ -4697,9 +4707,14 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
         LOG_WARN("check special join table failed", K(ret), K(i));
       } else if (1 == i) {
         cur_table->left_table_ = table_item;
-        column_namespace_checker_.add_current_joined_table(table_item);
+        if (!reverse_parse) {
+          column_namespace_checker_.add_current_joined_table(table_item);
+        }
       } else {
         cur_table->right_table_ = table_item;
+        if (reverse_parse) {
+          column_namespace_checker_.add_current_joined_table(table_item);
+        }
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(cur_table->single_table_ids_.push_back(table_item->table_id_))) {
@@ -4786,6 +4801,90 @@ int ObDMLResolver::resolve_generate_table(const ParseNode &table_node,
     LOG_WARN("failed to add gen col exprs", K(ret));
   } else if (OB_FAIL(do_resolve_generate_table(table_node, alias_node, select_resolver, table_item))) {
     LOG_WARN("do resolve generated table failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_lateral_generated_table(const ParseNode &table_node,
+                                                   const ParseNode *alias_node,
+                                                   TableItem *&table_item)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObExecParamRawExpr*, 4> exec_params;
+  ObDMLStmt *stmt = get_stmt();
+  ObSelectResolver select_resolver(params_);
+  select_resolver.set_current_level(current_level_ + 1);
+  select_resolver.set_current_view_level(current_view_level_);
+  select_resolver.set_parent_namespace_resolver(this);
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0 ||
+               (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_2_0 &&
+                GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "lateral derived table cluster version");
+  } else if (stmt->is_select_stmt() ||
+             (is_mysql_mode() && (stmt->is_delete_stmt() || stmt->is_update_stmt()))) {
+    //resolve with cte table
+    select_resolver.set_is_sub_stmt(true);
+    if (OB_FAIL(select_resolver.set_cte_ctx(cte_ctx_, true, true))) {
+      LOG_WARN("failed to set cte ctx in mysql mode", K(ret));
+    } else if (OB_FAIL(add_cte_table_to_children(select_resolver))) {
+      LOG_WARN("failed to add cte table to children in mysql mode", K(ret));
+    }
+  } else { }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FALSE_IT(set_query_ref_exec_params(&exec_params))) {
+  } else if (OB_FALSE_IT(params_.is_resolve_lateral_derived_table_ = true)) {
+  } else if (OB_FAIL(select_resolver.add_parent_gen_col_exprs(gen_col_exprs_))) {
+    LOG_WARN("failed to add gen col exprs", K(ret));
+  } else if (OB_FAIL(do_resolve_generate_table(table_node, alias_node, select_resolver, table_item))) {
+    LOG_WARN("do resolve generated table failed", K(ret));
+  } else if (OB_ISNULL(table_item)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FALSE_IT(params_.is_resolve_lateral_derived_table_ = false)) {
+  } else if (OB_FAIL(table_item->exec_params_.assign(exec_params))) {
+    LOG_WARN("failed to assign exec params", K(ret));
+  } else {
+    set_query_ref_exec_params(NULL);
+    table_item->type_ = TableItem::LATERAL_TABLE;
+  }
+  return ret;
+}
+
+int ObDMLResolver::check_contain_lateral_node(const ParseNode *parse_tree, bool &is_contain)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *table_node = parse_tree;
+  is_contain = false;
+  if (OB_ISNULL(parse_tree)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (T_ORG == parse_tree->type_) {
+    table_node = parse_tree->children_[0];
+  } else if (T_ALIAS == parse_tree->type_) {
+    table_node = parse_tree->children_[0];
+  }
+  if (OB_ISNULL(table_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (table_node->type_ == T_SELECT) {
+    is_contain = parse_tree->value_ == 1;
+  } else if (table_node->type_ == T_JOINED_TABLE) {
+    if (OB_UNLIKELY(table_node->num_child_ < 3)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(SMART_CALL(check_contain_lateral_node(table_node->children_[1],
+                                                             is_contain)))) {
+      LOG_WARN("failed to check contain lateral node", K(ret));
+    } else if (!is_contain &&
+               OB_FAIL(SMART_CALL(check_contain_lateral_node(table_node->children_[2],
+                                                             is_contain)))) {
+      LOG_WARN("failed to check contain lateral node", K(ret));
+    }
   }
   return ret;
 }
@@ -7175,7 +7274,7 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     subquery_resolver.set_current_level(current_level_ + 1);
     subquery_resolver.set_current_view_level(current_view_level_);
     subquery_resolver.set_parent_namespace_resolver(this);
-    set_query_ref_expr(info.ref_expr_);
+    set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
       LOG_WARN("add CTE table to children failed", K(ret));
     } else if (OB_FAIL(subquery_resolver.add_parent_gen_col_exprs(gen_col_exprs_))) {
@@ -7188,7 +7287,7 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
         LOG_WARN("do resolve subquery info failed", K(ret));
       }
     }
-    set_query_ref_expr(NULL);
+    set_query_ref_exec_params(NULL);
   }
   return ret;
 }
@@ -10223,7 +10322,8 @@ int ObDMLResolver::resolve_generated_table_column_item(const TableItem &table_it
     LOG_WARN("schema checker is null", K(stmt), K_(schema_checker), K_(params_.expr_factory));
   } else if (OB_UNLIKELY(!table_item.is_generated_table() &&
                          !table_item.is_fake_cte_table() &&
-                         !table_item.is_temp_table())) {
+                         !table_item.is_temp_table() &&
+                         !table_item.is_lateral_table())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not generated table", K_(table_item.type));
   }
@@ -12753,8 +12853,8 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
   const TableItem *table_item = NULL;
   ObDMLStmt *cur_stmt = NULL;
   int32_t cur_level = current_level_;
-  ObQueryRefRawExpr *query_ref = NULL;
-  if (OB_FAIL(check_rowid_table_column_in_all_namespace(q_name, table_item, cur_stmt, cur_level, query_ref))) {
+  ObIArray<ObExecParamRawExpr*> *query_ref_exec_params = NULL;
+  if (OB_FAIL(check_rowid_table_column_in_all_namespace(q_name, table_item, cur_stmt, cur_level, query_ref_exec_params))) {
     LOG_WARN("failed to check rowid table column in all namespace", K(ret));
   } else if (OB_ISNULL(table_item) || OB_ISNULL(cur_stmt)) {
     ret = OB_ERR_BAD_FIELD_ERROR;
@@ -12788,11 +12888,11 @@ int ObDMLResolver::resolve_rowid_pseudo_column(
       if (OB_SUCC(ret)) {
         if (cur_level != current_level_) {
           ObRawExpr *exec_param = NULL;
-          if (OB_ISNULL(query_ref)) {
+          if (OB_ISNULL(query_ref_exec_params)) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("no subquery is found", K(ret), K(query_ref));
+            LOG_WARN("no subquery is found", K(ret), K(query_ref_exec_params));
           } else if (OB_FAIL(ObRawExprUtils::get_exec_param_expr(*params_.expr_factory_,
-                                                                  query_ref,
+                                                                  query_ref_exec_params,
                                                                   real_ref_expr,
                                                                   exec_param))) {
             LOG_WARN("failed to get exec param expr", K(ret));
@@ -13112,7 +13212,7 @@ int ObDMLResolver::check_rowid_table_column_in_all_namespace(const ObQualifiedNa
                                                              const TableItem *&table_item,
                                                              ObDMLStmt *&dml_stmt,
                                                              int32_t &cur_level,
-                                                             ObQueryRefRawExpr *&query_ref)
+                                                             ObIArray<ObExecParamRawExpr*> *&query_ref_exec_params)
 {
   int ret = OB_SUCCESS;
   //first check current resolver
@@ -13125,19 +13225,19 @@ int ObDMLResolver::check_rowid_table_column_in_all_namespace(const ObQualifiedNa
   } else if (table_item != NULL) {
     dml_stmt = get_stmt();
     cur_level = current_level_;
-    query_ref = get_subquery();
+    query_ref_exec_params = get_query_ref_exec_params();
   } else if (get_stmt()->is_select_stmt()) {
     //if don't find table item and current resolver is select resolver then try to find table from
     // parent namespace resolver.
     if (OB_ISNULL(get_parent_namespace_resolver())) {
       /*do nothing*/
     } else if (OB_FAIL(SMART_CALL(get_parent_namespace_resolver()->
-             check_rowid_table_column_in_all_namespace(q_name, table_item, dml_stmt, cur_level, query_ref)))) {
+             check_rowid_table_column_in_all_namespace(q_name, table_item, dml_stmt, cur_level, query_ref_exec_params)))) {
       LOG_WARN("failed to check rowid table column in all namespace", K(ret), K(q_name));
     } else {/*do nothing*/}
   }
   LOG_TRACE("Succeed to check rowid table column in all namespace", K(q_name), KPC(table_item),
-                                                       KPC(dml_stmt), K(cur_level), KPC(query_ref));
+                                                       KPC(dml_stmt), K(cur_level), KPC(query_ref_exec_params));
   return ret;
 }
 
@@ -13786,7 +13886,9 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_AGGR_FIRST_UNNEST:
     case T_NO_AGGR_FIRST_UNNEST:
     case T_JOIN_FIRST_UNNEST:
-    case T_NO_JOIN_FIRST_UNNEST: {
+    case T_NO_JOIN_FIRST_UNNEST:
+    case T_DECORRELATE:
+    case T_NO_DECORRELATE: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }

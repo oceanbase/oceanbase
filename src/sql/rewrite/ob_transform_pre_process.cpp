@@ -9544,6 +9544,23 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
   }
   if (!is_correlated) {
     // add flag to mark the exec param refer the same table
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+      TableItem *table_item = stmt->get_table_items().at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (table_item->is_lateral_table()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_item->exec_params_.count(); ++j) {
+          ObRawExpr *exec_param = table_item->exec_params_.at(j);
+          if (OB_ISNULL(exec_param)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("exec param is null", K(ret));
+          } else if (OB_FAIL(exec_param->add_flag(BE_USED))) {
+            LOG_WARN("failed to add flag", K(ret));
+          }
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
       ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
       if (OB_ISNULL(query_ref)) {
@@ -9583,6 +9600,23 @@ int ObTransformPreProcess::check_is_correlated_cte(ObSelectStmt *stmt, ObIArray<
     }
 
     // clear flag
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+      TableItem *table_item = stmt->get_table_items().at(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (table_item->is_lateral_table()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_item->exec_params_.count(); ++j) {
+          ObRawExpr *exec_param = table_item->exec_params_.at(j);
+          if (OB_ISNULL(exec_param)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("exec param is null", K(ret));
+          } else if (OB_FAIL(exec_param->clear_flag(BE_USED))) {
+            LOG_WARN("failed to add flag", K(ret));
+          }
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
       ObQueryRefRawExpr *query_ref = stmt->get_subquery_exprs().at(i);
       if (OB_ISNULL(query_ref)) {

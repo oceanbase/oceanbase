@@ -47,6 +47,7 @@
 #include "sql/rewrite/ob_transform_count_to_exists.h"
 #include "sql/rewrite/ob_transform_expr_pullup.h"
 #include "sql/rewrite/ob_transform_dblink.h"
+#include "sql/rewrite/ob_transform_decorrelate.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -353,6 +354,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(SEMI_TO_INNER, ObTransformSemiToInner);
     APPLY_RULE_IF_NEEDED(QUERY_PUSH_DOWN, ObTransformQueryPushDown);
     APPLY_RULE_IF_NEEDED(SELECT_EXPR_PULLUP, ObTransformExprPullup);
+    APPLY_RULE_IF_NEEDED(DECORRELATE, ObTransformDecorrelate);
     APPLY_RULE_IF_NEEDED(ELIMINATE_OJ, ObTransformEliminateOuterJoin);
     APPLY_RULE_IF_NEEDED(JOIN_ELIMINATION, ObTransformJoinElimination);
     APPLY_RULE_IF_NEEDED(JOIN_LIMIT_PUSHDOWN, ObTransformJoinLimitPushDown);
@@ -593,28 +595,45 @@ int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
       }
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+    TableItem *table_item = NULL;
+    if (OB_ISNULL(table_item = stmt->get_table_items().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_FAIL(finalize_exec_params(stmt, table_item->exec_params_))) {
+      LOG_WARN("failed to finalize exec params", K(ret));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
     ObQueryRefRawExpr *query_ref = NULL;
     if (OB_ISNULL(query_ref = stmt->get_subquery_exprs().at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref expr is null", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < query_ref->get_param_count(); ++j) {
-      ObExecParamRawExpr *exec_param = NULL;
-      if (OB_ISNULL(exec_param = query_ref->get_exec_param(j))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("exec param is null", K(ret));
-      } else if (exec_param->get_param_index() >= 0) {
-        // do nothing
-      } else {
-        exec_param->set_param_index(stmt->get_question_marks_count());
-        stmt->increase_question_marks_count();
-      }
+    } else if (OB_FAIL(finalize_exec_params(stmt, query_ref->get_exec_params()))) {
+      LOG_WARN("failed to finalize exec params", K(ret));
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
     if (OB_FAIL(SMART_CALL(finalize_exec_params(child_stmts.at(i))))) {
       LOG_WARN("failed to finalize exec params", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; OB_SUCC(ret) && j < exec_params.count(); ++j) {
+    ObExecParamRawExpr *exec_param = NULL;
+    if (OB_ISNULL(exec_param = exec_params.at(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param is null", K(ret));
+    } else if (exec_param->get_param_index() >= 0) {
+      // do nothing
+    } else {
+      exec_param->set_param_index(stmt->get_question_marks_count());
+      stmt->increase_question_marks_count();
     }
   }
   return ret;

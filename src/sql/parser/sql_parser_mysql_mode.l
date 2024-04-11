@@ -1147,6 +1147,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>DYNAMIC_SAMPLING { return DYNAMIC_SAMPLING; }
 <hint>BLOCKING { return BLOCKING; }
 <hint>PUSHDOWN { return PUSHDOWN; }
+<hint>DECORRELATE { return DECORRELATE; }
+<hint>NO_DECORRELATE { return NO_DECORRELATE; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

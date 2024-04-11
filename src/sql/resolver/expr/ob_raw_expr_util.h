@@ -555,6 +555,10 @@ public:
                                  ObRawExpr *correlated_expr,
                                  ObRawExpr *&exec_param);
 
+  static int get_exec_param_expr(ObRawExprFactory &expr_factory,
+                                 ObIArray<ObExecParamRawExpr*> *query_ref_exec_params,
+                                 ObRawExpr *correlated_expr,
+                                 ObRawExpr *&exec_param);
   static int create_new_exec_param(ObQueryCtx *query_ctx,
                                    ObRawExprFactory &expr_factory,
                                    ObRawExpr *&expr,

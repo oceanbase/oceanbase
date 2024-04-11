@@ -223,7 +223,7 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_parent_view_resolver(parent_view_resolver_);
     subquery_resolver.set_current_view_item(current_view_item);
-    set_query_ref_expr(info.ref_expr_);
+    set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
             LOG_WARN("add CTE table to children failed", K(ret));
     } else if (is_only_full_group_by_on(session_info_->get_sql_mode())) {
@@ -233,7 +233,7 @@ int ObViewTableResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &s
     if (OB_FAIL(do_resolve_subquery_info(info, subquery_resolver))) {
       LOG_WARN("do resolve subquery info failed", K(ret));
     }
-    set_query_ref_expr(NULL);
+    set_query_ref_exec_params(NULL);
   }
   return ret;
 }

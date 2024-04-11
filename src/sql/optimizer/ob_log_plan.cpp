@@ -753,6 +753,8 @@ int ObLogPlan::generate_join_orders()
       LOG_WARN("failed to init function table depend infos", K(ret));
     } else if (OB_FAIL(init_json_table_depend_info(base_table_items))) {
       LOG_WARN("failed to init json table depend infos", K(ret));
+    } else if (OB_FAIL(init_lateral_table_depend_info(base_table_items))) {
+      LOG_WARN("failed to init lateral table depend info", K(ret));
     } else if (OB_FAIL(generate_conflict_detectors(from_table_items,
                                                   stmt->get_semi_infos(),
                                                   quals,
@@ -1913,8 +1915,7 @@ int ObLogPlan::generate_cross_product_conflict_rule(ConflictDetector *cross_prod
         } else if (OB_ISNULL(expr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null expr", K(ret));
-        } else if (has_depend_function_table(expr->get_relation_ids())
-                  || has_depend_json_table(expr->get_relation_ids())) {
+        } else if (has_depend_table(expr->get_relation_ids())) {
           //do nothing
         } else {
           used_infos.reuse();
@@ -2609,7 +2610,7 @@ int ObLogPlan::init_function_table_depend_info(const ObIArray<TableItem*> &table
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
     TableItem *table = table_items.at(i);
-    FunctionTableDependInfo info;
+    TableDependInfo info;
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -2623,12 +2624,12 @@ int ObLogPlan::init_function_table_depend_info(const ObIArray<TableItem*> &table
     } else if (OB_FAIL(info.depend_table_set_.add_members(table->function_table_expr_->get_relation_ids()))) {
       LOG_WARN("failed to assign table ids", K(ret));
     } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-    } else if (OB_FAIL(function_table_depend_infos_.push_back(info))) {
+    } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
       LOG_WARN("failed to push back info", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to init function table depend info", K(function_table_depend_infos_));
+    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
   }
   return ret;
 }
@@ -2722,7 +2723,7 @@ int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_ite
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
     TableItem *table = table_items.at(i);
-    JsonTableDependInfo info;
+    TableDependInfo info;
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -2736,12 +2737,12 @@ int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_ite
     } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_expr_->get_relation_ids()))) {
       LOG_WARN("failed to assign table ids", K(ret));
     } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
-    } else if (OB_FAIL(json_table_depend_infos_.push_back(info))) {
+    } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
       LOG_WARN("failed to push back info", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_TRACE("succeed to init function table depend info", K(json_table_depend_infos_));
+    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
   }
   return ret;
 }
@@ -7781,17 +7782,8 @@ int ObLogPlan::check_join_legal(const ObRelIds &left_set,
       }
     }
     //检查dependent function table的约束
-    for (int64_t i = 0; OB_SUCC(ret) && legal && i < function_table_depend_infos_.count(); ++i) {
-      FunctionTableDependInfo &info = function_table_depend_infos_.at(i);
-      if (left_set.has_member(info.table_idx_)) {
-        legal = info.depend_table_set_.is_subset(left_set);
-      } else if (right_set.has_member(info.table_idx_)) {
-        legal = info.depend_table_set_.is_subset(left_set) || info.depend_table_set_.is_subset(right_set);
-      }
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && legal && i < json_table_depend_infos_.count(); ++i) {
-      JsonTableDependInfo &info = json_table_depend_infos_.at(i);
+    for (int64_t i = 0; OB_SUCC(ret) && legal && i < table_depend_infos_.count(); ++i) {
+      TableDependInfo &info = table_depend_infos_.at(i);
       if (left_set.has_member(info.table_idx_)) {
         legal = info.depend_table_set_.is_subset(left_set);
       } else if (right_set.has_member(info.table_idx_)) {
@@ -12883,11 +12875,11 @@ int ObLogPlan::get_cached_hash_sharding_info(const ObIArray<ObRawExpr*> &hash_ex
   return ret;
 }
 
-bool ObLogPlan::has_depend_function_table(const ObRelIds& table_ids)
+bool ObLogPlan::has_depend_table(const ObRelIds& table_ids)
 {
   bool b_ret = false;
-  for (int64_t i = 0; !b_ret && i < function_table_depend_infos_.count(); ++i) {
-    FunctionTableDependInfo &info = function_table_depend_infos_.at(i);
+  for (int64_t i = 0; !b_ret && i < table_depend_infos_.count(); ++i) {
+    TableDependInfo &info = table_depend_infos_.at(i);
     if (table_ids.has_member(info.table_idx_)) {
       b_ret = true;
     }
@@ -12895,17 +12887,6 @@ bool ObLogPlan::has_depend_function_table(const ObRelIds& table_ids)
   return b_ret;
 }
 
-bool ObLogPlan::has_depend_json_table(const ObRelIds& table_ids)
-{
-  bool b_ret = false;
-  for (int64_t i = 0; !b_ret && i < json_table_depend_infos_.count(); ++i) {
-    JsonTableDependInfo &info = json_table_depend_infos_.at(i);
-    if (table_ids.has_member(info.table_idx_)) {
-      b_ret = true;
-    }
-  }
-  return b_ret;
-}
 
 int ObLogPlan::allocate_output_expr_for_values_op(ObLogicalOperator &values_op)
 {
@@ -14947,6 +14928,47 @@ int ObLogPlan::compute_duplicate_table_replicas(ObLogicalOperator *op)
         phy_part_loc.set_selected_replica_idx(dup_table_pos);
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items)
+{
+  int ret = OB_SUCCESS;
+  const ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_items.count(); ++i) {
+    TableItem *table = table_items.at(i);
+    TableDependInfo info;
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (!table->is_lateral_table() ||
+                table->exec_params_.empty()) {
+      //do nothing
+    } else {
+      for (int64_t j = 0; OB_SUCC(ret) && j < table->exec_params_.count(); ++j) {
+        if (OB_ISNULL(table->exec_params_.at(j))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_FAIL(info.depend_table_set_.add_members(
+                  table->exec_params_.at(j)->get_ref_expr()->get_relation_ids()))) {
+          LOG_WARN("failed to add table ids", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
+      } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
+        LOG_WARN("failed to push back info", K(ret));
+      }
+    }
+
+  }
+  if (OB_SUCC(ret)) {
+    LOG_TRACE("succeed to init function table depend info", K(table_depend_infos_));
   }
   return ret;
 }

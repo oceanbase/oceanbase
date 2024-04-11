@@ -91,6 +91,10 @@ int ObLogJoin::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to generate join partition id expr", K(ret));
   } else if (NULL != partition_id_expr_ && OB_FAIL(all_exprs.push_back(partition_id_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+    // lateral derived table exec params may eliminate by group by, add exec_params to all_exprs here
+    // otherwise, will report 4002 in cg
+  } else if (OB_FAIL(append(all_exprs, nl_params_))) {
+    LOG_WARN("failed to append exprs", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < nl_params_.count(); i++) {
       if (OB_ISNULL(nl_params_.at(i)) ||

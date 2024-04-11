@@ -4706,6 +4706,7 @@ int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
                                         ObRawExpr *&param_expr)
 {
   int ret = OB_SUCCESS;
+  param_expr = NULL;
   if (OB_ISNULL(query_ref) || OB_ISNULL(outer_val_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid params", K(ret), K(query_ref), K(outer_val_expr));
@@ -4765,6 +4766,53 @@ int ObRawExprUtils::create_new_exec_param(ObRawExprFactory &expr_factory,
     exec_param->set_result_type(ref_expr->get_result_type());
     if (is_onetime) {
       exec_param->add_flag(IS_ONETIME);
+    }
+  }
+  return ret;
+}
+
+int ObRawExprUtils::get_exec_param_expr(ObRawExprFactory &expr_factory,
+                                        ObIArray<ObExecParamRawExpr*> *query_ref_exec_params,
+                                        ObRawExpr *outer_val_expr,
+                                        ObRawExpr *&param_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(outer_val_expr) || OB_ISNULL(query_ref_exec_params)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid params", K(ret), K(outer_val_expr));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < query_ref_exec_params->count(); ++i) {
+    ObExecParamRawExpr *param = NULL;
+    if (OB_ISNULL(param = query_ref_exec_params->at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param expr is null", K(ret), K(i));
+    } else if (param->get_ref_expr() == outer_val_expr) {
+      param_expr = param;
+      break;
+    }
+  }
+  // the exec param is not found in the query ref,
+  // we create a new one here
+  if (OB_SUCC(ret) && NULL == param_expr) {
+    ObExecParamRawExpr *exec_param = NULL;
+    if (OB_FAIL(expr_factory.create_raw_expr(T_QUESTIONMARK, exec_param))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(exec_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param is null", K(ret), K(exec_param));
+    } else if (OB_FAIL(query_ref_exec_params->push_back(exec_param))) {
+      LOG_WARN("failed to add exec param expr", K(ret));
+    } else if (OB_FAIL(exec_param->set_enum_set_values(outer_val_expr->get_enum_set_values()))) {
+      LOG_WARN("failed to set enum set values", K(ret));
+    } else if (OB_FAIL(exec_param->add_flag(IS_CONST))) {
+      LOG_WARN("failed to add flag", K(ret));
+    } else if (OB_FAIL(exec_param->add_flag(IS_DYNAMIC_PARAM))) {
+      LOG_WARN("failed to add flag", K(ret));
+    } else {
+      exec_param->set_ref_expr(outer_val_expr);
+      exec_param->set_param_index(-1);
+      exec_param->set_result_type(outer_val_expr->get_result_type());
+      param_expr = exec_param;
     }
   }
   return ret;

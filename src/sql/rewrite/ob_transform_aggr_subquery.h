@@ -139,21 +139,12 @@ private:
                            ObSelectStmt &subquery,
                            TransformParam &param);
 
-  int deduce_query_values(ObDMLStmt &stmt,
-                          TransformParam &param,
-                          ObIArray<ObRawExpr *> &select_exprs,
-                          ObIArray<ObRawExpr *> &view_columns,
-                          ObIArray<ObRawExpr *> &real_values);
-
   int transform_upper_stmt(ObDMLStmt &stmt, TransformParam &param);
 
   int transform_from_list(ObDMLStmt &stmt,
                           TableItem *view_table_item,
                           const ObIArray<ObRawExpr *> &joined_conds,
                           const int64_t pullup_flag);
-
-  int extract_nullable_exprs(const ObRawExpr *expr,
-                             ObIArray<const ObRawExpr*> &vars);
 
   inline bool use_outer_join(int64_t flag)
   { return 0 != (flag & USE_OUTER_JOIN); }

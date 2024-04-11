@@ -310,7 +310,7 @@ int ObWhereSubQueryPullup::check_transform_validity(ObDMLStmt *stmt,
   } else if (can_unnest) {
     /*do nothing*/
   } else if (OB_FAIL(ObTransformUtils::check_correlated_exprs_can_pullup(
-                       *trans_param.subquery_expr_,
+                       trans_param.subquery_expr_->get_exec_params(),
                        *trans_param.subquery_,
                        trans_param.can_be_transform_))) {
     LOG_WARN("failed to check can unnest with spj", K(ret));
@@ -414,7 +414,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
     OPT_TRACE("subquery`s select expr contain subquery");
   } else if (!is_correlated) {
     // do nothing
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(*query_ref,
+  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref->get_exec_params(),
                                                                      subquery,
                                                                      check_status))) {
     LOG_WARN("failed to is joined table conditions correlated", K(ret));
@@ -427,7 +427,7 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObQueryRefRawExpr *query_ref,
     is_valid = false;
     OPT_TRACE("subquery`s where condition contain correlated subquery");
   } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(
-                       *query_ref, *subquery, check_status))) {
+                       query_ref->get_exec_params(), *subquery, check_status))) {
     LOG_WARN("failed to check if subquery contain correlated subquery", K(ret));
   } else if (check_status) {
     is_valid = false;
@@ -486,7 +486,7 @@ int ObWhereSubQueryPullup::do_transform_pullup_subquery(ObDMLStmt *stmt,
                                                                    ctx_))) {
     LOG_WARN("failed to add const param constraints", K(ret));
   } else if (trans_param.need_create_spj_) {
-    if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(*query_ref,
+    if (OB_FAIL(ObTransformUtils::create_spj_and_pullup_correlated_exprs(query_ref->get_exec_params(),
                                                                          subquery,
                                                                          ctx_))) {
       LOG_WARN("failed to create spj and pullup correlated exprs", K(ret));
@@ -1257,12 +1257,14 @@ int ObWhereSubQueryPullup::check_subquery_validity(ObDMLStmt &stmt,
   //2.check from item correlated
   if (OB_SUCC(ret) && is_valid) {
     bool is_correlated = false;
-    if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(*query_ref, subquery, is_correlated))) {
+    if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref->get_exec_params(),
+                                                                subquery,
+                                                                is_correlated))) {
       LOG_WARN("failed to is joined table conditions correlated", K(ret));
     } else if (is_correlated) {
       is_valid = false;
       OPT_TRACE("subquery contain correlated on condition");
-    } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(*query_ref,
+    } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(query_ref->get_exec_params(),
                                                                   *subquery,
                                                                   is_correlated))) {
       LOG_WARN("failed to check if subquery contain correlated subquery", K(ret));

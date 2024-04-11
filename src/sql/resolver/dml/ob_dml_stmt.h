@@ -205,7 +205,8 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K(table_values_));
+               K(table_values_),
+               K_(exec_params));
 
   enum TableType
   {
@@ -220,7 +221,8 @@ struct TableItem
     LINK_TABLE,
     JSON_TABLE,
     EXTERNAL_TABLE,
-    VALUES_TABLE
+    VALUES_TABLE,
+    LATERAL_TABLE,
   };
 
   /**
@@ -257,6 +259,8 @@ struct TableItem
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
   bool is_json_table() const { return JSON_TABLE == type_; }
   bool is_values_table() const { return VALUES_TABLE == type_; }//used to mark values statement: values row(1,2), row(3,4);
+
+  bool is_lateral_table() const { return LATERAL_TABLE == type_; }
   bool is_synonym() const { return !synonym_name_.empty(); }
   bool is_oracle_all_or_user_sys_view() const
   {
@@ -338,6 +342,7 @@ struct TableItem
   // table partition
   common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
   common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
+  common::ObSEArray<ObExecParamRawExpr*, 4, common::ModulePageAllocator, true> exec_params_;
   // json table
   ObJsonTableDef* json_table_def_;
   // values table
@@ -1163,6 +1168,10 @@ public:
   int do_formalize_query_ref_exprs_pre();
 
   int do_formalize_query_ref_exprs_post();
+
+  int do_formalize_lateral_derived_table_pre();
+
+  int do_formalize_lateral_derived_table_post();
 
 protected:
   int create_table_item(TableItem *&table_item);

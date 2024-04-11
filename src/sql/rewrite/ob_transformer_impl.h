@@ -153,6 +153,8 @@ private:
   void print_trans_stat();
 
   int finalize_exec_params(ObDMLStmt *stmt);
+
+  int finalize_exec_params(ObDMLStmt *stmt, ObIArray<ObExecParamRawExpr*> & exec_params);
   /**
    * @brief adjust_global_dependency_tables
    * 为pl收集依赖表的schema version信息

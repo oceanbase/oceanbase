@@ -413,6 +413,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"language", LANGUAGE},
   {"last", LAST},
   {"last_value", LAST_VALUE},
+  {"lateral", LATERAL},
   {"lead", LEAD},
   {"leader", LEADER},
   {"leading", LEADING},

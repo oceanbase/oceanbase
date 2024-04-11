@@ -7630,6 +7630,8 @@ int ObJoinOrder::init_base_join_order(const TableItem *table_item)
       set_type(JSON_TABLE_ACCESS);
     } else if (table_item->is_values_table()) {
       set_type(VALUES_TABLE_ACCESS);
+    } else if (table_item->is_lateral_table()) {
+      set_type(SUBQUERY);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid type of table item", K(table_item->type_), K(ret));
@@ -11669,15 +11671,10 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
     }
     //check depend function table
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_depend_function_table(left_tree,
-                                              right_tree,
-                                              join_type,
-                                              path_info))) {
-        LOG_WARN("failed to check depend function table", K(ret));
-      } else if (OB_FAIL(check_depend_json_table(left_tree,
-                                                 right_tree,
-                                                 join_type,
-                                                 path_info))) {
+      if (OB_FAIL(check_depend_table(left_tree,
+                                      right_tree,
+                                      join_type,
+                                      path_info))) {
         LOG_WARN("failed to check depend function table", K(ret));
       } else if (OB_FAIL(check_subquery_in_join_condition(join_type,
                                                           join_conditions,
@@ -11733,19 +11730,19 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
   return ret;
 }
 
-int ObJoinOrder::check_depend_function_table(const ObJoinOrder &left_tree,
-                                            const ObJoinOrder &right_tree,
-                                            const ObJoinType join_type,
-                                            ValidPathInfo &path_info)
+int ObJoinOrder::check_depend_table(const ObJoinOrder &left_tree,
+                                      const ObJoinOrder &right_tree,
+                                      const ObJoinType join_type,
+                                      ValidPathInfo &path_info)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_plan())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input argument error", K(get_plan()), K(ret));
   } else {
-    const ObIArray<FunctionTableDependInfo> &infos = get_plan()->get_function_table_depend_infos();
+    const ObIArray<TableDependInfo> &infos = get_plan()->get_table_depend_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      const FunctionTableDependInfo &info = infos.at(i);
+      const TableDependInfo &info = infos.at(i);
       if (left_tree.get_tables().has_member(info.table_idx_) &&
           info.depend_table_set_.is_subset(right_tree.get_tables())) {
         path_info.local_methods_ = 0;
@@ -11760,36 +11757,6 @@ int ObJoinOrder::check_depend_function_table(const ObJoinOrder &left_tree,
           path_info.local_methods_ &= NESTED_LOOP_JOIN;
           path_info.force_inner_nl_ = true;
           OPT_TRACE("left tree has depend function table, force use nested loop join");
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObJoinOrder::check_depend_json_table(const ObJoinOrder &left_tree,
-                                         const ObJoinOrder &right_tree,
-                                         const ObJoinType join_type,
-                                         ValidPathInfo &path_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(get_plan())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Input argument error", K(get_plan()), K(ret));
-  } else {
-    const ObIArray<JsonTableDependInfo> &infos = get_plan()->get_json_table_depend_infos();
-    for (int64_t i = 0; OB_SUCC(ret) && i < infos.count(); ++i) {
-      const JsonTableDependInfo &info = infos.at(i);
-      if (left_tree.get_tables().has_member(info.table_idx_) &&
-          info.depend_table_set_.is_subset(right_tree.get_tables())) {
-        path_info.local_methods_ = 0;
-      } else if (right_tree.get_tables().has_member(info.table_idx_) &&
-                  info.depend_table_set_.is_subset(left_tree.get_tables())) {
-        if (RIGHT_OUTER_JOIN == join_type || FULL_OUTER_JOIN == join_type) {
-          ret = OB_NOT_SUPPORTED;
-        } else {
-          path_info.local_methods_ &= NESTED_LOOP_JOIN;
-          path_info.force_inner_nl_ = true;
         }
       }
     }
@@ -14014,6 +13981,9 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                                     helper.filters_,
                                                                     can_pushdown))) {
     LOG_WARN("failed to pushdown filter into subquery", K(ret));
+  } else if (table_item->is_lateral_table() &&
+             OB_FAIL(append(nl_params, table_item->exec_params_))) {
+    LOG_WARN("failed to append exec params", K(ret));
   } else if (!inner_path_info.force_inner_nl_ && !can_pushdown) {
     //do thing
     LOG_TRACE("can not pushdown any filter into subquery");

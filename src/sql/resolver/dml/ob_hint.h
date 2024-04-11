@@ -521,6 +521,7 @@ public:
   bool is_project_prune_hint() const { return T_PROJECT_PRUNE == hint_type_; }
   bool is_table_dynamic_sampling_hint() const { return T_TABLE_DYNAMIC_SAMPLING == hint_type_; }
   bool is_pq_subquery_hint() const { return T_PQ_SUBQUERY == hint_type_; }
+  bool is_decorrelate_hint() const { return T_DECORRELATE == hint_type_; }
 
   VIRTUAL_TO_STRING_KV("hint_type", get_type_name(hint_type_),
                        K_(hint_class), K_(qb_name),

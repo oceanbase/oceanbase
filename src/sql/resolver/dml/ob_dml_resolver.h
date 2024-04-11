@@ -304,8 +304,11 @@ public:
                                          const ObResolverUtils::PureFunctionCheckStatus
                                                check_status);
 
-  void set_query_ref_expr(ObQueryRefRawExpr *query_ref) { query_ref_ = query_ref; }
-  ObQueryRefRawExpr *get_subquery() { return query_ref_; }
+  void set_query_ref_exec_params(ObIArray<ObExecParamRawExpr*> *query_ref_exec_params)
+  {
+    query_ref_exec_params_ = query_ref_exec_params;
+  }
+  ObIArray<ObExecParamRawExpr*> *get_query_ref_exec_params() { return query_ref_exec_params_; }
   int build_heap_table_hidden_pk_expr(ObRawExpr *&expr, const ObColumnRefRawExpr *ref_expr);
   static int copy_schema_expr(ObRawExprFactory &factory,
                               ObRawExpr *expr,
@@ -358,6 +361,13 @@ protected:
   virtual int resolve_generate_table(const ParseNode &table_node,
                                      const ParseNode *alias_node,
                                      TableItem *&tbl_item);
+
+  int resolve_lateral_generated_table(const ParseNode &table_node,
+                                      const ParseNode *alias_node,
+                                      TableItem *&tbl_item);
+
+  int check_contain_lateral_node(const ParseNode *parse_tree, bool &is_contain);
+
   int check_stmt_has_flashback_query(ObDMLStmt *stmt, bool check_all, bool &has_fq);
   virtual int resolve_basic_table(const ParseNode &parse_tree, TableItem *&table_item);
   int resolve_flashback_query_node(const ParseNode *time_node, TableItem *table_item);
@@ -807,7 +817,7 @@ protected:
                                                 const TableItem *&table_item,
                                                 ObDMLStmt *&dml_stmt,
                                                 int32_t &cur_level,
-                                                ObQueryRefRawExpr *&query_ref);
+                                                ObIArray<ObExecParamRawExpr*> *&query_ref_exec_params);
   int get_view_id_for_trigger(const TableItem &view_item, uint64_t &view_id);
   bool get_joininfo_by_id(int64_t table_id, ResolverJoinInfo *&join_info);
   int get_json_table_column_by_id(uint64_t table_id, ObDmlJtColDef *&col_def);
@@ -1002,7 +1012,7 @@ protected:
   common::ObArray<GenColumnExprInfo > gen_col_exprs_;
   common::ObArray<TableItem*> from_items_order_;
 
-  ObQueryRefRawExpr *query_ref_;
+  ObIArray<ObExecParamRawExpr *> *query_ref_exec_params_;
 
   // for oracle style outer join
   bool has_ansi_join_;

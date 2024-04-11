@@ -1489,7 +1489,11 @@ public:
                                                    ObOptimizerContext &opt_ctx,
                                                    ObRawExpr *&calc_part_id_expr);
 
-  static int check_contain_my_exec_param(ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+  static int check_contain_my_exec_param(const ObRawExpr* expr, const common::ObIArray<ObExecParamRawExpr*> & my_exec_params, bool &contain);
+
+  static int check_contain_my_exec_param(const ObIArray<ObRawExpr *> &exprs,
+                                         const ObIArray<ObExecParamRawExpr*> &my_exec_params,
+                                         bool &contain);
 
   static int generate_pseudo_trans_info_expr(ObOptimizerContext &opt_ctx,
                                              const common::ObString &table_name,

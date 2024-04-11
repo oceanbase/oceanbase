@@ -1231,8 +1231,10 @@ int ObStmtComparer::compare_table_item(const ObDMLStmt *first,
       }
     }
   //TODO:jiangxiu.wt 后续打开flashback query针对view和generated table的支持，这里需要处理
-  } else if (first_table->is_generated_table() &&
-             second_table->is_generated_table()) {
+  } else if ((first_table->is_generated_table() &&
+             second_table->is_generated_table()) ||
+             (first_table->is_lateral_table() &&
+              second_table->is_lateral_table())) {
     ObStmtMapInfo ref_query_map_info;
     const int32_t first_table_index = first->get_table_bit_index(first_table->table_id_);
     const int32_t second_table_index = second->get_table_bit_index(second_table->table_id_);

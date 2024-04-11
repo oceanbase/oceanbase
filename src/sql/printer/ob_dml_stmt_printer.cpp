@@ -260,7 +260,10 @@ int ObDMLStmtPrinter::print_table_with_subquery(const TableItem *table_item)
     const uint64_t subquery_print_params =
                            PRINT_BRACKET |
                            (stmt_->is_select_stmt() ? FORCE_COL_ALIAS : 0);
-    if (OB_FAIL(print_subquery(table_item->ref_query_,
+    if (table_item->is_lateral_table()) {
+      DATA_PRINTF("lateral ");
+    }
+    if (OB_SUCC(ret) && OB_FAIL(print_subquery(table_item->ref_query_,
                                subquery_print_params))) {
       LOG_WARN("failed to print subquery", K(ret));
     } else if (!table_item->alias_name_.empty()) {
@@ -403,6 +406,7 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
         }
         break;
       }
+    case TableItem::LATERAL_TABLE:
     case TableItem::GENERATED_TABLE: {
         if (OB_ISNULL(table_item->ref_query_)) {
           ret = OB_ERR_UNEXPECTED;
