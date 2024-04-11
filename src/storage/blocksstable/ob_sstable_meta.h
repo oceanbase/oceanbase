@@ -65,7 +65,7 @@ public:
   OB_INLINE int16_t get_sstable_seq() const { return sstable_logic_seq_; }
   int decode_for_compat(const char *buf, const int64_t data_len, int64_t &pos);
 
-  int set_upper_trans_version(const int64_t upper_trans_version);
+  void set_upper_trans_version(const int64_t upper_trans_version);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size() const;

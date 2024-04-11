@@ -2830,6 +2830,7 @@ int ObMemtable::mvcc_write_(
     } else {
       // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
       (void)mvcc_engine_.mvcc_undo(value);
+      res.is_mvcc_undo_ = true;
     }
     if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
       ret = post_row_write_conflict_(ctx.mvcc_acc_ctx_,
@@ -2848,6 +2849,7 @@ int ObMemtable::mvcc_write_(
   } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
     if (res.has_insert()) {
       (void)mvcc_engine_.mvcc_undo(value);
+      res.is_mvcc_undo_ = true;
     }
     TRANS_LOG(WARN, "prepare kv after lock fail", K(ret));
   } else if (res.has_insert()
@@ -2860,6 +2862,7 @@ int ObMemtable::mvcc_write_(
                                                         arg.seq_no_,
                                                         arg.column_cnt_))) {
     (void)mvcc_engine_.mvcc_undo(value);
+    res.is_mvcc_undo_ = true;
     TRANS_LOG(WARN, "register row commit failed", K(ret));
   } else {
     is_new_locked = res.is_new_locked_;
@@ -2895,7 +2898,6 @@ int ObMemtable::mvcc_write_(
       ++mt_stat_.delete_row_count_;
     }
   }
-
   return ret;
 }
 

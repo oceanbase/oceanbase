@@ -130,8 +130,25 @@ enum ObTableModeFlag
   TABLE_MODE_NORMAL = 0,
   TABLE_MODE_QUEUING = 1,
   TABLE_MODE_PRIMARY_AUX_VP = 2,
+  TABLE_MODE_QUEUING_MODERATE = 3,
+  TABLE_MODE_QUEUING_SUPER = 4,
+  TABLE_MODE_QUEUING_EXTREME = 5,
   TABLE_MODE_MAX,
 };
+
+inline bool is_valid_table_mode_flag(const ObTableModeFlag &table_mode)
+{
+  return TABLE_MODE_NORMAL <= table_mode && table_mode < TABLE_MODE_MAX;
+}
+inline bool is_new_queuing_mode(const ObTableModeFlag &table_mode)
+{
+  return TABLE_MODE_QUEUING_MODERATE <= table_mode && table_mode <= TABLE_MODE_QUEUING_EXTREME;
+}
+inline bool is_queuing_table_mode(const ObTableModeFlag &table_mode)
+{
+  return TABLE_MODE_QUEUING ==  table_mode || is_new_queuing_mode(table_mode);
+}
+const char *table_mode_flag_to_str(const ObTableModeFlag &table_mode);
 
 enum ObTablePKMode
 {
@@ -299,18 +316,42 @@ struct ObBackUpTableModeOp
       "QUEUING|NEW_NO_PK_MODE": TABLE_MODE_QUEUING && TPKM_NEW_NO_PK
       "QUEUING|HEAP_ORGANIZED_TABLE":TABLE_MODE_QUEUING && TOM_HEAP_ORGANIZED
       "QUEUING|INDEX_ORGANIZED_TABLE":TABLE_MODE_QUEUING && TOM_INDEX_ORGANIZED
+      "MODERATE":TABLE_MODE_QUEUING_MODERATE
+      "MODERATE|NEW_NO_PK_MODE": TABLE_MODE_QUEUING_MODERATE && TPKM_NEW_NO_PK
+      "MODERATE|HEAP_ORGANIZED_TABLE":TABLE_MODE_QUEUING_MODERATE && TOM_HEAP_ORGANIZED
+      "MODERATE|INDEX_ORGANIZED_TABLE":TABLE_MODE_QUEUING_MODERATE && TOM_INDEX_ORGANIZED
+      "SUPER":TABLE_MODE_QUEUING_SUPER
+      "SUPER|NEW_NO_PK_MODE": TABLE_MODE_QUEUING_SUPER && TPKM_NEW_NO_PK
+      "SUPER|HEAP_ORGANIZED_TABLE":TABLE_MODE_QUEUING_SUPER && TOM_HEAP_ORGANIZED
+      "SUPER|INDEX_ORGANIZED_TABLE":TABLE_MODE_QUEUING_SUPER && TOM_INDEX_ORGANIZED
+      "EXTREME":TABLE_MODE_QUEUING_EXTREME
+      "EXTREME|NEW_NO_PK_MODE": TABLE_MODE_QUEUING_EXTREME && TPKM_NEW_NO_PK
+      "EXTREME|HEAP_ORGANIZED_TABLE":TABLE_MODE_QUEUING_EXTREME && TOM_HEAP_ORGANIZED
+      "EXTREME|INDEX_ORGANIZED_TABLE":TABLE_MODE_QUEUING_EXTREME && TOM_INDEX_ORGANIZED
   */
+  #define SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, queuing_mode_str) \
+    if (TPKM_NEW_NO_PK == mode.pk_mode_) {                               \
+      ret_str = queuing_mode_str"|NEW_NO_PK_MODE";                       \
+    } else if (TOM_HEAP_ORGANIZED == mode.organization_mode_) {          \
+      ret_str = queuing_mode_str"|HEAP_ORGANIZED_TABLE";                 \
+    } else if (TOM_INDEX_ORGANIZED == mode.organization_mode_) {         \
+      ret_str = queuing_mode_str"|INDEX_ORGANIZED_TABLE";                \
+    } else {                                                             \
+      ret_str = queuing_mode_str;                                        \
+    }
+
   static common::ObString get_table_mode_str(const ObTableMode mode) {
     common::ObString ret_str = "";
-    if (TABLE_MODE_QUEUING == mode.mode_flag_) {
-      if (TPKM_NEW_NO_PK == mode.pk_mode_) {
-        ret_str = "QUEUING|NEW_NO_PK_MODE";
-      } else if (TOM_HEAP_ORGANIZED == mode.organization_mode_) {
-        ret_str = "QUEUING|HEAP_ORGANIZED_TABLE";
-      } else if (TOM_INDEX_ORGANIZED == mode.organization_mode_) {
-        ret_str = "QUEUING|INDEX_ORGANIZED_TABLE";
-      } else {
-        ret_str = "QUEUING";
+    const ObTableModeFlag flag = static_cast<ObTableModeFlag>(mode.mode_flag_);
+    if (is_queuing_table_mode(flag)) {
+      if (TABLE_MODE_QUEUING == mode.mode_flag_) {
+        SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, "QUEUING");
+      } else if (TABLE_MODE_QUEUING_MODERATE == mode.mode_flag_) {
+        SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, "MODERATE");
+      } else if (TABLE_MODE_QUEUING_SUPER == mode.mode_flag_) {
+        SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, "SUPER");
+      } else if (TABLE_MODE_QUEUING_EXTREME == mode.mode_flag_) {
+        SET_QUEUING_TABLE_MODE_WITH_OTHER_MODE(mode, "EXTREME");
       }
     } else if (TPKM_NEW_NO_PK == mode.pk_mode_) {
       ret_str = "NEW_NO_PK_MODE";
@@ -322,7 +363,7 @@ struct ObBackUpTableModeOp
     return ret_str;
   }
 
-  static int get_table_mode(const common::ObString str, ObTableMode &ret_mode) {
+  static int get_table_mode(const common::ObString str, ObTableMode &ret_mode, uint64_t tenant_data_version) {
     int ret = common::OB_SUCCESS;
     ret_mode.reset();
     char * flag = nullptr;
@@ -339,6 +380,12 @@ struct ObBackUpTableModeOp
          // do nothing
        } else if (0 == flag_str.case_compare("queuing")) {
          ret_mode.mode_flag_ = TABLE_MODE_QUEUING;
+       } else if (0 == flag_str.case_compare("moderate")) {
+         ret_mode.mode_flag_ = TABLE_MODE_QUEUING_MODERATE;
+       } else if (0 == flag_str.case_compare("super")) {
+         ret_mode.mode_flag_ = TABLE_MODE_QUEUING_SUPER;
+       } else if (0 == flag_str.case_compare("extreme")) {
+         ret_mode.mode_flag_ = TABLE_MODE_QUEUING_EXTREME;
        } else if (0 == flag_str.case_compare("new_no_pk_mode")) {
          ret_mode.pk_mode_ = TPKM_NEW_NO_PK;
        } else if (0 == flag_str.case_compare("heap_organized_table")) {
@@ -348,6 +395,11 @@ struct ObBackUpTableModeOp
          ret_mode.organization_mode_ = TOM_INDEX_ORGANIZED;
        } else {
          ret = common::OB_ERR_PARSER_SYNTAX;
+       }
+       if (OB_SUCC(ret) && tenant_data_version < DATA_VERSION_4_2_1_5 && is_new_queuing_mode(static_cast<ObTableModeFlag>(ret_mode.mode_flag_))) {
+        ret = OB_NOT_SUPPORTED;
+        SHARE_SCHEMA_LOG(WARN, "moderate/super/extreme table mode is not supported in data version less than 4.2.1.5", K(ret), K(flag_str), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.1.5");
        }
        flag = strtok_r(NULL, delim, &save_ptr);
     }
@@ -570,7 +622,7 @@ public:
   inline void set_table_state_flag(const ObTableStateFlag flag)
   { table_mode_.state_flag_ = flag; }
   inline bool is_queuing_table() const
-  { return TABLE_MODE_QUEUING == (enum ObTableModeFlag)table_mode_.mode_flag_; }
+  { return is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
   inline bool is_iot_table() const
   { return TOM_INDEX_ORGANIZED == (enum ObTableOrganizationMode)table_mode_.organization_mode_; }
   inline bool is_heap_table() const
@@ -819,6 +871,7 @@ public:
 
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
   inline bool gen_normal_tablet() const { return has_rowid() && !is_extended_rowid_mode(); }
+  inline bool is_new_queuing_table_mode() const { return is_new_queuing_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_)); }
 
   DECLARE_VIRTUAL_TO_STRING;
 protected:

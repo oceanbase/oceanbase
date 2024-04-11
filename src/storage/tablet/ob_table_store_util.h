@@ -60,6 +60,7 @@ public:
   blocksstable::ObSSTable *operator[](const int64_t pos) const;
   blocksstable::ObSSTable *at(const int64_t pos) const;
   ObITable *get_boundary_table(const bool is_last) const;
+  int64_t get_last_snapshot_version() const;
   int get_all_tables(ObIArray<ObITable *> &tables) const;
   int get_table(const ObITable::TableKey &table_key, ObITable *&table) const;
   int inc_macro_ref(bool &is_success) const;

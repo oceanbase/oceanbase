@@ -616,10 +616,31 @@ int ObFreezer::ls_freeze_task()
   FLOG_INFO("[Freezer] logstream_freeze success", K(ls_id), K(freeze_clock));
 
   stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
-
   unset_freeze_();
 
+  (void)try_freeze_tx_data_();
+
   return ret;
+}
+
+void ObFreezer::try_freeze_tx_data_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t MAX_RETRY_DURATION = 10LL * 1000LL * 1000LL;  // 10 seconds
+  int64_t retry_times = 0;
+  int64_t start_freeze_ts = ObClockGenerator::getClock();
+  do {
+    if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
+      if (OB_EAGAIN == ret) {
+        // sleep and retry
+        retry_times++;
+        usleep(100);
+      } else {
+        STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
+      }
+    }
+  } while (OB_EAGAIN == ret && ObClockGenerator::getClock() - start_freeze_ts < MAX_RETRY_DURATION);
+  STORAGE_LOG(INFO, "freeze tx data after logstream freeze", KR(ret), K(retry_times), KTIME(start_freeze_ts));
 }
 
 // must be used under the protection of ls_lock

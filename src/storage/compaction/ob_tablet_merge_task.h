@@ -156,7 +156,12 @@ private:
   int create_sstable_after_merge();
   int get_merged_sstable(ObTabletMergeCtx &ctx);
   int add_sstable_for_merge(ObTabletMergeCtx &ctx);
-  int try_schedule_compaction_after_mini(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
+  int try_set_upper_trans_version(ObTabletMergeCtx &ctx, const ObUpdateTableStoreParam &param);
+  void try_schedule_other_compaction(ObTabletMergeCtx &ctx, storage::ObTabletHandle &tablet_handle);
+  int try_schedule_adaptive_merge(
+      ObTabletMergeCtx &ctx,
+      ObTabletHandle &tablet_handle,
+      bool &create_dag);
   int try_report_tablet_stat_after_mini(ObTabletMergeCtx &ctx);
 private:
   bool is_inited_;

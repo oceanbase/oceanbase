@@ -553,6 +553,8 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
           STORAGE_LOG(WARN, "Fail to build micro block, ", K(ret));
         } else if (OB_FAIL(OB_FAIL(append_row_and_hash_index(*row_to_append)))) {
           STORAGE_LOG(ERROR, "Fail to append row to micro block, ", K(ret), K(row));
+        } else if (OB_FAIL(update_micro_commit_info(*row_to_append))) {
+          STORAGE_LOG(WARN, "Fail to update_micro_commit_info", K(ret), K(row));
         } else if (OB_FAIL(save_last_key(*row_to_append))) {
           STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(row));
         }
@@ -588,6 +590,8 @@ int ObMacroBlockWriter::append_row(const ObDatumRow &row, const int64_t split_si
         }
       }
       if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(update_micro_commit_info(*row_to_append))) {
+        STORAGE_LOG(WARN, "Fail to update_micro_commit_info", K(ret), K(row));
       } else if (OB_FAIL(save_last_key(*row_to_append))) {
         STORAGE_LOG(WARN, "Fail to save last key, ", K(ret), K(row));
       } else if (OB_FAIL(micro_block_adaptive_splitter_.check_need_split(micro_writer_->get_block_size(), micro_writer_->get_row_count(),
@@ -792,7 +796,9 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Unexpected current row trans version in major merge", K(ret), K(row), K(data_store_desc_->snapshot_version_));
     } else if (!row.mvcc_row_flag_.is_uncommitted_row()) { // update max commit version
-      micro_writer_->update_max_merged_trans_version(-cur_row_version);
+      if (data_store_desc_->is_major_merge() && data_store_desc_->major_working_cluster_version_ < DATA_VERSION_4_2_1_5) {
+        micro_writer_->update_max_merged_trans_version(-cur_row_version);
+      }
       if (!row.mvcc_row_flag_.is_shadow_row()) {
         const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].reuse(); // make sql sequence positive
         const_cast<ObDatumRow&>(row).storage_datums_[sql_sequence_col_idx].set_int(0); // make sql sequence positive
@@ -800,9 +806,6 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected shadow row", K(ret), K(row));
       }
-    } else { // not committed
-      micro_writer_->set_contain_uncommitted_row();
-      LOG_TRACE("meet uncommited trans row", K(row));
     }
     if (OB_SUCC(ret) && last_key_.is_valid()) {
       ObDatumRowkey cur_key;
@@ -846,8 +849,7 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
         }
       } else { // another schema rowkey
         if (nullptr != data_store_desc_->merge_info_
-            && !is_major_merge_type(data_store_desc_->merge_info_->merge_type_)
-            && !is_meta_major_merge(data_store_desc_->merge_info_->merge_type_)
+            && !is_major_or_meta_merge_type(data_store_desc_->merge_info_->merge_type_)
             && !is_macro_or_micro_block_reused_
             && !last_key_with_L_flag_) {
           ret = OB_ERR_UNEXPECTED;
@@ -858,6 +860,26 @@ int ObMacroBlockWriter::check_order(const ObDatumRow &row)
 
     if (OB_ROWKEY_ORDER_ERROR == ret || OB_ERR_UNEXPECTED == ret || OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
       dump_micro_block(*micro_writer_); // print micro block have output
+    }
+  }
+  return ret;
+}
+
+int ObMacroBlockWriter::update_micro_commit_info(const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  bool is_ghost_row_flag = false;
+  if (OB_FAIL(blocksstable::ObGhostRowUtil::is_ghost_row(row.mvcc_row_flag_, is_ghost_row_flag))) {
+    STORAGE_LOG(ERROR, "failed to check ghost row", K(ret), K(row));
+  } else if (is_ghost_row_flag) { //skip cg block & ghost row
+  } else if (row.mvcc_row_flag_.is_uncommitted_row()) {
+    micro_writer_->set_contain_uncommitted_row();
+    LOG_TRACE("meet uncommited trans row", K(row));
+  } else {
+    const int64_t trans_version_col_idx = data_store_desc_->schema_rowkey_col_cnt_;
+    const int64_t cur_row_version = row.storage_datums_[trans_version_col_idx].get_int();
+    if (!data_store_desc_->is_major_merge() || data_store_desc_->major_working_cluster_version_ >= DATA_VERSION_4_2_1_5) {
+      micro_writer_->update_max_merged_trans_version(-cur_row_version);
     }
   }
   return ret;
@@ -1407,7 +1429,7 @@ int ObMacroBlockWriter::merge_micro_block(const ObMicroBlock &micro_block)
   } else if (!micro_block.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid micro_block", K(micro_block), K(ret));
-  } else if (OB_UNLIKELY(!data_store_desc_->is_major_merge())) {
+  } else if (OB_UNLIKELY(!data_store_desc_->is_major_or_meta_merge_type())) {
     // forbid micro block level merge for minor merge now
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "minor merge does not allow micro block level merge", K(ret));

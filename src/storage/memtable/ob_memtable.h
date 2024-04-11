@@ -50,7 +50,12 @@ class ObMemtableGetIterator;
 
 struct ObMtStat
 {
+  ObMtStat() { reset(); }
+  ~ObMtStat() = default;
   void reset() { memset(this, 0, sizeof(*this));}
+  TO_STRING_KV(K_(insert_row_count), K_(update_row_count), K_(delete_row_count),
+               K_(frozen_time), K_(ready_for_flush_time), K_(create_flush_dag_time),
+               K_(release_time), K_(push_table_into_gc_queue_time), K_(last_print_time));
   int64_t insert_row_count_;
   int64_t update_row_count_;
   int64_t delete_row_count_;
@@ -329,6 +334,7 @@ public:
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int set_emergency(const bool emergency);
   ObMtStat& get_mt_stat() { return mt_stat_; }
+  const ObMtStat& get_mt_stat() const { return mt_stat_; }
   int64_t get_size() const;
   int64_t get_occupied_size() const;
   int64_t get_physical_row_cnt() const { return query_engine_.btree_size(); }
@@ -470,7 +476,6 @@ public:
   void dec_unsubmitted_and_unsynced_cnt();
   virtual uint32_t get_freeze_flag() override;
   virtual OB_INLINE int64_t get_timestamp() const override { return timestamp_; }
-  void inc_timestamp(const int64_t timestamp) { timestamp_ = MAX(timestamp_, timestamp + 1); }
   int get_active_table_ids(common::ObIArray<uint64_t> &table_ids);
   blocksstable::ObDatumRange &m_get_real_range(blocksstable::ObDatumRange &real_range,
                                         const blocksstable::ObDatumRange &range, const bool is_reverse) const;

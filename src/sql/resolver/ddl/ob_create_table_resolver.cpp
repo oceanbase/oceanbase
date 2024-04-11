@@ -3038,7 +3038,7 @@ int ObCreateTableResolver::resolve_vertical_partition(const ParseNode *node)
   if (NULL == node || 2 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "node is null", K(ret));
-  } else if (table_mode_.mode_flag_ == TABLE_MODE_QUEUING) {
+  } else if (is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Vertical partition table cannot set queuing table mode");
     SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));

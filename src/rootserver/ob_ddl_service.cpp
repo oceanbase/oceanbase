@@ -1110,6 +1110,7 @@ int ObDDLService::generate_schema(
   const ObIArray<ObConstraint> &constraints = arg.constraint_list_;
   const uint64_t tenant_id = schema.get_tenant_id();
   uint64_t new_table_id = schema.get_table_id();
+  uint64_t compat_version = 0;
   ObSchemaService *schema_service = NULL;
   const ObDatabaseSchema *database_schema = NULL;
   const ObTenantSchema *tenant_schema = NULL;
@@ -1118,6 +1119,12 @@ int ObDDLService::generate_schema(
   ObSchemaGetterGuard guard;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_1_5 && arg.schema_.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.1.5", K(ret), K(tenant_id), K(compat_version), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.1.5");
   } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
     LOG_WARN("get schema guard failed", K(ret));
   } else {
@@ -2753,8 +2760,17 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::TABLE_MODE: {
-          new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
-          need_update_index_table = true;
+          uint64_t compat_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
+          } else if (compat_version < DATA_VERSION_4_2_1_5 && alter_table_schema.is_new_queuing_table_mode()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("moderate/super/extreme table mode is not supported in data version less than 4.2.1.5", K(ret), K(compat_version), K(alter_table_schema.get_table_mode()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "moderate/super/extreme table mode in data version less than 4.2.1.5");
+          } else {
+            new_table_schema.set_table_mode(alter_table_schema.get_table_mode());
+            need_update_index_table = true;
+          }
           break;
         }
         case ObAlterTableArg::INCREMENT_MODE : {

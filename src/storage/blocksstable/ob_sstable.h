@@ -140,8 +140,8 @@ public:
       ObStoreRowLockState &lock_state);
 
   int set_upper_trans_version(
-      const int64_t upper_trans_version,
-      const bool force_update);
+      common::ObArenaAllocator &allocator,
+      const int64_t upper_trans_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return upper_trans_version_;
@@ -183,6 +183,8 @@ public:
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
+  // load sstable meta bypass. Lifetime is guaranteed by allocator, which should cover this sstable
+  int bypass_load_meta(common::ObArenaAllocator &allocator);
   int set_status_for_read(const ObSSTableStatus status);
 
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded

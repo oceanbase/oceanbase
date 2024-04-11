@@ -32,17 +32,18 @@ public:
   {
     allocator_.reset();
   }
-  void set_basic_info(ObMediumCompactionInfo &medium_info)
+  void set_basic_info(ObMediumCompactionInfo &medium_info, const int64_t compat_version)
   {
     medium_info.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
     medium_info.tenant_id_ = MTL_ID();
     medium_info.data_version_ = 100;
     medium_info.cluster_id_ = INIT_CLUSTER_ID;
-    medium_info.medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+    medium_info.medium_compat_version_ = compat_version;
   }
   int construct_array(
       const char *snapshot_list,
       ObMediumListChecker::MediumInfoArray &array,
+      const int64_t medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2,
       const int64_t last_medium_scn_of_first_medium_info = 1,
       const int64_t cluster_id = INIT_CLUSTER_ID);
   int construct_array(
@@ -84,6 +85,7 @@ int TestMediumListChecker::construct_array(
 int TestMediumListChecker::construct_array(
     const char *snapshot_list,
     ObMediumListChecker::MediumInfoArray &input_array,
+    const int64_t medium_compat_version,
     const int64_t last_medium_scn_of_first_medium_info,
     const int64_t cluster_id)
 {
@@ -91,7 +93,7 @@ int TestMediumListChecker::construct_array(
   construct_array(snapshot_list, array_);
   OB_ASSERT(array_.count() <= ARRAY_SIZE);
   for (int i = 0; OB_SUCC(ret) && i < array_.count(); ++i) {
-    set_basic_info(medium_info_array_[i]);
+    set_basic_info(medium_info_array_[i], medium_compat_version);
     medium_info_array_[i].medium_snapshot_ = array_.at(i);
     medium_info_array_[i].last_medium_snapshot_ = (i > 0 ? array_.at(i - 1) : last_medium_scn_of_first_medium_info);
     ret = input_array.push_back(&medium_info_array_[i]);
@@ -103,30 +105,34 @@ int TestMediumListChecker::construct_array(
 TEST_F(TestMediumListChecker, test_validate_medium_info_list)
 {
   int ret = OB_SUCCESS;
-  ObExtraMediumInfo extra_info;
-  extra_info.last_medium_scn_ = 100;
-  ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
+  int64_t medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+  for ( ; medium_compat_version <= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_LATEST; medium_compat_version++) {
+    COMMON_LOG(INFO, "Start test for compat version", K(medium_compat_version));
+    ObExtraMediumInfo extra_info;
+    extra_info.last_medium_scn_ = 100;
+    ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
 
-  ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, 10/*last_medium_scn_of_first_medium_info*/));
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, medium_compat_version, 10/*last_medium_scn_of_first_medium_info*/));
+    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
-  array.reset();
-  ASSERT_EQ(OB_SUCCESS, construct_array("200, 400, 500", array, 100/*last_medium_scn_of_first_medium_info*/));
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 50/*last_major_snapshot*/);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    array.reset();
+    ASSERT_EQ(OB_SUCCESS, construct_array("200, 400, 500", array, medium_compat_version, 100/*last_medium_scn_of_first_medium_info*/));
+    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 50/*last_major_snapshot*/);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 100/*last_major_snapshot*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
 
-  extra_info.last_medium_scn_ = 1000;
-  ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 1000/*last_major_snapshot*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
+    extra_info.last_medium_scn_ = 1000;
+    ret = ObMediumListChecker::validate_medium_info_list(extra_info, &array, 1000/*last_major_snapshot*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
 
-  // push item without clear array
-  ASSERT_EQ(OB_SUCCESS, construct_array("900", array, 700/*last_medium_scn_of_first_medium_info*/));
-  ret = ObMediumListChecker::check_continue(array);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    // push item without clear array
+    ASSERT_EQ(OB_SUCCESS, construct_array("900", array, medium_compat_version, 700/*last_medium_scn_of_first_medium_info*/));
+    ret = ObMediumListChecker::check_continue(array);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+  }
 }
 
 TEST_F(TestMediumListChecker, test_check_extra_info)
@@ -154,40 +160,48 @@ TEST_F(TestMediumListChecker, test_check_extra_info)
 TEST_F(TestMediumListChecker, test_check_next_schedule_medium)
 {
   int ret = OB_SUCCESS;
-  ObMediumCompactionInfo medium_info;
-  set_basic_info(medium_info);
-  medium_info.medium_snapshot_ = 130;
-  medium_info.last_medium_snapshot_ = 100;
+  int64_t medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+  for ( ; medium_compat_version <= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_LATEST; medium_compat_version++) {
+    COMMON_LOG(INFO, "Start test for compat version", K(medium_compat_version));
+    ObMediumCompactionInfo medium_info;
+    set_basic_info(medium_info, medium_compat_version);
+    medium_info.medium_snapshot_ = 130;
+    medium_info.last_medium_snapshot_ = 100;
 
-  ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 100/*last_major_snapshot*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
+    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 100/*last_major_snapshot*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 120/*last_major_snapshot*/);
-  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 120/*last_major_snapshot*/);
+    ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
 
-  // medium from different cluster
-  medium_info.cluster_id_ = OTHER_CLUSTER_ID;
-  ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 50/*last_major_snapshot*/);
-  ASSERT_EQ(OB_SUCCESS, ret);
+    // medium from different cluster
+    medium_info.cluster_id_ = OTHER_CLUSTER_ID;
+    ret = ObMediumListChecker::check_next_schedule_medium(&medium_info, 50/*last_major_snapshot*/);
+    ASSERT_EQ(OB_SUCCESS, ret);
+  }
 }
 
 TEST_F(TestMediumListChecker, test_filter_finish_medium_info)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
-  ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array));
-  int64_t next_medium_info_idx = 0;
-  ret = ObMediumListChecker::filter_finish_medium_info(array, 100, next_medium_info_idx);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(next_medium_info_idx, 0);
+  int64_t medium_compat_version = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V2;
+  for ( ; medium_compat_version <= ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_LATEST; medium_compat_version++) {
+    COMMON_LOG(INFO, "Start test for compat version", K(medium_compat_version));
+    ObSEArray<compaction::ObMediumCompactionInfo*, 10> array;
+    ASSERT_EQ(OB_SUCCESS, construct_array("300, 400, 500", array, medium_compat_version));
+    int64_t next_medium_info_idx = 0;
+    ret = ObMediumListChecker::filter_finish_medium_info(array, 100, next_medium_info_idx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(next_medium_info_idx, 0);
 
-  ret = ObMediumListChecker::filter_finish_medium_info(array, 500, next_medium_info_idx);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(next_medium_info_idx, 3);
+    ret = ObMediumListChecker::filter_finish_medium_info(array, 500, next_medium_info_idx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(next_medium_info_idx, 3);
 
-  ret = ObMediumListChecker::filter_finish_medium_info(array, 400, next_medium_info_idx);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(next_medium_info_idx, 2);
+    ret = ObMediumListChecker::filter_finish_medium_info(array, 400, next_medium_info_idx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(next_medium_info_idx, 2);
+  }
 }
 
 }//end namespace unittest

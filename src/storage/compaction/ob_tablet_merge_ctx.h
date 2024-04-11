@@ -116,6 +116,7 @@ public:
     GET_PARALLEL_RANGE,
     EXECUTE,
     CREATE_SSTABLE,
+    UPDATE_UPPER_TRANS,
     UPDATE_TABLET,
     RELEASE_MEMTABLE,
     SCHEDULE_OTHER_COMPACTION,
@@ -166,6 +167,7 @@ struct ObTabletMergeCtx
     const int64_t medium_snapshot,
     ObGetMergeTablesResult &result,
     bool &is_schema_changed);
+  int init_get_meta_compaction_info(); // for meta major schema
   int get_schema_and_gene_from_result(const ObGetMergeTablesResult &get_merge_table_result);
   int get_storage_schema_to_merge(const ObTablesHandleArray &merge_tables_handle);
   int try_swap_tablet_handle();

@@ -1781,7 +1781,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl && !is_no_table_options(sql_mode)) {
     if (!agent_mode) {
       if (table_schema.is_queuing_table()) {
-        table_mode_str = "QUEUING";
+        table_mode_str = table_mode_flag_to_str(table_schema.get_table_mode_flag());
       }
     } else { // true == agent_mode
       table_mode_str = ObBackUpTableModeOp::get_table_mode_str(table_schema.get_table_mode_struct());
@@ -2277,7 +2277,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
   if (OB_SUCC(ret) && !strict_compat_ && !is_index_tbl) {
     if (!is_agent_mode) {
       if (table_schema.is_queuing_table()) {
-        table_mode_str = "QUEUING";
+        table_mode_str = table_mode_flag_to_str(table_schema.get_table_mode_flag());
       }
     } else { // true == agent_mode
       table_mode_str = ObBackUpTableModeOp::get_table_mode_str(table_schema.get_table_mode_struct());
