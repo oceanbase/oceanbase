@@ -4766,13 +4766,28 @@ static struct VarsInit{
     ObSysVars[336].alias_ = "OB_SV_INFORMATION_SCHEMA_STATS_EXPIRY" ;
     }();
 
+    [&] (){
+      ObSysVars[337].default_value_ = "9223372036854775807" ;
+      ObSysVars[337].info_ = "used by JDBC setMaxRows() interface to specify limitation of row number in ResultSet" ;
+      ObSysVars[337].name_ = "_oracle_sql_select_limit" ;
+      ObSysVars[337].data_type_ = ObIntType ;
+      ObSysVars[337].min_val_ = "0" ;
+      ObSysVars[337].max_val_ = "9223372036854775807" ;
+      ObSysVars[337].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[337].id_ = SYS_VAR__ORACLE_SQL_SELECT_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ORACLE_SQL_SELECT_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ORACLE_SQL_SELECT_LIMIT] = 337 ;
+      ObSysVars[337].base_value_ = "9223372036854775807" ;
+    ObSysVars[337].alias_ = "OB_SV__ORACLE_SQL_SELECT_LIMIT" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 337;
+static int64_t var_amount = 338;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

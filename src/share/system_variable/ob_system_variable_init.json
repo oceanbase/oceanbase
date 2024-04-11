@@ -4952,5 +4952,20 @@
     "min_val": "0",
     "max_val": "31536000",
     "publish_version": "424"
+  },
+  "_oracle_sql_select_limit": {
+    "id": 10253,
+    "name": "_oracle_sql_select_limit",
+    "default_value": "9223372036854775807",
+    "base_value": "9223372036854775807",
+    "data_type": "int",
+    "info": "used by JDBC setMaxRows() interface to specify limitation of row number in ResultSet",
+    "flags": "SESSION | INVISIBLE | ORACLE_ONLY",
+    "min_val": "0",
+    "max_val": "9223372036854775807",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
