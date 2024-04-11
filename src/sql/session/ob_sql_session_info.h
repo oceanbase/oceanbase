@@ -46,6 +46,7 @@
 #include "sql/ob_optimizer_trace_impl.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -1520,6 +1521,8 @@ public:
   inline void inc_in_bytes(int64_t in_bytes) { IGNORE_RETURN ATOMIC_FAA(&in_bytes_, in_bytes); }
   inline int64_t get_out_bytes() const { return ATOMIC_LOAD(&out_bytes_); }
   inline void inc_out_bytes(int64_t out_bytes) { IGNORE_RETURN ATOMIC_FAA(&out_bytes_, out_bytes); }
+  dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
+  void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1550,6 +1553,7 @@ private:
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
   bool client_non_standard_;
   bool is_session_sync_support_; // session_sync_support flag.
+  dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

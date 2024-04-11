@@ -132,16 +132,51 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedJobResult);
 };
 
+class ObDBMSSchedStopJobArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDBMSSchedStopJobArg():
+    tenant_id_(OB_INVALID_ID), job_name_(), session_id_(OB_INVALID_ID), rpc_send_time_(OB_INVALID_TIMESTAMP) {}
+
+  ObDBMSSchedStopJobArg(uint64_t tenant_id,
+               common::ObString &job_name,
+               uint64_t session_id,
+               int64_t rpc_send_time)
+    : tenant_id_(tenant_id), job_name_(job_name), session_id_(session_id), rpc_send_time_(rpc_send_time) {}
+
+  inline bool is_valid() const
+  {
+    return common::is_valid_tenant_id(tenant_id_)
+        && !job_name_.empty()
+        && session_id_ != OB_INVALID_ID
+        && rpc_send_time_ != OB_INVALID_TIMESTAMP;
+  }
+
+  TO_STRING_KV(K_(tenant_id),
+               K_(job_name),
+               K_(session_id));
+
+  uint64_t tenant_id_;
+  common::ObString job_name_;
+  uint64_t session_id_;
+  int64_t rpc_send_time_;
+};
+
 class ObDBMSSchedJobRpcProxy : public obrpc::ObRpcProxy
 {
 public:
   DEFINE_TO(ObDBMSSchedJobRpcProxy);
   RPC_AP(PR5 run_dbms_sched_job, obrpc::OB_RUN_DBMS_SCHED_JOB, (ObDBMSSchedJobArg), ObDBMSSchedJobResult);
+  RPC_S(PR5 stop_dbms_sched_job, obrpc::OB_STOP_DBMS_SCHED_JOB, (ObDBMSSchedStopJobArg));
 
 public:
   int run_dbms_sched_job(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, common::ObString &job_name,
     common::ObAddr server_addr, common::ObAddr master_addr);
+  int stop_dbms_sched_job(
+    uint64_t tenant_id, common::ObString &job_name,
+    common::ObAddr server_addr, uint64_t session_id);
 };
 
 }

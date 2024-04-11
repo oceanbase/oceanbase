@@ -212,6 +212,7 @@
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2513,6 +2514,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvConnection, kv_connection))) {
               kv_connection->set_connection_mgr(&table::ObTableConnectionMgr::get_instance());
               vt_iter = static_cast<ObVirtualTableIterator *>(kv_connection);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID:
+          {
+            ObAllVirtualTenantSchedulerRunningJob *running_job = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSchedulerRunningJob, running_job))) {
+              running_job->set_session_mgr(GCTX.session_mgr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
             }
             break;
           }

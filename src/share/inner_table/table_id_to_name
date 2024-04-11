@@ -989,6 +989,7 @@
 # 12426: __all_import_table_task  # BASE_TABLE_NAME
 # 12427: __all_virtual_import_table_task_history
 # 12427: __all_import_table_task_history  # BASE_TABLE_NAME
+# 12442: __all_virtual_tenant_scheduler_running_job
 # 12451: __all_virtual_transfer_partition_task
 # 12451: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 12452: __all_virtual_transfer_partition_task_history

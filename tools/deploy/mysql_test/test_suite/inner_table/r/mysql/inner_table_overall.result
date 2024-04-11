@@ -661,6 +661,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12425	__all_virtual_import_table_job_history	2	201001	1
 12426	__all_virtual_import_table_task	2	201001	1
 12427	__all_virtual_import_table_task_history	2	201001	1
+12442	__all_virtual_tenant_scheduler_running_job	2	201001	1
 12451	__all_virtual_transfer_partition_task	2	201001	1
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1

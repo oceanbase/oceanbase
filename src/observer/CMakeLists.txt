@@ -399,6 +399,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_thread.cpp
   virtual_table/ob_virtual_flt_config.cpp
   virtual_table/ob_all_virtual_kv_connection.cpp
+  virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
 )
 
 ob_server_add_target(ob_server)

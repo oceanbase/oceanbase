@@ -12867,6 +12867,39 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 # 12432: __all_virtual_column_group_mapping_history
 # 12433: __all_virtual_storage_ha_error_diagnose
 # 12434: __all_virtual_storage_ha_perf_diagnose
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name     = '__all_virtual_tenant_scheduler_running_job',
+  table_id       = '12442',
+  table_type     = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('owner', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
+    ('job_name', 'varchar:128'),
+    ('job_subname', 'varchar:30', 'true'),
+    ('job_style', 'varchar:11', 'true'),
+    ('detached', 'varchar:5', 'true'),
+    ('session_id', 'uint', 'true'),
+    ('slave_process_id', 'uint', 'true'),
+    ('slave_os_process_id', 'uint', 'true'),
+    ('resource_consumer_group', 'varchar:30', 'true'),
+    ('running_instance', 'varchar:30', 'true'),
+    ('elapsed_time', 'int', 'true'),
+    ('cpu_used', 'int', 'true'),
+    ('destination_owner', 'varchar:128', 'true'),
+    ('destination', 'varchar:128', 'true'),
+    ('credential_owner', 'varchar:30', 'true'),
+    ('credential_name', 'varchar:30', 'true'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12451',
   table_name = '__all_virtual_transfer_partition_task',
