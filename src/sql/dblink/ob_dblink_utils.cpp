@@ -243,6 +243,22 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   return ret;
 }
 
+int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll) {
+  int ret = OB_SUCCESS;
+  common::ObCharsetType database_cs = ObCharsetType::CHARSET_UTF8MB4;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (lib::is_oracle_mode()) {
+    spell_coll = session->get_nls_collation();
+  } else if (OB_FAIL(session->get_character_set_database(database_cs))) {
+    LOG_WARN("failed to get character_set_database", K(ret));
+  } else {
+    spell_coll = ObCharset::get_default_collation_by_mode(database_cs, false);
+  }
+  return ret;
+}
+
 ObReverseLink::ObReverseLink()
   : user_(),
     tenant_(),

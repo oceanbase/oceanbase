@@ -50,6 +50,7 @@ public:
                                 const char *&set_client_charset,
                                 const char *&set_connection_charset,
                                 const char *&set_results_charset);
+  static int get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll);
 };
 
 enum DblinkGetConnType {

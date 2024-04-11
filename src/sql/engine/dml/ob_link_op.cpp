@@ -206,6 +206,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
   int64_t stmt_fmt_next_param_pos = (next_param < param_infos.count() ?
                                      param_infos.at(next_param).pos_ : link_stmt_fmt.length());
   char proxy_route_ip_port_str[proxy_route_ip_port_size_] = { 0 };
+  ObCollationType spell_coll = CS_TYPE_INVALID;
   if (OB_NOT_NULL(reverse_link)) {
     if (OB_FAIL(reverse_link->get_self_addr().ip_port_to_string(proxy_route_ip_port_str,
                                                  proxy_route_ip_port_size_))) {
@@ -217,6 +218,9 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
     }
   }
   link_stmt_pos += reserve_proxy_route_space;
+  if (OB_SUCC(ret) && param_infos.count() && OB_FAIL(ObDblinkService::get_spell_collation_type(ctx_.get_my_session(), spell_coll))) {
+    LOG_WARN("failed to get spell collation type", K(ret));
+  }
   while (OB_SUCC(ret) && stmt_fmt_pos <  link_stmt_fmt.length()) {
     // copy from link_stmt_fmt.
     if (stmt_fmt_pos < stmt_fmt_next_param_pos) {
@@ -249,6 +253,7 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
         // the target character set of param is the same as that of oci connection.
         obj_print_params.cs_type_ = ctx_.get_my_session()->get_nls_collation();
       }
+      obj_print_params.cs_type_ = spell_coll;
       obj_print_params.need_cast_expr_ = true;
       obj_print_params.print_const_expr_type_ = true;
       while (OB_SUCC(ret) && link_stmt_pos == saved_stmt_pos) {

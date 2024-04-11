@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "sql/optimizer/ob_log_link.h"
 #include "sql/ob_sql_utils.h"
+#include "sql/dblink/ob_dblink_utils.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -212,6 +213,7 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   ObOptimizerContext *opt_ctx = NULL;
   ObQueryCtx *query_ctx = NULL;
   ObSQLSessionInfo *session = NULL;
+  ObCollationType spell_coll = CS_TYPE_INVALID;
   int64_t session_query_timeout_us = 0;
   int64_t hint_query_timeout_us = 0;
   if (OB_ISNULL(stmt) || OB_ISNULL(plan) ||
@@ -223,6 +225,9 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
   } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(ObDblinkService::get_spell_collation_type(session, spell_coll))) {
+    LOG_WARN("failed to get spell collation type", K(ret));
+  } else if (FALSE_IT(print_param.cs_type_ = spell_coll)) {
   } else if (FALSE_IT(hint_query_timeout_us = query_ctx->get_query_hint_for_update().get_global_hint().query_timeout_)) {
   } else if (OB_FAIL(session->get_query_timeout(session_query_timeout_us))) {
     LOG_WARN("failed to get session query timeout", K(ret));
