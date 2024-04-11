@@ -8639,7 +8639,8 @@ public:
   res_arg_array_(),
   ddl_type_(share::DDL_INVALID),
   task_id_(0),
-  ddl_res_array_()
+  ddl_res_array_(),
+  ddl_need_retry_at_executor_(false)
   {}
   void reset();
   int assign(const ObAlterTableRes &other) {
@@ -8654,12 +8655,13 @@ public:
     } else {
       ddl_type_ = other.ddl_type_;
       task_id_ = other.task_id_;
+      ddl_need_retry_at_executor_ = other.ddl_need_retry_at_executor_;
     }
     return ret;
   }
 public:
   TO_STRING_KV(K_(index_table_id), K_(constriant_id), K_(schema_version),
-  K_(res_arg_array), K_(ddl_type), K_(task_id));
+  K_(res_arg_array), K_(ddl_type), K_(task_id), K_(ddl_need_retry_at_executor));
   uint64_t index_table_id_;
   uint64_t constriant_id_;
   int64_t schema_version_;
@@ -8667,6 +8669,7 @@ public:
   share::ObDDLType ddl_type_;
   int64_t task_id_;
   common::ObSArray<ObDDLRes> ddl_res_array_;
+  bool ddl_need_retry_at_executor_;
 };
 
 struct ObDropDatabaseRes final

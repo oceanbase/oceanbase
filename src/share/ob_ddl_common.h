@@ -100,6 +100,7 @@ enum ObDDLType
   DDL_MVIEW_COMPLETE_REFRESH = 1014,
   DDL_CREATE_MVIEW = 1015,
   DDL_ALTER_COLUMN_GROUP = 1016, // alter table add/drop column group
+  DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION = 1017,
 
   // @note new normal ddl type to be defined here !!!
   DDL_NORMAL_TYPE = 10001,

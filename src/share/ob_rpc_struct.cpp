@@ -7082,6 +7082,7 @@ void ObAlterTableRes::reset()
   ddl_type_ = ObDDLType::DDL_INVALID;
   task_id_ = 0;
   ddl_res_array_.reset();
+  ddl_need_retry_at_executor_ = false;
 }
 
 void ObDropDatabaseRes::reset()
@@ -7104,7 +7105,7 @@ int ObDropDatabaseRes::assign(const ObDropDatabaseRes &other)
 OB_SERIALIZE_MEMBER(ObDropDatabaseRes, ddl_res_, affected_row_);
 OB_SERIALIZE_MEMBER(ObAlterTableResArg, schema_type_, schema_id_, schema_version_, part_object_id_);
 OB_SERIALIZE_MEMBER(ObAlterTableRes, index_table_id_, constriant_id_, schema_version_,
-res_arg_array_, ddl_type_, task_id_, ddl_res_array_);
+res_arg_array_, ddl_type_, task_id_, ddl_res_array_, ddl_need_retry_at_executor_);
 OB_SERIALIZE_MEMBER(ObGetTenantSchemaVersionArg, tenant_id_);
 OB_SERIALIZE_MEMBER(ObGetTenantSchemaVersionResult, schema_version_);
 OB_SERIALIZE_MEMBER(ObTenantMemoryArg, tenant_id_, memory_size_, refresh_interval_);
