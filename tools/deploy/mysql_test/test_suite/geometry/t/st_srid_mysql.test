@@ -120,3 +120,7 @@ select st_astext(st_srid(x'00000000010300000003000000050000000000100000000000000
 
 --echo bugfix: 53257405
 select st_srid(st_geomfromtext('point(100 100)')) - 3;
+
+select weight_string(st_srid(NULL));
+--error 3037
+select weight_string(st_srid(3333));

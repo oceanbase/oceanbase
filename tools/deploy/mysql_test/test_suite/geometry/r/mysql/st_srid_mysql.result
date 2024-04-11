@@ -152,3 +152,8 @@ bugfix: 53257405
 select st_srid(st_geomfromtext('point(100 100)')) - 3;
 st_srid(st_geomfromtext('point(100 100)')) - 3
 -3
+select weight_string(st_srid(NULL));
+weight_string(st_srid(NULL))
+NULL
+select weight_string(st_srid(3333));
+ERROR 22023: Invalid GIS data provided to function st_srid.

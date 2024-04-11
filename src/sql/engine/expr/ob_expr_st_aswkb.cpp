@@ -152,11 +152,11 @@ int ObExprGeomWkb::eval_geom_wkb(const ObExpr &expr,
                                                         axis_order))) {
       LOG_WARN("fail to parse axis order option string", K(ret), K(option_str));
       ret = OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR; // adapt mysql errcode.
+      const uint64_t STR_LEN_MAX = 512;
+      char err_str[STR_LEN_MAX] = {0};
       const int64_t len = option_str.length();
-      char str[len + 1];
-      str[len] = '\0';
-      MEMCPY(str, option_str.ptr(), len);
-      LOG_USER_ERROR(OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR, str, '=', get_func_name());
+      MEMCPY(err_str, option_str.ptr(), (len >= STR_LEN_MAX ? (STR_LEN_MAX - 1) : len));
+      LOG_USER_ERROR(OB_ERR_INVALID_OPTION_KEY_VALUE_PAIR, err_str, '=', get_func_name());
     } else if (OB_FAIL(ObGeoExprUtils::check_need_reverse(axis_order, need_reverse))) {
       LOG_WARN("fail to check need reverse", K(ret), K(axis_order));
     }
