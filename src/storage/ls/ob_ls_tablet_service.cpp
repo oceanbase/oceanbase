@@ -3932,7 +3932,8 @@ int ObLSTabletService::insert_tablet_rows(
   // It would be more efficient and elegant to completely merge the uniqueness constraint
   // and write conflict checking, but the implementation currently is to minimize intrusion
   // into the memtable.
-  if (check_exists && OB_FAIL(tablet_handle.get_obj()->rowkeys_exists(run_ctx.store_ctx_, table,
+  if (OB_FAIL(ret)) {
+  } else if (check_exists && OB_FAIL(tablet_handle.get_obj()->rowkeys_exists(run_ctx.store_ctx_, table,
                                                                       rows_info, exists))) {
     LOG_WARN("Failed to check the uniqueness constraint", K(ret), K(rows_info));
   } else if (exists) {

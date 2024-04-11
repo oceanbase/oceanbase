@@ -338,7 +338,7 @@ int ObPushdownFilterConstructor::deduplicate_filter_node(
         --n_node;
       }
     }
-    if (0 < merged_node.count()) {
+    if (OB_SUCC(ret) && 0 < merged_node.count()) {
       if (OB_ISNULL(filter_nodes.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter node is null", K(ret), K(i));

@@ -528,7 +528,7 @@ int ObPartitionMergePolicy::find_minor_merge_tables(
                 "last_end_log_ts", result.scn_range_.end_scn_, K(tmp_table_handle));
         result.reset_handle_and_range();
       }
-      if (OB_FAIL(result.handle_.add_table(tmp_table_handle))) {
+      if (FAILEDx(result.handle_.add_table(tmp_table_handle))) {
         LOG_WARN("Failed to add table", K(ret), KPC(table));
       } else {
         if (1 == result.handle_.get_count()) {

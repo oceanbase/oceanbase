@@ -226,7 +226,7 @@ int ObMacroBlockReader::decompress_data_with_prealloc_buf(
       }
     }
 
-    if (OB_FAIL(compressor_->decompress(buf, size, uncomp_buf, uncomp_buf_size, uncomp_size))) {
+    if (FAILEDx(compressor_->decompress(buf, size, uncomp_buf, uncomp_buf_size, uncomp_size))) {
       LOG_WARN("Fail to decompress data", K(ret));
     } else {
       if (OB_UNLIKELY(uncomp_size != uncomp_buf_size)) {

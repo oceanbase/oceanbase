@@ -264,7 +264,7 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObTabletMergeCtx &m
       int64_t mini_merge_thread = 0;
       if (OB_FAIL(memtable->estimate_phy_size(nullptr, nullptr, total_bytes, total_rows))) {
         STORAGE_LOG(WARN, "Failed to get estimate size from memtable", K(ret));
-      } else if (MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, mini_merge_thread)) {
+      } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, mini_merge_thread))) {
         STORAGE_LOG(WARN, "failed to get uplimit", K(ret), K(mini_merge_thread));
       } else {
         ObArray<ObStoreRange> store_ranges;
@@ -377,7 +377,7 @@ int ObParallelMergeCtx::calc_mini_minor_parallel_degree(const int64_t tablet_siz
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to calc mini minor parallel degree", K(ret), K(tablet_size),
                 K(total_size), K(sstable_count));
-  } else if (MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_MID, minor_merge_thread)) {
+  } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_MID, minor_merge_thread))) {
     STORAGE_LOG(WARN, "failed to get uplimit", K(ret), K(minor_merge_thread));
   } else {
     int64_t avg_sstable_size = total_size / sstable_count;

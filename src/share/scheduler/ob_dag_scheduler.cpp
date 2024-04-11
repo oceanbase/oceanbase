@@ -452,7 +452,7 @@ int ObIDag::add_task(ObITask &task)
     if (OB_FAIL(check_cycle())) {
       COMMON_LOG(WARN, "check_cycle failed", K(ret), K_(id));
       if (OB_ISNULL(task_list_.remove(&task))) {
-        COMMON_LOG(WARN, "failed to remove task from task_list", K_(id));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to remove task from task_list", K_(id));
       }
     }
   }
@@ -2852,7 +2852,7 @@ int ObTenantDagScheduler::loop_running_dag_net_map()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag net is unepxected null", K(ret), KP(dag_net));
     } else if (dag_net->check_finished_and_mark_stop()) {
-      LOG_WARN("dag net is in finish state", K(ret), KPC(dag_net));
+      LOG_INFO("dag net is in finish state", K(ret), KPC(dag_net));
     } else if (dag_net->start_time_ + PRINT_SLOW_DAG_NET_THREASHOLD < ObTimeUtility::fast_current_time()) {
       ++slow_dag_net_cnt;
       LOG_DEBUG("slow dag net", K(ret), KP(dag_net), "dag_net_start_time", dag_net->start_time_);

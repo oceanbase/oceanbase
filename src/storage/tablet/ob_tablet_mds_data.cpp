@@ -914,6 +914,7 @@ int ObTabletMdsData::copy_medium_info_list(
       const compaction::ObMediumCompactionInfo *chosen_info = nullptr;
 
       if (OB_ISNULL(info1) || OB_ISNULL(info2)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("medium info is null", K(ret), K(i), K(j), KP(info1), KP(info2));
       } else if (info1->medium_snapshot_ < info2->medium_snapshot_) {
         chosen_info = info1;
