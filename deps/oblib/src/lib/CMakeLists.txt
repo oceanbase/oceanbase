@@ -204,6 +204,8 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
   udt/ob_udt_type.cpp
+  locale/ob_locale_type.cc
+  locale/ob_locale.cpp
 )
 
 ob_set_subtarget(oblib_lib lock

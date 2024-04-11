@@ -960,7 +960,7 @@ int ObInnerTableSchema::gv_ob_parameters_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SCOPE,   TENANT_ID,   NAME,   DATA_TYPE,   VALUE,   INFO,   SECTION,   EDIT_LEVEL FROM oceanbase.__all_virtual_tenant_parameter_stat )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( SELECT   SVR_IP,   SVR_PORT,   ZONE,   SCOPE,   TENANT_ID,   NAME,   DATA_TYPE,   VALUE,   INFO,   SECTION,   EDIT_LEVEL,   DEFAULT_VALUE,   CAST (CASE ISDEFAULT         WHEN 1         THEN 'YES'         ELSE 'NO'         END AS CHAR(3)) AS ISDEFAULT FROM oceanbase.__all_virtual_tenant_parameter_stat )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1010,7 +1010,7 @@ int ObInnerTableSchema::v_ob_parameters_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     ZONE,     SCOPE,     TENANT_ID,     NAME,     DATA_TYPE,     VALUE,     INFO,     SECTION,     EDIT_LEVEL     FROM oceanbase.GV$OB_PARAMETERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT SVR_IP,     SVR_PORT,     ZONE,     SCOPE,     TENANT_ID,     NAME,     DATA_TYPE,     VALUE,     INFO,     SECTION,     EDIT_LEVEL,     DEFAULT_VALUE,     CAST (CASE ISDEFAULT           WHEN 1           THEN 'YES'           ELSE 'NO'           END AS CHAR(3)) AS ISDEFAULT     FROM oceanbase.GV$OB_PARAMETERS     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

@@ -3520,6 +3520,21 @@ int ObBasicSessionInfo::get_init_connect(ObString &str) const
   return get_string_sys_var(SYS_VAR_INIT_CONNECT, str);
 }
 
+int ObBasicSessionInfo::get_locale_name(common::ObString &str) const
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    if(OB_FAIL(get_string_sys_var(SYS_VAR_LC_TIME_NAMES, str))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to load sys variables", "var_name",SYS_VAR_LC_TIME_NAMES, K(ret));
+    }
+   } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("oracle mode does not support lc_time_names", K(lib::is_oracle_mode()), K(ret));
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_transformation_enabled(bool &transformation_enabled) const
 {
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_TRANSFORMATION, transformation_enabled);

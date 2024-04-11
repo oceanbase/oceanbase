@@ -410,6 +410,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_nic_info.cpp
   virtual_table/ob_all_virtual_storage_ha_error_diagnose.cpp
   virtual_table/ob_all_virtual_storage_ha_perf_diagnose.cpp
+  virtual_table/ob_all_virtual_sys_variable_default_value.cpp
 )
 
 ob_server_add_target(ob_server)

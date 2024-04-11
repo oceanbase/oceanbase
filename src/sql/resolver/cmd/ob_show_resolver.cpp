@@ -28,6 +28,19 @@ namespace oceanbase
 namespace sql
 {
 
+inline static bool valid_default_parameter_version(int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  uint64_t data_version = 0;
+  if(OB_SUCC(GET_MIN_DATA_VERSION(tenant_id, data_version)))
+  {
+    bret = ((data_version >= DATA_VERSION_4_2_2_0 &&
+             data_version < DATA_VERSION_4_3_0_0) ||
+             data_version >= DATA_VERSION_4_3_1_0);
+  }
+  return bret;
+}
 ObShowResolver::ObShowResolver(ObResolverParams &params)
     : ObSelectResolver(params)
 {
@@ -1094,9 +1107,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PARAMETERS_SEED, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_ALL_VIRTUAL_TENANT_PARAMETER_STAT_TNAME, OB_ALL_VIRTUAL_TENANT_PARAMETER_STAT_ORA_TNAME),
                              local_ip, GCONF.self_addr_.get_port());
             }
-          } else if (OB_SYS_TENANT_ID == show_tenant_id) {
-            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PARAMETERS);
-            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PARAMETERS,
+          } else if (valid_default_parameter_version(show_tenant_id)) {
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_PARAMETERS_WITH_DEFAULT_VALUE);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_PARAMETERS_WITH_DEFAULT_VALUE,
                 REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
                 REAL_NAME(OB_ALL_VIRTUAL_TENANT_PARAMETER_STAT_TNAME, OB_ALL_VIRTUAL_TENANT_PARAMETER_STAT_ORA_TNAME),
                 show_tenant_id);
@@ -2868,6 +2881,11 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS,
                        "SELECT zone, svr_type, svr_ip, svr_port, name, data_type, value, info, section, scope, source, edit_level from %s.%s where name not like '\\_%%' and (tenant_id = %ld or tenant_id is null)",
                        R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL" FROM %s.%s WHERE NAME NOT LIKE '\_%%' ESCAPE '\' and  (tenant_id = %ld or tenant_id is null))",
                        "name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_WITH_DEFAULT_VALUE,
+                       NULL,
+                      "SELECT zone, svr_type, svr_ip, svr_port, name, data_type, value, info, section,scope, source, edit_level, default_value, isdefault from %s.%s where (name not like '\\_%%' or isdefault=0) and (tenant_id = %ld or tenant_id is null)",
+                      R"(SELECT "ZONE", "SVR_TYPE", "SVR_IP", "SVR_PORT", "NAME", "DATA_TYPE", "VALUE", "INFO", "SECTION", "SCOPE", "SOURCE", "EDIT_LEVEL", "DEFAULT_VALUE", "ISDEFAULT" FROM %s.%s WHERE (NAME NOT LIKE '\_%%' ESCAPE '\' or ISDEFAULT=0) and  (tenant_id = %ld or tenant_id is null))",
+                      "name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_PARAMETERS_UNSYS,
                        NULL,
                        "SELECT 1 `gmt_create`, 1 `gmt_modified`, 1 `zone`, 1 `svr_type`, 1 `svr_ip`, 1 `svr_port`, 1 `name`, 1 `data_type`, 1 `value`, 1 `info`, 1 `section`, 1 `scope`, 1 `source`, 1 `edit_level` FROM (SELECT 1 FROM DUAL) tmp_table WHERE 1 != 1",

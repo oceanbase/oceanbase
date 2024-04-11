@@ -714,6 +714,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
+12450	__all_virtual_sys_variable_default_value	2	201001	1
 12451	__all_virtual_transfer_partition_task	2	201001	1
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12453	__all_virtual_tenant_snapshot_job	2	201001	1
@@ -1095,6 +1096,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1
+21500	DBA_OB_SYS_VARIABLES	1	201001	1
 21501	DBA_OB_TRANSFER_PARTITION_TASKS	1	201001	1
 21502	CDB_OB_TRANSFER_PARTITION_TASKS	1	201001	1
 21503	DBA_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1

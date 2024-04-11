@@ -225,6 +225,7 @@
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
+#include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
 
 namespace oceanbase
 {
@@ -2675,6 +2676,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "ObAllVirtualStorageHAPerfDiagnose construct failed", K(ret));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(storage_ha_perf_diagnose);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID: {
+            ObSysVarDefaultValue *sys_var_default_value = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObSysVarDefaultValue, sys_var_default_value))) {
+              SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
+            } else {
+              vt_iter = static_cast<ObVirtualTableIterator *>(sys_var_default_value);
             }
             break;
           }

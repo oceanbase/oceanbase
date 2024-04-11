@@ -1,7 +1,7 @@
 ===========================  case1: under sys tenant  ===========================
 =====================  [1] prevent data_type UNKNOWN  ======================
 show parameters where data_type = 'UNKNOWN';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
 select * from __all_sys_parameter where data_type = 'UNKNOWN';
 gmt_create	gmt_modified	zone	svr_type	svr_ip	svr_port	name	data_type	value	value_strict	info	need_reboot	section	visible_level	config_version	scope	source	edit_level
 select * from __tenant_parameter where data_type = 'UNKNOWN';
@@ -15,9 +15,9 @@ tenant_id	zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	
 select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
 tenant_id	zone	svr_type	svr_ip	svr_port	name	gmt_create	gmt_modified	data_type	value	info	section	scope	source	edit_level	config_version
 select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
-SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL	DEFAULT_VALUE	ISDEFAULT
 select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
-SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL	DEFAULT_VALUE	ISDEFAULT
 ===============  [2] check data_tpye for __all_sys_parameter  ===============
 select name, data_type from __all_sys_parameter where name = 'enable_sql_audit';
 name	data_type
@@ -308,62 +308,62 @@ name	data_type
 compatible	VERSION
 ================  [10] check data_tpye for show parameters  =================
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	true	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	500	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	5	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	dynamic	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	0M	0
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	2s	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	etc2;etc3	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	False	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	50	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4	0
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	plsql_code_type	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	plsql_code_type	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	native	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	128M	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	10m	0
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	02:00	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible' tenant = sys;
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.1.0	1
 ==========================  case2: under mysql tenant  ==========================
 =====================  [1] prevent data_type UNKNOWN  ======================
 show parameters where data_type = 'UNKNOWN';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
 select * from __all_virtual_tenant_parameter_stat where data_type = 'UNKNOWN';
 zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	tenant_id	default_value	isdefault
 select * from __all_virtual_tenant_parameter where data_type = 'UNKNOWN';
 tenant_id	zone	svr_type	svr_ip	svr_port	name	gmt_create	gmt_modified	data_type	value	info	section	scope	source	edit_level	config_version
 select * from GV$OB_PARAMETERS where data_type = 'UNKNOWN';
-SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL	DEFAULT_VALUE	ISDEFAULT
 select * from V$OB_PARAMETERS where data_type = 'UNKNOWN';
-SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL
+SVR_IP	SVR_PORT	ZONE	SCOPE	TENANT_ID	NAME	DATA_TYPE	VALUE	INFO	SECTION	EDIT_LEVEL	DEFAULT_VALUE	ISDEFAULT
 =======  [2] check data_tpye for __all_virtual_tenant_parameter_stat  =======
 select name, data_type from __all_virtual_tenant_parameter_stat where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
 name	data_type
@@ -530,47 +530,47 @@ name	data_type
 compatible	VERSION
 =================  [6] check data_tpye for show parameters  =================
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'enable_sql_audit';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	enable_sql_audit	BOOL	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	true	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'max_string_print_length';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	max_string_print_length	INT	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	500	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'location_cache_cpu_quota';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	location_cache_cpu_quota	DOUBLE	value	info	TENANT	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	5	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'default_row_format';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	default_row_format	STRING	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	dynamic	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'log_disk_size';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	log_disk_size	CAPACITY	value	info	LOGSERVICE	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	0M	0
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'rpc_timeout';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	rpc_timeout	TIME	value	info	RPC	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	2s	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'config_additional_dir';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	config_additional_dir	STR_LIST	value	info	OBSERVER	CLUSTER	DEFAULT	DYNAMIC_EFFECTIVE	etc2;etc3	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_debug';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	plsql_debug	BOOL	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	False	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'open_cursors';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	open_cursors	INT	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	50	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'cpu_quota_concurrency';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	cpu_quota_concurrency	DOUBLE	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'plsql_code_type';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	plsql_code_type	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	plsql_code_type	STRING	value	info	OBSERVER	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	native	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'range_optimizer_max_mem_size';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	range_optimizer_max_mem_size	CAPACITY	value	info	TENANT	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	128M	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'merger_check_interval';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	merger_check_interval	TIME	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	10m	0
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'major_freeze_duty_time';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	02:00	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
-zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level
-zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE
+zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.1.0	1

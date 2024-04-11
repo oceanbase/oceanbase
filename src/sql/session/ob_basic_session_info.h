@@ -1021,6 +1021,7 @@ public:
   int is_select_index_enabled(bool &select_index_enabled) const;
   int get_name_case_mode(common::ObNameCaseMode &case_mode) const;
   int get_init_connect(common::ObString &str) const;
+  int get_locale_name(common::ObString &str) const;
   /// @}
 
   ///@{ user variables related:

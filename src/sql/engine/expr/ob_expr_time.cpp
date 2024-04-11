@@ -17,6 +17,7 @@
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/expr/ob_expr_day_of_func.h"
 #include "sql/engine/expr/ob_expr_util.h"
+#include "lib/locale/ob_locale_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -210,6 +211,7 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
     expr_datum.set_null();
   } else {
     ObTime ot;
+    ObString locale_name;
     if (OB_FAIL(ob_expr_convert_to_time(*param_datum, expr.args_[0]->datum_meta_.type_,
                                         expr.args_[0]->datum_meta_.scale_, with_date, is_allow_incomplete_dates,
                                         ctx, ot, expr.args_[0]->obj_meta_.has_lob_header(),
@@ -230,11 +232,18 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
         expr_datum.set_null();
       } else {
         int idx = ot.parts_[type] - 1;
-        if(0 <= idx  && idx < 7) {
-          const ObString &name = daynames[idx];
-          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, name))) {
-            LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(name));
-          }          
+        if (0 <= idx  && idx < 7) {
+          if (OB_FAIL(session->get_locale_name(locale_name))) {
+              LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+          } else {
+            OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
+            OB_LOCALE_TYPE *locale_type = ob_cur_locale->day_names_;
+            const char ** locale_daynames = locale_type->type_names_;
+            const ObString &name = locale_daynames[idx];
+            if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, name))) {
+              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(name));
+            }
+          }
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("the parameter idx should be within a reasonable range", K(idx));
@@ -246,9 +255,16 @@ int ObExprTimeBase::calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum
       } else {
         int idx = ot.parts_[type] - 1;
         if(0 <= idx  && idx < 12) {
-          const ObString &month_name = monthnames[idx];
-          if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, month_name))) {
-            LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(month_name));
+          if (OB_FAIL(session->get_locale_name(locale_name))) {
+              LOG_WARN("failed to get locale time name", K(expr), K(expr_datum));
+          } else {
+            OB_LOCALE *ob_cur_locale = ob_locale_by_name(locale_name);
+            OB_LOCALE_TYPE *locale_type = ob_cur_locale->month_names_;
+            const char ** locale_monthnames = locale_type->type_names_;
+            const ObString &month_name = locale_monthnames[idx];
+            if (OB_FAIL(ObExprUtil::set_expr_ascii_result(expr, ctx, expr_datum, month_name))) {
+              LOG_WARN("failed to exec set_expr_ascii_result", K(expr), K(ctx), K(expr_datum), K(month_name));
+            }
           }          
         } else {
           ret = OB_ERR_UNEXPECTED;

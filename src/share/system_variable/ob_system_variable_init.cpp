@@ -3447,7 +3447,7 @@ static struct VarsInit{
       ObSysVars[244].info_ = "The locale indicated by the lc_time_names system variable controls the language used to display day and month names and abbreviations" ;
       ObSysVars[244].name_ = "lc_time_names" ;
       ObSysVars[244].data_type_ = ObVarcharType ;
-      ObSysVars[244].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[244].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[244].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_locale_type_is_valid" ;
       ObSysVars[244].id_ = SYS_VAR_LC_TIME_NAMES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_LC_TIME_NAMES)) ;
@@ -4806,6 +4806,7 @@ ObString ObSysVariables::get_alias(int64_t i){ return ObSysVars[i].alias_;}
 const ObObj &ObSysVariables::get_default_value(int64_t i){ return ObSysVarDefaultValues[i];}
 const ObObj &ObSysVariables::get_base_value(int64_t i){ return ObSysVarBaseValues[i];}
 int64_t ObSysVariables::get_amount(){ return var_amount;}
+ObCollationType ObSysVariables::get_default_sysvar_collation() { return CS_TYPE_UTF8MB4_GENERAL_CI;}
 
 int ObSysVariables::set_value(const char *name, const char * new_value)
 {
@@ -4870,11 +4871,11 @@ int ObSysVariables::init_default_values()
       ObObj in_obj;
       ObObj out_obj;
       in_obj.set_varchar(sys_var_val_str);
-      in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      in_obj.set_collation_type(ObSysVariables::get_default_sysvar_collation());
       ObObj base_in_obj;
       ObObj base_out_obj;
       base_in_obj.set_varchar(base_sys_var_val_str);
-      base_in_obj.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      base_in_obj.set_collation_type(ObSysVariables::get_default_sysvar_collation());
       //varchar to others. so, no need to get collation from session
       ObCastCtx cast_ctx(&ObSysVarAllocator,
                          NULL,

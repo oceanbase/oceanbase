@@ -9175,6 +9175,13 @@ network_speed	bigint(20)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_aux_stat;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_sys_variable_default_value;
+Field	Type	Null	Key	Default	Extra
+variable_name	varchar(128)	NO			
+default_value	varchar(65536)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sys_variable_default_value;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_transfer_partition_task;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

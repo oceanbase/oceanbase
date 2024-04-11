@@ -326,6 +326,17 @@ int ObAllVirtualTenantParameterStat::fill_row_(common::ObNewRow *&row,
             }
             break;
           }
+          case DEFAULT_VALUE: {
+            cells[i].set_varchar(iter->second->default_str());
+            cells[i].set_collation_type(
+              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+            break;
+          }
+          case ISDEFAULT: {
+            int isdefault = iter->second->is_default(iter->second->str(),iter->second->default_str(),sizeof(iter->second->default_str())) ? 1 : 0;
+            cells[i].set_int(isdefault);
+            break;
+          }
           default : {
             // skip unknown column for version compatibility
             cells[i].set_null();

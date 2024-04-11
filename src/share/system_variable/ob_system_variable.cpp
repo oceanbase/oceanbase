@@ -35,6 +35,7 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
+#include "lib/locale/ob_locale_type.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_warning.h"
 #endif
@@ -2437,18 +2438,6 @@ int ObSysVarOnCheckFuncs::check_session_readonly(ObExecContext &ctx,
   return ret;
 }
 
-int ObSysVarOnCheckFuncs::check_locale_type_is_valid(
-    sql::ObExecContext &ctx,
-    const ObSetVar &set_var,
-    const ObBasicSysVar &sys_var,
-    const common::ObObj &in_val,
-    common::ObObj &out_val)
-{
-  int ret = OB_NOT_SUPPORTED;
-  LOG_USER_ERROR(OB_NOT_SUPPORTED, "lc_time_names");
-  return ret;
-}
-
 int ObSysVarOnCheckFuncs::check_and_convert_plsql_warnings(sql::ObExecContext &ctx,
                                                  const ObSetVar &set_var,
                                                  const ObBasicSysVar &sys_var,
@@ -2516,6 +2505,28 @@ int ObSysVarOnCheckFuncs::check_runtime_filter_type_is_valid(
       ret = OB_ERR_WRONG_VALUE_FOR_VAR;
       LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, str_val.length(), str_val.ptr(), str_val.length(), str_val.ptr());
     }
+  }
+  return ret;
+}
+
+int ObSysVarOnCheckFuncs::check_locale_type_is_valid(
+    sql::ObExecContext &ctx,
+    const ObSetVar &set_var,
+    const ObBasicSysVar &sys_var,
+    const common::ObObj &in_val,
+    common::ObObj &out_val)
+{
+  int ret = OB_SUCCESS;
+  const ObString &locale_val = in_val.get_string();
+  ObString valid_locale = in_val.get_string();
+  if (true == set_var.is_set_default_) {
+    //do nothing
+  } else if (!is_valid_ob_locale(locale_val, valid_locale)) {            //check if the variable is valid
+    ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+    LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, sys_var.get_name().length(), sys_var.get_name().ptr(),
+                                               locale_val.length(), locale_val.ptr());
+  } else {
+    OX(out_val.set_string(in_val.get_type(), valid_locale));
   }
   return ret;
 }
