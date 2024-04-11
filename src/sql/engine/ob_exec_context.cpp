@@ -343,7 +343,10 @@ int ObExecContext::build_temp_expr_ctx(const ObTempExpr &temp_expr, ObTempExprCt
   char **frames = NULL;
   char *mem = static_cast<char*>(get_allocator().alloc(sizeof(ObTempExprCtx)));
   ObArray<char *> tmp_param_frame_ptrs;
-  CK(OB_NOT_NULL(mem));
+  if (OB_ISNULL(mem)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("no more memory to create temp expr ctx", K(ret));
+  }
   OX(temp_expr_ctx = new(mem)ObTempExprCtx(*this));
   OZ(temp_expr.alloc_frame(get_allocator(), tmp_param_frame_ptrs, frame_cnt, frames));
   OX(temp_expr_ctx->frames_ = frames);
