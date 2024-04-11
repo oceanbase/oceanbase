@@ -482,16 +482,73 @@ int ObBackupPath::join_checkpoint_info_file(const common::ObString &file_name, c
   }
   return ret;
 }
+int ObBackupPath::join_table_list_dir()
+{
+  int ret = OB_SUCCESS;
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(path_, sizeof(path_), cur_pos_, "/%s", OB_STR_TABLE_LIST))) {
+    LOG_WARN("failed to join table list dir", K(ret), K(*this));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_table_list_part_file(const share::SCN &scn, const int64_t part_no)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%lu.%ld",
+                                     OB_STR_TABLE_LIST,
+                                     scn.get_val_for_inner_table_field(),
+                                     part_no))) {
+    LOG_WARN("failed to join table list file", K(ret), K(part_no), K(scn), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPath::join_table_list_meta_info_file(const share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  char file_name[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (cur_pos_ <= 0) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K(*this));
+  } else if (OB_FAIL(databuff_printf(file_name,
+                                     sizeof(file_name),
+                                     "%s.%lu",
+                                     OB_STR_TABLE_LIST_META_INFO,
+                                     scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to join table list tmp file", K(ret), K(scn), K(*this));
+  } else if (OB_FAIL(join(file_name, ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to join file_name", K(ret), K(file_name));
+  } else if (OB_FAIL(trim_right_backslash())) {
+    LOG_WARN("failed to trim right backslash", K(ret));
+  }
+  return ret;
+}
 
 // param case: entry_d_name -> 'checkpoint_info.1678226622262333112.obarc', file_name -> 'checkpoint_info', type -> ARCHIVE
 // result : checkpoint -> 1678226622262333112
-int ObBackupPath::parse_checkpoint(const common::ObString &entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
+int ObBackupPath::parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint)
 {
   int ret = OB_SUCCESS;
   checkpoint = 0;
   ObBackupPath tmp_path; //format string for sscanf
   char tmp_file_name[OB_MAX_FILE_NAME_LENGTH] = { 0 };
-  if (entry_d_name.length() <= 0 || file_name.length() <= 0 || type > ObBackupFileSuffix::BACKUP || type < ObBackupFileSuffix::NONE) {
+  if (OB_ISNULL(entry_d_name) || strlen(entry_d_name) <= 0 || file_name.length() <= 0
+      || type > ObBackupFileSuffix::BACKUP || type < ObBackupFileSuffix::NONE) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(entry_d_name), K(file_name));
   } else if (OB_FAIL(databuff_printf(tmp_file_name, sizeof(tmp_file_name), "%s.%%lu", file_name.ptr()))) {
@@ -502,7 +559,7 @@ int ObBackupPath::parse_checkpoint(const common::ObString &entry_d_name, const c
     LOG_WARN("failed to add backup file suffix", K(ret), K(type), K(tmp_path));
   } else if (OB_FAIL(tmp_path.trim_right_backslash())) {
     OB_LOG(WARN, "fail to trim_right_backslash", K(ret));
-  } else if (1 == sscanf(entry_d_name.ptr(), tmp_path.get_ptr(), &checkpoint)) {
+  } else if (1 == sscanf(entry_d_name, tmp_path.get_ptr(), &checkpoint)) {
     if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
       OB_LOG(INFO, "succeed to get checkpoint scn", K(ret), K(entry_d_name), K(checkpoint), K(tmp_path));
     }
@@ -512,6 +569,68 @@ int ObBackupPath::parse_checkpoint(const common::ObString &entry_d_name, const c
   }
   return ret;
 }
+
+// param case: entry_d_name -> 'table_list.1702352553000000000.1.obbak', file_name -> 'table_list', type -> BACKUP
+// result : part_no -> 1
+int ObBackupPath::parse_partial_table_list_file_name(const char *entry_d_name, const share::SCN &scn, int64_t &part_no)
+{
+  int ret = OB_SUCCESS;
+  part_no = 0;
+  ObBackupPath tmp_path;
+  char tmp_file_name[OB_MAX_FILE_NAME_LENGTH] = { 0 };
+  if (OB_ISNULL(entry_d_name) || strlen(entry_d_name) <= 0 || !scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(entry_d_name), K(scn));
+  } else if (OB_FAIL(databuff_printf(tmp_file_name,
+                                     sizeof(tmp_file_name),
+                                     "%s.%lu.%%ld",
+                                     OB_STR_TABLE_LIST,
+                                     scn.get_val_for_inner_table_field()))) {
+    LOG_WARN("failed to join tmp file name", K(ret));
+  } else if (OB_FAIL(tmp_path.init(tmp_file_name))) {
+    LOG_WARN("failed to init tmp path", K(ret), K(tmp_file_name));
+  } else if (OB_FAIL(tmp_path.add_backup_suffix(ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(tmp_path));
+  } else if (OB_FAIL(tmp_path.trim_right_backslash())) {
+    LOG_WARN("fail to trim_right_backslash", K(ret));
+  } else if (1 != sscanf(entry_d_name, tmp_path.get_ptr(), &part_no)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get part_no", K(ret), K(entry_d_name), K(part_no), K(tmp_path));
+  }
+  return ret;
+}
+
+// param case: entry_d_name -> 'table_list_meta_info.1702352553000000000.obbak', file_name -> 'table_list_meta_info', type -> BACKUP
+// result : scn_val -> 1702352553000000000
+int ObBackupPath::parse_table_list_meta_file_name(const char *entry_d_name, share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  uint64_t scn_val = 0;
+  ObBackupPath tmp_path;
+  char tmp_file_name[OB_MAX_FILE_NAME_LENGTH] = { 0 };
+  if (OB_ISNULL(entry_d_name) || strlen(entry_d_name) <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(entry_d_name));
+  } else if (OB_FAIL(databuff_printf(tmp_file_name,
+                                     sizeof(tmp_file_name),
+                                     "%s.%%lu",
+                                     OB_STR_TABLE_LIST_META_INFO))) {
+    LOG_WARN("failed to join tmp file name", K(ret));
+  } else if (OB_FAIL(tmp_path.init(tmp_file_name))) {
+    LOG_WARN("failed to init tmp path", K(ret), K(tmp_file_name));
+  } else if (OB_FAIL(tmp_path.add_backup_suffix(ObBackupFileSuffix::BACKUP))) {
+    LOG_WARN("failed to add backup file suffix", K(ret), K(tmp_path));
+  } else if (OB_FAIL(tmp_path.trim_right_backslash())) {
+    LOG_WARN("fail to trim_right_backslash", K(ret));
+  } else if (1 != sscanf(entry_d_name, tmp_path.get_ptr(), &scn_val)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get scn", K(ret), K(entry_d_name), K(scn_val), K(tmp_path));
+  } else if (OB_FAIL(scn.convert_for_inner_table_field(scn_val))) {
+    LOG_WARN("fail to convert scn", K(ret), K(scn_val));
+  }
+  return ret;
+}
+
 
 common::ObString ObBackupPath::get_obstr() const
 {
@@ -1269,6 +1388,57 @@ int ObBackupPathUtil::get_ls_log_archive_prefix(const share::ObBackupDest &backu
   }
   return ret;
 }
+
+int ObBackupPathUtil::get_table_list_dir_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_ls_info_dir_path(backup_tenant_dest, desc, backup_path))) {
+    LOG_WARN("fail to get backup set info path", K(ret), K(backup_tenant_dest), K(desc));
+  } else if (OB_FAIL(backup_path.join_table_list_dir())) {
+    LOG_WARN("fail to join table list dir", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_table_list_dir_path(const share::ObBackupDest &backup_set_dest,
+      share::ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupPathUtil::get_ls_info_dir_path(backup_set_dest, backup_path))) {
+      LOG_WARN("fail to get backup set info path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(backup_path.join_table_list_dir())) {
+    LOG_WARN("fail to join table list dir", K(ret), K(backup_set_dest), K(backup_path));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_table_list_meta_path(const share::ObBackupDest &backup_set_dest,
+      const share::SCN &scn, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(get_table_list_dir_path(backup_set_dest, path))) {
+    LOG_WARN("fail to get table list dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_table_list_meta_info_file(scn))) {
+    LOG_WARN("fail to join table list meta file path", K(ret), K(backup_set_dest), K(path));
+  }
+  return ret;
+}
+
+int ObBackupPathUtil::get_table_list_part_file_path(const share::ObBackupDest &backup_set_dest,
+      const share::SCN &scn, const int64_t part_no, share::ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(get_table_list_dir_path(backup_set_dest, path))) {
+    LOG_WARN("fail to get table list dir path", K(ret), K(backup_set_dest));
+  } else if (OB_FAIL(path.join_table_list_part_file(scn, part_no))) {
+    LOG_WARN("fail to join table list part file", K(ret), K(scn), K(part_no));
+  }
+  return ret;
+}
+
 
 int ObBackupPathUtil::construct_backup_set_dest(const share::ObBackupDest &backup_tenant_dest,
     const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest)

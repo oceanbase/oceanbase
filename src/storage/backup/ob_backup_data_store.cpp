@@ -166,6 +166,46 @@ bool ObBackupLSMetaInfosDesc::is_valid() const
   return !ls_meta_packages_.empty();
 }
 
+/*
+ *-----------------------------ObBackupPartialTableListDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupPartialTableListDesc, items_);
+
+bool ObBackupPartialTableListDesc::is_valid() const
+{
+  return count() > 0;
+}
+
+void ObBackupPartialTableListDesc::reset()
+{
+  items_.reset();
+}
+
+int64_t ObBackupPartialTableListDesc::to_string(char *buf, int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0 || !is_valid()) {
+    // do nothing
+  } else {
+    J_OBJ_START();
+    int64_t total = count();
+    J_KV("start_item", items_.at(0), "end_item", items_.at(count() - 1), K(total));
+    J_OBJ_END();
+  }
+  return pos;
+}
+
+/*
+ *-----------------------------ObBackupTableListMetaInfoDesc-----------------------
+ */
+
+OB_SERIALIZE_MEMBER(ObBackupTableListMetaInfoDesc, scn_, count_, batch_size_, partial_metas_);
+
+bool ObBackupTableListMetaInfoDesc::is_valid() const
+{
+  return scn_.is_valid() && count_ >= 0 && batch_size_ > 0;
+}
 
 int ObBackupSetFilter::get_backup_set_array(ObIArray<share::ObBackupSetDesc> &backup_set_array) const
 {
@@ -1250,6 +1290,84 @@ int ObBackupDataStore::read_deleted_tablet_info_v_4_1_x(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupDataStore::write_single_table_list_part_file(const share::SCN &scn, const int64_t part_no, const ObBackupPartialTableListDesc &table_list)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scn is not valid", K(ret), K(scn));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_part_file_path(backup_set_dest_, scn, part_no, path))) {
+    LOG_WARN("fail to get table list part file path", K(ret), K_(backup_set_dest), K(scn), K(part_no));
+  } else if (OB_FAIL(write_single_file(path.get_obstr(), table_list))) {
+    LOG_WARN("fail to write single file", K(ret));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::write_table_list_meta_info(const share::SCN &scn, const ObBackupTableListMetaInfoDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (!scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("scn is not valid", K(ret), K(scn));
+  } else if (!desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table list meta desc is not valid", K(ret), K(desc));
+  } else if (OB_FAIL( ObBackupPathUtil::get_table_list_meta_path(backup_set_dest_, scn, path))) {
+    LOG_WARN("fail to get table list meta path", K(ret), K(scn));
+  } else if (OB_FAIL(write_single_file(path.get_obstr(), desc))) {
+    LOG_WARN("fail to write single file", K(ret), K(desc));
+  }
+
+  return ret;
+}
+
+int ObBackupDataStore::read_table_list_file(const char *file_name, ObBackupPartialTableListDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  char path_str[OB_MAX_BACKUP_PATH_LENGTH] = { 0 };
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data extern mgr not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_dir_path(backup_set_dest_, path))) {
+    LOG_WARN("fail to get table list dir path", K(ret), K_(backup_set_dest));
+  } else if (OB_FAIL(databuff_printf(path_str, OB_MAX_BACKUP_PATH_LENGTH, "%s/%s", path.get_ptr(), file_name))) {
+    LOG_WARN("fail to databuff printf", K(ret), K(path), K(file_name));
+  } else if (OB_FAIL(read_single_file(path_str, desc))) {
+    LOG_WARN("fail to read single file", K(ret), K(path_str));
+  }
+  return ret;
+}
+
+int ObBackupDataStore::is_table_list_meta_exist(const share::SCN &scn, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  ObBackupIoAdapter util;
+  const ObBackupStorageInfo *storage_info = get_storage_info();
+
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObBackupStore not init", K(ret));
+  } else if (OB_FAIL(ObBackupPathUtil::get_table_list_meta_path(backup_set_dest_, scn, full_path))) {
+    LOG_WARN("failed to get format file path", K(ret));
+  } else if (OB_FAIL(util.is_exist(full_path.get_obstr(), storage_info, is_exist))) {
+    LOG_WARN("failed to check format file exist.", K(ret), K(full_path));
   }
   return ret;
 }
