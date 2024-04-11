@@ -295,7 +295,7 @@ int ObMVPrinter::gen_update_for_mav(ObSelectStmt *delta_mv_stmt,
     LOG_WARN("failed to create simple table item", K(ret));
   } else if (OB_FAIL(create_simple_table_item(update_stmt, DELTA_BASIC_MAV_VIEW_NAME, source_table, delta_mv_stmt))) {
     LOG_WARN("failed to create simple table item", K(ret));
-  } else if (OB_FAIL(gen_update_assignments(mv_columns, values, source_table, table_info->assignments_))) {
+  } else if (OB_FAIL(gen_update_assignments(mv_columns, values, source_table, table_info->assignments_, true))) {
     LOG_WARN("failed gen update assignments", K(ret));
   } else if (OB_FAIL(gen_update_conds(mv_columns, values, update_stmt->get_condition_exprs()))) {
     LOG_WARN("failed gen update conds", K(ret));
@@ -565,9 +565,7 @@ int ObMVPrinter::gen_calc_expr_for_insert_clause_sum(ObRawExpr *source_count,
 //  --> d_cnt_c3 and d_sum_c3 is output from merge source_table view
 //  case when d_cnt_c3 = 0 then null else d_sum_c3 end
 //  sum_c3 = case when cnt_c3 + d_cnt_c3 = 0 then null
-//                when cnt_c3 = 0 then d_sum_c3
-//                when d_cnt_c3 = 0 then sum_c3
-//                else d_sum_c3 + sum_c3 end,
+//                else nvl(d_sum_c3, 0) + nvl(sum_c3) end,
 int ObMVPrinter::gen_calc_expr_for_update_clause_sum(ObRawExpr *target_count,
                                                      ObRawExpr *source_count,
                                                      ObRawExpr *target_sum,
@@ -579,6 +577,8 @@ int ObMVPrinter::gen_calc_expr_for_update_clause_sum(ObRawExpr *target_count,
   ObOpRawExpr *add_expr = NULL;
   ObRawExpr *when_expr = NULL;
   ObCaseOpRawExpr *case_when_expr = NULL;
+  ObRawExpr *nvl_target_sum = NULL;
+  ObRawExpr *nvl_source_sum = NULL;
   if (OB_ISNULL(target_count) || OB_ISNULL(source_count) || OB_ISNULL(target_sum) || OB_ISNULL(source_sum)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(target_count), K(source_count), K(target_sum), K(source_sum));
@@ -592,15 +592,10 @@ int ObMVPrinter::gen_calc_expr_for_update_clause_sum(ObRawExpr *target_count,
              || OB_FAIL(case_when_expr->add_when_param_expr(when_expr))
              || OB_FAIL(case_when_expr->add_then_param_expr(exprs_.null_expr_))) {
     LOG_WARN("failed to build and add when/then exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, T_OP_EQ, target_count, exprs_.int_zero_, when_expr))
-             || OB_FAIL(case_when_expr->add_when_param_expr(when_expr))
-             || OB_FAIL(case_when_expr->add_then_param_expr(source_sum))) {
-    LOG_WARN("failed to build and add when/then exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_, T_OP_EQ, source_count, exprs_.int_zero_, when_expr))
-             || OB_FAIL(case_when_expr->add_when_param_expr(when_expr))
-             || OB_FAIL(case_when_expr->add_then_param_expr(target_sum))) {
-    LOG_WARN("failed to build and add when/then exprs", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_add_expr(expr_factory_, target_sum, source_sum, add_expr))) {
+  } else if (OB_FAIL(add_nvl_above_exprs(target_sum, exprs_.int_zero_, nvl_target_sum))
+             || OB_FAIL(add_nvl_above_exprs(source_sum, exprs_.int_zero_, nvl_source_sum))) {
+    LOG_WARN("failed to add nvl above exprs", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::build_add_expr(expr_factory_, nvl_target_sum, nvl_source_sum, add_expr))) {
     LOG_WARN("failed to build add expr", K(ret));
   } else {
     case_when_expr->set_default_param_expr(add_expr);
@@ -651,7 +646,8 @@ int ObMVPrinter::get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
 int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &target_columns,
                                         const ObIArray<ObRawExpr*> &values_exprs,
                                         const TableItem *source_table,
-                                        ObIArray<ObAssignment> &assignments)
+                                        ObIArray<ObAssignment> &assignments,
+                                        const bool for_mysql_update /* default false */)
 {
   int ret = OB_SUCCESS;
   assignments.reuse();
@@ -664,6 +660,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
   const ObIArray<ObRawExpr*> &group_by_exprs = mv_checker_.get_stmt().get_group_exprs();
   const ObIArray<SelectItem> &select_items = mv_checker_.get_stmt().get_select_items();
   ObAssignment assign;
+  ObSEArray<ObAssignment, 4> inner_assigns;
   if (OB_ISNULL(source_table) ||
       OB_UNLIKELY(target_columns.count() != select_items.count()
                   || target_columns.count() != values_exprs.count())) {
@@ -686,7 +683,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
     } else if (OB_FAIL(ObRawExprUtils::build_add_expr(expr_factory_, target_columns.at(i), values_exprs.at(i), op_expr))) {
       LOG_WARN("failed to build add expr", K(ret));
     } else if (OB_FALSE_IT(assign.expr_ = op_expr)) {
-    } else if (OB_FAIL(assignments.push_back(assign))) {
+    } else if (OB_FAIL(inner_assigns.push_back(assign))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(expr, assign.expr_))) {
       LOG_WARN("failed to add replace pair", K(ret));
@@ -710,7 +707,7 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
     } else if (OB_FAIL(gen_calc_expr_for_update_clause_sum(target_count, source_count, target_columns.at(i),
                                                            source_sum, assign.expr_))) {
       LOG_WARN("failed to gen calc expr for aggr sum", K(ret));
-    } else if (OB_FAIL(assignments.push_back(assign))) {
+    } else if (OB_FAIL(inner_assigns.push_back(assign))) {
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(copier.add_replaced_expr(expr, assign.expr_))) {
       LOG_WARN("failed to add replace pair", K(ret));
@@ -738,8 +735,25 @@ int ObMVPrinter::gen_update_assignments(const ObIArray<ObColumnRefRawExpr*> &tar
         /* do nothing */
       } else if (OB_FAIL(copier.copy_on_replace(expr, assign.expr_))) {
         LOG_WARN("failed to generate group by exprs", K(ret));
-      } else if (OB_FAIL(assignments.push_back(assign))) {
+      } else if (OB_FAIL(inner_assigns.push_back(assign))) {
         LOG_WARN("failed to push back", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !inner_assigns.empty()) {
+    if (!for_mysql_update) {
+      if (OB_FAIL(assignments.assign(inner_assigns))) {
+        LOG_WARN("failed to assign array", K(ret));
+      }
+    } else if (OB_FAIL(assignments.prepare_allocate(inner_assigns.count()))) {
+      LOG_WARN("failed to prepare allocate array", K(ret));
+    } else {
+      int64_t idx = inner_assigns.count() - 1;
+      for (int64_t i = 0; OB_SUCC(ret) && i < inner_assigns.count(); ++i) {
+        if (OB_FAIL(assignments.at(i).assign(inner_assigns.at(idx - i)))) {
+          LOG_WARN("failed to assign ObAssignment", K(ret));
+        }
       }
     }
   }
@@ -987,32 +1001,32 @@ int ObMVPrinter::gen_basic_aggr_expr(ObRawExprCopier &copier,
     LOG_WARN("failed to add param expr to agg expr", K(ret));
   } else if (T_FUN_COUNT != aggr_expr.get_expr_type() || !mv_checker_.get_stmt().is_scala_group_by()) {
     aggr_print_expr = new_aggr_expr;
-  } else if (OB_FAIL(add_nvl_default_zero_above_expr(new_aggr_expr, aggr_print_expr))) {
+  } else if (OB_FAIL(add_nvl_above_exprs(new_aggr_expr, exprs_.int_zero_, aggr_print_expr))) {
+    //  for scalar group by, d_cnt from sum(dml_factor) may get null, need convert null to 0
+    //  count(*) --> nvl(d_cnt, 0)
+    //  count(c3) --> nvl(d_cnt_3, 0)
     LOG_WARN("failed to gen calc expr for scalar count", K(ret));
   }
   return ret;
 }
 
-//  for scalar group by, d_cnt from sum(dml_factor) may get null, need convert null to 0
-//  count(*) --> nvl(d_cnt, 0)
-//  count(c3) --> nvl(d_cnt_3, 0)
-int ObMVPrinter::add_nvl_default_zero_above_expr(ObRawExpr *source_expr, ObRawExpr *&expr)
+int ObMVPrinter::add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_expr, ObRawExpr *&res_expr)
 {
   int ret = OB_SUCCESS;
-  expr = NULL;
+  res_expr = NULL;
   ObSysFunRawExpr *nvl_expr = NULL;
   if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_SYS_NVL, nvl_expr))) {
     LOG_WARN("fail to create nvl expr", K(ret));
-  } else if (OB_ISNULL(source_expr) || OB_ISNULL(exprs_.int_zero_) || OB_ISNULL(nvl_expr)) {
+  } else if (OB_ISNULL(expr) || OB_ISNULL(default_expr) || OB_ISNULL(nvl_expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(source_expr), K(exprs_.int_zero_), K(nvl_expr));
-  } else if (OB_FAIL(nvl_expr->add_param_expr(source_expr))
-             || OB_FAIL(nvl_expr->add_param_expr(exprs_.int_zero_))) {
+    LOG_WARN("unexpected null", K(ret), K(expr), K(default_expr), K(nvl_expr));
+  } else if (OB_FAIL(nvl_expr->add_param_expr(expr))
+             || OB_FAIL(nvl_expr->add_param_expr(default_expr))) {
     LOG_WARN("fail to add param expr", K(ret));
   } else {
     nvl_expr->set_expr_type(T_FUN_SYS_NVL);
     nvl_expr->set_func_name(ObString::make_string(N_NVL));
-    expr = nvl_expr;
+    res_expr = nvl_expr;
   }
   return ret;
 }
