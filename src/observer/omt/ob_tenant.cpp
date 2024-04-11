@@ -1557,7 +1557,6 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
-  req.set_large_retry_flag(true);
   if (0 != req.get_group_id()) {
     if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
       LOG_WARN("tenant receive large retry request fail", K(ret));
@@ -1606,11 +1605,21 @@ void ObTenant::handle_retry_req(bool need_clear)
   int ret = OB_SUCCESS;
   ObLink* task = nullptr;
   ObRequest *req = NULL;
-  while (OB_SUCC(retry_queue_.pop(task, need_clear))) {
+  while (OB_SUCC(ret) && OB_SUCC(retry_queue_.pop(task, need_clear))) {
     req = static_cast<rpc::ObRequest*>(task);
-    if (OB_FAIL(recv_large_request(*req))) {
-      LOG_ERROR("tenant patrol push req fail", "tenant", id_);
-      break;
+    if (nullptr != req) {
+      if (req->large_retry_flag()) {
+        if (OB_FAIL(recv_large_request(*req))) {
+          LOG_ERROR("tenant patrol push req into large_query queue fail", "tenant_id", id_, K(ret));
+        }
+      } else {
+        if (OB_FAIL(recv_request(*req))) {
+          LOG_ERROR("tenant patrol push req into common queue fail", "tenant_id", id_, K(ret));
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("the req is NULL", "tenant_id", id_, K(ret));
     }
   }
 }
