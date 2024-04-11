@@ -6574,8 +6574,27 @@ int ObDDLResolver::resolve_spatial_index_constraint(
       //do nothing, check result type of expr on rootserver later
     }
   } else {
-    column_schema = table_schema.get_column_schema(column_name);
-    if (is_oracle_mode) {
+    // if create idx by alter table, resolved_cols is not null
+    // if current col in resolved_cols, means it has been altered, use col schema in alter table schema
+    if (OB_NOT_NULL(resolved_cols) && resolved_cols->count() > 0) {
+      bool found = false;
+      for (int i = 0; i < resolved_cols->count() && !found && OB_SUCC(ret); ++i) {
+        ObColumnSchemaV2* tmp_col_schema = resolved_cols->at(i);
+        if (OB_ISNULL(tmp_col_schema)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("should not be null.", K(i), K(resolved_cols->count()), K(ret));
+        } else {
+          ObCompareNameWithTenantID column_name_cmp(table_schema.get_tenant_id());
+          if (0 == column_name_cmp.compare(column_name, tmp_col_schema->get_column_name_str())) {
+            found = true;
+            column_schema = tmp_col_schema;
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(column_schema) && OB_FALSE_IT(column_schema = table_schema.get_column_schema(column_name))) {
+    } else if (is_oracle_mode) {
       if (OB_NOT_NULL(column_schema) && ob_is_geometry_tc(column_schema->get_data_type())) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("oracle spatial index not supported", K(ret));

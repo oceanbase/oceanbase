@@ -146,7 +146,7 @@ int ObGeoPointLocationVisitor::calculate_point_location_in_linestring(T_IBIN *ge
     typename T_IBIN::value_type::iterator iter = line->begin();
     typename T_IBIN::value_type::iterator iter_after = line->begin() + 1;
     ObSegment seg;
-    for (uint32_t i = 0; i < geo_size - 1 && OB_SUCC(ret); ++i, ++iter, ++iter_after) {
+    for (uint32_t i = 0; i < geo_size - 1 && OB_SUCC(ret) && point_location_ != ObPointLocation::BOUNDARY && point_location_ != ObPointLocation::INTERIOR; ++i, ++iter, ++iter_after) {
       seg.begin.x = iter->template get<0>();
       seg.begin.y = iter->template get<1>();
       seg.end.x = (iter_after)->template get<0>();
