@@ -460,6 +460,7 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
+        ObSignalHandlerGuard guard(ob_signal_handler);
         ret = lmap.set_refactored(key, LabelInfoItem(litem, chunk, block));
       }
     }
@@ -484,6 +485,7 @@ int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
       item->alloc_count_ += 1;
       item->alloc_bytes_ += offset;
     } else {
+      ObSignalHandlerGuard guard(ob_signal_handler);
       ret = malloc_sample_map.set_refactored(key, ObMallocSampleValue(1, offset));
     }
   }
