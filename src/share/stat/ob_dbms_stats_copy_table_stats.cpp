@@ -422,25 +422,26 @@ int ObDbmsStatsCopyTableStats::copy_tab_col_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to copy table column stat", K(ret), KPC(copy_stat_helper.src_part_stat_));
   }
   if (OB_SUCC(ret)) {
-    ObSEArray<ObOptTableStatHandle, 4> history_tab_handles;
-    ObSEArray<ObOptColumnStatHandle, 4> history_col_handles;
-    //before write, we need record history stats.
-    if (!table_stat_param.is_temp_table_ &&
-        OB_FAIL(ObDbmsStatsHistoryManager::get_history_stat_handles(ctx, table_stat_param,
-                                                                    history_tab_handles,
-                                                                    history_col_handles))) {
-      LOG_WARN("failed to get history stat handles", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, table_stats, column_stats))) {
-      LOG_WARN("failed to split batch write stat", K(ret));
-    } else if (!table_stat_param.is_temp_table_ &&
-               OB_FAIL(ObDbmsStatsUtils::batch_write_history_stats(ctx,
-                                                                   history_tab_handles,
-                                                                   history_col_handles))) {
-      LOG_WARN("failed to batch write history stats", K(ret));
-    } else if (share::schema::ObTableType::EXTERNAL_TABLE != table_stat_param.ref_table_type_ &&
-               OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(ctx, table_stat_param))) {
-      LOG_WARN("failed to update last modified count", K(ret));
+    ObMySQLTransaction trans;
+    //begin trans
+    if (OB_FAIL(trans.start(ctx.get_sql_proxy(), table_stat_param.tenant_id_))) {
+      LOG_WARN("fail to start transaction", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsHistoryManager::backup_opt_stats(ctx, trans, table_stat_param, ObTimeUtility::current_time()))) {
+      LOG_WARN("failed to backup opt stats", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(), table_stats, column_stats))) {
+      LOG_WARN("failed to split batch write", K(ret));
     } else {/*do nothing*/}
+    //end trans
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }

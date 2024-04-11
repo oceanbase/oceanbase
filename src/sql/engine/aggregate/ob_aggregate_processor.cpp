@@ -77,7 +77,8 @@ OB_DEF_SERIALIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ENCODE(*dll_udf_);
@@ -115,7 +116,8 @@ OB_DEF_DESERIALIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     CK(NULL != alloc_);
@@ -162,7 +164,8 @@ OB_DEF_SERIALIZE_SIZE(ObAggrInfo)
               strict_json_,
               absent_on_null_,
               returning_type_,
-              with_unique_keys_
+              with_unique_keys_,
+              max_disuse_param_expr_
   );
   if (T_FUN_AGG_UDF == get_expr_type()) {
     OB_UNIS_ADD_LEN(*dll_udf_);
@@ -5230,7 +5233,7 @@ int ObAggregateProcessor::approx_count_calc_batch(
         has_null_cell = true;
       }
       OB_ASSERT(NULL != expr->basic_funcs_);
-      ObExprHashFuncType hash_func = expr->basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr->basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(*arg_datums.at(nth_row), hash_value, hash_value))) {
         LOG_WARN("fail to do hash", K(ret));
       }
@@ -5732,7 +5735,7 @@ int ObAggregateProcessor::llc_calc_hash_value(const ObChunkDatumStore::StoredRow
       has_null_cell = true;
     } else {
       OB_ASSERT(NULL != expr.basic_funcs_);
-      ObExprHashFuncType hash_func = expr.basic_funcs_->default_hash_;
+      ObExprHashFuncType hash_func = expr.basic_funcs_->murmur_hash_;
       if (OB_FAIL(hash_func(datum, hash_value, hash_value))) {
         LOG_WARN("failed to do hash", K(ret));
       }
@@ -6120,27 +6123,41 @@ int ObAggregateProcessor::init_topk_fre_histogram_item(
   } else {
     ObDatum *window_size_result = NULL;
     ObDatum *item_size_result = NULL;
+    ObDatum *max_disuse_cnt_result = NULL;
     int64_t window_size = 0;
     int64_t item_size = 0;
+    int64_t max_disuse_cnt = 0;
     if (OB_UNLIKELY(!aggr_info.window_size_param_expr_->obj_meta_.is_numeric_type() ||
-                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type())) {
+                    !aggr_info.item_size_param_expr_->obj_meta_.is_numeric_type() ||
+                    (aggr_info.max_disuse_param_expr_ != NULL &&
+                     !aggr_info.max_disuse_param_expr_->obj_meta_.is_numeric_type()))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("expr node is null", K(ret), KPC(aggr_info.window_size_param_expr_),
-                                    KPC(aggr_info.item_size_param_expr_));
+                                    KPC(aggr_info.item_size_param_expr_),
+                                    KPC(aggr_info.max_disuse_param_expr_));
     } else if (OB_FAIL(aggr_info.window_size_param_expr_->eval(eval_ctx_, window_size_result)) ||
-               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result))) {
+               OB_FAIL(aggr_info.item_size_param_expr_->eval(eval_ctx_, item_size_result)) ||
+               (aggr_info.max_disuse_param_expr_ != NULL &&
+                OB_FAIL(aggr_info.max_disuse_param_expr_->eval(eval_ctx_, max_disuse_cnt_result)))) {
       LOG_WARN("eval failed", K(ret));
-    } else if (OB_ISNULL(window_size_result) || OB_ISNULL(item_size_result)) {
+    } else if (OB_ISNULL(window_size_result) ||
+               OB_ISNULL(item_size_result)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(window_size_result), K(item_size_result));
     } else if (OB_FAIL(ObExprUtil::get_int_param_val(window_size_result, window_size)) ||
-               OB_FAIL(ObExprUtil::get_int_param_val(item_size_result, item_size))) {
+               OB_FAIL(ObExprUtil::get_int_param_val(item_size_result, item_size)) ||
+               (max_disuse_cnt_result != NULL &&
+                OB_FAIL(ObExprUtil::get_int_param_val(max_disuse_cnt_result, max_disuse_cnt)))) {
       LOG_WARN("failed to get int param val", K(*window_size_result), K(window_size),
-                                              K(*item_size_result), K(item_size), K(ret));
+                                              K(*item_size_result), K(item_size),
+                                              KPC(max_disuse_cnt_result), K(max_disuse_cnt), K(ret));
     } else {
       topk_fre_hist->set_window_size(window_size);
       topk_fre_hist->set_item_size(item_size);
       topk_fre_hist->set_is_topk_hist_need_des_row(aggr_info.is_need_deserialize_row_);
+      topk_fre_hist->set_max_disuse_cnt(max_disuse_cnt);
+      LOG_TRACE("succeed to init topk fre histogram item", K(window_size), K(item_size),
+                                          K(aggr_info.is_need_deserialize_row_), K(max_disuse_cnt));
     }
   }
   return ret;

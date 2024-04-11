@@ -288,6 +288,8 @@ public:
   int deep_copy_llc_bitmap(const char *bitmap, const int64_t size);
   int deep_copy_histogram(const ObHistogram &hist);
 
+  int assign(const ObOptColumnStat &other);
+
   int64_t get_last_analyzed() const { return last_analyzed_; }
   void set_last_analyzed(int64_t last) { last_analyzed_ = last; }
 

@@ -16,6 +16,7 @@
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_hybrid_hist_estimator.h"
+#include "share/stat/ob_topk_hist_estimator.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 namespace oceanbase
 {
@@ -222,13 +223,6 @@ int ObStatLlcBitmap::decode(ObObj &obj)
   return ret;
 }
 
-bool ObStatTopKHist::is_needed() const
-{
-  return NULL != col_param_ &&
-         col_param_->need_basic_stat() &&
-         col_param_->bucket_num_ > 1;
-}
-
 int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -248,12 +242,13 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
     double err_rate = 1.0 / (1000 * (bkt_num / MIN_BUCKET_SIZE));
     if (OB_SUCC(ret)) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                                  lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld)" :
-                                  " TOP_K_FRE_HIST(%lf, `%.*s`, %ld)",
+                                  lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld, %ld)" :
+                                  " TOP_K_FRE_HIST(%lf, `%.*s`, %ld, %ld)",
                                   err_rate,
                                   col_param_->column_name_.length(),
                                   col_param_->column_name_.ptr(),
-                                  col_param_->bucket_num_))) {
+                                  col_param_->bucket_num_,
+                                  max_disuse_cnt_))) {
         LOG_WARN("failed to print buf topk hist expr", K(ret));
       }
     }
@@ -505,6 +500,21 @@ void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int
   }
 }
 
+void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic, int64_t scnt, int64_t mcnt)
+{
+  // skip empty partition
+  if (rc > 0) {
+    row_count_ += rc;
+    row_size_ += rs;
+    data_size_ += ds;
+    macro_block_count_ += mac;
+    micro_block_count_ += mic;
+    part_cnt_ ++;
+    sstable_row_cnt_ += scnt;
+    memtable_row_cnt_ += mcnt;
+  }
+}
+
 int64_t ObGlobalTableStat::get_row_count() const
 {
   return row_count_;
@@ -653,10 +663,6 @@ int ObStatHybridHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret), K(col_param_));
-  } else if (is_null_item_) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, " NULL"))) {
-      LOG_WARN("failed to print buf", K(ret));
-    } else {/*do nothing*/}
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                      lib::is_oracle_mode() ? " HYBRID_HIST(\"%.*s\", %ld)" :
                                      " HYBRID_HIST(`%.*s`, %ld)",

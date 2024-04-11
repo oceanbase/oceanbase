@@ -99,10 +99,8 @@ class ObHybridHistEstimator : public ObBasicStatsEstimator
 public:
   explicit ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &allocator);
 
-  int estimate(const ObTableStatParam &param,
-               const ObExtraParam &extra,
+  int estimate(const ObOptStatGatherParam &param,
                ObOptStat &opt_stat);
-
 private:
 
   int try_build_hybrid_hist(const ObColumnStatParam &param,
@@ -117,7 +115,9 @@ private:
                                double &est_percent,
                                bool &is_block_sample);
 
-  int extract_hybrid_hist_col_info(const ObTableStatParam &param,
+  int reset_histogram_for_refine_col_stats(ObIArray<ObOptColumnStat *> &refine_col_stats);
+
+  int extract_hybrid_hist_col_info(const ObOptStatGatherParam &param,
                                    ObOptStat &opt_stat,
                                    ObIArray<const ObColumnStatParam *> &hybrid_col_params,
                                    ObIArray<ObOptColumnStat *> &hybrid_col_stats,
@@ -131,20 +131,15 @@ private:
                                  ObIArray<int64_t> &no_sample_idx);
 
   int estimate_no_sample_col_hydrid_hist(ObIAllocator &allocator,
-                                         const ObTableStatParam &param,
-                                         const ObExtraParam &extra,
+                                         const ObOptStatGatherParam &param,
                                          ObOptStat &opt_stat,
                                          ObIArray<const ObColumnStatParam *> &hybrid_col_params,
                                          ObIArray<ObOptColumnStat *> &hybrid_col_stats,
                                          ObIArray<int64_t> &no_sample_idx);
 
-  int add_no_sample_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
-                                           ObIArray<ObOptColumnStat *> &hybrid_col_stats,
-                                           ObIArray<int64_t> &no_sample_idx);
-
-private:
-  /// a magic number
-  static const int64_t AUTO_SAMPLE_SIZE;
+   int add_no_sample_hybrid_hist_stat_items(ObIArray<const ObColumnStatParam *> &hybrid_col_params,
+                                            ObIArray<ObOptColumnStat *> &hybrid_col_stats,
+                                            ObIArray<int64_t> &no_sample_idx);
 };
 
 }

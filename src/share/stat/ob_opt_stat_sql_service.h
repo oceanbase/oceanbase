@@ -60,6 +60,12 @@ struct ObOptKeyInfo
 struct ObOptKeyColumnStat
 {
   ObOptKeyColumnStat() : key_(NULL), stat_(NULL), only_histogram_stat_(false) {}
+  ObOptKeyColumnStat(const ObOptColumnStat::Key *key,
+                     ObOptColumnStat *stat) :
+    key_(key),
+    stat_(stat),
+    only_histogram_stat_(false)
+  {}
   const ObOptColumnStat::Key *key_;
   ObOptColumnStat *stat_;
   bool only_histogram_stat_;
@@ -82,6 +88,12 @@ public:
                        const ObOptTableStat::Key &key,
                        ObIArray<ObOptTableStat> &all_part_stats);
 
+  int batch_fetch_table_stats(sqlclient::ObISQLConnection *conn,
+                              const uint64_t tenant_id,
+                              const uint64_t table_id,
+                              const ObIArray<int64_t> &part_ids,
+                              ObIArray<ObOptTableStat*> &all_part_stats);
+
   int fill_table_stat(sqlclient::ObMySQLResult &result, ObOptTableStat &stat);
 
   int fill_column_stat(ObIAllocator &allocator,
@@ -91,25 +103,25 @@ public:
   int fetch_column_stat(const uint64_t tenant_id,
                         ObIAllocator &allocator,
                         ObIArray<ObOptKeyColumnStat> &key_col_stats,
-                        bool is_accross_tenant_query = false);
+                        bool is_accross_tenant_query = false,
+                        sqlclient::ObISQLConnection *conn = NULL);
 
   int update_table_stat(const uint64_t tenant_id,
+                        sqlclient::ObISQLConnection *conn,
                         const ObOptTableStat *tab_stat,
                         const bool is_index_stat);
   int update_table_stat(const uint64_t tenant_id,
-                        ObMySQLTransaction &trans,
+                        sqlclient::ObISQLConnection *conn,
                         const common::ObIArray<ObOptTableStat*> &table_stats,
                         const int64_t current_time,
-                        const bool is_index_stat,
-                        const bool is_history_stat = false);
+                        const bool is_index_stat);
   int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t exec_tenant_id,
                          ObIAllocator &allocator,
-                         ObMySQLTransaction &trans,
+                         sqlclient::ObISQLConnection *conn,
                          const common::ObIArray<ObOptColumnStat*> &column_stats,
                          const int64_t current_time,
                          bool only_update_col_stat = false,
-                         bool is_history_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
 
   int delete_table_stat(const uint64_t exec_tenant_id,
@@ -175,10 +187,6 @@ private:
                          const int64_t current_time,
                          const bool is_index,
                          ObSqlString &sql_string);
-  int get_table_stat_history_sql(const uint64_t tenant_id,
-                                 const ObOptTableStat &stat,
-                                 const int64_t saving_time,
-                                 ObSqlString &sql_string);
   int get_column_stat_sql(const uint64_t tenant_id,
                                 ObIAllocator &allocator,
                                 const ObOptColumnStat &stat,
@@ -187,14 +195,6 @@ private:
                                 ObObjMeta max_meta,
                                 ObSqlString &sql_string,
                                 const ObObjPrintParams &print_params);
-  int get_column_stat_history_sql(const uint64_t tenant_id,
-                                  ObIAllocator &allocator,
-                                  const ObOptColumnStat &stat,
-                                  const int64_t saving_time,
-                                  ObObjMeta min_meta,
-                                  ObObjMeta max_meta,
-                                  ObSqlString &sql_string,
-                                  const ObObjPrintParams &print_params);
   int get_histogram_stat_sql(const uint64_t tenant_id,
                              const ObOptColumnStat &stat,
                              common::ObIAllocator &allocator,
@@ -202,14 +202,6 @@ private:
                              ObObjMeta endpoint_meta,
                              ObSqlString &sql_string,
                              const ObObjPrintParams &print_params);
-  int get_histogram_stat_history_sql(const uint64_t tenant_id,
-                                     const ObOptColumnStat &stat,
-                                     ObIAllocator &allocator,
-                                     const ObHistBucket &bucket,
-                                     const int64_t saving_time,
-                                     ObObjMeta endpoint_meta,
-                                     ObSqlString &sql_string,
-                                     const ObObjPrintParams &print_params);
 
   int generate_in_list(const ObIArray<uint64_t> &list,
                        ObSqlString &sql_string);
@@ -219,7 +211,6 @@ private:
                                 ObIAllocator &allocator,
                                 const ObIArray<ObOptColumnStat*> &column_stats,
                                 const int64_t current_time,
-                                bool is_history_stat,
                                 ObSqlString &column_stats_sql,
                                 const ObObjPrintParams &print_params);
 
@@ -232,7 +223,6 @@ private:
                                      ObIAllocator &allocator,
                                      const ObIArray<ObOptColumnStat*> &column_stats,
                                      const int64_t current_time,
-                                     bool is_history_stat,
                                      ObSqlString &insert_histogram_sql,
                                      bool &need_histogram,
                                      const ObObjPrintParams &print_params);

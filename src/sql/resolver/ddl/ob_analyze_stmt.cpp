@@ -27,7 +27,6 @@ ObAnalyzeStmt::ObAnalyzeStmt()
     table_name_(),
     table_id_(common::OB_INVALID_ID),
     part_level_(share::schema::PARTITION_LEVEL_ZERO),
-    total_part_cnt_(0),
     partition_name_(),
     partition_infos_(),
     subpartition_infos_(),
@@ -39,7 +38,8 @@ ObAnalyzeStmt::ObAnalyzeStmt()
     part_ids_(),
     subpart_ids_(),
     ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
-    gather_subpart_hist_(false)
+    gather_subpart_hist_(false),
+    is_sepcify_subpart_(false)
 {
 }
 
@@ -79,15 +79,12 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
   param.table_id_ = table_id_;
   param.ref_table_type_ = ref_table_type_;
   param.part_level_ = part_level_;
-  param.total_part_cnt_ = total_part_cnt_;
 
   param.part_name_ = partition_name_;
 
   OZ (param.part_infos_.assign(partition_infos_));
   OZ (param.subpart_infos_.assign(subpartition_infos_));
   OZ (param.column_params_.assign(column_params_));
-  OZ (param.part_ids_.assign(part_ids_));
-  OZ (param.subpart_ids_.assign(subpart_ids_));
   OZ (pl::ObDbmsStats::set_param_global_part_id(ctx, param));
   OZ (param.all_part_infos_.assign(all_partition_infos_));
   OZ (param.all_subpart_infos_.assign(all_subpartition_infos_));
@@ -97,9 +94,15 @@ int ObAnalyzeStmt::fill_table_stat_param(ObExecContext &ctx, common::ObTableStat
     param.degree_ = parallel_degree_;
     //analyze stmt default use granularity is based partition type(oracle 12c),maybe refine it later
     param.global_stat_param_.need_modify_ = partition_name_.empty();
-    param.part_stat_param_.need_modify_ = !partition_infos_.empty();
-    param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty();
+    param.part_stat_param_.need_modify_ = !partition_infos_.empty() && !is_sepcify_subpart_;
+    param.subpart_stat_param_.need_modify_ = !subpartition_infos_.empty() && (partition_name_.empty() || is_sepcify_subpart_);
     param.subpart_stat_param_.gather_histogram_ = gather_subpart_hist_;
+    if (param.global_stat_param_.need_modify_ && param.part_stat_param_.need_modify_) {
+      param.global_stat_param_.gather_approx_ = true;
+    }
+    if (param.part_stat_param_.need_modify_ && param.subpart_stat_param_.need_modify_) {
+      param.part_stat_param_.can_use_approx_ = true;
+    }
   }
 
   LOG_TRACE("link bug", K(param));

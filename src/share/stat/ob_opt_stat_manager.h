@@ -57,11 +57,12 @@ public:
                               bool &is_opt_stat_valid);
 
   int update_table_stat(const uint64_t tenant_id,
+                        sqlclient::ObISQLConnection *conn,
                         const ObOptTableStat *table_stats,
                         const bool is_index_stat);
 
   int update_table_stat(const uint64_t tenant_id,
-                        ObMySQLTransaction &trans,
+                        sqlclient::ObISQLConnection *conn,
                         const ObIArray<ObOptTableStat*> &table_stats,
                         const bool is_index_stat);
 
@@ -120,7 +121,7 @@ public:
                               ObOptColumnStatHandle &handle);
   virtual int update_column_stat(share::schema::ObSchemaGetterGuard *schema_guard,
                                  const uint64_t tenant_id,
-                                 ObMySQLTransaction &trans,
+                                 sqlclient::ObISQLConnection *conn,
                                  const common::ObIArray<ObOptColumnStat *> &column_stats,
                                  bool only_update_col_stat = false,
                                  const ObObjPrintParams &print_params = ObObjPrintParams());
@@ -155,12 +156,11 @@ public:
 
   int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                   const uint64_t tenant_id,
-                  ObMySQLTransaction &trans,
+                  sqlclient::ObISQLConnection *conn,
                   ObIArray<ObOptTableStat *> &table_stats,
                   ObIArray<ObOptColumnStat *> &column_stats,
                   const int64_t current_time,
                   const bool is_index_stat,
-                  const bool is_history_stat,
                   const ObObjPrintParams &print_params);
 
   /**  @brief  外部获取行统计信息的接口 */
@@ -199,6 +199,7 @@ public:
                         ObOptDSStatHandle &ds_stat_handle);
   int update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
+  ObOptStatService &get_stat_service() { return stat_service_; }
 protected:
   static const int64_t REFRESH_STAT_TASK_NUM = 5;
   bool inited_;

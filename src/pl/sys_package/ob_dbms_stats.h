@@ -308,6 +308,7 @@ public:
                                     const ObObjParam &tab_name,
                                     const ObObjParam &colname,
                                     const ObObjParam &part_name,
+                                    ObObjMeta &col_meta,
                                     ObTableStatParam &param);
 
   static int parse_set_column_stats_options(ObExecContext &ctx,
@@ -379,8 +380,6 @@ public:
                                   ObIAllocator &allocator,
                                   common::ObIArray<PartInfo> &part_infos,
                                   common::ObIArray<PartInfo> &subpart_infos,
-                                  common::ObIArray<int64_t> &part_ids,
-                                  common::ObIArray<int64_t> &subpart_ids,
                                   OSGPartMap *part_map = NULL);
 
   static int get_part_ids_from_schema(const share::schema::ObTableSchema *table_schema,
@@ -462,13 +461,6 @@ public:
                                    int64_t &succeed_cnt,
                                    ObOptStatTaskInfo &task_info);
 
-  static int do_gather_tables_stats(sql::ObExecContext &ctx,
-                                    const uint64_t tenant_id,
-                                    const ObIArray<int64_t> &table_ids,
-                                    const int64_t duration_time,
-                                    int64_t &succeed_cnt,
-                                    ObOptStatTaskInfo &task_info);
-
   static int get_table_stale_percent(sql::ObExecContext &ctx,
                                      const uint64_t tenant_id,
                                      const share::schema::ObTableSchema &table_schema,
@@ -537,24 +529,17 @@ private:
   static int get_common_table_stale_percent(sql::ObExecContext &ctx,
                                             const uint64_t tenant_id,
                                             const share::schema::ObTableSchema &table_schema,
-                                            const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                            StatTable &stat_table,
-                                            bool &is_big_table);
+                                            StatTable &stat_table);
 
   static int get_user_partition_table_stale_percent(sql::ObExecContext &ctx,
                                                     const uint64_t tenant_id,
                                                     const share::schema::ObTableSchema &table_schema,
                                                     const double stale_percent_threshold,
-                                                    const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
-                                                    StatTable &stat_table,
-                                                    bool &is_big_table);
+                                                    StatTable &stat_table);
 
   static bool is_table_gather_global_stats(const int64_t global_id,
                                            const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
                                            int64_t &cur_row_cnt);
-
-  static bool is_all_partition_locked(const ObIArray<int64_t> &partition_ids,
-                                      const ObIArray<ObPartitionStatInfo> &partition_stat_infos);
 
   static int parse_index_part_info(ObExecContext &ctx,
                                    const ObObjParam &owner,
@@ -590,6 +575,13 @@ private:
   static void decide_modified_part(ObTableStatParam &param, const bool cascade_parts);
 
   static int refresh_tenant_schema_guard(ObExecContext &ctx, const uint64_t tenant_id);
+
+  static int adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                            ObTableStatParam &param);
+
+  static bool is_partition_no_regather(int64_t part_id,
+                                       const ObIArray<ObPartitionStatInfo> &partition_stat_infos,
+                                       bool &is_locked);
 
 };
 

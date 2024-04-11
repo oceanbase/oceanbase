@@ -28,8 +28,7 @@ ObHybridHistEstimator::ObHybridHistEstimator(ObExecContext &ctx, ObIAllocator &a
   : ObBasicStatsEstimator(ctx, allocator)
 {}
 
-int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
-                                    const ObExtraParam &extra,
+int ObHybridHistEstimator::estimate(const ObOptStatGatherParam &param,
                                     ObOptStat &opt_stat)
 {
   int ret = OB_SUCCESS;
@@ -63,8 +62,7 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
     LOG_WARN("failed to compute estimate percent", K(ret));
   } else if (need_sample && OB_FAIL(fill_sample_info(allocator,
                                                      est_percent,
-                                                     is_block_sample,
-                                                     sample_hint_))) {
+                                                     is_block_sample))) {
     LOG_WARN("failed to fill sample info", K(ret));
   } else if (OB_FAIL(add_hybrid_hist_stat_items(hybrid_col_params,
                                                 hybrid_col_stats,
@@ -73,20 +71,23 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
                                                 est_percent,
                                                 no_sample_idx))) {
     LOG_WARN("failed to add hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
     LOG_WARN("failed to fill hints", K(ret));
   } else if (OB_FAIL(add_from_table(param.db_name_, param.tab_name_))) {
     LOG_WARN("failed to add from table", K(ret));
   } else if (OB_FAIL(fill_parallel_info(allocator, param.degree_))) {
     LOG_WARN("failed to fill parallel info", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(extra.start_time_,
-                                                               param.duration_time_,
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
+                                                               param.max_duration_time_,
                                                                duration_time))) {
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
     LOG_WARN("failed to fill query timeout info", K(ret));
-  } else if (OB_FAIL(fill_partition_info(allocator, param, extra))) {
-    LOG_WARN("failed to fill partition info", K(ret));
+  } else if (!param.partition_infos_.empty() &&
+             OB_FAIL(fill_partition_info(allocator, param.partition_infos_.at(0).part_name_))) {
+    LOG_WARN("failed to add partition info", K(ret));
+  } else if (OB_FAIL(fill_specify_scn_info(allocator, param.sepcify_scn_))) {
+    LOG_WARN("failed to fill specify scn info", K(ret));
   } else if (OB_FAIL(pack(raw_sql))) {
     LOG_WARN("failed to pack", K(ret));
   } else if (OB_FAIL(tmp_opt_stats.push_back(opt_stat))) {
@@ -96,7 +97,7 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
                                  opt_stat, tmp_opt_stats))) {
     LOG_WARN("failed to do estimate", K(ret));
   } else if (!no_sample_idx.empty() &&
-             OB_FAIL(estimate_no_sample_col_hydrid_hist(allocator, param, extra, opt_stat,
+             OB_FAIL(estimate_no_sample_col_hydrid_hist(allocator, param, opt_stat,
                                                         hybrid_col_params, hybrid_col_stats,
                                                         no_sample_idx))) {
     LOG_WARN("failed to estimate no sample col hydrid_hist", K(ret));
@@ -106,7 +107,7 @@ int ObHybridHistEstimator::estimate(const ObTableStatParam &param,
   return ret;
 }
 
-int ObHybridHistEstimator::extract_hybrid_hist_col_info(const ObTableStatParam &param,
+int ObHybridHistEstimator::extract_hybrid_hist_col_info(const ObOptStatGatherParam &param,
                                                         ObOptStat &opt_stat,
                                                         ObIArray<const ObColumnStatParam *> &hybrid_col_params,
                                                         ObIArray<ObOptColumnStat *> &hybrid_col_stats,
@@ -183,8 +184,7 @@ int ObHybridHistEstimator::add_hybrid_hist_stat_items(ObIArray<const ObColumnSta
 }
 
 int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allocator,
-                                                              const ObTableStatParam &param,
-                                                              const ObExtraParam &extra,
+                                                              const ObOptStatGatherParam &param,
                                                               ObOptStat &opt_stat,
                                                               ObIArray<const ObColumnStatParam *> &hybrid_col_params,
                                                               ObIArray<ObOptColumnStat *> &hybrid_col_stats,
@@ -207,10 +207,10 @@ int ObHybridHistEstimator::estimate_no_sample_col_hydrid_hist(ObIAllocator &allo
                                                           hybrid_col_stats,
                                                           no_sample_idx))) {
     LOG_WARN("failed to add no sample hybrid hist stat items", K(ret));
-  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_))) {
+  } else if (OB_FAIL(fill_hints(allocator, param.tab_name_, param.gather_vectorize_))) {
     LOG_WARN("failed to fill hints", K(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(extra.start_time_,
-                                                               param.duration_time_,
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_valid_duration_time(param.gather_start_time_,
+                                                               param.max_duration_time_,
                                                                duration_time))) {
     LOG_WARN("failed to get valid duration time", K(ret));
   } else if (OB_FAIL(fill_query_timeout_info(allocator, duration_time))) {
@@ -355,16 +355,28 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
     }
     if (OB_SUCC(ret) && need_sample) {
       if (total_row_count * est_percent / 100 >= MAGIC_MIN_SAMPLE_SIZE) {
-        /*do nothing*/
+        const int64_t MAGIC_MAX_SPECIFY_SAMPLE_SIZE = 1000000;
+        is_block_sample = !is_block_sample ? total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS : is_block_sample;
+        int64_t max_allowed_multiple = max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM ? 1 :
+                                                    max_num_bkts / ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM;
+        int64_t max_specify_sample_size = MAGIC_MAX_SPECIFY_SAMPLE_SIZE * max_allowed_multiple;
+        if (total_row_count * est_percent / 100 >= max_specify_sample_size) {
+          est_percent = max_specify_sample_size * 100.0 / total_row_count;
+        }
       } else if (total_row_count <= MAGIC_SAMPLE_SIZE) {
         need_sample = false;
         est_percent = 0.0;
         is_block_sample = false;
       } else {
-        is_block_sample = false;
+        is_block_sample = total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS;
         est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
       }
     }
+  } else if (total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS) {
+    need_sample = true;
+    is_block_sample = true;
+    const int64_t MAGIC_MAX_SAMPLE_SIZE = 100000;
+    est_percent = MAGIC_MAX_SAMPLE_SIZE * 100.0 / total_row_count;
   } else if (total_row_count >= MAGIC_MAX_AUTO_SAMPLE_SIZE) {
     if (max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM) {
       need_sample = true;

@@ -61,8 +61,7 @@ protected:
 
   int fill_sample_info(common::ObIAllocator &alloc,
                        double est_percent,
-                       bool block_sample,
-                       ObString &sample_hint);
+                       bool block_sample);
 
   int fill_sample_info(common::ObIAllocator &alloc,
                        const ObAnalyzeSampleInfo &sample_info);
@@ -74,29 +73,32 @@ protected:
                               const int64_t duration_timeout);
 
   int fill_partition_info(ObIAllocator &allocator,
-                          const ObTableStatParam &param,
-                          const ObExtraParam &extra);
+                          const ObString &part_nam);
+
+  int fill_partition_info(ObIAllocator &allocator,
+                          const ObIArray<PartInfo> &partition_infos);
 
   int add_hint(const ObString &hint_str,
                common::ObIAllocator &alloc);
 
   int fill_group_by_info(ObIAllocator &allocator,
-                         const ObTableStatParam &param,
-                         const ObExtraParam &extra,
+                         const ObOptStatGatherParam &param,
                          ObString &calc_part_id_str);
 
   void reset_select_items() { stat_items_.reset(); select_fields_.reset(); }
   void reset_sample_hint() { sample_hint_.reset(); }
   void reset_other_hint() { other_hints_.reset(); }
 
-private:
-  int copy_opt_stat(ObOptStat &src_opt_stat,
-                    ObIArray<ObOptStat> &dst_opt_stats);
+  int fill_specify_scn_info(common::ObIAllocator &alloc, uint64_t sepcify_scn);
 
-  int copy_col_stats(const int64_t cur_row_cnt,
-                     const int64_t total_row_cnt,
-                     ObIArray<ObOptColumnStat *> &src_col_stats,
-                     ObIArray<ObOptColumnStat *> &dst_col_stats);
+private:
+  int copy_basic_opt_stat(ObOptStat &src_opt_stat,
+                          ObIArray<ObOptStat> &dst_opt_stats);
+
+  int copy_basic_col_stats(const int64_t cur_row_cnt,
+                           const int64_t total_row_cnt,
+                           ObIArray<ObOptColumnStat *> &src_col_stats,
+                           ObIArray<ObOptColumnStat *> &dst_col_stats);
 
 protected:
 
@@ -116,6 +118,7 @@ protected:
   ObArray<ObStatItem *> stat_items_;
   ObArray<ObObj> results_;
   double sample_value_;
+  ObString current_scn_string_;
 };
 
 

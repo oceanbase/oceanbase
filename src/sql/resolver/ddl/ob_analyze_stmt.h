@@ -79,11 +79,6 @@ public:
     part_level_ = part_level;
   }
 
-  void set_part_cnt(int64_t total_part_cnt)
-  {
-    total_part_cnt_ = total_part_cnt;
-  }
-
   void set_degree(uint64_t degree)
   {
     if (degree > 1) {
@@ -103,7 +98,7 @@ public:
   int set_subpart_ids(ObIArray<int64_t> &subpart_ids);
 
   void set_gather_subpart_hist(bool gather_subpart_hist) { gather_subpart_hist_ = gather_subpart_hist; }
-
+  void set_is_sepcify_subpart(bool is_sepcify_subpart) { is_sepcify_subpart_ = is_sepcify_subpart; }
 
   TO_STRING_KV(K_(tenant_id),
                K_(table_id),
@@ -115,7 +110,8 @@ public:
                K_(part_ids),
                K_(subpart_ids),
                K_(ref_table_type),
-               K_(gather_subpart_hist));
+               K_(gather_subpart_hist),
+               K_(is_sepcify_subpart));
 
 private:
   uint64_t tenant_id_;
@@ -126,7 +122,6 @@ private:
   uint64_t table_id_;
 
   share::schema::ObPartitionLevel part_level_;
-  int64_t total_part_cnt_;
   ObString partition_name_;
 
   common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> partition_infos_;
@@ -146,6 +141,7 @@ private:
   common::ObSEArray<PartInfo, 4, common::ModulePageAllocator, true> all_subpartition_infos_;
   share::schema::ObTableType ref_table_type_;
   bool gather_subpart_hist_;
+  bool is_sepcify_subpart_;
   DISALLOW_COPY_AND_ASSIGN(ObAnalyzeStmt);
 };
 

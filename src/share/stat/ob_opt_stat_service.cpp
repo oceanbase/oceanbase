@@ -189,7 +189,7 @@ int ObOptStatService::load_column_stat_and_put_cache(const uint64_t tenant_id,
                                                      ObIArray<ObOptColumnStatHandle> &handles)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator arena(ObModIds::OB_SQL_PARSER);
+  ObArenaAllocator arena("ObOptColStatGet", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   LOG_TRACE("begin load column stat and put cache", K(keys));
   ObSEArray<ObOptKeyColumnStat, 4> key_column_stats;
   // generate new entrys and load from global statistics table and store it in cache.

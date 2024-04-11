@@ -106,7 +106,8 @@ public:
     strict_json_(false),
     absent_on_null_(false),
     returning_type_(INT64_MAX),
-    with_unique_keys_(false)
+    with_unique_keys_(false),
+    max_disuse_param_expr_(NULL)
   {}
   ObAggrInfo(common::ObIAllocator &alloc)
   : expr_(NULL),
@@ -134,7 +135,8 @@ public:
     strict_json_(false),
     absent_on_null_(false),
     returning_type_(INT64_MAX),
-    with_unique_keys_(false)
+    with_unique_keys_(false),
+    max_disuse_param_expr_(NULL)
   {}
   virtual ~ObAggrInfo();
 
@@ -214,6 +216,8 @@ public:
   bool absent_on_null_;
   int64_t returning_type_;
   bool with_unique_keys_;
+  //used for top_k_fre_hist
+  ObExpr *max_disuse_param_expr_;
 };
 
 typedef common::ObFixedArray<ObAggrInfo, common::ObIAllocator> AggrInfoFixedArray;

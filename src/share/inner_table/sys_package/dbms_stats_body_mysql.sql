@@ -7,7 +7,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       tabname            VARCHAR(65535),
       partname           VARCHAR(65535) DEFAULT NULL,
       estimate_percent   DECIMAL(20, 10) DEFAULT AUTO_SAMPLE_SIZE,
-      block_sample       BOOLEAN DEFAULT FALSE,
+      block_sample       BOOLEAN DEFAULT NULL,
       method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
       degree             DECIMAL(20, 10) DEFAULT NULL,
       granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,
@@ -24,7 +24,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
     PROCEDURE gather_schema_stats (
       ownname            VARCHAR(65535),
       estimate_percent   DECIMAL(20, 10) DEFAULT AUTO_SAMPLE_SIZE,
-      block_sample       BOOLEAN DEFAULT FALSE,
+      block_sample       BOOLEAN DEFAULT NULL,
       method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
       degree             DECIMAL(20, 10) DEFAULT NULL,
       granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,

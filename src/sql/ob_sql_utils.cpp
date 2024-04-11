@@ -3722,8 +3722,8 @@ int ObVirtualTableResultConverter::convert_output_row(ObNewRow *&src_row)
       ObObj src_obj = src_row->get_cell(i);
       if (tenant_id_col_id_ == column_id) {
         src_obj.set_uint64(cur_tenant_id_);
-      } else if (src_row->get_cell(i).is_string_type() &&
-                0 == src_row->get_cell(i).get_data_length()) {
+      } else if ((src_row->get_cell(i).is_string_type() && 0 == src_row->get_cell(i).get_data_length()) ||
+                 (src_row->get_cell(i).is_timestamp() && src_row->get_cell(i).get_timestamp() <= 0)) {
         need_cast = false;
         convert_row_.cells_[i].set_null();
       }
@@ -3764,7 +3764,9 @@ int ObVirtualTableResultConverter::convert_column(ObObj &src_obj, uint64_t colum
       LOG_WARN("column is not match", K(ret), K(column_id), K(col_schema->get_column_id()));
     } else if (tenant_id_col_id_ == column_id) {
       dst_obj.set_uint64(cur_tenant_id_);
-    } else if (src_obj.is_null() || (src_obj.is_string_type() && 0 == src_obj.get_data_length())) {
+    } else if (src_obj.is_null() ||
+               (src_obj.is_string_type() && 0 == src_obj.get_data_length()) ||
+               (src_obj.is_timestamp() && src_obj.get_timestamp() <= 0)) {
       need_cast = false;
       src_obj.set_null();
     } else if (src_obj.is_ext()) {
@@ -3813,8 +3815,9 @@ int ObVirtualTableResultConverter::convert_output_row(
       } else if (OB_FAIL(datum->to_obj(convert_row_.cells_[i], expr->obj_meta_))) {
         LOG_WARN("failed to cast obj", K(ret));
       } else if (convert_row_.cells_[i].is_null() ||
-          (convert_row_.cells_[i].is_string_type() && 0 == convert_row_.cells_[i].get_data_length())) {
-        convert_row_.cells_[i].set_null();
+                 (convert_row_.cells_[i].is_string_type() && 0 == convert_row_.cells_[i].get_data_length()) ||
+                 (convert_row_.cells_[i].is_timestamp() && convert_row_.cells_[i].get_timestamp() <= 0)) {
+          convert_row_.cells_[i].set_null();
       } else if (convert_row_.cells_[i].is_lob_storage()) {
         ObLobLocatorV2 lob;
         if (OB_FAIL(convert_row_.cells_[i].get_lob_locatorv2(lob))) {

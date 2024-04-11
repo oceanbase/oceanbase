@@ -889,7 +889,8 @@ public:
                                const bool is_partition_wise = false,
                                const bool is_push_down = false,
                                const bool is_partition_gi = false,
-                               const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP);
+                               const ObRollupStatus rollup_status = ObRollupStatus::NONE_ROLLUP,
+                               const bool is_three_stage_aggr = false);
 
   int candi_allocate_limit(const ObIArray<OrderItem> &order_items);
 

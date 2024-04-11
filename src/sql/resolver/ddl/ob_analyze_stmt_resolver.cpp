@@ -75,6 +75,19 @@ int ObAnalyzeStmtResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     analyze_stmt->set_degree(parallel_degree);
     stmt_ = analyze_stmt;
+    ObSEArray<ObColumnStatParam, 4> new_column_params;
+    for (int64_t i = 0 ; OB_SUCC(ret) && i < analyze_stmt->get_column_params().count(); ++i) {
+      if (analyze_stmt->get_column_params().at(i).need_col_stat()) {
+        if (OB_FAIL(new_column_params.push_back(analyze_stmt->get_column_params().at(i)))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(analyze_stmt->get_column_params().assign(new_column_params))) {
+        LOG_WARN("failed to assign", K(ret));
+      }
+    }
     LOG_DEBUG("analyze statement", K(*analyze_stmt));
   }
   return ret;
@@ -281,7 +294,6 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
     LOG_WARN("failed to set subpart infos", K(ret));
   } else if (NULL == part_node) {
     analyze_stmt.set_part_level(table_schema->get_part_level());
-    analyze_stmt.set_part_cnt(0);
     if (OB_FAIL(analyze_stmt.set_part_infos(part_infos))) {
       LOG_WARN("failed to set part infos", K(ret));
     } else if (OB_FAIL(analyze_stmt.set_subpart_infos(subpart_infos))) {
@@ -299,7 +311,6 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
   } else {
     const ParseNode *name_list = part_node->children_[0];
     analyze_stmt.set_part_level(table_schema->get_part_level());
-    analyze_stmt.set_part_cnt(0);
     for (int64_t i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
       partition_name.assign_ptr(name_list->children_[i]->str_value_,
                                 static_cast<int32_t>(name_list->children_[i]->str_len_));
@@ -314,6 +325,8 @@ int ObAnalyzeStmtResolver::resolve_partition_info(const ParseNode *part_node,
                                                                    analyze_stmt.get_subpart_infos(),
                                                                    is_subpart_name))) {
         LOG_WARN("failed to find selected part infos", K(ret));
+      } else {
+        analyze_stmt.set_is_sepcify_subpart(is_subpart_name);
       }
     }
   }
