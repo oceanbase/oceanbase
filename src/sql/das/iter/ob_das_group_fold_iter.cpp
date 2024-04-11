@@ -327,12 +327,6 @@ int ObDASGroupFoldIter::inner_get_next_rows(int64_t &count, int64_t capacity)
   count = ret_count;
 
   LOG_DEBUG("das group fold iter get next rows end", K(ret_count), K(storage_count), K(*this));
-  if (OB_UNLIKELY(group_save_rows_.need_check_output_datum_)) {
-    ObSQLUtils::access_expr_sanity_check(*group_save_rows_.exprs_,
-                                         *group_save_rows_.eval_ctx_,
-                                         group_save_rows_.max_size_);
-  }
-
   return ret;
 }
 
