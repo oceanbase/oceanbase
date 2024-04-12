@@ -37,8 +37,8 @@ ObPushdownFilterFactory::PDFilterAllocFunc ObPushdownFilterFactory::PD_FILTER_AL
   ObPushdownFilterFactory::alloc<ObPushdownWhiteFilterNode, WHITE_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownAndFilterNode, AND_FILTER>,
   ObPushdownFilterFactory::alloc<ObPushdownOrFilterNode, OR_FILTER>,
-  ObPushdownFilterFactory::alloc<ObPushdownSampleFilterNode, SAMPLE_FILTER>,
-  ObPushdownFilterFactory::alloc<ObPushdownDynamicFilterNode, DYNAMIC_FILTER>
+  ObPushdownFilterFactory::alloc<ObPushdownDynamicFilterNode, DYNAMIC_FILTER>,
+  ObPushdownFilterFactory::alloc<ObPushdownSampleFilterNode, SAMPLE_FILTER>
 };
 
 ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER_EXECUTOR_ALLOC[PushdownExecutorType::MAX_EXECUTOR_TYPE] =
@@ -47,8 +47,8 @@ ObPushdownFilterFactory::FilterExecutorAllocFunc ObPushdownFilterFactory::FILTER
   ObPushdownFilterFactory::alloc<ObWhiteFilterExecutor, ObPushdownWhiteFilterNode, WHITE_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObAndFilterExecutor, ObPushdownAndFilterNode, AND_FILTER_EXECUTOR>,
   ObPushdownFilterFactory::alloc<ObOrFilterExecutor, ObPushdownOrFilterNode, OR_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObSampleFilterExecutor, ObPushdownSampleFilterNode, SAMPLE_FILTER_EXECUTOR>,
-  ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>
+  ObPushdownFilterFactory::alloc<ObDynamicFilterExecutor, ObPushdownDynamicFilterNode, DYNAMIC_FILTER_EXECUTOR>,
+  ObPushdownFilterFactory::alloc<ObSampleFilterExecutor, ObPushdownSampleFilterNode, SAMPLE_FILTER_EXECUTOR>
 };
 
 ObDynamicFilterExecutor::PreparePushdownDataFunc ObDynamicFilterExecutor::PREPARE_PD_DATA_FUNCS
