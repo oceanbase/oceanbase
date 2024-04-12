@@ -347,7 +347,8 @@ int ObVirtualTableIterator::convert_output_row(ObNewRow *&cur_row)
       const ObColumnSchemaV2 *col_schema = cols_schema_.at(i);
       if (cur_row->get_cell(i).is_null()
           || (cur_row->get_cell(i).is_string_type() && 0 == cur_row->get_cell(i).get_data_length())
-          || ob_is_empty_lob(cur_row->get_cell(i))) {
+          || ob_is_empty_lob(cur_row->get_cell(i))
+          || (cur_row->get_cell(i).is_timestamp() && cur_row->get_cell(i).get_timestamp() <= 0)) {
         convert_row_.cells_[i].set_null();
       } else if (OB_FAIL(ObObjCaster::to_type(col_schema->get_data_type(),
                                               col_schema->get_collation_type(),

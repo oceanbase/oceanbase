@@ -246,6 +246,7 @@ int ObBasicStatsEstimator::do_estimate_block_count(ObExecContext &ctx,
   do {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("failed to check status", K(ret));
+      retry_cnt = MAX_RETRY_CNT;
     } else if (OB_FAIL(do_estimate_block_count_and_row_count(ctx, tenant_id, table_id, tablet_ids,
                                                              partition_ids, estimate_res))) {
       LOG_WARN("failed to do estimate block count and row count", K(ret));
