@@ -4781,13 +4781,985 @@ static struct VarsInit{
     ObSysVars[337].alias_ = "OB_SV__ORACLE_SQL_SELECT_LIMIT" ;
     }();
 
+    [&] (){
+      ObSysVars[338].default_value_ = "0" ;
+      ObSysVars[338].info_ = "Allows the server to join the group even if it has local transactions that are not present in the group" ;
+      ObSysVars[338].name_ = "group_replication_allow_local_disjoint_gtids_join" ;
+      ObSysVars[338].data_type_ = ObIntType ;
+      ObSysVars[338].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[338].id_ = SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN] = 338 ;
+      ObSysVars[338].base_value_ = "0" ;
+    ObSysVars[338].alias_ = "OB_SV_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN" ;
+    }();
+
+    [&] (){
+      ObSysVars[339].default_value_ = "0" ;
+      ObSysVars[339].info_ = "Allows the current server to join the group even if it has a lower major version than the group" ;
+      ObSysVars[339].name_ = "group_replication_allow_local_lower_version_join" ;
+      ObSysVars[339].data_type_ = ObIntType ;
+      ObSysVars[339].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[339].id_ = SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_LOWER_VERSION_JOIN ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_LOWER_VERSION_JOIN)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_LOWER_VERSION_JOIN] = 339 ;
+      ObSysVars[339].base_value_ = "0" ;
+    ObSysVars[339].alias_ = "OB_SV_GROUP_REPLICATION_ALLOW_LOCAL_LOWER_VERSION_JOIN" ;
+    }();
+
+    [&] (){
+      ObSysVars[340].default_value_ = "7" ;
+      ObSysVars[340].info_ = "Determines the interval between successive column values for transactions that execute on this server instance" ;
+      ObSysVars[340].name_ = "group_replication_auto_increment_increment" ;
+      ObSysVars[340].data_type_ = ObIntType ;
+      ObSysVars[340].min_val_ = "1" ;
+      ObSysVars[340].max_val_ = "65535" ;
+      ObSysVars[340].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[340].id_ = SYS_VAR_GROUP_REPLICATION_AUTO_INCREMENT_INCREMENT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_AUTO_INCREMENT_INCREMENT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_AUTO_INCREMENT_INCREMENT] = 340 ;
+      ObSysVars[340].base_value_ = "7" ;
+    ObSysVars[340].alias_ = "OB_SV_GROUP_REPLICATION_AUTO_INCREMENT_INCREMENT" ;
+    }();
+
+    [&] (){
+      ObSysVars[341].default_value_ = "0" ;
+      ObSysVars[341].info_ = "Configure this server to bootstrap the group" ;
+      ObSysVars[341].name_ = "group_replication_bootstrap_group" ;
+      ObSysVars[341].data_type_ = ObIntType ;
+      ObSysVars[341].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[341].id_ = SYS_VAR_GROUP_REPLICATION_BOOTSTRAP_GROUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_BOOTSTRAP_GROUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_BOOTSTRAP_GROUP] = 341 ;
+      ObSysVars[341].base_value_ = "0" ;
+    ObSysVars[341].alias_ = "OB_SV_GROUP_REPLICATION_BOOTSTRAP_GROUP" ;
+    }();
+
+    [&] (){
+      ObSysVars[342].default_value_ = "31536000" ;
+      ObSysVars[342].info_ = "Timeout, in seconds, that Group Replication waits for each of the components when shutting down" ;
+      ObSysVars[342].name_ = "group_replication_components_stop_timeout" ;
+      ObSysVars[342].data_type_ = ObIntType ;
+      ObSysVars[342].min_val_ = "2" ;
+      ObSysVars[342].max_val_ = "31536000" ;
+      ObSysVars[342].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[342].id_ = SYS_VAR_GROUP_REPLICATION_COMPONENTS_STOP_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_COMPONENTS_STOP_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_COMPONENTS_STOP_TIMEOUT] = 342 ;
+      ObSysVars[342].base_value_ = "31536000" ;
+    ObSysVars[342].alias_ = "OB_SV_GROUP_REPLICATION_COMPONENTS_STOP_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[343].default_value_ = "1000000" ;
+      ObSysVars[343].info_ = "The threshold value in bytes above which compression is applied to messages sent between group members" ;
+      ObSysVars[343].name_ = "group_replication_compression_threshold" ;
+      ObSysVars[343].data_type_ = ObIntType ;
+      ObSysVars[343].min_val_ = "0" ;
+      ObSysVars[343].max_val_ = "4294967295" ;
+      ObSysVars[343].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[343].id_ = SYS_VAR_GROUP_REPLICATION_COMPRESSION_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_COMPRESSION_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_COMPRESSION_THRESHOLD] = 343 ;
+      ObSysVars[343].base_value_ = "1000000" ;
+    ObSysVars[343].alias_ = "OB_SV_GROUP_REPLICATION_COMPRESSION_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[344].default_value_ = "0" ;
+      ObSysVars[344].info_ = "Enable or disable strict consistency checks for multi-primary update everywhere" ;
+      ObSysVars[344].name_ = "group_replication_enforce_update_everywhere_checks" ;
+      ObSysVars[344].data_type_ = ObIntType ;
+      ObSysVars[344].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[344].id_ = SYS_VAR_GROUP_REPLICATION_ENFORCE_UPDATE_EVERYWHERE_CHECKS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_ENFORCE_UPDATE_EVERYWHERE_CHECKS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_ENFORCE_UPDATE_EVERYWHERE_CHECKS] = 344 ;
+      ObSysVars[344].base_value_ = "0" ;
+    ObSysVars[344].alias_ = "OB_SV_GROUP_REPLICATION_ENFORCE_UPDATE_EVERYWHERE_CHECKS" ;
+    }();
+
+    [&] (){
+      ObSysVars[345].default_value_ = "1" ;
+      ObSysVars[345].info_ = "Configures how Group Replication behaves when a server instance leaves the group unintentionally, for example after encountering an applier error, or in the case of a loss of majority, or when another member of the group expels it due to a suspicion timing out" ;
+      ObSysVars[345].name_ = "group_replication_exit_state_action" ;
+      ObSysVars[345].data_type_ = ObIntType ;
+      ObSysVars[345].enum_names_ = "[u'ABORT_SERVER', u'READ_ONLY']" ;
+      ObSysVars[345].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[345].id_ = SYS_VAR_GROUP_REPLICATION_EXIT_STATE_ACTION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_EXIT_STATE_ACTION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_EXIT_STATE_ACTION] = 345 ;
+      ObSysVars[345].base_value_ = "1" ;
+    ObSysVars[345].alias_ = "OB_SV_GROUP_REPLICATION_EXIT_STATE_ACTION" ;
+    }();
+
+    [&] (){
+      ObSysVars[346].default_value_ = "25000" ;
+      ObSysVars[346].info_ = "Specifies the number of waiting transactions in the applier queue that trigger flow control. This variable can be changed without resetting Group Replication" ;
+      ObSysVars[346].name_ = "group_replication_flow_control_applier_threshold" ;
+      ObSysVars[346].data_type_ = ObIntType ;
+      ObSysVars[346].min_val_ = "0" ;
+      ObSysVars[346].max_val_ = "2147483647" ;
+      ObSysVars[346].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[346].id_ = SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_APPLIER_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_APPLIER_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_APPLIER_THRESHOLD] = 346 ;
+      ObSysVars[346].base_value_ = "25000" ;
+    ObSysVars[346].alias_ = "OB_SV_GROUP_REPLICATION_FLOW_CONTROL_APPLIER_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[347].default_value_ = "25000" ;
+      ObSysVars[347].info_ = "Specifies the number of waiting transactions in the certifier queue that trigger flow control. This variable can be changed without resetting Group Replication" ;
+      ObSysVars[347].name_ = "group_replication_flow_control_certifier_threshold" ;
+      ObSysVars[347].data_type_ = ObIntType ;
+      ObSysVars[347].min_val_ = "0" ;
+      ObSysVars[347].max_val_ = "2147483647" ;
+      ObSysVars[347].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[347].id_ = SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_CERTIFIER_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_CERTIFIER_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_CERTIFIER_THRESHOLD] = 347 ;
+      ObSysVars[347].base_value_ = "25000" ;
+    ObSysVars[347].alias_ = "OB_SV_GROUP_REPLICATION_FLOW_CONTROL_CERTIFIER_THRESHOLD" ;
+    }();
+
+    [&] (){
+      ObSysVars[348].default_value_ = "1" ;
+      ObSysVars[348].info_ = "Specifies the mode used for flow control. This variable can be changed without resetting Group Replication" ;
+      ObSysVars[348].name_ = "group_replication_flow_control_mode" ;
+      ObSysVars[348].data_type_ = ObIntType ;
+      ObSysVars[348].enum_names_ = "[u'DISABLED', u'QUOTA']" ;
+      ObSysVars[348].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[348].id_ = SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE] = 348 ;
+      ObSysVars[348].base_value_ = "1" ;
+    ObSysVars[348].alias_ = "OB_SV_GROUP_REPLICATION_FLOW_CONTROL_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[349].default_value_ = "" ;
+      ObSysVars[349].info_ = "A list of peer addresses as a comma separated list such as host1:port1,host2:port2" ;
+      ObSysVars[349].name_ = "group_replication_force_members" ;
+      ObSysVars[349].data_type_ = ObVarcharType ;
+      ObSysVars[349].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[349].id_ = SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS] = 349 ;
+      ObSysVars[349].base_value_ = "" ;
+    ObSysVars[349].alias_ = "OB_SV_GROUP_REPLICATION_FORCE_MEMBERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[350].default_value_ = "" ;
+      ObSysVars[350].info_ = "The name of the group which this server instance belongs to. Must be a valid UUID. This UUID is used internally when setting GTIDs for Group Replication events in the binary log" ;
+      ObSysVars[350].name_ = "group_replication_group_name" ;
+      ObSysVars[350].data_type_ = ObVarcharType ;
+      ObSysVars[350].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[350].id_ = SYS_VAR_GROUP_REPLICATION_GROUP_NAME ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GROUP_NAME)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_GROUP_NAME] = 350 ;
+      ObSysVars[350].base_value_ = "" ;
+    ObSysVars[350].alias_ = "OB_SV_GROUP_REPLICATION_GROUP_NAME" ;
+    }();
+
+    [&] (){
+      ObSysVars[351].default_value_ = "" ;
+      ObSysVars[351].info_ = "The number of consecutive GTIDs that are reserved for each member. Each member consumes its blocks and reserves more when needed" ;
+      ObSysVars[351].name_ = "group_replication_gtid_assignment_block_size" ;
+      ObSysVars[351].data_type_ = ObVarcharType ;
+      ObSysVars[351].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[351].id_ = SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE] = 351 ;
+      ObSysVars[351].base_value_ = "" ;
+    ObSysVars[351].alias_ = "OB_SV_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE" ;
+    }();
+
+    [&] (){
+      ObSysVars[352].default_value_ = "AUTOMATIC" ;
+      ObSysVars[352].info_ = "Specifies the allowlist of hosts that are permitted to connect to the group" ;
+      ObSysVars[352].name_ = "group_replication_ip_whitelist" ;
+      ObSysVars[352].data_type_ = ObVarcharType ;
+      ObSysVars[352].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[352].id_ = SYS_VAR_GROUP_REPLICATION_IP_WHITELIST ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_IP_WHITELIST)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_IP_WHITELIST] = 352 ;
+      ObSysVars[352].base_value_ = "AUTOMATIC" ;
+    ObSysVars[352].alias_ = "OB_SV_GROUP_REPLICATION_IP_WHITELIST" ;
+    }();
+
+    [&] (){
+      ObSysVars[353].default_value_ = "" ;
+      ObSysVars[353].info_ = "The network address which the member provides for connections from other members, specified as a host:port formatted string" ;
+      ObSysVars[353].name_ = "group_replication_local_address" ;
+      ObSysVars[353].data_type_ = ObVarcharType ;
+      ObSysVars[353].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[353].id_ = SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS] = 353 ;
+      ObSysVars[353].base_value_ = "" ;
+    ObSysVars[353].alias_ = "OB_SV_GROUP_REPLICATION_LOCAL_ADDRESS" ;
+    }();
+
+    [&] (){
+      ObSysVars[354].default_value_ = "50" ;
+      ObSysVars[354].info_ = "A percentage weight that can be assigned to members to influence the chance of the member being elected as primary in the event of failover, for example when the existing primary leaves a single-primary group" ;
+      ObSysVars[354].name_ = "group_replication_member_weight" ;
+      ObSysVars[354].data_type_ = ObIntType ;
+      ObSysVars[354].min_val_ = "0" ;
+      ObSysVars[354].max_val_ = "100" ;
+      ObSysVars[354].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[354].id_ = SYS_VAR_GROUP_REPLICATION_MEMBER_WEIGHT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_MEMBER_WEIGHT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_MEMBER_WEIGHT] = 354 ;
+      ObSysVars[354].base_value_ = "50" ;
+    ObSysVars[354].alias_ = "OB_SV_GROUP_REPLICATION_MEMBER_WEIGHT" ;
+    }();
+
+    [&] (){
+      ObSysVars[355].default_value_ = "0" ;
+      ObSysVars[355].info_ = "The number of times the group communication thread waits for the communication engine mutex to be released before the thread waits for more incoming network messages" ;
+      ObSysVars[355].name_ = "group_replication_poll_spin_loops" ;
+      ObSysVars[355].data_type_ = ObIntType ;
+      ObSysVars[355].min_val_ = "0" ;
+      ObSysVars[355].max_val_ = "4294967295" ;
+      ObSysVars[355].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[355].id_ = SYS_VAR_GROUP_REPLICATION_POLL_SPIN_LOOPS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_POLL_SPIN_LOOPS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_POLL_SPIN_LOOPS] = 355 ;
+      ObSysVars[355].base_value_ = "0" ;
+    ObSysVars[355].alias_ = "OB_SV_GROUP_REPLICATION_POLL_SPIN_LOOPS" ;
+    }();
+
+    [&] (){
+      ObSysVars[356].default_value_ = "1" ;
+      ObSysVars[356].info_ = "Recovery policies when handling cached transactions after state transfer" ;
+      ObSysVars[356].name_ = "group_replication_recovery_complete_at" ;
+      ObSysVars[356].data_type_ = ObIntType ;
+      ObSysVars[356].enum_names_ = "[u'TRANSACTIONS_CERTIFIED', u'TRANSACTIONS_APPLIED']" ;
+      ObSysVars[356].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[356].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_COMPLETE_AT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_COMPLETE_AT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_COMPLETE_AT] = 356 ;
+      ObSysVars[356].base_value_ = "1" ;
+    ObSysVars[356].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_COMPLETE_AT" ;
+    }();
+
+    [&] (){
+      ObSysVars[357].default_value_ = "60" ;
+      ObSysVars[357].info_ = "The sleep time, in seconds, between reconnection attempts when no donor was found in the group" ;
+      ObSysVars[357].name_ = "group_replication_recovery_reconnect_interval" ;
+      ObSysVars[357].data_type_ = ObIntType ;
+      ObSysVars[357].min_val_ = "0" ;
+      ObSysVars[357].max_val_ = "31536000" ;
+      ObSysVars[357].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[357].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_RECONNECT_INTERVAL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_RECONNECT_INTERVAL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_RECONNECT_INTERVAL] = 357 ;
+      ObSysVars[357].base_value_ = "60" ;
+    ObSysVars[357].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_RECONNECT_INTERVAL" ;
+    }();
+
+    [&] (){
+      ObSysVars[358].default_value_ = "10" ;
+      ObSysVars[358].info_ = "The number of times that the member that is joining tries to connect to the available donors before giving up" ;
+      ObSysVars[358].name_ = "group_replication_recovery_retry_count" ;
+      ObSysVars[358].data_type_ = ObIntType ;
+      ObSysVars[358].min_val_ = "0" ;
+      ObSysVars[358].max_val_ = "31536000" ;
+      ObSysVars[358].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[358].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_RETRY_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_RETRY_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_RETRY_COUNT] = 358 ;
+      ObSysVars[358].base_value_ = "10" ;
+    ObSysVars[358].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_RETRY_COUNT" ;
+    }();
+
+    [&] (){
+      ObSysVars[359].default_value_ = "" ;
+      ObSysVars[359].info_ = "The path to a file that contains a list of trusted SSL certificate authorities" ;
+      ObSysVars[359].name_ = "group_replication_recovery_ssl_ca" ;
+      ObSysVars[359].data_type_ = ObVarcharType ;
+      ObSysVars[359].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[359].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CA ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CA)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CA] = 359 ;
+      ObSysVars[359].base_value_ = "" ;
+    ObSysVars[359].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CA" ;
+    }();
+
+    [&] (){
+      ObSysVars[360].default_value_ = "" ;
+      ObSysVars[360].info_ = "The path to a directory that contains trusted SSL certificate authority certificates" ;
+      ObSysVars[360].name_ = "group_replication_recovery_ssl_capath" ;
+      ObSysVars[360].data_type_ = ObVarcharType ;
+      ObSysVars[360].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[360].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CAPATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CAPATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CAPATH] = 360 ;
+      ObSysVars[360].base_value_ = "" ;
+    ObSysVars[360].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CAPATH" ;
+    }();
+
+    [&] (){
+      ObSysVars[361].default_value_ = "" ;
+      ObSysVars[361].info_ = "The name of the SSL certificate file to use for establishing a secure connection" ;
+      ObSysVars[361].name_ = "group_replication_recovery_ssl_cert" ;
+      ObSysVars[361].data_type_ = ObVarcharType ;
+      ObSysVars[361].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[361].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CERT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CERT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CERT] = 361 ;
+      ObSysVars[361].base_value_ = "" ;
+    ObSysVars[361].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CERT" ;
+    }();
+
+    [&] (){
+      ObSysVars[362].default_value_ = "" ;
+      ObSysVars[362].info_ = "The list of permissible ciphers for SSL encryption" ;
+      ObSysVars[362].name_ = "group_replication_recovery_ssl_cipher" ;
+      ObSysVars[362].data_type_ = ObVarcharType ;
+      ObSysVars[362].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[362].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CIPHER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CIPHER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CIPHER] = 362 ;
+      ObSysVars[362].base_value_ = "" ;
+    ObSysVars[362].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CIPHER" ;
+    }();
+
+    [&] (){
+      ObSysVars[363].default_value_ = "" ;
+      ObSysVars[363].info_ = "The path to a directory that contains files containing certificate revocation lists" ;
+      ObSysVars[363].name_ = "group_replication_recovery_ssl_crl" ;
+      ObSysVars[363].data_type_ = ObVarcharType ;
+      ObSysVars[363].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[363].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRL] = 363 ;
+      ObSysVars[363].base_value_ = "" ;
+    ObSysVars[363].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CRL" ;
+    }();
+
+    [&] (){
+      ObSysVars[364].default_value_ = "" ;
+      ObSysVars[364].info_ = "The path to a directory that contains files containing certificate revocation lists" ;
+      ObSysVars[364].name_ = "group_replication_recovery_ssl_crlpath" ;
+      ObSysVars[364].data_type_ = ObVarcharType ;
+      ObSysVars[364].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[364].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRLPATH ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRLPATH)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRLPATH] = 364 ;
+      ObSysVars[364].base_value_ = "" ;
+    ObSysVars[364].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_CRLPATH" ;
+    }();
+
+    [&] (){
+      ObSysVars[365].default_value_ = "" ;
+      ObSysVars[365].info_ = "The name of the SSL key file to use for establishing a secure connection" ;
+      ObSysVars[365].name_ = "group_replication_recovery_ssl_key" ;
+      ObSysVars[365].data_type_ = ObVarcharType ;
+      ObSysVars[365].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[365].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_KEY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_KEY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_KEY] = 365 ;
+      ObSysVars[365].base_value_ = "" ;
+    ObSysVars[365].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_KEY" ;
+    }();
+
+    [&] (){
+      ObSysVars[366].default_value_ = "0" ;
+      ObSysVars[366].info_ = "Make the recovery process check the server's Common Name value in the donor sent certificate" ;
+      ObSysVars[366].name_ = "group_replication_recovery_ssl_verify_server_cert" ;
+      ObSysVars[366].data_type_ = ObIntType ;
+      ObSysVars[366].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[366].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_VERIFY_SERVER_CERT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_VERIFY_SERVER_CERT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_VERIFY_SERVER_CERT] = 366 ;
+      ObSysVars[366].base_value_ = "0" ;
+    ObSysVars[366].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_SSL_VERIFY_SERVER_CERT" ;
+    }();
+
+    [&] (){
+      ObSysVars[367].default_value_ = "0" ;
+      ObSysVars[367].info_ = "Whether Group Replication recovery connection should use SSL or not" ;
+      ObSysVars[367].name_ = "group_replication_recovery_use_ssl" ;
+      ObSysVars[367].data_type_ = ObIntType ;
+      ObSysVars[367].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[367].id_ = SYS_VAR_GROUP_REPLICATION_RECOVERY_USE_SSL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_RECOVERY_USE_SSL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_RECOVERY_USE_SSL] = 367 ;
+      ObSysVars[367].base_value_ = "0" ;
+    ObSysVars[367].alias_ = "OB_SV_GROUP_REPLICATION_RECOVERY_USE_SSL" ;
+    }();
+
+    [&] (){
+      ObSysVars[368].default_value_ = "0" ;
+      ObSysVars[368].info_ = "Instructs the group to pick a single server automatically to be the one that handles read/write workload. This server is the primary and all others are secondaries" ;
+      ObSysVars[368].name_ = "group_replication_single_primary_mode" ;
+      ObSysVars[368].data_type_ = ObIntType ;
+      ObSysVars[368].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[368].id_ = SYS_VAR_GROUP_REPLICATION_SINGLE_PRIMARY_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_SINGLE_PRIMARY_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_SINGLE_PRIMARY_MODE] = 368 ;
+      ObSysVars[368].base_value_ = "0" ;
+    ObSysVars[368].alias_ = "OB_SV_GROUP_REPLICATION_SINGLE_PRIMARY_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[369].default_value_ = "0" ;
+      ObSysVars[369].info_ = "Specifies the security state of the connection between Group Replication members" ;
+      ObSysVars[369].name_ = "group_replication_ssl_mode" ;
+      ObSysVars[369].data_type_ = ObIntType ;
+      ObSysVars[369].enum_names_ = "[u'DISABLED', u'REQUIRED', u'VERIFY_CA', u'VERIFY_IDENTITY']" ;
+      ObSysVars[369].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[369].id_ = SYS_VAR_GROUP_REPLICATION_SSL_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_SSL_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_SSL_MODE] = 369 ;
+      ObSysVars[369].base_value_ = "0" ;
+    ObSysVars[369].alias_ = "OB_SV_GROUP_REPLICATION_SSL_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[370].default_value_ = "0" ;
+      ObSysVars[370].info_ = "Whether the server should start Group Replication or not during server start" ;
+      ObSysVars[370].name_ = "group_replication_start_on_boot" ;
+      ObSysVars[370].data_type_ = ObIntType ;
+      ObSysVars[370].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[370].id_ = SYS_VAR_GROUP_REPLICATION_START_ON_BOOT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_START_ON_BOOT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_START_ON_BOOT] = 370 ;
+      ObSysVars[370].base_value_ = "0" ;
+    ObSysVars[370].alias_ = "OB_SV_GROUP_REPLICATION_START_ON_BOOT" ;
+    }();
+
+    [&] (){
+      ObSysVars[371].default_value_ = "0" ;
+      ObSysVars[371].info_ = "Configures the maximum transaction size in bytes which the replication group accepts" ;
+      ObSysVars[371].name_ = "group_replication_transaction_size_limit" ;
+      ObSysVars[371].data_type_ = ObIntType ;
+      ObSysVars[371].min_val_ = "0" ;
+      ObSysVars[371].max_val_ = "2147483647" ;
+      ObSysVars[371].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[371].id_ = SYS_VAR_GROUP_REPLICATION_TRANSACTION_SIZE_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_TRANSACTION_SIZE_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_TRANSACTION_SIZE_LIMIT] = 371 ;
+      ObSysVars[371].base_value_ = "0" ;
+    ObSysVars[371].alias_ = "OB_SV_GROUP_REPLICATION_TRANSACTION_SIZE_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[372].default_value_ = "0" ;
+      ObSysVars[372].info_ = "Configures how long members that suffer a network partition and cannot connect to the majority wait before leaving the group" ;
+      ObSysVars[372].name_ = "group_replication_unreachable_majority_timeout" ;
+      ObSysVars[372].data_type_ = ObIntType ;
+      ObSysVars[372].min_val_ = "0" ;
+      ObSysVars[372].max_val_ = "31536000" ;
+      ObSysVars[372].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[372].id_ = SYS_VAR_GROUP_REPLICATION_UNREACHABLE_MAJORITY_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_GROUP_REPLICATION_UNREACHABLE_MAJORITY_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_GROUP_REPLICATION_UNREACHABLE_MAJORITY_TIMEOUT] = 372 ;
+      ObSysVars[372].base_value_ = "0" ;
+    ObSysVars[372].alias_ = "OB_SV_GROUP_REPLICATION_UNREACHABLE_MAJORITY_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[373].default_value_ = "0" ;
+      ObSysVars[373].info_ = "The replication thread delay in milliseconds on a replica server if innodb_thread_concurrency is reached" ;
+      ObSysVars[373].name_ = "innodb_replication_delay" ;
+      ObSysVars[373].data_type_ = ObIntType ;
+      ObSysVars[373].min_val_ = "0" ;
+      ObSysVars[373].max_val_ = "4294967295" ;
+      ObSysVars[373].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[373].id_ = SYS_VAR_INNODB_REPLICATION_DELAY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_REPLICATION_DELAY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_REPLICATION_DELAY] = 373 ;
+      ObSysVars[373].base_value_ = "0" ;
+    ObSysVars[373].alias_ = "OB_SV_INNODB_REPLICATION_DELAY" ;
+    }();
+
+    [&] (){
+      ObSysVars[374].default_value_ = "FILE" ;
+      ObSysVars[374].info_ = "The setting of this variable determines whether the replica records metadata about the source, consisting of status and connection information, to an InnoDB table in the mysql system database, or as a file in the data directory" ;
+      ObSysVars[374].name_ = "master_info_repository" ;
+      ObSysVars[374].data_type_ = ObVarcharType ;
+      ObSysVars[374].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[374].id_ = SYS_VAR_MASTER_INFO_REPOSITORY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MASTER_INFO_REPOSITORY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MASTER_INFO_REPOSITORY] = 374 ;
+      ObSysVars[374].base_value_ = "FILE" ;
+    ObSysVars[374].alias_ = "OB_SV_MASTER_INFO_REPOSITORY" ;
+    }();
+
+    [&] (){
+      ObSysVars[375].default_value_ = "0" ;
+      ObSysVars[375].info_ = "Enabling this variable causes the source to verify events read from the binary log by examining checksums, and to stop with an error in the event of a mismatch" ;
+      ObSysVars[375].name_ = "master_verify_checksum" ;
+      ObSysVars[375].data_type_ = ObIntType ;
+      ObSysVars[375].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[375].id_ = SYS_VAR_MASTER_VERIFY_CHECKSUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MASTER_VERIFY_CHECKSUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_MASTER_VERIFY_CHECKSUM] = 375 ;
+      ObSysVars[375].base_value_ = "0" ;
+    ObSysVars[375].alias_ = "OB_SV_MASTER_VERIFY_CHECKSUM" ;
+    }();
+
+    [&] (){
+      ObSysVars[376].default_value_ = "0" ;
+      ObSysVars[376].info_ = "Assists with the correct handling of transactions that originated on older or newer servers than the server currently processing them" ;
+      ObSysVars[376].name_ = "pseudo_slave_mode" ;
+      ObSysVars[376].data_type_ = ObIntType ;
+      ObSysVars[376].flags_ = ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[376].id_ = SYS_VAR_PSEUDO_SLAVE_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PSEUDO_SLAVE_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PSEUDO_SLAVE_MODE] = 376 ;
+      ObSysVars[376].base_value_ = "0" ;
+    ObSysVars[376].alias_ = "OB_SV_PSEUDO_SLAVE_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[377].default_value_ = "2147483647" ;
+      ObSysVars[377].info_ = "This variable is for internal server use" ;
+      ObSysVars[377].name_ = "pseudo_thread_id" ;
+      ObSysVars[377].data_type_ = ObIntType ;
+      ObSysVars[377].min_val_ = "0" ;
+      ObSysVars[377].max_val_ = "2147483647" ;
+      ObSysVars[377].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[377].id_ = SYS_VAR_PSEUDO_THREAD_ID ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PSEUDO_THREAD_ID)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PSEUDO_THREAD_ID] = 377 ;
+      ObSysVars[377].base_value_ = "2147483647" ;
+    ObSysVars[377].alias_ = "OB_SV_PSEUDO_THREAD_ID" ;
+    }();
+
+    [&] (){
+      ObSysVars[378].default_value_ = "0" ;
+      ObSysVars[378].info_ = "For internal use by mysqlbinlog" ;
+      ObSysVars[378].name_ = "rbr_exec_mode" ;
+      ObSysVars[378].data_type_ = ObIntType ;
+      ObSysVars[378].enum_names_ = "[u'STRICT', u'IDEMPOTENT']" ;
+      ObSysVars[378].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[378].id_ = SYS_VAR_RBR_EXEC_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RBR_EXEC_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RBR_EXEC_MODE] = 378 ;
+      ObSysVars[378].base_value_ = "0" ;
+    ObSysVars[378].alias_ = "OB_SV_RBR_EXEC_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[379].default_value_ = "0" ;
+      ObSysVars[379].info_ = "Use shared locks, and avoid unnecessary lock acquisitions, to improve performance for semisynchronous replication" ;
+      ObSysVars[379].name_ = "replication_optimize_for_static_plugin_config" ;
+      ObSysVars[379].data_type_ = ObIntType ;
+      ObSysVars[379].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[379].id_ = SYS_VAR_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG] = 379 ;
+      ObSysVars[379].base_value_ = "0" ;
+    ObSysVars[379].alias_ = "OB_SV_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG" ;
+    }();
+
+    [&] (){
+      ObSysVars[380].default_value_ = "0" ;
+      ObSysVars[380].info_ = "Limit callbacks to improve performance for semisynchronous replication" ;
+      ObSysVars[380].name_ = "replication_sender_observe_commit_only" ;
+      ObSysVars[380].data_type_ = ObIntType ;
+      ObSysVars[380].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[380].id_ = SYS_VAR_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY] = 380 ;
+      ObSysVars[380].base_value_ = "0" ;
+    ObSysVars[380].alias_ = "OB_SV_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY" ;
+    }();
+
+    [&] (){
+      ObSysVars[381].default_value_ = "0" ;
+      ObSysVars[381].info_ = "Controls whether semisynchronous replication is enabled on the source" ;
+      ObSysVars[381].name_ = "rpl_semi_sync_master_enabled" ;
+      ObSysVars[381].data_type_ = ObIntType ;
+      ObSysVars[381].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[381].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_ENABLED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_ENABLED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_ENABLED] = 381 ;
+      ObSysVars[381].base_value_ = "0" ;
+    ObSysVars[381].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_ENABLED" ;
+    }();
+
+    [&] (){
+      ObSysVars[382].default_value_ = "10000" ;
+      ObSysVars[382].info_ = "A value in milliseconds that controls how long the source waits on a commit for acknowledgment from a replica before timing out and reverting to asynchronous replication" ;
+      ObSysVars[382].name_ = "rpl_semi_sync_master_timeout" ;
+      ObSysVars[382].data_type_ = ObIntType ;
+      ObSysVars[382].min_val_ = "0" ;
+      ObSysVars[382].max_val_ = "4294967295" ;
+      ObSysVars[382].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[382].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_TIMEOUT] = 382 ;
+      ObSysVars[382].base_value_ = "10000" ;
+    ObSysVars[382].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[383].default_value_ = "32" ;
+      ObSysVars[383].info_ = "The semisynchronous replication debug trace level on the source" ;
+      ObSysVars[383].name_ = "rpl_semi_sync_master_trace_level" ;
+      ObSysVars[383].data_type_ = ObIntType ;
+      ObSysVars[383].min_val_ = "0" ;
+      ObSysVars[383].max_val_ = "4294967295" ;
+      ObSysVars[383].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[383].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL] = 383 ;
+      ObSysVars[383].base_value_ = "32" ;
+    ObSysVars[383].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[384].default_value_ = "1" ;
+      ObSysVars[384].info_ = "The number of replica acknowledgments the source must receive per transaction before proceeding" ;
+      ObSysVars[384].name_ = "rpl_semi_sync_master_wait_for_slave_count" ;
+      ObSysVars[384].data_type_ = ObIntType ;
+      ObSysVars[384].min_val_ = "1" ;
+      ObSysVars[384].max_val_ = "65535" ;
+      ObSysVars[384].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[384].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_FOR_SLAVE_COUNT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_FOR_SLAVE_COUNT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_FOR_SLAVE_COUNT] = 384 ;
+      ObSysVars[384].base_value_ = "1" ;
+    ObSysVars[384].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_WAIT_FOR_SLAVE_COUNT" ;
+    }();
+
+    [&] (){
+      ObSysVars[385].default_value_ = "0" ;
+      ObSysVars[385].info_ = "Controls whether the source waits for the timeout period configured by rpl_semi_sync_master_timeout to expire, even if the replica count drops to less than the number of replicas configured by rpl_semi_sync_master_wait_for_slave_count during the timeout period" ;
+      ObSysVars[385].name_ = "rpl_semi_sync_master_wait_no_slave" ;
+      ObSysVars[385].data_type_ = ObIntType ;
+      ObSysVars[385].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[385].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_NO_SLAVE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_NO_SLAVE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_NO_SLAVE] = 385 ;
+      ObSysVars[385].base_value_ = "0" ;
+    ObSysVars[385].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_WAIT_NO_SLAVE" ;
+    }();
+
+    [&] (){
+      ObSysVars[386].default_value_ = "0" ;
+      ObSysVars[386].info_ = "This variable controls the point at which a semisynchronous source waits for replica acknowledgment of transaction receipt before returning a status to the client that committed the transaction" ;
+      ObSysVars[386].name_ = "rpl_semi_sync_master_wait_point" ;
+      ObSysVars[386].data_type_ = ObIntType ;
+      ObSysVars[386].enum_names_ = "[u'AFTER_SYNC', u'AFTER_COMMIT']" ;
+      ObSysVars[386].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[386].id_ = SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_POINT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_POINT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_POINT] = 386 ;
+      ObSysVars[386].base_value_ = "0" ;
+    ObSysVars[386].alias_ = "OB_SV_RPL_SEMI_SYNC_MASTER_WAIT_POINT" ;
+    }();
+
+    [&] (){
+      ObSysVars[387].default_value_ = "0" ;
+      ObSysVars[387].info_ = "Controls whether semisynchronous replication is enabled on the replica" ;
+      ObSysVars[387].name_ = "rpl_semi_sync_slave_enabled" ;
+      ObSysVars[387].data_type_ = ObIntType ;
+      ObSysVars[387].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[387].id_ = SYS_VAR_RPL_SEMI_SYNC_SLAVE_ENABLED ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_SLAVE_ENABLED)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_SLAVE_ENABLED] = 387 ;
+      ObSysVars[387].base_value_ = "0" ;
+    ObSysVars[387].alias_ = "OB_SV_RPL_SEMI_SYNC_SLAVE_ENABLED" ;
+    }();
+
+    [&] (){
+      ObSysVars[388].default_value_ = "32" ;
+      ObSysVars[388].info_ = "The semisynchronous replication debug trace level on the replica" ;
+      ObSysVars[388].name_ = "rpl_semi_sync_slave_trace_level" ;
+      ObSysVars[388].data_type_ = ObIntType ;
+      ObSysVars[388].min_val_ = "0" ;
+      ObSysVars[388].max_val_ = "4294967295" ;
+      ObSysVars[388].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[388].id_ = SYS_VAR_RPL_SEMI_SYNC_SLAVE_TRACE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_SEMI_SYNC_SLAVE_TRACE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_SEMI_SYNC_SLAVE_TRACE_LEVEL] = 388 ;
+      ObSysVars[388].base_value_ = "32" ;
+    ObSysVars[388].alias_ = "OB_SV_RPL_SEMI_SYNC_SLAVE_TRACE_LEVEL" ;
+    }();
+
+    [&] (){
+      ObSysVars[389].default_value_ = "31536000" ;
+      ObSysVars[389].info_ = "You can control the length of time (in seconds) that STOP SLAVE waits before timing out by setting this variab" ;
+      ObSysVars[389].name_ = "rpl_stop_slave_timeout" ;
+      ObSysVars[389].data_type_ = ObIntType ;
+      ObSysVars[389].min_val_ = "2" ;
+      ObSysVars[389].max_val_ = "31536000" ;
+      ObSysVars[389].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[389].id_ = SYS_VAR_RPL_STOP_SLAVE_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_RPL_STOP_SLAVE_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_RPL_STOP_SLAVE_TIMEOUT] = 389 ;
+      ObSysVars[389].base_value_ = "31536000" ;
+    ObSysVars[389].alias_ = "OB_SV_RPL_STOP_SLAVE_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[390].default_value_ = "0" ;
+      ObSysVars[390].info_ = "Whether or not batched updates are enabled on NDB Cluster replicas" ;
+      ObSysVars[390].name_ = "slave_allow_batching" ;
+      ObSysVars[390].data_type_ = ObIntType ;
+      ObSysVars[390].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[390].id_ = SYS_VAR_SLAVE_ALLOW_BATCHING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_ALLOW_BATCHING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_ALLOW_BATCHING] = 390 ;
+      ObSysVars[390].base_value_ = "0" ;
+    ObSysVars[390].alias_ = "OB_SV_SLAVE_ALLOW_BATCHING" ;
+    }();
+
+    [&] (){
+      ObSysVars[391].default_value_ = "512" ;
+      ObSysVars[391].info_ = "Sets the maximum number of transactions that can be processed by a multithreaded replica before a checkpoint operation is called to update its status as shown by SHOW SLAVE STATUS" ;
+      ObSysVars[391].name_ = "slave_checkpoint_group" ;
+      ObSysVars[391].data_type_ = ObIntType ;
+      ObSysVars[391].min_val_ = "32" ;
+      ObSysVars[391].max_val_ = "524280" ;
+      ObSysVars[391].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[391].id_ = SYS_VAR_SLAVE_CHECKPOINT_GROUP ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_CHECKPOINT_GROUP)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_CHECKPOINT_GROUP] = 391 ;
+      ObSysVars[391].base_value_ = "512" ;
+    ObSysVars[391].alias_ = "OB_SV_SLAVE_CHECKPOINT_GROUP" ;
+    }();
+
+    [&] (){
+      ObSysVars[392].default_value_ = "300" ;
+      ObSysVars[392].info_ = "Sets the maximum time (in milliseconds) that is allowed to pass before a checkpoint operation is called to update the status of a multithreaded replica as shown by SHOW SLAVE STATUS" ;
+      ObSysVars[392].name_ = "slave_checkpoint_period" ;
+      ObSysVars[392].data_type_ = ObIntType ;
+      ObSysVars[392].min_val_ = "1" ;
+      ObSysVars[392].max_val_ = "4294967295" ;
+      ObSysVars[392].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[392].id_ = SYS_VAR_SLAVE_CHECKPOINT_PERIOD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_CHECKPOINT_PERIOD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_CHECKPOINT_PERIOD] = 392 ;
+      ObSysVars[392].base_value_ = "300" ;
+    ObSysVars[392].alias_ = "OB_SV_SLAVE_CHECKPOINT_PERIOD" ;
+    }();
+
+    [&] (){
+      ObSysVars[393].default_value_ = "0" ;
+      ObSysVars[393].info_ = "Whether to use compression of the source/replica protocol if both source and replica support it" ;
+      ObSysVars[393].name_ = "slave_compressed_protocol" ;
+      ObSysVars[393].data_type_ = ObIntType ;
+      ObSysVars[393].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[393].id_ = SYS_VAR_SLAVE_COMPRESSED_PROTOCOL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_COMPRESSED_PROTOCOL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_COMPRESSED_PROTOCOL] = 393 ;
+      ObSysVars[393].base_value_ = "0" ;
+    ObSysVars[393].alias_ = "OB_SV_SLAVE_COMPRESSED_PROTOCOL" ;
+    }();
+
+    [&] (){
+      ObSysVars[394].default_value_ = "0" ;
+      ObSysVars[394].info_ = "Controls how a replication thread resolves conflicts and errors during replication" ;
+      ObSysVars[394].name_ = "slave_exec_mode" ;
+      ObSysVars[394].data_type_ = ObIntType ;
+      ObSysVars[394].enum_names_ = "[u'STRICT', u'IDEMPOTENT']" ;
+      ObSysVars[394].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[394].id_ = SYS_VAR_SLAVE_EXEC_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_EXEC_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_EXEC_MODE] = 394 ;
+      ObSysVars[394].base_value_ = "0" ;
+    ObSysVars[394].alias_ = "OB_SV_SLAVE_EXEC_MODE" ;
+    }();
+
+    [&] (){
+      ObSysVars[395].default_value_ = "1073741824" ;
+      ObSysVars[395].info_ = "This variable sets the maximum packet size for the replication SQL and I/O threads, so that large updates using row-based replication do not cause replication to fail because an update exceeded max_allowed_packet" ;
+      ObSysVars[395].name_ = "slave_max_allowed_packet" ;
+      ObSysVars[395].data_type_ = ObIntType ;
+      ObSysVars[395].min_val_ = "1024" ;
+      ObSysVars[395].max_val_ = "1073741824" ;
+      ObSysVars[395].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[395].id_ = SYS_VAR_SLAVE_MAX_ALLOWED_PACKET ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_MAX_ALLOWED_PACKET)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_MAX_ALLOWED_PACKET] = 395 ;
+      ObSysVars[395].base_value_ = "1073741824" ;
+    ObSysVars[395].alias_ = "OB_SV_SLAVE_MAX_ALLOWED_PACKET" ;
+    }();
+
+    [&] (){
+      ObSysVars[396].default_value_ = "60" ;
+      ObSysVars[396].info_ = "The number of seconds to wait for more data or a heartbeat signal from the source before the replica considers the connection broken, aborts the read, and tries to reconnect" ;
+      ObSysVars[396].name_ = "slave_net_timeout" ;
+      ObSysVars[396].data_type_ = ObIntType ;
+      ObSysVars[396].min_val_ = "1" ;
+      ObSysVars[396].max_val_ = "31536000" ;
+      ObSysVars[396].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[396].id_ = SYS_VAR_SLAVE_NET_TIMEOUT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_NET_TIMEOUT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_NET_TIMEOUT] = 396 ;
+      ObSysVars[396].base_value_ = "60" ;
+    ObSysVars[396].alias_ = "OB_SV_SLAVE_NET_TIMEOUT" ;
+    }();
+
+    [&] (){
+      ObSysVars[397].default_value_ = "0" ;
+      ObSysVars[397].info_ = "When using a multithreaded replica (slave_parallel_workers is greater than 0), this variable specifies the policy used to decide which transactions are allowed to execute in parallel on the replica" ;
+      ObSysVars[397].name_ = "slave_parallel_type" ;
+      ObSysVars[397].data_type_ = ObIntType ;
+      ObSysVars[397].enum_names_ = "[u'DATABASE', u'LOGICAL_CLOCK']" ;
+      ObSysVars[397].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[397].id_ = SYS_VAR_SLAVE_PARALLEL_TYPE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_PARALLEL_TYPE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_PARALLEL_TYPE] = 397 ;
+      ObSysVars[397].base_value_ = "0" ;
+    ObSysVars[397].alias_ = "OB_SV_SLAVE_PARALLEL_TYPE" ;
+    }();
+
+    [&] (){
+      ObSysVars[398].default_value_ = "0" ;
+      ObSysVars[398].info_ = "Sets the number of applier threads for executing replication transactions in parallel" ;
+      ObSysVars[398].name_ = "slave_parallel_workers" ;
+      ObSysVars[398].data_type_ = ObIntType ;
+      ObSysVars[398].min_val_ = "0" ;
+      ObSysVars[398].max_val_ = "1024" ;
+      ObSysVars[398].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[398].id_ = SYS_VAR_SLAVE_PARALLEL_WORKERS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_PARALLEL_WORKERS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_PARALLEL_WORKERS] = 398 ;
+      ObSysVars[398].base_value_ = "0" ;
+    ObSysVars[398].alias_ = "OB_SV_SLAVE_PARALLEL_WORKERS" ;
+    }();
+
+    [&] (){
+      ObSysVars[399].default_value_ = "16777216" ;
+      ObSysVars[399].info_ = "For multithreaded replicas, this variable sets the maximum amount of memory (in bytes) available to worker queues holding events not yet applied" ;
+      ObSysVars[399].name_ = "slave_pending_jobs_size_max" ;
+      ObSysVars[399].data_type_ = ObUInt64Type ;
+      ObSysVars[399].min_val_ = "1024" ;
+      ObSysVars[399].max_val_ = "18446744073709551615" ;
+      ObSysVars[399].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[399].id_ = SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX] = 399 ;
+      ObSysVars[399].base_value_ = "16777216" ;
+    ObSysVars[399].alias_ = "OB_SV_SLAVE_PENDING_JOBS_SIZE_MAX" ;
+    }();
+
+    [&] (){
+      ObSysVars[400].default_value_ = "0" ;
+      ObSysVars[400].info_ = "For multithreaded replicas, the setting 1 for this variable ensures that transactions are externalized on the replica in the same order as they appear in the replica's relay log, and prevents gaps in the sequence of transactions that have been executed from the relay lo" ;
+      ObSysVars[400].name_ = "slave_preserve_commit_order" ;
+      ObSysVars[400].data_type_ = ObIntType ;
+      ObSysVars[400].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[400].id_ = SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER] = 400 ;
+      ObSysVars[400].base_value_ = "0" ;
+    ObSysVars[400].alias_ = "OB_SV_SLAVE_PRESERVE_COMMIT_ORDER" ;
+    }();
+
+    [&] (){
+      ObSysVars[401].default_value_ = "0" ;
+      ObSysVars[401].info_ = "Cause the replication SQL thread to verify data using the checksums read from the relay log" ;
+      ObSysVars[401].name_ = "slave_sql_verify_checksum" ;
+      ObSysVars[401].data_type_ = ObIntType ;
+      ObSysVars[401].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[401].id_ = SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM] = 401 ;
+      ObSysVars[401].base_value_ = "0" ;
+    ObSysVars[401].alias_ = "OB_SV_SLAVE_SQL_VERIFY_CHECKSUM" ;
+    }();
+
+    [&] (){
+      ObSysVars[402].default_value_ = "10" ;
+      ObSysVars[402].info_ = "Deadlock or because the transaction's execution time exceeded InnoDB's innodb_lock_wait_timeout or NDB's TransactionDeadlockDetectionTimeout or TransactionInactiveTimeout, it automatically retries slave_transaction_retries times before stopping with an error. Transactions with a non-temporary error are not retried" ;
+      ObSysVars[402].name_ = "slave_transaction_retries" ;
+      ObSysVars[402].data_type_ = ObUInt64Type ;
+      ObSysVars[402].min_val_ = "0" ;
+      ObSysVars[402].max_val_ = "18446744073709551615" ;
+      ObSysVars[402].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[402].id_ = SYS_VAR_SLAVE_TRANSACTION_RETRIES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_TRANSACTION_RETRIES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_TRANSACTION_RETRIES] = 402 ;
+      ObSysVars[402].base_value_ = "10" ;
+    ObSysVars[402].alias_ = "OB_SV_SLAVE_TRANSACTION_RETRIES" ;
+    }();
+
+    [&] (){
+      ObSysVars[403].default_value_ = "0" ;
+      ObSysVars[403].info_ = "The number of events from the source that a replica should ski" ;
+      ObSysVars[403].name_ = "sql_slave_skip_counter" ;
+      ObSysVars[403].data_type_ = ObIntType ;
+      ObSysVars[403].min_val_ = "0" ;
+      ObSysVars[403].max_val_ = "4294967295" ;
+      ObSysVars[403].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[403].id_ = SYS_VAR_SQL_SLAVE_SKIP_COUNTER ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SQL_SLAVE_SKIP_COUNTER)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SQL_SLAVE_SKIP_COUNTER] = 403 ;
+      ObSysVars[403].base_value_ = "0" ;
+    ObSysVars[403].alias_ = "OB_SV_SQL_SLAVE_SKIP_COUNTER" ;
+    }();
+
+    [&] (){
+      ObSysVars[404].default_value_ = "0" ;
+      ObSysVars[404].info_ = "The crash recovery mode, typically only changed in serious troubleshooting situations. Possible values are from 0 to 6" ;
+      ObSysVars[404].name_ = "innodb_force_recovery" ;
+      ObSysVars[404].data_type_ = ObIntType ;
+      ObSysVars[404].min_val_ = "0" ;
+      ObSysVars[404].max_val_ = "6" ;
+      ObSysVars[404].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[404].id_ = SYS_VAR_INNODB_FORCE_RECOVERY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_FORCE_RECOVERY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_FORCE_RECOVERY] = 404 ;
+      ObSysVars[404].base_value_ = "0" ;
+    ObSysVars[404].alias_ = "OB_SV_INNODB_FORCE_RECOVERY" ;
+    }();
+
+    [&] (){
+      ObSysVars[405].default_value_ = "0" ;
+      ObSysVars[405].info_ = "Tells the replica server not to start the replication threads when the server starts" ;
+      ObSysVars[405].name_ = "skip_slave_start" ;
+      ObSysVars[405].data_type_ = ObIntType ;
+      ObSysVars[405].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[405].id_ = SYS_VAR_SKIP_SLAVE_START ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_SLAVE_START)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_SLAVE_START] = 405 ;
+      ObSysVars[405].base_value_ = "0" ;
+    ObSysVars[405].alias_ = "OB_SV_SKIP_SLAVE_START" ;
+    }();
+
+    [&] (){
+      ObSysVars[406].default_value_ = "" ;
+      ObSysVars[406].info_ = "The name of the directory where the replica creates temporary files" ;
+      ObSysVars[406].name_ = "slave_load_tmpdir" ;
+      ObSysVars[406].data_type_ = ObVarcharType ;
+      ObSysVars[406].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[406].id_ = SYS_VAR_SLAVE_LOAD_TMPDIR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_LOAD_TMPDIR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_LOAD_TMPDIR] = 406 ;
+      ObSysVars[406].base_value_ = "" ;
+    ObSysVars[406].alias_ = "OB_SV_SLAVE_LOAD_TMPDIR" ;
+    }();
+
+    [&] (){
+      ObSysVars[407].default_value_ = "OFF" ;
+      ObSysVars[407].info_ = "This variable causes the replication SQL thread to continue replication when a statement returns any of the errors listed in the variable value" ;
+      ObSysVars[407].name_ = "slave_skip_errors" ;
+      ObSysVars[407].data_type_ = ObVarcharType ;
+      ObSysVars[407].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[407].id_ = SYS_VAR_SLAVE_SKIP_ERRORS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SLAVE_SKIP_ERRORS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SLAVE_SKIP_ERRORS] = 407 ;
+      ObSysVars[407].base_value_ = "OFF" ;
+    ObSysVars[407].alias_ = "OB_SV_SLAVE_SKIP_ERRORS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 338;
+static int64_t var_amount = 408;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

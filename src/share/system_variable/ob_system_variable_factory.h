@@ -2503,6 +2503,512 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ORACLE_SQL_SELECT_LIMIT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(337); }
 };
+class ObSysVarGroupReplicationAllowLocalDisjointGtidsJoin : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationAllowLocalDisjointGtidsJoin() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(338); }
+};
+class ObSysVarGroupReplicationAllowLocalLowerVersionJoin : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationAllowLocalLowerVersionJoin() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_LOWER_VERSION_JOIN; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(339); }
+};
+class ObSysVarGroupReplicationAutoIncrementIncrement : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationAutoIncrementIncrement() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_AUTO_INCREMENT_INCREMENT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(340); }
+};
+class ObSysVarGroupReplicationBootstrapGroup : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationBootstrapGroup() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_BOOTSTRAP_GROUP; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(341); }
+};
+class ObSysVarGroupReplicationComponentsStopTimeout : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationComponentsStopTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_COMPONENTS_STOP_TIMEOUT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(342); }
+};
+class ObSysVarGroupReplicationCompressionThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationCompressionThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_COMPRESSION_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(343); }
+};
+class ObSysVarGroupReplicationEnforceUpdateEverywhereChecks : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationEnforceUpdateEverywhereChecks() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_ENFORCE_UPDATE_EVERYWHERE_CHECKS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(344); }
+};
+class ObSysVarGroupReplicationExitStateAction : public ObEnumSysVar
+{
+public:
+  const static char * GROUP_REPLICATION_EXIT_STATE_ACTION_NAMES[];
+public:
+  ObSysVarGroupReplicationExitStateAction() : ObEnumSysVar(GROUP_REPLICATION_EXIT_STATE_ACTION_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_EXIT_STATE_ACTION; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(345); }
+};
+class ObSysVarGroupReplicationFlowControlApplierThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationFlowControlApplierThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_APPLIER_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(346); }
+};
+class ObSysVarGroupReplicationFlowControlCertifierThreshold : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationFlowControlCertifierThreshold() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_CERTIFIER_THRESHOLD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(347); }
+};
+class ObSysVarGroupReplicationFlowControlMode : public ObEnumSysVar
+{
+public:
+  const static char * GROUP_REPLICATION_FLOW_CONTROL_MODE_NAMES[];
+public:
+  ObSysVarGroupReplicationFlowControlMode() : ObEnumSysVar(GROUP_REPLICATION_FLOW_CONTROL_MODE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_FLOW_CONTROL_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(348); }
+};
+class ObSysVarGroupReplicationForceMembers : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationForceMembers() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_FORCE_MEMBERS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(349); }
+};
+class ObSysVarGroupReplicationGroupName : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationGroupName() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_GROUP_NAME; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(350); }
+};
+class ObSysVarGroupReplicationGtidAssignmentBlockSize : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationGtidAssignmentBlockSize() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_GTID_ASSIGNMENT_BLOCK_SIZE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(351); }
+};
+class ObSysVarGroupReplicationIpWhitelist : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationIpWhitelist() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_IP_WHITELIST; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(352); }
+};
+class ObSysVarGroupReplicationLocalAddress : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationLocalAddress() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_LOCAL_ADDRESS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(353); }
+};
+class ObSysVarGroupReplicationMemberWeight : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationMemberWeight() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_MEMBER_WEIGHT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(354); }
+};
+class ObSysVarGroupReplicationPollSpinLoops : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationPollSpinLoops() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_POLL_SPIN_LOOPS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(355); }
+};
+class ObSysVarGroupReplicationRecoveryCompleteAt : public ObEnumSysVar
+{
+public:
+  const static char * GROUP_REPLICATION_RECOVERY_COMPLETE_AT_NAMES[];
+public:
+  ObSysVarGroupReplicationRecoveryCompleteAt() : ObEnumSysVar(GROUP_REPLICATION_RECOVERY_COMPLETE_AT_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_COMPLETE_AT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(356); }
+};
+class ObSysVarGroupReplicationRecoveryReconnectInterval : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoveryReconnectInterval() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_RECONNECT_INTERVAL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(357); }
+};
+class ObSysVarGroupReplicationRecoveryRetryCount : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoveryRetryCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_RETRY_COUNT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(358); }
+};
+class ObSysVarGroupReplicationRecoverySslCa : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCa() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CA; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(359); }
+};
+class ObSysVarGroupReplicationRecoverySslCapath : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCapath() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CAPATH; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(360); }
+};
+class ObSysVarGroupReplicationRecoverySslCert : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCert() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CERT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(361); }
+};
+class ObSysVarGroupReplicationRecoverySslCipher : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCipher() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CIPHER; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(362); }
+};
+class ObSysVarGroupReplicationRecoverySslCrl : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCrl() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(363); }
+};
+class ObSysVarGroupReplicationRecoverySslCrlpath : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslCrlpath() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_CRLPATH; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(364); }
+};
+class ObSysVarGroupReplicationRecoverySslKey : public ObVarcharSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslKey() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_KEY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(365); }
+};
+class ObSysVarGroupReplicationRecoverySslVerifyServerCert : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoverySslVerifyServerCert() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_SSL_VERIFY_SERVER_CERT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(366); }
+};
+class ObSysVarGroupReplicationRecoveryUseSsl : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationRecoveryUseSsl() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_RECOVERY_USE_SSL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(367); }
+};
+class ObSysVarGroupReplicationSinglePrimaryMode : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationSinglePrimaryMode() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_SINGLE_PRIMARY_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(368); }
+};
+class ObSysVarGroupReplicationSslMode : public ObEnumSysVar
+{
+public:
+  const static char * GROUP_REPLICATION_SSL_MODE_NAMES[];
+public:
+  ObSysVarGroupReplicationSslMode() : ObEnumSysVar(GROUP_REPLICATION_SSL_MODE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_SSL_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(369); }
+};
+class ObSysVarGroupReplicationStartOnBoot : public ObBoolSysVar
+{
+public:
+  ObSysVarGroupReplicationStartOnBoot() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_START_ON_BOOT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(370); }
+};
+class ObSysVarGroupReplicationTransactionSizeLimit : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationTransactionSizeLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_TRANSACTION_SIZE_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(371); }
+};
+class ObSysVarGroupReplicationUnreachableMajorityTimeout : public ObIntSysVar
+{
+public:
+  ObSysVarGroupReplicationUnreachableMajorityTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_GROUP_REPLICATION_UNREACHABLE_MAJORITY_TIMEOUT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(372); }
+};
+class ObSysVarInnodbReplicationDelay : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbReplicationDelay() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_REPLICATION_DELAY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(373); }
+};
+class ObSysVarMasterInfoRepository : public ObVarcharSysVar
+{
+public:
+  ObSysVarMasterInfoRepository() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_MASTER_INFO_REPOSITORY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(374); }
+};
+class ObSysVarMasterVerifyChecksum : public ObBoolSysVar
+{
+public:
+  ObSysVarMasterVerifyChecksum() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_MASTER_VERIFY_CHECKSUM; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(375); }
+};
+class ObSysVarPseudoSlaveMode : public ObBoolSysVar
+{
+public:
+  ObSysVarPseudoSlaveMode() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PSEUDO_SLAVE_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(376); }
+};
+class ObSysVarPseudoThreadId : public ObIntSysVar
+{
+public:
+  ObSysVarPseudoThreadId() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_PSEUDO_THREAD_ID; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(377); }
+};
+class ObSysVarRbrExecMode : public ObEnumSysVar
+{
+public:
+  const static char * RBR_EXEC_MODE_NAMES[];
+public:
+  ObSysVarRbrExecMode() : ObEnumSysVar(RBR_EXEC_MODE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RBR_EXEC_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(378); }
+};
+class ObSysVarReplicationOptimizeForStaticPluginConfig : public ObBoolSysVar
+{
+public:
+  ObSysVarReplicationOptimizeForStaticPluginConfig() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_REPLICATION_OPTIMIZE_FOR_STATIC_PLUGIN_CONFIG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(379); }
+};
+class ObSysVarReplicationSenderObserveCommitOnly : public ObBoolSysVar
+{
+public:
+  ObSysVarReplicationSenderObserveCommitOnly() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_REPLICATION_SENDER_OBSERVE_COMMIT_ONLY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(380); }
+};
+class ObSysVarRplSemiSyncMasterEnabled : public ObBoolSysVar
+{
+public:
+  ObSysVarRplSemiSyncMasterEnabled() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_ENABLED; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(381); }
+};
+class ObSysVarRplSemiSyncMasterTimeout : public ObIntSysVar
+{
+public:
+  ObSysVarRplSemiSyncMasterTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_TIMEOUT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(382); }
+};
+class ObSysVarRplSemiSyncMasterTraceLevel : public ObIntSysVar
+{
+public:
+  ObSysVarRplSemiSyncMasterTraceLevel() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_TRACE_LEVEL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(383); }
+};
+class ObSysVarRplSemiSyncMasterWaitForSlaveCount : public ObIntSysVar
+{
+public:
+  ObSysVarRplSemiSyncMasterWaitForSlaveCount() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_FOR_SLAVE_COUNT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(384); }
+};
+class ObSysVarRplSemiSyncMasterWaitNoSlave : public ObBoolSysVar
+{
+public:
+  ObSysVarRplSemiSyncMasterWaitNoSlave() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_NO_SLAVE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(385); }
+};
+class ObSysVarRplSemiSyncMasterWaitPoint : public ObEnumSysVar
+{
+public:
+  const static char * RPL_SEMI_SYNC_MASTER_WAIT_POINT_NAMES[];
+public:
+  ObSysVarRplSemiSyncMasterWaitPoint() : ObEnumSysVar(RPL_SEMI_SYNC_MASTER_WAIT_POINT_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_MASTER_WAIT_POINT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(386); }
+};
+class ObSysVarRplSemiSyncSlaveEnabled : public ObBoolSysVar
+{
+public:
+  ObSysVarRplSemiSyncSlaveEnabled() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_SLAVE_ENABLED; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(387); }
+};
+class ObSysVarRplSemiSyncSlaveTraceLevel : public ObIntSysVar
+{
+public:
+  ObSysVarRplSemiSyncSlaveTraceLevel() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_SEMI_SYNC_SLAVE_TRACE_LEVEL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(388); }
+};
+class ObSysVarRplStopSlaveTimeout : public ObIntSysVar
+{
+public:
+  ObSysVarRplStopSlaveTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_RPL_STOP_SLAVE_TIMEOUT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(389); }
+};
+class ObSysVarSlaveAllowBatching : public ObBoolSysVar
+{
+public:
+  ObSysVarSlaveAllowBatching() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_ALLOW_BATCHING; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(390); }
+};
+class ObSysVarSlaveCheckpointGroup : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveCheckpointGroup() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_CHECKPOINT_GROUP; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(391); }
+};
+class ObSysVarSlaveCheckpointPeriod : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveCheckpointPeriod() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_CHECKPOINT_PERIOD; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(392); }
+};
+class ObSysVarSlaveCompressedProtocol : public ObBoolSysVar
+{
+public:
+  ObSysVarSlaveCompressedProtocol() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_COMPRESSED_PROTOCOL; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(393); }
+};
+class ObSysVarSlaveExecMode : public ObEnumSysVar
+{
+public:
+  const static char * SLAVE_EXEC_MODE_NAMES[];
+public:
+  ObSysVarSlaveExecMode() : ObEnumSysVar(SLAVE_EXEC_MODE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_EXEC_MODE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(394); }
+};
+class ObSysVarSlaveMaxAllowedPacket : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveMaxAllowedPacket() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_MAX_ALLOWED_PACKET; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(395); }
+};
+class ObSysVarSlaveNetTimeout : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveNetTimeout() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_NET_TIMEOUT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(396); }
+};
+class ObSysVarSlaveParallelType : public ObEnumSysVar
+{
+public:
+  const static char * SLAVE_PARALLEL_TYPE_NAMES[];
+public:
+  ObSysVarSlaveParallelType() : ObEnumSysVar(SLAVE_PARALLEL_TYPE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_PARALLEL_TYPE; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(397); }
+};
+class ObSysVarSlaveParallelWorkers : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveParallelWorkers() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_PARALLEL_WORKERS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(398); }
+};
+class ObSysVarSlavePendingJobsSizeMax : public ObIntSysVar
+{
+public:
+  ObSysVarSlavePendingJobsSizeMax() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_PENDING_JOBS_SIZE_MAX; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(399); }
+};
+class ObSysVarSlavePreserveCommitOrder : public ObBoolSysVar
+{
+public:
+  ObSysVarSlavePreserveCommitOrder() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_PRESERVE_COMMIT_ORDER; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(400); }
+};
+class ObSysVarSlaveSqlVerifyChecksum : public ObBoolSysVar
+{
+public:
+  ObSysVarSlaveSqlVerifyChecksum() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_SQL_VERIFY_CHECKSUM; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(401); }
+};
+class ObSysVarSlaveTransactionRetries : public ObIntSysVar
+{
+public:
+  ObSysVarSlaveTransactionRetries() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_TRANSACTION_RETRIES; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(402); }
+};
+class ObSysVarSqlSlaveSkipCounter : public ObIntSysVar
+{
+public:
+  ObSysVarSqlSlaveSkipCounter() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SQL_SLAVE_SKIP_COUNTER; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(403); }
+};
+class ObSysVarInnodbForceRecovery : public ObIntSysVar
+{
+public:
+  ObSysVarInnodbForceRecovery() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_FORCE_RECOVERY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(404); }
+};
+class ObSysVarSkipSlaveStart : public ObBoolSysVar
+{
+public:
+  ObSysVarSkipSlaveStart() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SKIP_SLAVE_START; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(405); }
+};
+class ObSysVarSlaveLoadTmpdir : public ObVarcharSysVar
+{
+public:
+  ObSysVarSlaveLoadTmpdir() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_LOAD_TMPDIR; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(406); }
+};
+class ObSysVarSlaveSkipErrors : public ObVarcharSysVar
+{
+public:
+  ObSysVarSlaveSkipErrors() : ObVarcharSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_SKIP_ERRORS; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(407); }
+};
 
 
 class ObSysVarFactory
@@ -2523,7 +3029,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 239;
+  const static int64_t OB_SYS_VARS_COUNT = 309;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
