@@ -746,6 +746,16 @@ int ObTxRedoLog::ob_admin_dump(memtable::ObMemtableMutatorIterator *iter_ptr,
           arg.writer_ptr_->dump_string(to_cstring(iter_ptr->get_table_lock_row()));
           break;
         }
+        case memtable::MutatorType::MUTATOR_ROW_EXT_INFO: {
+          arg.writer_ptr_->dump_key("ExtInfo");
+          arg.writer_ptr_->start_object();
+          arg.log_stat_->ext_info_log_count_++;
+          if (OB_FAIL(format_mutator_row_(iter_ptr->get_mutator_row(), arg))) {
+            TRANS_LOG(WARN, "format ext info mutator row failed", K(ret));
+          }
+          arg.writer_ptr_->end_object();
+          break;
+        }
         default: {
           arg.writer_ptr_->dump_key("ERROR:unknown mutator type");
           const int64_t mutator_type = static_cast<int64_t>(iter_ptr->get_row_head().mutator_type_);

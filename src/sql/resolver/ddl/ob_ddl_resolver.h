@@ -564,6 +564,11 @@ protected:
   int check_skip_index(share::schema::ObTableSchema &table_schema);
   int resolve_lob_inrow_threshold(const ParseNode *option_node, const bool is_index_option);
 
+  int resolve_lob_storage_parameters(const ParseNode *node);
+  int resolve_lob_storage_parameter(share::schema::ObColumnSchemaV2 &column, const ParseNode &param_node);
+  int resolve_lob_chunk_size(const ParseNode &size_node, int64_t &lob_chunk_size);
+  int resolve_lob_chunk_size(share::schema::ObColumnSchemaV2 &column, const ParseNode &lob_chunk_size_node);
+
   /*
   int resolve_generated_column_definition(
       share::schema::ObColumnSchemaV2 &column,

@@ -292,7 +292,8 @@ struct VecTCHashCalc<VEC_TC_JSON, HashMethod, hash_v2>
     } else if (OB_FAIL(str_iter.get_full_data(j_bin_str))) {
       COMMON_LOG(WARN, "Lob: str iter get full data failed", K(ret));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBinCtx ctx;
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), &ctx);
       ObIJsonBase *j_base = &j_bin;
       if (j_bin_str.length() == 0) {
         res = seed;
@@ -681,8 +682,10 @@ struct VecTCCmpCalc<VEC_TC_JSON, VEC_TC_JSON>
     } else if (OB_FAIL(r_instr_iter.get_full_data(r_data))) {
       COMMON_LOG(WARN, "Lob: get right lob str iter full data failed ", K(ret), K(r_instr_iter));
     } else {
-      ObJsonBin j_bin_l(l_data.ptr(), l_data.length());
-      ObJsonBin j_bin_r(r_data.ptr(), r_data.length());
+      ObJsonBinCtx ctx_l;
+      ObJsonBinCtx ctx_r;
+      ObJsonBin j_bin_l(l_data.ptr(), l_data.length(), &ctx_l);
+      ObJsonBin j_bin_r(r_data.ptr(), r_data.length(), &ctx_r);
       ObIJsonBase *j_base_l = &j_bin_l;
       ObIJsonBase *j_base_r = &j_bin_r;
 

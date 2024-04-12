@@ -120,9 +120,7 @@
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_libxml2_sax_handler.h"
-#endif
 #include "ob_check_params.h"
 
 using namespace oceanbase::lib;
@@ -664,11 +662,9 @@ void ObServer::destroy()
     sql_engine_.destroy();
     FLOG_INFO("sql engine destroyed");
 
-#ifdef OB_BUILD_ORACLE_XML
     FLOG_INFO("begin to destroy xml ctx");
     ObLibXml2SaxHandler::destroy();
     FLOG_INFO("xml ctx destroyed");
-#endif
 
     FLOG_INFO("begin to destroy pl engine");
     pl_engine_.destory();
@@ -2579,11 +2575,9 @@ int ObServer::init_sql()
     }
   }
 
-#ifdef OB_BUILD_ORACLE_XML
   if (OB_SUCC(ret)) {
     ObLibXml2SaxHandler::init();
   }
-#endif
 
   if (OB_SUCC(ret)) {
     LOG_INFO("init sql done");

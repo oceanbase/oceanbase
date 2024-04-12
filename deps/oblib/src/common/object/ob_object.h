@@ -527,6 +527,7 @@ struct ObLobId
 
 struct ObLobDataOutRowCtx
 {
+  static const int64_t OUTROW_LOB_CHUNK_SIZE_UNIT = 1024; // 1KB
   enum OpType
   {
     SQL = 0, // all sql op
@@ -539,10 +540,10 @@ struct ObLobDataOutRowCtx
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
-      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0)
+      del_seq_no_cnt_(0), modified_len_(0), first_meta_offset_(0), chunk_size_(0)
   {}
   TO_STRING_KV(K_(is_full), K_(op), K_(offset), K_(check_sum), K_(seq_no_st), K_(seq_no_cnt),
-    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset));
+    K_(del_seq_no_cnt), K_(modified_len), K_(first_meta_offset), K_(chunk_size));
   uint64_t is_full_ : 1;
   uint64_t op_ : 8;
   uint64_t offset_ : 55;
@@ -553,6 +554,9 @@ struct ObLobDataOutRowCtx
   uint64_t modified_len_;
   uint32_t first_meta_offset_ : 24;
   uint32_t chunk_size_ : 8;   // unit is kb
+
+  bool is_diff() const { return OpType::DIFF == op_; }
+  int64_t get_real_chunk_size() const;
 };
 
 struct ObLobData
@@ -925,6 +929,7 @@ public:
   static const uint32_t MEM_LOB_EXTERN_RETRYINFO_LEN = sizeof(ObMemLobRetryInfo);
   static const uint16_t MEM_LOB_EXTERN_SIZE_LEN = sizeof(uint16_t);
   static const uint32_t MEM_LOB_ADDR_LEN = 0; // reserved for temp lob address
+  static const int64_t DISK_LOB_OUTROW_FULL_SIZE = sizeof(ObLobCommon) + sizeof(ObLobData) + sizeof(ObLobDataOutRowCtx) + sizeof(uint64_t);
 
   ObLobLocatorV2() : ptr_(NULL), size_(0), has_lob_header_(true) {}
   ObLobLocatorV2(char *loc_ptr, uint32_t loc_size, uint32_t has_lob_header = true) :
@@ -1051,6 +1056,7 @@ public:
   int get_location_info(ObMemLobLocationInfo *&location_info) const;
   int get_retry_info(ObMemLobRetryInfo *&retry_info) const;
   int get_real_locator_len(int64_t &real_len) const;
+  int get_chunk_size(int64_t &chunk_size) const;
 
   bool is_empty_lob() const;
   bool is_inrow() const;

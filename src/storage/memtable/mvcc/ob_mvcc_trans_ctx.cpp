@@ -234,6 +234,7 @@ void ObTransCallbackMgr::reset()
   callback_remove_for_remove_memtable_count_ = 0;
   callback_remove_for_fast_commit_count_ = 0;
   callback_remove_for_rollback_to_count_ = 0;
+  callback_ext_info_log_count_ = 0;
   pending_log_size_ = 0;
   flushed_log_size_ = 0;
 }
@@ -2149,11 +2150,13 @@ void ObTransCallbackMgr::print_statistics(char *buf, const int64_t buf_len, int6
   }
   common::databuff_printf(buf, buf_len, pos,
                           "tx_end=%ld, rollback_to=%ld, "
-                          "fast_commit=%ld, remove_memtable=%ld]",
+                          "fast_commit=%ld, remove_memtable=%ld, "
+                          "ext_info_log=%ld]",
                           get_callback_remove_for_trans_end_count(),
                           get_callback_remove_for_rollback_to_count(),
                           get_callback_remove_for_fast_commit_count(),
-                          get_callback_remove_for_remove_memtable_count());
+                          get_callback_remove_for_remove_memtable_count(),
+                          get_callback_ext_info_log_count());
   if (!need_merge_) {
     common::databuff_printf(buf, buf_len, pos,
     " detail:[(log_epoch,length,logged,synced,appended,removed,unlog_removed,branch_removed)|");

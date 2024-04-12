@@ -14,6 +14,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array.h"
+#include "share/ob_json_access_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
@@ -214,7 +215,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
     } else if (dst_type == ObJsonType) {
-      if (OB_FAIL(j_arr.get_raw_binary(res_string, &temp_allocator))) {
+      if (OB_FAIL(ObJsonWrapper::get_raw_binary(&j_arr, res_string, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
       }
     } else {
@@ -284,7 +285,7 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (ObJsonParser::is_json_doc_over_depth(j_arr.depth())) {
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
-    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: json get binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));

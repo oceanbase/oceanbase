@@ -1729,7 +1729,8 @@ DEF_GEO_FUNCS(ObGeometryType, string, ObString);
       } else if (OB_FAIL(lob.get_inrow_data(j_bin_str))) {                           \
         COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(lob));                  \
       } else {                                                                       \
-        ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());                        \
+        ObJsonBinCtx ctx;                                                            \
+        ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), &ctx);                  \
         ObIJsonBase *j_base = &j_bin;                                                \
         if (j_bin_str.length() == 0 || param.is_null()) {                            \
           res = hash;                                                                \

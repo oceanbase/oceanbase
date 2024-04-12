@@ -45,6 +45,7 @@ namespace storage
 {
 class ObLsmtTransNode;
 class ObFreezer;
+class ObExtInfoCallback;
 }
 
 using namespace transaction::tablelock;
@@ -78,6 +79,8 @@ public: // for mvcc engine invoke
   virtual void old_row_free(void *row) = 0;
   virtual void *alloc_mvcc_row_callback() = 0;
   virtual void free_mvcc_row_callback(ObITransCallback *cb) = 0;
+  virtual storage::ObExtInfoCallback *alloc_ext_info_callback() = 0;
+  virtual void free_ext_info_callback(ObITransCallback *cb) = 0;
   virtual common::ObIAllocator &get_query_allocator() = 0;
   virtual void set_conflict_trans_id(const uint32_t descriptor)
   { UNUSED(descriptor); }
@@ -168,6 +171,13 @@ public:
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
       const share::SCN scn);
+  int register_ext_info_commit_cb(
+      const int64_t timeout,
+      const blocksstable::ObDmlFlag dml_flag,
+      transaction::ObTxDesc *tx_desc,
+      transaction::ObTxSEQ &parent_seq_no,
+      ObObj &index_data,
+      ObObj &ext_info_data);
 public:
   virtual void reset()
   {

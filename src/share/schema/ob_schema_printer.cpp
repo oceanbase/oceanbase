@@ -434,6 +434,9 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             }
           }
         }
+        if (OB_SUCC(ret) && !is_oracle_mode && OB_FAIL(print_column_lob_params(*col, buf, buf_len, pos))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print lob params", K(ret));
+        }
         if (OB_SUCC(ret) && !is_oracle_mode && 0 < strlen(col->get_comment())) {
           if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COMMENT '%s'", to_cstring(ObHexEscapeSqlStr(col->get_comment_str()))))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print comment", K(ret));
@@ -5586,6 +5589,24 @@ int ObSchemaPrinter::print_view_define_str(char* buf,
         SHARE_SCHEMA_LOG(WARN, "fail to print view define str, get unexpected state", K(ret), K(cursor), K(state));
       }
     }
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::print_column_lob_params(const ObColumnSchemaV2 &column_schema,
+                                             char* buf,
+                                             const int64_t& buf_len,
+                                             int64_t& pos) const
+{
+  int ret = OB_SUCCESS;
+  if (strict_compat_ || column_schema.is_shadow_column() || column_schema.is_hidden()) {
+    // do nothing
+  } else if (! column_schema.is_json()) {
+    // do nothing
+  } else if (column_schema.get_lob_chunk_size() == OB_DEFAULT_LOB_CHUNK_SIZE) {
+    // default value not display
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " CHUNK '%ldKB'", column_schema.get_lob_chunk_size()/ObLobDataOutRowCtx::OUTROW_LOB_CHUNK_SIZE_UNIT))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print column", K(ret), K(column_schema));
   }
   return ret;
 }

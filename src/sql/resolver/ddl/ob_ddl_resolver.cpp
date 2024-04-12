@@ -2274,6 +2274,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         ret = resolve_lob_inrow_threshold(option_node, is_index_option);
         break;
       }
+      case T_LOB_STORAGE_CLAUSE : {
+        ret = resolve_lob_storage_parameters(option_node);
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -3531,6 +3535,13 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
         }
         break;
       }
+      case T_LOB_CHUNK_SIZE:
+      case T_CONSTR_LOB_CHUNK_SIZE: {
+        if (OB_FAIL(resolve_lob_chunk_size(column, *attr_node))) {
+          SQL_RESV_LOG(WARN, "fail to resolve lob chunk size", K(ret), K(attr_node->type_));
+        }
+        break;
+      }
       default:  // won't be here
         ret = OB_ERR_PARSER_SYNTAX;
         SQL_RESV_LOG(WARN, "Wrong column attribute", K(ret), K(attr_node->type_));
@@ -3855,6 +3866,201 @@ int ObDDLResolver::resolve_srid_node(share::schema::ObColumnSchemaV2 &column,
     }
   }
 
+  return ret;
+}
+
+int ObDDLResolver::resolve_lob_storage_parameters(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_data_version = 0;
+  ObColumnSchemaV2 *column_schema = nullptr;
+  ObString column_name;
+  ObObjType type = ObObjType::ObNullType;
+  if (OB_ISNULL(schema_checker_) || OB_ISNULL(stmt_) ||
+      OB_ISNULL(session_info_) || OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "unexpected null value", K(ret), K(schema_checker_),
+                 K(stmt_), K(session_info_), K(node));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    SQL_RESV_LOG(WARN, "get tenant data version failed", KR(ret));
+  } else if (! ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "chunk size attribute not support in current version", KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "chunk size attribute not support in current version");
+  } else if (is_oracle_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "lob chunk size column attribute is not supported in oracle mode", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "chunk size column attribute in oracle mode");
+  } else if (T_LOB_STORAGE_CLAUSE != node->type_) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(node->type_));
+  } else if (node->num_child_ != 3) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "num_child_ not correct", K(ret), K(node->num_child_));
+  } else if (OB_ISNULL(node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "type node is null", K(ret), K(node));
+  } else if (OB_FALSE_IT(type = static_cast<ObObjType>(node->children_[0]->value_))) {
+  } else if (! ob_is_json(type)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "type is not support", K(ret), K(type), K(node));
+  } else if (OB_ISNULL(node->children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "column name node is null", K(ret), K(node));
+  } else if (OB_FALSE_IT(column_name.assign_ptr(node->children_[1]->str_value_, node->children_[1]->str_len_))) {
+  } else if (OB_ISNULL(node->children_[2])) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "param node is null", K(ret), K(node));
+  } else if (node->children_[2]->num_child_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "param node is empty", K(ret), K(node), K(node->children_[2]->num_child_));
+  } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
+    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+    column_schema = const_cast<ObColumnSchemaV2*>(create_table_stmt->get_column_schema(column_name));
+  } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
+    ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
+    ObTableSchema &tbl_schema = alter_table_stmt->get_alter_table_schema();
+    for (ObTableSchema::const_column_iterator iter = tbl_schema.column_begin();
+          iter != tbl_schema.column_end() && nullptr == column_schema; ++iter) {
+      ObColumnSchemaV2 &column = (**iter);
+      if (column.get_column_name_str().case_compare(column_name) == 0) {
+        const AlterColumnSchema &alter_col_schema = static_cast<const AlterColumnSchema &>(column);
+        if (alter_col_schema.alter_type_ != OB_DDL_ADD_COLUMN) {
+          ret = OB_NOT_SUPPORTED;
+          SQL_RESV_LOG(WARN, "lob chunk size column attribute is not supported modify",
+              KR(ret), K(alter_col_schema));
+        } else {
+          column_schema = &column;
+        }
+      }
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "not supported statement for lob storage parameter", K(ret), K(stmt_->get_stmt_type()));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(column_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "column not found", K(ret), K(type), K(column_name));
+  } else if (column_schema->get_data_type() != type) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "column type node match", K(ret), K(type), K(*column_schema));
+  } else {
+    for (int64_t i = 0; i < node->children_[2]->num_child_ && OB_SUCC(ret); i ++) {
+      if (OB_FAIL(resolve_lob_storage_parameter(*column_schema, *node->children_[2]->children_[i]))) {
+        SQL_RESV_LOG(WARN, "resolve_lob_storage_parameter fail", K(ret), K(type), K(*column_schema));
+      }
+    }
+  }
+  return ret;
+}
+int ObDDLResolver::resolve_lob_storage_parameter(share::schema::ObColumnSchemaV2 &column, const ParseNode &param_node)
+{
+  int ret = OB_SUCCESS;
+  switch (param_node.type_) {
+    case T_LOB_CHUNK_SIZE:
+    case T_CONSTR_LOB_CHUNK_SIZE: {
+      if (OB_FAIL(resolve_lob_chunk_size(column, param_node))) {
+        SQL_RESV_LOG(WARN, "fail to resolve lob meta size", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "UnKnown type", K(ret), K(param_node.type_));
+      break;
+    }
+  }
+  return ret;
+}
+int ObDDLResolver::resolve_lob_chunk_size(const ParseNode &size_node, int64_t &lob_chunk_size)
+{
+  int ret = OB_SUCCESS;
+  const char *str = nullptr;
+  int64_t len = 0;
+  int64_t value = 0;
+  bool valid = false;
+  ObString unit;
+  if (T_CONSTR_LOB_CHUNK_SIZE != size_node.type_ && T_LOB_CHUNK_SIZE != size_node.type_) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "invalid argument", KR(ret), K(size_node.type_));
+  } else if (size_node.num_child_ != 1
+      || OB_ISNULL(size_node.children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "invalid node", KR(ret));
+  } else if (T_LOB_CHUNK_SIZE == size_node.type_) {
+    lob_chunk_size = size_node.children_[0]->value_ * 1024;
+  } else if (OB_ISNULL(str = size_node.children_[0]->str_value_)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "size node value is null", KR(ret), K(size_node.type_));
+  } else {
+    int64_t i = 0;
+    len = size_node.children_[0]->str_len_;
+    // calc integer part
+    for (; i < len; ++i) {
+      char c = str[i];
+      if (isdigit(c)) {
+        value = value * 10 + (c - '0');
+      } else {
+        break;
+      }
+    }
+    // cacl unit part, only support kb
+    unit.assign_ptr(str + i, len - i);
+    if (i >= len) {
+      // if no unit, use kb as unit
+      valid = true;
+      value <<= 10;
+    } else if (0 == unit.case_compare("kb")
+        || 0 == unit.case_compare("k")) {
+      value <<= 10;
+      valid = true;
+    }
+    if (valid) {
+      lob_chunk_size = value;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN, "size input is invalid", KR(ret), K(ObString(len, str)));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (lob_chunk_size < OB_MIN_LOB_CHUNK_SIZE || lob_chunk_size > OB_MAX_LOB_CHUNK_SIZE) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_RESV_LOG(WARN, "lob meta size invalid", KR(ret), K(lob_chunk_size));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "invalid CHUNK LOB storage option value");
+  }
+  return ret;
+}
+int ObDDLResolver::resolve_lob_chunk_size(
+    share::schema::ObColumnSchemaV2 &column,
+    const ParseNode &lob_chunk_size_node)
+{
+  int ret = OB_SUCCESS;
+  int64_t lob_chunk_size = 0;
+  uint64_t tenant_id = session_info_->get_effective_tenant_id();
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    SQL_RESV_LOG(WARN, "get tenant data version failed", KR(ret));
+  } else if (! ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "lob chunk size column attribute is not supported in oracle mode",
+        KR(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "chunk size attribute not support in current version");
+  } else if (is_oracle_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "lob chunk size column attribute is not supported in oracle mode",
+        KR(ret), K(lob_chunk_size_node.type_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "chunk size column attribute in oracle mode");
+  } else if (! column.is_json()) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_RESV_LOG(WARN, "lob chunk size column attribute is only supported for json",
+        KR(ret), K(lob_chunk_size_node.type_), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "chunk size column attribute only supported for json, others");
+  } else if (OB_FAIL(resolve_lob_chunk_size(lob_chunk_size_node, lob_chunk_size))) {
+    SQL_RESV_LOG(WARN, "resolve size node fail", KR(ret));
+  } else {
+    column.set_lob_chunk_size(lob_chunk_size);
+  }
   return ret;
 }
 

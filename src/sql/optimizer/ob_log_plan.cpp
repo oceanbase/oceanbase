@@ -2713,6 +2713,46 @@ int ObLogPlan::init_width_estimation_info(const ObDMLStmt *stmt)
   return ret;
 }
 
+int ObLogPlan::init_default_val_json(ObRelIds& depend_table_set,
+                                     ObRawExpr*& default_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(default_expr)) {
+    if (default_expr->get_relation_ids().is_empty()) {
+      //do nothing
+    } else if (OB_FAIL(depend_table_set.add_members(default_expr->get_relation_ids()))) {
+      LOG_WARN("failed to assign table ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::init_json_table_column_depend_info(ObRelIds& depend_table_set,
+                                                   TableItem* json_table,
+                                                   const ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ColumnItem* column_item = NULL;
+  common::ObArray<ColumnItem> stmt_column_items;
+  if (OB_ISNULL(stmt) || OB_ISNULL(json_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (OB_FAIL(stmt->get_column_items(json_table->table_id_, stmt_column_items))) {
+    LOG_WARN("fail to get column_items", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt_column_items.count(); i++) {
+    if (json_table->table_id_ != stmt_column_items.at(i).table_id_) {
+    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_value_expr_)
+                && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_value_expr_))) {
+      LOG_WARN("fail to init error default value depend info", K(ret));
+    } else if (OB_NOT_NULL(stmt_column_items.at(i).default_empty_expr_)
+                && OB_FAIL(init_default_val_json(depend_table_set, stmt_column_items.at(i).default_empty_expr_))) {
+      LOG_WARN("fail to init error default value depend info", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_items)
 {
   int ret = OB_SUCCESS;
@@ -2736,6 +2776,8 @@ int ObLogPlan::init_json_table_depend_info(const ObIArray<TableItem*> &table_ite
       //do thing
     } else if (OB_FAIL(info.depend_table_set_.add_members(table->json_table_def_->doc_expr_->get_relation_ids()))) {
       LOG_WARN("failed to assign table ids", K(ret));
+    } else if (OB_FAIL(init_json_table_column_depend_info(info.depend_table_set_, table, stmt))) { // deal column items default value
+      LOG_WARN("fail to init json table default value depend info", K(ret));
     } else if (OB_FALSE_IT(info.table_idx_ = stmt->get_table_bit_index(table->table_id_))) {
     } else if (OB_FAIL(table_depend_infos_.push_back(info))) {
       LOG_WARN("failed to push back info", K(ret));
@@ -4174,7 +4216,12 @@ int ObLogPlan::allocate_json_table_path(JsonTablePath *json_table_path,
       LOG_WARN("failed to compute property", K(ret));
     } else if (OB_FAIL(op->pick_out_startup_filters())) {
       LOG_WARN("failed to pick out startup filters", K(ret));
+    } else if (OB_FAIL(op->set_namespace_arr(tbl_def->namespace_arr_))) {
+      LOG_WARN("fail to get ns array from table def", K(ret));
+    } else if (OB_FAIL(op->set_column_param_default_arr(json_table_path->column_param_default_exprs_))) {
+      LOG_WARN("fail to get default array from table def", K(ret));
     } else {
+      op->set_table_type(tbl_def->table_type_);
       out_access_path_op = op;
     }
   }

@@ -350,6 +350,20 @@ int ObLogPartTransParser::parse_stmts_(
             ++row_index;
           }
         } // need_ignore_row=false
+      } else if (MutatorType::MUTATOR_ROW_EXT_INFO == mutator_type) {
+        if (OB_FAIL(handle_mutator_ext_info_log_(
+            tenant,
+            tablet_id,
+            redo_data,
+            redo_data_len,
+            pos,
+            task,
+            redo_log_entry_task))) {
+          LOG_ERROR("handle_mutator_ext_info_log_ failed", KR(ret),
+              "tls_id", task.get_tls_id(),
+              "trans_id", task.get_trans_id(),
+              K(tablet_id), K(redo_log_entry_task), K(row_index));
+        }
       } else {
         ret = OB_NOT_SUPPORTED;
         LOG_ERROR("not support mutator type", KR(ret), K(mutator_type));
@@ -919,6 +933,105 @@ const transaction::ObTxSEQ &ObLogPartTransParser::get_row_seq_(PartTransTask &ta
 {
   //return task.is_cluster_version_before_320() ? row.sql_no_ : row.seq_no_;
   return row.seq_no_;
+}
+
+int ObLogPartTransParser::parse_ext_info_log_mutator_row_(
+    ObLogTenant *tenant,
+    const char *redo_data,
+    const int64_t redo_data_len,
+    int64_t &pos,
+    PartTransTask &part_trans_task,
+    ObLogEntryTask &redo_log_entry_task,
+    MutatorRow *&row,
+    bool &is_ignored)
+{
+  int ret = OB_SUCCESS;
+  is_ignored = false;
+  row = nullptr;
+  bool need_rollback = false;
+
+  if (OB_FAIL(alloc_mutator_row_(part_trans_task, redo_log_entry_task, row))) {
+    LOG_ERROR("alloc_mutator_row_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task));
+  } else if (OB_FAIL(row->deserialize(redo_data, redo_data_len, pos))) {
+    LOG_ERROR("deserialize mutator row fail", KR(ret), KPC(row), K(redo_data_len), K(pos));
+  } else if (OB_FAIL(check_row_need_rollback_(part_trans_task, *row, need_rollback))) {
+    LOG_ERROR("check_row_need_rollback_ failed", KR(ret), K(part_trans_task), K(redo_log_entry_task), KPC(row));
+  } else if (need_rollback) {
+    LOG_DEBUG("rollback row by RollbackToSavepoint",
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id(),
+        "row_seq_no", row->seq_no_);
+  } else if (part_trans_task.is_ddl_trans()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part tans task is ddl not expected", KR(ret), K(part_trans_task));
+  }
+
+  if (OB_SUCC(ret)) {
+    is_ignored = need_rollback;
+  }
+
+  if (OB_FAIL(ret) || is_ignored) {
+    free_mutator_row_(part_trans_task, redo_log_entry_task, row);
+    row = nullptr;
+  } else if (OB_ISNULL(row)) {
+    ret = OB_INVALID_DATA;
+  }
+
+  return ret;
+}
+
+int ObLogPartTransParser::handle_mutator_ext_info_log_(
+    ObLogTenant *tenant,
+    const ObTabletID &tablet_id,
+    const char *redo_data,
+    const int64_t redo_data_len,
+    int64_t &pos,
+    PartTransTask &part_trans_task,
+    ObLogEntryTask &redo_log_entry_task)
+{
+  int ret = OB_SUCCESS;
+  bool is_ignored = false;
+  MutatorRow *row = nullptr;
+  if (OB_FAIL(parse_ext_info_log_mutator_row_(
+      tenant,
+      redo_data,
+      redo_data_len,
+      pos,
+      part_trans_task,
+      redo_log_entry_task,
+      row,
+      is_ignored))) {
+    LOG_ERROR("parse_mutator_row_ failed", KR(ret),
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id(),
+        K(tablet_id));
+  } else if (! is_ignored) {
+    const int64_t commit_version = part_trans_task.get_trans_commit_version();
+    const uint64_t tenant_id = tenant->get_tenant_id();
+    const transaction::ObTransID &trans_id = part_trans_task.get_trans_id();
+    const uint64_t table_id = 0;
+    ObLobId lob_id; // empty
+    transaction::ObTxSEQ row_seq_no = row->seq_no_;
+    ObString ext_info_log;
+    ObCDCLobAuxMetaStorager &lob_aux_meta_storager = TCTX.lob_aux_meta_storager_;
+    LobAuxMetaKey lob_aux_meta_key(commit_version, tenant_id, trans_id, table_id, lob_id, row_seq_no);
+    if (OB_FAIL(row->parse_ext_info_log(ext_info_log))) {
+      LOG_WARN("parse_ext_info_log fail", KR(ret));
+    } else if (OB_FAIL(lob_aux_meta_storager.put(lob_aux_meta_key, "ext_info_log", ext_info_log.ptr(), ext_info_log.length()))) {
+      LOG_ERROR("lob_aux_meta_storager put failed", KR(ret), K(lob_aux_meta_key));
+    } else {
+      LOG_DEBUG("put ext info log success", K(lob_aux_meta_key), "log_length", ext_info_log.length());
+    }
+  } else {
+    LOG_INFO("ext info log is ignored", K(tablet_id),
+        "tenant_id", tenant->get_tenant_id(),
+        "tls_id", part_trans_task.get_tls_id(),
+        "trans_id", part_trans_task.get_trans_id());
+  }
+  if (OB_NOT_NULL(row)) {
+    free_mutator_row_(part_trans_task, redo_log_entry_task, row);
+  }
+  return ret;
 }
 
 }

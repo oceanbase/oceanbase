@@ -78,14 +78,6 @@ if(OB_BUILD_TDE_SECURITY)
   )
 endif()
 
-if(OB_BUILD_ORACLE_XML)
-  target_include_directories(
-    oblib_base_base_base INTERFACE
-    ${CMAKE_SOURCE_DIR}/close_modules/xml
-    ${CMAKE_SOURCE_DIR}/close_modules/xml/deps/oblib/src/
-  )
-endif()
-
 if(OB_BUILD_AUDIT_SECURITY)
   target_include_directories(
     oblib_base_base_base INTERFACE

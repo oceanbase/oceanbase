@@ -7073,6 +7073,24 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
             }
           }
         }
+        if (OB_FAIL(ret)) {
+        } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
+#ifdef OB_BUILD_ORACLE_PL
+          if (ObPlJsonUtil::is_pl_jsontype(actually_type.get_user_type_id())) {
+            OZ (check_composite_compatible(current_block_->get_namespace(),
+                                          expected_type.get_user_type_id(),
+                                          actually_type.get_user_type_id(),
+                                          is_legal));
+          } else {
+#endif
+            OZ (check_composite_compatible(current_block_->get_namespace(),
+                                          actually_type.get_user_type_id(),
+                                          expected_type.get_user_type_id(),
+                                          is_legal));
+          }
+#ifdef OB_BUILD_ORACLE_PL
+        }
+#endif
       } else if (actually_type.is_composite_type() || expected_type.is_composite_type()) {
         if (actually_type.is_obj_type()
              && ObExtendType == actually_type.get_data_type()->get_obj_type()) {
@@ -9507,7 +9525,8 @@ bool ObPLResolver::is_json_type_compatible(const ObUserDefinedType *left, const 
 {
 #ifdef OB_BUILD_ORACLE_PL
   return (ObPlJsonUtil::is_pl_json_element_type(left->get_user_type_id())
-          && ObPlJsonUtil::is_pl_json_object_type(right->get_user_type_id())) ;
+          && (ObPlJsonUtil::is_pl_json_object_type(right->get_user_type_id())
+          || ObPlJsonUtil::is_pl_json_array_type(right->get_user_type_id()))) ;
 #else
   return false;
 #endif
@@ -9788,7 +9807,8 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
 #ifdef OB_BUILD_ORACLE_PL
         // error code compiltable with oracle
         if (ObPlJsonUtil::is_pl_json_object_type(expected_type->get_user_type_id())
-            && ObPlJsonUtil::is_pl_json_element_type(expr->get_result_type().get_udt_id())) {
+            && ObPlJsonUtil::is_pl_json_element_type(expr->get_result_type().get_udt_id())
+            && ObPlJsonUtil::is_pl_json_array_type(expr->get_result_type().get_udt_id())) {
           ret = OB_ERR_EXPRESSION_WRONG_TYPE;
         }
 #endif
@@ -11471,7 +11491,7 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   }
   if (OB_SUCC(ret)) {
     int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
-    int64_t member_cnt = object_type->get_member_count();
+    int64_t member_cnt = object_type->is_opaque_type() ?  0 : object_type->get_member_count();
     bool is_opaque_cons_and_no_self_param
       = object_type->is_opaque_type() && (param_cnt - 2) == member_cnt && udf_info.is_udf_udt_cons();
 

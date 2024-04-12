@@ -109,7 +109,7 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     if (ret == OB_ERR_JSON_SYNTAX_ERROR) is_cover_by_error = true;
     LOG_WARN("get_json_doc failed", K(ret));
   // if is scalar, must be json type
-  } else if(!is_null_result && ((is_json_scalar(json_target) && expr.args_[0]->datum_meta_.type_ != ObJsonType)
+  } else if(!is_null_result  && ((is_json_scalar(json_target) && expr.args_[0]->datum_meta_.type_ != ObJsonType)
                               || (is_json_scalar(json_candidate) && expr.args_[1]->datum_meta_.type_ != ObJsonType))) {
     ret = OB_ERR_JSON_SYNTAX_ERROR;
     is_cover_by_error = true;
@@ -168,7 +168,7 @@ int ObExprJsonEqual::eval_json_equal(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       ret = OB_ERR_JSON_SYNTAX_ERROR;
     }
   } else if (is_null_result) {
-    res.set_null();
+    res.set_int(static_cast<int64_t>(false));
   } else {
     is_equal = (compare_res == 0);
     res.set_int(static_cast<int64_t>(is_equal));

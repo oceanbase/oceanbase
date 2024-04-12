@@ -122,6 +122,13 @@ bool ObLobCommon::operator!=(const ObLobCommon &other) const
   return !(operator==(other));
 }
 
+int64_t ObLobDataOutRowCtx::get_real_chunk_size() const
+{
+  // ObLobDataOutRowCtx::chunk_size_ only have 8 bit, range is 0~255
+  // and chunk size can not be zero, so if chunk size is 256KB, ObLobDataOutRowCtx::chunk_size_ is zero
+  return chunk_size_ == 0 ? OB_MAX_LOB_CHUNK_SIZE : chunk_size_ * OUTROW_LOB_CHUNK_SIZE_UNIT;
+}
+
 void ObLobData::reset()
 {
   id_.reset();
@@ -805,6 +812,35 @@ int ObLobLocatorV2::get_real_locator_len(int64_t &real_len) const
     } else {
       real_len += disk_loc->get_handle_size(0);
     }
+  }
+  return ret;
+}
+
+int ObLobLocatorV2::get_chunk_size(int64_t &chunk_size) const
+{
+  int ret = OB_SUCCESS;
+  ObLobCommon *disk_loc = nullptr;
+  if (! has_lob_header_ || size_ == 0 || OB_ISNULL(ptr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "no locator or is null", K(ret), K(has_lob_header_), K(size_), KP(ptr_));
+  } else if (! is_persist_lob()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "non-persist_lob should not call this function", K(ret), KPC(this));
+  } else if (is_inrow()) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "inrow-persist_lob should not call this function", K(ret), KPC(this));
+  } else if (OB_FAIL(get_disk_locator(disk_loc))) {
+    COMMON_LOG(WARN, "get disk locator fail", K(ret), KPC(this));
+  } else if(((uintptr_t)disk_loc - (uintptr_t)ptr_) < DISK_LOB_OUTROW_FULL_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "size overflow", K(ret), KPC(this), KP(disk_loc), KP(ptr_), "left_size", ((uintptr_t)disk_loc - (uintptr_t)ptr_));
+  } else if (! disk_loc ->is_init_) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "disk lob not init", K(ret), KPC(this), KPC(disk_loc));
+  } else {
+    const ObLobData *lob_data = reinterpret_cast<const ObLobData*>(disk_loc->buffer_);
+    const ObLobDataOutRowCtx *ctx = reinterpret_cast<const ObLobDataOutRowCtx*>(lob_data->buffer_);
+    chunk_size = ctx->get_real_chunk_size();
   }
   return ret;
 }

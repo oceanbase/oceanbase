@@ -310,7 +310,8 @@ bool need_calc_json(ObItemType item_type)
 {
   bool bool_ret = false;
   if (T_FUN_SYS < item_type && item_type < T_FUN_SYS_END) {
-    if (T_FUN_SYS_JSON_OBJECT <= item_type && item_type <= T_FUN_JSON_OBJECTAGG) {
+    if ((T_FUN_SYS_JSON_OBJECT <= item_type && item_type <= T_FUN_JSON_OBJECTAGG)
+      || (T_FUN_SYS_JSON_SCHEMA_VALID <= item_type && item_type <= T_FUN_SYS_JSON_APPEND)) {
       bool_ret = true; // json calc type is decided by json functions
     }
   }

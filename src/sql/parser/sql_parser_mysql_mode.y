@@ -375,7 +375,7 @@ END_P SET_VAR DELIMITER
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
-%type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option
+%type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
 %type <node> opt_force
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
 %type <node> create_database_stmt drop_database_stmt alter_database_stmt use_database_stmt
@@ -6540,6 +6540,10 @@ not NULLX
   merge_nodes(opt_skip_index_type_list, result, T_COL_SKIP_INDEX_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_COL_SKIP_INDEX, 1, opt_skip_index_type_list);
 }
+| lob_chunk_size
+{
+  $$ = $1;
+}
 ;
 
 opt_column_default_value_list:
@@ -6880,6 +6884,10 @@ TABLE_MODE opt_equal_mark STRING_VALUE
 {
   (void)($2); /*  make bison mute*/
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOB_INROW_THRESHOLD, 1, $3);
+}
+| lob_storage_clause
+{
+  $$ = $1;
 }
 ;
 
@@ -16169,6 +16177,18 @@ ADD COLUMN column_definition
 {
   merge_nodes($$, result, T_COLUMN_ADD, $3);
 }
+| ADD COLUMN '(' column_definition_list ')' lob_storage_clause
+{
+  ParseNode *column_node = NULL;
+  merge_nodes(column_node, result, T_COLUMN_ADD, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ADD_WITH_LOB_PARAMS, 2, column_node, $6);
+}
+| ADD '(' column_definition_list ')' lob_storage_clause
+{
+  ParseNode *column_node = NULL;
+  merge_nodes(column_node, result, T_COLUMN_ADD, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_ADD_WITH_LOB_PARAMS, 2, column_node, $5);
+}
 | DROP column_definition_ref opt_drop_behavior
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_COLUMN_DROP, 1, $2);
@@ -19903,6 +19923,48 @@ MIN_MAX
 }
 ;
 
+lob_chunk_size:
+CHUNK INTNUM
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOB_CHUNK_SIZE, 1, $2);
+}
+|
+CHUNK STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_LOB_CHUNK_SIZE, 1, $2);
+}
+;
+
+lob_storage_parameter:
+lob_chunk_size
+{
+  $$ = $1;
+}
+
+lob_storage_parameters:
+lob_storage_parameter
+{
+  $$ = $1;
+}
+|
+lob_storage_parameters lob_storage_parameter
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+lob_storage_clause:
+JSON '(' column_name ')' STORE AS '(' lob_storage_parameters ')'
+{
+  ParseNode *type_node = NULL;
+  malloc_terminal_node(type_node, result->malloc_pool_, T_INT);
+  type_node->value_ = T_JSON;
+  ParseNode *params = NULL;
+  merge_nodes(params, result, T_ARGUMENT_LIST, $8);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOB_STORAGE_CLAUSE, 3, type_node, $3, params);
+}
+;
+
 unreserved_keyword:
 unreserved_keyword_normal { $$=$1;}
 | unreserved_keyword_special { $$=$1;}
@@ -20527,6 +20589,7 @@ ACCOUNT
 |       STOP
 |       STORAGE
 |       STORAGE_FORMAT_VERSION
+|       STORE
 |       STORING
 |       STRONG
 |       STRING

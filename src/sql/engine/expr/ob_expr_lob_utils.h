@@ -207,7 +207,7 @@ public:
         str.assign_ptr(lob.get_inrow_data_ptr(), static_cast<int32_t>(lob.get_byte_size(datum.len_)));
       } else {
         const ObMemLobCommon *memlob = reinterpret_cast<const ObMemLobCommon*>(datum.ptr_);
-        if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0) {
+        if (datum.len_ != 0 && memlob->has_inrow_data_ && memlob->has_extern_ == 0 && (memlob->type_ != ObMemLobType::TEMP_DELTA_LOB)) {
           if (memlob->is_simple_) {
             str.assign_ptr(memlob->data_, static_cast<int32_t>(datum.len_ - sizeof(ObMemLobCommon)));
           } else {

@@ -25,11 +25,9 @@
 #include "lib/charset/ob_charset.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "observer/mysql/obmp_stmt_prexecute.h"
-#include "sql/engine/expr/ob_expr_xml_func_helper.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_util.h"
-#endif
+#include "sql/engine/expr/ob_expr_xml_func_helper.h"
 
 namespace oceanbase
 {

@@ -56,6 +56,7 @@ public:
                                              ObPLJsonBaseType *&jsontype);
   static int print_decimal(number::ObNumber &num, ObScale scale, ObJsonBuffer &j_buf);
   static int get_json_object(sql::ObExecContext &ctx, ObJsonNode*& json_val);
+  static int get_json_array(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int get_json_boolean(sql::ObExecContext &ctx, ObObj &data, ObJsonNode*& json_val);
   static int get_json_null(sql::ObExecContext &ctx, ObJsonNode*& json_val);
   static int set_on_error(sql::ObExecContext &ctx, sql::ParamStore &params, common::ObObj &result);

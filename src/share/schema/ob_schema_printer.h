@@ -487,6 +487,10 @@ public:
                             bool is_oracle_mode,
                             const ObString &sql) const;
 
+  int print_column_lob_params(const ObColumnSchemaV2 &column_schema,
+                             char* buf,
+                             const int64_t& buf_len,
+                             int64_t& pos) const;
   int print_table_definition_lob_params(const ObTableSchema &table_schema,
                                         char* buf,
                                         const int64_t& buf_len,

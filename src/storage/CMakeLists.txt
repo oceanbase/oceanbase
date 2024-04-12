@@ -778,6 +778,7 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_locator.cpp
   lob/ob_lob_util.cpp
   lob/ob_lob_rpc_struct.cpp
+  lob/ob_ext_info_callback.cpp
 )
 
 ob_set_subtarget(ob_storage mview

@@ -256,6 +256,8 @@ protected:
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
+  int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
+  int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;

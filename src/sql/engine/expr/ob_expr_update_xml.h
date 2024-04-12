@@ -15,17 +15,21 @@
 #define OCEANBASE_SQL_ENGINE_EXPR_OB_EXPR_UPDATE_XML_H
 
 #include "sql/engine/expr/ob_expr_operator.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_multi_mode_interface.h"
 #include "lib/xml/ob_xml_tree.h"
 #include "lib/xml/ob_xpath.h"
-#endif
 
 namespace oceanbase
 {
 
 namespace sql
 {
+
+enum ObUpdateXMLRetType: uint32_t {
+  ObRetInputStr,
+  ObRetNullType,
+  ObRetMax
+};
 
 class ObExprUpdateXml : public ObFuncExprOperator
 {
@@ -36,17 +40,20 @@ public:
                                 ObExprResType *types,
                                 int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const override;
-#ifdef OB_BUILD_ORACLE_XML
   static int eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
-#else
-  static int eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res) { return OB_NOT_SUPPORTED; }
-#endif
+  static int eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx,
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr)
                       const override;
-#ifdef OB_BUILD_ORACLE_XML
 private:
+  static int update_xml_tree_mysql(ObMulModeMemCtx* xml_mem_ctx,
+                                   ObString xml_target,
+                                   ObEvalCtx &ctx,
+                                   ObString &xpath_str,
+                                   ObIMulModeBase *&xml_tree,
+                                   ObUpdateXMLRetType &res_origin);
+  static int update_xml_child_text(ObXmlNode *old_node, ObXmlNode *text_node);
   static int update_xml_tree(ObMulModeMemCtx* xml_mem_ctx,
                              const ObExpr *expr,
                              ObEvalCtx &ctx,
@@ -80,7 +87,6 @@ private:
   static int remove_and_insert_element_node(ObXmlElement *ele_node, ObXmlNode *update_node, int64_t pos, bool is_remove);
   // for pi node
   static int update_pi_node(ObMulModeMemCtx* xml_mem_ctx, ObXmlNode *xml_node, const ObExpr *expr, ObEvalCtx &ctx);
-#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprUpdateXml);
 };

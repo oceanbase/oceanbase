@@ -333,7 +333,6 @@ public:
   int init(const uint64_t tenant_id);
   virtual void *old_row_alloc(const int64_t size) override;
   virtual void old_row_free(void *row) override;
-
   virtual common::ObIAllocator &get_query_allocator();
   virtual void inc_lock_for_read_retry_count();
   // When row lock conflict occurs in a remote execution, record the trans id in
@@ -447,6 +446,8 @@ public:
 public: // callback
   virtual void *alloc_mvcc_row_callback() override;
   virtual void free_mvcc_row_callback(ObITransCallback *cb) override;
+  virtual storage::ObExtInfoCallback *alloc_ext_info_callback() override;
+  virtual void free_ext_info_callback(ObITransCallback *cb) override;
   void *alloc_lock_link_node() { return mem_ctx_obj_pool_.alloc<transaction::tablelock::ObMemCtxLockOpLinkNode>(); }
   void free_lock_link_node(void *ptr) { mem_ctx_obj_pool_.free<transaction::tablelock::ObMemCtxLockOpLinkNode>(ptr); }
   void *alloc_table_lock_callback() { return mem_ctx_obj_pool_.alloc<transaction::tablelock::ObOBJLockCallback>(); }

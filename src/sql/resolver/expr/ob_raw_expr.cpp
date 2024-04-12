@@ -4049,6 +4049,16 @@ bool ObSysFunRawExpr::inner_same_as(
           get_extra() != expr.get_extra()) { // for calc_partition_id
         bool_ret = false;
       }
+
+      // for json partial update
+      // update json_test set j1 = json_replace(j2, '$[0]', 'xyz'), j2 = json_replace(j2, '$[0]', 'xyz') where pk=1;
+      // first and second value expr is same, but behavior is different
+      // so do not share expr
+      if ((T_FUN_SYS_JSON_REPLACE == get_expr_type() ||
+           T_FUN_SYS_JSON_SET == get_expr_type() ||
+           T_FUN_SYS_JSON_REMOVE == get_expr_type())) {
+        bool_ret = false;
+      }
     }
   } else if (expr.is_op_expr() && T_OP_CNN == expr.get_expr_type()) {
     //for cases which compares concat('xxx','xxx') with 'xxx'||'xxx'

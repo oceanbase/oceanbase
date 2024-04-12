@@ -1842,6 +1842,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         sql_info.ps_need_parameterized_ = false;
       } else if ((0 == func_name.case_compare("json_extract"))) {
         sql_info.ps_need_parameterized_ = false;
+      } else if ((0 == func_name.case_compare("json_schema_valid"))
+                || (0 == func_name.case_compare("json_schema_validation_report"))) {
+        const int64_t ARGS_NUMBER_TWO = 2;
+        bool mark_arr[ARGS_NUMBER_TWO] = {1, 0};
+        if (OB_FAIL(mark_args(node[1], mark_arr, ARGS_NUMBER_TWO, sql_info))) {
+          SQL_PC_LOG(WARN, "fail to mark arg", K(ret));
+        }
       }
     }
   } else if (T_OP_LIKE == tree->type_) {
@@ -1861,13 +1868,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     } else { /*do nothing*/ }
   } else if(T_FUN_SYS_JSON_VALUE == tree->type_) {
-    if (9 != tree->num_child_) {
+    if (10 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json value expr argument", K(ret), K(tree->num_child_)); 
     } else {
-      const int64_t ARGS_NUMBER_NINE = 9;
-      bool mark_arr[ARGS_NUMBER_NINE] = {0, 1, 1, 1, 1, 1, 1, 1, 1};
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_NINE, sql_info))) {
+      const int64_t ARGS_NUMBER_TEN = 10;
+      bool mark_arr[ARGS_NUMBER_TEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_TEN, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
       }
     }
@@ -1951,12 +1958,23 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
   } else if (T_JSON_TABLE_EXPRESSION == tree->type_) {
     if (5 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
-      SQL_PC_LOG(WARN, "invalid json mergepatch expr argument", K(ret), K(tree->num_child_));
+      SQL_PC_LOG(WARN, "invalid json table expr argument", K(ret), K(tree->num_child_));
     } else {
       const int64_t ARGS_NUMBER_FIVE = 5;
       bool mark_arr[ARGS_NUMBER_FIVE] = {0, 1, 1, 1, 1};
       if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_FIVE, sql_info))) {
-        SQL_PC_LOG(WARN, "fail to mark json mergepatch arg", K(ret));
+        SQL_PC_LOG(WARN, "fail to mark json table arg", K(ret));
+      }
+    }
+  } else if (T_XML_TABLE_EXPRESSION == tree->type_) {
+    if (6 != tree->num_child_) {
+      ret = OB_INVALID_ARGUMENT;
+      SQL_PC_LOG(WARN, "invalid xml table expr argument", K(ret), K(tree->num_child_));
+    } else {
+      const int64_t ARGS_NUMBER_SIX = 6;
+      bool mark_arr[ARGS_NUMBER_SIX] = {1, 1, 0, 1, 1, 1}; // because of namespace deal in resolve, so can not parameter
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_SIX, sql_info))) {
+        SQL_PC_LOG(WARN, "fail to mark xml table arg", K(ret));
       }
     }
   } else if (T_FUN_SYS_TREAT == tree->type_) {

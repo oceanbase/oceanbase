@@ -81,7 +81,9 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
     MEMCPY(buf, text, length);
     buf[length] = '\0';
     bool with_unique_key = HAS_FLAG(parse_flag, JSN_UNIQUE_FLAG);
-    ObRapidJsonHandler handler(allocator, with_unique_key);
+    bool is_schema = HAS_FLAG(parse_flag, JSN_SCHEMA_FLAG);
+    bool preserve_dup = HAS_FLAG(parse_flag, JSN_PRESERVE_DUP_FLAG);
+    ObRapidJsonHandler handler(allocator, with_unique_key, is_schema, preserve_dup);
     ObRapidJsonAllocator parse_allocator(allocator);
     rapidjson::InsituStringStream ss(static_cast<char *>(buf));
     ObRapidJsonReader reader(&parse_allocator);
@@ -112,10 +114,11 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
       allocator->free(buf);
       if (handler.has_duplicate_key()) {
         ret = OB_ERR_DUPLICATE_KEY;
+      } else if (is_schema && OB_FAIL(handler.get_error_code())) {
       } else {
         ret = OB_ERR_INVALID_JSON_TEXT;
       }
-      if (offset != NULL){
+      if (offset != NULL) {
         *offset = reader.GetErrorOffset();
       }
       if (syntaxerr != NULL) {
@@ -271,7 +274,7 @@ bool ObRapidJsonHandler::seeing_value(ObJsonNode *value)
         INIT_SUCC(ret);
         next_state_ = ObJsonExpectNextState::EXPECT_OBJECT_KEY;
         ObJsonObject *object = dynamic_cast<ObJsonObject *>(current_element_);
-        if (OB_FAIL(object->add(key_, value, with_unique_key_, true, false))) {
+        if (OB_FAIL(object->add(key_, value, with_unique_key_, true, false, is_schema_))) {
           LOG_WARN("fail to add element to json object", K(ret));
           if (ret == OB_ERR_DUPLICATE_KEY) {
             with_duplicate_key_ = true;
@@ -334,7 +337,9 @@ bool ObRapidJsonHandler::is_end_object_or_array()
       obj->update_serialize_size();
       obj->stable_sort();
       int64_t origin_num = obj->element_count();
-      obj->unique();
+      if (!preserve_dup_key_) {
+        obj->unique();
+      }
       if (with_unique_key_ && obj->element_count() < origin_num) {
         is_continue = false;
         with_duplicate_key_ = true;
@@ -472,26 +477,29 @@ bool ObRapidJsonHandler::String(const char *str, rapidjson::SizeType length, boo
   void *buf = alloc(sizeof(ObJsonString));
   if (OB_ISNULL(buf)) {
     LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc memory for string json node", K(OB_ALLOCATE_MEMORY_FAILED));
-  } else {
-    if (copy) {
-      void *dst_buf = NULL;
-      ObString src_str(length, str);
-      if (length > 0) {
-        if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
-          LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(length));
-        } else {
-          MEMCPY(dst_buf, src_str.ptr(), src_str.length());
-          ObJsonString *node = new (buf) ObJsonString(static_cast<char *>(dst_buf), length);
-          is_continue = seeing_value(node);
-        }
+  } else if (is_schema_ && OB_NOT_NULL(str) && length > 0
+        && next_state_ == ObJsonExpectNextState::EXPECT_OBJECT_VALUE
+        && key_.compare("$ref") == 0 && *str != '#') {
+    err_code_ = OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA;
+    LOG_WARN_RET(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA, "unsupported ref in json schema", K(OB_ERR_UNSUPPROTED_REF_IN_JSON_SCHEMA));
+  } else if (copy) {
+    void *dst_buf = NULL;
+    ObString src_str(length, str);
+    if (length > 0) {
+      if (OB_ISNULL(dst_buf = allocator_->alloc(length))) {
+        LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "allocate memory fail", K(length));
       } else {
-        ObJsonString *node = new (buf) ObJsonString(str, length);
+        MEMCPY(dst_buf, src_str.ptr(), src_str.length());
+        ObJsonString *node = new (buf) ObJsonString(static_cast<char *>(dst_buf), length);
         is_continue = seeing_value(node);
       }
     } else {
       ObJsonString *node = new (buf) ObJsonString(str, length);
       is_continue = seeing_value(node);
     }
+  } else {
+    ObJsonString *node = new (buf) ObJsonString(str, length);
+    is_continue = seeing_value(node);
   }
 
   return is_continue;

@@ -842,6 +842,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"stop", STOP},
   {"storage", STORAGE},
   {"storage_format_version", STORAGE_FORMAT_VERSION},
+  {"store", STORE},
   {"stored", STORED},
   {"storing", STORING},
   {"string", STRING},

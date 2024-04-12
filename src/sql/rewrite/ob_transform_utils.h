@@ -928,13 +928,15 @@ public:
                                                   ObDMLStmt *stmt,
                                                   ColumnItem& col_item,
                                                   ObSEArray<ObRawExpr *, 1>& param_array);
+  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
+                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   static int get_expand_node_from_star(ObTransformerCtx *ctx,
                                        ObDMLStmt *stmt,
                                        ObRawExpr *param_expr,
                                        ObSEArray<ObRawExpr *, 1>& param_array);
-  static int add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
-                                                 ObSEArray<ObRawExpr *, 1>& param_array);
   // end json object with star
+
+
   static int add_cast_for_replace(ObRawExprFactory &expr_factory,
                                   const ObRawExpr *from_expr,
                                   ObRawExpr *&to_expr,

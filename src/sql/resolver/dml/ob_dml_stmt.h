@@ -152,7 +152,64 @@ public:
   int64_t unpivot_column_count_;
 };
 
-struct ObJsonTableDef;
+enum MulModeTableType {
+  INVALID_TABLE_TYPE = 0,
+  OB_ORA_JSON_TABLE_TYPE, // 1
+  OB_ORA_XML_TABLE_TYPE = 2,
+};
+
+typedef struct ObJtColBaseInfo
+{
+  ObJtColBaseInfo();
+  ObJtColBaseInfo(const ObJtColBaseInfo& info);
+
+  int32_t col_type_;
+  int32_t truncate_;
+  int32_t format_json_;
+  int32_t wrapper_;
+  int32_t allow_scalar_;
+  int64_t output_column_idx_;
+  int64_t empty_expr_id_;
+  int64_t error_expr_id_;
+  ObString col_name_;
+  ObString path_;
+  int32_t on_empty_;
+  int32_t on_error_;
+  int32_t on_mismatch_;
+  int32_t on_mismatch_type_;
+  int64_t res_type_;
+  ObDataType data_type_;
+  int32_t parent_id_;
+  int32_t id_;
+  union {
+    int32_t value_;
+    struct {
+      int32_t is_name_quoted_ : 1;
+      int32_t reserved_ : 31;
+    };
+  };
+
+  int deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator);
+  int assign(const ObJtColBaseInfo& src);
+
+  TO_STRING_KV(K_(col_type), K_(format_json), K_(wrapper), K_(allow_scalar),
+   K_(output_column_idx), K_(col_name), K_(path), K_(parent_id), K_(id));
+} ObJtColBaseInfo;
+
+typedef struct ObJsonTableDef {
+  ObJsonTableDef()
+    : all_cols_(),
+      doc_expr_(nullptr),
+      table_type_(MulModeTableType::INVALID_TABLE_TYPE),
+      namespace_arr_() {}
+
+  int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
+  int assign(const ObJsonTableDef& src);
+  common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
+  ObRawExpr *doc_expr_;
+  MulModeTableType table_type_;
+  common::ObSEArray<ObString, 16, common::ModulePageAllocator, true> namespace_arr_;
+} ObJsonTableDef;
 
 struct TableItem
 {
@@ -257,7 +314,7 @@ struct TableItem
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
   bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
   bool is_link_type() const { return LINK_TABLE == type_; } // after dblink transformer, LINK_TABLE will be BASE_TABLE, BASE_TABLE will be LINK_TABLE
-  bool is_json_table() const { return JSON_TABLE == type_; }
+  bool is_json_table() const { return JSON_TABLE == type_; }  // json_table_def_->table_type_ == MulModeTableType::OB_ORA_JSON_TABLE_TYPE
   bool is_values_table() const { return VALUES_TABLE == type_; }//used to mark values statement: values row(1,2), row(3,4);
 
   bool is_lateral_table() const { return LATERAL_TABLE == type_; }
@@ -448,55 +505,6 @@ inline uint64_t ColumnItem::hash(uint64_t seed) const
 
   return seed;
 }
-
-typedef struct ObJtColBaseInfo
-{
-  ObJtColBaseInfo();
-  ObJtColBaseInfo(const ObJtColBaseInfo& info);
-
-  int32_t col_type_;
-  int32_t truncate_;
-  int32_t format_json_;
-  int32_t wrapper_;
-  int32_t allow_scalar_;
-  int64_t output_column_idx_;
-  int64_t empty_expr_id_;
-  int64_t error_expr_id_;
-  ObString col_name_;
-  ObString path_;
-  int32_t on_empty_;
-  int32_t on_error_;
-  int32_t on_mismatch_;
-  int32_t on_mismatch_type_;
-  int64_t res_type_;
-  ObDataType data_type_;
-  int32_t parent_id_;
-  int32_t id_;
-  union {
-    int32_t value_;
-    struct {
-      int32_t is_name_quoted_ : 1;
-      int32_t reserved_ : 31;
-    };
-  };
-
-  int deep_copy(const ObJtColBaseInfo& src, ObIAllocator* allocator);
-  int assign(const ObJtColBaseInfo& src);
-
-  TO_STRING_KV(K_(col_type), K_(format_json), K_(wrapper), K_(allow_scalar),
-   K_(output_column_idx), K_(col_name), K_(path), K_(parent_id), K_(id));
-} ObJtColBaseInfo;
-
-typedef struct ObJsonTableDef {
-  ObJsonTableDef()
-    : all_cols_(),
-      doc_expr_(nullptr) {}
-
-  int deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
-  int assign(const ObJsonTableDef& src);
-  common::ObSEArray<ObJtColBaseInfo*, 4, common::ModulePageAllocator, true> all_cols_;
-  ObRawExpr *doc_expr_;
-} ObJsonTableDef;
 
 struct FromItem
 {
@@ -1032,7 +1040,6 @@ public:
                          ObStmtExprGetter &visitor);
   int get_relation_exprs(common::ObIArray<ObRawExpr *> &relation_exprs) const;
   int get_relation_exprs(common::ObIArray<ObRawExprPointer> &relation_expr_ptrs);
-
   //this func is used for enum_set_wrapper to get exprs which need to be handled
   int get_relation_exprs_for_enum_set_wrapper(common::ObIArray<ObRawExpr*> &rel_array);
   ColumnItem *get_column_item_by_id(uint64_t table_id, uint64_t column_id) const;

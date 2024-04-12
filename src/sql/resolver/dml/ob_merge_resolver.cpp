@@ -358,7 +358,8 @@ int ObMergeResolver::resolve_table(const ParseNode &parse_tree, TableItem *&tabl
         OZ (resolve_function_table_item(*table_node, table_item));
         break;
       }
-      case T_JSON_TABLE_EXPRESSION: {
+      case T_JSON_TABLE_EXPRESSION:
+      case T_XML_TABLE_EXPRESSION: {
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));

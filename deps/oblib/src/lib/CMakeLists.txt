@@ -146,6 +146,7 @@ ob_set_subtarget(oblib_lib common_mixed
   hash/ob_hashutils.cpp
   hash/xxhash.c
   hash_func/murmur_hash.cpp
+  lob/ob_lob_base.cpp
   json/ob_json.cpp
   json/ob_json_print_utils.cpp
   json/ob_yson.cpp
@@ -154,6 +155,8 @@ ob_set_subtarget(oblib_lib common_mixed
   json_type/ob_json_bin.cpp
   json_type/ob_json_base.cpp
   json_type/ob_json_parse.cpp
+  json_type/ob_json_schema.cpp
+  json_type/ob_json_diff.cpp
   lds/ob_lds_define.cpp
   net/ob_addr.cpp
   net/ob_net_util.cpp
@@ -204,6 +207,19 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
   udt/ob_udt_type.cpp
+  xml/ob_mul_mode_reader.cpp
+  xml/ob_xml.cpp
+  xml/ob_xml_parser.cpp
+  xml/ob_libxml2_sax_handler.cpp
+  xml/ob_tree_base.cpp
+  xml/ob_xml_tree.cpp
+  xml/ob_xml_util.cpp
+  xml/ob_xpath.cpp
+  xml/ob_multi_mode_bin.cpp
+  xml/ob_xml_bin.cpp
+  xml/ob_multi_mode_interface.cpp
+  xml/ob_path_parser.cpp
+  xml/ob_binary_aggregate.cpp
   locale/ob_locale_type.cc
   locale/ob_locale.cpp
 )
@@ -358,17 +374,16 @@ add_library(malloc_hook STATIC
   alloc/malloc_hook.h)
 target_link_libraries(malloc_hook oblib_base)
 
-if(OB_BUILD_ORACLE_XML)
+if(OB_BUILD_CLOSE_MODULES)
+  target_link_libraries(oblib_lib PUBLIC
+  ${DEP_3RD_DIR}/usr/local/lib/libxslt.a
+  ${DEP_3RD_DIR}/usr/local/lib/libexslt.a
+  ${ob_close_deps_static_name}
+  )
+endif()
+
 target_link_libraries(oblib_lib
   PUBLIC ob_malloc compress restore
   ${DEP_DIR}/lib/libxml2.a
   ${DEP_DIR}/lib/liblzma.a
-  ${DEP_3RD_DIR}/usr/local/lib/libxslt.a
-  ${DEP_3RD_DIR}/usr/local/lib/libexslt.a
-  ${ob_close_deps_static_name}
 )
-else()
-target_link_libraries(oblib_lib
-  PUBLIC ob_malloc
-)
-endif()

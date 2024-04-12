@@ -12,11 +12,9 @@
  */
 
 #include "ob_expr_update_xml.h"
-#ifdef OB_BUILD_ORACLE_XML
 #include "sql/engine/expr/ob_expr_xml_func_helper.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
-#endif
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -44,7 +42,27 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
                                        common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (param_num < 3) {
+  bool is_mysql_mode = lib::is_mysql_mode();
+  if (is_mysql_mode) {
+    if (param_num != 3) {
+      ret = OB_ERR_PARAM_SIZE;
+      LOG_WARN("invalid param number", K(ret), K(param_num));
+    } else {
+      for (int8_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+        ObObjType param_type = types[i].get_type();
+        if (param_type == ObNullType) {
+        } else if (ob_is_string_type(param_type)) {
+          if (types[i].get_charset_type() != CHARSET_UTF8MB4) {
+            types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+          }
+        } else if (i != 1 && !ob_is_string_type(param_type)) {
+          types[i].set_calc_type(ObVarcharType);
+          types[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        }
+      }
+    }
+
+  } else if (param_num < 3) {
     ret = OB_ERR_PARAM_SIZE;
     LOG_WARN("invalid param number", K(ret), K(param_num));
   } else if (!is_called_in_sql()) {
@@ -59,6 +77,12 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
     LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(types[0].get_type())));
   }
   if (OB_FAIL(ret)) {
+  } else if (is_mysql_mode) {
+    type.set_type(ObLongTextType);
+    type.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+    type.set_collation_level(CS_LEVEL_IMPLICIT);
+    type.set_length(OB_MAX_LONGTEXT_LENGTH / 4);
+    type.set_length_semantics(LS_BYTE);
   } else {
     bool has_ns_str = (param_num - 1) % 2 == 1;
     int64_t xpath_value_end = has_ns_str ? param_num - 1 : param_num;
@@ -95,14 +119,96 @@ int ObExprUpdateXml::calc_result_typeN(ObExprResType &type,
         }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    type.set_sql_udt(ObXMLSqlType);
+    if (OB_SUCC(ret)) {
+      type.set_sql_udt(ObXMLSqlType);
+    }
   }
   return ret;
 }
 
-#ifdef OB_BUILD_ORACLE_XML
+int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
+  int64_t num_child = expr.arg_cnt_;
+  ObString xml_target;
+  ObString xpath_expr;
+  ObString new_xml;
+  ObString xml_res;
+  ObIMulModeBase *xml_base = nullptr;
+  ObXmlDocument *xml_doc = nullptr;
+  bool return_null = false;
+  ObUpdateXMLRetType res_origin = ObUpdateXMLRetType::ObRetMax;
+
+  ObMulModeMemCtx* xml_mem_ctx = nullptr;
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "XMLModule"));
+  if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
+    LOG_WARN("fail to create tree memory context", K(ret));
+  } else if (num_child != 3) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("invalid param number", K(ret), K(num_child));
+  } else if (!expr.args_[1]->is_const_expr()) {
+    ret = OB_XPATH_EXPRESSION_UNSUPPORTED;
+    LOG_WARN("args_[1] get const expr invalid", K(ret), K(expr.args_[1]));
+  } else if (ObNullType == expr.args_[0]->datum_meta_.type_ ||
+             !ob_is_string_type(expr.args_[1]->datum_meta_.type_) ||
+             ObNullType == expr.args_[2]->datum_meta_.type_) {
+    return_null = true;
+  } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[0], ctx, xml_target, allocator))) {
+    LOG_WARN("failed to get xml_target str from expr", K(ret));
+  } else if (xml_target.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
+    LOG_WARN("failed to get xpath expr.", K(ret));
+  } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[2], ctx, new_xml, allocator))) {
+    LOG_WARN("failed to get new xml.", K(ret));
+  } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_DOCUMENT))) {
+    ret = OB_SUCCESS;
+    if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_CONTENT))) {
+      LOG_USER_WARN(OB_ERR_XML_PARSE);
+      ret = OB_SUCCESS;
+      return_null = true;
+      LOG_WARN("parse xml_frag failed.", K(xml_target));
+    }
+  }
+
+  if (OB_FAIL(ret) || OB_ISNULL(xml_base)) {
+  } else if (OB_FAIL(update_xml_tree_mysql(xml_mem_ctx, new_xml, ctx, xpath_expr, xml_base, res_origin))) {
+    LOG_WARN("update xml tree failed", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (return_null) {
+    res.set_null();
+  } else if (OB_ISNULL(xml_base)) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_res))) {
+      LOG_WARN("pack res origin failed.", K(ret), K(xml_res));
+    }
+  } else if (res_origin == ObUpdateXMLRetType::ObRetInputStr) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_target))) {
+      LOG_WARN("pack res origin failed.", K(ret), K(xml_target));
+    }
+  } else if (res_origin == ObUpdateXMLRetType::ObRetNullType) {
+    res.set_null();
+  } else {
+    ObStringBuffer buff(&allocator);
+    if (OB_ISNULL(xml_doc = static_cast<ObXmlDocument *>(xml_base))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get xml base failed.", K(ret));
+    } else if (OB_FAIL(xml_doc->print_document(buff, CS_TYPE_INVALID, ObXmlFormatType::NO_FORMAT | ObXmlFormatType::NO_ENTITY_ESCAPE))) {
+      LOG_WARN("failed to print document.", K(ret));
+    } else {
+      ObString res_str = buff.string();
+      if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, res_str))) {
+        LOG_WARN("failed to pack long text res.", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   int ret = OB_SUCCESS;
@@ -146,7 +252,7 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 
   if (OB_SUCC(ret)) {
     int64_t xpath_value_size = has_namespace_str ? num_child - 1 : num_child;
-    if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, xml_datum, cs_type, ObNodeMemType::TREE_TYPE, xml_tree, node_type, true))) {
+    if (OB_FAIL(ObXMLExprHelper::get_xml_base(xml_mem_ctx, xml_datum, cs_type, ObNodeMemType::TREE_TYPE, xml_tree, node_type, ObGetXmlBaseType::OB_IS_REPARSE))) {
       LOG_WARN("fail to get xml base", K(ret));
     }
     // do update xml
@@ -196,6 +302,174 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       }
     }
   }
+  return ret;
+}
+
+int ObExprUpdateXml::update_xml_tree_mysql(ObMulModeMemCtx* xml_mem_ctx,
+                                           ObString xml_target,
+                                           ObEvalCtx &ctx,
+                                           ObString &xpath_str,
+                                           ObIMulModeBase *&xml_tree,
+                                           ObUpdateXMLRetType &res_origin)
+{
+  INIT_SUCC(ret);
+  ObPathExprIter xpath_iter((static_cast<ObXmlNode*>(xml_tree))->get_mem_ctx()->allocator_);
+  ObIMulModeBase *node = NULL;
+  ObString default_ns;
+  ObPathVarObject prefix_ns(*(static_cast<ObXmlNode*>(xml_tree))->get_mem_ctx()->allocator_);
+  ObArray<ObIMulModeBase*> res_array;
+  ObXmlNode *xml_node = nullptr;
+  ObXmlText *text_node = NULL;
+  bool has_get_node = false;
+  if (OB_FAIL(xpath_iter.init(xml_mem_ctx, xpath_str, default_ns, xml_tree, &prefix_ns))) {
+    LOG_WARN("fail to init xpath iterator", K(xpath_str), K(default_ns), K(ret));
+    ObXMLExprHelper::replace_xpath_ret_code(ret);
+  } else if (OB_FAIL(xpath_iter.open())) {
+    LOG_WARN("fail to open xpath iterator", K(ret));
+    ObXMLExprHelper::replace_xpath_ret_code(ret);
+  }
+
+  while (OB_SUCC(ret) && ObUpdateXMLRetType::ObRetMax == res_origin) {
+    if (OB_FAIL(xpath_iter.get_next_node(node))) {
+      if (ret != OB_ITER_END) {
+        LOG_WARN("fail to get next xml node", K(ret));
+      }
+    } else if (has_get_node) {
+      res_origin = ObUpdateXMLRetType::ObRetInputStr;
+    } else {
+      has_get_node = true;
+    }
+  }
+
+  if (ret == OB_ITER_END) {
+    ret = OB_SUCCESS;
+  }
+
+  if (OB_FAIL(ret)) {
+    if (ret == OB_NOT_IMPLEMENT) {
+      ret = OB_SUCCESS;
+      res_origin = ObUpdateXMLRetType::ObRetNullType;
+    }
+  } else if (res_origin != ObUpdateXMLRetType::ObRetMax) {
+    // do nothing
+  } else if (OB_ISNULL(node)) {
+    res_origin = ObUpdateXMLRetType::ObRetInputStr;
+  } else if (OB_ISNULL(xml_node = static_cast<ObXmlNode *>(node))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get xml node null", K(ret));
+  } else if (OB_ISNULL(text_node = OB_NEWx(ObXmlText, xml_mem_ctx->allocator_, ObMulModeNodeType::M_TEXT, xml_mem_ctx))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("new xml text failed", K(ret));
+  } else {
+    text_node->set_value(xml_target);
+    switch (xml_node->type()) {
+      case M_DOCUMENT:
+      case M_CONTENT: {
+        ObXmlDocument *document = NULL;
+        if (OB_ISNULL(document = OB_NEWx(ObXmlDocument, xml_mem_ctx->allocator_, ObMulModeNodeType::M_DOCUMENT, xml_mem_ctx))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("new xml text failed", K(ret));
+        } else if (OB_FAIL(document->add_element(text_node))) {
+          LOG_WARN("add text failed.", K(ret));
+        } else if (OB_ISNULL(xml_tree = static_cast<ObXmlNode*>(document))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("document cast to xml node failed.", K(ret));
+        }
+        break;
+      }
+      case M_CDATA:
+      case M_INSTRUCT:
+      case M_COMMENT:
+      case M_TEXT: {
+        // update parent node
+        ObXmlNode *parent = NULL;
+        if (OB_ISNULL(parent = xml_node->get_parent())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get xml node parent failed.", K(ret));
+        } else if (OB_FAIL(update_xml_child_text(parent, text_node))) {
+          LOG_WARN("failed to update text.", K(ret), K(xml_node->type()));
+        }
+
+        break;
+      }
+      case M_ATTRIBUTE: {
+        // rewrite tree
+        ObXmlAttribute *attribute = NULL;
+        if (OB_ISNULL(attribute = OB_NEWx(ObXmlAttribute, xml_mem_ctx->allocator_, ObMulModeNodeType::M_ATTRIBUTE, xml_mem_ctx))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("new xml text failed", K(ret));
+        } else {
+          attribute->set_xml_key(xml_target);
+          attribute->set_only_key();
+          if (OB_FAIL(update_xml_child_text(xml_node, attribute))) {
+            LOG_WARN("update xml child failed.", K(ret), K(xml_node->type()));
+          }
+        }
+
+        break;
+      }
+      case M_ELEMENT: {
+        if (OB_FAIL(update_xml_child_text(xml_node, text_node))) {
+          LOG_WARN("update xml child failed.", K(ret), K(xml_node->type()));
+        }
+        break;
+      }
+      case M_NAMESPACE: {
+        res_origin = ObUpdateXMLRetType::ObRetInputStr;
+        break;
+      }
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unsupported xml node type", K(ret), K(xml_node->type()));
+        break;
+      }
+    }
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = xpath_iter.close())) {
+    LOG_WARN("fail to close xpath iter", K(tmp_ret));
+    ret = COVER_SUCC(tmp_ret);
+  }
+
+  return ret;
+}
+
+int ObExprUpdateXml::update_xml_child_text(ObXmlNode *old_node, ObXmlNode *text_node)
+{
+  INIT_SUCC(ret);
+  ObXmlNode *parent = NULL;
+  ObXmlElement *ele_node = NULL;
+  int64_t pos = -1;
+  if (OB_ISNULL(old_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get null node", K(ret));
+  } else if (OB_ISNULL(parent = old_node->get_parent())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parat node is null", K(ret));
+  } else if (OB_ISNULL(ele_node = static_cast<ObXmlElement*>(parent))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parat node is null", K(ret));
+  } else {
+    pos = old_node->get_index();
+    if (pos < 0 || pos > ele_node->count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pos is invalid", K(ret), K(pos));
+    } else if (old_node->type() == M_ATTRIBUTE) {
+      if (OB_FAIL(ele_node->remove_attribute(pos))) {
+        LOG_WARN("failed to remove attribute.", K(ret), K(pos));
+      } else if (OB_FAIL(ele_node->add_attribute(text_node, false, pos))) {
+        LOG_WARN("failed to add attribute.", K(ret), K(pos));
+      }
+    } else {
+      if (OB_FAIL(ele_node->remove_element(ele_node->at(pos)))) {
+        LOG_WARN("remove element failed.", K(ret), K(pos));
+      } else if (OB_FAIL(ele_node->add_element(text_node, false, pos))) {
+        LOG_WARN("failed to add text.", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -619,7 +893,7 @@ int ObExprUpdateXml::update_namespace_value(ObIAllocator &allocator, ObXmlNode *
     int64_t pos = -1;
     new_ns->set_value(ns_value);
     new_ns->set_prefix(ObXmlConstants::XMLNS_STRING);
-    new_ns->set_key(key);
+    new_ns->set_xml_key(key);
     if (OB_FAIL(parent->get_attribute_pos(ObMulModeNodeType::M_NAMESPACE, key, pos))) {
       LOG_WARN("fail to get namespace node pos", K(ret));
     } else if (OB_FAIL(parent->remove_namespace(pos))) {
@@ -667,7 +941,7 @@ int ObExprUpdateXml::clear_element_child_node(ObXmlElement *ele_node)
     if (OB_SUCC(ret) && OB_NOT_NULL(ns)) {
       if (ele_node->get_prefix().empty()) {
         ObXmlAttribute *default_ns = NULL;
-        if (OB_FAIL(get_valid_default_ns_from_parent(ele_node->get_parent(), default_ns))) {
+        if (OB_FAIL(ObXMLExprHelper::get_valid_default_ns_from_parent(ele_node->get_parent(), default_ns))) {
           LOG_WARN("fail to get valid default ns", K(ret));
         } else if (OB_NOT_NULL(default_ns)
                    && default_ns->get_value().compare(ns->get_value()) == 0) {
@@ -737,7 +1011,7 @@ int ObExprUpdateXml::update_namespace_xml_node(ObIAllocator &allocator, ObXmlNod
     LOG_WARN("fail to get attribute pos", K(ret), K(key), K(ns_node->type()));
   } else if (!is_default_ns && OB_FAIL(update_exist_nodes_ns(ele_node, ns_node))) {
     LOG_WARN("fail to update exist node ns", K(ret));
-  } else if (OB_FAIL(update_new_nodes_ns(allocator, ele_node, update_node))) {
+  } else if (OB_FAIL(ObXMLExprHelper::update_new_nodes_ns(allocator, ele_node, update_node))) {
     LOG_WARN("fail to update new node ns", K(ret));
   } else {
     // remove prefix ns: not default ns && ns of element is not this prefix && attr of element not use, remove the prefix xmlns
@@ -764,122 +1038,10 @@ int ObExprUpdateXml::update_exist_nodes_ns(ObXmlElement *parent, ObXmlAttribute 
     LOG_WARN("node is NULL", K(ret), K(parent), K(prefix_ns));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < parent->size(); i++) {
-      if (OB_FAIL(set_ns_recrusively(parent->at(i), prefix_ns))) {
+      if (OB_FAIL(ObXMLExprHelper::set_ns_recrusively(parent->at(i), prefix_ns))) {
         LOG_WARN("fail to set exist nodes ns", K(ret));
       }
     }
-  }
-  return ret;
-}
-
-// update the new node default ns to empty when the parent node has default ns
-int ObExprUpdateXml::update_new_nodes_ns(ObIAllocator &allocator, ObXmlNode *parent, ObXmlNode *update_node)
-{
-  int ret = OB_SUCCESS;
-  ObXmlAttribute *empty_ns = NULL;
-  ObXmlAttribute *default_ns = NULL;
-  if (OB_ISNULL(parent) || OB_ISNULL(update_node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node is NULL", K(ret), K(parent), K(update_node));
-  } else if (OB_FAIL(get_valid_default_ns_from_parent(parent, default_ns))) {
-    LOG_WARN("unexpected error in find default ns from parent", K(ret));
-  } else if (OB_NOT_NULL(default_ns) && !default_ns->get_value().empty()) {
-    // need to update the new node default ns with empty default ns
-    if (OB_ISNULL(empty_ns = OB_NEWx(ObXmlAttribute, (&allocator), ObMulModeNodeType::M_NAMESPACE, parent->get_mem_ctx()))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc failed", K(ret));
-    } else {
-      empty_ns->set_key(ObXmlConstants::XMLNS_STRING);
-      empty_ns->set_value(ObString::make_empty_string());
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(set_ns_recrusively(update_node, empty_ns))) {
-      LOG_WARN("fail to set empty default ns recrusively", K(ret));
-    }
-  }
-  return ret;
-}
-
-// found valid default ns from down to top
-int ObExprUpdateXml::get_valid_default_ns_from_parent(ObXmlNode *cur_node, ObXmlAttribute* &default_ns)
-{
-  int ret = OB_SUCCESS;
-  ObXmlNode* t_node = NULL;
-  bool is_found = false;
-  if (OB_ISNULL(cur_node)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("update node is NULL", K(ret));
-  } else if (!ObXMLExprHelper::is_xml_element_node(cur_node->type())) {
-    t_node = cur_node->get_parent();
-  } else {
-    t_node = cur_node;
-  }
-
-  while(!is_found && OB_SUCC(ret) && OB_NOT_NULL(t_node)) {
-    ObXmlElement *t_element = static_cast<ObXmlElement*>(t_node);
-    ObArray<ObIMulModeBase *> attr_list;
-    if (OB_FAIL(t_element->get_namespace_list(attr_list))) {
-      LOG_WARN("fail to get namespace list", K(ret));
-    }
-    for (int i = 0; !is_found && OB_SUCC(ret) && i < attr_list.size(); i ++) {
-      ObXmlAttribute *attr = static_cast<ObXmlAttribute *>(attr_list.at(i));
-      if (attr->get_key().compare(ObXmlConstants::XMLNS_STRING) == 0) {
-        is_found = true;
-        default_ns = attr;
-      }
-    }
-    t_node = t_node->get_parent();
-  }
-  return ret;
-}
-
-int ObExprUpdateXml::set_ns_recrusively(ObXmlNode *update_node, ObXmlAttribute *ns)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(update_node) || OB_ISNULL(ns)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("update node is NULL", K(ret), K(update_node), K(ns));
-  } else if (!ObXMLExprHelper::is_xml_element_node(update_node->type())) {
-    // no need to set default ns
-  } else {
-    bool is_stop = false;
-    ObXmlElement *ele_node = static_cast<ObXmlElement *>(update_node);
-    ObString key = ns->get_key();
-    if (ele_node->type() != M_ELEMENT) {
-      // skip
-    } else if (key.compare(ObXmlConstants::XMLNS_STRING) == 0) {
-      // update default ns
-      if (ele_node->get_prefix().empty()) {
-        // this condition mean: has no ns || has non-empty default ns
-        is_stop = true;
-        if (OB_ISNULL(ele_node->get_ns())) {
-          ele_node->add_attribute(ns, false, 0);
-          ele_node->set_ns(ns);
-        } else { /* has non-empty default ns, skip and stop find */ }
-      }
-    } else { // has prefix
-      ObXmlAttribute *tmp_ns = NULL;
-      if (ele_node->get_ns() == ns ||
-          ele_node->has_attribute_with_ns(ns) ||
-          OB_NOT_NULL(tmp_ns = ele_node->get_ns_by_name(key))) {
-        // match condition below will stop recrusive
-        // element use this prefix ns || attributes of element use this prefix ns || this prefix in attributes
-        is_stop = true;
-        if (OB_NOT_NULL(tmp_ns)) { // if the prefix not in attributes
-        } else if (OB_FAIL(ele_node->add_attribute(ns, false, 0))) {
-          LOG_WARN("fail to add namespace node", K(ret), K(key));
-        }
-      }
-    }
-
-    if (!is_stop) {
-      // find its child node recrusivle when no need to set default ns
-      for (int64_t i = 0; OB_SUCC(ret) && i < ele_node->size(); i++) {
-        if (OB_FAIL(SMART_CALL(set_ns_recrusively(ele_node->at(i), ns)))) {
-          LOG_WARN("fail set default ns in origin tree recursively", K(ret));
-        }
-      } // end for
-    } // end is_stop
   }
   return ret;
 }
@@ -903,7 +1065,7 @@ int ObExprUpdateXml::update_xml_child_node(ObIAllocator &allocator, ObXmlNode *o
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(update_new_nodes_ns(allocator, ele_node, update_node))) {
+  } else if (OB_FAIL(ObXMLExprHelper::update_new_nodes_ns(allocator, ele_node, update_node))) {
     LOG_WARN("fail to update new node ns", K(ret));
   } else if (OB_FAIL(remove_and_insert_element_node(ele_node, update_node, pos, true))) {
       LOG_WARN("fail to update element node", K(ret));
@@ -944,13 +1106,15 @@ int ObExprUpdateXml::remove_and_insert_element_node(ObXmlElement *ele_node, ObXm
   return ret;
 }
 
-#endif
-
 int ObExprUpdateXml::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  rt_expr.eval_func_ = eval_update_xml;
+  if (lib::is_oracle_mode()) {
+    rt_expr.eval_func_ = eval_update_xml;
+  } else {
+    rt_expr.eval_func_ = eval_mysql_update_xml;
+  }
   return OB_SUCCESS;
 }
 

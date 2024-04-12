@@ -363,10 +363,45 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
   } else if (cb->is_table_lock_callback()) {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "try to free table lock callback", KPC(cb));
+  } else if (MutatorType::MUTATOR_ROW_EXT_INFO == cb->get_mutator_type()) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "try to free ext info callback as mvcc row callback", KP(cb), K(*this));
   } else {
     ATOMIC_INC(&callback_free_count_);
     TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
     trans_mgr_.free_mvcc_row_callback(cb);
+    cb = NULL;
+  }
+}
+
+storage::ObExtInfoCallback *ObMemtableCtx::alloc_ext_info_callback()
+{
+  int ret = OB_SUCCESS;
+  void *cb_buffer = nullptr;
+  storage::ObExtInfoCallback *cb = nullptr;
+  if (nullptr == (cb_buffer = mem_ctx_obj_pool_.alloc<storage::ObExtInfoCallback>())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObExtInfoCallback fail", K(ret));
+  } else if (nullptr == (cb = new(cb_buffer) storage::ObExtInfoCallback())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObExtInfoCallback object fail", K(ret), "cb_buffer", cb_buffer);
+  } else {
+    trans_mgr_.add_callback_ext_info_log_count(1);
+  }
+  return cb;
+}
+
+void ObMemtableCtx::free_ext_info_callback(ObITransCallback *cb)
+{
+  if (OB_ISNULL(cb)) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is null, unexpected error", KP(cb), K(*this));
+  } else if (MutatorType::MUTATOR_ROW_EXT_INFO != cb->get_mutator_type()) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "cb is not ext info callback", "type", cb->get_mutator_type(), K(*this));
+  } else {
+    ObExtInfoCallback *ext_cb = static_cast<ObExtInfoCallback *>(cb);
+    ext_cb->~ObExtInfoCallback();
+    mem_ctx_obj_pool_.free<storage::ObExtInfoCallback>(cb);
+    TRANS_LOG(DEBUG, "callback release succ", KP(cb), K(*this), K(lbt()));
+    trans_mgr_.add_callback_ext_info_log_count(-1);
     cb = NULL;
   }
 }

@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include "ob_arena_object_pool.h"
+#include "storage/lob/ob_ext_info_callback.h"
 #include "storage/tablelock/ob_mem_ctx_table_lock.h"
 
 namespace oceanbase
@@ -40,7 +41,10 @@ public:
         alloc_lock_op_cnt_(0) {}
 #else
   ObMemtableCtxObjPool(common::ObIAllocator &allocator)
-      : lock_op_node_pool_(allocator), lock_callback_pool_(allocator), mvcc_callback_pool_(allocator) {}
+      : lock_op_node_pool_(allocator),
+        lock_callback_pool_(allocator),
+        mvcc_callback_pool_(allocator),
+        ext_info_callback_pool_(allocator) {}
 #endif
 
   ObMemtableCtxObjPool() = delete;
@@ -111,6 +115,13 @@ public:
   {
     return mvcc_callback_pool_.alloc();
   }
+
+  template <>
+  void *alloc<storage::ObExtInfoCallback>()
+  {
+    return ext_info_callback_pool_.alloc();
+  }
+
 #endif
 
   template <typename T>
@@ -134,6 +145,12 @@ public:
     mvcc_callback_pool_.free(obj);
   }
 
+  template <>
+  void free<storage::ObExtInfoCallback>(void *obj)
+  {
+    ext_info_callback_pool_.free(obj);
+  }
+
   void reset()
   {
     lock_op_node_pool_.reset();
@@ -146,6 +163,7 @@ private:
   ObArenaObjPool<tablelock::ObMemCtxLockOpLinkNode, OBJ_NUM> lock_op_node_pool_;
   ObArenaObjPool<tablelock::ObOBJLockCallback, OBJ_NUM> lock_callback_pool_;
   ObArenaObjPool<memtable::ObMvccRowCallback, OBJ_NUM> mvcc_callback_pool_;
+  ObArenaObjPool<storage::ObExtInfoCallback, OBJ_NUM> ext_info_callback_pool_;
 
 #ifdef OB_ENABLE_MEMTABLE_CTX_OBJ_CACHE_DEBUG
   int64_t hit_mvcc_cb_cache_cnt_;

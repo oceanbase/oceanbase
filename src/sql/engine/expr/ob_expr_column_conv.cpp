@@ -471,7 +471,7 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
         ObLobLocatorV2 input_lob(raw_str.ptr(), raw_str.length(), has_lob_header);
         bool is_delta = input_lob.is_valid() && input_lob.is_delta_temp_lob();
         if (is_delta) { // delta lob
-          if (!(ob_is_text_tc(in_type))) {
+          if (!(ob_is_text_tc(in_type) || ob_is_json(in_type))) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("delta lob can not convert to non-text type", K(ret), K(out_type));
           } else {

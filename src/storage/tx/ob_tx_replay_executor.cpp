@@ -618,6 +618,12 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo, const bool s
         }
       } else if (FALSE_IT(row_head = mmi_ptr_->get_row_head())) {
         // do nothing
+      } else if (MutatorType::MUTATOR_ROW_EXT_INFO == row_head.mutator_type_) {
+        // ext info redo log is only used for obcdc, no need replay
+        if (EXECUTE_COUNT_PER_SEC(8)) {
+          TRANS_LOG(INFO, "ext info redo log no need replay", K(row_head), K(redo));
+        }
+        TRANS_LOG(DEBUG, "ext info redo log no need replay", K(row_head), K(redo));
       } else if (OB_FAIL(replay_one_row_in_memtable_(row_head, mmi_ptr_))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW == ret) {
           if (TC_REACH_TIME_INTERVAL(1000 * 1000)) {
@@ -740,6 +746,10 @@ int ObTxReplayExecutor::replay_one_row_in_memtable_(ObMutatorRowHeader &row_head
       } else {
         table_lock_row_count_++;
       }
+      break;
+    }
+    case MutatorType::MUTATOR_ROW_EXT_INFO: {
+      TRANS_LOG(DEBUG, "[Replay Tx] ignore replay row ext info", K(row_head));
       break;
     }
     default: {

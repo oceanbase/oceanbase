@@ -250,6 +250,7 @@ ob_set_subtarget(ob_share common_mixed
   system_variable/ob_system_variable_factory.cpp
   system_variable/ob_system_variable_init.cpp
   ob_lob_access_utils.cpp
+  ob_json_access_utils.cpp
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
   table/ob_table_load_define.cpp

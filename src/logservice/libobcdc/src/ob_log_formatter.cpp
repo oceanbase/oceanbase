@@ -63,6 +63,7 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
   (void)memset(is_null_lob_old_columns_, 0, sizeof(is_null_lob_old_columns_));
+  (void)memset(is_diff_, 0, sizeof(is_diff_));
 }
 
 int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_old_column)
@@ -79,6 +80,7 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
     (void)memset(is_null_lob_old_columns_, 0, column_num * sizeof(is_null_lob_old_columns_[0]));
+    (void)memset(is_diff_, 0, column_num * sizeof(is_diff_[0]));
   }
 
   return OB_SUCCESS;
@@ -1294,15 +1296,26 @@ int ObLogFormatter::fill_normal_cols_(
           if (! cv->is_out_row_) {
             rv->new_columns_[usr_column_idx] = &cv->string_value_;
           } else {
+            ObLobDataGetCtx *lob_data_get_ctx = nullptr;
             ObString *new_col_str = nullptr;
-            if (OB_FAIL(lob_ctx_cols.get_lob_column_value(column_id, true/*is_new_col*/, new_col_str))) {
+            if (OB_FAIL(lob_ctx_cols.get_lob_data_get_ctx(column_id, lob_data_get_ctx))) {
               if (OB_ENTRY_NOT_EXIST != ret) {
                 LOG_ERROR("get_lob_column_value failed", KR(ret), K(column_id));
               }
+            } else {
+              new_col_str = &(lob_data_get_ctx->get_new_lob_column_value());
             }
 
             if (OB_SUCC(ret)) {
-              if (cv->is_json() || cv->is_geometry()) {
+              if (lob_data_get_ctx->is_ext_info_log()) {
+                if (cv->is_json()) {
+                  rv->new_columns_[usr_column_idx] = new_col_str;
+                  rv->is_diff_[usr_column_idx] = true;
+                } else {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
+                }
+              } else if (cv->is_json() || cv->is_geometry()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *new_col_str);
 
@@ -1317,7 +1330,7 @@ int ObLogFormatter::fill_normal_cols_(
               }
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(new_col_str->ptr(), new_col_str->length()),
-                  "buf_len", new_col_str->length());
+                  "buf_len", new_col_str->length(), KPC(lob_data_get_ctx), "is_diff", rv->is_diff_[usr_column_idx]);
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->new_columns_[usr_column_idx] = nullptr;
@@ -1329,15 +1342,28 @@ int ObLogFormatter::fill_normal_cols_(
           if (! cv->is_out_row_) {
             rv->old_columns_[usr_column_idx] = &cv->string_value_;
           } else {
+            ObLobDataGetCtx *lob_data_get_ctx = nullptr;
             ObString *old_col_str = nullptr;
-            if (OB_FAIL(lob_ctx_cols.get_lob_column_value(column_id, false/*is_new_col*/, old_col_str))) {
+            if (OB_FAIL(lob_ctx_cols.get_lob_data_get_ctx(column_id, lob_data_get_ctx))) {
               if (OB_ENTRY_NOT_EXIST != ret) {
                 LOG_ERROR("get_lob_column_value failed", KR(ret), K(column_id));
               }
+            } else {
+              old_col_str = &(lob_data_get_ctx->get_old_lob_column_value());
             }
 
             if (OB_SUCC(ret)) {
-              if (cv->is_json() || cv->is_geometry()) {
+              if (lob_data_get_ctx->is_ext_info_log()) {
+                if (cv->is_json()) {
+                  // old data isn't passed when data is partial json
+                  // so need set is_null_lob_old_columns_
+                  rv->old_columns_[usr_column_idx] = nullptr;
+                  rv->is_null_lob_old_columns_[usr_column_idx] = true;
+                } else {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
+                }
+              } else if (cv->is_json() || cv->is_geometry()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *old_col_str);
 
@@ -1353,7 +1379,7 @@ int ObLogFormatter::fill_normal_cols_(
               // TODO remove
               LOG_DEBUG("fill_normal_cols_", K(is_new_value), K(column_id), KPC(cv), K(lob_ctx_cols),
                   "md5", calc_md5_cstr(old_col_str->ptr(), old_col_str->length()),
-                  "buf_len", old_col_str->length());
+                  "buf_len", old_col_str->length(), KPC(lob_data_get_ctx));
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->old_columns_[usr_column_idx] = nullptr;
@@ -1836,6 +1862,9 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
               "column_num", row_value->column_num_);
+        } else if (row_value->is_diff_[i]) {
+          br_data->putNewDiff(str_val->ptr(), str_val->length());
+          LOG_DEBUG("putNewDiff", K(i), KPC(str_val));
         } else {
           br_data->putNew(str_val->ptr(), str_val->length());
         }
@@ -2091,6 +2120,8 @@ int ObLogFormatter::parse_aux_lob_meta_table_(
       if (OB_FAIL(parse_aux_lob_meta_table_insert_(*log_entry_task, stmt_task, *new_cols))) {
         LOG_ERROR("parse_aux_lob_meta_table_insert_ failed", KR(ret));
       }
+    } else if (stmt_task.is_update()) {
+      // lob meta update data isn't used, just skip
     } else if (stmt_task.is_delete()) {
       if (OB_FAIL(parse_aux_lob_meta_table_delete_(*log_entry_task, stmt_task, *old_cols))) {
         LOG_ERROR("parse_aux_lob_meta_table_delete_ failed", KR(ret));

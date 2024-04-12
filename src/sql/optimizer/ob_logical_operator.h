@@ -1960,6 +1960,33 @@ int ObLogicalOperator::init_all_traverse_ctx(Allocator &alloc)
   return ret;
 }
 
+// json table default value struct
+struct ObColumnDefault
+{
+public:
+  ObColumnDefault()
+    : column_id_(common::OB_NOT_EXIST_COLUMN_ID),
+      default_error_expr_(nullptr),
+      default_empty_expr_(nullptr)
+  {}
+  ObColumnDefault(int64_t column_id)
+    : column_id_(column_id),
+      default_error_expr_(nullptr),
+      default_empty_expr_(nullptr)
+  {}
+  void reset()
+  {
+    column_id_ = common::OB_NOT_EXIST_COLUMN_ID;
+    default_error_expr_ = nullptr;
+    default_empty_expr_ = nullptr;
+  }
+
+  TO_STRING_KV(K_(column_id), KPC_(default_error_expr), KPC_(default_empty_expr));
+  int64_t column_id_;
+  ObRawExpr* default_error_expr_;
+  ObRawExpr* default_empty_expr_;
+};
+
 } // end of namespace sql
 } // end of namespace oceanbase
 

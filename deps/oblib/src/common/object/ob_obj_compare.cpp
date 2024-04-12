@@ -1340,8 +1340,10 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                 K(obj1.get_collation_type()), K(obj2.get_collation_type()),                     \
                 K(obj1), K(obj2));                                                              \
     } else {                                                                                    \
-      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
-      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObJsonBinCtx ctx1;                                                                        \
+      ObJsonBinCtx ctx2;                                                                        \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length(), &ctx1);                             \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length(), &ctx2);                             \
       ObIJsonBase *j_base1 = &j_bin1;                                                           \
       ObIJsonBase *j_base2 = &j_bin2;                                                           \
       if (OB_FAIL(j_bin1.reset_iter())) {                                                       \
@@ -1384,8 +1386,10 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
                 K(obj1), K(obj2));                                                              \
       ret = CR_OB_ERROR;                                                                        \
     } else {                                                                                    \
-      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length());                                    \
-      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length());                                    \
+      ObJsonBinCtx ctx1;                                                                        \
+      ObJsonBinCtx ctx2;                                                                        \
+      ObJsonBin j_bin1(data_str1.ptr(), data_str1.length(), &ctx1);                             \
+      ObJsonBin j_bin2(data_str2.ptr(), data_str2.length(), &ctx2);                             \
       ObIJsonBase *j_base1 = &j_bin1;                                                           \
       ObIJsonBase *j_base2 = &j_bin2;                                                           \
       if (OB_FAIL(j_bin1.reset_iter())) {                                                       \

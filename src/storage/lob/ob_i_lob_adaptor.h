@@ -35,6 +35,10 @@ public:
   virtual int get_lob_data(ObLobAccessParam &param, uint64_t piece_id, ObLobPieceInfo& info) = 0;
   virtual int revert_scan_iter(common::ObNewRowIterator *iter) = 0;
   virtual int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id) = 0;
+  virtual int prepare_single_get(
+      ObLobAccessParam &param,
+      ObTableScanParam &scan_param,
+      uint64_t &table_id) = 0;
 };
 
 } // storage

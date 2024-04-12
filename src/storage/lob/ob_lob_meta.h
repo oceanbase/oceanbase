@@ -25,6 +25,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObLobMetaSingleGetter;
+
 class ObLobMetaUtil {
 public:
   static const uint64_t LOB_META_COLUMN_CNT = 6;
@@ -195,6 +197,9 @@ public:
   int update(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row);
   // fetch lob id
   int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id);
+
+  int open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter);
+
   TO_STRING_KV("[LOB]", "meta mngr");
 private:
   // lob adaptor
@@ -221,6 +226,61 @@ OB_INLINE int64_t ob_lob_writer_length_validation(const common::ObCollationType 
   }
   return len_ret;
 }
+
+
+class ObLobMetaWriteRowIter: public ObNewRowIterator
+{
+public:
+  ObLobMetaWriteRowIter() : param_(nullptr), meta_iter_(nullptr), new_row_(), row_cell_(), result_() {}
+  ObLobMetaWriteRowIter(ObLobAccessParam *param, ObLobMetaWriteIter *meta_iter)
+    : param_(param), meta_iter_(meta_iter), new_row_(), row_cell_(), result_()
+  {}
+  virtual ~ObLobMetaWriteRowIter() {}
+  virtual int get_next_row(ObNewRow *&row);
+	virtual void reset() { new_row_.reset(); }
+private:
+  int update_seq_no();
+
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObLobMetaWriteRowIter);
+private:
+  // data members
+  ObLobAccessParam *param_;
+  ObLobMetaWriteIter *meta_iter_;
+  ObNewRow new_row_;
+  ObObj row_cell_[ObLobMetaUtil::LOB_META_COLUMN_CNT];
+  ObLobMetaWriteResult result_;
+};
+
+class ObLobMetaSingleGetter
+{
+public:
+  ObLobMetaSingleGetter():
+    param_(nullptr),
+    scan_param_(),
+    row_objs_(nullptr),
+    table_id_(0),
+    lob_adatper_(nullptr),
+    scan_iter_(nullptr)
+  {}
+
+  ~ObLobMetaSingleGetter();
+
+  int open(ObLobAccessParam &param, ObILobApator* lob_adatper);
+
+  int get_next_row(ObString &seq_id, ObLobMetaInfo &info);
+
+private:
+  ObLobAccessParam *param_;
+  ObTableScanParam scan_param_;
+  ObObj *row_objs_;
+  uint64_t table_id_;
+public:
+  ObILobApator *lob_adatper_;
+  ObTableScanIterator *scan_iter_;
+};
+
 
 } // storage
 } // oceanbase

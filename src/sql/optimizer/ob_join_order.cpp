@@ -5907,6 +5907,8 @@ int JsonTablePath::assign(const JsonTablePath &other, common::ObIAllocator *allo
   int ret = OB_SUCCESS;
   if (OB_FAIL(Path::assign(other, allocator))) {
     LOG_WARN("failed to deep copy path", K(ret));
+  } else if (OB_FAIL(column_param_default_exprs_.assign(other.column_param_default_exprs_))) {
+    LOG_WARN("fail to assgin default expr", K(ret));
   } else {
     table_id_ = other.table_id_;
     value_expr_ = other.value_expr_;
@@ -7689,6 +7691,8 @@ int ObJoinOrder::generate_json_table_paths()
     json_path->parent_ = this;
     ObSEArray<ObExecParamRawExpr *, 4> nl_params;
     ObRawExpr* json_table_expr = NULL;
+    ObRawExpr* default_expr = NULL;
+    ObArray<ColumnItem> column_items;
     // magic number ? todo refine this
     output_rows_ = 199;
     output_row_size_ = 199;
@@ -7709,6 +7713,37 @@ int ObJoinOrder::generate_json_table_paths()
     } else {
       json_path->value_expr_ = json_table_expr;
     }
+    // deal non_const default value
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(stmt->get_column_items(table_id_, column_items))) {
+      LOG_WARN("fail to get column item", K(ret));
+    } else if (OB_FAIL(json_path->column_param_default_exprs_.reserve(column_items.count()))) {
+      LOG_WARN("fail to init column default map", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_items.count(); i++) {
+      ColumnItem& col_item = column_items.at(i);
+      ObColumnDefault col_val(col_item.column_id_);
+      default_expr = col_item.default_value_expr_;
+      if (OB_FAIL(generate_json_table_default_val(json_path->nl_params_,
+                                                  json_path->subquery_exprs_,
+                                                  default_expr))) { // default error
+        LOG_WARN("fail to check default error value", K(ret));
+      } else {
+        col_val.default_error_expr_ = default_expr;
+      }
+      default_expr = col_item.default_empty_expr_;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generate_json_table_default_val(json_path->nl_params_,
+                                                         json_path->subquery_exprs_,
+                                                         default_expr))) { // default empty
+        LOG_WARN("fail to check default empty value", K(ret));
+      } else {
+        col_val.default_empty_expr_ = default_expr;
+      }
+      if (OB_SUCC(ret) && OB_FAIL(json_path->column_param_default_exprs_.push_back(col_val))) {
+        LOG_WARN("fail to append col default into array", K(ret), K(col_val));
+      }
+    }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(json_path->estimate_cost())) {
         LOG_WARN("failed to estimate cost", K(ret));
@@ -7717,6 +7752,45 @@ int ObJoinOrder::generate_json_table_paths()
       } else if (OB_FAIL(add_path(json_path))) {
         LOG_WARN("failed to add path", K(ret));
       } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::generate_json_table_default_val(ObIArray<ObExecParamRawExpr *> &nl_param,
+                                                  ObIArray<ObRawExpr *> &subquery_exprs,
+                                                  ObRawExpr*& default_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(default_expr)) {
+    ObArray<ObExecParamRawExpr *> t_nl_param;
+    const ObDMLStmt *stmt = NULL;
+    ObLogPlan *plan = get_plan();
+    ObSEArray<ObRawExpr *, 1> old_func_exprs;
+    ObSEArray<ObRawExpr *, 1> new_func_exprs;
+    ObExecParamRawExpr *param = nullptr;
+    if (OB_ISNULL(plan) || OB_ISNULL(stmt = plan->get_stmt())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("NULL pointer error", K(plan), K(ret));
+    } else if (OB_FAIL(old_func_exprs.push_back(default_expr))) {
+      LOG_WARN("failed to push back function table expr", K(ret));
+    } else if (OB_FAIL(extract_params_for_inner_path(default_expr->get_relation_ids(),
+                                                      t_nl_param,
+                                                      subquery_exprs,
+                                                      old_func_exprs,
+                                                      new_func_exprs))) {
+      LOG_WARN("failed to extract params", K(ret));
+    } else if (OB_UNLIKELY(new_func_exprs.count() != 1) ||
+                OB_ISNULL(new_func_exprs.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("new function table expr is invalid", K(ret), K(new_func_exprs));
+    } else {
+      default_expr = new_func_exprs.at(0);
+      for (int64_t i = 0; OB_SUCC(ret) && i < t_nl_param.count(); i++) {
+        if (OB_FAIL(nl_param.push_back(t_nl_param.at(i)))) {
+          LOG_WARN("fail to push nl param", K(ret));
+        }
+      }
     }
   }
   return ret;

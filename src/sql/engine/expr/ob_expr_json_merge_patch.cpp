@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_merge_patch.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "share/ob_json_access_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -163,7 +164,7 @@ int ObExprJsonMergePatch::eval_json_merge_patch(const ObExpr &expr, ObEvalCtx &c
     ObString raw_bin;
     if (has_null) {
       res.set_null();
-    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));
@@ -302,7 +303,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to construct jbuf", K(ret));
       } else if (dst_type == ObJsonType) {
-        if (OB_FAIL(j_base->get_raw_binary(res_string, &temp_allocator))) {
+        if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, res_string, &temp_allocator))) {
           LOG_WARN("failed: get json raw binary", K(ret));
         }
       } else {

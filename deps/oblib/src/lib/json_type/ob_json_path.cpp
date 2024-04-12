@@ -974,10 +974,10 @@ bool ObJsonPathCache::is_match(ObString& path_str, size_t idx)
   return result;
 }
 
-int ObJsonPathCache::find_and_add_cache(ObJsonPath*& res_path, ObString& path_str, int arg_idx)
+int ObJsonPathCache::find_and_add_cache(ObJsonPath*& res_path, ObString& path_str, int arg_idx, bool is_const)
 {
   INIT_SUCC(ret);
-  if (!is_match(path_str, arg_idx)) {
+  if (!((is_const && arg_idx < size()) || is_match(path_str, arg_idx))) {
     void* buf = allocator_->alloc(sizeof(ObJsonPath));
     if (OB_NOT_NULL(buf)) {
       ObJsonPath* path = new (buf) ObJsonPath(path_str, allocator_);
@@ -4004,15 +4004,16 @@ int ObJsonPath::parse_comp_exist(ObJsonPathFilterNode* filter_comp_node)
         uint64_t sub_len = end - start + 2;
         char* sub_path = static_cast<char*> (allocator_->alloc(sub_len));
         if (OB_ISNULL(sub_path)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("fail to allocate memory for sub_path.",K(ret), K(len),K(start_ptr));
-          } else {
-            sub_path[0] = ObJsonPathItem::ROOT;
-            MEMCPY(sub_path + 1, start_ptr, sub_len - 1);
-          }
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for sub_path.",K(ret), K(len),K(start_ptr));
+        } else {
+          sub_path[0] = ObJsonPathItem::ROOT;
+          MEMCPY(sub_path + 1, start_ptr, sub_len - 1);
+        }
         ObString exist_subpath(sub_len, sub_path);
         ObJsonPath* spath = static_cast<ObJsonPath*> (allocator_->alloc(sizeof(ObJsonPath)));
-        if (OB_ISNULL(spath)) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(spath)) {
           // error
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate row buffer failed at sub_path",K(ret), K(index_), K(expression_));

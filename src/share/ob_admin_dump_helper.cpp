@@ -209,6 +209,7 @@ void ObLogStat::reset()
   total_tx_redo_log_count_ = 0;
   normal_row_count_ = 0;
   table_lock_count_ = 0;
+  ext_info_log_count_ = 0;
 }
 
 int64_t ObLogStat::total_size() const

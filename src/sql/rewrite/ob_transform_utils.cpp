@@ -13760,6 +13760,7 @@ int ObTransformUtils::check_is_json_constraint(ObTransformerCtx *ctx,
   return ret;
 }
 
+
 int ObTransformUtils::add_dummy_expr_for_json_object_node(ObTransformerCtx *ctx,
                                                           ObSEArray<ObRawExpr *, 1>& param_array)
 {

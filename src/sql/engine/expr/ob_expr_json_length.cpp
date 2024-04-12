@@ -103,7 +103,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
       if (type2 == ObNullType) { // null should display "NULL"
         is_null = true;
       } else { // ObLongTextType
-        ObJsonBaseVector hit;
+        ObJsonSeekResult hit;
         ObString j_path_text = data2->get_string();
         ObJsonPath *j_path = NULL;
         if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, *data2, meta2, has_lob_header2, j_path_text))) {

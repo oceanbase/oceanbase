@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_LIB_JSON_TYPE_OB_JSON_COMMON_
 #define OCEANBASE_LIB_JSON_TYPE_OB_JSON_COMMON_
 #include "lib/string/ob_string_buffer.h"
+#include "lib/lob/ob_lob_base.h"
 
 namespace oceanbase {
 namespace common {

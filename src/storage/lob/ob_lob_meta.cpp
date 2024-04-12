@@ -17,6 +17,7 @@
 #include "ob_lob_meta.h"
 #include "ob_lob_seq.h"
 #include "ob_lob_manager.h"
+#include "storage/tx_storage/ob_access_service.h"
 #include "storage/access/ob_table_scan_iterator.h"
 
 namespace oceanbase
@@ -990,6 +991,19 @@ int ObLobMetaManager::scan(ObLobAccessParam& param, ObLobMetaScanIter &iter)
   }
   return ret;
 }
+
+int ObLobMetaManager::open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter)
+{
+  int ret = OB_SUCCESS;
+  ObILobApator *apator = &persistent_lob_adapter_;
+  if (OB_FAIL(getter->open(param, apator))) {
+    LOG_WARN("open lob scan iter failed.", K(ret), K(param));
+  } else {
+    getter->lob_adatper_ = apator;
+  }
+  return ret;
+}
+
 // erase specified range
 int ObLobMetaManager::erase(ObLobAccessParam& param, ObLobMetaInfo& in_row)
 {
@@ -1020,6 +1034,172 @@ int ObLobMetaManager::fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id)
   }
   return ret;
 }
+
+
+int ObLobMetaWriteRowIter::get_next_row(ObNewRow *&row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(meta_iter_->get_next_row(result_))) {
+    if (ret != OB_ITER_END) {
+      LOG_WARN("get next meta info failed.", K(ret));
+    }
+  } else {
+    result_.info_.lob_data_.assign_ptr(result_.data_.ptr(), result_.data_.length());
+    for (int64_t i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
+      row_cell_[i].reset();
+      row_cell_[i].set_nop_value();
+    }
+    row_cell_[ObLobMetaUtil::LOB_ID_COL_ID].set_varchar(reinterpret_cast<char*>(&result_.info_.lob_id_), sizeof(ObLobId));
+    row_cell_[ObLobMetaUtil::LOB_ID_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+    row_cell_[ObLobMetaUtil::SEQ_ID_COL_ID].set_varchar(result_.info_.seq_id_);
+    row_cell_[ObLobMetaUtil::SEQ_ID_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+    row_cell_[ObLobMetaUtil::BYTE_LEN_COL_ID].set_uint32(result_.info_.byte_len_);
+    row_cell_[ObLobMetaUtil::CHAR_LEN_COL_ID].set_uint32(result_.info_.char_len_);
+    row_cell_[ObLobMetaUtil::PIECE_ID_COL_ID].set_uint64(result_.info_.piece_id_);
+
+    row_cell_[ObLobMetaUtil::LOB_DATA_COL_ID].set_varchar(result_.info_.lob_data_);
+    row_cell_[ObLobMetaUtil::LOB_DATA_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+
+    new_row_.assign(row_cell_, ObLobMetaUtil::LOB_META_COLUMN_CNT);
+    // refresh param
+    // refrsh outrow ctx for cdc
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObLobManager::update_out_ctx(*param_, nullptr, result_.info_))) { // new row
+      LOG_WARN("failed update checksum.", K(ret));
+    } else if (OB_FAIL(update_seq_no())) {
+      LOG_WARN("update_seq_no fail", K(ret));
+    } else {
+      param_->lob_data_->byte_size_ += result_.info_.byte_len_;
+      param_->byte_size_ = param_->lob_data_->byte_size_;
+      if (ObLobManager::lob_handle_has_char_len(*param_)) {
+        int64_t *len = ObLobManager::get_char_len_ptr(*param_);
+        *len = *len + result_.info_.char_len_;
+        OB_ASSERT(*len >= 0);
+      }
+      // set output
+      row = &new_row_;
+    }
+  }
+  return ret;
+}
+
+int ObLobMetaWriteRowIter::update_seq_no()
+{
+  int ret = OB_SUCCESS;
+  if (param_->seq_no_st_.is_valid()) {
+    if (param_->used_seq_cnt_ < param_->total_seq_cnt_) {
+      param_->dml_base_param_->spec_seq_no_ = param_->seq_no_st_ + param_->used_seq_cnt_;
+      param_->used_seq_cnt_++;
+      LOG_DEBUG("dml lob meta with seq no", K(param_->dml_base_param_->spec_seq_no_));
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("failed to get seq no from param.", K(ret), KPC(param_));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid seq no from param.", K(ret), KPC(param_));
+  }
+  return ret;
+}
+
+ObLobMetaSingleGetter::~ObLobMetaSingleGetter()
+{
+  if (OB_NOT_NULL(row_objs_)) {
+    param_->allocator_->free(row_objs_);
+    row_objs_ = nullptr;
+  }
+  if (OB_NOT_NULL(scan_iter_)) {
+    scan_iter_->reset();
+    if (lob_adatper_ != NULL) {
+      lob_adatper_->revert_scan_iter(scan_iter_);
+    }
+    scan_iter_ = nullptr;
+  }
+}
+
+int ObLobMetaSingleGetter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  if (OB_FAIL(lob_adatper->prepare_single_get(param, scan_param_, table_id_))) {
+    LOG_WARN("failed to open iter", K(ret));
+  } else if (OB_ISNULL(buf = param.allocator_->alloc(sizeof(ObObj) * 4))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alloc range obj failed.", K(ret));
+  } else {
+    row_objs_ = reinterpret_cast<ObObj*>(buf);
+    param_ = &param;
+  }
+  return ret;
+}
+
+int ObLobMetaSingleGetter::get_next_row(ObString &seq_id, ObLobMetaInfo &info)
+{
+  int ret = OB_SUCCESS;
+  common::ObNewRowIterator *iter = nullptr;
+  blocksstable::ObDatumRow* datum_row = nullptr;
+  ObObj *row_objs = row_objs_;
+  const char *lob_id_ptr = reinterpret_cast<char*>(&param_->lob_data_->id_);
+  row_objs[0].reset();
+  row_objs[0].set_varchar(lob_id_ptr, sizeof(ObLobId)); // lob_id
+  row_objs[0].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+  row_objs[1].reset();
+  row_objs[1].set_varchar(seq_id.ptr(), seq_id.length()); // lob_id
+  row_objs[1].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+  ObRowkey min_row_key(row_objs, 2);
+
+  row_objs[2].reset();
+  row_objs[2].set_varchar(lob_id_ptr, sizeof(ObLobId)); // lob_id
+  row_objs[2].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+  row_objs[3].reset();
+  row_objs[3].set_varchar(seq_id.ptr(), seq_id.length()); // lob_id
+  row_objs[3].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
+  ObRowkey max_row_key(row_objs + 2, 2);
+
+  common::ObNewRange range;
+  range.table_id_ = table_id_;
+  range.start_key_ = min_row_key;
+  range.end_key_ = max_row_key;
+  range.border_flag_.set_inclusive_start();
+  range.border_flag_.set_inclusive_end();
+  scan_param_.key_ranges_.reset();
+
+  ObAccessService *oas = MTL(ObAccessService*);
+  if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
+    LOG_WARN("failed to push key range.", K(ret), K(scan_param_), K(range));
+  } else if (OB_ISNULL(oas)) {
+    ret = OB_ERR_INTERVAL_INVALID;
+    LOG_WARN("get access service failed.", K(ret));
+  } else if (OB_NOT_NULL(scan_iter_)) {
+    scan_iter_->reuse();
+    if (OB_FAIL(scan_iter_->rescan(scan_param_))) {
+      LOG_WARN("rescan fali", K(ret), K(scan_param_));
+    }
+  } else if (OB_FAIL(oas->table_scan(scan_param_, iter))) {
+    LOG_WARN("do table scan fali", K(ret), K(scan_param_));
+  } else {
+    scan_iter_ = static_cast<ObTableScanIterator*>(iter);
+    iter = nullptr;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(scan_iter_->get_next_row(datum_row))) {
+    LOG_WARN("get next row failed.", K(ret));
+  } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(datum_row, info, false))) {
+    LOG_WARN("failed to transform row.", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    if (iter != nullptr) {
+      iter->reset();
+      if (lob_adatper_ != nullptr) {
+        lob_adatper_->revert_scan_iter(iter);
+      }
+      iter = nullptr;
+      scan_iter_ = nullptr;
+    }
+  }
+  return ret;
+}
+
 
 }
 }

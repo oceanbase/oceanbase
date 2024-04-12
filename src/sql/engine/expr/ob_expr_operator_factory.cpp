@@ -313,6 +313,8 @@
 #include "sql/engine/expr/ob_expr_nlssort.h"
 #include "sql/engine/expr/ob_expr_json_object.h"
 #include "sql/engine/expr/ob_expr_json_extract.h"
+#include "sql/engine/expr/ob_expr_json_schema_valid.h"
+#include "sql/engine/expr/ob_expr_json_schema_validation_report.h"
 #include "sql/engine/expr/ob_expr_json_contains.h"
 #include "sql/engine/expr/ob_expr_json_contains_path.h"
 #include "sql/engine/expr/ob_expr_json_depth.h"
@@ -325,6 +327,7 @@
 #include "sql/engine/expr/ob_expr_json_valid.h"
 #include "sql/engine/expr/ob_expr_json_remove.h"
 #include "sql/engine/expr/ob_expr_json_array_append.h"
+#include "sql/engine/expr/ob_expr_json_append.h"
 #include "sql/engine/expr/ob_expr_json_array_insert.h"
 #include "sql/engine/expr/ob_expr_json_value.h"
 #include "sql/engine/expr/ob_expr_json_replace.h"
@@ -401,6 +404,9 @@
 #include "sql/engine/expr/ob_expr_xml_serialize.h"
 #include "sql/engine/expr/ob_expr_xmlcast.h"
 #include "sql/engine/expr/ob_expr_update_xml.h"
+#include "sql/engine/expr/ob_expr_insert_child_xml.h"
+#include "sql/engine/expr/ob_expr_xml_delete_xml.h"
+#include "sql/engine/expr/ob_expr_xml_sequence.h"
 #include "sql/engine/expr/ob_expr_sql_udt_construct.h"
 #include "sql/engine/expr/ob_expr_priv_attribute_access.h"
 #include "sql/engine/expr/ob_expr_temp_table_ssid.h"
@@ -913,6 +919,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprHash);
     REG_OP(ObExprJsonObject);
     REG_OP(ObExprJsonExtract);
+    REG_OP(ObExprJsonSchemaValid);
+    REG_OP(ObExprJsonSchemaValidationReport);
     REG_OP(ObExprJsonContains);
     REG_OP(ObExprJsonContainsPath);
     REG_OP(ObExprJsonDepth);
@@ -925,6 +933,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprJsonSearch);
     REG_OP(ObExprJsonValid);
     REG_OP(ObExprJsonArrayAppend);
+    REG_OP(ObExprJsonAppend);
     REG_OP(ObExprJsonArrayInsert);
     REG_OP(ObExprJsonValue);
     REG_OP(ObExprJsonReplace);
@@ -939,6 +948,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprJsonMergePatch);
     REG_OP(ObExprJsonPretty);
     REG_OP(ObExprJsonMemberOf);
+    REG_OP(ObExprExtractValue);
+    REG_OP(ObExprUpdateXml);
     REG_OP(ObExprSha);
     REG_SAME_OP(T_FUN_SYS_SHA ,T_FUN_SYS_SHA, N_SHA1, i);
     REG_OP(ObExprSha2);
@@ -1353,6 +1364,9 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprXmlSerialize);
   REG_OP_ORCL(ObExprXmlcast);
   REG_OP_ORCL(ObExprUpdateXml);
+  REG_OP_ORCL(ObExprInsertChildXml);
+  REG_OP_ORCL(ObExprDeleteXml);
+  REG_OP_ORCL(ObExprXmlSequence);
   REG_OP_ORCL(ObExprUdtConstruct);
   REG_OP_ORCL(ObExprUDTAttributeAccess);
   REG_OP_ORCL(ObExprTempTableSSID);

@@ -7510,7 +7510,9 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
   UNUSED(in_root_job);
   ObIAllocator &alloc = phy_plan_->get_allocator();
   ObRawExpr *value_raw_expr = nullptr;
+  ObArray<ObString> ns_arr;
   ObExpr *value_expr = nullptr;
+  ObString ns_prefix_str;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op.get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7518,7 +7520,8 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
   } else if (OB_FAIL(spec.column_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.emp_default_exprs_.init(op.get_stmt()->get_column_size()))
           || OB_FAIL(spec.err_default_exprs_.init(op.get_stmt()->get_column_size()))
-          || OB_FAIL(spec.cols_def_.init(op.get_origin_cols_def().count()))) {
+          || OB_FAIL(spec.cols_def_.init(op.get_origin_cols_def().count()))
+          || OB_FAIL(spec.namespace_def_.init(op.get_ns_size()))) {
     LOG_WARN("failed to init array", K(ret));
   } else if (OB_UNLIKELY(op.get_num_of_child() > 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -7531,6 +7534,7 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
   } else {
     spec.has_correlated_expr_ = value_raw_expr->has_flag(CNT_DYNAMIC_PARAM);
     spec.value_expr_ = value_expr;
+    spec.table_type_ = op.get_table_type();  // table func type
 
     if (OB_FAIL(spec.dup_origin_column_defs(op.get_origin_cols_def()))) {
       LOG_WARN("failed to append col define", K(ret));
@@ -7542,9 +7546,24 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
       }
     }
 
+    if (OB_SUCC(ret)) { // deal namespace
+      if (OB_FAIL(op.get_namespace_arr(ns_arr))) {
+        LOG_WARN("fail to get ns from log table", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ns_arr.size(); i++) {
+          if (OB_FAIL(ob_write_string(*(spec.namespace_def_.get_allocator()), ns_arr.at(i), ns_prefix_str))) { // need deep copy
+            LOG_WARN("fail to wirte prefix string", K(ret), K(ns_prefix_str));
+          } else if (OB_FAIL(spec.namespace_def_.push_back(ns_prefix_str))) {
+            LOG_WARN("fail to add ns str to arr", K(ret), K(i));
+          }
+        }
+      }
+    }
+
     bool need_set_lob_header = get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0;
     for (int64_t i = 0; OB_SUCC(ret) && i < op.get_stmt()->get_column_size(); ++i) {
       ObExpr *rt_expr = nullptr;
+      ObRawExpr* default_val = nullptr;
       const ColumnItem *col_item = op.get_stmt()->get_column_item(i);
       CK (OB_NOT_NULL(col_item));
       CK (OB_NOT_NULL(col_item->expr_));
@@ -7556,7 +7575,7 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
         if (OB_SUCC(ret) && is_lob_storage(rt_expr->obj_meta_.get_type()) && need_set_lob_header) {
           rt_expr->obj_meta_.set_has_lob_header();
         }
-
+        ObColumnDefault* col_def;
         OZ (spec.column_exprs_.push_back(rt_expr));
 
         if (OB_FAIL(ret)) {
@@ -7569,20 +7588,23 @@ int ObStaticEngineCG::generate_spec(ObLogJsonTable &op, ObJsonTableSpec &spec,
           ObJtColInfo* col_info = spec.cols_def_.at(col_item->col_idx_);
           col_info->output_column_idx_ = spec.column_exprs_.count() - 1;
 
-          if (OB_NOT_NULL(col_item->default_value_expr_)) {
+          if (OB_ISNULL(col_def = op.get_column_param_default_val(col_item->column_id_))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get default value", K(ret), K(col_item->column_id_));
+          } else if (OB_NOT_NULL(default_val = col_def->default_error_expr_)) {
             ObExpr *err_expr = nullptr;
-            OZ (mark_expr_self_produced(col_item->default_value_expr_));
-            OZ (generate_rt_expr(*col_item->default_value_expr_, err_expr));
+            OZ (mark_expr_self_produced(default_val));
+            OZ (generate_rt_expr(*default_val, err_expr));
             if (OB_SUCC(ret) && is_lob_storage(err_expr->obj_meta_.get_type()) && need_set_lob_header) {
               err_expr->obj_meta_.set_has_lob_header();
             }
             OX (col_info->error_expr_id_ = spec.err_default_exprs_.count());
             OZ (spec.err_default_exprs_.push_back(err_expr));
           }
-          if (OB_SUCC(ret) && OB_NOT_NULL(col_item->default_empty_expr_)) {
+          if (OB_SUCC(ret) && OB_NOT_NULL(default_val = col_def->default_empty_expr_)) {
             ObExpr *emp_expr = nullptr;
-            OZ (mark_expr_self_produced(col_item->default_empty_expr_));
-            OZ (generate_rt_expr(*col_item->default_empty_expr_, emp_expr));
+            OZ (mark_expr_self_produced(default_val));
+            OZ (generate_rt_expr(*default_val, emp_expr));
             if (OB_SUCC(ret) && is_lob_storage(emp_expr->obj_meta_.get_type()) && need_set_lob_header) {
               emp_expr->obj_meta_.set_has_lob_header();
             }

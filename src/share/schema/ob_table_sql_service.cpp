@@ -4059,6 +4059,11 @@ int ObTableSqlService::gen_column_dml(
   lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
+  } else if (! ((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)
+      && column.get_lob_chunk_size() != OB_DEFAULT_LOB_CHUNK_SIZE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.3.1, lob chunk size is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, lob chunk size");
   } else if (OB_FAIL(ObCompatModeGetter::get_table_compat_mode(
                column.get_tenant_id(), column.get_table_id(), compat_mode))) {
       LOG_WARN("fail to get tenant mode", K(ret), K(column));
@@ -4225,6 +4230,8 @@ int ObTableSqlService::gen_column_dml(
                          || (tenant_data_version >= DATA_VERSION_4_2_0_0 &&OB_FAIL(dml.add_column("sub_data_type", column.get_sub_data_type())))
                          || (tenant_data_version >= DATA_VERSION_4_3_0_0
                             && OB_FAIL(dml.add_column("skip_index_attr", column.get_skip_index_attr().get_packed_value())))
+                         || (((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)
+                            && OB_FAIL(dml.add_column("lob_chunk_size", column.get_lob_chunk_size())))
                          || (tenant_data_version >= DATA_VERSION_4_2_2_0 &&OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {

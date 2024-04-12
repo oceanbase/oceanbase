@@ -159,6 +159,24 @@ private:
       MutatorRow *&row,
       ObCDCTableInfo &table_info,
       bool &is_ignored);
+  int handle_mutator_ext_info_log_(
+      ObLogTenant *tenant,
+      const ObTabletID &tablet_id,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      int64_t &pos,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task);
+  int parse_ext_info_log_mutator_row_(
+      ObLogTenant *tenant,
+      const char *redo_data,
+      const int64_t redo_data_len,
+      int64_t &pos,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow *&row,
+      bool &is_ignored);
+
 private:
   bool              inited_;
   IObLogBRPool      *br_pool_;

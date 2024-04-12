@@ -351,7 +351,11 @@ int ObDMLService::check_lob_column_changed(ObEvalCtx &eval_ctx,
       cmp_params.compare_len_ = UINT64_MAX;
       cmp_params.timeout_ = timeout;
       cmp_params.tx_desc_ = eval_ctx.exec_ctx_.get_my_session()->get_tx_desc();
-      if(OB_FAIL(lob_mngr->equal(old_lob, new_lob, cmp_params, is_equal))) {
+      if (old_lob.is_persist_lob() && new_lob.is_delta_temp_lob()) {
+        if (OB_FAIL(ObDeltaLob::has_diff(new_lob, result))) {
+          LOG_WARN("delata lob has_diff fail", K(ret), K(old_lob), K(new_lob));
+        }
+      } else if(OB_FAIL(lob_mngr->equal(old_lob, new_lob, cmp_params, is_equal))) {
         LOG_WARN("fail to compare lob", K(ret), K(old_lob), K(new_lob));
       } else {
         result = is_equal ? 0 : 1;

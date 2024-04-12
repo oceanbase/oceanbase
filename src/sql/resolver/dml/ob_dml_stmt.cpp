@@ -849,11 +849,17 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
         LOG_WARN("failed to visit temp expr", K(ret));
       }
     }
-    if (OB_SUCC(ret) && NULL != column_items_.at(i).default_value_expr_) {
+    if (OB_FAIL(ret)) {
+    } else if (NULL != column_items_.at(i).default_value_expr_) {
       if (OB_FAIL(visitor.visit(column_items_.at(i).default_value_expr_,
                                 SCOPE_BASIC_TABLE))) {
         LOG_WARN("failed to visit temp expr", K(ret));
       }
+    } else if (NULL != column_items_.at(i).default_empty_expr_) {
+      if (OB_FAIL(visitor.visit(column_items_.at(i).default_empty_expr_,
+                                SCOPE_FROM))) {
+        LOG_WARN("failed to visit temp expr", K(ret));
+      } // non_const default value
     } else { /*do nothing*/ }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < table_items_.count(); i++) {
@@ -1874,6 +1880,14 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
                  is_hierarchical_query()) {
         if (OB_FAIL(set_sharable_expr_reference(*column_item.expr_, ExplicitedRefType::REF_BY_NORMAL))) {
           LOG_WARN("failed to set sharable exprs reference", K(ret));
+        } else if (table_item->is_json_table()) {
+          if (NULL != column_item.default_value_expr_
+                    && OB_FAIL(set_sharable_expr_reference(*column_item.default_value_expr_, ExplicitedRefType::REF_BY_NORMAL))) {
+            LOG_WARN("failed to visit default error expr", K(ret));
+          } else if (NULL != column_item.default_empty_expr_
+                    && OB_FAIL(set_sharable_expr_reference(*column_item.default_empty_expr_, ExplicitedRefType::REF_BY_NORMAL))) {
+            LOG_WARN("failed to visit default empty expr", K(ret));
+          } else { /*do nothing*/ }
         }
       } else { /*do nothing*/ }
     }
@@ -4973,7 +4987,7 @@ int ObJtColBaseInfo::assign(const ObJtColBaseInfo& src)
 int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
-
+  table_type_ = src.table_type_;
   if (OB_FAIL(expr_copier.copy(src.doc_expr_, doc_expr_))) {
     LOG_WARN("failed to deep copy raw expr", K(ret));
   }
@@ -4998,6 +5012,14 @@ int ObJsonTableDef::deep_copy(const ObJsonTableDef& src, ObIRawExprCopier &expr_
       }
     }
   }
+  ObString ns_str;
+  for (size_t i = 0; OB_SUCC(ret) && i < src.namespace_arr_.count(); i ++) {
+    if (OB_FAIL(ob_write_string(*allocator, src.namespace_arr_.at(i), ns_str))) {
+      LOG_WARN("fail to copy string", K(src.namespace_arr_.at(i)), K(i));
+    } else if (OB_FAIL(namespace_arr_.push_back(ns_str))) {
+      LOG_WARN("fail to push str in array", K(ret), K(ns_str));
+    }
+  }
 
   return ret;
 }
@@ -5007,9 +5029,15 @@ int ObJsonTableDef::assign(const ObJsonTableDef& src)
   int ret = OB_SUCCESS;
 
   doc_expr_ = src.doc_expr_;
+  table_type_ = src.table_type_;
 
   if (OB_FAIL(all_cols_.assign(src.all_cols_))) {
     LOG_WARN("fail to assign all cols.", K(ret));
+  }
+  for (size_t i = 0; OB_SUCC(ret) && i < src.namespace_arr_.count(); i ++) {
+    if (OB_FAIL(namespace_arr_.push_back(src.namespace_arr_.at(i)))) {
+      LOG_WARN("fail to push str in array", K(ret), K(src.namespace_arr_.at(i)));
+    }
   }
 
   return ret;

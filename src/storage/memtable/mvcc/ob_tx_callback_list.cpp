@@ -260,6 +260,8 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
           if (iter->is_need_free()) {
             if (iter->is_table_lock_callback()) {
               callback_mgr_.get_ctx().free_table_lock_callback(iter);
+            } else if (MutatorType::MUTATOR_ROW_EXT_INFO == iter->get_mutator_type()) {
+              callback_mgr_.get_ctx().free_ext_info_callback(iter);
             } else {
               callback_mgr_.get_ctx().free_mvcc_row_callback(iter);
             }

@@ -234,6 +234,10 @@ int ObDelUpdResolver::resolve_assignments(const ParseNode &parse_node,
         }
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(resolve_json_partial_update_flag(table_assigns, scope))) {
+      LOG_WARN("resolve_json_partial_update_flag fail", K(ret));
+    }
   }
   return ret;
 }
@@ -911,7 +915,7 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
             ret = dml->is_insert_stmt() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_NON_UPDATABLE_TABLE;
             LOG_WARN("view is not updatable", K(ret));
           } else if (new_table_item->is_json_table()) {
-            ret = OB_ERR_NON_INSERTABLE_TABLE;
+            ret = is_mysql_mode() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
             LOG_WARN("json table can not be insert", K(ret));
           } else {
             ret = OB_ERR_UNEXPECTED;
@@ -4632,6 +4636,69 @@ int ObDelUpdResolver::check_need_match_all_params(const common::ObIArray<ObColum
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+
+int ObDelUpdResolver::resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope)
+{
+  INIT_SUCC(ret);
+  if (T_UPDATE_SCOPE == scope) {
+    bool need_partial_update = false;
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session is NULL", K(ret));
+    } else {
+      ObString option = session_info_->get_log_row_value_option();
+      need_partial_update = option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_JSON) == 0
+        || option.case_compare(OB_LOG_ROW_VALUE_PARTIAL_ALL) == 0;
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && need_partial_update && i < table_assigns.count(); ++i) {
+      ObTableAssignment &table_assign = table_assigns.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < table_assign.assignments_.count(); ++j) {
+        ObAssignment &assign = table_assign.assignments_.at(j);
+        bool allow_json_partial_update = false;
+        if (OB_FAIL(mark_json_partial_update_flag(assign.column_expr_, assign.expr_, 0, allow_json_partial_update))) {
+          LOG_WARN("mark_json_partial_update_flag fail", K(ret), K(table_assign), K(assign));
+        }
+      }
+    }
+  }
+  return ret;
+}
+int ObDelUpdResolver::mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update)
+{
+  INIT_SUCC(ret);
+  ObItemType expr_type = expr->get_expr_type();
+  if (OB_ISNULL(ref_expr) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref_expr or expr is NULL", K(ret), KP(ref_expr), KP(expr));
+  } else if (! ob_is_json(ref_expr->get_data_type())) {
+  } else if (expr->is_column_ref_expr()) {
+    allow_json_partial_update = ObRawExprUtils::is_same_column_ref(ref_expr, expr);
+  } else if (T_FUN_COLUMN_CONV == expr_type) {
+    if (0 == depth && ob_is_json(expr->get_data_type()) && ob_is_json(expr->get_param_expr(4)->get_data_type())) {
+      ObRawExpr *json_expr = expr->get_param_expr(4);
+      if (OB_FAIL(mark_json_partial_update_flag(ref_expr, json_expr, depth + 1, allow_json_partial_update))) {
+        LOG_WARN("mark_json_partial_update_flag fail", K(ret), KP(ref_expr), KP(expr), KP(json_expr));
+      } else if (allow_json_partial_update) {
+        json_expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | json_expr->get_extra());
+      }
+    }
+  } else if (expr_type != T_FUN_SYS_JSON_REPLACE
+      && expr_type != T_FUN_SYS_JSON_SET
+      && expr_type != T_FUN_SYS_JSON_REMOVE) {
+  } else if (OB_FAIL(mark_json_partial_update_flag(ref_expr, expr->get_param_expr(0), depth + 1, allow_json_partial_update))) {
+    LOG_WARN("mark fail", K(ret));
+  } else if (allow_json_partial_update) {
+    expr->set_extra(OB_JSON_PARTIAL_UPDATE_ALLOW | expr->get_extra());
+    if (depth == 0) {
+      expr->set_extra(OB_JSON_PARTIAL_UPDATE_LAST_EXPR | expr->get_extra());
+    }
+    if (expr->get_param_expr(0)->is_column_ref_expr()) {
+      expr->set_extra(OB_JSON_PARTIAL_UPDATE_FIRST_EXPR | expr->get_extra());
     }
   }
   return ret;

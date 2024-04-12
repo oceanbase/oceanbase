@@ -81,16 +81,14 @@ int ObLogJsonTable::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
   } else if (NULL != value_expr_ && OB_FAIL(all_exprs.push_back(value_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
-      const ColumnItem *col_item = stmt->get_column_item(i);
-      if (col_item->table_id_ == table_id_) {
-        if (OB_NOT_NULL(col_item->default_value_expr_)
-            && OB_FAIL(all_exprs.push_back(col_item->default_value_expr_))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        } else if (OB_NOT_NULL(col_item->default_empty_expr_)
-                   && OB_FAIL(all_exprs.push_back(col_item->default_empty_expr_))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        }
+    // add default value into all exprs
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_param_default_exprs_.count(); i ++) {
+      if (OB_NOT_NULL(column_param_default_exprs_.at(i).default_error_expr_)
+          && OB_FAIL(all_exprs.push_back(column_param_default_exprs_.at(i).default_error_expr_))) {
+        LOG_WARN("push error expr to array failed", K(ret));
+      } else if (OB_NOT_NULL(column_param_default_exprs_.at(i).default_empty_expr_)
+          && OB_FAIL(all_exprs.push_back(column_param_default_exprs_.at(i).default_empty_expr_))) {
+        LOG_WARN("push empty expr to array failed", K(ret));
       }
     }
   }
@@ -136,6 +134,61 @@ uint64_t ObLogJsonTable::hash(uint64_t seed) const
   seed = do_hash(table_name_, seed);
   seed = ObLogicalOperator::hash(seed);
   return seed;
+}
+
+int ObLogJsonTable::set_namespace_arr(ObIArray<ObString> &namespace_arr)
+{
+  int ret = OB_SUCCESS;
+  for (size_t i = 0; OB_SUCC(ret) && i < namespace_arr.count(); i++) {
+    if (OB_FAIL(namespace_arr_.push_back(namespace_arr.at(i)))) {
+      LOG_WARN("fail to push ns to arr", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObLogJsonTable::get_namespace_arr(ObIArray<ObString> &namespace_arr)
+{
+  int ret = OB_SUCCESS;
+  for (size_t i = 0; OB_SUCC(ret) && i < namespace_arr_.count(); i++) {
+    if (OB_FAIL(namespace_arr.push_back(namespace_arr_.at(i)))) {
+      LOG_WARN("fail to push ns to arr", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObLogJsonTable::set_column_param_default_arr(ObIArray<ObColumnDefault> &column_param_default_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (size_t i = 0; OB_SUCC(ret) && i < column_param_default_exprs.count(); i++) {
+    if (OB_FAIL(column_param_default_exprs_.push_back(column_param_default_exprs.at(i)))) {
+      LOG_WARN("fail to push ns to arr", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+int ObLogJsonTable::get_column_param_default_arr(ObIArray<ObColumnDefault> &column_param_default_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (size_t i = 0; OB_SUCC(ret) && i < column_param_default_exprs_.count(); i++) {
+    if (OB_FAIL(column_param_default_exprs.push_back(column_param_default_exprs_.at(i)))) {
+      LOG_WARN("fail to push ns to arr", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
+ObColumnDefault* ObLogJsonTable::get_column_param_default_val(int64_t index)
+{
+  ObColumnDefault* val = NULL;
+  for (size_t i = 0; i < column_param_default_exprs_.count(); i++) {
+    if (index == column_param_default_exprs_.at(i).column_id_) {
+      val = &column_param_default_exprs_.at(i);
+    }
+  }
+  return val;
 }
 
 } // namespace sql

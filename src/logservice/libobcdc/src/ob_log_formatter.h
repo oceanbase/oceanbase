@@ -138,6 +138,7 @@ private:
     bool is_rowkey_[common::OB_MAX_COLUMN_NUMBER];
     bool is_changed_[common::OB_MAX_COLUMN_NUMBER];
     bool is_null_lob_old_columns_[common::OB_MAX_COLUMN_NUMBER];
+    bool is_diff_[common::OB_MAX_COLUMN_NUMBER];
 
     // invoke before handle format stmt task
     // incase of usage of column_num but row doesn't contain valid column and column_num is not set

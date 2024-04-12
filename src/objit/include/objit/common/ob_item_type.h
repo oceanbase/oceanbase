@@ -1132,7 +1132,6 @@ typedef enum ObItemType
   T_DIAGNOSTICS,
   T_JSON_TABLE_EXPRESSION,
   T_JSON_TABLE_COLUMN,
-
   //pseudo_column
   T_PSEUDO_COLUMN,
   T_LEVEL,
@@ -2520,6 +2519,7 @@ typedef enum ObOutlineType
     || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS) \
     || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
+    || ((op) == T_FUN_SYS_JSON_SCHEMA_VALID) \
     || ((op) == T_FUN_SYS_JSON_EQUAL) \
     || ((op) == T_FUN_SYS_IS_JSON) \
     || ((op) == T_FUN_SYS_JSON_EXISTS) \

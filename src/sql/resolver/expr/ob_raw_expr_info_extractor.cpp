@@ -567,6 +567,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         }
       } else {}
     }
+
   }
   return ret;
 }

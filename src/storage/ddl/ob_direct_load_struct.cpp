@@ -813,6 +813,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const share::ObLSID &ls_id,
     const ObTabletID &tablet_id,
     const int64_t trans_version,
+    const ObObjType &obj_type,
     const ObCollationType &cs_type,
     const ObLobId &lob_id,
     const transaction::ObTransID trans_id,
@@ -853,7 +854,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
     lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
     int64_t unused_affected_rows = 0;
     if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-      allocator, nullptr, ls_id, tablet_id, lob_id, cs_type, lob_storage_param, datum,
+      allocator, nullptr, ls_id, tablet_id, lob_id, obj_type, cs_type, lob_storage_param, datum,
       timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
       LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(lob_id), K(src_tenant_id));
     } else if (OB_FAIL(row_iterator_->init(meta_write_iter_, trans_id,
@@ -912,7 +913,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_memtable(
     ObLobStorageParam lob_storage_param;
     lob_storage_param.inrow_threshold_ = lob_inrow_threshold;
     if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-      allocator, info.ls_id_, info.data_tablet_id_, col_types.at(i).get_collation_type(),
+      allocator, info.ls_id_, info.data_tablet_id_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(),
       lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, info.src_tenant_id_))) {
       LOG_WARN("fail to insert_lob_col", K(ret), K(datum));
     }
@@ -949,7 +950,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
         lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id.
         ObLobMetaRowIterator *row_iter = nullptr;
         if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
-            info.data_tablet_id_, info.trans_version_, col_types.at(i).get_collation_type(), lob_id,
+            info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(), lob_id,
             info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, row_iter))) {
           LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
         } else {

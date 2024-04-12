@@ -559,6 +559,7 @@ private:
       const share::ObLSID &ls_id,
       const ObTabletID &tablet_id,
       const int64_t trans_version,
+      const ObObjType &obj_type,
       const ObCollationType &cs_type,
       const ObLobId &lob_id,
       const transaction::ObTransID trans_id,

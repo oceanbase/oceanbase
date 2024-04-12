@@ -20,6 +20,7 @@
 #include "lib/worker.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl_stmt.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 #include "lib/geo/ob_sdo_geo_object.h"
 
 namespace oceanbase
@@ -1827,17 +1828,17 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
 {
   INIT_SUCC(ret);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(print_json_return_type(expr->get_param_expr(2)))) {
+    if (OB_FAIL(print_json_return_type(expr->get_param_expr(JsnValueClause::JSN_VAL_RET)))) {
       LOG_WARN("fail to print cast_type", K(ret));
     }
   }
 
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_TRUNC))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("truncate value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(3))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_TRUNC))->get_value().get_int();
       switch (type) {
         case 0:
           break;
@@ -1851,13 +1852,12 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
       }
     }
   }
-
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_ASCII))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ascii value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(4))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_ASCII))->get_value().get_int();
       switch (type) {
         case 0:
           DATA_PRINTF("");
@@ -1872,53 +1872,55 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
       }
     }
   }
+  // print empty type  type 5, default value 6.
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_EMPTY))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("type value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(5))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_EMPTY))->get_value().get_int();
       switch (type) {
-        case 0:
+        case JsnValueType::JSN_VALUE_ERROR:
           DATA_PRINTF(" error");
           break;
-        case 1:
-        case 3:
+        case JsnValueType::JSN_VALUE_NULL:
+        case JsnValueType::JSN_VALUE_IMPLICIT:
           if (lib::is_mysql_mode() || type == 1) {
             DATA_PRINTF(" null");
           }
           break;
-        case 2:
+        case JsnValueType::JSN_VALUE_DEFAULT:
           DATA_PRINTF(" default ");
-          PRINT_EXPR(expr->get_param_expr(6));
+          PRINT_EXPR(expr->get_param_expr(JSN_VAL_EMPTY_DEF));
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid type value.", K(type));
           break;
       }
-      if (OB_SUCC(ret) && (lib::is_mysql_mode() || type < 3)) {
+      if (OB_SUCC(ret) && (lib::is_mysql_mode() || type < JsnValueType::JSN_VALUE_IMPLICIT)) {
         DATA_PRINTF(" on empty");
       }
     }
   }
+  // print error type  type 7, default value 8.
   if (OB_SUCC(ret)) {
-    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(8))->get_value().is_int()) {
+    if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_ERROR))->get_value().is_int()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("type value isn't int value");
     } else {
-      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(8))->get_value().get_int();
+      int64_t type = static_cast<ObConstRawExpr*>(expr->get_param_expr(JsnValueClause::JSN_VAL_ERROR))->get_value().get_int();
       switch (type) {
-        case 0:
+        case JsnValueType::JSN_VALUE_ERROR:
           DATA_PRINTF(" error");
           break;
-        case 1:
-        case 3:
+        case JsnValueType::JSN_VALUE_NULL:
+        case JsnValueType::JSN_VALUE_IMPLICIT:
           DATA_PRINTF(" null");
           break;
-        case 2:
+        case JsnValueType::JSN_VALUE_DEFAULT:
           DATA_PRINTF(" default ");
-          PRINT_EXPR(expr->get_param_expr(9));
+          PRINT_EXPR(expr->get_param_expr(JSN_VAL_ERROR_DEF));
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
@@ -1933,7 +1935,7 @@ int ObRawExprPrinter::print_json_value(ObSysFunRawExpr *expr)
   if (lib::is_oracle_mode()) {
     if (OB_SUCC(ret)) {
       bool not_first_node = false;
-      for (size_t i = 11;  OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      for (size_t i = JsnValueClause::JSN_VAL_MISMATCH;  OB_SUCC(ret) && i < expr->get_param_count(); i++) {
         if (!static_cast<ObConstRawExpr*>(expr->get_param_expr(i))->get_value().is_int()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("type value isn't int value");
@@ -2452,7 +2454,7 @@ int ObRawExprPrinter::print_json_expr(ObSysFunRawExpr *expr)
     switch (expr->get_expr_type()) {
       case T_FUN_SYS_JSON_VALUE: {
         // if json value only have one mismatch clause, the size of parameter is 13
-        const int8_t JSN_VAL_WITH_ONE_MISMATCH = 13;
+        const int8_t JSN_VAL_WITH_ONE_MISMATCH = 11;
         // json value parameter count more than 13, because mismatch is multi-val and default value.
         // json_value(expr(0), expr(1) returning cast_type truncate ascii xxx on empty(default value) xxx on error(default value) xxx on mismatch (xxx))
         if (OB_UNLIKELY(expr->get_param_count() < JSN_VAL_WITH_ONE_MISMATCH)) {

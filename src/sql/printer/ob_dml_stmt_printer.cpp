@@ -446,11 +446,27 @@ int ObDMLStmtPrinter::print_table(const TableItem *table_item,
       break;
     }
     case TableItem::JSON_TABLE: {
-      DATA_PRINTF("JSON_TABLE(");
-      OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
-      OZ (print_json_table(table_item));
-      DATA_PRINTF(")");
-      DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+      switch (table_item->json_table_def_->table_type_) {
+        case MulModeTableType::OB_ORA_JSON_TABLE_TYPE : {
+          DATA_PRINTF("JSON_TABLE(");
+          OZ (expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE));
+          OZ (print_json_table(table_item));
+          DATA_PRINTF(")");
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
+        case MulModeTableType::OB_ORA_XML_TABLE_TYPE : {
+          DATA_PRINTF("XMLTABLE(");
+          OZ (print_xml_table(table_item));
+          DATA_PRINTF(")");
+          DATA_PRINTF(" %.*s", LEN_AND_PTR(table_item->alias_name_));
+          break;
+        }
+        default : {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected table function type");
+        }
+      }
       break;
     }
     case TableItem::TEMP_TABLE: {
@@ -675,6 +691,11 @@ int ObDMLStmtPrinter::print_json_return_type(int64_t value, ObDataType data_type
         } else {
           DATA_PRINTF("clob");
         }
+        break;
+      }
+      case T_EXTEND: {
+        ret = OB_ERR_INVALID_CAST_UDT;
+        LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
         break;
       }
       default: {
@@ -1033,23 +1054,50 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       break;
     }
     case T_GEOMETRY: {
-      int32_t flag = parse_node.int32_values_[1];
-      if (flag == 0) {
-        DATA_PRINTF("GEOMETRY ");
-      } else if (flag == 1) {
-        DATA_PRINTF("POINT ");
-      } else if (flag == 2) {
-        DATA_PRINTF("LINESTRING ");
-      } else if (flag == 3) {
-        DATA_PRINTF("POLYGON ");
-      } else if (flag == 4) {
-        DATA_PRINTF("MULTIPOINT ");
-      } else if (flag == 5) {
-        DATA_PRINTF("MULTILINESTRING ");
-      } else if (flag == 6) {
-        DATA_PRINTF("MULTIPOLYGON ");
-      } else if (flag == 7) {
-        DATA_PRINTF("GEOMETRYCOLLECTION ");
+      ObGeoType geo_type = static_cast<ObGeoType>(parse_node.int32_values_[1]);
+      switch (geo_type) {
+        case ObGeoType::GEOMETRY: {
+          DATA_PRINTF("geometry");
+          break;
+        }
+        case ObGeoType::POINT: {
+          DATA_PRINTF("point");
+          break;
+        }
+        case ObGeoType::LINESTRING: {
+          DATA_PRINTF("linestring");
+          break;
+        }
+        case ObGeoType::POLYGON: {
+          DATA_PRINTF("polygon");
+          break;
+        }
+        case ObGeoType::MULTIPOINT: {
+          DATA_PRINTF("multipoint");
+          break;
+        }
+        case ObGeoType::MULTILINESTRING: {
+          DATA_PRINTF("multilinestring");
+          break;
+        }
+        case ObGeoType::MULTIPOLYGON: {
+          DATA_PRINTF("multipolygon");
+          break;
+        }
+        case ObGeoType::GEOMETRYCOLLECTION: {
+          DATA_PRINTF("geometrycollection");
+          break;
+        }
+        case ObGeoType::GEOTYPEMAX: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid cast geo sub type", K(ret), K(cast_type), K(geo_type));
+          break;
+        }
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknown cast geo sub type", K(ret), K(cast_type), K(geo_type));
+          break;
+        }
       }
       break;
     }
@@ -1179,7 +1227,8 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
       }
 
       if (OB_FAIL(ret)) {
-      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)) {
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY)
+                  || col_info.col_type_ == static_cast<int32_t>(COL_TYPE_ORDINALITY_XML)) {
         DATA_PRINTF(" for ordinality");
       } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_EXISTS)) {
         // to print returning type
@@ -1348,6 +1397,33 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
         } else if (col_info.on_mismatch_type_ == 2) {
           DATA_PRINTF(" (type error)");
         }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_VAL_EXTRACT_XML)) {
+        OZ (print_json_return_type(col_info.res_type_, col_info.data_type_));
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+        if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+        }
+      } else if (col_info.col_type_ == static_cast<int32_t>(COL_TYPE_XMLTYPE_XML)) {
+        DATA_PRINTF(" XMLTYPE");
+        if (OB_SUCC(ret) && col_info.truncate_) {
+          DATA_PRINTF(" ( SEQUENCE ) BY REF");
+        }
+        if (OB_SUCC(ret) && col_info.path_.length() > 0) {
+          DATA_PRINTF(" path \'%.*s\'", LEN_AND_PTR(col_info.path_));
+        }
+        if (OB_SUCC(ret) && col_info.on_empty_ == 2) {
+          DATA_PRINTF(" default ");
+          if (OB_SUCC(ret)
+              && OB_FAIL(expr_printer_.do_print(cur_def->empty_expr_, T_NONE_SCOPE))) {
+            LOG_WARN("fail to print default value col", K(ret));
+          }
+        }
       }
     }
   }
@@ -1365,6 +1441,55 @@ int ObDMLStmtPrinter::print_json_table_nested_column(const TableItem *table_item
 
   return ret;
 }
+
+int ObDMLStmtPrinter::print_xml_namespace(const TableItem *table_item)
+{
+  INIT_SUCC(ret);
+  DATA_PRINTF("XMLNAMESPACES( ");
+  bool is_default = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_item->json_table_def_->namespace_arr_.count(); i ++) {
+    if (i % 2 == 0) {  // first value is uri
+      if (i > 0) {
+        DATA_PRINTF(", ");
+      }
+      if (table_item->json_table_def_->namespace_arr_.at(i + 1).empty()) {
+        DATA_PRINTF("DEFAULT \'%.*s\' ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+      } else {
+        DATA_PRINTF("\'%.*s\' AS ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+      }
+    } else if (!table_item->json_table_def_->namespace_arr_.at(i).empty()) {
+      DATA_PRINTF("%.*s ", LEN_AND_PTR(table_item->json_table_def_->namespace_arr_.at(i)));
+    }
+  }
+  DATA_PRINTF("),");
+  return ret;
+}
+int ObDMLStmtPrinter::print_xml_table(const TableItem *table_item)
+{
+  int ret = OB_SUCCESS;
+  ObJsonTableDef* tbl_def  = table_item->json_table_def_;
+  ObArenaAllocator alloc;
+  ObDmlJtColDef* root_def = nullptr;
+  if (OB_FAIL(build_json_table_nested_tree(table_item, &alloc, root_def))) {
+    LOG_WARN("fail to build column tree.", K(ret));
+  } else if (table_item->json_table_def_->namespace_arr_.count() > 0 && OB_FAIL(print_xml_namespace(table_item))) {
+    LOG_WARN("fail to print xml ns", K(ret));
+  } else if (root_def->col_base_info_.path_.length() > 0) {
+    DATA_PRINTF(" \'%.*s\'", LEN_AND_PTR(root_def->col_base_info_.path_));
+  }
+  DATA_PRINTF(" PASSING ");
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(expr_printer_.do_print(table_item->json_table_def_->doc_expr_, T_FROM_SCOPE))) {
+    LOG_WARN("fail to print xml doc", K(ret));
+  } else if (root_def->col_base_info_.allow_scalar_) {
+    DATA_PRINTF(" RETURNING SEQUENCE BY REF");
+  }
+  DATA_PRINTF(" COLUMNS ");
+  OZ (print_json_table_nested_column(table_item, *root_def));
+
+  return ret;
+}
+
 
 int ObDMLStmtPrinter::print_json_table(const TableItem *table_item)
 {

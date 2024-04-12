@@ -110,19 +110,11 @@ typedef enum JsnValueClause {
   JSN_VAL_ASCII,     // 4
   JSN_VAL_EMPTY,    // 5
   JSN_VAL_EMPTY_DEF,     // 6
-  JSN_VAL_EMPTY_DEF_PRE, // 7
-  JSN_VAL_ERROR,    // 8
-  JSN_VAL_ERROR_DEF,     // 9
-  JSN_VAL_ERROR_DEF_PRE,     // 10
-  JSN_VAL_MISMATCH  // 11
+  JSN_VAL_ERROR,    // 7
+  JSN_VAL_ERROR_DEF,     // 8
+  JSN_VAL_MISMATCH  // 9
 } JsnValueClause;
 
-typedef enum JsnValueMisMatch {
-  JSN_VALUE_MISMATCH_ERROR,    // 0
-  JSN_VALUE_MISMATCH_NULL,     // 1
-  JSN_VALUE_MISMATCH_IGNORE,   // 2
-  JSN_VALUE_MISMATCH_IMPLICIT  // 3
-} JsnValueMisMatch;
 
 typedef enum JsnValueOpt {
   JSN_VAL_TRUNC_OPT,      // 0

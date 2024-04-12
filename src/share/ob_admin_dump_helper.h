@@ -137,6 +137,7 @@ struct ObLogStat
   int64_t total_tx_redo_log_count_;
   int64_t normal_row_count_;
   int64_t table_lock_count_;
+  int64_t ext_info_log_count_;
 
 
   TO_STRING_KV(
@@ -154,7 +155,8 @@ struct ObLogStat
   K(total_tx_log_count_),
   K(total_tx_redo_log_count_),
   K(normal_row_count_),
-  K(table_lock_count_));
+  K(table_lock_count_),
+  K(ext_info_log_count_));
 };
 
 struct ObAdminMutatorStringArg

@@ -1529,7 +1529,12 @@ protected:
   int init_function_table_depend_info(const ObIArray<TableItem*> &table_items);
 
   int init_json_table_depend_info(const ObIArray<TableItem*> &table_items);
-
+  // init json_table non_const default value
+  int init_json_table_column_depend_info(ObRelIds& depend_table_set,
+                                                   TableItem* json_table,
+                                                   const ObDMLStmt *stmt);
+  int init_default_val_json(ObRelIds& depend_table_set,
+                            ObRawExpr*& default_expr);
   int check_need_bushy_tree(common::ObIArray<JoinOrderArray> &join_rels,
                             const int64_t join_level,
                             bool &need);

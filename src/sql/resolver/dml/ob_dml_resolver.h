@@ -198,6 +198,7 @@ public:
                                   TableItem *&table_item);
   int resolve_json_table_item(const ParseNode &table_node,
                               TableItem *&table_item);
+  int resolve_xml_namespaces(const ParseNode *namespace_node, ObJsonTableDef*& table_def);
   int fill_same_column_to_using(JoinedTable* &joined_table);
   int get_columns_from_table_item(const TableItem *table_item, common::ObIArray<common::ObString> &column_names);
 
@@ -209,11 +210,19 @@ public:
                                      ObRawExpr *&real_ref_expr);
   int json_table_make_json_path(const ParseNode &parse_tree,
                                 ObIAllocator* allocator,
-                                ObString& path_str);
+                                ObString& path_str,
+                                MulModeTableType table_type);
+  int resolve_str_const(const ParseNode &parse_tree, ObString& path_str);
+  int resolve_table_func_path(ObIAllocator* allocator,
+                              ObString& path_str,
+                              MulModeTableType table_type);
   int resolve_json_table_column_name_and_path(const ParseNode *name_node,
                                            const ParseNode *path_node,
                                            ObIAllocator* allocator,
-                                           ObDmlJtColDef *col_def);
+                                           ObDmlJtColDef *col_def,
+                                           MulModeTableType table_type);
+  int check_xpath_in_xmltype(ObDmlJtColDef *col_def,
+                             const ObDataType &data_type);
   int resolve_single_table_column_item(const TableItem &table_item,
                                        const common::ObString &column_name,
                                        bool include_hidden,

@@ -61,6 +61,7 @@
 #include "share/stat/ob_opt_ds_stat.h"
 #include "lib/udt/ob_udt_type.h"
 #include "sql/resolver/dml/ob_insert_resolver.h"
+#include "lib/xml/ob_path_parser.h"
 
 namespace oceanbase
 {
@@ -2039,7 +2040,8 @@ static int check_is_pl_jsontype(const oceanbase::pl::ObUserDefinedType *user_typ
   if (OB_ISNULL(user_type)) {
   } else if (user_type->get_type() == oceanbase::pl::PL_OPAQUE_TYPE) {
     if (user_type->get_name().compare("JSON_OBJECT_T") == 0
-        || user_type->get_name().compare("JSON_ELEMENT_T") == 0) {
+        || user_type->get_name().compare("JSON_ELEMENT_T") == 0
+        || user_type->get_name().compare("JSON_ARRAY_T") == 0) {
       ret = OB_ERR_PL_JSONTYPE_USAGE;
       LOG_WARN("invalid pl json type userage in pl/sql", K(ret),
                 K(user_type->get_type()), K(user_type->get_user_type_id()));
@@ -4128,11 +4130,13 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         OZ (resolve_function_table_item(*table_node, table_item));
         break;
       }
-      case T_JSON_TABLE_EXPRESSION: {
+      case T_JSON_TABLE_EXPRESSION:
+      case T_XML_TABLE_EXPRESSION: {
         if (OB_ISNULL(session_info_)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid argument", K(ret));
-        } else if (lib::is_mysql_mode() && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
+        } else if (lib::is_mysql_mode() && T_JSON_TABLE_EXPRESSION == table_node->type_
+                   && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("json table in mysql mode not support before 4.2.1", K(ret), K(GET_MIN_CLUSTER_VERSION()));
         }
@@ -5013,6 +5017,55 @@ int ObDMLResolver::resolve_generate_table_item(ObSelectStmt *ref_query,
   return ret;
 }
 
+int ObDMLResolver::resolve_str_const(const ParseNode &parse_tree, ObString& path_str)
+{
+  INIT_SUCC(ret);
+  ObObjParam val;
+  char *buf = NULL;
+  ObString literal_prefix;
+  bool is_paramlize = false;
+  ObExprInfo parents_expr_info;
+  const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(session_info_) ? session_info_->get_actual_nls_length_semantics() : LS_BYTE);
+  const ObSQLSessionInfo *session_info = session_info_;
+  int64_t server_collation = CS_TYPE_INVALID;
+  ObCollationType nation_collation = OB_NOT_NULL(session_info_) ? session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
+  ObCollationType collation_connection = CS_TYPE_INVALID;
+  ObCharsetType character_set_connection = CHARSET_INVALID;
+  if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("resolve status is invalid", K_(params_.expr_factory), K_(params_.session_info));
+  } else if (OB_FAIL(params_.session_info_->get_collation_connection(collation_connection))) {
+    LOG_WARN("fail to get collation_connection", K(ret));
+  } else if (OB_FAIL(params_.session_info_->get_character_set_connection(character_set_connection))) {
+    LOG_WARN("fail to get character_set_connection", K(ret));
+  } else if (lib::is_oracle_mode() && nullptr == session_info) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is null", K(ret));
+  } else if (lib::is_oracle_mode() && OB_FAIL(
+    session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
+    LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(ObResolverUtils::resolve_const(&parse_tree,
+                                             // stmt_type is only used in oracle mode
+                                             lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
+                                             params_.expr_factory_->get_allocator(),
+                                             collation_connection, nation_collation, TZ_INFO(params_.session_info_),
+                                             val, is_paramlize,
+                                             literal_prefix,
+                                             default_length_semantics,
+                                             static_cast<ObCollationType>(server_collation),
+                                             &parents_expr_info,
+                                             session_info->get_sql_mode(),
+                                             nullptr != params_.secondary_namespace_))) {
+    LOG_WARN("failed to resolve const", K(ret));
+  } else if (OB_ISNULL(buf = static_cast<char*>(allocator_->alloc(val.get_string().length())))) { // deep copy str value
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory", K(ret), K(buf));
+  } else {
+    MEMCPY(buf, val.get_string().ptr(), val.get_string().length());
+    path_str.assign_ptr(buf, val.get_string().length());
+  }
+  return ret;
+}
 
 int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableItem *&tbl_item)
 {
@@ -5025,16 +5078,36 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
   int32_t id = 0;
   ObRawExpr *error_expr = NULL;
   ObRawExpr *empty_expr = NULL;
+  ParseNode *doc_node = NULL;
+  ParseNode *path_node = NULL;
+  ParseNode *alias_node = NULL;
+  ParseNode *on_err_seq_node = NULL;
+  ParseNode *chil_col_node = NULL;
+  ParseNode *namespace_node = NULL;
 
-  CK (OB_LIKELY(T_JSON_TABLE_EXPRESSION == parse_tree.type_));
-  CK (OB_LIKELY(5 == parse_tree.num_child_));
+  if (T_JSON_TABLE_EXPRESSION == parse_tree.type_ && 5 == parse_tree.num_child_) {
+    doc_node = parse_tree.children_[0];
+    path_node = parse_tree.children_[1];
+    alias_node = parse_tree.children_[4];
+    on_err_seq_node = parse_tree.children_[2];
+    // namespace_node = parse_tree.children_[5];
+    chil_col_node =parse_tree.children_[3];
+  } else if (T_XML_TABLE_EXPRESSION == parse_tree.type_ && 6 == parse_tree.num_child_ && OB_NOT_NULL(parse_tree.children_[0])) {
+    doc_node = parse_tree.children_[2];
+    path_node = parse_tree.children_[1];
+    alias_node = parse_tree.children_[5];
+    on_err_seq_node = parse_tree.children_[3];
+    namespace_node = parse_tree.children_[0];
+    chil_col_node =parse_tree.children_[4];
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table type not support ot param num mismatch", K(parse_tree.type_), K(parse_tree.num_child_));
+  }
+
   CK (OB_NOT_NULL(parse_tree.children_[0]));
   CK (OB_NOT_NULL(parse_tree.children_[1]));
   CK (OB_NOT_NULL(parse_tree.children_[2]));
   CK (OB_NOT_NULL(parse_tree.children_[3]));
-
-  ParseNode *doc_node = parse_tree.children_[0];
-  ParseNode *path_node = parse_tree.children_[1];
 
   // json document node
   if (OB_FAIL(ret)) {
@@ -5060,6 +5133,14 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
     } else {
       table_def = static_cast<ObJsonTableDef*>(new (table_buf) ObJsonTableDef());
       table_def->doc_expr_ = json_doc_expr;
+      if (T_JSON_TABLE_EXPRESSION == parse_tree.type_) {
+        table_def->table_type_ = MulModeTableType::OB_ORA_JSON_TABLE_TYPE;
+      } else if (T_XML_TABLE_EXPRESSION == parse_tree.type_) {
+        table_def->table_type_ = MulModeTableType::OB_ORA_XML_TABLE_TYPE;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknow table function", K(ret), K(parse_tree.type_));
+      }
     }
   }
 
@@ -5067,7 +5148,6 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
   ObDmlJtColDef* root_col_def = NULL;
   if (OB_SUCC(ret)) {
     ObString alias_name;
-    ParseNode *alias_node = parse_tree.children_[4];
     if (lib::is_mysql_mode() && OB_ISNULL(alias_node)) {
       ret = OB_ERR_TABLE_WITHOUT_ALIAS;
       LOG_WARN("table function need alias", K(ret));
@@ -5104,25 +5184,31 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
     ObString path_str;
     if (path_node->type_ == T_NULL) {
       path_str = ObString("$");
-    } else {
-      path_str.assign_ptr(path_node->str_value_, path_node->str_len_);
+    } else if (OB_FAIL(resolve_str_const(*path_node, path_str))) {
+      LOG_WARN("fail to resolve json path", K(ret));
+    }
+    if (OB_SUCC(ret)
+        && table_def->table_type_ == MulModeTableType::OB_ORA_XML_TABLE_TYPE) { // xmltable check xpath
+      if (path_str.length() == 0 || path_node->type_ == T_NULL) {
+        ret = OB_ERR_LACK_XQUERY_LITERAL;
+        LOG_WARN("xmltable need xquery literal", K(ret));
+      }
     }
 
     ObIAllocator& alloc_ref = *allocator_;
-    if (OB_FAIL(ob_write_string(alloc_ref, path_str, root_col_def->col_base_info_.path_))) {
+    if (OB_SUCC(ret) && OB_FAIL(ob_write_string(alloc_ref, path_str, root_col_def->col_base_info_.path_))) {
       LOG_WARN("failed to write string.", K(ret), K(path_str.length()));
     }
   }
 
   // error node process
-  if (OB_SUCC(ret)) {
-    ParseNode *on_err_node = parse_tree.children_[2];
-    if (on_err_node->num_child_ != 2) {
+  if (OB_SUCC(ret) && T_JSON_TABLE_EXPRESSION == parse_tree.type_) {
+    if (on_err_seq_node->num_child_ != 2) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("failed to resolve json table error node count not correct", K(ret), K(on_err_node->num_child_));
+      LOG_WARN("failed to resolve json table error node count not correct", K(ret), K(on_err_seq_node->num_child_));
     } else {
-      ParseNode *error_node = on_err_node->children_[0];
-      ParseNode *empty_node = on_err_node->children_[1];
+      ParseNode *error_node = on_err_seq_node->children_[0];
+      ParseNode *empty_node = on_err_seq_node->children_[1];
 
       if (OB_ISNULL(error_node) || OB_ISNULL(empty_node)) {
         ret = OB_ERR_UNEXPECTED;
@@ -5170,14 +5256,78 @@ int ObDMLResolver::resolve_json_table_item(const ParseNode &parse_tree, TableIte
       }
     }
   }
+  // xmltable sequence & namespace node
+  if (OB_SUCC(ret) && T_XML_TABLE_EXPRESSION == parse_tree.type_) {
+    root_col_def->col_base_info_.allow_scalar_ = on_err_seq_node->value_;
+    root_col_def->col_base_info_.on_empty_ = 1;
+    root_col_def->col_base_info_.on_error_ = 0;
+    if (OB_FAIL(resolve_xml_namespaces(namespace_node, table_def))) {
+      LOG_WARN("fail to resolve xml namespace", K(ret));
+    }
+  }
 
   // column node process
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(json_table_infos_.push_back(root_col_def))) {
     LOG_WARN("failed to push back column info", K(ret));
-  } else if (OB_FAIL(resolve_json_table_column_item(*parse_tree.children_[3], item,
+  } else if (OB_FAIL(resolve_json_table_column_item(*chil_col_node, item,
                                                     root_col_def, -1, id, cur_column_id))) {
     LOG_WARN("failed to resovle json table column item", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_xml_namespaces(const ParseNode *namespace_node, ObJsonTableDef*& table_def)
+{
+  INIT_SUCC(ret);
+  ObString t_str;
+  common::hash::ObHashSet<ObString> key_ns;
+  bool has_default = false;
+  int64_t bucket_num = (namespace_node->num_child_ / 2) + 1;
+  if (namespace_node->type_ == T_NULL) { // ns is null
+  } else if (namespace_node->num_child_ > 0 && OB_FAIL(key_ns.create(bucket_num))) {
+    LOG_WARN("init hash failed", K(ret), K(bucket_num));
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < namespace_node->num_child_; i++) {
+      if (i % 2 == 1 && namespace_node->children_[i]->type_ == T_NULL && namespace_node->children_[i]->value_ == 1) {
+        if (has_default) {
+          ret = OB_ERR_DUP_DEF_NAMESPACE;
+          ObString str_def(namespace_node->children_[i]->text_len_, namespace_node->children_[i]->raw_text_);
+          LOG_USER_ERROR(OB_ERR_DUP_DEF_NAMESPACE, str_def.ptr());
+          LOG_WARN("can not input one more default ns", K(ret));
+        } else {
+          t_str.assign_ptr("", 0);
+          has_default = true;
+        }
+      } else if (i % 2 == 1 && namespace_node->children_[i]->text_len_ == 0) {
+        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+        LOG_WARN("can not input without ns prefix", K(ret));
+      } else {
+        if (i % 2 == 0) { // drop single quote
+          size_t path_len = namespace_node->children_[i]->text_len_;
+          char* str_buf = static_cast<char*>(allocator_->alloc(path_len - 2));
+          if (OB_ISNULL(str_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret), K(path_len));
+          } else {
+            MEMCPY(str_buf, namespace_node->children_[i]->raw_text_ + 1, path_len - 2);
+            t_str.assign_ptr(str_buf, path_len - 2);
+          }
+        } else {
+          t_str.assign_ptr(namespace_node->children_[i]->raw_text_, namespace_node->children_[i]->text_len_);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (i % 2 == 1 && OB_HASH_EXIST == key_ns.exist_refactored(t_str)) {
+        ret = OB_ERR_TOO_MANY_PREFIX_DECLARE;
+        LOG_USER_ERROR(OB_ERR_TOO_MANY_PREFIX_DECLARE, t_str.length(), t_str.ptr());
+        LOG_WARN("duplicate key", K(ret));
+      } else if (i % 2 == 1 && OB_FAIL(key_ns.set_refactored(t_str, 0))) {
+        LOG_WARN("store key to vector failed", K(ret), K(key_ns.size()));
+      } else if (OB_FAIL(table_def->namespace_arr_.push_back(t_str))) {
+        LOG_WARN("failed push string in namespace", K(ret), K(t_str), K(i));
+      }
+    }
   }
   return ret;
 }
@@ -9249,7 +9399,8 @@ int ObDMLResolver::resolve_function_table_column_item(const TableItem &table_ite
 
 int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
                                              ObIAllocator* allocator,
-                                             ObString& path_str)
+                                             ObString& path_str,
+                                             MulModeTableType table_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(allocator)) {
@@ -9297,21 +9448,121 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
       }
     }
   } else {
-    char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.text_len_ + 3));
+    if (table_type == MulModeTableType::OB_ORA_JSON_TABLE_TYPE) {
+      char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.text_len_ + 3));
+      if (OB_ISNULL(str_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(parse_tree.str_len_));
+      } else {
+        MEMCPY(str_buf, "$.", 2);
+        str_buf[parse_tree.text_len_ + 2] = '\0';
+        if (parse_tree.text_len_ > 0
+            && (parse_tree.raw_text_[0] == '\'' && parse_tree.raw_text_[parse_tree.text_len_-1] == '\'')) {
+          MEMCPY(str_buf + 2, parse_tree.raw_text_ + 1, parse_tree.text_len_ - 1);
+          str_buf[parse_tree.text_len_] = '\0';
+        } else {
+          MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
+        }
+        path_str.assign_ptr(str_buf, strlen(str_buf));
+      }
+    } else if (table_type == MulModeTableType::OB_ORA_XML_TABLE_TYPE) {
+      if (parse_tree.str_len_ == 0) {
+        ret = OB_ERR_LACK_XQUERY_LITERAL;
+        LOG_WARN("xmltable need xquery literal", K(ret));
+      } else {
+        char* str_buf = static_cast<char*>(allocator->alloc(parse_tree.text_len_));
+        if (OB_ISNULL(str_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(parse_tree.str_len_));
+        } else {
+          MEMCPY(str_buf, parse_tree.raw_text_, parse_tree.text_len_);
+          for (int64_t i = 0; i < parse_tree.text_len_; i ++) {
+            str_buf[i] = toupper(str_buf[i]);
+          }
+          path_str.assign_ptr(str_buf, parse_tree.text_len_);
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("INVALID table function", K(ret), K(table_type));
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_table_func_path(ObIAllocator* allocator,
+                                            ObString& path_str,
+                                            MulModeTableType table_type)
+{
+  INIT_SUCC(ret);
+  if (table_type == OB_ORA_XML_TABLE_TYPE) {  // if path not begin with '/', then add '/' in front
+    ObString root_path = json_table_infos_.at(0)->col_base_info_.path_;   // root path
+    ObString header;
+    int len = root_path.length() - 1;
+    if (path_str[0] != '/') {
+      while(len >= 0 && root_path[len] != '/'){
+        len --;
+      }
+      char* str_buf = static_cast<char*>(allocator->alloc(root_path.length() - len + 1 + path_str.length()));
+      if (OB_ISNULL(str_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(root_path.length() - len + 1 + path_str.length()));
+      } else {
+        str_buf[0] = '/';
+        MEMCPY(str_buf + 1, root_path.ptr() + (len + 1), root_path.length() - (len + 1));
+        str_buf[root_path.length() - len] = '/';
+        MEMCPY(str_buf + root_path.length() - len + 1, path_str.ptr(), path_str.length());
+        path_str.assign_ptr(str_buf, (root_path.length() - len + 1 + path_str.length()));
+      }
+    }
+  }
+  return ret;
+}
+
+bool check_xpath_need_transform(ObString& path)
+{
+  bool res = true;
+  size_t len = path.length();
+  size_t l = 0;
+  if ((path[0] >= 'a' && path[0] <= 'z')
+        || (path[0] >= 'A' && path[0] <= 'Z')
+        || path[0] >= '_') {
+  } else {
+    res = false;
+  }
+  while(res && l < len
+        && !ObPathParserUtil::is_xpath_transform_terminator(path[l])) {
+    if (path[l] == ObPathItem::BRACE_START || path[l] == ObPathItem::COLON) {   // exist item method, not transform
+      res = false;
+    }
+    l ++;
+  }
+  if (res && l == 0) { // first char is '/', ignore
+    res = false;
+  }
+  return res;
+}
+
+// xmltype need transform xpath 'a' -> '/a'
+int ObDMLResolver::check_xpath_in_xmltype(ObDmlJtColDef *col_def,
+                                          const ObDataType &data_type)
+{
+  INIT_SUCC(ret);
+  if (!ob_is_xml_sql_type(data_type.get_obj_type(), data_type.get_meta_type().get_subschema_id())) {
+  } else if (col_def->col_base_info_.path_.length() == 0) {
+    ret = OB_ERR_LACK_XQUERY_LITERAL;
+    LOG_WARN("xmltable need xquery literal", K(ret));
+  } else if (json_table_infos_.at(0)->col_base_info_.path_ == "/"
+              && check_xpath_need_transform(col_def->col_base_info_.path_)) {
+    int64_t len = col_def->col_base_info_.path_.length() + 1;
+    char* str_buf = static_cast<char*>(allocator_->alloc(len));
     if (OB_ISNULL(str_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("allocate memory failed", K(ret), K(parse_tree.str_len_));
+      LOG_WARN("allocate memory failed", K(ret), K(col_def->col_base_info_.path_));
     } else {
-      MEMCPY(str_buf, "$.", 2);
-      str_buf[parse_tree.text_len_ + 2] = '\0';
-      if (parse_tree.text_len_ > 0
-          && (parse_tree.raw_text_[0] == '\'' && parse_tree.raw_text_[parse_tree.text_len_-1] == '\'')) {
-        MEMCPY(str_buf + 2, parse_tree.raw_text_ + 1, parse_tree.text_len_ - 1);
-        str_buf[parse_tree.text_len_] = '\0';
-      } else {
-        MEMCPY(str_buf + 2, parse_tree.raw_text_, parse_tree.text_len_);
-      }
-      path_str.assign_ptr(str_buf, strlen(str_buf));
+      MEMCPY(str_buf, "/", 1);
+      MEMCPY(str_buf + 1, col_def->col_base_info_.path_.ptr(), col_def->col_base_info_.path_.length());
+      col_def->col_base_info_.path_.assign_ptr(str_buf, len);
     }
   }
   return ret;
@@ -9320,7 +9571,8 @@ int ObDMLResolver::json_table_make_json_path(const ParseNode &parse_tree,
 int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name_node,
                                                         const ParseNode *path_node,
                                                         ObIAllocator* allocator,
-                                                        ObDmlJtColDef *col_def)
+                                                        ObDmlJtColDef *col_def,
+                                                        MulModeTableType table_type)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(name_node) || OB_ISNULL(path_node) || OB_ISNULL(allocator) || OB_ISNULL(col_def)) {
@@ -9334,20 +9586,28 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
     LOG_WARN("failed to resolve json column as name node is null", K(ret));
   } else if (path_node->type_ != T_NULL
               && (path_node->str_len_ > 0 && OB_NOT_NULL(path_node->str_value_))) {
-    col_def->col_base_info_.path_.assign_ptr(path_node->str_value_, path_node->str_len_);
-    if (lib::is_mysql_mode()) { // do nothing
-    } else if (*path_node->str_value_ != '$' && path_node->value_ != 1
-        && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+    if ((path_node->type_ == T_CHAR || path_node->type_ == T_VARCHAR)
+          && OB_FAIL(resolve_str_const(*path_node, col_def->col_base_info_.path_))) {
+      LOG_WARN("fail to resolve path const", K(ret));
+    } else if (lib::is_mysql_mode()) { // do nothing
+      (const_cast<ParseNode *>(path_node))->type_ = T_CHAR;
+      if (OB_FAIL(resolve_str_const(*path_node, col_def->col_base_info_.path_))) {
+        LOG_WARN("fail to resolve path const in mysql", K(ret));
+      }
+    } else if (((table_type == OB_ORA_JSON_TABLE_TYPE && *path_node->str_value_ != '$' && path_node->value_ != 1))
+                && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_, table_type))) {
       LOG_WARN("failed to make json path", K(ret));
     }
   } else if (path_node->type_ == T_NULL
-             && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_))) {
+             && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_, table_type))) {
     LOG_WARN("failed to make json path by name", K(ret));
   } else if (path_node->type_  == T_OBJ_ACCESS_REF
-             && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_))) {
+             && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_, table_type))) {
     LOG_WARN("failed to make json path by lists", K(ret));
+  } else if (table_type == MulModeTableType::OB_ORA_XML_TABLE_TYPE && col_def->col_base_info_.path_.length() == 0) {
+    ret = OB_ERR_LACK_XQUERY_LITERAL;
+    LOG_WARN("xmltable need xquery literal", K(ret));
   }
-
   if (OB_SUCC(ret)) {
     if (lib::is_mysql_mode() && (name_node->str_value_[name_node->str_len_ - 1] == ' ')) {
       ret = OB_WRONG_COLUMN_NAME;
@@ -9360,6 +9620,7 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
   }
   return ret;
 }
+
 
 int ObDMLResolver::resolve_json_table_check_dup_name(const ObJsonTableDef* table_def,
                                                      const ObString& column_name,
@@ -9402,7 +9663,7 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
     obj_type = static_cast<ObObjType>(parse_tree.type_);
   }
 
-  if (col_type == COL_TYPE_ORDINALITY) {
+  if (col_type == COL_TYPE_ORDINALITY || col_type == COL_TYPE_ORDINALITY_XML) {
     data_type.set_int();
     data_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObInt32Type]);
   } else if (col_type == COL_TYPE_QUERY && obj_type == ObJsonType) {
@@ -9411,8 +9672,8 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
   } else if (col_type == COL_TYPE_EXISTS
              || col_type == COL_TYPE_VALUE
              || col_type == COL_TYPE_QUERY
-             || col_type == COL_TYPE_QUERY_JSON_COL) {
-
+             || col_type == COL_TYPE_QUERY_JSON_COL
+             || col_type == COL_TYPE_VAL_EXTRACT_XML) {
     if (OB_UNLIKELY(!ob_is_valid_obj_type(obj_type))) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid obj type", K(ret), K(obj_type));
@@ -9432,15 +9693,19 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
                                                           convert_real_to_decimal))) {
         LOG_WARN("resolve data type failed", K(ret), K(col_def->col_base_info_.col_name_));
       } else {
+        ObCharsetType charset_type = data_type.get_charset_type();
         ObCollationType coll_type = data_type.get_collation_type();
-        if (CS_TYPE_INVALID != coll_type) {
+        if (CS_TYPE_INVALID != coll_type && CHARSET_INVALID != charset_type) {
           data_type.set_collation_type(coll_type);
+          data_type.set_charset_type(charset_type);
         } else if (OB_ISNULL(session_info_)) { // use connection_collation. for cast('a' as char)
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected collation type", K(ret));
-        } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
+        } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))
+                    || OB_FAIL(session_info_->get_character_set_connection(charset_type))) {
           LOG_WARN("failed to get collation", K(ret));
         } else {
+          data_type.set_charset_type(charset_type);
           data_type.set_collation_type(coll_type);
         }
         if (OB_SUCC(ret) && ob_is_json_tc(obj_type)) {
@@ -9462,7 +9727,10 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
       accuracy.set_length_semantics(length_semantics);
       ObObjTypeClass dest_tc = ob_obj_type_class(obj_type);
 
-      if (ObStringTC == dest_tc) {
+      if (ObExtendTC == dest_tc) {
+        ret = OB_ERR_INVALID_CAST_UDT;
+        LOG_WARN("invalid CAST to a type that is not a nested table or VARRAY", K(ret));
+      } else if (ObStringTC == dest_tc) {
         if (parse_tree.length_semantics_ == LS_DEFAULT) {
           length_semantics = (OB_NOT_NULL(session_info_) ?
                 session_info_->get_actual_nls_length_semantics() : LS_BYTE);
@@ -9522,6 +9790,9 @@ int ObDMLResolver::resolve_json_table_column_type(const ParseNode &parse_tree,
         }
       }
     }
+  } else if (col_type == COL_TYPE_XMLTYPE_XML) { // not check, default returning xml type
+    data_type.set_obj_type(ObUserDefinedSQLType);
+    data_type.set_subschema_id(ObXMLSqlType);
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("failed to resolve regular column type.", K(ret), KP(col_type));
@@ -9609,9 +9880,13 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
   } else if (OB_FAIL(get_json_table_column_by_id(table_item->table_id_, root_col_def))) {
     LOG_WARN("internal error find jt column failed", K(ret));
   } else if ((col_type == COL_TYPE_EXISTS && parse_tree.num_child_ != 5) ||
-             (col_type == COL_TYPE_VALUE && parse_tree.num_child_ != 5) ||
-             ((col_type == COL_TYPE_QUERY || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 7) ||
-             (col_type == COL_TYPE_ORDINALITY && parse_tree.num_child_ != 2)) {
+             ((col_type == COL_TYPE_VALUE
+                || col_type == COL_TYPE_VAL_EXTRACT_XML
+                || col_type == COL_TYPE_XMLTYPE_XML) && parse_tree.num_child_ != 5) ||
+             ((col_type == COL_TYPE_QUERY
+                || col_type == COL_TYPE_QUERY_JSON_COL) && parse_tree.num_child_ != 7) ||
+             ((col_type == COL_TYPE_ORDINALITY
+                || col_type == COL_TYPE_ORDINALITY_XML) && parse_tree.num_child_ != 2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to resolve json table regular column", K(ret), K(parse_tree.num_child_), K(col_type));
   } else {
@@ -9628,13 +9903,14 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
       const ParseNode* return_type = parse_tree.children_[1];
       col_def->col_base_info_.res_type_ = return_type->value_;
 
-      if (col_type == COL_TYPE_ORDINALITY) {
+      if (col_type == COL_TYPE_ORDINALITY || col_type == COL_TYPE_ORDINALITY_XML) {
         if (OB_ISNULL(name_node->str_value_) || name_node->str_len_ == 0 ) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("failed to resolve json column as name node is null", K(ret));
         } else {
           col_def->col_base_info_.col_name_.assign_ptr(name_node->str_value_, name_node->str_len_);
-          col_def->col_base_info_.col_type_ = COL_TYPE_ORDINALITY;
+          col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
+          col_def->col_base_info_.col_type_ = col_type;
           col_def->col_base_info_.is_name_quoted_ = name_node->is_input_quoted_;
         }
       } else if (col_type == COL_TYPE_EXISTS) {
@@ -9642,7 +9918,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
         const ParseNode* on_err_node = parse_tree.children_[4];
         const ParseNode* truncate_node = parse_tree.children_[2];
 
-        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
+        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def, table_item->json_table_def_->table_type_))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else if (on_err_node->num_child_ != 2) {
           ret = OB_ERR_UNEXPECTED;
@@ -9681,7 +9957,7 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
             || OB_ISNULL(on_err_node->children_[2])) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("json table error empty mismatch is null", K(ret));
-        } else if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
+        } else if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def, table_item->json_table_def_->table_type_))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         } else {
           col_def->col_base_info_.col_type_ = COL_TYPE_QUERY;
@@ -9712,10 +9988,10 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
       } else { // COL_TYPE_VALUE
         const ParseNode* trunc_node = parse_tree.children_[2];
         const ParseNode* path_node = parse_tree.children_[3];
-        col_def->col_base_info_.col_type_ = COL_TYPE_VALUE;
+        col_def->col_base_info_.col_type_ = col_type;
         col_def->col_base_info_.truncate_ = trunc_node->value_;
 
-        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def))) {
+        if (OB_FAIL(resolve_json_table_column_name_and_path(name_node, path_node, allocator_, col_def, table_item->json_table_def_->table_type_))) {
           LOG_WARN("failed to resolve json column name node or path node", K(ret));
         }
       }
@@ -9735,6 +10011,10 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
                                                           data_type,
                                                           col_def))) {
           LOG_WARN("failed to resolve json column type.", K(ret));
+        } else if (table_item->json_table_def_->table_type_
+                                  == MulModeTableType::OB_ORA_XML_TABLE_TYPE
+                   && OB_FAIL(check_xpath_in_xmltype(col_def, data_type))) {
+          LOG_WARN("fail to check xpath in xmltype column", K(ret));
         } else if (OB_FAIL(generate_json_table_output_column_item(table_item,
                                                                   data_type,
                                                                   col_def->col_base_info_.col_name_,
@@ -9751,9 +10031,12 @@ int ObDMLResolver::resolve_json_table_regular_column(const ParseNode &parse_tree
           col_def->col_base_info_.output_column_idx_ = cur_column_id++;
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(check_json_table_column_constrain(col_def))) {
+          } else if (table_def->table_type_ == MulModeTableType::OB_ORA_JSON_TABLE_TYPE
+                      && OB_FAIL(check_json_table_column_constrain(col_def))) {
             LOG_WARN("failed to check json column constrain.", K(ret));
-          } else if (col_type == COL_TYPE_VALUE) {
+          } else if (col_type == COL_TYPE_VALUE
+                      || col_type == COL_TYPE_VAL_EXTRACT_XML
+                      || col_type == COL_TYPE_XMLTYPE_XML) {
             const ParseNode* on_err_node = parse_tree.children_[4];
 
             // error default value
@@ -9897,7 +10180,7 @@ int ObDMLResolver::resolve_json_table_nested_column(const ParseNode &parse_tree,
     // json table nested path syntax, not quoted:
     // nested path employees[*] columns ( name, job )
     if (path_node->value_ == 2) {
-      if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_))) {
+      if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_, table_item->json_table_def_->table_type_))) {
         LOG_WARN("failed to make json path.", K(ret));
       }
     } else if (OB_ISNULL(path_node->str_value_) || path_node->str_len_ == 0) {
@@ -9906,7 +10189,7 @@ int ObDMLResolver::resolve_json_table_nested_column(const ParseNode &parse_tree,
     } else {
       if (path_node->str_value_[0] == '$') {
         col_def->col_base_info_.path_.assign_ptr(path_node->str_value_, path_node->str_len_);
-      } else if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_))) {
+      } else if (OB_FAIL(json_table_make_json_path(*path_node, allocator_, col_def->col_base_info_.path_, table_item->json_table_def_->table_type_))) {
         LOG_WARN("failed to make json path.", K(ret));
       }
     }
@@ -9996,7 +10279,10 @@ int ObDMLResolver::resolve_json_table_column_item(const ParseNode &parse_tree,
           col_type == COL_TYPE_QUERY ||
           col_type == COL_TYPE_EXISTS ||
           col_type == COL_TYPE_ORDINALITY ||
-          col_type == COL_TYPE_QUERY_JSON_COL) {
+          col_type == COL_TYPE_ORDINALITY_XML ||
+          col_type == COL_TYPE_QUERY_JSON_COL ||
+          col_type == COL_TYPE_VAL_EXTRACT_XML ||
+          col_type == COL_TYPE_XMLTYPE_XML) {
         if (OB_FAIL(resolve_json_table_regular_column(*cur_node, table_item, cur_col_def, cur_node_id, id, cur_column_id))) {
           LOG_WARN("resolve column defination in json table failed.", K(ret), K(cur_node->value_));
         } else if (OB_ISNULL(cur_col_def)) {
@@ -10018,7 +10304,7 @@ int ObDMLResolver::resolve_json_table_column_item(const ParseNode &parse_tree,
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("bad column type defination in json table.", K(ret));
+        LOG_WARN("bad column type defination in json table.", K(ret), K(cur_node->value_));
       }
     }
   }
@@ -10059,8 +10345,6 @@ int ObDMLResolver::resolve_json_table_column_all_items(const TableItem &table_it
   ObDMLStmt* stmt = get_stmt();
   CK (OB_NOT_NULL(stmt));
 
-  CK (OB_NOT_NULL(stmt));
-  CK (OB_LIKELY(table_item.is_json_table()));
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(jt_def = table_item.json_table_def_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -10134,7 +10418,8 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
   CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType*>(user_type)));
   if (OB_SUCC(ret)
       && !coll_type->get_element_type().is_obj_type()
-      && !coll_type->get_element_type().is_record_type()) {
+      && !coll_type->get_element_type().is_record_type()
+      && !(coll_type->get_element_type().is_opaque_type() && coll_type->get_element_type().get_user_type_id() == T_OBJ_XML)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported udt type", K(ret), K(coll_type->get_user_type_id()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "current udt type");
@@ -10149,6 +10434,29 @@ int ObDMLResolver::resolve_function_table_column_item_udf(const TableItem &table
       OZ (resolve_function_table_column_item(table_item,
                                             coll_type->get_element_type().get_data_type()->get_meta_type(),
                                             coll_type->get_element_type().get_data_type()->get_accuracy(),
+                                            ObString("COLUMN_VALUE"),
+                                            OB_APP_MIN_COLUMN_ID,
+                                            col_item));
+    }
+    CK (OB_NOT_NULL(col_item));
+    OZ (col_items.push_back(*col_item));
+  }
+
+  // The array element type is opaque
+  if (OB_SUCC(ret) && coll_type->get_element_type().is_opaque_type()) {
+    if (OB_FAIL(ret)) { // do nothing ...
+    } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, ObString("COLUMN_VALUE")))) {
+      //exist, ignore resolve...
+    } else {
+      ObAccuracy accuracy = ObAccuracy(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
+      accuracy.set_accuracy(T_OBJ_XML);
+      common::ObObjMeta meta;
+      meta.set_type(ObUserDefinedSQLType);
+      meta.set_subschema_id(ObXMLSqlType);
+      const ObObjMeta input_meta = meta;
+      OZ (resolve_function_table_column_item(table_item,
+                                            input_meta,
+                                            accuracy,
                                             ObString("COLUMN_VALUE"),
                                             OB_APP_MIN_COLUMN_ID,
                                             col_item));

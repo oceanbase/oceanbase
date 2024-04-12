@@ -4163,7 +4163,7 @@ int ObLSTabletService::insert_lob_col(
     lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;
     lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
     lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
-    lob_param.coll_type_ = column.col_type_.get_collation_type();
+    lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
     lob_param.allocator_ = &run_ctx.lob_allocator_;
     lob_param.lob_common_ = lob_common;
     if (OB_NOT_NULL(del_param)) {
@@ -4502,7 +4502,7 @@ int ObLSTabletService::process_delta_lob(
     lob_param.sql_mode_ = run_ctx.dml_param_.sql_mode_;
     lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
     lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
-    lob_param.coll_type_ = column.col_type_.get_collation_type();
+    lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
     lob_param.allocator_ = &run_ctx.lob_allocator_;
     // should use old obj lob
     ObLobLocatorV2 old_lob;
@@ -4529,8 +4529,36 @@ int ObLSTabletService::process_delta_lob(
       } else {
         // update obj with new disk locator
         obj.set_lob_value(obj.get_type(), lob_param.lob_common_, lob_param.handle_size_);
+        if (! lob_param.ext_info_log_.is_null()
+          && OB_FAIL(register_ext_info_commit_cb(run_ctx, obj, lob_param.ext_info_log_))) {
+          LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(lob_param));
+        }
       }
     }
+  }
+  return ret;
+}
+
+int ObLSTabletService::register_ext_info_commit_cb(
+    ObDMLRunningCtx &run_ctx,
+    ObObj &col_data,
+    ObObj &ext_info_data)
+{
+  int ret = OB_SUCCESS;
+  memtable::ObMvccWriteGuard guard(false);
+  if (ext_info_data.is_null()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ext_info_log is null", K(ret), K(ext_info_data));
+  } else if (OB_FAIL(guard.write_auth(run_ctx.store_ctx_))) {
+    LOG_WARN("write_auth fail", K(ret), K(run_ctx.store_ctx_));
+  } else if (OB_FAIL(run_ctx.store_ctx_.mvcc_acc_ctx_.mem_ctx_->register_ext_info_commit_cb(
+      run_ctx.dml_param_.timeout_,
+      run_ctx.dml_flag_,
+      run_ctx.store_ctx_.mvcc_acc_ctx_.tx_desc_,
+      run_ctx.store_ctx_.mvcc_acc_ctx_.tx_scn_,
+      col_data,
+      ext_info_data))) {
+    LOG_WARN("register_ext_info_commit_cb fail", K(ret), K(run_ctx.store_ctx_), K(col_data), K(ext_info_data));
   }
   return ret;
 }
@@ -4551,6 +4579,7 @@ int ObLSTabletService::set_lob_storage_params(
     LOG_WARN("column_param is null", K(ret), K(table_param));
   } else {
     lob_param.inrow_threshold_ = table_param->get_data_table().get_lob_inrow_threshold();
+    lob_param.schema_chunk_size_ = column_param->get_lob_chunk_size();
   }
   return ret;
 }
@@ -5560,7 +5589,7 @@ int ObLSTabletService::delete_lob_col(
         lob_param.is_total_quantity_log_ = run_ctx.dml_param_.is_total_quantity_log_;
         lob_param.ls_id_ = run_ctx.store_ctx_.ls_id_;
         lob_param.tablet_id_ = run_ctx.relative_table_.get_tablet_id();
-        lob_param.coll_type_ = column.col_type_.get_collation_type();
+        lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(column.col_type_.get_type(), column.col_type_.get_collation_type());
         lob_param.allocator_ = &run_ctx.lob_allocator_;
         lob_param.lob_common_ = lob_common;
         lob_param.handle_size_ = data.length();

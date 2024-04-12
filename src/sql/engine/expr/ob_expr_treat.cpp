@@ -107,8 +107,7 @@ static int treat_as_json_udt(const ObExpr &expr, ObEvalCtx &ctx, common::ObIAllo
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cast to json type is null", K(ret), K(opaque));
   } else if(OB_ISNULL(json_doc = jsontype->get_data())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get json doc is null", K(ret), K(jsontype));
+    res.set_null();
   } else {
     ObJsonNode * json_node_copy = nullptr;
     if (OB_ISNULL(json_node_copy = json_doc->clone(&ctx.exec_ctx_.get_allocator()))) {

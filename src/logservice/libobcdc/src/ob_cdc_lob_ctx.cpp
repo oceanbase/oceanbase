@@ -72,6 +72,7 @@ int ObLobColCtx::set_col_value(
 
 void ObLobDataGetCtx::reset()
 {
+  type_ = ObLobDataGetTaskType::FULL_LOB;
   host_ = nullptr;
   column_id_ = common::OB_INVALID_ID;
   dml_flag_ = blocksstable::ObDmlFlag::DF_MAX;
@@ -93,9 +94,20 @@ void ObLobDataGetCtx::reset(
   column_id_ = column_id;
   dml_flag_ = dml_flag;
   new_lob_data_ = new_lob_data;
+
+  // set task type according to ObLobDataOutRowCtx::op
+  const ObLobDataOutRowCtx *lob_data_out_row_ctx = nullptr;
+  if (OB_ISNULL(new_lob_data_)) {
+    LOG_DEBUG("new_lob_data_ is null", K(column_id), K(dml_flag), KP(host));
+  } else if (OB_ISNULL(lob_data_out_row_ctx = reinterpret_cast<const ObLobDataOutRowCtx *>(new_lob_data_->buffer_))) {
+    LOG_DEBUG("lob_data_out_row_ctx is null", K(column_id), K(dml_flag), KP(host), KPC(new_lob_data_));
+  } else if (lob_data_out_row_ctx->is_diff()) {
+    type_ = ObLobDataGetTaskType::EXT_INFO_LOG;
+    LOG_DEBUG("lob_data_out_row_ctx is diff", K(column_id), KPC(new_lob_data_), KPC(lob_data_out_row_ctx));
+  }
 }
 
-int ObLobDataGetCtx::get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx)
+int ObLobDataGetCtx::get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out_row_ctx) const
 {
   int ret = OB_SUCCESS;
 
@@ -105,6 +117,55 @@ int ObLobDataGetCtx::get_lob_out_row_ctx(const ObLobDataOutRowCtx *&lob_data_out
     lob_data_out_row_ctx = reinterpret_cast<const ObLobDataOutRowCtx *>(new_lob_data_->buffer_);
   }
 
+  return ret;
+}
+
+ObLobId ObLobDataGetCtx::get_lob_id() const
+{
+  ObLobId lob_id;
+  switch (get_type()) {
+    case ObLobDataGetTaskType::FULL_LOB:
+      if (OB_NOT_NULL(new_lob_data_)) {
+        lob_id = new_lob_data_->id_;
+      } else {
+        LOG_DEBUG("new_lob_data_ is null", KPC(this));
+      }
+      break;
+    default:
+      break;
+  }
+  return lob_id;
+}
+
+int ObLobDataGetCtx::get_data_length(const bool is_new_col, uint64_t &data_length) const
+{
+  int ret = OB_SUCCESS;
+  switch (get_type()) {
+    case ObLobDataGetTaskType::FULL_LOB: {
+      const ObLobData *lob_data = nullptr;
+      if (OB_ISNULL(lob_data = get_lob_data(is_new_col))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("new_lob_data is nullptr", KR(ret), KPC(this));
+      } else {
+        data_length = lob_data->byte_size_;
+      }
+      break;
+    }
+    case ObLobDataGetTaskType::EXT_INFO_LOG: {
+      const ObLobDataOutRowCtx *lob_data_out_row_ctx = nullptr;
+      if (! is_new_col) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("is_new_col must be true", KR(ret), KPC(this));
+      } else if (OB_FAIL(get_lob_out_row_ctx(lob_data_out_row_ctx))) {
+        LOG_ERROR("get_lob_out_row_ctx failed", KR(ret), KPC(this));
+      } else {
+        data_length = lob_data_out_row_ctx->modified_len_;
+      }
+      break;
+    }
+    default:
+      break;
+  }
   return ret;
 }
 
@@ -127,6 +188,10 @@ void ObLobDataGetCtx::inc_lob_col_value_count(bool &is_lob_col_value_handle_done
   int8_t total_value_count = 0;
 
   if (is_insert()) {
+    total_value_count = 1;
+  // if current outrow data is ext_info_log or partial_json
+  // there is no before-image output. so total_value_count is one.
+  } else if (is_ext_info_log()) {
     total_value_count = 1;
   } else if (is_update()) {
     if (nullptr != old_lob_data_ && old_lob_data_->byte_size_ > 0) {
@@ -157,9 +222,9 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
     }
 
     (void)common::databuff_printf(buf, buf_len, pos,
-        "column_id=%ld, dml=%s, ref_cnt[new=%d, old=%d], handle_cnt=%d, ",
+        "column_id=%ld, dml=%s, ref_cnt[new=%d, old=%d], handle_cnt=%d, type=%d, ",
         column_id_, print_dml_flag(dml_flag_), new_lob_col_ctx_.get_col_ref_cnt(),
-        old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_);
+        old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_, type_);
 
     if (nullptr != new_lob_data_) {
       (void)common::databuff_printf(buf, buf_len, pos,
@@ -256,6 +321,45 @@ int ObLobDataOutRowCtxList::get_lob_column_value(
   }
 
   return ret;
+}
+
+int ObLobDataOutRowCtxList::get_lob_data_get_ctx(
+    const uint64_t column_id,
+    ObLobDataGetCtx *&result)
+{
+  int ret = OB_SUCCESS;
+  bool is_found = false;
+  ObLobDataGetCtx *lob_data_get_ctx = lob_data_get_ctxs_.head_;
+  if (OB_UNLIKELY(! is_all_lob_callback_done())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("lob_ctx_cols is_all_lob_callback_done is false, not expected", KR(ret), KPC(this));
+  } else {
+    while (OB_SUCC(ret) && ! is_found && nullptr != lob_data_get_ctx) {
+      if (column_id == lob_data_get_ctx->column_id_) {
+        is_found = true;
+        result = lob_data_get_ctx;
+      }
+      lob_data_get_ctx = lob_data_get_ctx->get_next();
+    } // while
+  }
+
+  if (! is_found) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
+uint64_t ObLobDataOutRowCtxList::get_table_id_of_lob_aux_meta_key(const ObLobDataGetCtx &lob_data_get_ctx) const
+{
+  uint64_t table_id = 0;
+  switch (lob_data_get_ctx.get_type()) {
+    case ObLobDataGetTaskType::FULL_LOB:
+      table_id = get_aux_lob_meta_table_id();
+      break;
+    default:
+      break;
+  }
+  return table_id;
 }
 
 int64_t ObLobDataOutRowCtxList::to_string(char *buf, const int64_t buf_len) const

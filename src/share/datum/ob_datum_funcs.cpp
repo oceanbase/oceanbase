@@ -523,7 +523,7 @@ struct DatumJsonHashCalculator : public DefHashMethod<T>
     } else if (OB_FAIL(str_iter.get_full_data(j_bin_str))) {
       LOG_WARN("Lob: str iter get full data failed ", K(ret), K(str_iter));
     } else {
-      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length());
+      ObJsonBin j_bin(j_bin_str.ptr(), j_bin_str.length(), &allocator);
       ObIJsonBase *j_base = &j_bin;
       if (j_bin_str.length() == 0) {
         res = seed;
