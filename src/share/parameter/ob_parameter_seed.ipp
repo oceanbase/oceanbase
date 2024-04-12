@@ -1891,7 +1891,7 @@ DEF_INT(_query_record_size_limit, OB_TENANT_PARAMETER, "65536", "[0, 67108864] i
 ERRSIM_DEF_BOOL(ls_rebuild_without_check_limit, OB_TENANT_PARAMETER, "False",
          "ls rebuild without check limit",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "idc",
+DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "region",
         common::ObConfigMigrationChooseSourceChecker,
         "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
         "'region' means firstly choose follower replica of the same region as source",
