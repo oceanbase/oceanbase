@@ -530,7 +530,8 @@ public:
   }
   TO_STRING_KV(KP_(query_range), KPC_(row_header), KPC_(minor_meta_info), KPC_(endkey),
       KP_(agg_row_buf), K_(agg_buf_size), K_(flag), K_(range_idx), K_(parent_macro_id),
-      K_(nested_offset), K_(cs_row_range), K_(skipping_filter_results));
+      K_(nested_offset), K_(rowkey_begin_idx), K_(rowkey_end_idx), K_(cs_row_range),
+      K_(skipping_filter_results));
 
 public:
   const ObIndexBlockRowHeader *row_header_;

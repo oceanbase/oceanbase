@@ -123,13 +123,13 @@ class ObIndexTreePrefetcher
 public:
   ObIndexTreePrefetcher() :
       is_inited_(false),
-      is_rescan_(false),
       iter_type_(0),
       cur_level_(0),
       index_tree_height_(0),
       max_rescan_height_(0),
       max_rescan_range_cnt_(0),
       data_version_(0),
+      table_scan_cnt_(0),
       sstable_(nullptr),
       sstable_meta_handle_(),
       index_block_(),
@@ -162,8 +162,9 @@ public:
   int lookup_in_index_tree(ObSSTableReadHandle &read_handle, const bool force_prefetch);
   OB_INLINE bool is_valid() { return is_inited_; }
   ObMicroBlockDataHandle &get_last_data_handle() { return last_micro_block_handle_; }
-  VIRTUAL_TO_STRING_KV(K_(is_rescan), K_(iter_type), K_(cur_level), K_(index_tree_height),
-      K_(max_rescan_height), K_(max_rescan_range_cnt), K_(data_version), K_(index_scanner));
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(iter_type), K_(cur_level), K_(index_tree_height),
+      K_(max_rescan_height), K_(max_rescan_range_cnt), K_(data_version), K_(table_scan_cnt), K_(index_scanner),
+      KPC_(sstable), KPC_(iter_param), K_(last_micro_block_handle));
 protected:
   void inner_reset();
   int init_index_scanner(ObIndexBlockRowScanner &index_scanner);
@@ -181,24 +182,25 @@ protected:
       ObSSTable &sstable,
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx);
+  OB_INLINE bool is_first_scan() const { return nullptr == sstable_; }
+  OB_INLINE bool is_rescan() const { return 1 < table_scan_cnt_; }
 private:
   ObMicroBlockDataHandle &get_read_handle(const int64_t level)
   {
     return micro_handles_[level % DEFAULT_GET_MICRO_DATA_HANDLE_CNT];
   }
   bool last_handle_hit(const ObMicroIndexInfo &block_info, const bool is_data, ObMicroBlockDataHandle &micro_handle);
-
 protected:
   static const int64_t MAX_RESCAN_HOLD_LIMIT = 64;
   static const int16_t MAX_INDEX_TREE_HEIGHT = 16;
   bool is_inited_;
-  bool is_rescan_;
   int16_t iter_type_;
   int16_t cur_level_;
   int16_t index_tree_height_;
   int16_t max_rescan_height_;
   int64_t max_rescan_range_cnt_;
   int64_t data_version_;
+  int64_t table_scan_cnt_;
   ObSSTable *sstable_;
   ObSSTableMetaHandle sstable_meta_handle_;
   ObMicroBlockData index_block_;
@@ -348,7 +350,7 @@ public:
   { return ext_read_handles_[fetch_rowkey_idx_ % MAX_MULTIGET_MICRO_DATA_HANDLE_CNT]; }
   OB_INLINE ObMicroBlockDataHandle &current_micro_handle()
   { return *ext_read_handles_[fetch_rowkey_idx_ % MAX_MULTIGET_MICRO_DATA_HANDLE_CNT].micro_handle_; }
-  INHERIT_TO_STRING_KV("ObIndexTreePrefetcher", ObIndexTreePrefetcher, K_(index_tree_height),
+  INHERIT_TO_STRING_KV("ObIndexTreePrefetcher", ObIndexTreePrefetcher, K_(index_tree_height), K_(is_rowkey_sorted),
       K_(fetch_rowkey_idx), K_(prefetch_rowkey_idx), K_(prefetched_rowkey_cnt), K_(max_handle_prefetching_cnt));
   bool is_rowkey_sorted_;
   int64_t fetch_rowkey_idx_;

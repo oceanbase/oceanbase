@@ -199,7 +199,7 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
               ret = OB_SUCCESS;
             }
           } else {
-            STORAGE_LOG(WARN, "Iterator get next row failed", K(i), K(ret));
+            STORAGE_LOG(WARN, "Iterator get next row failed", K(i), K(ret), K(tables_));
           }
         } else if (OB_ISNULL(tmp_row)) {
           ret = OB_ERR_UNEXPECTED;

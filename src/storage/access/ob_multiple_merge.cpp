@@ -583,7 +583,7 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
             scan_state_ = ScanState::BATCH;
             continue;
           } else if (OB_ITER_END != ret) {
-            LOG_WARN("Fail to inner get next row, ", K(ret), KP(this));
+            LOG_WARN("Fail to inner get next row, ", K(ret), K(tables_), KP(this));
           }
         } else if (need_read_lob_columns(unprojected_row_)) {
           if (OB_FAIL(handle_lob_before_fuse_row())) {

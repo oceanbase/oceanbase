@@ -166,7 +166,7 @@ int ObSSTableRowMultiGetter::fetch_row(ObSSTableReadHandle &read_handle, const b
               read_handle,
               store_row,
               macro_block_reader_))) {
-    LOG_WARN("Fail to get row", K(ret));
+    LOG_WARN("Fail to get row", K(ret), K(prefetcher_));
   }
   return ret;
 }
