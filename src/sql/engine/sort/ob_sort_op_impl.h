@@ -263,7 +263,8 @@ public:
       const int64_t default_block_size = ObChunkDatumStore::BLOCK_SIZE,
       const common::ObCompressorType compressor_type = common::NONE_COMPRESSOR,
       const ExprFixedArray *exprs = nullptr,
-      const int64_t est_rows = 0);
+      const int64_t est_rows = 0,
+      const bool use_compact_format = false);
 
   virtual int64_t get_prefix_pos() const { return 0;  }
   // keep initialized, can sort same rows (same cell type, cell count, projector) after reuse.
@@ -756,7 +757,6 @@ protected:
                        const ObChunkDatumStore::StoredRow *&store_row);
   int adjust_topn_heap_with_ties(const common::ObIArray<ObExpr*> &exprs,
                                  const ObChunkDatumStore::StoredRow *&store_row);
-  //
   int copy_to_topn_row(const common::ObIArray<ObExpr*> &exprs,
                        ObIAllocator &alloc,
                        SortStoredRow *&top_row);
@@ -792,7 +792,7 @@ protected:
                           const int64_t batch_size,
                           const uint16_t selector[],
                           const int64_t size);
-  bool use_compact_store() { return compress_type_ != NONE_COMPRESSOR; }
+  bool use_compact_store() { return use_compact_format_ || compress_type_ != NONE_COMPRESSOR; }
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
 protected:
@@ -866,6 +866,7 @@ protected:
   ObChunkDatumStore::IteratedBlockHolder default_blk_holder_;
   const ExprFixedArray *sort_exprs_;
   common::ObCompressorType compress_type_;
+  bool use_compact_format_;
 };
 
 class ObInMemoryTopnSortImpl;

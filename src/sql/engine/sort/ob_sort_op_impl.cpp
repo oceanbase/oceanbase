@@ -578,7 +578,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
     is_fetch_with_ties_(false), topn_heap_(NULL), ties_array_pos_(0),
     last_ties_row_(NULL), pt_buckets_(NULL), use_partition_topn_sort_(false), heap_nodes_(), cur_heap_idx_(0), part_group_cnt_(0),
     rows_(NULL), sort_exprs_(nullptr),
-    compress_type_(NONE_COMPRESSOR)
+    compress_type_(NONE_COMPRESSOR), use_compact_format_(false)
 {
 }
 
@@ -693,7 +693,8 @@ int ObSortOpImpl::init(
   const int64_t default_block_size /* = 64KB */,
   const ObCompressorType compress_type /* = NONE_COMPRESS */,
   const ExprFixedArray *exprs /* =nullptr */,
-  const int64_t est_rows /* = 0 */)
+  const int64_t est_rows /* = 0 */,
+  const bool use_compact_format /* =false */)
 {
   int ret = OB_SUCCESS;
   if (is_inited()) {
@@ -722,6 +723,7 @@ int ObSortOpImpl::init(
     part_cnt_ = part_cnt;
     topn_cnt_ = topn_cnt;
     compress_type_ = compress_type;
+    use_compact_format_ = use_compact_format;
     sort_exprs_ = exprs;
     use_heap_sort_ = is_topn_sort() && part_cnt_ == 0;
     use_partition_topn_sort_ = is_topn_sort() && part_cnt_ > 0;
@@ -860,6 +862,7 @@ void ObSortOpImpl::reset()
   rows_ = NULL;
   ties_array_pos_ = 0;
   compress_type_ = NONE_COMPRESSOR;
+  use_compact_format_ = false;
   sort_exprs_ = nullptr;
   // for partition topn sort
   cur_heap_idx_ = 0;
