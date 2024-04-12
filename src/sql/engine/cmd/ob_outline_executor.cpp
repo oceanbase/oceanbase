@@ -99,6 +99,8 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
   int32_t len = 0;
   int32_t pos = 0;
   ObMaxConcurrentParam concurrent_param(&ctx.get_allocator());
+  bool has_in_expr = false;
+  int64_t in_expr_pos = 0;
   buf = (char *)ctx.get_allocator().alloc(outline_sql.length());
   if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
@@ -117,12 +119,22 @@ int ObOutlineExecutor::generate_outline_info1(ObExecContext &ctx,
                                                  has_questionmark_in_outline_sql,
                                                  outline_info.is_format()))) {
     LOG_WARN("fail to get outline key", "outline_sql", outline_sql, K(ret));
+  } else if (OB_FAIL(ObSqlParameterization::search_in_expr_pos(outline_info.get_format_sql_text_str().ptr(),
+                                                               outline_info.get_format_sql_text_str().length(),
+                                                               in_expr_pos, has_in_expr))) {
+    LOG_WARN("failed to search in expr", K(ret), K(outline_info.get_format_sql_text_str()));
   } else if (FALSE_IT(max_concurrent = query_hint->get_global_hint().max_concurrent_)) {
   } else if (OB_UNLIKELY(has_questionmark_in_outline_sql && query_hint->has_hint_exclude_concurrent())) {
     ret = OB_INVALID_OUTLINE;
     LOG_USER_ERROR(OB_INVALID_OUTLINE, "sql text should have no ? when there is no concurrent limit");
     LOG_WARN("outline should have no ? when there is no concurrent limit",
              K(outline_sql), K(ret));
+  } else if (OB_UNLIKELY(max_concurrent > ObGlobalHint::UNSET_MAX_CONCURRENT && has_in_expr
+                         && concurrent_param.fixed_param_store_.count() > 0 && outline_info.is_format())) {
+    ret = OB_INVALID_OUTLINE;
+    LOG_USER_ERROR(OB_INVALID_OUTLINE, "format outline with in expr not support concurrent limit, recommend to use normal outline");
+    LOG_WARN("format outline with in expr can not have const param",
+             "outline_format_sql_text", outline_info.get_format_sql_text_str(), K(ret));
   } else if (OB_FAIL(get_outline(ctx, outline_stmt, outline))) {
     LOG_WARN("fail to get outline", K(ret));
   } else {
