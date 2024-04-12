@@ -5437,7 +5437,7 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
         LOG_WARN("get wrong schema", K(ret), K(new_view_schema));
       } else if (old_view_schema.is_sys_view() && OB_FAIL(check_sys_view_changed(old_view_schema, new_view_schema, changed))) {
         LOG_WARN("failed to check sys view changed", K(ret));
-      } else if (!select_stmt->get_ref_obj_table()->is_inited() || !changed) {
+      } else if (!select_stmt->get_ref_obj_table()->is_inited() || (old_view_schema.is_sys_view() && !changed)) {
         // do nothing
       } else if (OB_FAIL(GCTX.sql_engine_->get_dep_info_queue().add_view_id_to_set(new_view_schema.get_table_id()))) {
         if (OB_HASH_EXIST == ret) {
