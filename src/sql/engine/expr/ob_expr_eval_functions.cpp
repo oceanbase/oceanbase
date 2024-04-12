@@ -1137,7 +1137,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
   ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
   ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
-  NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 673 */
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
   NULL, //ObExprIs::json_is_true,                                     /* 675 */
   NULL, //ObExprIs::json_is_false,                                    /* 676 */
@@ -1145,7 +1145,6 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprMod::mod_decimalint,                                  /* 678 */
   ObExprPrivSTGeoHash::eval_priv_st_geohash,                          /* 679 */
   ObExprPrivSTMakePoint::eval_priv_st_makepoint,                      /* 680 */
-  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 681 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1266,7 +1265,19 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
   calc_sqrt_expr_oracle_number_in_batch,                              /* 116 */
-  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 117 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 117 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 118 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 119 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 120 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 121 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 122 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 123 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 124 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 125 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 126 */
+  NULL, //ObBatchCast::explicit_batch_cast                            /* 127 */
+  NULL, //ObBatchCast::implicit_batch_cast                            /* 128 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
