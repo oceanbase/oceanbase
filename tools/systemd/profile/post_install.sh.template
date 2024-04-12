@@ -1,0 +1,20 @@
+#!/bin/bash
+echo "execute post install script"
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+
+# prepare the systemd service unit
+cp -f $prefix/profile/oceanbase.service /etc/systemd/system/oceanbase.service
+chmod 644 /etc/systemd/system/oceanbase.service
+chmod +x $prefix/profile/oceanbase-service.sh
+cp -f $prefix/profile/oceanbase.cnf /etc/oceanbase.cnf
+systemctl daemon-reload
+
+# telemetry
+/bin/bash $prefix/profile/telemetry.sh $1 >/dev/null 2>&1
+
+GREEN='\033[32m'
+NC="\033[0m"
+echo -e "${GREEN}To configure OceanBase${NC} : edit /etc/oceanbase.cnf"
+echo -e "${GREEN}To start OceanBase${NC}     : systemctl start oceanbase"
+echo -e "${GREEN}To enable OceanBase auto reboot ${NC} : systemctl enable oceanbase"
+echo -e "${GREEN}To get more infomation${NC} : https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000000640297"

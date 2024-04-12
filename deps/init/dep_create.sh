@@ -82,6 +82,9 @@ function get_os_release() {
       fedora)
         version_ge "33" && compat_centos7 && return
         ;;
+      openEuler)
+        version_ge "22" && compat_centos9 && return
+        ;;
       opensuse-leap)
         version_ge "15" && compat_centos7 && return
         ;;
@@ -108,6 +111,11 @@ function get_os_release() {
         version_ge "8.0" && compat_centos8 && return
         version_ge "7.0" && compat_centos7 && return
         ;;
+      anolis)
+        version_ge "23.0" && compat_centos9 && return
+        version_ge "8.0" && compat_centos8 && return
+        version_ge "7.0" && compat_centos7 && return
+        ;;
       centos)
         version_ge "8.0" && OS_RELEASE=8 && return
         version_ge "7.0" && OS_RELEASE=7 && return
@@ -115,6 +123,9 @@ function get_os_release() {
       debian)
         version_ge "12" && compat_centos9 && return
         version_ge "9" && compat_centos7 && return
+        ;;
+      openEuler)
+        version_ge "22" && compat_centos9 && return
         ;;
       ubuntu)
         version_ge "22.04" && compat_centos9 && return

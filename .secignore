@@ -188,6 +188,8 @@
   http://helloworld.com/*
   http://1.1.1.1:8080/*
   https://mirrors.aliyun.com/*
+  https://mirrors.oceanbase.com/*
+  http://mirrors.oceanbase.com/*
   https://bixense.com/clicolors/
   martin.gieseking@uos.de
   jloup@gzip.org

@@ -289,14 +289,16 @@ tools/deploy/single-with-proxy.yaml
 tools/deploy/single.yaml
 tools/docker/standalone/boot
 tools/docker/standalone/init_store_for_fast_start.py
-tools/rpm/systemd/profile/oceanbase-service.sh
-tools/rpm/systemd/profile/post_install.sh
-tools/rpm/systemd/profile/pre_uninstall.sh
-tools/rpm/systemd/profile/post_uninstall.sh
-tools/rpm/systemd/profile/telemetry.sh
-tools/rpm/systemd/profile/postinst
-tools/rpm/systemd/profile/prerm
-tools/rpm/systemd/profile/postrm
+tools/systemd/profile/oceanbase-service.sh
+tools/systemd/profile/pre_install.sh
+tools/systemd/profile/post_install.sh
+tools/systemd/profile/pre_uninstall.sh
+tools/systemd/profile/post_uninstall.sh
+tools/systemd/profile/telemetry.sh
+tools/systemd/profile/preinst
+tools/systemd/profile/postinst
+tools/systemd/profile/prerm
+tools/systemd/profile/postrm
 
 ############# unittest #############
 unittest/**/test_*
