@@ -98,6 +98,8 @@ def					ifnull(0, 0.0)	246	23	3	Y	32896	1	63
 ifnull(0, 0.0)
 0.0
 insert into t3 values(0, 2.4, "123");
+Warnings:
+Warning	1265	Data truncated for column 'b' at row 1
 select ifnull(a, b), ifnull(a, c) from t3;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def					ifnull(a, b)	246	12	1	Y	32896	0	63

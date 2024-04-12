@@ -1253,6 +1253,7 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
 }
 
 static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
+                                    const ObUserLoggingCtx *user_logging_ctx,
                                     ObDecimalIntBuilder &res_val)
 {// TODO: add cases
 #define SET_ZERO(int_type)                                                                         \
@@ -1354,7 +1355,8 @@ static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
       //  1 row in set (0.01 sec)
       if (ObDatumCast::need_scale_decimalint(in_scale, in_precision, out_scale, out_prec)) {
         if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, int_bytes, in_scale, out_scale,
-                                                         out_prec, expr.extra_, res_val))) {
+                                                         out_prec, expr.extra_, res_val,
+                                                         user_logging_ctx))) {
           LOG_WARN("scale decimal int failed", K(ret));
         }
       } else {
@@ -2147,7 +2149,8 @@ static int scale_const_decimalint_expr(const ObDecimalInt *decint, const int32_t
 int ObDatumCast::common_scale_decimalint(const ObDecimalInt *decint, const int32_t int_bytes,
                                          const ObScale in_scale, const ObScale out_scale,
                                          const ObPrecision out_prec, const ObCastMode cast_mode,
-                                         ObDecimalIntBuilder &val)
+                                         ObDecimalIntBuilder &val,
+                                         const ObUserLoggingCtx *user_logging_ctx)
 {
   int ret = OB_SUCCESS;
   ObDecimalIntBuilder max_v, min_v;
@@ -2178,6 +2181,12 @@ int ObDatumCast::common_scale_decimalint(const ObDecimalInt *decint, const int32
       val.from(max_v);
     } else {
       // do nothing
+    }
+    if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode() && CM_IS_COLUMN_CONVERT(cast_mode) && in_scale > out_scale &&
+            decimal_int_truncated_check(decint, int_bytes, in_scale - out_scale)) {
+        log_user_warning_truncated(user_logging_ctx);
+      }
     }
   } else {
     if (OB_FAIL(
@@ -2278,6 +2287,16 @@ int check_decimalint_accuracy(const ObCastMode cast_mode,
     }
   }
   return ret;
+}
+
+void log_user_warning_truncated(const ObUserLoggingCtx *user_logging_ctx)
+{
+  if (OB_ISNULL(user_logging_ctx) || user_logging_ctx->skip_logging()) {
+  } else {
+    const ObString *column_name = user_logging_ctx->get_column_name();
+    LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_name->length(), column_name->ptr(),
+                  user_logging_ctx->get_row_num());
+  }
 }
 
 static int common_json_string(const ObExpr &expr,
@@ -3589,7 +3608,8 @@ CAST_FUNC_NAME(string, decimalint)
   {
     ObString in_str(child_res->len_, child_res->ptr_);
     ObDecimalIntBuilder res_val;
-    if (OB_FAIL(common_string_decimalint(expr, in_str, res_val))) {
+    if (OB_FAIL(common_string_decimalint(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(),
+                                         res_val))) {
       LOG_WARN("cast string to decimal int failed", K(ret));
     } else {
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -3822,7 +3842,7 @@ CAST_FUNC_NAME(text, decimalint)
     ObDecimalIntBuilder res_val;
     if (OB_FAIL(get_text_full_data(expr, ctx, &temp_allocator, child_res, in_str))) {
       LOG_WARN("get string data failed", K(ret));
-    } else if (OB_FAIL(common_string_decimalint(expr, in_str, res_val))) {
+    } else if (OB_FAIL(common_string_decimalint(expr, in_str, ctx.exec_ctx_.get_user_logging_ctx(), res_val))) {
       LOG_WARN("cast string to decimal int failed", K(ret), K(in_str));
     } else {
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -4737,7 +4757,8 @@ CAST_FUNC_NAME(float, decimalint)
       } else if (ObDatumCast::need_scale_decimalint(in_scale, in_prec, out_scale, out_prec)) {
         ObDecimalIntBuilder res_val;
         if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, val_len, in_scale, out_scale,
-                                            out_prec, expr.extra_, res_val))) {
+                                            out_prec, expr.extra_, res_val,
+                                            ctx.exec_ctx_.get_user_logging_ctx()))) {
           LOG_WARN("scale decimalint failed", K(ret));
         } else {
           res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -4888,7 +4909,8 @@ CAST_FUNC_NAME(double, decimalint)
       } else if (ObDatumCast::need_scale_decimalint(in_scale, in_prec, out_scale, out_prec)) {
         ObDecimalIntBuilder res_val;
         if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, val_len, in_scale, out_scale,
-                                            out_prec, expr.extra_, res_val))) {
+                                            out_prec, expr.extra_, res_val,
+                                            ctx.exec_ctx_.get_user_logging_ctx()))) {
           LOG_WARN("scale decimal int failed", K(ret));
         } else {
           res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -5556,7 +5578,8 @@ CAST_FUNC_NAME(datetime, decimalint)
       } else if (ObDatumCast::need_scale_decimalint(in_scale, in_precision, out_scale, out_prec)) {
         ObDecimalIntBuilder res_val;
         if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, int_bytes, scale, out_scale,
-                                            out_prec, expr.extra_, res_val))) {
+                                            out_prec, expr.extra_, res_val,
+                                            ctx.exec_ctx_.get_user_logging_ctx()))) {
           LOG_WARN("scale decimal int failed", K(ret), K(scale), K(out_scale));
         } else {
           res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -7186,7 +7209,8 @@ CAST_FUNC_NAME(time, decimalint)
     } else if (ObDatumCast::need_scale_decimalint(in_scale, in_prec, out_scale, out_prec)) {
       ObDecimalIntBuilder res_val;
       if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, int_bytes, in_scale, out_scale, out_prec,
-                                          expr.extra_, res_val))) {
+                                          expr.extra_, res_val,
+                                          ctx.exec_ctx_.get_user_logging_ctx()))) {
         LOG_WARN("scale decimal int failed", K(ret));
       } else {
         res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -8772,7 +8796,8 @@ CAST_FUNC_NAME(geometry, decimalint)
       ObDecimalIntBuilder res_val;
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res, expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("failed to get real data", K(ret), K(in_str));
-      } else if (OB_FAIL(common_string_decimalint(expr, in_str, res_val))) {
+      } else if (OB_FAIL(common_string_decimalint(expr, in_str,
+                                                  ctx.exec_ctx_.get_user_logging_ctx(), res_val))) {
         LOG_WARN("failed to cast string to decimal int", K(ret), K(in_str));
         ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD; // compatible with mysql
       } else {
@@ -9823,7 +9848,7 @@ CAST_FUNC_NAME(number, decimalint)
     } else if (ObDatumCast::need_scale_decimalint(in_scale, int_bytes, out_scale, out_bytes)) {
       ObDecimalIntBuilder res_val;
       if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, int_bytes, in_scale, out_scale, out_prec,
-                                          expr.extra_, res_val))) {
+                                          expr.extra_, res_val, ctx.exec_ctx_.get_user_logging_ctx()))) {
         LOG_WARN("scale decimal int failed", K(ret), K(in_scale), K(out_scale));
       } else {
         res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -10620,7 +10645,8 @@ CAST_FUNC_NAME(decimalint, decimalint)
     if (ObDatumCast::need_scale_decimalint(in_scale, in_prec, out_scale, out_prec)) {
       ObDecimalIntBuilder res_val;
       if (OB_FAIL(ObDatumCast::common_scale_decimalint(child_res->decimal_int_, child_res->len_, in_scale,
-                                          out_scale, out_prec, expr.extra_, res_val))) {
+                                          out_scale, out_prec, expr.extra_, res_val,
+                                          ctx.exec_ctx_.get_user_logging_ctx()))) {
         LOG_WARN("scale decimal int failed", K(ret));
       } else {
         res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
@@ -11258,11 +11284,16 @@ int number_range_check_v2(const ObCastMode &cast_mode,
         LOG_WARN("out_val.from failed", K(ret), K(in_val));
       } else if (OB_FAIL(out_val.round(scale))) {
         LOG_WARN("out_val.round failed", K(ret), K(scale));
-      } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-        in_val.compare(out_val) != 0) {
-        ret = OB_OPERATE_OVERFLOW;
-        LOG_WARN("input value is out of range.", K(scale), K(in_val));
-      } else {
+      } else if (!in_val.is_equal(out_val)) {
+        if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+        } else if (lib::is_mysql_mode()) {
+          // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+          warning = OB_ERR_DATA_TOO_LONG;
+        }
+      }
+      if (OB_SUCC(ret)) {
         res_datum.set_number(out_val);
         is_finish = true;
       }

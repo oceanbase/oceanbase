@@ -1,14 +1,32 @@
 drop table t1;
 create table t1(c1 int, c2 varchar(10), c3 decimal);
 insert into t1 values(0, 'abc', '0.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(1, 'def', '1.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(2, 'ghi', '2.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(3, 'jkl', '3.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(4, 'mno', '4.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(5, 'pqr', '5.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(6, 'stu', '6.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(7, 'vwx', '7.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(8, 'yz', '8.1');
+Warnings:
+Warning	1265	Data truncated for column 'c3' at row 1
 insert into t1 values(9, null, null);
 result_format: 4
 explain_protocol: 1

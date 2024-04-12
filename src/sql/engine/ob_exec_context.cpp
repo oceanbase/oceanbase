@@ -130,7 +130,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     table_direct_insert_ctx_(),
     errcode_(OB_SUCCESS),
     dblink_snapshot_map_(),
-    cur_row_num_(-1),
+    user_logging_ctx_(),
     is_online_stats_gathering_(false)
 {
 }

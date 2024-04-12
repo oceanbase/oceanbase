@@ -30,6 +30,8 @@ namespace oceanbase
 namespace sql
 {
 class ObPhysicalPlanCtx;
+struct ObUserLoggingCtx;
+
 // extract accuracy info from %expr and call datum_accuracy_check() below.
 int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,
@@ -302,6 +304,26 @@ int check_decimalint_accuracy(const ObCastMode cast_mode,
                               const ObPrecision precision, const ObScale scale,
                               ObDecimalIntBuilder &res_val, int &warning);
 
+inline bool decimal_int_truncated_check(const ObDecimalInt *decint, const int32_t int_bytes,
+                                       const unsigned scale)
+{
+#define TRUNC_CHECK(int_type) \
+  if (wide::ObDecimalIntConstValue::get_int_bytes_by_precision(scale) > int_bytes) {  \
+    bret = (*reinterpret_cast<const int_type *>(decint)) != 0;              \
+  } else {                                                                  \
+    const int_type sf = get_scale_factor<int_type>(scale);                  \
+    bret = (((*reinterpret_cast<const int_type *>(decint)) % sf) != 0);     \
+  }
+
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  DISPATCH_WIDTH_TASK(int_bytes, TRUNC_CHECK);
+  return bret;
+#undef TRUNC_CHECK
+}
+
+void log_user_warning_truncated(const ObUserLoggingCtx *user_logging_ctx);
+
 // copied from ob_obj_cast.cpp，函数逻辑没有修改，只是将输入参数从ObObj变为ObDatum
 class ObDatumHexUtils
 {
@@ -433,7 +455,8 @@ public:
   static int common_scale_decimalint(const ObDecimalInt *decint, const int32_t int_bytes,
                                      const ObScale in_scale, const ObScale out_scale,
                                      const ObPrecision out_prec,
-                                     const ObCastMode cast_mode, ObDecimalIntBuilder &val);
+                                     const ObCastMode cast_mode, ObDecimalIntBuilder &val,
+                                     const ObUserLoggingCtx *column_conv_ctx = NULL);
 
   static int align_decint_precision_unsafe(const ObDecimalInt *decint, const int32_t int_bytes,
                                            const int32_t expected_int_bytes,

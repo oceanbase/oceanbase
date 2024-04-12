@@ -62,7 +62,8 @@
     int64_t pos = 0;                                                                               \
     if (OB_FAIL(sql::ObDatumCast::common_scale_decimalint(                                         \
           (in_obj).get_decimal_int(), (in_obj).get_int_bytes(), in_scale,                          \
-          res_acc.get_scale(), res_acc.get_precision(), params.cast_mode_, tmp_dec))) {            \
+          res_acc.get_scale(), res_acc.get_precision(), params.cast_mode_, tmp_dec,                \
+          (NULL == params.exec_ctx_) ? NULL : params.exec_ctx_->get_user_logging_ctx()))) {        \
       LOG_WARN("common scale decimal int failed", K(ret));                                         \
     } else if (OB_ISNULL(buf = (char *)params.alloc(tmp_dec.get_int_bytes()))) {                   \
       ret = OB_ALLOCATE_MEMORY_FAILED;                                                             \
@@ -13434,11 +13435,16 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
       } else {
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round(scale))) {
-        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-          in_val.compare(out_val) != 0) {
-          ret = OB_OPERATE_OVERFLOW;
-          LOG_WARN("input value is out of range.", K(scale), K(in_val));
-        } else {
+        } else if (!in_val.is_equal(out_val)) {
+          if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+          } else if (lib::is_mysql_mode()) {
+            // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+            params.warning_ = OB_ERR_DATA_TOO_LONG;
+          }
+        }
+        if (OB_SUCC(ret)) {
           buf_obj.set_number(obj.get_type(), out_val);
         }
       }

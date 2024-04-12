@@ -127,6 +127,33 @@ public:
   ObOperatorKit *kits_;
 };
 
+struct ObUserLoggingCtx
+{
+  friend class ObExecContext;
+  friend class Guard;
+  class Guard
+  {
+  public:
+    explicit Guard(ObUserLoggingCtx &ctx) : ctx_(ctx) {}
+    ~Guard() { ctx_.reset(); }
+  private:
+    ObUserLoggingCtx &ctx_;
+  };
+  ObUserLoggingCtx() : column_name_(NULL), row_num_(-1) {}
+  inline bool skip_logging() const { return NULL == column_name_ || row_num_ <= 0; }
+  inline const ObString *get_column_name() const  { return column_name_; }
+  inline int64_t get_row_num() const { return row_num_; }
+private:
+  inline void reset()
+  {
+    column_name_ = NULL;
+    row_num_ = -1;
+  }
+private:
+  const ObString *column_name_;
+  int64_t row_num_;
+};
+
 class ObIExtraStatusCheck;
 struct ObTempExprBackupCtx;
 
@@ -473,8 +500,11 @@ public:
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
 
   ObExecFeedbackInfo &get_feedback_info() { return fb_info_; };
-  void set_cur_rownum(int64_t cur_rownum) { cur_row_num_ = cur_rownum; }
-  int64_t get_cur_rownum() { return cur_row_num_; }
+  inline void set_cur_rownum(int64_t cur_rownum) { user_logging_ctx_.row_num_ = cur_rownum; }
+  inline int64_t get_cur_rownum() const { return user_logging_ctx_.row_num_; }
+  inline void set_cur_column_name(const ObString *column_name)
+  { user_logging_ctx_.column_name_ = column_name; }
+  inline ObUserLoggingCtx *get_user_logging_ctx() { return &user_logging_ctx_; }
   bool use_temp_expr_ctx_cache() const { return use_temp_expr_ctx_cache_; }
   bool has_dynamic_values_table() const {
     bool ret = false;
@@ -663,8 +693,8 @@ protected:
   hash::ObHashMap<uint64_t, void*> dblink_snapshot_map_;
   // for feedback
   ObExecFeedbackInfo fb_info_;
-  // for dml report user warning/error at specific row
-  int64_t cur_row_num_;
+  // for dml report user warning/error at specific row and column
+  ObUserLoggingCtx user_logging_ctx_;
   // for online stats gathering
   bool is_online_stats_gathering_;
   //---------------

@@ -149,13 +149,15 @@ int ObDMLService::check_column_type(const ExprFixedArray &dml_row,
   int ret = OB_SUCCESS;
   CK(dml_row.count() >= column_infos.count());
   ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObUserLoggingCtx::Guard logging_ctx_guard(*dml_op.get_exec_ctx().get_user_logging_ctx());
   dml_op.get_exec_ctx().set_cur_rownum(row_num);
   for (int64_t i = 0; OB_SUCC(ret) && i < column_infos.count(); ++i) {
     const ColumnContent &column_info = column_infos.at(i);
+    common::ObString column_name = column_infos.at(i).column_name_;
+    dml_op.get_exec_ctx().set_cur_column_name(&column_name);
     ObExpr *expr = dml_row.at(column_info.projector_index_);
     ObDatum *datum = nullptr;
     if (OB_FAIL(expr->eval(dml_op.get_eval_ctx(), datum))) {
-      common::ObString column_name = column_infos.at(i).column_name_;
       ret = ObDMLService::log_user_error_inner(ret, row_num, column_name, dml_op.get_exec_ctx());
     } else if (!datum->is_null() && expr->obj_meta_.is_geometry()) {
       // geo column type
