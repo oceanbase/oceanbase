@@ -150,13 +150,14 @@ struct ObMemAttr
         prio_(prio),
         use_500_(false),
         expect_500_(true),
-        ignore_version_(ObMemVersionNode::tl_ignore_node)
+        ignore_version_(ObMemVersionNode::tl_ignore_node),
+        alloc_extra_info_(false)
   {}
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
   bool expect_500() const { return expect_500_; }
   bool ignore_version() const { return ignore_version_; }
-private:
+public:
   union {
     char padding__[4];
     struct {
@@ -164,6 +165,7 @@ private:
         uint8_t use_500_ : 1;
         uint8_t expect_500_ : 1;
         uint8_t ignore_version_ : 1;
+        uint8_t alloc_extra_info_ : 1;
       };
     };
   };
@@ -300,6 +302,7 @@ struct AObject {
   OB_INLINE ABlock *block() const;
   OB_INLINE uint64_t hold(uint32_t cells_per_block) const;
   OB_INLINE ObLabel label() const;
+  OB_INLINE char *bt();
 
   // members
   union {
@@ -357,6 +360,7 @@ static const uint32_t INTACT_MIDDLE_AOBJECT_SIZE = 64L << 10;
 
 static const int32_t AOBJECT_BACKTRACE_COUNT = 16;
 static const int32_t AOBJECT_BACKTRACE_SIZE = sizeof(void*) * AOBJECT_BACKTRACE_COUNT;
+static const int32_t AOBJECT_EXTRA_INFO_SIZE = AOBJECT_BACKTRACE_SIZE;
 
 static const int32_t MAX_BACKTRACE_LENGTH = 512;
 
@@ -613,6 +617,10 @@ uint64_t AObject::hold(uint32_t cells_per_block) const
 ObLabel AObject::label() const
 {
   return ObLabel(label_);
+}
+char *AObject::bt()
+{
+  return &data_[alloc_bytes_ + AOBJECT_TAIL_SIZE];
 }
 
 class Label

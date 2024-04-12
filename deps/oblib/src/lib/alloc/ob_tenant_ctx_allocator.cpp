@@ -413,7 +413,6 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
   }
 
   AObject *obj = NULL;
-  int64_t alloc_size = 0;
   bool sample_allowed = false;
   bool is_errsim = false;
   if (NULL != ptr) {
@@ -436,13 +435,14 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
 #endif
   ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
       && ObCtxIds::GLIBC != attr.ctx_id_);
+  ObMemAttr inner_attr = attr;
   if (OB_UNLIKELY(is_errsim)) {
   } else {
     BASIC_TIME_GUARD(time_guard, "ObMalloc");
-    DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, attr));
-    sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, attr);
-    alloc_size = sample_allowed ? (size + AOBJECT_BACKTRACE_SIZE) : size;
-    obj = allocator.realloc_object(obj, alloc_size, attr);
+    DEFER(ObMallocTimeMonitor::get_instance().record_malloc_time(time_guard, size, inner_attr));
+    sample_allowed = ObMallocSampleLimiter::malloc_sample_allowed(size, inner_attr);
+    inner_attr.alloc_extra_info_ = sample_allowed;
+    obj = allocator.realloc_object(obj, size, inner_attr);
     if(OB_ISNULL(obj)) {
       int64_t total_size = 0;
       if (g_alloc_failed_ctx().need_wash_block()) {
@@ -453,31 +453,40 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
         BASIC_TIME_GUARD_CLICK("WASH_CHUNK_END");
       }
       if (total_size > 0) {
-        obj = allocator.realloc_object(obj, alloc_size, attr);
+        obj = allocator.realloc_object(obj, size, inner_attr);
       }
     }
   }
 
   if (obj != NULL) {
-    obj->on_malloc_sample_ = sample_allowed;
-    ob_malloc_sample_backtrace(obj, size);
-    obj->ignore_version_ = attr.ignore_version() || ObMemVersionNode::tl_ignore_node;
+    if (inner_attr.label_.str_ != nullptr) {
+      STRNCPY(obj->label_, inner_attr.label_.str_, sizeof(obj->label_));
+      obj->label_[sizeof(obj->label_) - 1] = '\0';
+    } else {
+      MEMSET(obj->label_, '\0', sizeof(obj->label_));
+    }
+    if (sample_allowed) {
+      void *addrs[100] = {nullptr};
+      ob_backtrace(addrs, ARRAYSIZEOF(addrs));
+      STATIC_ASSERT(AOBJECT_BACKTRACE_SIZE < sizeof(addrs), "AOBJECT_BACKTRACE_SIZE must be less than addrs!");
+      MEMCPY(obj->bt(), (char*)addrs, AOBJECT_BACKTRACE_SIZE);
+      obj->on_malloc_sample_ = true;
+    }
+    obj->ignore_version_ = inner_attr.ignore_version() || ObMemVersionNode::tl_ignore_node;
     if (!obj->ignore_version_) {
       obj->version_ = ObMemVersionNode::tl_node->version_;
     }
     nptr = obj->data_;
-    get_mem_leak_checker().on_alloc(*obj, attr);
-    SANITY_POISON(obj, AOBJECT_HEADER_SIZE);
+    get_mem_leak_checker().on_alloc(*obj, inner_attr);
+    SANITY_POISON(obj, obj->nobjs_ * AOBJECT_CELL_BYTES);
     SANITY_UNPOISON(obj->data_, size);
-    SANITY_POISON((void*)upper_align((int64_t)obj->data_ + size, 8),
-                                     alloc_size - size + sizeof(AOBJECT_TAIL_MAGIC_CODE));
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
     const char *msg = is_errsim ? "[ERRSIM] errsim inject memory error" : alloc_failed_msg();
     LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
                 "ctx_limit=%ld, tenant_hold=%ld, tenant_limit=%ld",
-                attr.tenant_id_, attr.ctx_id_,
-                get_global_ctx_info().get_ctx_name(attr.ctx_id_),
+                inner_attr.tenant_id_, inner_attr.ctx_id_,
+                get_global_ctx_info().get_ctx_name(inner_attr.ctx_id_),
                 ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
     // 49 is the user defined signal to dump memory
     raise(49);
