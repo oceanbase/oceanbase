@@ -620,7 +620,8 @@ int ObAccessService::check_write_allowed_(
     enable_table_lock = false;
     ret = OB_SUCCESS;
   }
-  if (OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
+  if (!dml_param.is_direct_insert()
+      && OB_FAIL(check_tenant_out_of_memstore_limit_(is_out_of_mem))) {
     LOG_WARN("fail to check tenant out of mem limit", K(ret), K_(tenant_id));
   } else if (is_out_of_mem && !tablet_id.is_inner_tablet()) {
     ret = OB_TENANT_OUT_OF_MEM;
