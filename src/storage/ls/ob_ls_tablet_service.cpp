@@ -2887,7 +2887,8 @@ int ObLSTabletService::insert_row(
     } else {
       tbl_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
       tbl_row.row_val_ = row;
-      if (OB_FAIL(get_conflict_rows(tablet_handle,
+      if (!dml_param.table_param_->get_data_table().is_mlog_table()
+          && OB_FAIL(get_conflict_rows(tablet_handle,
                                     run_ctx,
                                     flag,
                                     duplicated_column_ids,

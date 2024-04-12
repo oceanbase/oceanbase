@@ -210,6 +210,15 @@ int ObDASInsertOp::insert_row_with_fetch()
     const ObDASInsCtDef *index_ins_ctdef = static_cast<const ObDASInsCtDef*>(related_ctdefs_.at(i));
     ObDASInsRtDef *index_ins_rtdef = static_cast<ObDASInsRtDef*>(related_rtdefs_.at(i));
     ObTabletID index_tablet_id = related_tablet_ids_.at(i);
+    ObDASMLogDMLIterator mlog_iter(index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);
+    ObNewRowIterator *new_iter = nullptr;
+    if (index_ins_ctdef->table_param_.get_data_table().is_mlog_table()
+        && !index_ins_ctdef->is_access_mlog_as_master_table_) {
+      new_iter = &mlog_iter;
+    } else {
+      new_iter = &dml_iter;
+    }
+
     if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
       LOG_WARN("rewind dml iter failed", K(ret));
     } else if (OB_FAIL(ObDMLService::init_dml_param(*index_ins_ctdef,
@@ -230,7 +239,7 @@ int ObDASInsertOp::insert_row_with_fetch()
       duplicated_column_ids = &(index_ins_ctdef->column_ids_);
     }
 
-    while (OB_SUCC(ret) && OB_SUCC(dml_iter.get_next_row(insert_row))) {
+    while (OB_SUCC(ret) && OB_SUCC(new_iter->get_next_row(insert_row))) {
       ObNewRowIterator *duplicated_rows = NULL;
       if (OB_ISNULL(insert_row)) {
         ret = OB_ERR_UNEXPECTED;
