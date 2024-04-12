@@ -165,8 +165,14 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
+  if (!is_root() && OB_SUCC(ret)) {
+    if (OB_FAIL(errsim_do_pre_commit_without_root_())) {
+      TRANS_LOG(WARN, "errsim in do pre commit", K(ret), KPC(this));
+    }
+  }
+
   need_wait = false;
-  if (is_root()) {
+  if (is_root() && OB_SUCC(ret)) {
     if (OB_FAIL(ctx_tx_data_.set_commit_version(exec_info_.prepare_version_))) {
       TRANS_LOG(ERROR, "set tx data commit version", K(ret), K(ctx_tx_data_));
     } else if (OB_FAIL(wait_gts_elapse_commit_version_(need_wait))) {
@@ -184,7 +190,7 @@ int ObPartTransCtx::do_pre_commit(bool &need_wait)
     }
   }
 
-  if (!need_wait && OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
+  if (!need_wait && OB_SUCC(ret) && OB_FAIL(update_local_max_commit_version_(ctx_tx_data_.get_commit_version()))) {
     TRANS_LOG(ERROR, "update publish version failed", KR(ret), KPC(this));
   }
   if (OB_SUCC(ret) && OB_FAIL(restart_2pc_trans_timer_())) {

@@ -603,8 +603,9 @@ private:
 
   int prepare_mul_data_source_tx_end_(bool is_commit);
 
-  int errism_dup_table_redo_sync_();
-  int errism_submit_prepare_log_();
+  int errsim_dup_table_redo_sync_();
+  int errsim_submit_prepare_log_();
+  int errsim_do_pre_commit_without_root_();
 protected:
   virtual int get_gts_(share::SCN &gts);
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);

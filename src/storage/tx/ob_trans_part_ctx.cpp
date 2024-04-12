@@ -3263,7 +3263,7 @@ int ObPartTransCtx::submit_prepare_log_()
 
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(errism_submit_prepare_log_())) {
+    if (OB_FAIL(errsim_submit_prepare_log_())) {
       TRANS_LOG(WARN, "errsim for submit prepare log", K(ret), KPC(this));
     }
   }
@@ -6624,7 +6624,7 @@ ERRSIM_POINT_DEF(EN_DUP_TABLE_REDO_SYNC)
 ERRSIM_POINT_DEF(EN_SUBMIT_TX_PREPARE_LOG)
 #endif
 
-int ObPartTransCtx::errism_dup_table_redo_sync_()
+int ObPartTransCtx::errsim_dup_table_redo_sync_()
 {
 
   int ret = OB_SUCCESS;
@@ -6635,7 +6635,7 @@ int ObPartTransCtx::errism_dup_table_redo_sync_()
   return ret;
 }
 
-OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
+OB_NOINLINE int ObPartTransCtx::errsim_submit_prepare_log_()
 {
 
   int ret = OB_SUCCESS;
@@ -6649,6 +6649,17 @@ OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
 #ifdef ERRSIM
   ret = EN_SUBMIT_TX_PREPARE_LOG;
 #endif
+
+  return ret;
+}
+
+OB_NOINLINE int ObPartTransCtx::errsim_do_pre_commit_without_root_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim in do pre_commit", K(ret));
+  }
 
   return ret;
 }
@@ -6953,7 +6964,7 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
   } else if (is_follower_()) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "can not execute redo sync on a follower", KPC(this));
-  } else if (OB_FAIL(errism_dup_table_redo_sync_())) {
+  } else if (OB_FAIL(errsim_dup_table_redo_sync_())) {
     TRANS_LOG(WARN, "errsim for dup table redo sync", K(ret), KPC(this));
   } else {
     if (is_dup_table_redo_sync_completed_()) {
@@ -9044,7 +9055,10 @@ int ObPartTransCtx::handle_trans_ask_state_resp(const ObAskStateRespMsg &msg)
         }
       } else if (state_info_array_.at(j-1).need_update(msg.state_info_array_.at(i))) {
         state_info_array_.at(j-1) = msg.state_info_array_.at(i);
+      } else {
+        state_info_array_.at(j - 1).snapshot_version_ = msg.state_info_array_.at(i).snapshot_version_;
       }
+
     }
   }
   TRANS_LOG(INFO, "handle trans ask state resp", K(ret), K(msg), KPC(this));
@@ -9146,6 +9160,8 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
       TRANS_LOG(WARN, "state info array has wrong participiants", K(ret), K(msg), KPC(this));
     } else if (state_info_array_.at(i-1).need_update(msg.state_info_)) {
       state_info_array_.at(i-1) = msg.state_info_;
+    } else {
+      state_info_array_.at(i-1).snapshot_version_ = msg.state_info_.snapshot_version_;
     }
     if (OB_SUCC(ret)) {
       standby_part_collected_.add_member(i-1);
