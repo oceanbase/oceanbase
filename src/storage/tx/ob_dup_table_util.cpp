@@ -1820,19 +1820,31 @@ int ObDupTableLoopWorker::append_dup_table_ls(const share::ObLSID &ls_id)
   return ret;
 }
 
+int ObDupTableLoopWorker::CopyDupLsIdFunctor::operator()(common::hash::HashSetTypes<share::ObLSID>::pair_type &kv)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_id_array_.push_back(kv.first))) {
+    DUP_TABLE_LOG(WARN, "push back ls id failed", K(ret));
+  }
+  return ret;
+}
+
 // trans service -> dup worker -> ls service -> dup ls handler -> iterate
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
-  DupLSIDSet_Spin::iterator iter;
   ObLSService *ls_service = MTL(ObLSService *);
+  common::ObArray<share::ObLSID> ls_id_array;
+  CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
 
   if (OB_ISNULL(ls_service)) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "get ls service failed", K(ret), KP(ls_service));
-  } else {
-    for (iter = dup_ls_id_set_.begin(); iter != dup_ls_id_set_.end(); iter++) {
-      const share::ObLSID cur_ls_id = iter->first;
+  } else if (OB_FAIL(dup_ls_id_set_.foreach_refactored(copy_dup_ls_id_functor))) {
+    DUP_TABLE_LOG(WARN, "get dup ls id array failed", K(ret));
+  } else if (ls_id_array.count() > 0) {
+    ARRAY_FOREACH(ls_id_array, i) {
+      const share::ObLSID cur_ls_id = ls_id_array.at(i);
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
@@ -1861,15 +1873,18 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_it
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
-  DupLSIDSet_Spin::iterator iter;
   ObLSService *ls_service = MTL(ObLSService *);
+  common::ObArray<share::ObLSID> ls_id_array;
+  CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
 
   if (OB_ISNULL(ls_service)) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "get ls service failed", K(ret), KP(ls_service));
-  } else {
-    for (iter = dup_ls_id_set_.begin(); iter != dup_ls_id_set_.end(); iter++) {
-      const share::ObLSID cur_ls_id = iter->first;
+  } else if (OB_FAIL(dup_ls_id_set_.foreach_refactored(copy_dup_ls_id_functor))) {
+    DUP_TABLE_LOG(WARN, "get dup ls id array failed", K(ret));
+  } else if (ls_id_array.count() > 0) {
+    ARRAY_FOREACH(ls_id_array, i) {
+      const share::ObLSID cur_ls_id = ls_id_array.at(i);
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
@@ -1898,15 +1913,18 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
-  DupLSIDSet_Spin::iterator iter;
   ObLSService *ls_service = MTL(ObLSService *);
+  common::ObArray<share::ObLSID> ls_id_array;
+  CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
 
   if (OB_ISNULL(ls_service)) {
     ret = OB_INVALID_ARGUMENT;
     DUP_TABLE_LOG(WARN, "get ls service failed", K(ret), KP(ls_service));
-  } else {
-    for (iter = dup_ls_id_set_.begin(); iter != dup_ls_id_set_.end(); iter++) {
-      const share::ObLSID cur_ls_id = iter->first;
+  } else if (OB_FAIL(dup_ls_id_set_.foreach_refactored(copy_dup_ls_id_functor))) {
+    DUP_TABLE_LOG(WARN, "get dup ls id array failed", K(ret));
+  } else if (ls_id_array.count() > 0) {
+    ARRAY_FOREACH(ls_id_array, i) {
+      const share::ObLSID cur_ls_id = ls_id_array.at(i);
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
