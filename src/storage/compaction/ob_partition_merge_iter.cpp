@@ -1604,12 +1604,10 @@ int ObPartitionMinorRowMergeIter::next()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
     }
-/* TODO is_rowkey_first_row_already_output_ is not right, can't skip ghost row now
   } else if (OB_FAIL(skip_ghost_row())) {
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("Failed to skip_ghost_row", K(ret));
     }
-*/
   } else if (need_recycle_mv_row()) {
     if (OB_FAIL(compact_old_row())) {
       LOG_WARN("Failed to compact_old_row", K(ret));
@@ -1888,7 +1886,6 @@ int ObPartitionMinorMacroMergeIter::next_range()
         }
         macro_block_opened_ = false;
         have_macro_output_row_ = false;
-        is_rowkey_first_row_already_output_ = false;
         is_rowkey_shadow_row_reused_ = false;
         if (OB_FAIL(check_macro_block_recycle(curr_block_desc_, can_recycle))) {
           LOG_WARN("failed to check macro block recycle", K(ret));
@@ -1918,6 +1915,8 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("Unepxcted opened macro block to open", K(ret));
   } else {
+    bool is_first_row = false;
+    bool is_shadow_row = false;
     ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
     iter->reuse();
     if (OB_FAIL(iter->open(
@@ -1928,21 +1927,19 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
                 *reinterpret_cast<ObSSTable *>(table_),
                 last_mvcc_row_already_output_))) {
       LOG_WARN("fail to set context", K(ret));
+    } else if (OB_FAIL(iter->get_first_row_mvcc_info(is_first_row, is_shadow_row))) {
+        LOG_WARN("Fail to check rowkey first row info", K(ret), KPC(iter));
     } else {
       macro_block_opened_ = true;
+      if (row_queue_.is_empty()) {
+        is_rowkey_first_row_already_output_ = !is_first_row;
+      }
       if (last_macro_block_reused() && last_macro_block_recycled_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected merge status", K(ret), K(curr_block_desc_.macro_block_id_), KPC(this));
       } else if (last_macro_block_reused()) {
-        bool is_first_row = false;
-        bool is_shadow_row = false;
-        if (OB_FAIL(iter->get_first_row_mvcc_info(is_first_row, is_shadow_row))) {
-          LOG_WARN("Fail to check rowkey first row info", K(ret), KPC(iter));
-        } else {
-          check_committing_trans_compacted_ = is_first_row;
-          is_rowkey_first_row_already_output_ = !is_first_row;
-          is_rowkey_shadow_row_reused_ = !is_first_row && !is_shadow_row;
-        }
+        check_committing_trans_compacted_ = is_first_row;
+        is_rowkey_shadow_row_reused_ = !is_first_row && !is_shadow_row;
       } else if (last_macro_block_recycled_) {
         last_macro_block_recycled_ = false;
         check_committing_trans_compacted_ = true;
