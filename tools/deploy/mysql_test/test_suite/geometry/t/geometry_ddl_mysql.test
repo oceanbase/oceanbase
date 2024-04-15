@@ -771,3 +771,32 @@ drop table if exists geo_t1;
 create table geo_t1 as select ST_Centroid(ST_geomfromtext('POLYGON((121.474243 31.234504, 121.471775 31.233348, 121.470724 31.23155, 121.471603 31.230229, 121.472655 31.230357, 121.475777 31.232045, 121.474243 31.234504))')) centroid ;
 desc geo_t1;
 drop table geo_t1;
+
+# bugfix: 56075340
+--disable_warnings
+drop table if exists t1;
+CREATE TABLE `t1` (
+  `a` int(10) unsigned NOT NULL,
+  `b` varchar(19) DEFAULT NULL);
+--error 1252
+ALTER TABLE t1 ADD COLUMN p2 POINT, ADD KEY(p2);
+--error 1252
+ALTER TABLE t1 ADD COLUMN p2 POINT, ADD KEY(P2);
+ALTER TABLE t1 ADD COLUMN p2 int, ADD KEY(p2);
+drop table t1;
+
+--echo bugfix: 56020142
+drop table if exists test_wrong_table;
+set binlog_row_image='MINIMAL';
+CREATE TABLE `test_wrong_table` (
+  `id` int(32) NOT NULL auto_increment,
+  `the_geom` polygon NOT NULL /*!80003 SRID 4326 */,
+  PRIMARY KEY (`id`),
+  SPATIAL KEY `test_wrong_idx` (`the_geom`) BLOCK_SIZE 16384 LOCAL
+);
+
+INSERT INTO test_wrong_table (id, the_geom) VALUES (21, st_geomfromtext('POLYGON((40 50,40 70,50 100,70 100,80 80,70 50,40 50))',4326,'axis-order=lat-long'));
+--error 1687
+ALTER TABLE test_wrong_table MODIFY COLUMN the_geom varbinary(200) NOT NULL; 
+DELETE FROM test_wrong_table; 
+drop table test_wrong_table;

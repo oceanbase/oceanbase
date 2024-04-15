@@ -2825,6 +2825,9 @@ int ObPathFilterOpNode::init_right_without_filter(ObPathCtx &ctx, ObSeekResult& 
 {
   INIT_SUCC(ret);
   bool get_valid_right = false;
+  if (OB_NOT_NULL(right_)) {
+    right_->is_seeked_ = false;
+  }
   while (OB_SUCC(ret) && !get_valid_right) {
     ObSeekResult left_res;
     if (OB_FAIL(get_valid_res(ctx, left_res, true))) {
@@ -2949,7 +2952,8 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
     }
   }
 
-  if (OB_SUCC(ret)) { // do nothing
+  if (OB_SUCC(ret)) {
+    is_seeked_ = true;
   } else if (ret == OB_ITER_END) {
     is_seeked_ = false; // reset
     left_->is_seeked_ = false;

@@ -156,7 +156,7 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("invalid index for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->old_row_projector_));
             } else {
-              geo_idx = i;
+              geo_idx = projector_idx;
               geo_wkb = sr->cells()[projector_idx].get_string();
               geo_meta = main_ctdef_->column_types_.at(i);
             }

@@ -1243,7 +1243,8 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
       }
     }
   } else if (value.is_geometry()) {
-    if (is_ps_protocol) {
+    if (lib::is_mysql_mode()) {
+    } else if (is_ps_protocol) {
 #ifdef OB_BUILD_ORACLE_PL
       ObObj result;
       if (OB_ISNULL(exec_context)) {
