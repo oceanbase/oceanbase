@@ -287,6 +287,7 @@ _enable_column_store
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
+_enable_dbms_job_package
 _enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check

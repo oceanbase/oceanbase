@@ -2008,6 +2008,8 @@ int ObRootService::execute_bootstrap(const obrpc::ObBootstrapArg &arg)
       LOG_WARN("failed to update cpu_quota_concurrency", K(ret));
     } else if (OB_FAIL(set_enable_trace_log_())) {
       LOG_WARN("fail to set one phase commit config", K(ret));
+    } else if (OB_FAIL(disable_dbms_job())) {
+      LOG_WARN("failed to update _enable_dbms_job_package", K(ret));
     }
 
     if (OB_SUCC(ret)) {
@@ -11258,6 +11260,18 @@ int ObRootService::set_cpu_quota_concurrency_config_()
   if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET cpu_quota_concurrency = 10;", affected_rows))) {
     LOG_WARN("update cpu_quota_concurrency failed", K(ret));
   } else if (OB_FAIL(check_config_result("cpu_quota_concurrency", "10"))) {
+    LOG_WARN("failed to check config same", K(ret));
+  }
+  return ret;
+}
+
+int ObRootService::disable_dbms_job()
+{
+  int64_t affected_rows = 0;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sql_proxy_.write("ALTER SYSTEM SET _enable_dbms_job_package = false;", affected_rows))) {
+    LOG_WARN("update _enable_dbms_job_package to false failed", K(ret));
+  } else if (OB_FAIL(check_config_result("_enable_dbms_job_package", "false"))) {
     LOG_WARN("failed to check config same", K(ret));
   }
   return ret;
