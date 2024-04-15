@@ -100,6 +100,10 @@ static int build_compressed_packet(ObEasyBuffer &src_buf,
       } else {
         len_before_compress = next_compress_size;
       }
+    } else if (next_compress_size > comp_buf_size) {
+      ret = OB_BUF_NOT_ENOUGH;
+      SERVER_LOG(WARN, "do not use real compress, dst buffer is not enough", K(ret),
+                 K(next_compress_size), K(comp_buf_size), K(lbt()));
     } else {
       //if compress off, just copy date to output buf
       MEMCPY(dst_buf.last() + OB_MYSQL_COMPRESSED_HEADER_SIZE, src_buf.read_pos(), next_compress_size);
@@ -150,6 +154,9 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
       char * proxy_pos = is_v2_compress ? NULL : context.last_pkt_pos_;
       int64_t next_read_size = orig_send_buf.get_next_read_size(proxy_pos, max_read_step);
       int64_t last_read_size = 0;
+      if (next_read_size > (comp_send_buf.write_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE)) {
+        next_read_size = max_read_step;
+      }
       int64_t max_comp_pkt_size = get_max_comp_pkt_size(next_read_size);
       while (OB_SUCC(ret)
              && next_read_size > 0
@@ -166,6 +173,9 @@ static int build_compressed_buffer(ObEasyBuffer &orig_send_buf,
           //optimize for multi packet
           last_read_size = next_read_size;
           next_read_size = orig_send_buf.get_next_read_size(proxy_pos, max_read_step);
+          if (next_read_size > (comp_send_buf.write_avail_size() - OB_MYSQL_COMPRESSED_HEADER_SIZE)) {
+            next_read_size = max_read_step;
+          }
           if (last_read_size != next_read_size) {
             max_comp_pkt_size = get_max_comp_pkt_size(next_read_size);
           }
