@@ -8203,6 +8203,22 @@ int ObRawExprResolverImpl::process_internal_sys_function_node(const ParseNode *n
         }
       } //end for
       OX (expr = func_expr);
+      if (OB_SUCC(ret) && T_FUN_SYS_SET_COLLATION == node_type && ctx_.is_in_system_view_) {
+        if (OB_UNLIKELY(expr->get_param_count() != 2 || num != 2)) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_WARN("invalid parse tree", K(ret));
+        } else if (OB_ISNULL(expr->get_param_expr(1))) {
+          ret = OB_ERR_PARSER_SYNTAX;
+          LOG_WARN("invalid parse tree", K(ret));
+        } else {
+          const ParseNode *collation_node = node->children_[1]->children_[1];
+          ObString collation(collation_node->str_len_, collation_node->str_value_);
+          if (0 == collation.case_compare("utf8mb4_name_case") &&
+              CS_TYPE_UTF8MB4_GENERAL_CI == expr->get_param_expr(1)->get_collation_type()) {
+            expr = expr->get_param_expr(0);
+          }
+        }
+      }
     }
   }
   return ret;

@@ -241,7 +241,7 @@ desc information_schema.ROUTINES;
 Field	Type	Null	Key	Default	Extra
 SPECIFIC_NAME	varchar(64)	NO		NULL	
 ROUTINE_CATALOG	varchar(512)	NO			
-ROUTINE_SCHEMA	varchar(64)	NO			
+ROUTINE_SCHEMA	varchar(64)	NO		NULL	
 ROUTINE_NAME	varchar(64)	NO		NULL	
 ROUTINE_TYPE	varchar(9)	NO		NULL	
 DATA_TYPE	varchar(64)	NO			
