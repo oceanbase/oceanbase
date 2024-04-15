@@ -43,8 +43,9 @@ class ObExprObjAccess;
 
 struct ObSPICursor
 {
-  ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator)
+  ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
+    session_info_(session_info)
   {
     row_desc_.set_tenant_id(MTL_ID());
   }
@@ -52,7 +53,7 @@ struct ObSPICursor
   ~ObSPICursor()
   {
     for (int64_t i = 0; i < complex_objs_.count(); ++i) {
-      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i)));
+      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i), session_info_));
     }
   }
 
@@ -62,6 +63,7 @@ struct ObSPICursor
   int64_t cur_;
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
+  sql::ObSQLSessionInfo* session_info_;
 };
 
 struct ObSPIOutParams

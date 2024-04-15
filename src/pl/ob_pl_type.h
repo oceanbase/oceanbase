@@ -1016,7 +1016,8 @@ public:
   int prepare_spi_cursor(sql::ObSPICursor *&spi_cursor,
                           uint64_t tenant_id,
                           uint64_t mem_limit,
-                          bool is_local_for_update = false);
+                          bool is_local_for_update = false,
+                          sql::ObSQLSessionInfo* session_info = nullptr);
 
   inline void set_packed(bool is_packed) { is_packed_ = is_packed; }
   inline bool is_packed() { return is_packed_; }

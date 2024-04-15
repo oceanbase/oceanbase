@@ -2080,7 +2080,9 @@ int ObPLCursorInfo::deep_copy(ObPLCursorInfo &src, common::ObIAllocator *allocat
     // it will happend not in ps cursor.
     OZ (prepare_spi_cursor(dest_cursor,
                             src_cursor->row_store_.get_tenant_id(),
-                            src_cursor->row_store_.get_mem_limit()));
+                            src_cursor->row_store_.get_mem_limit(),
+                            false,
+                            src_cursor->session_info_));
     CK (OB_NOT_NULL(dest_cursor));
     OZ (dest_cursor->row_desc_.assign(src_cursor->row_desc_));
 #ifdef OB_BUILD_ORACLE_PL
@@ -2368,7 +2370,8 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
 int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
                                         uint64_t tenant_id,
                                         uint64_t mem_limit,
-                                        bool is_local_for_update)
+                                        bool is_local_for_update,
+                                        sql::ObSQLSessionInfo* session_info)
 {
   int ret = OB_SUCCESS;
   ObIAllocator *spi_allocator = get_allocator();
@@ -2382,7 +2385,7 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
     OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
   }
-  OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator));
+  OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator, session_info));
   OX (last_stream_cursor_ = false);
   if (OB_SUCC(ret)) {
     if (OB_INVALID_SIZE == mem_limit) {
