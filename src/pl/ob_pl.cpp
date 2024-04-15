@@ -23,6 +23,7 @@
 #include "pl/ob_pl_compile.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_user_type.h"
+#include "pl/ob_pl_json_type.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_interface_pragma.h"
 #include "observer/ob_server_struct.h"
@@ -3025,6 +3026,13 @@ int ObPLExecState::final(int ret)
       ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
     }
     exec_ctx_bak_.restore(*ctx_.exec_ctx_);
+  }
+
+  if (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session())) {
+  #ifdef OB_BUILD_ORACLE_PL
+    ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
+    ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
+  #endif
   }
 
   return OB_SUCCESS;

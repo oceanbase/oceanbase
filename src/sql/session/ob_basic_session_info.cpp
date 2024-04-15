@@ -36,6 +36,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
+#include "pl/ob_pl_json_type.h"
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 
@@ -94,6 +95,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       package_info_allocator_(sizeof(pl::ObPLPackageState), common::OB_MALLOC_NORMAL_BLOCK_SIZE - 32,
                               ObMalloc(lib::ObMemAttr(orig_tenant_id_, "SessPackageInfo"))),
       name_pool_(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION), OB_MALLOC_NORMAL_BLOCK_SIZE),
+      json_pl_mngr_(0),
       trans_flags_(),
       sql_scope_flags_(),
       need_reset_package_(false),
@@ -286,6 +288,9 @@ void ObBasicSessionInfo::destroy()
   }
   total_stmt_tables_.reset();
   cur_stmt_tables_.reset();
+#ifdef OB_BUILD_ORACLE_PL
+  pl::ObPlJsonTypeManager::release(get_json_pl_mngr());
+#endif
 }
 
 void ObBasicSessionInfo::clean_status()
@@ -6657,5 +6662,48 @@ observer::ObSMConnection *ObBasicSessionInfo::get_sm_connection()
   }
   return conn;
 }
+
+void ObBasicSessionInfo::destory_json_pl_mngr()
+{
+#ifdef OB_BUILD_ORACLE_PL
+  if (json_pl_mngr_) {
+    pl::ObPlJsonTypeManager* handle = reinterpret_cast<pl::ObPlJsonTypeManager*>(json_pl_mngr_);
+    handle->destroy();
+    common::ObIAllocator& allocator = get_session_allocator();
+    allocator.free(handle);
+    json_pl_mngr_ = 0;
+  }
+#endif
+}
+
+intptr_t ObBasicSessionInfo::get_json_pl_mngr()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  if (!json_pl_mngr_) {
+    common::ObIAllocator& allocator = get_session_allocator();
+    pl::ObPlJsonTypeManager* handle = static_cast<pl::ObPlJsonTypeManager*>(
+                                        allocator.alloc(sizeof(pl::ObPlJsonTypeManager)));
+    if (OB_ISNULL(handle)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate handle", K(ret));
+    } else {
+      handle = new (handle) pl::ObPlJsonTypeManager(orig_tenant_id_);
+      if (OB_FAIL(handle->init())) {
+        allocator.free(handle);
+        LOG_WARN("failed to init json pl type manager", K(ret));
+      } else {
+        json_pl_mngr_ = reinterpret_cast<intptr_t>(handle);
+      }
+    }
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("failed to create json pl type manager", K(ret));
+#endif
+
+  return json_pl_mngr_;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase
