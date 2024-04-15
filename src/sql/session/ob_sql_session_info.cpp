@@ -2919,7 +2919,7 @@ int ObSQLSessionInfo::ps_use_stream_result_set(bool &use_stream) {
   return ret;
 }
 
-ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
+::oceanbase::observer::ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   if (NULL == piece_cache_ && need_init) {
     void *buf = get_session_allocator().alloc(sizeof(ObPieceCache));
     if (NULL != buf) {
@@ -2936,6 +2936,23 @@ ObPieceCache* ObSQLSessionInfo::get_piece_cache(bool need_init) {
   return piece_cache_;
 }
 
+int ObSQLSessionInfo::set_login_info(const share::schema::ObUserLoginInfo &login_info)
+{
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(get_session_allocator(), login_info.tenant_name_, login_info_.tenant_name_));
+  OZ (ob_write_string(get_session_allocator(), login_info.user_name_, login_info_.user_name_));
+  OZ (ob_write_string(get_session_allocator(), login_info.client_ip_, login_info_.client_ip_));
+  OZ (ob_write_string(get_session_allocator(), login_info.passwd_, login_info_.passwd_));
+  OZ (ob_write_string(get_session_allocator(), login_info.db_, login_info_.db_));
+  OZ (ob_write_string(get_session_allocator(), login_info.scramble_str_, login_info_.scramble_str_));
+  return ret;
+}
+
+int ObSQLSessionInfo::set_login_auth_data(const ObString &auth_data) {
+  int ret = OB_SUCCESS;
+  OZ (ob_write_string(get_session_allocator(), auth_data, login_info_.passwd_));
+  return ret;
+}
 
 
 

@@ -34,6 +34,7 @@ int ObMysqlCompressProtocolProcessor::do_decode(ObSMConnection& conn, ObICSMemPo
   pkt = NULL;
   const uint32_t sessid = conn.sessid_;
   const int64_t header_size = OB_MYSQL_COMPRESSED_HEADER_SIZE;
+  conn.mysql_pkt_context_.is_auth_switch_ = conn.is_in_auth_switch_phase();
   // no need duplicated check 'm' valid, ObMySQLHandler::process() has already checked
   if ((end - start) >= header_size) {
     //1. decode length from net buffer

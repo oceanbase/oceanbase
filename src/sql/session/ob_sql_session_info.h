@@ -1333,6 +1333,9 @@ public:
   // piece
   observer::ObPieceCache *get_piece_cache(bool need_init = false);
 
+  share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
+  int set_login_info(const share::schema::ObUserLoginInfo &login_info);
+  int set_login_auth_data(const ObString &auth_data);
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
@@ -1596,6 +1599,7 @@ private:
   common::ObSEArray<ObSequenceSchema*, 2> dblink_sequence_schemas_;
   bool client_non_standard_;
   bool is_session_sync_support_; // session_sync_support flag.
+  share::schema::ObUserLoginInfo login_info_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const
