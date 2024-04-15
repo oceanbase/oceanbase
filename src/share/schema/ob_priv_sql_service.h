@@ -88,6 +88,14 @@ public:
       const share::ObRawObjPrivArray &obj_priv_array,
       bool is_revoke_all);
 
+  virtual int grant_column(
+      const ObColumnPrivSortKey &column_priv_key,
+      uint64_t column_priv_id,
+      const ObPrivSet priv_set,
+      const int64_t new_schema_version,
+      const ObString *ddl_stmt_str,
+      ObISQLClient &sql_client,
+      const bool is_grant);
   virtual int revoke_table_ora(
       const ObObjPrivSortKey &obj_priv_key,
       const share::ObRawObjPrivArray &obj_priv_array,
@@ -100,7 +108,25 @@ public:
       const ObTablePrivSortKey &table_priv_key,
       const int64_t new_schema_version,
       common::ObISQLClient &sql_client);
-  
+  virtual int grant_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client,
+    const uint64_t option,
+    const bool is_grant);
+  virtual int revoke_routine(
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet priv_set,
+    const int64_t new_schema_version,
+    const ObString *ddl_stmt_str,
+    ObISQLClient &sql_client);
+  virtual int gen_routine_priv_dml(
+    const uint64_t exec_tenant_id,
+    const ObRoutinePrivSortKey &routine_priv_key,
+    const ObPrivSet &priv_set,
+    ObDMLSqlSplicer &dml);
   virtual int alter_user_default_role(
       const share::schema::ObUserInfo &user_info,
       const int64_t new_schema_version,
@@ -168,6 +194,13 @@ private:
       const ObTablePrivSortKey &table_priv_key,
       const ObPrivSet &priv_set,
       share::ObDMLSqlSplicer &dml);
+
+  int gen_column_priv_dml(
+      const uint64_t exec_tenant_id,
+      const ObColumnPrivSortKey &column_priv_key,
+      const uint64_t priv_id,
+      const ObPrivSet &priv_set,
+      ObDMLSqlSplicer &dml);
 
   int gen_grant_sys_priv_dml(
       const uint64_t exec_tenant_id,

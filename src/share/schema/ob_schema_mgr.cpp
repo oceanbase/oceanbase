@@ -5262,6 +5262,10 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to get table priv statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(priv_mgr_.get_schema_statistics(ROUTINE_PRIV, schema_info))) {
+    LOG_WARN("fail to get table priv statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(priv_mgr_.get_schema_statistics(DATABASE_PRIV, schema_info))) {
     LOG_WARN("fail to get database priv statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
@@ -5338,6 +5342,10 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(priv_mgr_.get_schema_statistics(OBJ_PRIV, schema_info))) {
     LOG_WARN("fail to get obj priv statistics", K(ret));
+  } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
+    LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
+  } else if (OB_FAIL(priv_mgr_.get_schema_statistics(COLUMN_PRIV, schema_info))) {
+    LOG_WARN("fail to get column priv statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("fail to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(dblink_mgr_.get_schema_statistics(schema_info))) {

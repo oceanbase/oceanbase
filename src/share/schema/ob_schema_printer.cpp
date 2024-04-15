@@ -2752,6 +2752,8 @@ int ObSchemaPrinter::print_view_definiton(
   if (buf && buf_len > 0) {
     const ObTableSchema *table_schema = NULL;
     bool is_oracle_mode = false;
+    bool need_print_column_list = false;
+    common::ObSEArray<uint64_t, 16> column_ids;
     if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
     } else if (NULL == table_schema) {
@@ -2784,6 +2786,16 @@ int ObSchemaPrinter::print_view_definiton(
 
     if (OB_FAIL(ret)) {
       // pass
+    } else if (FALSE_IT(need_print_column_list = (is_oracle_mode && !is_inner_table(table_id)))) {
+    } else if (need_print_column_list && OB_FAIL(databuff_printf(buf, buf_len, pos, " ("))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
+    } else if (need_print_column_list && OB_FAIL(table_schema->get_column_ids(column_ids))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
+    } else if (need_print_column_list
+               && OB_FAIL(print_column_list(*table_schema, column_ids, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
+    } else if (need_print_column_list && OB_FAIL(databuff_printf(buf, buf_len, pos, ") "))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " AS "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print view definition", K(ret));
     } else if (OB_FAIL(print_view_define_str(buf, buf_len, pos, is_oracle_mode,

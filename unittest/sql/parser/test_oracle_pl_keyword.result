@@ -1,0 +1,191 @@
+**************   Begin Test Reserved Keyword   ***************
+Reserved Keyword: ALL
+Test PL type name Sql:create type ALL as table of varchar2(1);
+Reserved Keyword: ALTER
+Test PL type name Sql:create type ALTER as table of varchar2(1);
+Reserved Keyword: AND
+Test PL type name Sql:create type AND as table of varchar2(1);
+Reserved Keyword: ANY
+Test PL type name Sql:create type ANY as table of varchar2(1);
+Reserved Keyword: AS
+Test PL type name Sql:create type AS as table of varchar2(1);
+Reserved Keyword: ASC
+Test PL type name Sql:create type ASC as table of varchar2(1);
+Reserved Keyword: AT
+Test PL type name Sql:create type AT as table of varchar2(1);
+Reserved Keyword: BEGIN
+Test PL type name Sql:create type BEGIN as table of varchar2(1);
+Reserved Keyword: BETWEEN
+Test PL type name Sql:create type BETWEEN as table of varchar2(1);
+Reserved Keyword: BY
+Test PL type name Sql:create type BY as table of varchar2(1);
+Reserved Keyword: CASE
+Test PL type name Sql:create type CASE as table of varchar2(1);
+Reserved Keyword: CHECK
+Test PL type name Sql:create type CHECK as table of varchar2(1);
+Reserved Keyword: CLUSTERS
+Test PL type name Sql:create type CLUSTERS as table of varchar2(1);
+Reserved Keyword: CLUSTER
+Test PL type name Sql:create type CLUSTER as table of varchar2(1);
+Reserved Keyword: COLAUTH
+Test PL type name Sql:create type COLAUTH as table of varchar2(1);
+Reserved Keyword: COLUMNS
+Test PL type name Sql:create type COLUMNS as table of varchar2(1);
+Reserved Keyword: COMPRESS
+Test PL type name Sql:create type COMPRESS as table of varchar2(1);
+Reserved Keyword: CONNECT
+Test PL type name Sql:create type CONNECT as table of varchar2(1);
+Reserved Keyword: CRASH
+Test PL type name Sql:create type CRASH as table of varchar2(1);
+Reserved Keyword: CREATE
+Test PL type name Sql:create type CREATE as table of varchar2(1);
+Reserved Keyword: CURSOR
+Test PL type name Sql:create type CURSOR as table of varchar2(1);
+Reserved Keyword: COMMIT
+Test PL type name Sql:create type COMMIT as table of varchar2(1);
+Reserved Keyword: DELETE
+Test PL type name Sql:create type DELETE as table of varchar2(1);
+Reserved Keyword: DECLARE
+Test PL type name Sql:create type DECLARE as table of varchar2(1);
+Reserved Keyword: DEFAULT
+Test PL type name Sql:create type DEFAULT as table of varchar2(1);
+Reserved Keyword: DESC
+Test PL type name Sql:create type DESC as table of varchar2(1);
+Reserved Keyword: DISTINCT
+Test PL type name Sql:create type DISTINCT as table of varchar2(1);
+Reserved Keyword: DROP
+Test PL type name Sql:create type DROP as table of varchar2(1);
+Reserved Keyword: EXISTS
+Test PL type name Sql:create type EXISTS as table of varchar2(1);
+Reserved Keyword: ELSE
+Test PL type name Sql:create type ELSE as table of varchar2(1);
+Reserved Keyword: ELSIF
+Test PL type name Sql:create type ELSIF as table of varchar2(1);
+Reserved Keyword: END
+Test PL type name Sql:create type END as table of varchar2(1);
+Reserved Keyword: EXCEPTION
+Test PL type name Sql:create type EXCEPTION as table of varchar2(1);
+Reserved Keyword: EXCLUSIVE
+Test PL type name Sql:create type EXCLUSIVE as table of varchar2(1);
+Reserved Keyword: FETCH
+Test PL type name Sql:create type FETCH as table of varchar2(1);
+Reserved Keyword: FOR
+Test PL type name Sql:create type FOR as table of varchar2(1);
+Reserved Keyword: FROM
+Test PL type name Sql:create type FROM as table of varchar2(1);
+Reserved Keyword: FUNCTION
+Test PL type name Sql:create type FUNCTION as table of varchar2(1);
+Reserved Keyword: GOTO
+Test PL type name Sql:create type GOTO as table of varchar2(1);
+Reserved Keyword: GRANT
+Test PL type name Sql:create type GRANT as table of varchar2(1);
+Reserved Keyword: GROUP
+Test PL type name Sql:create type GROUP as table of varchar2(1);
+Reserved Keyword: HAVING
+Test PL type name Sql:create type HAVING as table of varchar2(1);
+Reserved Keyword: IDENTIFIED
+Test PL type name Sql:create type IDENTIFIED as table of varchar2(1);
+Reserved Keyword: IF
+Test PL type name Sql:create type IF as table of varchar2(1);
+Reserved Keyword: IN
+Test PL type name Sql:create type IN as table of varchar2(1);
+Reserved Keyword: INDEX
+Test PL type name Sql:create type INDEX as table of varchar2(1);
+Reserved Keyword: INDEXES
+Test PL type name Sql:create type INDEXES as table of varchar2(1);
+Reserved Keyword: INSERT
+Test PL type name Sql:create type INSERT as table of varchar2(1);
+Reserved Keyword: INTERSECT
+Test PL type name Sql:create type INTERSECT as table of varchar2(1);
+Reserved Keyword: INTO
+Test PL type name Sql:create type INTO as table of varchar2(1);
+Reserved Keyword: IS
+Test PL type name Sql:create type IS as table of varchar2(1);
+Reserved Keyword: LIKE
+Test PL type name Sql:create type LIKE as table of varchar2(1);
+Reserved Keyword: LOCK
+Test PL type name Sql:create type LOCK as table of varchar2(1);
+Reserved Keyword: MINUS
+Test PL type name Sql:create type MINUS as table of varchar2(1);
+Reserved Keyword: MODE
+Test PL type name Sql:create type MODE as table of varchar2(1);
+Reserved Keyword: NOCOMPRESS
+Test PL type name Sql:create type NOCOMPRESS as table of varchar2(1);
+Reserved Keyword: NOT
+Test PL type name Sql:create type NOT as table of varchar2(1);
+Reserved Keyword: NOWAIT
+Test PL type name Sql:create type NOWAIT as table of varchar2(1);
+Reserved Keyword: NULL
+Test PL type name Sql:create type NULL as table of varchar2(1);
+Reserved Keyword: OF
+Test PL type name Sql:create type OF as table of varchar2(1);
+Reserved Keyword: ON
+Test PL type name Sql:create type ON as table of varchar2(1);
+Reserved Keyword: OPTION
+Test PL type name Sql:create type OPTION as table of varchar2(1);
+Reserved Keyword: OR
+Test PL type name Sql:create type OR as table of varchar2(1);
+Reserved Keyword: ORDER
+Test PL type name Sql:create type ORDER as table of varchar2(1);
+Reserved Keyword: OVERLAPS
+Test PL type name Sql:create type OVERLAPS as table of varchar2(1);
+Reserved Keyword: PROCEDURE
+Test PL type name Sql:create type PROCEDURE as table of varchar2(1);
+Reserved Keyword: PUBLIC
+Test PL type name Sql:create type PUBLIC as table of varchar2(1);
+Reserved Keyword: RESOURCE
+Test PL type name Sql:create type RESOURCE as table of varchar2(1);
+Reserved Keyword: REVOKE
+Test PL type name Sql:create type REVOKE as table of varchar2(1);
+Reserved Keyword: RETURN
+Test PL type name Sql:create type RETURN as table of varchar2(1);
+Reserved Keyword: ROLLBACK
+Test PL type name Sql:create type ROLLBACK as table of varchar2(1);
+Reserved Keyword: SELECT
+Test PL type name Sql:create type SELECT as table of varchar2(1);
+Reserved Keyword: SHARE
+Test PL type name Sql:create type SHARE as table of varchar2(1);
+Reserved Keyword: SIZE
+Test PL type name Sql:create type SIZE as table of varchar2(1);
+Reserved Keyword: SQL
+Test PL type name Sql:create type SQL as table of varchar2(1);
+Reserved Keyword: START
+Test PL type name Sql:create type START as table of varchar2(1);
+Reserved Keyword: SUBTYPE
+Test PL type name Sql:create type SUBTYPE as table of varchar2(1);
+Reserved Keyword: SAVEPOINT
+Test PL type name Sql:create type SAVEPOINT as table of varchar2(1);
+Reserved Keyword: SET
+Test PL type name Sql:create type SET as table of varchar2(1);
+Reserved Keyword: TABAUTH
+Test PL type name Sql:create type TABAUTH as table of varchar2(1);
+Reserved Keyword: TABLE
+Test PL type name Sql:create type TABLE as table of varchar2(1);
+Reserved Keyword: THEN
+Test PL type name Sql:create type THEN as table of varchar2(1);
+Reserved Keyword: TO
+Test PL type name Sql:create type TO as table of varchar2(1);
+Reserved Keyword: UNION
+Test PL type name Sql:create type UNION as table of varchar2(1);
+Reserved Keyword: UNIQUE
+Test PL type name Sql:create type UNIQUE as table of varchar2(1);
+Reserved Keyword: UPDATE
+Test PL type name Sql:create type UPDATE as table of varchar2(1);
+Reserved Keyword: VALUES
+Test PL type name Sql:create type VALUES as table of varchar2(1);
+Reserved Keyword: VIEW
+Test PL type name Sql:create type VIEW as table of varchar2(1);
+Reserved Keyword: VIEWS
+Test PL type name Sql:create type VIEWS as table of varchar2(1);
+Reserved Keyword: WHEN
+Test PL type name Sql:create type WHEN as table of varchar2(1);
+Reserved Keyword: WHERE
+Test PL type name Sql:create type WHERE as table of varchar2(1);
+Reserved Keyword: WITH
+Test PL type name Sql:create type WITH as table of varchar2(1);
+Reserved Keyword: WHILE
+Test PL type name Sql:create type WHILE as table of varchar2(1);
+************** Total Count of Reserved Keyword:93   ***************
+**************   End Test Reserved Keyword   ***************
+**************   Begin Test Non-Reserved Keyword  ***************
+**************   End Test Non-Reserved Keyword  ***************

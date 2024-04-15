@@ -226,6 +226,7 @@
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+#include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 
 namespace oceanbase
 {
@@ -1153,15 +1154,22 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           {
             ObTableColumns *table_columns = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObTableColumns, table_columns))) {
-              vt_iter = static_cast<ObVirtualTableIterator *>(table_columns);
+              if (OB_FAIL(table_columns->init(real_tenant_id))) {
+                SERVER_LOG(WARN, "fail to init tenant_virtual_table_column", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(table_columns);
+              }
             }
             break;
           }
           case OB_TENANT_VIRTUAL_TABLE_INDEX_TID: {
             ObTableIndex *table_index = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObTableIndex, table_index))) {
-              table_index->set_tenant_id(real_tenant_id);
-              vt_iter = static_cast<ObVirtualTableIterator *>(table_index);
+              if (OB_FAIL(table_index->init(real_tenant_id))) {
+                SERVER_LOG(WARN, "fail to init tenant_virtual_table_index", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(table_index);
+              }
             }
             break;
           }
@@ -2685,6 +2693,14 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               SERVER_LOG(ERROR, "fail to new", K(ret), K(pure_tid));
             } else {
               vt_iter = static_cast<ObVirtualTableIterator *>(sys_var_default_value);
+            }
+            break;
+          }
+          case OB_ENABLED_ROLES_TID:
+          {
+            ObInfoSchemaEnableRolesTable *enable_roles = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaEnableRolesTable, enable_roles))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(enable_roles);
             }
             break;
           }

@@ -1146,7 +1146,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprInnerRowCmpVal::eval_inner_row_cmp_val,                       /* 674 */
   ObExprIs::json_is_true,                                             /* 675 */
   ObExprIs::json_is_false,                                            /* 676 */
-  NULL, //ObExprCurrentRole::eval_current_role                        /* 677 */
+  ObExprCurrentRole::eval_current_role,                               /* 677 */
   ObExprMod::mod_decimalint,                                          /* 678 */
   NULL, // ObExprPrivSTGeoHash::eval_priv_st_geohash,                 /* 679 */
   NULL, // ObExprPrivSTMakePoint::eval_priv_st_makepoint,             /* 680 */

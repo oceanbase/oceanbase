@@ -272,7 +272,7 @@ int ObVirtualArchiveDestStatus::get_all_tenant_ls_(const uint64_t tenant_id)
   ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_);
 
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-    ObMySQLResult *result = NULL;
+    common::sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
 
     const static char *SELECT_ALL_LS = "SELECT ls_id FROM %s WHERE tenant_id = %ld and status not in "
@@ -316,7 +316,7 @@ int ObVirtualArchiveDestStatus::get_ls_max_scn_(const uint64_t tenant_id)
     SERVER_LOG(WARN, "not inited", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
 
       const static char *SELECT_LS_BY_TENANT = "SELECT ls_id, max_scn FROM %s WHERE tenant_id=%ld and role='LEADER'";
@@ -380,7 +380,7 @@ int ObVirtualArchiveDestStatus::get_ls_checkpoint_scn_(const uint64_t tenant_id,
     SERVER_LOG(WARN, "not inited", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
 
       const static char *SELECT_LS_CHECKPOINT = "select ls_id, max(checkpoint_scn) as checkpoint_scn from %s "
@@ -472,7 +472,7 @@ int ObVirtualArchiveDestStatus::get_status_info_(const uint64_t tenant_id,
     SERVER_LOG(WARN, "not inited", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
 
       const static char *SELECT_LOG_ARCHIVE_PROGRESS = "SELECT status,path,checkpoint_scn,comment from %s "
@@ -573,7 +573,7 @@ int ObVirtualArchiveDestStatus::check_if_switch_piece_(const uint64_t tenant_id,
     SERVER_LOG(WARN, "get log archive used piece id failed", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
       int64_t tmp_ls_id = share::ObLSID::INVALID_LS_ID;
       int64_t tmp_piece_id = OB_BACKUP_INVALID_PIECE_ID;
@@ -619,7 +619,7 @@ int ObVirtualArchiveDestStatus::get_log_archive_used_piece_id_(const uint64_t te
     SERVER_LOG(WARN, "not inited", K(ret));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
+      common::sqlclient::ObMySQLResult *result = NULL;
       ObSqlString sql;
 
       const static char *SELECT_RS_PIECE_ID_SQL = "SELECT used_piece_id FROM %s WHERE tenant_id=%ld and dest_id=%ld";

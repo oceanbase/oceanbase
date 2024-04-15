@@ -66,8 +66,8 @@ public:
       share::ObRawObjPriv priv,
       bool &exists);
 
-  int resolve_grant_system_privileges_mysql(
-      const ParseNode *grant_system_privileges,
+  int resolve_grant_role_mysql(
+      const ParseNode *grant_role,
       ObGrantStmt *grant_stmt);
   int resolve_grant_system_privileges_ora(
       const ParseNode *grant_system_privileges,
@@ -87,10 +87,16 @@ public:
       share::schema::ObPrivLevel &grant_level,
       ObIAllocator &allocator);
 
+  template<class T>
   static int resolve_priv_set(
+      const uint64_t tenant_id,
       const ParseNode *privs_node,
       share::schema::ObPrivLevel grant_level,
-      ObPrivSet &priv_set);
+      ObPrivSet &priv_set,
+      T *grant_stmt,
+      ObSchemaChecker *schema_checker,
+      ObSQLSessionInfo *session_info,
+      ObIAllocator &allocator);
   static int map_mysql_priv_type_to_ora_type(
       const ObPrivType mysql_priv_type,
       share::ObRawObjPriv &ora_obj_priv,
@@ -145,6 +151,14 @@ private:
       const ParseNode *privs_node,
       share::schema::ObPrivLevel grant_level,
       bool is_owner);
+  template<class T>
+  static int resolve_col_names_mysql(
+      T *grant_stmt,
+      const ObPrivType priv_type,
+      ParseNode *column_list,
+      ObSchemaChecker *schema_checker,
+      ObSQLSessionInfo *session_info,
+      ObIAllocator &allocator);
   int resolve_col_names(
       ObGrantStmt *grant_stmt,
       share::ObRawObjPriv raw_obj_priv,

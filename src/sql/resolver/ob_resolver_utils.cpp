@@ -2387,6 +2387,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_LOCK_TABLE;
       }
       break;
+      case T_ALTER_USER_DEFAULT_ROLE: {
+        type = stmt::T_ALTER_USER_PROFILE;
+      }
+      break;
       case T_SP_CALL_STMT: {
         type = stmt::T_CALL_PROCEDURE;
       }
@@ -5361,6 +5365,35 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
     LOG_DEBUG("succ to resolve_default_expr_v2_column_expr",
               "is_const_expr", expr->is_const_raw_expr(),
               KPC(expr), K(ret));
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_comment_length(
+    ObSQLSessionInfo *session_info,
+    char *str,
+    int64_t *str_len,
+    const int64_t max_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_info) || (NULL == str  && *str_len != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", K(session_info), K(str), K(ret));
+  } else {
+    size_t tmp_len = ObCharset::charpos(CS_TYPE_UTF8MB4_GENERAL_CI, str, *str_len, max_len);
+    if (tmp_len < 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect error", K(ret));
+    } else if (tmp_len < *str_len) {
+      if (!is_strict_mode(session_info->get_sql_mode())) {
+        ret = OB_SUCCESS;
+        *str_len = tmp_len;
+        LOG_USER_WARN(OB_ERR_TOO_LONG_FIELD_COMMENT, max_len);
+      } else {
+        ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, max_len);
+      }
+    }
   }
   return ret;
 }

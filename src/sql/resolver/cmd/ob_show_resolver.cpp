@@ -20,6 +20,7 @@
 #include "sql/parser/ob_parser.h"
 #include "lib/charset/ob_charset.h"
 #include "observer/ob_server_struct.h"
+#include "sql/resolver/dcl/ob_grant_resolver.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -94,7 +95,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
   ObShowResolverContext show_resv_ctx;
   if (OB_UNLIKELY(NULL == session_info_
                   || NULL == params_.allocator_
-                  || NULL == schema_checker_)) {
+                  || NULL == schema_checker_
+                  || NULL == schema_checker_->get_schema_guard())) {
     ret = OB_NOT_INIT;
     LOG_WARN("data member is not init",
         K(ret),
@@ -170,7 +172,26 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                 LOG_WARN("fail to check priv", K(ret));
               }
             } else {
-              if (0 == parse_tree.children_[2]->value_) {
+              /* (parse_tree.children_[2]->value_)&1        ->  FULL
+               * ((parse_tree.children_[2]->value_)>>1)&1   ->  EXTENDED
+               * ObServer does not have hidden tables created by failed ALTER TABLE
+               * statements, hence we do nothing for "EXTENDED"
+               */
+              bool is_full = (1 == ((parse_tree.children_[2]->value_)&1));
+              bool is_extended = (1 == (((parse_tree.children_[2]->value_)>>1)&1));
+              bool is_compat; // compatible mode for version lower than 4.2.2 which does not support SHOW EXTENDED
+              uint64_t min_data_version;
+              if (OB_UNLIKELY(((parse_tree.children_[2]->value_)>>2) != 0)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("node value unexpected", K(ret), K(parse_tree.children_[2]->value_));
+                break;
+              } else if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_data_version))) {
+                LOG_WARN("get min data version failed", K(ret), K(real_tenant_id));
+              } else if (OB_FALSE_IT(is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version))) {
+              } else if (OB_UNLIKELY(is_compat && is_extended)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("version lower than 4.2.2 or 4.3.1 does not support show extended", K(ret));
+              } else if (!is_full) {
                 if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
                   if (OB_UNLIKELY(condition_node->num_child_ != 2
                                   || NULL == condition_node->children_)) {
@@ -201,7 +222,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                  show_resv_ctx.show_database_name_.ptr());
                   GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
                 }
-              } else if (1 == parse_tree.children_[2]->value_) {
+              } else {
                 if (NULL != condition_node && T_LIKE_CLAUSE == condition_node->type_) {
                   if (OB_UNLIKELY(condition_node->num_child_ != 2
                                   || NULL == condition_node->children_[0]
@@ -225,10 +246,6 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                                  show_resv_ctx.show_database_name_.ptr());
                   GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_TABLES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_SHOW_TABLES_TNAME, show_db_id);
                 }
-              } else {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("node value unexpected", K(parse_tree.value_));
-                break;
               }
             }
 
@@ -381,43 +398,45 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
               if (OB_FAIL(stmt_need_privs.need_privs_.init(3))) {
                 LOG_WARN("fail to init need privs array", K(ret));
               } else {
-                ObNeedPriv need_priv;
-                //Priv check: global select || db select || table acc
-                need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_SELECT;
-                stmt_need_privs.need_privs_.push_back(need_priv);
 
-                need_priv.priv_level_ = OB_PRIV_DB_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_SELECT;
-                need_priv.db_ = show_db_name;
-                stmt_need_privs.need_privs_.push_back(need_priv);
-
-                need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
-                need_priv.priv_set_ = OB_PRIV_TABLE_ACC;
-                need_priv.db_ = show_db_name;
-                need_priv.table_ = show_table_name;
-                stmt_need_privs.need_privs_.push_back(need_priv);
-
-                if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
-                  if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
-                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
-                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                   show_table_name.length(), show_table_name.ptr());
-                  } else {
-                    LOG_WARN("fail to check priv", K(ret));
-                  }
-                }
               }
             }
 
             if (OB_SUCC(ret)) {
-              if (1 == parse_tree.children_[0]->value_) {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_COLUMNS);
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+              /* (parse_tree.children_[0]->value_)&1        ->  FULL
+               * ((parse_tree.children_[0]->value_)>>1)&1   ->  EXTENDED
+               */
+              bool is_full = (1 == ((parse_tree.children_[0]->value_)&1));
+              bool is_extended = (1 == (((parse_tree.children_[0]->value_)>>1)&1));
+              bool is_compat; // compatible mode for version lower than 4.2.2 which does not support SHOW EXTENDED
+              uint64_t min_data_version;
+              if (OB_UNLIKELY(((parse_tree.children_[0]->value_)>>2) != 0)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("node value unexpected", K(ret), K(parse_tree.children_[0]->value_));
+              } else if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_data_version))) {
+                LOG_WARN("get min data version failed", K(ret), K(real_tenant_id));
+              } else if (OB_FALSE_IT(is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version))) {
+              } else if (OB_UNLIKELY(is_compat && is_extended)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("version lower than 4.2.2 or 4.3.1 does not support show extended", K(ret));
+              } else if (OB_FALSE_IT(is_extended |= is_compat)) {
+                // is_extended SQL is same as normal SQL in version lower than 4.2.2 or 4.3.1
+              } else if (is_full) {
+                if (is_extended) {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_EXTENDED_FULL_COLUMNS);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_EXTENDED_FULL_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_FULL_COLUMNS);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_FULL_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+                }
               } else {
-                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_COLUMNS);
-                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+                if (is_extended) {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_EXTENDED_COLUMNS);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_EXTENDED_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+                } else {
+                  GEN_SQL_STEP_1(ObShowSqlSet::SHOW_COLUMNS);
+                  GEN_SQL_STEP_2(ObShowSqlSet::SHOW_COLUMNS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME, OB_TENANT_VIRTUAL_TABLE_COLUMN_ORA_TNAME), show_table_id);
+                }
               }
             }
           }
@@ -614,7 +633,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           if (is_oracle_mode) {
             ret = OB_NOT_SUPPORTED;
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "show indexes in oracle mode is");
-          } else if (OB_UNLIKELY(parse_tree.num_child_ != 3 || NULL == parse_tree.children_)) {
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 4 || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
           } else {
@@ -624,9 +643,20 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_table_id = OB_INVALID_ID;
             ObObj show_table_id_obj;
             bool is_view;
+            bool is_extended = (1 == parse_tree.children_[3]->value_);
+            bool is_compat; // compatible mode for version lower than 4.2.2 which does not support SHOW EXTENDED
+            uint64_t min_data_version;
             show_resv_ctx.condition_node_ = parse_tree.children_[2];
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_INDEXES;
-            if (OB_FAIL(resolve_show_from_table(parse_tree.children_[0], parse_tree.children_[1], database_name.empty(),
+            if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_data_version))) {
+              LOG_WARN("get min data version failed", K(ret), K(real_tenant_id));
+            } else if (OB_FALSE_IT(is_compat = !sql::ObSQLUtils::is_data_version_ge_422_or_431(min_data_version))) {
+            } else if (OB_UNLIKELY(is_compat && is_extended)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("version lower than 4.2.2 does not support show extended", K(ret));
+            } else if (OB_FALSE_IT(is_extended |= is_compat)) {
+              // is_extended SQL is same as normal SQL in version lower than 4.2.2
+            } else if (OB_FAIL(resolve_show_from_table(parse_tree.children_[0], parse_tree.children_[1], database_name.empty(),
                                                 T_SHOW_INDEXES, real_tenant_id, show_db_name, show_db_id,
                                                 show_table_name, show_table_id, is_view, synonym_checker))) {
               LOG_WARN("fail to resolve show from table", K(ret));
@@ -653,20 +683,31 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
 
                 if (OB_FAIL(schema_checker_->check_priv_or(session_priv, stmt_need_privs))) {
                   if (OB_ERR_NO_TABLE_PRIVILEGE == ret) {
-                    LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
-                                   session_priv.user_name_.length(), session_priv.user_name_.ptr(),
-                                   session_priv.host_name_.length(),session_priv.host_name_.ptr(),
-                                   show_table_name.length(), show_table_name.ptr());
-                  } else {
-                    LOG_WARN("fail to check priv", K(ret));
+                    ret = OB_SUCCESS;
+                    bool pass = false;
+                    if (OB_FAIL(schema_checker_->get_schema_guard()->check_priv_any_column_priv(
+                                  session_priv, show_db_name, show_table_name, pass))) {
+                      LOG_WARN("fail to collect privs in roles", K(ret));
+                    } else if (!pass) {
+                      ret = OB_ERR_NO_TABLE_PRIVILEGE;
+                      LOG_USER_ERROR(OB_ERR_NO_TABLE_PRIVILEGE, (int)strlen("SELECT"), "SELECT",
+                                    session_priv.user_name_.length(), session_priv.user_name_.ptr(),
+                                    session_priv.host_name_.length(),session_priv.host_name_.ptr(),
+                                    show_table_name.length(), show_table_name.ptr());
+                    }
                   }
                 }
               }
             }
 
             if (OB_SUCC(ret)) {
-              GEN_SQL_STEP_1(ObShowSqlSet::SHOW_INDEXES);
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_INDEXES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME, show_table_id);
+              if (is_extended) {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_EXTENDED_INDEXES);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_EXTENDED_INDEXES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME, show_table_id);
+              } else {
+                GEN_SQL_STEP_1(ObShowSqlSet::SHOW_INDEXES);
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_INDEXES, OB_SYS_DATABASE_NAME, OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME, show_table_id);
+              }
             }
           }
         }();
@@ -743,7 +784,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       }
       case T_SHOW_GRANTS: {
         [&] {
-          if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+          if (OB_UNLIKELY(parse_tree.num_child_ != (lib::is_mysql_mode() ? 2 : 1)
+                          || NULL == parse_tree.children_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("parse tree is wrong",
                 K(ret),
@@ -753,6 +795,7 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             uint64_t show_user_id = OB_INVALID_ID;
             ObString show_user_name;
             ObString show_host_name;
+            ObSqlString role_list_str;
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_GRANTS;
             if (NULL == parse_tree.children_[0]) {
               show_user_id = user_id;
@@ -786,9 +829,52 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                         K(user_name), K(ret));
               }
             }
+            if (OB_SUCC(ret)
+                && lib::is_mysql_mode()
+                && OB_NOT_NULL(parse_tree.children_[1])
+                && parse_tree.children_[1]->num_child_ > 0) {
+              ParseNode *role_list = parse_tree.children_[1];
+              ObGrantResolver dcl_resolver(params_);
+              const ObUserInfo *user_info = NULL;
+              OZ (role_list_str.append_fmt("%lu", show_user_id));
+              OZ (schema_checker_->get_user_info(real_tenant_id, show_user_id, user_info));
+              for (int i = 0; OB_SUCC(ret) && i < role_list->num_child_; i++) {
+                ObString user_name;
+                ObString host_name;
+                uint64_t role_id = OB_INVALID_ID;
+                OZ (dcl_resolver.resolve_user_host(role_list->children_[i], user_name, host_name));
+                OZ (schema_checker_->get_user_id(real_tenant_id, user_name, host_name, role_id));
+                if (OB_USER_NOT_EXIST == ret) {
+                  ret = OB_ERR_NO_GRANT_DEFINED_FOR_USER;
+                  LOG_USER_ERROR(OB_ERR_NO_GRANT_DEFINED_FOR_USER,
+                                 user_name.length(), user_name.ptr(), host_name.length(), host_name.ptr());
+                }
+                if (OB_SUCC(ret) && !has_exist_in_array(user_info->get_role_id_array(), role_id)) {
+                  ret = OB_ERR_ROLE_NOT_GRANTED_TO;
+                  LOG_USER_ERROR(OB_ERR_ROLE_NOT_GRANTED_TO,
+                                 user_name.length(), user_name.ptr(),
+                                 host_name.length(), host_name.ptr(),
+                                 user_info->get_user_name_str().length(),
+                                 user_info->get_user_name_str().ptr(),
+                                 user_info->get_host_name_str().length(),
+                                 user_info->get_host_name_str().ptr());
+                }
+                OZ (role_list_str.append_fmt(",%lu", role_id));
+              }
+            }
             if (OB_SUCC(ret)) {
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_GRANTS, show_user_name.length(), show_user_name.ptr(), show_host_name.length(), show_host_name.ptr());
-              GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS, REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME), REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME), show_user_id);
+              if (lib::is_mysql_mode() && role_list_str.length() > 0) {
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS_USING_ROLES,
+                               REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                               REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME),
+                               role_list_str.string().length(), role_list_str.string().ptr());
+              } else {
+                GEN_SQL_STEP_2(ObShowSqlSet::SHOW_GRANTS,
+                               REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                               REAL_NAME(OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_TNAME, OB_TENANT_VIRTUAL_PRIVILEGE_GRANT_ORA_TNAME),
+                               show_user_id);
+              }
             }
           }
         }();
@@ -2743,11 +2829,25 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_GLOBAL_VARIABLES,
 DEFINE_SHOW_CLAUSE_SET(SHOW_COLUMNS,
                        NULL,
                        "SELECT field AS `Field`, type AS `Type`, `NULL` AS `Null`, `KEY` AS `Key`, `DEFAULT` AS `Default`, extra AS `Extra` \
+                        FROM %s.%s  where table_id = %ld AND is_hidden = False",
+                        R"(SELECT "FIELD" AS "FIELD", "TYPE" AS "TYPE", "NULL" AS "NULL", "KEY" AS "KEY", "DEFAULT" AS "DEFAULT", "EXTRA" AS "EXTRA" )"
+                        R"(FROM %s.%s  WHERE TABLE_ID = %ld AND IS_HIDDEN = 0)",
+                       "Field");
+DEFINE_SHOW_CLAUSE_SET(SHOW_FULL_COLUMNS,
+                       NULL,
+                       "SELECT field AS `Field`, type AS `Type`, collation AS `Collation`, `NULL` AS `Null`, `KEY` AS `Key`, `DEFAULT` AS `Default`, extra AS `Extra`, `PRIVILEGES` AS `Privileges`, `COMMENT` AS `Comment` \
+                       FROM %s.%s  where table_id = %ld AND is_hidden = False",
+                       R"(SELECT "FIELD" AS "FIELD", "TYPE" AS "TYPE", "COLLATION" AS "COLLATION", "NULL" AS "NULL", KEY AS "KEY", "DEFAULT" AS "DEFAULT", EXTRA AS "EXTRA", "PRIVILEGES" AS "PRIVILEGES", "COMMENT" AS "COMMENT" )"
+                       R"(FROM %s.%s  WHERE TABLE_ID = %ld AND IS_HIDDEN = 0)",
+                       "Field");
+DEFINE_SHOW_CLAUSE_SET(SHOW_EXTENDED_COLUMNS,
+                       NULL,
+                       "SELECT field AS `Field`, type AS `Type`, `NULL` AS `Null`, `KEY` AS `Key`, `DEFAULT` AS `Default`, extra AS `Extra` \
                         FROM %s.%s  where table_id = %ld",
                         R"(SELECT "FIELD" AS "FIELD", "TYPE" AS "TYPE", "NULL" AS "NULL", "KEY" AS "KEY", "DEFAULT" AS "DEFAULT", "EXTRA" AS "EXTRA" )"
                         R"(FROM %s.%s  WHERE TABLE_ID = %ld)",
                        "Field");
-DEFINE_SHOW_CLAUSE_SET(SHOW_FULL_COLUMNS,
+DEFINE_SHOW_CLAUSE_SET(SHOW_EXTENDED_FULL_COLUMNS,
                        NULL,
                        "SELECT field AS `Field`, type AS `Type`, collation AS `Collation`, `NULL` AS `Null`, `KEY` AS `Key`, `DEFAULT` AS `Default`, extra AS `Extra`, `PRIVILEGES` AS `Privileges`, `COMMENT` AS `Comment` \
                        FROM %s.%s  where table_id = %ld",
@@ -2770,6 +2870,12 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_TABLEGROUP,
                        R"(SELECT "TABLEGROUP_NAME" AS "TABLEGROUP", "CREATE_TABLEGROUP" AS "CREATE TABLEGROUP" FROM %s.%s  WHERE TABLEGROUP_ID = %ld)",
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_INDEXES,
+                       NULL,
+                       "SELECT `TABLE` AS `Table`, NON_UNIQUE AS Non_unique, KEY_NAME AS Key_name, SEQ_IN_INDEX AS Seq_in_index, COLUMN_NAME AS Column_name, COLLATION AS Collation, CARDINALITY AS Cardinality, SUB_PART AS Sub_part, PACKED AS Packed, `NULL` AS `Null`, INDEX_TYPE AS Index_type, `COMMENT` AS `Comment`, INDEX_COMMENT AS Index_comment, IS_VISIBLE AS Visible, EXPRESSION AS Expression FROM %s.%s  where table_id = %ld AND is_column_visible = true",
+                       R"(SELECT "TABLE" AS "TABLE", "NON_UNIQUE" AS "NON_UNIQUE", "KEY_NAME" AS "KEY_NAME", "SEQ_IN_INDEX" AS "SEQ_IN_INDEX", "COLUMN_NAME" AS "COLUMN_NAME", "COLLATION" AS "COLLATION", "CARDINALITY" AS "CARDINALITY", "SUB_PART" AS "SUB_PART", "PACKED" AS "PACKED", "NULL" AS "NULL", "INDEX_TYPE" AS "INDEX_TYPE", "COMMENT" AS "COMMENT", )"
+                       R"(INDEX_COMMENT" AS "INDEX_COMMENT", "IS_VISIBLE" AS "VISIBLE", "EXPRESSION" AS "EXPRESSION" FROM %s.%s  WHERE TABLE_ID = %ld AND IS_COLUMN_VISIBLE = 1")",
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_EXTENDED_INDEXES,
                        NULL,
                        "SELECT `TABLE` AS `Table`, NON_UNIQUE AS Non_unique, KEY_NAME AS Key_name, SEQ_IN_INDEX AS Seq_in_index, COLUMN_NAME AS Column_name, COLLATION AS Collation, CARDINALITY AS Cardinality, SUB_PART AS Sub_part, PACKED AS Packed, `NULL` AS `Null`, INDEX_TYPE AS Index_type, `COMMENT` AS `Comment`, INDEX_COMMENT AS Index_comment, IS_VISIBLE AS Visible, EXPRESSION AS Expression FROM %s.%s  where table_id = %ld",
                        R"(SELECT "TABLE" AS "TABLE", "NON_UNIQUE" AS "NON_UNIQUE", "KEY_NAME" AS "KEY_NAME", "SEQ_IN_INDEX" AS "SEQ_IN_INDEX", "COLUMN_NAME" AS "COLUMN_NAME", "COLLATION" AS "COLLATION", "CARDINALITY" AS "CARDINALITY", "SUB_PART" AS "SUB_PART", "PACKED" AS "PACKED", "NULL" AS "NULL", "INDEX_TYPE" AS "INDEX_TYPE", "COMMENT" AS "COMMENT", )"
@@ -2815,6 +2921,11 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_GRANTS,
                        "SELECT grants AS `Grants for %.*s@%.*s` ",
                        "SELECT grants FROM %s.%s WHERE user_id = %ld",
                        R"(SELECT "GRANTS" AS "GRANTS" FROM %s.%s WHERE USER_ID = %ld)",
+                       NULL);
+DEFINE_SHOW_CLAUSE_SET(SHOW_GRANTS_USING_ROLES,
+                       "SELECT grants AS `Grants for %.*s@%.*s` ",
+                       "SELECT grants FROM %s.%s WHERE user_id in (%.*s)",
+                       R"(SELECT "GRANTS" AS "GRANTS" FROM %s.%s WHERE USER_ID IN (%.*s))",
                        NULL);
 DEFINE_SHOW_CLAUSE_SET(SHOW_PROCESSLIST,
                        NULL,

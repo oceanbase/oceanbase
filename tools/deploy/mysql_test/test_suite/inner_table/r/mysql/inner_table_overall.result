@@ -279,6 +279,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 484	__all_storage_ha_perf_diagnose_history	0	201001	1
 485	__all_clone_job	0	201001	1
 486	__all_clone_job_history	0	201001	1
+490	__all_routine_privilege	0	201001	1
+491	__all_routine_privilege_history	0	201001	1
 493	__all_ncomp_dll	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
@@ -286,6 +288,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 499	__all_transfer_partition_task_history	0	201001	1
 500	__all_tenant_snapshot_job	0	201001	1
 502	__all_trusted_root_certificate	0	201001	1
+505	__all_column_privilege	0	201001	1
+506	__all_column_privilege_history	0	201001	1
 507	__all_tenant_snapshot_ls_replica_history	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -713,6 +717,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12437	__all_virtual_checkpoint_diagnose_memtable_info	2	201001	1
 12438	__all_virtual_checkpoint_diagnose_checkpoint_unit_info	2	201001	1
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
+12443	__all_virtual_routine_privilege	2	201001	1
+12444	__all_virtual_routine_privilege_history	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
 12450	__all_virtual_sys_variable_default_value	2	201001	1
 12451	__all_virtual_transfer_partition_task	2	201001	1
@@ -720,7 +726,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12453	__all_virtual_tenant_snapshot_job	2	201001	1
 12458	__all_virtual_ls_snapshot	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
+12462	__all_virtual_column_privilege	2	201001	1
+12463	__all_virtual_column_privilege_history	2	201001	1
 12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
+12466	ENABLED_ROLES	2	201002	1
 12487	__all_virtual_nic_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
@@ -1093,6 +1102,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21478	V$OB_TENANT_RUNTIME_INFO	1	201001	1
 21479	GV$OB_CGROUP_CONFIG	1	201001	1
 21480	V$OB_CGROUP_CONFIG	1	201001	1
+21486	procs_priv	1	201003	1
 21497	DBA_OB_AUX_STATISTICS	1	201001	1
 21498	CDB_OB_AUX_STATISTICS	1	201001	1
 21499	DBA_INDEX_USAGE	1	201001	1
@@ -1103,7 +1113,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21504	CDB_OB_TRANSFER_PARTITION_TASK_HISTORY	1	201001	1
 21509	DBA_OB_TRUSTED_ROOT_CERTIFICATE	1	201001	1
 21510	DBA_OB_CLONE_PROGRESS	1	201001	1
+21511	role_edges	1	201003	1
+21512	default_roles	1	201003	1
 21513	CDB_INDEX_USAGE	1	201001	1
+21516	columns_priv	1	201003	1
 21517	GV$OB_LS_SNAPSHOTS	1	201001	1
 21518	V$OB_LS_SNAPSHOTS	1	201001	1
 21519	DBA_OB_CLONE_HISTORY	1	201001	1

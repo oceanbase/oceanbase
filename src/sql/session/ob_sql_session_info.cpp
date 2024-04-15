@@ -1069,7 +1069,7 @@ void ObSQLSessionInfo::update_show_warnings_buf()
 void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
 {
   session_priv.tenant_id_ = get_priv_tenant_id();
-  session_priv.user_id_ = get_user_id();
+  session_priv.user_id_ = get_priv_user_id();
   session_priv.user_name_ = get_user_name();
   session_priv.host_name_ = get_host_name();
   session_priv.db_ = get_database_name();

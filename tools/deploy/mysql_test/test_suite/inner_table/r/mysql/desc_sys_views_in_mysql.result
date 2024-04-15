@@ -1900,9 +1900,9 @@ desc information_schema.COLUMN_PRIVILEGES;
 Field	Type	Null	Key	Default	Extra
 GRANTEE	varchar(292)	NO			
 TABLE_CATALOG	varchar(512)	NO			
-TABLE_SCHEMA	varchar(64)	NO			
-TABLE_NAME	varchar(64)	NO			
-COLUMN_NAME	varchar(64)	NO			
+TABLE_SCHEMA	varchar(64)	NO		NULL	
+TABLE_NAME	varchar(64)	NO		NULL	
+COLUMN_NAME	varchar(64)	NO		NULL	
 PRIVILEGE_TYPE	varchar(64)	NO			
 IS_GRANTABLE	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.COLUMN_PRIVILEGES limit 1);
@@ -4366,6 +4366,9 @@ PRIV_REPL_SLAVE	varchar(3)	NO
 PRIV_REPL_CLIENT	varchar(3)	NO			
 PRIV_DROP_DATABASE_LINK	varchar(3)	NO			
 PRIV_CREATE_DATABASE_LINK	varchar(3)	NO			
+PRIV_EXECUTE	varchar(3)	NO			
+PRIV_ALTER_ROUTINE	varchar(3)	NO			
+PRIV_CREATE_ROUTINE	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USERS limit 1);
 cnt
 1
@@ -4387,6 +4390,9 @@ PRIV_SELECT	varchar(3)	NO
 PRIV_INDEX	varchar(3)	NO			
 PRIV_CREATE_VIEW	varchar(3)	NO			
 PRIV_SHOW_VIEW	varchar(3)	NO			
+PRIV_EXECUTE	varchar(3)	NO			
+PRIV_ALTER_ROUTINE	varchar(3)	NO			
+PRIV_CREATE_ROUTINE	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1);
 cnt
 1
@@ -5704,6 +5710,19 @@ CGROUP_PATH	varchar(256)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_CGROUP_CONFIG limit 1);
 cnt
 1
+desc mysql.procs_priv;
+Field	Type	Null	Key	Default	Extra
+Host	varchar(60)	NO			
+Db	varchar(64)	NO		NULL	
+User	varchar(32)	NO		NULL	
+Routine_name	varchar(64)	NO		NULL	
+Routine_type	varchar(9)	NO			
+Grantor	varchar(93)	YES		NULL	
+Proc_priv	varchar(27)	NO			
+Timestamp	date	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.procs_priv limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_AUX_STATISTICS;
 Field	Type	Null	Key	Default	Extra
 LAST_ANALYZED	timestamp(6)	NO		NULL	
@@ -5779,6 +5798,37 @@ TRANSFER_TASK_ID	bigint(20)	NO		NULL
 STATUS	varchar(64)	NO		NULL	
 COMMENT	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TRANSFER_PARTITION_TASK_HISTORY limit 1);
+cnt
+1
+desc mysql.role_edges;
+Field	Type	Null	Key	Default	Extra
+FROM_HOST	varchar(255)	NO			
+FROM_USER	varchar(128)	NO		NULL	
+TO_HOST	varchar(255)	NO			
+TO_USER	varchar(128)	NO		NULL	
+WITH_ADMIN_OPTION	varchar(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.role_edges limit 1);
+cnt
+1
+desc mysql.default_roles;
+Field	Type	Null	Key	Default	Extra
+HOST	varchar(255)	NO			
+USER	varchar(128)	NO		NULL	
+DEFAULT_ROLE_HOST	varchar(255)	NO			
+DEFAULT_ROLE_USER	varchar(128)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.default_roles limit 1);
+cnt
+1
+desc mysql.columns_priv;
+Field	Type	Null	Key	Default	Extra
+Host	varchar(255)	NO			
+Db	varchar(128)	NO		NULL	
+User	varchar(128)	NO		NULL	
+Table_name	varchar(128)	NO		NULL	
+Column_name	varchar(128)	NO		NULL	
+Column_priv	varchar(31)	NO			
+Timestamp	datetime	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.columns_priv limit 1);
 cnt
 1
 desc oceanbase.GV$OB_LS_SNAPSHOTS;

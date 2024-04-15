@@ -59,6 +59,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
+#include "sql/resolver/dcl/ob_dcl_resolver.h"
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -1148,7 +1149,7 @@ int ObSQLUtils::cvt_db_name_to_org(share::schema::ObSchemaGetterGuard &schema_gu
     ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
     if (OB_FAIL(session->get_name_case_mode(case_mode))) {
       LOG_WARN("fail to get name case mode", K(ret));
-    } else if (case_mode == OB_ORIGIN_AND_INSENSITIVE) {
+    } else if (case_mode == OB_ORIGIN_AND_INSENSITIVE || case_mode == OB_LOWERCASE_AND_INSENSITIVE) {
       const ObDatabaseSchema *db_schema = NULL;
       if (OB_FAIL(schema_guard.get_database_schema(session->get_effective_tenant_id(),
                                                    name,
@@ -1597,7 +1598,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_RECYCLEBIN == type
                || T_SHOW_TENANT == type
                || T_SHOW_RESTORE_PREVIEW == type
-               || T_SHOW_SEQUENCES == type) {
+               || T_SHOW_SEQUENCES == type
+               || (T_SET_ROLE == type && lib::is_mysql_mode())) {
       ret = true;
     }
   }
@@ -5402,7 +5404,34 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
   ObTableSchema new_view_schema(&alloc);
   uint64_t data_version = 0;
   bool changed = false;
-  if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
+  if (reset_column_infos) {
+    // failed to resolve view definition, do nothing
+  } else if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get select stmt", K(ret));
+  } else if (is_oracle_mode() && !old_view_schema.is_sys_view()) {
+    // column name in column schema should be the same as select item alias name in view definition
+    // when view definition is not rebuilt and column list grammar is used, overwrite alias name
+    // sys view can not use column list grammar and column count of sys view may be changed
+    const ObColumnSchemaV2 *column_schema;
+    uint64_t column_id;
+    bool is_column_schema_null = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !is_column_schema_null
+                        && i < select_stmt->get_select_item_size(); ++i) {
+      column_id = i + OB_APP_MIN_COLUMN_ID;
+      column_schema = old_view_schema.get_column_schema(column_id);
+      if (OB_ISNULL(column_schema)) {
+        is_column_schema_null = true; // column schema of sys view can be null
+      } else if (OB_ISNULL(column_schema->get_column_name())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column name is null", K(ret));
+      } else {
+        select_stmt->get_select_item(i).alias_name_ = column_schema->get_column_name();
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(new_view_schema.assign(old_view_schema))) {
     LOG_WARN("failed to assign table schema", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(old_view_schema.get_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret));
@@ -5422,15 +5451,25 @@ int ObSQLUtils::async_recompile_view(const share::schema::ObTableSchema &old_vie
       //do not recompile sys view until upgrade finish
     } else if (!reset_column_infos) {
       ObArray<ObString> dummy_column_list;
+      ObArray<ObString> column_comments;
+      bool resolve_succ = true;
       if (OB_ISNULL(select_stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get select stmt", K(ret));
+      } else if (OB_FAIL(new_view_schema.get_view_column_comment(column_comments))) {
+        LOG_WARN("failed to get view column comment", K(ret));
       } else if (OB_FAIL(new_view_schema.delete_all_view_columns())) {
         LOG_WARN("failed to delete all columns", K(ret));
       } else if (OB_ISNULL(select_stmt->get_ref_obj_table())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ref obj is null", K(ret));
-      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(), *select_stmt, new_view_schema, alloc, session_info, dummy_column_list))) {
+      } else if (OB_FAIL(ObCreateViewResolver::add_column_infos(old_view_schema.get_tenant_id(),
+                                                                *select_stmt,
+                                                                new_view_schema,
+                                                                alloc,
+                                                                session_info,
+                                                                dummy_column_list,
+                                                                column_comments))) {
         LOG_WARN("failed to update view column info", K(ret));
       } else if (!new_view_schema.is_view_table() || new_view_schema.get_column_count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
@@ -5737,4 +5776,23 @@ bool ObSQLUtils::check_json_expr(ObItemType type)
     }
   }
   return res;
+}
+
+int ObSQLUtils::compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  OZ (GET_MIN_DATA_VERSION(tenant_id, data_version));
+  OV ((MOCK_DATA_VERSION_4_2_3_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0 , OB_NOT_SUPPORTED, data_version);
+  return ret;
+}
+
+bool ObSQLUtils::is_data_version_ge_422_or_431(uint64_t data_version)
+{
+  return ((DATA_VERSION_4_2_2_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0);
+}
+
+bool ObSQLUtils::is_data_version_ge_423_or_431(uint64_t data_version)
+{
+  return ((MOCK_DATA_VERSION_4_2_3_0 <= data_version && data_version < DATA_VERSION_4_3_0_0) || data_version >= DATA_VERSION_4_3_1_0);
 }

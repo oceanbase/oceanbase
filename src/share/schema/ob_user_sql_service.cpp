@@ -306,13 +306,16 @@ int ObUserSqlService::drop_user(
   //    1). role: update related grantees' schema version
   //    2). grantee: update related roles' schema version
   const ObUserInfo *user = NULL;
+  lib::Worker::CompatMode cmp_mode = lib::Worker::CompatMode::INVALID;
   if (FAILEDx(schema_guard.get_user_info(tenant_id, user_id, user))) {
     LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_id));
   } else if (NULL == user) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("user info is null", K(ret), K(user_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_compat_mode(tenant_id, cmp_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
   } else {
-    const bool is_role = user->is_role();
+    const bool is_role = user->is_role() || (lib::Worker::CompatMode::MYSQL == cmp_mode);
 
     OZ (drop_user_delete_role_grantee_map(tenant_id, is_role, new_schema_version,
                                           user, ddl_stmt_str, sql_client, schema_guard));
@@ -811,13 +814,16 @@ int ObUserSqlService::gen_user_dml(
   const bool is_ssl_support = (user.get_ssl_type() != ObSSLType::SSL_TYPE_NOT_SPECIFIED);
   LOG_INFO("gen_user_dml", K(is_ssl_support), K(user), K(is_from_inner_sql));
   uint64_t compat_version = 0;
+  bool is_oracle_mode = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(user.get_tenant_id(), compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(user.get_tenant_id()));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(user.get_tenant_id(), is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, user.get_tenant_id())))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id,user.get_user_id())))
-      || OB_FAIL(dml.add_column("user_name", user.get_user_name()))
+      || OB_FAIL(dml.add_column("user_name", ObHexEscapeSqlStr(user.get_user_name())))
       || OB_FAIL(dml.add_column("host", user.get_host_name()))
       || OB_FAIL(dml.add_column("passwd", user.get_passwd()))
       || OB_FAIL(dml.add_column("info", user.get_info()))
@@ -869,6 +875,21 @@ int ObUserSqlService::gen_user_dml(
     LOG_WARN("add  PRIV_DROP_DATABASE_LINK column failed", K(user.get_priv(OB_PRIV_DROP_DATABASE_LINK)), K(ret));
   } else if (OB_FAIL(dml.add_column("PRIV_CREATE_DATABASE_LINK", user.get_priv(OB_PRIV_CREATE_DATABASE_LINK) ? 1 : 0))) {
     LOG_WARN("add  PRIV_CREATE_DATABASE_LINK column failed", K(user.get_priv(OB_PRIV_CREATE_DATABASE_LINK)), K(ret));
+  }
+  int64_t priv_others = 0;
+  if (OB_SUCC(ret)) {
+    if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= 1; }
+    if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= 2; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= 4; }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!sql::ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+    if (priv_others != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_3_0", K(ret), K(user.get_priv(OB_PRIV_EXECUTE)), K(user.get_priv(OB_PRIV_ALTER_ROUTINE)), K(user.get_priv(OB_PRIV_CREATE_ROUTINE)));
+    }
+  } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
+    LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));
   }
   return ret;
 }

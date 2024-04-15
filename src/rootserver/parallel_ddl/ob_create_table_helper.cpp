@@ -440,7 +440,7 @@ int ObCreateTableHelper::lock_objects_by_id_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {
           // can't add object lock across tenant, assumed that sys inner udt won't be changed.
@@ -1041,7 +1041,7 @@ int ObCreateTableHelper::generate_table_schema_()
       if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get column schema failed", KR(ret));
-      } else if (col->is_extend()) {
+      } else if (col->get_meta_type().is_user_defined_sql_type()) {
         const uint64_t udt_id = col->get_sub_data_type();
         const ObUDTTypeInfo *udt_info = NULL;
         if (is_inner_object_id(udt_id) && !is_sys_tenant(tenant_id_)) {

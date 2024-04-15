@@ -350,6 +350,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_information_triggers_table.cpp
   virtual_table/ob_information_user_privileges_table.cpp
   virtual_table/ob_information_query_response_time.cpp
+  virtual_table/ob_information_schema_enable_roles_table.cpp
   virtual_table/ob_iterate_private_virtual_table.cpp
   virtual_table/ob_iterate_virtual_table.cpp
   virtual_table/ob_mem_leak_checker_info.cpp

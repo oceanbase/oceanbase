@@ -135,10 +135,6 @@ int ObInsertStmtPrinter::print_into()
         if (OB_ISNULL(column)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("column is NULL", K(ret));
-        } else if (column->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID
-                   || column->get_column_id() == OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID) {
-          // 临时表的隐藏列，不需要print。TODO 将临时表insert改写由resolver转移到改写阶段后，可以去掉本分支
-          LOG_DEBUG("do not print column", K(*column));
         } else {
           PRINT_IDENT_WITH_QUOT(column->get_column_name());
           DATA_PRINTF(",");
@@ -189,10 +185,6 @@ int ObInsertStmtPrinter::print_values()
             if (OB_ISNULL(column)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("column is NULL", K(ret));
-            } else if (column->get_column_id() == OB_HIDDEN_SESSION_ID_COLUMN_ID
-                       || column->get_column_id() == OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID) {
-              // 临时表的隐藏列，不需要print。TODO 将临时表insert改写由resolver转移到改写阶段后，可以去掉本分支
-              LOG_DEBUG("do not print column", K(*column));
             } else if (i * column_count + j >= insert_stmt->get_values_vector().count()) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpect values vector", K(ret));

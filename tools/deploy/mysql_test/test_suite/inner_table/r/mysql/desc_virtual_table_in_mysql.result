@@ -4778,6 +4778,15 @@ ls_meta_package	longtext	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_snapshot_ls_replica_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc information_schema.ENABLED_ROLES;
+Field	Type	Null	Key	Default	Extra
+ROLE_NAME	varchar(128)	YES		NULL	
+ROLE_HOST	varchar(1024)	YES		NULL	
+IS_DEFAULT	varchar(1024)	YES		NULL	
+IS_MANDATORY	varchar(1024)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_nic_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

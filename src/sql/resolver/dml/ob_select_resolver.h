@@ -91,11 +91,17 @@ public:
   void set_current_cte_involed_stmt(ObSelectStmt *stmt) { current_cte_involed_stmt_ = stmt; }
   int check_auto_gen_column_names();
 
+  void set_is_top_stmt(bool is_top_stmt) { is_top_stmt_ = is_top_stmt; }
+  bool is_top_stmt() const { return is_top_stmt_; }
+  void set_has_resolved_field_list(bool has_resolved_field_list) { has_resolved_field_list_ = has_resolved_field_list; }
+  bool has_resolved_field_list() const { return has_resolved_field_list_; }
   // function members
   TO_STRING_KV(K_(has_calc_found_rows),
                K_(has_top_limit),
                K_(in_set_query),
-               K_(is_sub_stmt));
+               K_(is_sub_stmt),
+               K_(is_top_stmt),
+               K_(has_resolved_field_list));
 
 protected:
   int resolve_set_query(const ParseNode &parse_node);
@@ -197,7 +203,7 @@ protected:
   int resolve_into_variable_node(const ParseNode *node, ObSelectIntoItem &into_item);
 
   // resolve_star related functions
-  int resolve_star_for_table_groups();
+  int resolve_star_for_table_groups(ObStarExpansionInfo &star_expansion_info);
   int find_joined_table_group_for_table(const uint64_t table_id, int64_t &jt_idx);
   int find_select_columns_for_join_group(const int64_t jt_idx, common::ObArray<SelectItem> *sorted_select_items);
   int find_select_columns_for_joined_table_recursive(const JoinedTable *jt,
@@ -375,6 +381,10 @@ protected:
   //用于标识当前的query是否有group by子句
   bool has_group_by_clause_;
   bool has_nested_aggr_;
+  //当前query是否为最外层select, 仅用于star expansion
+  bool is_top_stmt_;
+  //当前query的field list是否解析成功, 用于force view解析失败时的column schema持久化
+  bool has_resolved_field_list_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObSelectResolver);

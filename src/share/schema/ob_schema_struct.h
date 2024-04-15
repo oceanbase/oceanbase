@@ -1660,6 +1660,7 @@ public:
   inline uint64_t get_default_tablegroup_id() const { return default_tablegroup_id_; }
   inline const common::ObString &get_default_tablegroup_name() const { return default_tablegroup_name_; }
   inline common::ObCompatibilityMode get_compatibility_mode() const { return compatibility_mode_; }
+
   inline bool is_oracle_tenant() const
   {
     return common::ObCompatibilityMode::ORACLE_MODE == compatibility_mode_;
@@ -4022,7 +4023,7 @@ public:
   { }
 
   virtual ~ObPriv() { }
-  ObPriv& operator=(const ObPriv &other);
+  int assign(const ObPriv &other);
   static bool cmp_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
   { return (lhs->get_tenant_user_id() < tenant_user_id); }
   static bool equal_tenant_user_id(const ObPriv *lhs, const ObTenantUserId &tenant_user_id)
@@ -4064,6 +4065,8 @@ protected:
   ObPrivSet priv_set_;
   //ObPrivSet ora_sys_priv_set_;
   ObPackedPrivArray priv_array_;
+
+  DISABLE_COPY_ASSIGN(ObPriv);
 };
 
 // Not used now
@@ -4624,6 +4627,223 @@ struct ObTablePrivSortKey
   common::ObString table_;
 };
 
+struct ObRoutinePrivDBKey
+{
+  ObRoutinePrivDBKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
+  {}
+  ObRoutinePrivDBKey(const uint64_t tenant_id, const uint64_t user_id, const common::ObString &db)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db)
+  {}
+  bool operator==(const ObRoutinePrivDBKey &rhs) const
+  {
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_);
+  }
+  bool operator!=(const ObRoutinePrivDBKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObRoutinePrivDBKey &rhs) const
+  {
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+      }
+    }
+    return bret;
+  }
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+};
+
+struct ObRoutinePrivSortKey
+{
+  ObRoutinePrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID)
+  {}
+  ObRoutinePrivSortKey(const uint64_t tenant_id, const uint64_t user_id,
+                     const common::ObString &db, const common::ObString &routine, int64_t routine_type)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db), routine_(routine), routine_type_(routine_type)
+  {}
+  bool operator==(const ObRoutinePrivSortKey &rhs) const
+  {
+    ObCompareNameWithTenantID name_cmp(tenant_id_);
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_) && (0 == name_cmp.compare(routine_, rhs.routine_)) && (routine_type_ == rhs.routine_type_);
+  }
+  bool operator!=(const ObRoutinePrivSortKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObRoutinePrivSortKey &rhs) const
+  {
+    ObCompareNameWithTenantID name_cmp(tenant_id_);
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+        if (false == bret && db_ == rhs.db_) {
+          int routine_cmp_ret = name_cmp.compare(routine_, rhs.routine_);
+          if (routine_cmp_ret < 0) {
+            bret = true;
+          } else {
+            bret = false;
+          }
+          if (false == bret && 0 == routine_cmp_ret) {
+            bret = routine_type_ < rhs.routine_type_;
+          }
+        }
+      }
+    }
+    return bret;
+  }
+  //Not used yet.
+  inline uint64_t hash() const
+  {
+    uint64_t hash_ret = 0;
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    hash_ret = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+    hash_ret = common::murmurhash(&user_id_, sizeof(user_id_), hash_ret);
+    hash_ret = common::murmurhash(db_.ptr(), db_.length(), hash_ret);
+    hash_ret = common::ObCharset::hash(cs_type, routine_, hash_ret);
+    hash_ret = common::murmurhash(&routine_type_, sizeof(routine_type_), hash_ret);
+    return hash_ret;
+  }
+  bool is_valid() const
+  {
+    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID) && routine_type_ != 0;
+  }
+
+  int deep_copy(const ObRoutinePrivSortKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    routine_type_ = src.routine_type_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy db", KR(ret), K(src.db_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.routine_, routine_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy routine", KR(ret), K(src.routine_));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(routine), K_(routine_type));
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+  common::ObString routine_;
+  int64_t routine_type_;
+};
+
+struct ObColumnPrivIdKey
+{
+  ObColumnPrivIdKey() : tenant_id_(common::OB_INVALID_ID), priv_id_(common::OB_INVALID_ID) {}
+
+  ObColumnPrivIdKey(const uint64_t tenant_id, const uint64_t priv_id)
+      : tenant_id_(tenant_id), priv_id_(priv_id) {}
+
+  TO_STRING_KV(K_(tenant_id), K_(priv_id));
+
+  bool operator==(const ObColumnPrivIdKey &rhs) const
+  {
+    return (tenant_id_ == rhs.tenant_id_) && (priv_id_ == rhs.priv_id_);
+  }
+  uint64_t tenant_id_;
+  uint64_t priv_id_;
+};
+
+struct ObColumnPrivSortKey
+{
+  ObColumnPrivSortKey() : tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
+                          db_(), table_(), column_()
+  {}
+  ObColumnPrivSortKey(const uint64_t tenant_id, const uint64_t user_id,
+                     const common::ObString &db, const common::ObString &table, const common::ObString &column)
+      : tenant_id_(tenant_id), user_id_(user_id), db_(db), table_(table), column_(column)
+  {}
+
+  //In resolver, ObSQLUtils::cvt_db_name_to_org will make db_name and table_name string user wrotten in the sql the same as the string in the schema.
+  //So in the schema stage, db and table name can directly binary compare with each other without considering the collation.
+  bool operator==(const ObColumnPrivSortKey &rhs) const
+  {
+    // Only mysql will reach here, and column name character collation is general ci under mysql mode.
+    // If Oracle mode reach here, the result may be wrong!
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    return (tenant_id_ == rhs.tenant_id_) && (user_id_ == rhs.user_id_)
+           && (db_ == rhs.db_) && (table_ == rhs.table_) &&
+           (0 == common::ObCharset::strcmp(cs_type, column_, rhs.column_));
+  }
+  bool operator!=(const ObColumnPrivSortKey &rhs) const
+  {
+    return !(*this == rhs);
+  }
+  bool operator<(const ObColumnPrivSortKey &rhs) const
+  {
+    bool bret = tenant_id_ < rhs.tenant_id_;
+    if (false == bret && tenant_id_ == rhs.tenant_id_) {
+      bret = user_id_ < rhs.user_id_;
+      if (false == bret && user_id_ == rhs.user_id_) {
+        bret = db_ < rhs.db_;
+        if (false == bret && db_ == rhs.db_) {
+          bret = table_ < rhs.table_;
+          if (false == bret && table_ == rhs.table_) {
+            ObCompareNameWithTenantID name_cmp(tenant_id_);
+            int cmp_ret = name_cmp.compare(column_, rhs.column_);
+            if (cmp_ret < 0) {
+              bret = true;
+            } else {
+              bret = false;
+            }
+          }
+        }
+      }
+    }
+    return bret;
+  }
+  //Not used yet.
+  inline uint64_t hash() const
+  {
+    common::ObCollationType cs_type = common::CS_TYPE_UTF8MB4_GENERAL_CI;
+    uint64_t hash_ret = 0;
+    hash_ret = common::murmurhash(&tenant_id_, sizeof(tenant_id_), 0);
+    hash_ret = common::murmurhash(&user_id_, sizeof(user_id_), hash_ret);
+    hash_ret = common::murmurhash(db_.ptr(), db_.length(), hash_ret);
+    hash_ret = common::murmurhash(table_.ptr(), table_.length(), hash_ret);
+    hash_ret = common::ObCharset::hash(cs_type, column_, hash_ret);
+    return hash_ret;
+  }
+  bool is_valid() const
+  {
+    return (tenant_id_ != common::OB_INVALID_ID) && (user_id_ != common::OB_INVALID_ID);
+  }
+
+  int deep_copy(const ObColumnPrivSortKey &src, common::ObIAllocator &allocator)
+  {
+    int ret = OB_SUCCESS;
+    tenant_id_ = src.tenant_id_;
+    user_id_ = src.user_id_;
+    if (OB_FAIL(common::ob_write_string(allocator, src.db_, db_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy db", KR(ret), K(src.db_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.table_, table_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy table", KR(ret), K(src.table_));
+    } else if (OB_FAIL(common::ob_write_string(allocator, src.column_, column_))) {
+      SHARE_SCHEMA_LOG(WARN, "failed to deep copy table", KR(ret), K(src.column_));
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(table), K_(column));
+  uint64_t tenant_id_;
+  uint64_t user_id_;
+  common::ObString db_;
+  common::ObString table_;
+  common::ObString column_;
+};
+
 struct ObObjPrivSortKey
 {
   ObObjPrivSortKey() : tenant_id_(common::OB_INVALID_ID),
@@ -4763,6 +4983,154 @@ private:
   common::ObString table_;
 };
 
+class ObRoutinePriv : public ObSchema, public ObPriv
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  //constructor and destructor
+  ObRoutinePriv()
+      : ObSchema(), ObPriv(), db_(), routine_(), routine_type_(0)
+  { }
+  explicit ObRoutinePriv(common::ObIAllocator *allocator)
+      : ObSchema(allocator), ObPriv(allocator), db_(), routine_(), routine_type_(0)
+  { }
+  virtual ~ObRoutinePriv() { }
+
+  int assign(const ObRoutinePriv &other);
+
+  //for sort
+  ObRoutinePrivSortKey get_sort_key() const
+  { return ObRoutinePrivSortKey(tenant_id_, user_id_, db_, routine_, routine_type_); }
+  static bool cmp(const ObRoutinePriv *lhs, const ObRoutinePriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false; }
+  static bool cmp_sort_key(const ObRoutinePriv *lhs, const ObRoutinePrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() < sort_key : false; }
+  static bool equal(const ObRoutinePriv *lhs, const ObRoutinePriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false; }
+  static bool equal_sort_key(const ObRoutinePriv *lhs, const ObRoutinePrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() == sort_key : false; }
+
+  ObRoutinePrivDBKey get_db_key() const
+  { return ObRoutinePrivDBKey(tenant_id_, user_id_, db_); }
+  static bool cmp_db_key(const ObRoutinePriv *lhs, const ObRoutinePrivDBKey &db_key)
+  { return lhs->get_db_key() < db_key; }
+
+  //set methods
+  inline int set_database_name(const char *db) { return deep_copy_str(db, db_); }
+  inline int set_database_name(const common::ObString &db) { return deep_copy_str(db, db_); }
+  inline int set_routine_name(const char *routine) { return deep_copy_str(routine, routine_); }
+  inline int set_routine_name(const common::ObString &routine) { return deep_copy_str(routine, routine_); }
+  inline void set_routine_type(int64_t routine_type) { routine_type_ = routine_type; }
+
+  //get methods
+  inline const char* get_database_name() const { return extract_str(db_); }
+  inline const common::ObString& get_database_name_str() const { return db_; }
+  inline const char* get_routine_name() const { return extract_str(routine_); }
+  inline const common::ObString& get_routine_name_str() const { return routine_; }
+
+  inline int64_t get_routine_type() const { return routine_type_; }
+
+  TO_STRING_KV(K_(tenant_id), K_(user_id), K_(db), K_(routine), K_(routine_type),
+               "privileges", ObPrintPrivSet(priv_set_));
+  //other methods
+  virtual bool is_valid() const;
+  virtual void reset();
+  int64_t get_convert_size() const;
+
+private:
+  common::ObString db_;
+  common::ObString routine_;
+  int64_t routine_type_;
+
+  DISABLE_COPY_ASSIGN(ObRoutinePriv);
+};
+
+class ObColumnPriv : public ObSchema, public ObPriv
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  //constructor and destructor
+  ObColumnPriv()
+      : ObSchema(), ObPriv()
+  { }
+  explicit ObColumnPriv(common::ObIAllocator *allocator)
+      : ObSchema(allocator), ObPriv(allocator)
+  { }
+  virtual ~ObColumnPriv() { }
+
+  int assign(const ObColumnPriv &other);
+
+  //for sort
+  ObColumnPrivSortKey get_sort_key() const
+  { return ObColumnPrivSortKey(tenant_id_, user_id_, db_, table_, column_); }
+
+  ObColumnPrivIdKey get_id_key() const
+  { return ObColumnPrivIdKey(tenant_id_, priv_id_); }
+  static bool cmp_by_sort_key(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() < rhs->get_sort_key() : false; }
+  static bool cmp_by_id(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? (lhs->get_tenant_id() == rhs->get_tenant_id() ? lhs->get_priv_id() < rhs->get_priv_id() : lhs->get_tenant_id() < rhs->get_tenant_id()) : false; }
+  static bool cmp_sort_key(const ObColumnPriv *lhs, const ObColumnPrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() < sort_key : false; }
+
+  static bool cmp_by_id_key(const ObColumnPriv *lhs, const ObColumnPrivIdKey &sort_key)
+  { return NULL != lhs ? (lhs->get_tenant_id() == sort_key.tenant_id_ ? lhs->get_priv_id() < sort_key.priv_id_ : lhs->get_tenant_id() < sort_key.tenant_id_) : false; }
+  static bool equal_by_sort_key(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? lhs->get_sort_key() == rhs->get_sort_key() : false; }
+
+  static bool equal_by_id(const ObColumnPriv *lhs, const ObColumnPriv *rhs)
+  { return (NULL != lhs && NULL != rhs) ? (lhs->get_tenant_id() == rhs->get_tenant_id()
+                                           && lhs->get_priv_id() == rhs->get_priv_id()) : false; }
+  static bool equal_sort_key(const ObColumnPriv *lhs, const ObColumnPrivSortKey &sort_key)
+  { return NULL != lhs ? lhs->get_sort_key() == sort_key : false; }
+
+  static bool equal_by_id_key(const ObColumnPriv *lhs, const ObColumnPrivIdKey &sort_key)
+  { return NULL != lhs ? lhs->get_tenant_id() == sort_key.tenant_id_ && lhs->get_priv_id() == sort_key.priv_id_ : false; }
+
+  ObTablePrivSortKey get_table_key() const
+  { return ObTablePrivSortKey(tenant_id_, user_id_, db_, table_); }
+  static bool cmp_table_key(const ObColumnPriv *lhs, const ObTablePrivSortKey &table_key)
+  { return lhs->get_table_key() < table_key; }
+
+  ObTablePrivDBKey get_db_key() const
+  { return ObTablePrivDBKey(tenant_id_, user_id_, db_); }
+  static bool cmp_db_key(const ObColumnPriv *lhs, const ObTablePrivDBKey &db_key)
+  { return lhs->get_db_key() < db_key; }
+
+  //set methods
+  inline int set_database_name(const char *db) { return deep_copy_str(db, db_); }
+  inline int set_database_name(const common::ObString &db) { return deep_copy_str(db, db_); }
+  inline int set_table_name(const char *table) { return deep_copy_str(table, table_); }
+  inline int set_table_name(const common::ObString &table) { return deep_copy_str(table, table_); }
+  inline int set_column_name(const char *column) { return deep_copy_str(column, column_); }
+  inline int set_column_name(const common::ObString &column) { return deep_copy_str(column, column_); }
+  inline void set_priv_id(uint64_t priv_id)  {  priv_id_ = priv_id; }
+
+  //get methods
+  inline const char* get_database_name() const { return extract_str(db_); }
+  inline const common::ObString& get_database_name_str() const { return db_; }
+  inline const char* get_table_name() const { return extract_str(table_); }
+  inline const common::ObString& get_table_name_str() const { return table_; }
+  inline const char* get_column_name() const { return extract_str(column_); }
+  inline const common::ObString& get_column_name_str() const { return column_; }
+  inline uint64_t get_priv_id() const { return priv_id_; }
+  TO_STRING_KV(K_(tenant_id), K_(priv_id), K_(user_id), K_(db), K_(table), K_(column),
+               "privileges", ObPrintPrivSet(priv_set_));
+  //other methods
+  virtual bool is_valid() const;
+  virtual void reset();
+  int64_t get_convert_size() const;
+
+private:
+  common::ObString db_;
+  common::ObString table_;
+  common::ObString column_;
+  uint64_t priv_id_;
+  DISABLE_COPY_ASSIGN(ObColumnPriv);
+};
+
 class ObObjPriv : public ObSchema, public ObPriv
 {
   OB_UNIS_VERSION(1);
@@ -4882,11 +5250,29 @@ struct ObNeedPriv
              const bool is_for_update = false,
              ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
       : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
-        is_sys_table_(is_sys_table), is_for_update_(is_for_update), priv_check_type_(priv_check_type)
+        is_sys_table_(is_sys_table), obj_type_(share::schema::ObObjectType::INVALID),
+        is_for_update_(is_for_update), priv_check_type_(priv_check_type),
+        columns_(), check_any_column_priv_(false)
   { }
+
+  ObNeedPriv(const common::ObString &db,
+            const common::ObString &table,
+            ObPrivLevel priv_level,
+            ObPrivSet priv_set,
+            const bool is_sys_table,
+            const share::schema::ObObjectType obj_type,
+            const bool is_for_update = false,
+            ObPrivCheckType priv_check_type = OB_PRIV_CHECK_ALL)
+    : db_(db), table_(table), priv_level_(priv_level), priv_set_(priv_set),
+      is_sys_table_(is_sys_table), obj_type_(obj_type),
+      is_for_update_(is_for_update), priv_check_type_(priv_check_type),
+      columns_(), check_any_column_priv_(false)
+  { }
+
   ObNeedPriv()
       : db_(), table_(), priv_level_(OB_PRIV_INVALID_LEVEL), priv_set_(0), is_sys_table_(false),
-        is_for_update_(false), priv_check_type_(OB_PRIV_CHECK_ALL)
+        obj_type_(share::schema::ObObjectType::INVALID), is_for_update_(false),
+        priv_check_type_(OB_PRIV_CHECK_ALL), columns_(), check_any_column_priv_(false)
   { }
   int deep_copy(const ObNeedPriv &other, common::ObIAllocator &allocator);
   common::ObString db_;
@@ -4894,9 +5280,15 @@ struct ObNeedPriv
   ObPrivLevel priv_level_;
   ObPrivSet priv_set_;
   bool is_sys_table_; // May be used to represent the table of schema metadata
+  share::schema::ObObjectType obj_type_;
   bool is_for_update_;
   ObPrivCheckType priv_check_type_;
-  TO_STRING_KV(K_(db), K_(table), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
+  ObSEArray<ObString, 4> columns_; //used under table level.
+  // If columns_ empty, then check table level priv_set.
+  // Else column_ not empty, then table level has not the priv_set, then check if column_ has the priv_set.
+  bool check_any_column_priv_; //used under table level.
+  // If check_any_column_priv_ true, then check the table has any column with the priv_set.
+  TO_STRING_KV(K_(db), K_(table), K_(columns), K_(priv_set), K_(priv_level), K_(is_sys_table), K_(is_for_update),
                K_(priv_check_type));
 };
 

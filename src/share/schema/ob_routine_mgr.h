@@ -84,10 +84,9 @@ class ObSimpleRoutineSchema : public ObSchema
 public:
   ObSimpleRoutineSchema();
   explicit ObSimpleRoutineSchema(common::ObIAllocator *allocator);
-  ObSimpleRoutineSchema(const ObSimpleRoutineSchema &src_schema);
   virtual ~ObSimpleRoutineSchema();
-  ObSimpleRoutineSchema &operator =(const ObSimpleRoutineSchema &other);
   bool operator ==(const ObSimpleRoutineSchema &other) const;
+  int assign(const ObSimpleRoutineSchema &other);
   void reset()
   {
     tenant_id_ = common::OB_INVALID_ID;
@@ -98,6 +97,7 @@ public:
     schema_version_ = common::OB_INVALID_VERSION;
     routine_type_ = INVALID_ROUTINE_TYPE;
     overload_ = common::OB_INVALID_INDEX;
+    reset_string(priv_user_);
     ObSchema::reset();
   }
   int64_t get_convert_size() const;
@@ -130,6 +130,9 @@ public:
   { return ObTenantRoutineId(tenant_id_, routine_id_); }
   ObRoutineType get_routine_type() const { return routine_type_; }
   void set_routine_type(ObRoutineType routine_type) { routine_type_ = routine_type; }
+  inline int set_priv_user(const common::ObString &priv_user)
+  { return deep_copy_str(priv_user, priv_user_); }
+  inline const common::ObString &get_priv_user() const { return priv_user_; }
   TO_STRING_KV(K_(tenant_id),
                K_(database_id),
                K_(package_id),
@@ -137,7 +140,8 @@ public:
                K_(routine_name),
                K_(routine_type),
                K_(overload),
-               K_(schema_version));
+               K_(schema_version),
+               K_(priv_user));
 private:
   uint64_t tenant_id_;
   uint64_t database_id_;
@@ -147,6 +151,8 @@ private:
   ObRoutineType routine_type_;
   uint64_t overload_;
   int64_t schema_version_;
+  common::ObString priv_user_;
+  DISABLE_COPY_ASSIGN(ObSimpleRoutineSchema);
 };
 
 class ObRoutineNameHashWrapper
@@ -261,6 +267,7 @@ class ObRoutineMgr
       ObGetRoutineKey, 1024> RoutineNameMap;
   typedef RoutineInfos::iterator RoutineIter;
   typedef RoutineInfos::const_iterator ConstRoutineIter;
+
 public:
   ObRoutineMgr();
   explicit ObRoutineMgr(common::ObIAllocator &allocator);
@@ -295,6 +302,7 @@ public:
   int del_routine_schemas_in_package(uint64_t tenant_id, uint64_t package_id);
   int get_routine_schema_count(int64_t &routine_schema_count) const;
   int get_schema_statistics(ObSchemaStatisticsInfo &schema_info) const;
+  int check_user_reffered_by_definer(const ObString &user_name, bool &ref) const;
 private:
   inline bool check_inner_stat() const;
   inline static bool compare_routine(const ObSimpleRoutineSchema *lhs,

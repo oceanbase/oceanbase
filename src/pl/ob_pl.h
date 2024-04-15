@@ -852,6 +852,8 @@ public:
     is_function_or_trigger_ = false;
     last_insert_id_ = 0;
     trace_id_.reset();
+    old_user_priv_set_ = OB_PRIV_SET_EMPTY;
+    old_db_priv_set_ = OB_PRIV_SET_EMPTY;
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -1001,6 +1003,8 @@ private:
   uint64_t database_id_;
   common::ObSEArray<uint64_t, 8> old_role_id_array_;
   uint64_t old_priv_user_id_;
+  ObPrivSet old_user_priv_set_;
+  ObPrivSet old_db_priv_set_;
   bool old_in_definer_;
   bool need_reset_default_database_;
   bool need_reset_role_id_array_;
@@ -1105,6 +1109,7 @@ public:
               bool is_called_from_sql = false,
               uint64_t dblink_id = OB_INVALID_ID);
   int check_exec_priv(sql::ObExecContext &ctx,
+                      const ObString &database_name,
                       ObPLFunction *routine);
 private:
   // for normal routine

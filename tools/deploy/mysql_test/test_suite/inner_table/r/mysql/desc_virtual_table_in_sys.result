@@ -9162,6 +9162,34 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_checkpoint_diagnose_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_routine_privilege;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+database_name	varbinary(2048)	NO	PRI	NULL	
+routine_name	varbinary(2048)	NO	PRI	NULL	
+routine_type	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+all_priv	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine_privilege;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_routine_privilege_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_id	bigint(20)	NO	PRI	NULL	
+database_name	varbinary(2048)	NO	PRI	NULL	
+routine_name	varbinary(2048)	NO	PRI	NULL	
+routine_type	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+all_priv	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine_privilege_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_aux_stat;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -9279,6 +9307,36 @@ last_flush_time	timestamp(6)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_index_usage_info;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_column_privilege;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+priv_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+user_id	bigint(20)	NO		NULL	
+database_name	varbinary(1024)	NO		NULL	
+table_name	varbinary(1024)	NO		NULL	
+column_name	varbinary(1024)	NO		NULL	
+all_priv	bigint(20)	NO		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_privilege;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_column_privilege_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+priv_id	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+user_id	bigint(20)	YES		NULL	
+database_name	varbinary(1024)	YES		NULL	
+table_name	varbinary(1024)	YES		NULL	
+column_name	varbinary(1024)	YES		NULL	
+all_priv	bigint(20)	YES		0	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_column_privilege_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_snapshot_ls_replica_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -9295,6 +9353,15 @@ begin_interval_scn	bigint(20) unsigned	NO		NULL
 end_interval_scn	bigint(20) unsigned	NO		NULL	
 ls_meta_package	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_snapshot_ls_replica_history;
+IF(count(*) >= 0, 1, 0)
+1
+desc information_schema.ENABLED_ROLES;
+Field	Type	Null	Key	Default	Extra
+ROLE_NAME	varchar(128)	YES		NULL	
+ROLE_HOST	varchar(1024)	YES		NULL	
+IS_DEFAULT	varchar(1024)	YES		NULL	
+IS_MANDATORY	varchar(1024)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_nic_info;

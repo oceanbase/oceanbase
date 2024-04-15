@@ -172,6 +172,8 @@ int ObInsertTableInfo::assign(const ObInsertTableInfo &other)
     LOG_WARN("failed to assign part generated col dep cols", K(ret));
   } else if (OB_FAIL(assignments_.assign(other.assignments_))) {
     LOG_WARN("failed to assign exprs", K(ret));
+  } else if (OB_FAIL(column_in_values_vector_.assign(other.column_in_values_vector_))) {
+    LOG_WARN("failed to assign exprs", K(ret));
   } else {
     is_replace_ = other.is_replace_;
   }
@@ -187,6 +189,8 @@ int ObInsertTableInfo::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (OB_FAIL(expr_copier.copy(other.values_desc_, values_desc_))) {
     LOG_WARN("failed to copy exprs", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.values_vector_, values_vector_))) {
+    LOG_WARN("failed to copy exprs", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.column_in_values_vector_, column_in_values_vector_))) {
     LOG_WARN("failed to copy exprs", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.column_conv_exprs_, column_conv_exprs_))) {
     LOG_WARN("failed to copy exprs", K(ret));

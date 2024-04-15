@@ -318,6 +318,10 @@ void ObServerSchemaService::AllSchemaKeys::reset()
   del_db_priv_keys_.clear();
   new_table_priv_keys_.clear();
   del_table_priv_keys_.clear();
+  new_routine_priv_keys_.clear();
+  del_routine_priv_keys_.clear();
+  new_column_priv_keys_.clear();
+  del_column_priv_keys_.clear();
   new_synonym_keys_.clear();
   del_synonym_keys_.clear();
   new_routine_keys_.clear();
@@ -412,6 +416,14 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
     LOG_WARN("failed to create new_table_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_table_priv_keys_.create(bucket_size))) {
     LOG_WARN("failed to create del_table_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_routine_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_routine_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_routine_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_routine_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(new_column_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create new_column_priv_keys hashset", K(bucket_size), K(ret));
+  } else if (OB_FAIL(del_column_priv_keys_.create(bucket_size))) {
+    LOG_WARN("failed to create del_column_priv_keys hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(new_routine_keys_.create(bucket_size))) {
     LOG_WARN("failed to create new_routine_ids hashset", K(bucket_size), K(ret));
   } else if (OB_FAIL(del_routine_keys_.create(bucket_size))) {
@@ -520,18 +532,6 @@ int ObServerSchemaService::AllSchemaKeys::create(int64_t bucket_size)
   return ret;
 }
 
-void ObServerSchemaService::AllIncrementSchema::reset()
-{
-  table_schema_.reset();
-  db_schema_.reset();
-  tg_schema_.reset();
-  max_used_tids_.reset();
-  //For managing privileges
-  tenant_info_array_.reset();
-  user_info_array_.reset();
-  db_priv_array_.reset();
-  table_priv_array_.reset();
-}
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //                              SCHEMA SERVICE RELATED                                      //
@@ -572,6 +572,12 @@ int ObServerSchemaService::del_tenant_operation(
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_table_priv_keys_ : schema_keys.del_table_priv_keys_))) {
     LOG_WARN("fail to del table_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_routine_priv_keys_ : schema_keys.del_routine_priv_keys_))) {
+    LOG_WARN("fail to del routine_priv operation", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(del_operation(tenant_id,
+             new_flag ? schema_keys.new_column_priv_keys_ : schema_keys.del_column_priv_keys_))) {
+    LOG_WARN("fail to del column_priv operation", KR(ret), K(tenant_id));
   } else if (OB_FAIL(del_operation(tenant_id,
              new_flag ? schema_keys.new_synonym_keys_ : schema_keys.del_synonym_keys_))) {
     LOG_WARN("fail to del synonym operation", KR(ret), K(tenant_id));
@@ -2093,6 +2099,190 @@ int ObServerSchemaService::get_increment_table_priv_keys_reversely(
     if (OB_SUCC(ret)) {
       if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_table_priv_keys_,
           schema_keys.new_table_priv_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_routine_priv_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_ROUTINE_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &database_name = schema_operation.database_name_;
+    const ObString &routine_name = schema_operation.routine_name_;
+    const int64_t routine_type = schema_operation.routine_type_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey routine_priv_key;
+    routine_priv_key.tenant_id_ = tenant_id;
+    routine_priv_key.user_id_ = user_id;
+    routine_priv_key.database_name_ = database_name;
+    routine_priv_key.routine_name_ = routine_name;
+    routine_priv_key.obj_type_ = routine_type;
+    routine_priv_key.schema_version_ = schema_version;
+    if (OB_DDL_DEL_ROUTINE_PRIV == schema_operation.op_type_) { //delete
+      hash_ret = schema_keys.new_routine_priv_keys_.erase_refactored(routine_priv_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to del routine_priv_key from new_routine_priv_keys", KR(ret));
+      } else {
+        const ObRoutinePriv *routine_priv = NULL;
+        if (OB_FAIL(schema_mgr.priv_mgr_.get_routine_priv(
+            ObRoutinePrivSortKey(tenant_id, user_id, database_name, routine_name, routine_type), routine_priv))) {
+          LOG_WARN("get routine priv failed", KR(ret));
+        } else if (NULL != routine_priv) {
+          hash_ret = schema_keys.del_routine_priv_keys_.set_refactored_1(routine_priv_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Failed to add routine_priv_key to del_routine_priv_keys", KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_routine_priv_keys_.set_refactored_1(routine_priv_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to add new routine_priv_key", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_routine_priv_keys_reversely(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_ROUTINE_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t user_id = schema_operation.user_id_;
+    const ObString &database_name = schema_operation.database_name_;
+    const ObString &routine_name = schema_operation.routine_name_;
+    const int64_t routine_type = schema_operation.routine_type_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.user_id_ = user_id;
+    schema_key.database_name_ = database_name;
+    schema_key.routine_name_ = routine_name;
+    schema_key.obj_type_ = routine_type;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_GRANT_ROUTINE_PRIV == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObRoutinePriv *routine_priv = NULL;
+    if (OB_FAIL(schema_mgr.priv_mgr_.get_routine_priv(schema_key.get_routine_priv_key(),
+                                                    routine_priv))) {
+      LOG_WARN("get routine_priv failed",
+               "routine_priv_key", schema_key.get_routine_priv_key(),
+               KR(ret));
+    } else if (NULL != routine_priv) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_routine_priv_keys_,
+          schema_keys.new_routine_priv_keys_, is_delete, is_exist))) {
+        LOG_WARN("replay operation failed", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_column_priv_keys(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+
+  if (!(schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t column_priv_id = schema_operation.column_priv_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    int hash_ret = OB_SUCCESS;
+    SchemaKey column_priv_key;
+    column_priv_key.tenant_id_ = tenant_id;
+    column_priv_key.column_priv_id_ = column_priv_id;
+    column_priv_key.schema_version_ = schema_version;
+    const ObColumnPriv *column_priv = NULL;
+    if (OB_FAIL(schema_mgr.priv_mgr_.get_column_priv_by_id(tenant_id, column_priv_id, column_priv))) {
+      LOG_WARN("get column priv failed", KR(ret));
+    } else if (OB_DDL_DEL_COLUMN_PRIV == schema_operation.op_type_) { //delete
+      hash_ret = schema_keys.new_column_priv_keys_.erase_refactored(column_priv_key);
+      if (OB_SUCCESS != hash_ret && OB_HASH_NOT_EXIST != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to del column_priv_key from new_column_priv_keys", KR(ret));
+      } else {
+        if (NULL != column_priv) {
+          hash_ret = schema_keys.del_column_priv_keys_.set_refactored_1(column_priv_key, 1);
+          if (OB_SUCCESS != hash_ret) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("Failed to add column_priv_key to del_column_priv_keys", KR(ret));
+          }
+        }
+      }
+    } else {
+      hash_ret = schema_keys.new_column_priv_keys_.set_refactored_1(column_priv_key, 1);
+      if (OB_SUCCESS != hash_ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to add new column_priv_key", KR(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObServerSchemaService::get_increment_column_priv_keys_reversely(
+  const ObSchemaMgr &schema_mgr,
+  const ObSchemaOperation &schema_operation,
+  AllSchemaKeys &schema_keys)
+{
+  int ret = OB_SUCCESS;
+  if (!(schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN
+        && schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(schema_operation.op_type_), KR(ret));
+  } else {
+    const uint64_t tenant_id = schema_operation.tenant_id_;
+    const uint64_t column_priv_id = schema_operation.column_priv_id_;
+    const int64_t schema_version = schema_operation.schema_version_;
+    SchemaKey schema_key;
+    schema_key.tenant_id_ = tenant_id;
+    schema_key.column_priv_id_ = column_priv_id;
+    schema_key.schema_version_ = schema_version;
+    bool is_delete = (OB_DDL_GRANT_COLUMN_PRIV == schema_operation.op_type_);
+    bool is_exist = false;
+    const ObColumnPriv *column_priv = NULL;
+    if (NULL != column_priv) {
+      is_exist = true;
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(REPLAY_OP(schema_key, schema_keys.del_column_priv_keys_,
+          schema_keys.new_column_priv_keys_, is_delete, is_exist))) {
         LOG_WARN("replay operation failed", KR(ret));
       }
     }
@@ -3859,6 +4049,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(trigger, ObSimpleTriggerSchema, TriggerKeys);
   GET_BATCH_SCHEMAS(db_priv, ObDBPriv, DBPrivKeys);
   GET_BATCH_SCHEMAS(table_priv, ObTablePriv, TablePrivKeys);
+  GET_BATCH_SCHEMAS(routine_priv, ObRoutinePriv, RoutinePrivKeys);
   GET_BATCH_SCHEMAS(synonym, ObSimpleSynonymSchema, SynonymKeys);
   GET_BATCH_SCHEMAS(udf, ObSimpleUDFSchema, UdfKeys);
   GET_BATCH_SCHEMAS(udt, ObSimpleUDTSchema, UDTKeys);
@@ -3873,6 +4064,7 @@ int ObServerSchemaService::fetch_increment_schemas(
   GET_BATCH_SCHEMAS(audit, ObSAuditSchema, AuditKeys);
   GET_BATCH_SCHEMAS(sys_priv, ObSysPriv, SysPrivKeys);
   GET_BATCH_SCHEMAS(obj_priv, ObObjPriv, ObjPrivKeys);
+  GET_BATCH_SCHEMAS(column_priv, ObColumnPriv, ColumnPrivKeys);
 
   // After the schema is split, because the operation_type has not been updated,
   // the OB_DDL_TENANT_OPERATION is still reused
@@ -3964,6 +4156,12 @@ int ObServerSchemaService::apply_increment_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
     LOG_WARN("fail to apply db_priv schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_table_priv_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
+    LOG_WARN("fail to apply table_priv schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_routine_priv_schema_to_cache(
+             tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
+    LOG_WARN("fail to apply routine_priv schema to cache", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(apply_column_priv_schema_to_cache(
              tenant_id, all_keys, simple_incre_schemas, schema_mgr.priv_mgr_))) {
     LOG_WARN("fail to apply table_priv schema to cache", KR(ret), K(tenant_id));
   } else if (OB_FAIL(apply_synonym_schema_to_cache(
@@ -4166,6 +4364,8 @@ APPLY_SCHEMA_TO_CACHE_IMPL(ObPackageMgr, package, ObSimplePackageSchema, Package
 APPLY_SCHEMA_TO_CACHE_IMPL(ObTriggerMgr, trigger, ObSimpleTriggerSchema, TriggerKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, db_priv, ObDBPriv, DBPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, table_priv, ObTablePriv, TablePrivKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, routine_priv, ObRoutinePriv, RoutinePrivKeys);
+APPLY_SCHEMA_TO_CACHE_IMPL(ObPrivMgr, column_priv, ObColumnPriv, ColumnPrivKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObSynonymMgr, synonym, ObSimpleSynonymSchema, SynonymKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObUDFMgr, udf, ObSimpleUDFSchema, UdfKeys);
 APPLY_SCHEMA_TO_CACHE_IMPL(ObUDTMgr, udt, ObSimpleUDTSchema, UDTKeys);
@@ -4518,6 +4718,11 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_routine_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment routine id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN
+                   && schema_operation.op_type_ < OB_DDL_ROUTINE_PRIV_OPERATION_END) {
+          if (OB_FAIL(get_increment_routine_priv_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment routine id", K(ret));
+          }
         } else if (schema_operation.op_type_ > OB_DDL_PACKAGE_OPERATION_BEGIN
                    && schema_operation.op_type_ < OB_DDL_PACKAGE_OPERATION_END) {
           if (OB_FAIL(get_increment_package_keys(schema_mgr, schema_operation, schema_keys))) {
@@ -4631,6 +4836,11 @@ int ObServerSchemaService::replay_log(
           if (OB_FAIL(get_increment_rls_context_keys(schema_mgr, schema_operation, schema_keys))) {
             LOG_WARN("fail to get increment rls_context id", K(ret));
           }
+        } else if (schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN &&
+            schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END) {
+          if (OB_FAIL(get_increment_column_priv_keys(schema_mgr, schema_operation, schema_keys))) {
+            LOG_WARN("fail to get increment column priv id", K(ret));
+          }
         }
       }
     }
@@ -4702,6 +4912,11 @@ int ObServerSchemaService::replay_log_reversely(
       } else if (schema_operation.op_type_ > OB_DDL_ROUTINE_OPERATION_BEGIN
                  && schema_operation.op_type_ < OB_DDL_ROUTINE_OPERATION_END) {
         if (OB_FAIL(get_increment_routine_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment routine keys reversely", KR(ret));
+        }
+      } else if (schema_operation.op_type_ > OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN
+                 && schema_operation.op_type_ < OB_DDL_ROUTINE_PRIV_OPERATION_END) {
+        if (OB_FAIL(get_increment_routine_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment routine keys reversely", KR(ret));
         }
       } else if (schema_operation.op_type_ > OB_DDL_UDT_OPERATION_BEGIN
@@ -4823,6 +5038,11 @@ int ObServerSchemaService::replay_log_reversely(
                  schema_operation.op_type_ < OB_DDL_RLS_CONTEXT_OPERATION_END) {
         if (OB_FAIL(get_increment_rls_context_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
           LOG_WARN("fail to get increment rls_context keys reversely", KR(ret));
+        }
+       } else if (schema_operation.op_type_ > OB_DDL_COLUMN_PRIV_OPERATION_BEGIN &&
+                 schema_operation.op_type_ < OB_DDL_COLUMN_PRIV_OPERATION_END) {
+        if (OB_FAIL(get_increment_column_priv_keys_reversely(schema_mgr, schema_operation, schema_keys))) {
+          LOG_WARN("fail to get increment column priv keys reversely", KR(ret));
         }
       } else {
         // ingore other operaton.
@@ -6098,6 +6318,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       INIT_ARRAY(ObDBPriv, db_privs);
       INIT_ARRAY(ObSysPriv, sys_privs);
       INIT_ARRAY(ObTablePriv, table_privs);
+      INIT_ARRAY(ObRoutinePriv, routine_privs);
+      INIT_ARRAY(ObColumnPriv, column_privs);
       INIT_ARRAY(ObObjPriv, obj_privs);
       INIT_ARRAY(ObSimpleUDFSchema, simple_udfs);
       INIT_ARRAY(ObSimpleUDTSchema, simple_udts);
@@ -6247,6 +6469,30 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         }
       }
 
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_ROUTINE_PRIVILEGE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_routine_privs(
+          sql_client, schema_status, schema_version, tenant_id, routine_privs))) {
+          LOG_WARN("get all table priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObSimpleTableSchemaV2 *tmp_table = NULL;
+        if (OB_FAIL(schema_mgr_for_cache->get_table_schema(tenant_id, OB_ALL_COLUMN_PRIVILEGE_HISTORY_TID, tmp_table))) {
+          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id));
+        } else if (OB_ISNULL(tmp_table)) {
+          // for compatibility
+        } else if (OB_FAIL(schema_service_->get_all_column_privs(
+          sql_client, schema_status, schema_version, tenant_id, column_privs))) {
+          LOG_WARN("get all table priv failed", K(ret), K(schema_version), K(tenant_id));
+        }
+      }
+
       const bool refresh_full_schema = true;
       // add simple schema for cache
       if (OB_FAIL(ret)) {
@@ -6274,6 +6520,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_db_privs(db_privs))) {
         LOG_WARN("add db privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_table_privs(table_privs))) {
+        LOG_WARN("add table privs failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_routine_privs(routine_privs))) {
         LOG_WARN("add table privs failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_obj_privs(obj_privs))) {
         LOG_WARN("add obj privs failed", K(ret));
@@ -6318,6 +6566,8 @@ int ObServerSchemaService::refresh_tenant_full_normal_schema(
         LOG_WARN("add rls_groups failed", K(ret));
       } else if (OB_FAIL(schema_mgr_for_cache->rls_context_mgr_.add_rls_contexts(simple_rls_contexts))) {
         LOG_WARN("add rls_contexts failed", K(ret));
+      } else if (OB_FAIL(schema_mgr_for_cache->priv_mgr_.add_column_privs(column_privs))) {
+        LOG_WARN("add column privs failed", K(ret));
       }
 
       LOG_INFO("add schemas for tenant finish",

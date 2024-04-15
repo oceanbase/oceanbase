@@ -706,6 +706,10 @@ public:
   }
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
+
+  static int compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id);
+  static bool is_data_version_ge_422_or_431(uint64_t data_version);
+  static bool is_data_version_ge_423_or_431(uint64_t data_version);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);
