@@ -445,12 +445,23 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     } else if (tx->tx_id_ != header.tx_id_) {
       // replace
       audit_record.replace_tx_ = true;
+      ObSpinLockGuard guard(tx->lock_);
       if (!tx->flags_.SHADOW_) {
-        tx_desc_mgr_.remove(*tx);
+        // sanity check:
+        //   the trx on current session isn't active and hasn't uncommitted extra state
+        if (TX_START_OR_RESUME_ADDR(tx) == GCONF.self_addr_ && tx->in_tx_or_has_extra_state_()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "try replace active tx on tx start node", K(ret), KPC(tx));
+          tx->print_trace_();
+        } else {
+          tx_desc_mgr_.remove(*tx);
+        }
       }
-      // reset tx to cleanup for new txn
-      reinit_tx_(*tx, session_id, tx->get_cluster_version());
-      need_add_tx = true;
+      if (OB_SUCC(ret)) {
+        // reset tx to cleanup for new txn
+        reinit_tx_(*tx, session_id, tx->get_cluster_version());
+        need_add_tx = true;
+      }
     } else {
       // update
       // NOTE: for XA join/resume will cause `static state` re-synced
