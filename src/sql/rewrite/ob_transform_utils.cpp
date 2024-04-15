@@ -6797,6 +6797,8 @@ int ObTransformUtils::create_simple_view(ObTransformerCtx *ctx,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(pushdown_pseudo_column_like_exprs(*stmt, push_group_by, select_list))) {
     LOG_WARN("failed to pushdown pseudo column like exprs", K(ret));
+  } else if (OB_FAIL(remove_const_exprs(select_list, select_list))) {
+    LOG_WARN("failed to remove const exprs", K(ret));
   } else if (OB_FAIL(stmt->get_from_tables(from_tables))) {
     LOG_WARN("failed to get from tables", K(ret));
   } else if (OB_FAIL(semi_infos.assign(stmt->get_semi_infos()))) {
