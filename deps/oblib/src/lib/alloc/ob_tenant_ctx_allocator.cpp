@@ -481,6 +481,13 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     SANITY_POISON(obj, obj->nobjs_ * AOBJECT_CELL_BYTES);
     SANITY_UNPOISON(obj->data_, size);
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+#ifdef FATAL_ERROR_HANG
+    if (g_alloc_failed_ctx().reach_limit_except_ctx() &&
+        REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      ObMemoryDump::get_instance().generate_mod_stat_task();
+      sleep(1);
+    }
+#endif
     const char *msg = is_errsim ? "[ERRSIM] errsim inject memory error" : alloc_failed_msg();
     LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "

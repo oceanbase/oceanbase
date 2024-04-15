@@ -67,7 +67,25 @@ struct ObMallocSampleValue
 
 typedef hash::ObHashMap<ObMallocSampleKey, ObMallocSampleValue,
                         hash::NoPthreadDefendMode> ObMallocSampleMap;
-
+typedef hash::HashMapPair<ObMallocSampleKey, ObMallocSampleValue> ObMallocSamplePair;
+typedef ObMallocSampleMap::iterator ObMallocSampleIter;
+struct ObMallocSamplePairCmp
+{
+  bool operator()(const ObMallocSamplePair *left, const ObMallocSamplePair *right)
+  {
+    bool bret = true;
+    if (left->first.tenant_id_ != right->first.tenant_id_) {
+      bret = left->first.tenant_id_ < right->first.tenant_id_;
+    } else if (left->first.ctx_id_ != right->first.ctx_id_) {
+      bret = left->first.ctx_id_ < right->first.ctx_id_;
+    } else if (0 != STRCMP(left->first.label_, right->first.label_)) {
+      bret = STRCMP(left->first.label_, right->first.label_) < 0;
+    } else if (left->second.alloc_bytes_ != right->second.alloc_bytes_) {
+      bret = left->second.alloc_bytes_ > right->second.alloc_bytes_;
+    }
+    return bret;
+  }
+};
 
 inline uint64_t ob_malloc_sample_hash(const char* data)
 {

@@ -64,6 +64,12 @@ public:
     return reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
 
   }
+  bool reach_limit_except_ctx() const
+  {
+    return reason_ == lib::TENANT_HOLD_REACH_LIMIT ||
+           reason_ == lib::SERVER_HOLD_REACH_LIMIT ||
+           reason_ == lib::PHYSICAL_MEMORY_EXHAUST;
+  }
 };
 
 char *alloc_failed_msg();

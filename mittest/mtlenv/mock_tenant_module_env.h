@@ -659,8 +659,6 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
-  } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-    STORAGE_LOG(ERROR, "init memory dump timer fail", KR(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;
@@ -864,10 +862,6 @@ void MockTenantModuleEnv::destroy()
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);
-
-  TG_STOP(lib::TGDefIDs::MemDumpTimer);
-  TG_WAIT(lib::TGDefIDs::MemDumpTimer);
-  TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
 
   if (OB_NOT_NULL(THE_IO_DEVICE)) {
     THE_IO_DEVICE->destroy();
