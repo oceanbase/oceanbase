@@ -216,10 +216,11 @@ private:
       const uint64_t tenant_id,
       const ObLSID &ls_id,
       ObLSLocation &location);
-  int erase_location_(
+  int erase_location_safely_(
       const int64_t cluster_id,
       const uint64_t tenant_id,
       const ObLSID &ls_id);
+  int try_clear_dropped_tenant_caches_();
   int build_tenant_ls_info_hash_(ObTenantLsInfoHashMap &hash);
   int construct_rpc_dests_(common::ObIArray<common::ObAddr> &addrs);
   int detect_ls_leaders_(
@@ -235,6 +236,7 @@ private:
   static const int64_t RENEW_LS_LOCATION_INTERVAL_US = 5 * 1000 * 1000L; // 5s
   static const int64_t RENEW_LS_LOCATION_BY_RPC_INTERVAL_US = 1000 * 1000L; // 1s
   static const int64_t DUMP_CACHE_INTERVAL_US = 10 * 1000 * 1000L; // 10s
+  static const int64_t CLEAR_CACHE_INTERVAL = 60 * 1000 * 1000L; // 1m
 
   bool inited_;
   bool stopped_;
