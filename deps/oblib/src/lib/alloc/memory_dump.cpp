@@ -536,8 +536,9 @@ int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
       item->alloc_count_ += 1;
       item->alloc_bytes_ += object->alloc_bytes_;
     } else {
+      ObMallocSampleValue value(1, object->alloc_bytes_);
       ObSignalHandlerGuard guard(ob_signal_handler);
-      ret = malloc_sample_map.set_refactored(key, ObMallocSampleValue(1, object->alloc_bytes_));
+      ret = malloc_sample_map.set_refactored(key, value);
     }
   }
   return ret;
