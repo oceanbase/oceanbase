@@ -667,6 +667,7 @@ int ObTableQuerySyncP::destory_query_session(bool need_rollback_trans)
 
   ObQuerySyncMgr::get_instance().get_locker(query_session_id_).lock();
   if (OB_ISNULL(query_session_)) {
+    //overwrite ret
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null value", K(ret), KP_(query_session));
   } else if (OB_FAIL(ObQuerySyncMgr::get_instance().get_query_session_map()->erase_refactored(query_session_id_))) {

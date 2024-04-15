@@ -139,7 +139,7 @@ public:
   int get_tablet_by_rowkey(uint64_t table_id, const ObIArray<ObRowkey> &rowkeys,
                            ObIArray<ObTabletID> &tablet_ids);
   inline transaction::ObTxReadSnapshot &get_tx_snapshot() { return tx_snapshot_; }
-  inline bool had_do_response() const { return had_do_response_; }
+  inline bool is_async_response() const { return is_async_response_; }
   int get_table_id(const ObString &table_name, const uint64_t arg_table_id, uint64_t &real_table_id) const;
 protected:
   virtual int check_arg() = 0;
@@ -188,7 +188,7 @@ protected:
   // trans control
   sql::TransState trans_state_;
   transaction::ObTxDesc *trans_desc_;
-  bool had_do_response_; // asynchronous transactions return packet in advance
+  bool is_async_response_; // asynchronous transactions return packet in advance
   sql::TransState *trans_state_ptr_;
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;

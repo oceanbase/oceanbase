@@ -208,6 +208,7 @@ int ObTableRpcImpl::aggregate_tablet_by_server(const ObIArray<ObTabletLocation> 
   int tmp_ret = ret;
   FreeIdxArrayFunc free_idx_array_fn;
   if (OB_FAIL(server_tablet_map.foreach_refactored(free_idx_array_fn))) {
+    //overwrite ret
     LOG_WARN("failed to do foreach", K(ret));
   }
   ret = OB_SUCCESS == tmp_ret ? ret : tmp_ret;

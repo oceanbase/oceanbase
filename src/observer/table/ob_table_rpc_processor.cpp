@@ -249,7 +249,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      need_retry_in_queue_(false),
      retry_count_(0),
      trans_desc_(NULL),
-     had_do_response_(false),
+     is_async_response_(false),
      user_client_addr_(),
      sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
 {
@@ -261,7 +261,7 @@ void ObTableApiProcessorBase::reset_ctx()
 {
   trans_state_ptr_->reset();
   trans_desc_ = NULL;
-  had_do_response_ = false;
+  is_async_response_ = false;
 }
 
 int ObTableApiProcessorBase::get_ls_id(const ObTabletID &tablet_id, ObLSID &ls_id)
@@ -567,6 +567,7 @@ int ObTableApiProcessorBase::sync_end_trans_(bool is_rollback, transaction::ObTx
 
   int tmp_ret = ret;
   if (OB_FAIL(txs->release_tx(*trans_desc))) {
+    //overwrite ret
     LOG_ERROR("release tx failed", K(ret), KPC(trans_desc));
   }
   if (lock_handle != nullptr) {
@@ -606,7 +607,7 @@ int ObTableApiProcessorBase::async_commit_trans(rpc::ObRequest *req, int64_t tim
       callback.callback(ret);
     }
     // ignore the return code of end_trans
-    had_do_response_ = true; // don't send response in this worker thread
+    is_async_response_ = true; // don't send response in this worker thread
     // @note the req_ may be freed, req_processor can not be read any more.
     // The req_has_wokenup_ MUST set to be true, otherwise req_processor will invoke req_->set_process_start_end_diff, cause memory core
     // @see ObReqProcessor::run() req_->set_process_start_end_diff(ObTimeUtility::current_time());
@@ -931,7 +932,7 @@ int ObTableRpcProcessor<T>::process()
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
     if (OB_NOT_NULL(request_string_)) { // request_string_ has been generated if enable sql_audit
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_));
-    } else if (had_do_response()) { // req_ may be freed
+    } else if (is_async_response_) { // req_ may be freed
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_));
     } else {
       LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_);
@@ -965,7 +966,7 @@ int ObTableRpcProcessor<T>::response(int error_code)
 {
   int ret = OB_SUCCESS;
   // if it is waiting for retry in queue, the response can NOT be sent.
-  if (!need_retry_in_queue_ && !had_do_response()) {
+  if (!need_retry_in_queue_ && !is_async_response()) {
     const ObRpcPacket *rpc_pkt = &reinterpret_cast<const ObRpcPacket&>(this->req_->get_packet());
     if (ObTableRpcProcessorUtil::need_do_move_response(error_code, *rpc_pkt)) {
       // response rerouting packet
