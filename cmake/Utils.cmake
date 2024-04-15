@@ -157,5 +157,7 @@ function(ob_insert_nonlse_to_package_version INPUT_PACKAGE_VERSION OUTPUT_PACKAG
     string(SUBSTRING "${INPUT_PACKAGE_VERSION}" "${INSERT_INDEX}" "-1" FILE_NAME_SUFFIX)
     # 拼接最后的带有nonlse版本号
     set(${OUTPUT_PACKAGE_VERSION} "${FILE_NAME_PREFIX}nonlse.${FILE_NAME_SUFFIX}" PARENT_SCOPE)
+  else()
+    set(${OUTPUT_PACKAGE_VERSION} "${INPUT_PACKAGE_VERSION}.nonlse" PARENT_SCOPE)
   endif()
 endfunction()
