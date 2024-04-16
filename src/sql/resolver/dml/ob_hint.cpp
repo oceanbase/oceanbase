@@ -331,7 +331,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || !dops_.empty()
          || false != disable_transform_
          || false != disable_cost_based_transform_
-         || false != enable_append_
+         || false != has_append()
          || !opt_params_.empty()
          || !ob_ddl_schema_versions_.empty()
          || has_gather_opt_stat_hint()
@@ -363,7 +363,6 @@ void ObGlobalHint::reset()
   disable_cost_based_transform_ = false;
   opt_params_.reset();
   ob_ddl_schema_versions_.reuse();
-  enable_append_ = false;
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
   flashback_read_tx_uncommitted_ = false;
@@ -392,7 +391,6 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_opt_features_version_hint(other.opt_features_version_);
   disable_transform_ |= other.disable_transform_;
   disable_cost_based_transform_ |= other.disable_cost_based_transform_;
-  enable_append_ |= other.enable_append_;
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
@@ -562,9 +560,6 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && disable_cost_based_transform()) {
     PRINT_GLOBAL_HINT_STR("NO_COST_BASED_QUERY_TRANSFORMATION");
-  }
-  if (OB_SUCC(ret) && has_append()) { // APPEND
-    PRINT_GLOBAL_HINT_STR("APPEND");
   }
   if (OB_SUCC(ret) && UNSET_DYNAMIC_SAMPLING != dynamic_sampling_) { //DYNAMIC SAMPLING
     PRINT_GLOBAL_HINT_NUM("DYNAMIC_SAMPLING", dynamic_sampling_);

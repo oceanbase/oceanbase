@@ -276,7 +276,6 @@ struct ObGlobalHint {
                K_(opt_features_version),
                K_(disable_transform),
                K_(disable_cost_based_transform),
-               K_(enable_append),
                K_(opt_params),
                K_(ob_ddl_schema_versions),
                K_(osg_hint),
@@ -304,7 +303,6 @@ struct ObGlobalHint {
   uint64_t opt_features_version_;
   bool disable_transform_;
   bool disable_cost_based_transform_;
-  bool enable_append_;
   ObOptParamHint opt_params_;
   common::ObSArray<ObDDLSchemaVersionHint> ob_ddl_schema_versions_;
   ObOptimizerStatisticsGatheringHint osg_hint_;
