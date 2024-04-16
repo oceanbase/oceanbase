@@ -384,43 +384,15 @@ int ObP2PDatahubManager::P2PMsgSetCall::operator() (const common::hash::HashMapP
     ObP2PDatahubMsgBase *> &entry)
 {
   // entry.second == &dh_msg_
-  // 1. register into dm
-  // 2. do dh_msg_.regenerate()
+  // once the msg is set to p2p datahub map, other threads will access it, so
+  // the regenerate process must be done in the setting process.
   UNUSED(entry);
   int ret = OB_SUCCESS;
 
-#ifdef ERRSIM
-  if (OB_FAIL(OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS)) {
-    LOG_WARN("p2p msg reg dm failed by design", K(ret));
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    ret_ = ret;
-    return ret;
-  }
-#endif
-  if (OB_FAIL(ObDetectManagerUtils::p2p_datahub_register_check_item_into_dm(
-      dh_msg_.get_register_dm_info(), dh_key_, dh_msg_.get_dm_cb_node_seq_id()))) {
-    LOG_WARN("[DM] failed to register check item to dm", K(dh_msg_.get_register_dm_info()),
-        K(dh_key_), K(dh_msg_.get_dm_cb_node_seq_id()));
-  } else {
-    succ_reg_dm_ = true;
-    LOG_TRACE("[DM] rf register check item to dm", K(dh_msg_.get_register_dm_info()),
-        K(dh_key_), K(dh_msg_.get_dm_cb_node_seq_id()));
-    if (OB_FAIL(dh_msg_.regenerate())) {
-      LOG_WARN("failed to do regen_call", K(dh_key_));
-    } else if (FALSE_IT(dh_msg_.check_finish_receive())) {
-    }
-  }
-  if (OB_FAIL(ret)) {
-    (void) revert();
+  if (OB_FAIL(dh_msg_.regenerate())) {
+    LOG_WARN("failed to do regen_call", K(dh_key_));
+  } else if (FALSE_IT(dh_msg_.check_finish_receive())) {
   }
   ret_ = ret;
   return ret;
-}
-
-void ObP2PDatahubManager::P2PMsgSetCall::revert()
-{
-  if (succ_reg_dm_) {
-    (void) ObDetectManagerUtils::p2p_datahub_unregister_check_item_from_dm(
-        dh_msg_.get_register_dm_info().detectable_id_, dh_msg_.get_dm_cb_node_seq_id());
-  }
 }
