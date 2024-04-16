@@ -1515,6 +1515,7 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
     const ObRawExpr *const_expr = NULL;
     ObObj const_val;
     bool is_valid = false;
+    ObItemType ori_c_type = cmp_type;
     ObItemType c_type = cmp_type;
     bool is_physical_rowid = false;
     uint64_t table_id = common::OB_INVALID_ID;
@@ -1523,14 +1524,28 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
     const ObRawExpr *calc_urowid_expr = NULL;
     if (OB_UNLIKELY(r_expr->has_flag(IS_ROWID) && l_expr->is_const_expr())) {
       const_expr = l_expr;
-      c_type = (T_OP_LE == cmp_type ? T_OP_GE : (T_OP_GE == cmp_type ? T_OP_LE :
+      ori_c_type = (T_OP_LE == cmp_type ? T_OP_GE : (T_OP_GE == cmp_type ? T_OP_LE :
                                                  (T_OP_LT == cmp_type ? T_OP_GT : (T_OP_GT == cmp_type ? T_OP_LT : cmp_type))));
       calc_urowid_expr = r_expr;
     } else if (l_expr->has_flag(IS_ROWID) && r_expr->is_const_expr()) {
       const_expr = r_expr;
-      c_type = cmp_type;
+      ori_c_type = cmp_type;
       calc_urowid_expr = l_expr;
     }
+    switch (ori_c_type) {
+      case T_OP_LT:
+      case T_OP_LE:
+        c_type = T_OP_LE;
+        break;
+      case T_OP_GT:
+      case T_OP_GE:
+        c_type = T_OP_GE;
+        break;
+      default:
+        c_type = ori_c_type;
+        break;
+    }
+
     if (!const_expr->is_immutable_const_expr()) {
       query_range_ctx_->need_final_extract_ = true;
     }
@@ -1620,7 +1635,8 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
                 }
               }
               if (OB_FAIL(ret) || is_inconsistent_rowid) {
-              } else if (OB_FAIL(get_normal_cmp_keypart(c_type, tmp_val, *tmp_key_part))) {
+              } else if (OB_FAIL(get_normal_cmp_keypart(pk_column_items.count() - 1 == i ? ori_c_type : c_type,
+                                                         tmp_val, *tmp_key_part))) {
                 LOG_WARN("get normal cmp keypart failed", K(ret));
               }
             }
@@ -1631,6 +1647,16 @@ int ObQueryRange::get_rowid_key_part(const ObRawExpr *l_expr,
           } else if (pk_column_items.count() - 1 == i &&
                     OB_FAIL(and_range_graph(key_part_list, out_key_part))) {
             LOG_WARN("and basic query key part failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (out_key_part != NULL &&
+              !out_key_part->is_always_true() &&
+              !out_key_part->is_always_false() &&
+              pk_column_items.count() > 1) {
+            if (!contain_row_ && T_OP_EQ != cmp_type) {
+              contain_row_ = true;
+            }
           }
         }
       }
