@@ -891,6 +891,9 @@ constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
 constexpr int OB_ERR_NON_STRING_NOT_SUPPORT = -5517;
 constexpr int OB_ERR_DEPRECATED_SYNTAX_NO_REP = -5518;
+constexpr int OB_ERR_CAST_ARRAY_SUPPORT = -5519;
+constexpr int OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX = -5520;
+constexpr int OB_ERR_JSON_CONTAINER_CAST_SCALAR = -5521;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -2939,6 +2942,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_DEPRECATED_SYNTAX_NO_REP__USER_ERROR_MSG "%s is deprecated and will be removed in a future release"
+#define OB_ERR_CAST_ARRAY_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support %s"
+#define OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX__USER_ERROR_MSG "Invalid JSON value for CAST for functional index."
+#define OB_ERR_JSON_CONTAINER_CAST_SCALAR__USER_ERROR_MSG "Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_SESSION_VAR_CHANGED__USER_ERROR_MSG "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
@@ -5187,6 +5193,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5517, This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_DEPRECATED_SYNTAX_NO_REP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5518, %s is deprecated and will be removed in a future release"
+#define OB_ERR_CAST_ARRAY_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5519, This version of MySQL doesn't yet support %s"
+#define OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5520, Invalid JSON value for CAST for functional index."
+#define OB_ERR_JSON_CONTAINER_CAST_SCALAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5521, Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_SESSION_VAR_CHANGED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5540, System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
@@ -6372,7 +6381,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2244];
+extern int g_all_ob_errnos[2247];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
