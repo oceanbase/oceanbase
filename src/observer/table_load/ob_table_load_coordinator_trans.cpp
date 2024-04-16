@@ -137,8 +137,6 @@ int ObTableLoadCoordinatorTrans::get_bucket_writer_for_flush(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinatorTrans not init", KR(ret), KP(this));
-  } else if (OB_FAIL(check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-    LOG_WARN("fail to check trans status", KR(ret));
   } else {
     obsys::ObRLockGuard guard(trans_ctx_->rwlock_);
     if (OB_ISNULL(trans_bucket_writer_)) {
