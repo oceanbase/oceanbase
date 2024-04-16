@@ -1973,6 +1973,10 @@ const int64_t OB_MAX_CONTEXT_VALUE_LENGTH = 4000;
 const int64_t OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH = 65;
 const int64_t OB_MAX_CONTEXT_CLIENT_IDENTIFIER_LENGTH_IN_SESSION = 64;
 
+// Resource limit calculator
+const int64_t MAX_RESOURCE_NAME_LEN = 128;
+const int64_t MAX_CONSTRAINT_NAME_LEN = 128;
+
 // log row value options
 const char *const OB_LOG_ROW_VALUE_PARTIAL_LOB = "partial_lob";
 const char *const OB_LOG_ROW_VALUE_PARTIAL_JSON = "partial_json";

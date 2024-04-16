@@ -8864,6 +8864,58 @@ TP_MATCH	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TRACEPOINT_INFO limit 1);
 cnt
 1
+desc oceanbase.GV$OB_TENANT_RESOURCE_LIMIT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+ZONE	varchar(128)	NO		NULL	
+RESOURCE_NAME	varchar(128)	NO		NULL	
+CURRENT_UTILIZATION	bigint(20)	NO		NULL	
+MAX_UTILIZATION	bigint(20)	NO		NULL	
+RESERVED_VALUE	bigint(20)	NO		NULL	
+LIMIT_VALUE	bigint(20)	NO		NULL	
+EFFECTIVE_LIMIT_TYPE	varchar(128)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_RESOURCE_LIMIT limit 1);
+cnt
+1
+desc oceanbase.V$OB_TENANT_RESOURCE_LIMIT;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+ZONE	varchar(128)	NO			
+RESOURCE_NAME	varchar(128)	NO			
+CURRENT_UTILIZATION	bigint(20)	NO			
+MAX_UTILIZATION	bigint(20)	NO			
+RESERVED_VALUE	bigint(20)	NO			
+LIMIT_VALUE	bigint(20)	NO			
+EFFECTIVE_LIMIT_TYPE	varchar(128)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT limit 1);
+cnt
+1
+desc oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO		NULL	
+RESOURCE_NAME	varchar(128)	NO		NULL	
+LIMIT_TYPE	varchar(128)	NO		NULL	
+LIMIT_VALUE	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
+cnt
+1
+desc oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO			
+SVR_PORT	bigint(20)	NO			
+TENANT_ID	bigint(20)	NO			
+RESOURCE_NAME	varchar(128)	NO			
+LIMIT_TYPE	varchar(128)	NO			
+LIMIT_VALUE	bigint(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
+cnt
+1
 desc oceanbase.GV$OB_NIC_INFO;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

@@ -6734,6 +6734,33 @@ int ObGetLSSyncScnRes::assign(const ObGetLSSyncScnRes &other)
   }
   return ret;
 }
+OB_SERIALIZE_MEMBER(ObGetTenantResArg, tenant_id_);
+OB_SERIALIZE_MEMBER(ObTenantLogicalRes, server_, arg_);
+int ObTenantLogicalRes::init(const ObAddr &server, const ObUserResourceCalculateArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("server is invalid", KR(ret), K(server));
+  } else if (OB_FAIL(arg_.assign(arg))) {
+    LOG_WARN("failed to assign arg", KR(ret), K(arg));
+  } else {
+    server_ = server;
+  }
+  return ret;
+}
+int ObTenantLogicalRes::assign(const ObTenantLogicalRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(arg_.assign(other.arg_))) {
+      LOG_WARN("failed to assign", KR(ret), K(other));
+    } else {
+      server_ = other.server_;
+    }
+  }
+  return ret;
+}
 
 OB_SERIALIZE_MEMBER(ObGetLSReplayedScnArg, tenant_id_, ls_id_, all_replica_);
 

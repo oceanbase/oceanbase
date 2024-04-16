@@ -14155,8 +14155,55 @@ def_table_schema(
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
 # 12480: __all_virtual_service
-# 12481: __all_virtual_tenant_resource_limit
-# 12482: __all_virtual_tenant_resource_limit_detail
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name     = '__all_virtual_tenant_resource_limit',
+  table_id       = '12481',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = True,
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('zone', 'varchar:MAX_ZONE_LENGTH'),
+  ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
+  ('current_utilization', 'bigint'),
+  ('max_utilization', 'bigint'),
+  ('reserved_value', 'bigint'),
+  ('limit_value', 'bigint'),
+  ('effective_limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name     = '__all_virtual_tenant_resource_limit_detail',
+  table_id       = '12482',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = True,
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
+  ('limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN'),
+  ('limit_value', 'bigint'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 12483: __all_virtual_group_io_stat
 # 12484: __all_virtual_res_mgr_consumer_group
 # 12485: __all_virtual_storage_io_usage
@@ -14649,8 +14696,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445'
 # 15447: __all_user_proxy_role_info
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
 # 15449: __all_virtual_service
-# 15450: __all_virtual_tenant_resource_limit
-# 15451: __all_virtual_tenant_resource_limit_detail
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
+
 # 15452: __all_virtual_group_io_stat
 # 15453: __all_storage_io_usage
 # 15454: __all_virtual_storage_io_usage
@@ -33813,10 +33861,98 @@ def_table_schema(
 # 21547: CDB_OB_RSRC_DIRECTIVES
 # 21548: DBA_OB_SERVICES
 # 21549: CDB_OB_SERVICES
-# 21550: GV$OB_TENANT_RESOURCE_LIMIT
-# 21551: V$OB_TENANT_RESOURCE_LIMIT
-# 21552: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
-# 21553: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT',
+  table_id        = '21550',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+     svr_ip AS SVR_IP,
+     svr_port AS SVR_PORT,
+     tenant_id AS TENANT_ID,
+     zone AS ZONE,
+     resource_name AS RESOURCE_NAME,
+     current_utilization AS CURRENT_UTILIZATION,
+     max_utilization AS MAX_UTILIZATION,
+     reserved_value AS RESERVED_VALUE,
+     limit_value AS LIMIT_VALUE,
+     effective_limit_type AS EFFECTIVE_LIMIT_TYPE
+FROM
+    oceanbase.__all_virtual_tenant_resource_limit
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT',
+  table_id        = '21551',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,
+    RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE
+FROM
+    oceanbase.GV$OB_TENANT_RESOURCE_LIMIT
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  table_id        = '21552',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+     svr_ip AS SVR_IP,
+     svr_port AS SVR_PORT,
+     tenant_id AS TENANT_ID,
+     resource_name AS RESOURCE_NAME,
+     limit_type AS LIMIT_TYPE,
+     limit_value AS LIMIT_VALUE
+FROM
+    oceanbase.__all_virtual_tenant_resource_limit_detail
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  table_id        = '21553',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE
+FROM
+    oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
 # 21554: INNODB_LOCK_WAITS
 # 21555: INNODB_LOCKS
 # 21556: INNODB_TRX
@@ -33886,6 +34022,7 @@ def_table_schema(
 )
 
 #
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -61236,10 +61373,104 @@ def_table_schema(
 """.replace("\n", " ")
 )
 # 28223: DBA_OB_RSRC_DIRECTIVES
-# 28224: GV$OB_TENANT_RESOURCE_LIMIT
-# 28225: V$OB_TENANT_RESOURCE_LIMIT
-# 28226: GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
-# 28227: V$OB_TENANT_RESOURCE_LIMIT_DETAIL
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28224',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    ZONE,
+    RESOURCE_NAME,
+    CURRENT_UTILIZATION,
+    MAX_UTILIZATION,
+    RESERVED_VALUE,
+    LIMIT_VALUE,
+    EFFECTIVE_LIMIT_TYPE
+FROM
+    SYS.ALL_VIRTUAL_TENANT_RESOURCE_LIMIT
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28225',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,
+    RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE
+FROM
+    SYS.GV$OB_TENANT_RESOURCE_LIMIT
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28226',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    RESOURCE_NAME,
+    LIMIT_TYPE,
+    LIMIT_VALUE
+FROM
+   SYS.ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28227',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE
+FROM
+    SYS.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
 # 28228: V$OB_GROUP_IO_STAT
 # 28229: GV$OB_GROUP_IO_STAT
 

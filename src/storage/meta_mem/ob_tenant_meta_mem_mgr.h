@@ -22,6 +22,7 @@
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/queue/ob_link_queue.h"
 #include "share/ob_ls_id.h"
+#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
@@ -170,6 +171,9 @@ public:
   }
 
 private:
+  static const int64_t DEFAULT_TABLET_CNT_PER_GB = 20000;
+
+private:
   explicit ObTenantMetaMemMgr(const uint64_t tenant_id);
 public:
   ~ObTenantMetaMemMgr();
@@ -287,11 +291,26 @@ public:
   int has_meta_wait_gc(bool &is_wait);
   int dump_tablet_info();
   int release_memtable_and_mds_table_for_ls_offline(const ObTabletMapKey &key);
+  OB_INLINE share::ObIResourceLimitCalculatorHandler * get_t3m_limit_calculator() { return &t3m_limit_calculator_; }
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited), "tablet count", tablet_map_.count());
 
   int inc_ref_in_leak_checker(const int32_t index);
   int dec_ref_in_leak_checker(const int32_t index);
+public:
+  class ObT3MResourceLimitCalculatorHandler final : public share::ObIResourceLimitCalculatorHandler
+  {
+  public:
+    explicit ObT3MResourceLimitCalculatorHandler(ObTenantMetaMemMgr &t3m) : t3m_(t3m) {}
+    int get_current_info(share::ObResourceInfo &info) override;
+    int get_resource_constraint_value(share::ObResoureConstraintValue &constraint_value) override;
+    int cal_min_phy_resource_needed(share::ObMinPhyResourceResult &min_phy_res) override;
+    int cal_min_phy_resource_needed(const int64_t num, share::ObMinPhyResourceResult &min_phy_res) override;
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObT3MResourceLimitCalculatorHandler);
+  private:
+    ObTenantMetaMemMgr &t3m_;
+  };
 private:
   int fill_buffer_infos(
       const ObTabletPoolType pool_type,
@@ -528,6 +547,7 @@ private:
 
   common::ObConcurrentFIFOAllocator meta_cache_io_allocator_;
   int64_t last_access_tenant_config_ts_;
+  ObT3MResourceLimitCalculatorHandler t3m_limit_calculator_;
 
   bool is_tablet_leak_checker_enabled_;
   bool is_inited_;

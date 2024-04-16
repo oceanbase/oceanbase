@@ -42,6 +42,8 @@ class ObTabletPointerMap : public ObResourceMap<ObTabletMapKey, ObTabletPointer>
 {
 public:
   typedef ObResourceMap<ObTabletMapKey, ObTabletPointer> ResourceMap;
+  ObTabletPointerMap();
+  int set(const ObTabletMapKey &key, ObTabletPointer &ptr);  // overwrite
   int erase(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
   int exist(const ObTabletMapKey &key, bool &is_exist);
   int get_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard);
@@ -77,6 +79,7 @@ public:
   template <typename Operator> int for_each_value_store(Operator &op);
   int wash_meta_obj(const ObTabletMapKey &key, ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
   int64_t count() const { return ResourceMap::map_.size(); }
+  OB_INLINE int64_t max_count() const { return ATOMIC_LOAD(&max_count_); }
 
 private:
   // used when tablet object and memory is hold by external allocator
@@ -108,6 +111,9 @@ private:
 
 public:
   using ObResourceMap<ObTabletMapKey, ObTabletPointer>::ObResourceMap;
+
+private:
+  int64_t max_count_;
 };
 
 // ATTENTION: operator should be read-only operations

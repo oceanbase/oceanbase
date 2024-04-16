@@ -224,6 +224,8 @@
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_tenant_show_restore_preview.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
 #include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
@@ -2628,6 +2630,30 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualCgroupConfig *all_virtual_cgroup_config = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCgroupConfig, all_virtual_cgroup_config))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cgroup_config);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID: {
+            ObResourceLimitTable *all_virtual_resource_limit = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitTable,
+                                          all_virtual_resource_limit))) {
+              vt_iter = static_cast<ObResourceLimitTable *>(all_virtual_resource_limit);
+              if (OB_FAIL(all_virtual_resource_limit->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID: {
+            ObResourceLimitDetailTable *all_virtual_resource_limit_detail = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitDetailTable,
+                                          all_virtual_resource_limit_detail))) {
+              vt_iter = static_cast<ObResourceLimitDetailTable *>(all_virtual_resource_limit_detail);
+              if (OB_FAIL(all_virtual_resource_limit_detail->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
             }
             break;
           }

@@ -70,6 +70,7 @@
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "pl/sys_package/ob_dbms_mview_stats_mysql.h"
 #include "pl/sys_package/ob_pl_dbms_trusted_certificate_manager.h"
+#include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -757,6 +758,13 @@
   INTERFACE_DEF(INTERFACE_DBMS_DELETE_TRUSTED_CERTIFICATE, "DELETE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::delete_trusted_certificate))
   INTERFACE_DEF(INTERFACE_DBMS_UPDATE_TRUSTED_CERTIFICATE, "UPDATE_TRUSTED_CERTIFICATE", (ObPlDBMSTrustedCertificateManager::update_trusted_certificate))
   // end of end of dbms_workload_repository
+
+  // start of dbms_ob_limit_calculator
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_LOGIC_RES, "PHY_RES_CALCULATE_BY_LOGIC_RES", (ObDBMSLimitCalculator::phy_res_calculate_by_logic_res))
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_UNIT, "PHY_RES_CALCULATE_BY_UNIT", (ObDBMSLimitCalculator::phy_res_calculate_by_unit))
+  INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
+  // end of dbms_ob_limit_calculator
+
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif
 
