@@ -80,6 +80,7 @@ public:
     sort_cmp_funcs_.set_allocator(alloc);
   }
   int64_t to_string(char* buf, const int64_t buf_len) const;
+  int assign(const ObAggrInfo &rhs);
 
   ObExpr* expr_;
   ObExprOperatorType real_aggr_type_;  // used for wf

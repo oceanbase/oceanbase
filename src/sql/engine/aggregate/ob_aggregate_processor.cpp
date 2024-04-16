@@ -118,6 +118,34 @@ int64_t ObAggrInfo::to_string(char* buf, const int64_t buf_len) const
   return pos;
 }
 
+int ObAggrInfo::assign(const ObAggrInfo &rhs)
+{
+  int ret = OB_SUCCESS;
+  expr_ = rhs.expr_;
+  real_aggr_type_ = rhs.real_aggr_type_;
+  has_distinct_ = rhs.has_distinct_;
+  is_implicit_first_aggr_ = rhs.is_implicit_first_aggr_;
+  has_order_by_ = rhs.has_order_by_;
+
+  group_concat_param_count_ = rhs.group_concat_param_count_;
+
+  separator_expr_ = rhs.separator_expr_;
+
+  linear_inter_expr_ = rhs.linear_inter_expr_;
+  if (OB_FAIL(construct_assign(param_exprs_, rhs.param_exprs_))) {
+    LOG_WARN("fail to assign param exprs", K(ret));
+  } else if (OB_FAIL(construct_assign(distinct_collations_, rhs.distinct_collations_))) {
+    LOG_WARN("fail to assign distinct_collations_", K(ret));
+  } else if (OB_FAIL(construct_assign(distinct_cmp_funcs_, rhs.distinct_cmp_funcs_))) {
+    LOG_WARN("fail to assign distinct_cmp_funcs_", K(ret));
+  } else if (OB_FAIL(construct_assign(sort_collations_, rhs.sort_collations_))) {
+    LOG_WARN("fail to assign sort_collations_", K(ret));
+  } else if (OB_FAIL(construct_assign(sort_cmp_funcs_, rhs.sort_cmp_funcs_))) {
+    LOG_WARN("fail to assign sort_cmp_funcs_", K(ret));
+  }
+  return ret;
+}
+
 ObAggregateProcessor::AggrCell::~AggrCell()
 {
   destroy();
