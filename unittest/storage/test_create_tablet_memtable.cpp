@@ -102,7 +102,7 @@ void TestTabletCreateMemtable::SetUp()
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObStorageLogger *slogger = nullptr;
-  SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
   SLOGGERMGR.register_tenant(1);
   ret = SLOGGERMGR.get_tenant_storage_logger(1, slogger);
   ASSERT_EQ(OB_SUCCESS, ret);

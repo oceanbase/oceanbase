@@ -86,11 +86,12 @@ TEST_F(TestStorageLoggerManager, test_manager_basic)
   int ret = OB_SUCCESS;
 
   // test invalid init
-  ret = SLOGGERMGR.init(nullptr, MAX_FILE_SIZE, log_file_spec_);
+  ret = SLOGGERMGR.init(nullptr, nullptr, MAX_FILE_SIZE, log_file_spec_);
   ASSERT_NE(OB_SUCCESS, ret);
   // test normal init
-  ret = SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  ret = SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
   ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(SLOGGERMGR.need_reserved_);
   ASSERT_EQ(MAX_CONCURRENT_ITEM_CNT, SLOGGERMGR.log_buffers_.capacity());
   ASSERT_EQ(MAX_CONCURRENT_ITEM_CNT, SLOGGERMGR.slog_items_.capacity());
 
@@ -131,7 +132,7 @@ TEST_F(TestStorageLoggerManager, test_slogger_basic)
   cursor.log_id_ = 5;
   cursor.offset_ = 500;
 
-  SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
 
   ObStorageLogger *tmp_slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, 500));
@@ -184,7 +185,7 @@ TEST_F (TestStorageLoggerManager, test_build_item)
   ObTenantBase tenant_base(5);
   ObTenantEnv::set_tenant(&tenant_base);
   ASSERT_EQ(OB_SUCCESS, tenant_base.init());
-  SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
 
   ObStorageLogger *tmp_slogger = OB_NEW(ObStorageLogger, ObModIds::TEST);
   ASSERT_EQ(OB_SUCCESS, tmp_slogger->init(SLOGGERMGR, 500));

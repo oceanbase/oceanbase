@@ -156,7 +156,7 @@ int ObAdminExecutor::init_slogger_mgr()
 
   if (OB_FAIL(databuff_printf(slog_dir_, OB_MAX_FILE_NAME_LENGTH, "%s/slog/", data_dir_))) {
     LOG_WARN("failed to gen slog dir", K(ret));
-  } else if (OB_FAIL(SLOGGERMGR.init(slog_dir_, MAX_FILE_SIZE, storage_env_.slog_file_spec_))) {
+  } else if (OB_FAIL(SLOGGERMGR.init(slog_dir_, sstable_dir_, MAX_FILE_SIZE, storage_env_.slog_file_spec_))) {
     STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
   }
 
