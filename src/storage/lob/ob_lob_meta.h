@@ -44,16 +44,16 @@ public:
       ObLobAccessParam &param,
       const ObLobId &lob_id,
       const ObString &seq_id,
-      const uint32_t &char_len,
       const uint32_t &byte_len,
+      const uint32_t &char_len,
       const ObString &lob_data,
       ObLobMetaInfo &info)
   {
     int ret = OB_SUCCESS;
     info.lob_id_ = lob_id;
     info.seq_id_ = seq_id;
-    info.byte_len_ = char_len;
-    info.char_len_ = byte_len;
+    info.byte_len_ = byte_len;
+    info.char_len_ = char_len;
     info.piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
     info.lob_data_ = lob_data;
     return ret;

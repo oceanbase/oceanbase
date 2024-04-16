@@ -827,6 +827,10 @@ static int read_all(
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS;
   }
+  if (OB_SUCC(ret) && param.byte_size_ != output_data.length()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read size not macth", K(ret), "read_length", output_data.length(), "read_length", param.byte_size_, K(param), K(output_data));
+  }
   return ret;
 }
 
@@ -3442,9 +3446,6 @@ int ObLobManager::replace_process_meta_info(ObLobAccessParam& param,
     } else {
       ret = OB_SUCCESS;
     }
-  } else if (temp_read_buf.length() == 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get empty data", K(ret));
   }
 
   if (OB_FAIL(ret)) {
