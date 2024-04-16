@@ -414,6 +414,9 @@ int ObTableQueryAsyncP::init_tb_ctx(ObTableCtx &ctx)
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(ctx.init_scan(query_session_->get_query(), is_weak_read, arg_.table_id_))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
+  } else if (!ctx.is_global_index_scan() && arg_.table_id_ != ctx.get_ref_table_id()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(ctx.get_ref_table_id()));
   } else if (OB_FAIL(ctx.cons_column_items_for_cg())) {
     LOG_WARN("fail to construct column items", K(ret));
   } else if (OB_FAIL(ctx.generate_table_schema_for_cg())) {

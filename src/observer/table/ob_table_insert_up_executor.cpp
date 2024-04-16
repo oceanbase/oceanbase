@@ -429,14 +429,23 @@ int ObTableApiInsertUpExecutor::do_update(const ObConflictValue &constraint_valu
     if (NULL != constraint_value.baseline_datum_row_ &&
         NULL != constraint_value.current_datum_row_) {
       // base_line 和 curr_row 都存在
-      OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
-                             get_primary_table_upd_old_row(),
-                             eval_ctx_));
-      OZ(delete_upd_old_row_to_das());
-      OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                          insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_));
-      clear_evaluated_flag();
-      OZ(insert_upd_new_row_to_das());
+      if (OB_FAIL(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                                      get_primary_table_upd_old_row(),
+                                      eval_ctx_))) {
+        LOG_WARN("fail to load row to old row exprs", K(ret), KPC(constraint_value.baseline_datum_row_));
+      } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_,
+                                          insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
+        LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
+      } else {
+        clear_evaluated_flag();
+        for (int i = 0; i < insert_up_rtdefs_.count() && OB_SUCC(ret); i++) {
+          const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdefs().at(i)->upd_ctdef_;
+          ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;
+          if (OB_FAIL(ObTableApiModifyExecutor::update_row_to_das(upd_ctdef, upd_rtdef, dml_rtctx_))) {
+            LOG_WARN("fail to update row", K(ret));
+          }
+        }
+      }
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
       OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
