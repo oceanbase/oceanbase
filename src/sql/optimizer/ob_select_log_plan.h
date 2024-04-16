@@ -473,7 +473,7 @@ private:
    * @return
    */
   //    int process_subplan();
-  int candi_allocate_subplan_filter_for_select_item(common::ObIArray<OrderItem> &order_items);
+  int candi_allocate_subplan_filter_for_select_item();
 
   struct WinFuncOpHelper
   {
@@ -929,6 +929,7 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
   int check_external_table_scan(ObSelectStmt *stmt, bool &has_external_table);
 
   int contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain);
+  int candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items);
 
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };
