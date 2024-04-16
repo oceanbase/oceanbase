@@ -2650,6 +2650,101 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
   return len;
 }
 
+bool ObExchangePartitionArg::is_valid() const
+{
+  return OB_INVALID_ID != session_id_ && OB_INVALID_ID != tenant_id_ && PARTITION_LEVEL_ZERO != exchange_partition_level_ && PARTITION_LEVEL_MAX != exchange_partition_level_ && OB_INVALID_ID != base_table_id_
+         && !base_table_part_name_.empty() && OB_INVALID_ID != inc_table_id_;
+}
+
+int ObExchangePartitionArg::assign(const ObExchangePartitionArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    //do nothing
+  } else if (OB_FAIL(ObDDLArg::assign(other))) {
+    LOG_WARN("assign failed", K(ret));
+  } else {
+    session_id_ = other.session_id_;
+    tenant_id_ = other.tenant_id_;
+    exchange_partition_level_ = other.exchange_partition_level_;
+    base_table_id_ = other.base_table_id_;
+    base_table_part_name_ = other.base_table_part_name_;
+    inc_table_id_ = other.inc_table_id_;
+    including_indexes_ = other.including_indexes_;
+    without_validation_ = other.without_validation_;
+    update_global_indexes_ = other.update_global_indexes_;
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObExchangePartitionArg)
+{
+  int ret = OB_SUCCESS;
+  BASE_SER((, ObDDLArg));
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              session_id_,
+              tenant_id_,
+              exchange_partition_level_,
+              base_table_id_,
+              base_table_part_name_,
+              inc_table_id_,
+              including_indexes_,
+              without_validation_,
+              update_global_indexes_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObExchangePartitionArg)
+{
+  int ret = OB_SUCCESS;
+  BASE_DESER((, ObDDLArg));
+  LST_DO_CODE(OB_UNIS_DECODE,
+              session_id_,
+              tenant_id_,
+              exchange_partition_level_,
+              base_table_id_,
+              base_table_part_name_,
+              inc_table_id_,
+              including_indexes_,
+              without_validation_,
+              update_global_indexes_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObExchangePartitionArg)
+{
+  int64_t len = ObDDLArg::get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              session_id_,
+              tenant_id_,
+              exchange_partition_level_,
+              base_table_id_,
+              base_table_part_name_,
+              inc_table_id_,
+              including_indexes_,
+              without_validation_,
+              update_global_indexes_);
+  return len;
+}
+
+DEF_TO_STRING(ObExchangePartitionArg)
+{
+  int64_t pos = 0;
+  pos += ObDDLArg::to_string(buf + pos, buf_len - pos);
+  J_OBJ_START();
+  J_KV(K_(session_id),
+       K_(tenant_id),
+       K_(exchange_partition_level),
+       K_(base_table_id),
+       K_(base_table_part_name),
+       K_(inc_table_id),
+       K_(including_indexes),
+       K_(without_validation),
+       K_(update_global_indexes));
+  J_OBJ_END();
+  return pos;
+}
+
 bool ObTruncateTableArg::is_valid() const
 {
   return OB_INVALID_ID != tenant_id_ && !database_name_.empty()

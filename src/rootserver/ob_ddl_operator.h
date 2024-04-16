@@ -1023,6 +1023,32 @@ public:
                         const share::schema::ObTableSchema *table);
   int try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *synonym_info,
                                    common::ObMySQLTransaction &trans);
+  int exchange_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                share::schema::ObTableSchema &inc_table_schema,
+                                share::schema::ObTableSchema &del_table_schema,
+                                common::ObMySQLTransaction &trans);
+  int exchange_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
+                                share::schema::ObTableSchema &inc_table_schema,
+                                share::schema::ObTableSchema &del_table_schema,
+                                common::ObMySQLTransaction &trans);
+  int get_target_auto_inc_sequence_value(const uint64_t tenant_id,
+                                         const uint64_t table_id,
+                                         const uint64_t column_id,
+                                         uint64_t &sequence_value,
+                                         common::ObMySQLTransaction &trans);
+  int set_target_auto_inc_sync_value(const uint64_t tenant_id,
+                                     const uint64_t table_id,
+                                     const uint64_t column_id,
+                                     const uint64_t new_sequence_value,
+                                     const uint64_t new_sync_value,
+                                     common::ObMySQLTransaction &trans);
+  int get_target_sequence_sync_value(const uint64_t tenant_id,
+                                     const uint64_t sequence_id,
+                                     common::ObMySQLTransaction &trans,
+                                     ObIAllocator &allocator,
+                                     common::number::ObNumber &next_value);
+  int alter_target_sequence_start_with(const ObSequenceSchema &sequence_schema,
+                                       common::ObMySQLTransaction &trans);
 private:
   virtual int set_need_flush_ora(
       share::schema::ObSchemaGetterGuard &schema_guard,

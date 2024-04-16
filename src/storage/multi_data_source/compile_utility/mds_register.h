@@ -18,6 +18,7 @@
 // inlcude those classes definations header file in below MACRO BLOCK
 // CAUTION: MAKE SURE your header file is as CLEAN as possible to avoid recursive dependencies!
 #if defined (NEED_MDS_REGISTER_DEFINE) && !defined (NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION)
+  #include "src/storage/ddl/ob_ddl_change_tablet_to_table_helper.h"
   #include "src/storage/multi_data_source/compile_utility/mds_dummy_key.h"
   #include "src/storage/multi_data_source/mds_ctx.h"
   #include "src/storage/multi_data_source/test/example_user_data_define.h"
@@ -118,7 +119,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           28,\
                                           TRANSFER_DEST_PREPARE)
   // UNBIND_LOB_TABLET: ID = 29 for drop lob tablet when drop column instant.
-  // CHANGE_TABLET_TO_TABLE_MDS: ID = 30 for exchange tablet to table bind relationship after exchanging partition.
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObChangeTabletToTableHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          30,\
+                                          CHANGE_TABLET_TO_TABLE_MDS)
   // TABLET_SPLIT: ID = 31 for auto_split.
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif

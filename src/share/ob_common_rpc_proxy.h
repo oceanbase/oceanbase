@@ -95,6 +95,7 @@ public:
   RPC_S(PRD execute_ddl_task, obrpc::OB_EXECUTE_DDL_TASK, (ObAlterTableArg), common::ObSArray<uint64_t>);
   RPC_S(PRD maintain_obj_dependency_info, obrpc::OB_MAINTAIN_OBJ_DEPENDENCY_INFO, (ObDependencyObjDDLArg));
   RPC_S(PRD mview_complete_refresh, obrpc::OB_MVIEW_COMPLETE_REFRESH, (obrpc::ObMViewCompleteRefreshArg), obrpc::ObMViewCompleteRefreshRes);
+  RPC_S(PRD exchange_partition, obrpc::OB_EXCHANGE_PARTITION, (ObExchangePartitionArg), ObAlterTableRes);
 
   //----Definitions for managing privileges----
   RPC_S(PRD create_user, obrpc::OB_CREATE_USER, (ObCreateUserArg), common::ObSArray<int64_t>);

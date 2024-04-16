@@ -8938,6 +8938,7 @@ public:
   int get_column_id(const int64_t idx, uint64_t &column_id) const;
   int remove_column_id(const uint64_t column_id);
   int get_column_group_type_name(ObString &readable_cg_name) const;
+  bool has_same_column_group_attributes_for_part_exchange(const ObColumnGroupSchema &other) const;
 
   VIRTUAL_TO_STRING_KV(K_(column_group_id),
                        K_(column_group_name),

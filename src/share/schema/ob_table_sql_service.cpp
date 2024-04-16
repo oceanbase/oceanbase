@@ -713,6 +713,61 @@ int ObTableSqlService::truncate_subpart_info(
   return ret;
 }
 
+int ObTableSqlService::exchange_part_info(
+    common::ObISQLClient &sql_client,
+    const ObTableSchema &ori_table,
+    ObTableSchema &inc_table,
+    ObTableSchema &del_table,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  bool is_truncate_table = false;
+  bool is_truncate_partition = true;
+  if (OB_FAIL(check_ddl_allowed(ori_table))) {
+    LOG_WARN("check ddl allowd failed", K(ret), K(ori_table));
+  } else if (OB_FAIL(drop_inc_part_info(sql_client,
+                                        ori_table,
+                                        del_table,
+                                        schema_version,
+                                        is_truncate_partition,
+                                        is_truncate_table))) {
+    LOG_WARN("delete inc part info failed", K(ret));
+  } else if (OB_FAIL(add_inc_partition_info(sql_client,
+                                            ori_table,
+                                            inc_table,
+                                            schema_version,
+                                            true/*is_truncate_table*/,
+                                            false/*is_subpart*/))) {
+    LOG_WARN("add inc part info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObTableSqlService::exchange_subpart_info(
+    common::ObISQLClient &sql_client,
+    const ObTableSchema &ori_table,
+    ObTableSchema &inc_table,
+    ObTableSchema &del_table,
+    const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  const ObPartition *part = NULL;
+  if (OB_FAIL(check_ddl_allowed(ori_table))) {
+    LOG_WARN("check ddl allowd failed", K(ret), K(ori_table));
+  } else if (OB_FAIL(drop_inc_subpart_info(sql_client, ori_table, del_table,
+                                           schema_version))) {
+    LOG_WARN("failed to drop partition", K(ret), K(del_table));
+  } else if (OB_FAIL(add_inc_partition_info(sql_client,
+                                            ori_table,
+                                            inc_table,
+                                            schema_version,
+                                            true/*is_truncate_table*/,
+                                            true/*is_subpart*/))) {
+    LOG_WARN("add partition info failed", K(ret));
+  }
+  return ret;
+}
+
 int ObTableSqlService::drop_table(const ObTableSchema &table_schema,
                                   const int64_t new_schema_version,
                                   ObISQLClient &sql_client,

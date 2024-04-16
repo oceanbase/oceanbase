@@ -1345,6 +1345,38 @@ int ObLogPartMgr::apply_delete_tablet_change(const ObCDCTabletChangeInfo &tablet
   return ret;
 }
 
+int ObLogPartMgr::apply_exchange_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! tablet_change_info.is_valid())
+      || OB_UNLIKELY(! tablet_change_info.is_exchange_tablet_op())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid tablet_change_info for exchange_tablet_op", KR(ret), K(tablet_change_info));
+  } else {
+    const ObArray<ExchangeTabletOp> &exchange_tablet_op_arr = tablet_change_info.get_exchange_tablet_op_arr();
+
+    ARRAY_FOREACH_N(exchange_tablet_op_arr, idx, count) {
+      const ExchangeTabletOp &exchange_tablet_op = exchange_tablet_op_arr.at(idx);
+      if (OB_UNLIKELY(! exchange_tablet_op.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("exchange_tablet_op is invalid", KR(ret), K(exchange_tablet_op));
+      } else {
+        const common::ObSArray<common::ObTabletID> &tablet_ids = exchange_tablet_op.get_tablet_ids();
+        const common::ObSArray<uint64_t> &table_ids = exchange_tablet_op.get_table_ids();
+
+        if (OB_FAIL(tablet_to_table_info_.exchange_tablet_table_info(tablet_ids, table_ids))) {
+          LOG_ERROR("tablet_to_table_info_ exchange table info failed", K(tablet_ids), K(table_ids));
+        } else {
+          LOG_INFO("apply_exchange_tablet_change success", K(tablet_ids), K(table_ids));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 // @retval OB_SUCCESS                   success
 // @retval OB_TIMEOUT                   timeout
 // @retval OB_TENANT_HAS_BEEN_DROPPED   caller should ignore error code if schema error like tenant/database not exist

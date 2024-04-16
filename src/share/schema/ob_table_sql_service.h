@@ -208,6 +208,20 @@ public:
       ObTableSchema &del_table,
       const int64_t schema_version);
 
+  int exchange_part_info(
+      common::ObISQLClient &sql_client,
+      const ObTableSchema &ori_table,
+      ObTableSchema &inc_table,
+      ObTableSchema &del_table,
+      const int64_t schema_version);
+
+  int exchange_subpart_info(
+      common::ObISQLClient &sql_client,
+      const ObTableSchema &ori_table,
+      ObTableSchema &inc_table,
+      ObTableSchema &del_table,
+      const int64_t schema_version);
+
   int sync_schema_version_for_history(
       common::ObISQLClient &sql_client,
       ObTableSchema &schema,

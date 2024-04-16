@@ -133,6 +133,11 @@ public:
       const int64_t new_transfer_seq,
       const ObLSID &new_ls_id,
       const int32_t group_id);
+  static int update_table_to_tablet_id_mapping(
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      const common::ObTabletID &tablet_id);
   // Get rows from __all_tablet_to_ls according to ObTableIDs
   //
   // @param [in] sql_proxy, ObMySQLProxy or ObMySQLTransaction

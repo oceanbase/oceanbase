@@ -74,6 +74,7 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_master.h"
 
 #include "rootserver/ob_bootstrap.h"
+#include "rootserver/ob_partition_exchange.h"
 #include "rootserver/ob_schema2ddl_sql.h"
 #include "rootserver/ob_index_builder.h"
 #include "rootserver/ob_mlog_builder.h"
@@ -4524,6 +4525,45 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
                         "ret", ret,
                         "trace_id", *ObCurTraceId::get_trace_id(),
                         "task_id", res.task_id_,
+                        "table_id", table_id_buffer,
+                        "schema_version", res.schema_version_);
+  LOG_INFO("finish alter table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());
+  return ret;
+}
+
+int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res)
+{
+  int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
+  ObSchemaGetterGuard schema_guard;
+  ObPartitionExchange partition_exchange(ddl_service_);
+  schema_guard.set_session_id(arg.session_id_);
+  LOG_DEBUG("receive exchange partition arg", K(ret), K(arg));
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(arg.tenant_id_, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(arg.tenant_id_));
+  } else if (compat_version < DATA_VERSION_4_3_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("data version less than 4.3.1.0 does not support this operation", K(ret), K(compat_version));
+  } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {
+    LOG_WARN("get schema guard in inner table failed", K(ret));
+  } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+    LOG_WARN("check parallel ddl conflict failed", K(ret));
+  } else if (OB_FAIL(partition_exchange.check_and_exchange_partition(arg, res, schema_guard))) {
+    LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
+  }
+  char table_id_buffer[256];
+  snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, exchange_table_id:%ld",
+            arg.base_table_id_, arg.inc_table_id_);
+  ROOTSERVICE_EVENT_ADD("ddl scheduler", "alter table",
+                        K(arg.tenant_id_),
+                        "ret", ret,
+                        "trace_id", *ObCurTraceId::get_trace_id(),
                         "table_id", table_id_buffer,
                         "schema_version", res.schema_version_);
   LOG_INFO("finish alter table ddl", K(ret), K(arg), K(res), "ddl_event_info", ObDDLEventInfo());

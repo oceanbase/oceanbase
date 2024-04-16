@@ -1023,6 +1023,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"kv_attributes", KV_ATTRIBUTES},
   {"RESOURCE_POOL", RESOURCE_POOL},
   {"clone", CLONE},
+  {"without", WITHOUT},
+  {"validation", VALIDATION},
   {"_st_asmvt", _ST_ASMVT},
 };
 

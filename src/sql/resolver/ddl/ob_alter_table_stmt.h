@@ -111,6 +111,8 @@ public:
   obrpc::ObAlterTriggerArg &get_tg_arg() { return tg_arg_; }
   const ObTableSchema &get_alter_table_schema() const { return alter_table_arg_.alter_table_schema_; }
   ObTableSchema &get_alter_table_schema() { return alter_table_arg_.alter_table_schema_; }
+  obrpc::ObExchangePartitionArg &get_exchange_partition_arg() { return exchange_partition_arg_;}
+  int set_exchange_partition_arg(const obrpc::ObExchangePartitionArg &exchange_partition_arg);
 private:
   obrpc::ObAlterTableArg alter_table_arg_;
   bool is_comment_table_;
@@ -122,6 +124,7 @@ private:
   ObRawExpr *transition_expr_;
   uint64_t alter_table_action_count_;
   int64_t alter_external_table_type_;
+  obrpc::ObExchangePartitionArg exchange_partition_arg_;
 };
 
 inline int ObAlterTableStmt::set_tz_info_wrap(const common::ObTimeZoneInfoWrap &tz_info_wrap)

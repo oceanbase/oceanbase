@@ -501,6 +501,7 @@ public:
   int rename_table(const obrpc::ObRenameTableArg &arg);
   int truncate_table(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
   int truncate_table_v2(const obrpc::ObTruncateTableArg &arg, obrpc::ObDDLRes &res);
+  int exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res);
   int create_index(const obrpc::ObCreateIndexArg &arg, obrpc::ObAlterTableRes &res);
   int drop_table(const obrpc::ObDropTableArg &arg, obrpc::ObDDLRes &res);
   int drop_database(const obrpc::ObDropDatabaseArg &arg, obrpc::ObDropDatabaseRes &drop_database_res);

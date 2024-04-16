@@ -2263,6 +2263,41 @@ public:
   int64_t get_index_args_serialize_size() const;
 };
 
+struct ObExchangePartitionArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObExchangePartitionArg():
+      ObDDLArg(),
+      session_id_(common::OB_INVALID_ID),
+      tenant_id_(common::OB_INVALID_ID),
+      exchange_partition_level_(PARTITION_LEVEL_MAX),
+      base_table_id_(common::OB_INVALID_ID),
+      base_table_part_name_(),
+      inc_table_id_(common::OB_INVALID_ID),
+      including_indexes_(true),
+      without_validation_(true),
+      update_global_indexes_(false)
+  {
+  }
+  virtual ~ObExchangePartitionArg()
+  {
+  }
+  bool is_valid() const;
+  int assign(const ObExchangePartitionArg& other);
+public:
+  DECLARE_TO_STRING;
+  uint64_t session_id_;
+  uint64_t tenant_id_;
+  ObPartitionLevel exchange_partition_level_;
+  uint64_t base_table_id_; // PT table, always contains large amount pf data.
+  ObString base_table_part_name_;
+  uint64_t inc_table_id_; // NT table, always contains incremental data.
+  bool including_indexes_; // default true.
+  bool without_validation_; // default true.
+  bool update_global_indexes_; // default false.
+};
+
 struct ObTableItem
 {
   OB_UNIS_VERSION(1);

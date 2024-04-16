@@ -257,6 +257,7 @@ public:
   virtual int insert_table_id_into_cache(const uint64_t table_id, const uint64_t database_id) = 0;
   virtual int delete_table_id_from_cache(const uint64_t table_id) = 0;
   virtual int delete_db_from_cache(const uint64_t database_id) = 0;
+  virtual int apply_exchange_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info) = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -368,6 +369,7 @@ public:
   virtual int insert_table_id_into_cache(const uint64_t table_id, const uint64_t database_id);
   virtual int delete_table_id_from_cache(const uint64_t table_id);
   virtual int delete_db_from_cache(const uint64_t database_id);
+  virtual int apply_exchange_tablet_change(const ObCDCTabletChangeInfo &tablet_change_info);
 
 private:
   template<class TableMeta>

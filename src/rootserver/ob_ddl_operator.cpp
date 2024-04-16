@@ -12022,6 +12022,183 @@ int ObDDLOperator::try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *syn
   return ret;
 }
 
+int ObDDLOperator::exchange_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
+                                             share::schema::ObTableSchema &inc_table_schema,
+                                             share::schema::ObTableSchema &del_table_schema,
+                                             common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().exchange_part_info(
+                     trans,
+                     orig_table_schema,
+                     inc_table_schema,
+                     del_table_schema,
+                     new_schema_version))) {
+    LOG_WARN("exchange part info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::exchange_table_subpartitions(const share::schema::ObTableSchema &orig_table_schema,
+                                                share::schema::ObTableSchema &inc_table_schema,
+                                                share::schema::ObTableSchema &del_table_schema,
+                                                common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_service->get_table_sql_service().exchange_subpart_info(
+                     trans,
+                     orig_table_schema,
+                     inc_table_schema,
+                     del_table_schema,
+                     new_schema_version))) {
+    LOG_WARN("delete inc part info failed", K(ret));
+  }
+  return ret;
+}
+
+int ObDDLOperator::get_target_auto_inc_sequence_value(const uint64_t tenant_id,
+                                                      const uint64_t table_id,
+                                                      const uint64_t column_id,
+                                                      uint64_t &sequence_value,
+                                                      common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  sequence_value = OB_INVALID_ID;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id || OB_INVALID_ID == column_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(column_id));
+  } else {
+    ObSqlString sql;
+    const uint64_t exec_tenant_id = tenant_id;
+    const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
+    if (OB_FAIL(sql.assign_fmt(" SELECT  sequence_value FROM %s WHERE tenant_id = %lu AND sequence_key = %lu"
+                               " AND column_id = %lu FOR UPDATE",
+                               table_name,
+                               ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                               ObSchemaUtils::get_extract_schema_id(exec_tenant_id, table_id),
+                               column_id))) {
+      LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(table_id), K(column_id));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        ObMySQLResult *result = NULL;
+        uint64_t sequence_table_id = OB_ALL_AUTO_INCREMENT_TID;
+        if (OB_FAIL(trans.read(res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("failed to read data", K(ret));
+        } else if (NULL == (result = res.get_result())) {
+          LOG_WARN("failed to get result", K(ret));
+          ret = OB_ERR_UNEXPECTED;
+        } else if (OB_FAIL(result->next())) {
+          LOG_WARN("failed to get next", K(ret));
+          if (OB_ITER_END == ret) {
+            // auto-increment column has been deleted
+            ret = OB_SCHEMA_ERROR;
+            LOG_WARN("failed to get next", K(ret));
+          }
+        } else if (OB_FAIL(result->get_uint("sequence_value", sequence_value))) {
+          LOG_WARN("failed to get int_value.", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_ITER_END != (tmp_ret = result->next())) {
+            if (OB_SUCCESS == tmp_ret) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("more than one row", K(ret), K(tenant_id), K(table_id), K(column_id));
+            } else {
+              ret = tmp_ret;
+              LOG_WARN("fail to iter next row", K(ret), K(tenant_id), K(table_id), K(column_id));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::set_target_auto_inc_sync_value(const uint64_t tenant_id,
+                                                  const uint64_t table_id,
+                                                  const uint64_t column_id,
+                                                  const uint64_t new_sequence_value,
+                                                  const uint64_t new_sync_value,
+                                                  common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == table_id || OB_INVALID_ID == column_id || new_sequence_value < 0 || new_sync_value < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id), K(column_id), K(new_sequence_value), K(new_sync_value));
+  } else {
+    ObSqlString sql;
+    int64_t affected_rows = 0;
+    const char *table_name = OB_ALL_AUTO_INCREMENT_TNAME;
+    if (OB_FAIL(sql.assign_fmt(
+                "UPDATE %s SET sequence_value = %lu, sync_value = %lu WHERE tenant_id=%lu AND sequence_key=%lu AND column_id=%lu",
+                table_name, new_sequence_value, new_sync_value,
+                ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id), ObSchemaUtils::get_extract_schema_id(tenant_id, table_id), column_id))) {
+      LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(table_id), K(column_id), K(new_sequence_value), K(new_sync_value));
+    } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to execute", K(ret), K(sql));
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::get_target_sequence_sync_value(const uint64_t tenant_id,
+                                                  const uint64_t sequence_id,
+                                                  common::ObMySQLTransaction &trans,
+                                                  ObIAllocator &allocator,
+                                                  common::number::ObNumber &next_value)
+{
+  int ret = OB_SUCCESS;
+  next_value.set_zero();
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == sequence_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(sequence_id));
+  } else if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service_impl must not null", K(ret));
+  } else if (OB_FAIL(schema_service_impl->get_sequence_sql_service().get_sequence_sync_value(tenant_id,
+                                                                                             sequence_id,
+                                                                                             true,/*is select for update*/
+                                                                                             trans,
+                                                                                             allocator,
+                                                                                             next_value))) {
+    LOG_WARN("fail to get sequence sync value", K(ret), K(tenant_id), K(sequence_id));
+  }
+  return ret;
+}
+
+int ObDDLOperator::alter_target_sequence_start_with(const ObSequenceSchema &sequence_schema, common::ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  if (OB_UNLIKELY(!sequence_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(sequence_schema));
+  } else if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service_impl must not null", K(ret));
+  } else if (OB_FAIL(schema_service_impl->get_sequence_sql_service().alter_sequence_start_with(sequence_schema, trans))) {
+    LOG_WARN("fail to alter sequence start with", K(ret), K(sequence_schema));
+  }
+  return ret;
+}
 
 }//end namespace rootserver
 }//end namespace oceanbase

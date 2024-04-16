@@ -14448,6 +14448,20 @@ int ObColumnGroupSchema::get_column_group_type_name(ObString &readable_cg_name) 
   }
   return ret;
 }
+/*
+The following function is used by partition exchange to compare whether cg-level attributes are the same and three attributes are not considered.
+1、column_group_name: The same column group in the two tables may have different names specified by the user, so no comparison is required.
+2、column_group_id: Adding and deleting column groups multiple times to the same table will cause the column group id to increase, and the rules are similar to column ids. Therefore, in two tables, the same column group may have different column group ids.
+3、column id contained in column group: Since in the comparison of columns in two tables, the column id of the same column is not necessarily the same, therefore, the column id in the two column groups cannot distinguish whether they are the same column. You need to use the column id to get the column schema and then compare the column attributes in sequence.
+*/
+bool ObColumnGroupSchema::has_same_column_group_attributes_for_part_exchange(const ObColumnGroupSchema &other) const
+{
+  return column_group_type_ == other.get_column_group_type() &&
+         block_size_ == other.get_block_size() &&
+         compressor_type_ == other.get_compressor_type() &&
+         row_store_type_ == other.get_row_store_type() &&
+         column_id_cnt_ == other.get_column_id_count();
+}
 
 OB_DEF_SERIALIZE(ObSkipIndexColumnAttr)
 {

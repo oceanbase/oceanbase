@@ -36,6 +36,7 @@ struct ObRowkeyColumn
     return (ObURowIDType == type_.get_type() || length_ >= 0) && common::OB_INVALID_ID != column_id_
            && common::ob_is_valid_obj_type(static_cast<ObObjType>(type_.get_type()));
   }
+  bool is_equal_except_column_id(const ObRowkeyColumn &other) const;
   ObRowkeyColumn &operator=(const ObRowkeyColumn &other);
   bool operator==(const ObRowkeyColumn &other) const;
   const ObObjMeta get_meta_type() const { return type_; }

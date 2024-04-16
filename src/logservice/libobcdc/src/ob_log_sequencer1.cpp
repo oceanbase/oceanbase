@@ -1030,6 +1030,16 @@ int ObLogSequencer::handle_multi_data_source_info_(
           } else {
             LOG_DEBUG("CDC_DELETE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
           }
+        } else if (tablet_change_info.is_exchange_tablet_op()) {
+          if (OB_FAIL(wait_until_parser_done_("exchange_tablet_op", stop_flag))) {
+            if (OB_IN_STOP_STATE != ret) {
+              LOG_ERROR("wait_until_parser_done_ failed", KR(ret), KPC(part_trans_task));
+            }
+          } else if (OB_FAIL(part_mgr.apply_exchange_tablet_change(tablet_change_info))) {
+            LOG_ERROR("apply_exchange_tablet_change failed", KR(ret), K(tablet_change_info), K(tenant), KPC(part_trans_task));
+          } else {
+            LOG_INFO("CDC_EXCHANGE_TABLET", KR(ret), K(tablet_change_info), K(part_trans_task), KPC(part_trans_task), K(tenant));
+          }
         }
       }
     }

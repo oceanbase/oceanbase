@@ -160,5 +160,14 @@ int ObAlterTableStmt::fill_session_vars(const ObBasicSessionInfo &session) {
   return ret;
 }
 
+int ObAlterTableStmt::set_exchange_partition_arg(const obrpc::ObExchangePartitionArg &exchange_partition_arg)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(exchange_partition_arg_.assign(exchange_partition_arg))) {
+    SQL_RESV_LOG(WARN, "failed to assign", K(ret), K(exchange_partition_arg));
+  }
+  return ret;
+}
+
 } //namespace sql
 } //namespace oceanbase

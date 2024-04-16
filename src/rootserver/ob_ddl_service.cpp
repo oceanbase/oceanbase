@@ -38648,8 +38648,8 @@ int ObDDLService::check_rename_first(const AlterTableSchema &alter_table_schema,
 }
 
 int ObDDLService::fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema)
+                                           const ObSimpleTableSchemaV2 &ori_table_schema,
+                                           ObSimpleTableSchemaV2 &inc_table_schema)
 {
   int ret = OB_SUCCESS;
   bool ori_oracle_mode = false;
@@ -38701,7 +38701,7 @@ int ObDDLService::fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("src part is null", KR(ret));
         } else if (FALSE_IT(part_name = ori_part->get_part_name())){
-        } else if (OB_FAIL(check_same_partition_(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
+        } else if (OB_FAIL(check_same_partition(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
           LOG_WARN("fail to check ori_table_part and ori_aux_part is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_part_func_type));
         } else if (OB_UNLIKELY(!is_matched)) {
           ret = OB_INDEX_INELIGIBLE;
@@ -38716,8 +38716,8 @@ int ObDDLService::fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data
 }
 
 int ObDDLService::fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema)
+                                              const ObSimpleTableSchemaV2 &ori_table_schema,
+                                              ObSimpleTableSchemaV2 &inc_table_schema)
 {
   int ret = OB_SUCCESS;
   bool ori_oracle_mode = false;
@@ -38782,7 +38782,7 @@ int ObDDLService::fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_d
           } else if (OB_ISNULL(ori_part)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("src part is null", KR(ret));
-          } else if (OB_FAIL(check_same_partition_(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
+          } else if (OB_FAIL(check_same_partition(ori_oracle_mode, *ori_data_part, *ori_part, ori_part_func_type, is_matched))) {
             LOG_WARN("fail to check ori_table_part and ori_aux_part is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_part_func_type));
           } else if (OB_UNLIKELY(!is_matched)) {
             ret = OB_INDEX_INELIGIBLE;
@@ -38796,7 +38796,7 @@ int ObDDLService::fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_d
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get src subpart.", KR(ret));
           } else if (FALSE_IT(part_name = ori_subpart->get_part_name())) {
-          } else if (OB_FAIL(check_same_subpartition_(ori_oracle_mode, *ori_data_subpart, *ori_subpart, ori_subpart_func_type, is_matched))) {
+          } else if (OB_FAIL(check_same_subpartition(ori_oracle_mode, *ori_data_subpart, *ori_subpart, ori_subpart_func_type, is_matched))) {
             LOG_WARN("fail to check ori_table_subpart and ori_aux_subpart is the same", KR(ret), KPC(ori_data_part), KPC(ori_part), K(ori_subpart_func_type));
           } else if (OB_UNLIKELY(!is_matched)) {
             ret = OB_INDEX_INELIGIBLE;
@@ -38912,7 +38912,7 @@ int ObDDLService::fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSc
   return ret;
 }
 
-int ObDDLService::check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
+int ObDDLService::check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
                                        const ObPartitionFuncType part_type, bool &is_matched) const
 {
   int ret = OB_SUCCESS;
@@ -38931,7 +38931,7 @@ int ObDDLService::check_same_partition_(const bool is_oracle_mode, const ObParti
   return ret;
 }
 
-int ObDDLService::check_same_subpartition_(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
+int ObDDLService::check_same_subpartition(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
                                           const ObPartitionFuncType part_type, bool &is_matched) const
 {
   int ret = OB_SUCCESS;

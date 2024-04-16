@@ -101,6 +101,7 @@ ob_set_subtarget(ob_rootserver common
   ob_ls_recovery_stat_handler.cpp
   ob_shrink_expand_resource_pool_checker.cpp
   ob_transfer_partition_command.cpp
+  ob_partition_exchange.cpp
 )
 
 ob_set_subtarget(ob_rootserver balance

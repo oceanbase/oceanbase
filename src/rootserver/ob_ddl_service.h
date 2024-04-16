@@ -2576,9 +2576,43 @@ private:
   int gen_inc_table_schema_for_add_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_add_subpart(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_drop_part(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
+  int gen_inc_table_schema_for_drop_subpart(
+      const share::schema::ObTableSchema &orig_table_schema,
+      share::schema::AlterTableSchema &inc_table_schema);
+public:
+  //not check belong to the same table
+  int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
+                           const ObPartitionFuncType part_type, bool &is_matched) const;
+  //not check belong to the same table
+  int check_same_subpartition(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
+                              const ObPartitionFuncType part_type, bool &is_matched) const;
+private:
+  //After renaming a partition/subpartition, the consistency of the partition name between the data table and aux table is no longer guaranteed.
+  //Therefore, the partition names in the inc aux table must be synchronized with the ori aux table after assigning the data table's partition
+  //schema to the inc aux table.
+  //This function relies on the assumption that the inc table schema has a valid partition name.
+  int fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                               const ObSimpleTableSchemaV2 &ori_table_schema,
+                               ObSimpleTableSchemaV2 &inc_table_schema);
+  //This function relies on the assumption that the inc table schema has a valid subpartition name.
+  int fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
+                                  const ObSimpleTableSchemaV2 &ori_table_schema,
+                                  ObSimpleTableSchemaV2 &inc_table_schema);
+  //During the process of adding a partition/subpartition, we only check whether the partition schema of the argument is valid.
+  //It's possible for the inc aux table's partition name to duplicate with an existing partition name if one renames a partition/subpartition
+  //to another name and then adds a partition/subpartition with the same name.
+  //In this case, we will generate a name with a part/subpart id to replace the inc part/subpart name to avoid duplication.
+  int fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
+
+  int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
+                                          ObSimpleTableSchemaV2 &inc_table_schema);
   int gen_inc_table_schema_for_rename_part_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
@@ -2586,12 +2620,6 @@ private:
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema,
       share::schema::AlterTableSchema &del_table_schema);
-  int gen_inc_table_schema_for_add_subpart(
-      const share::schema::ObTableSchema &orig_table_schema,
-      share::schema::AlterTableSchema &inc_table_schema);
-  int gen_inc_table_schema_for_drop_subpart(
-      const share::schema::ObTableSchema &orig_table_schema,
-      share::schema::AlterTableSchema &inc_table_schema);
   int gen_inc_table_schema_for_rename_subpart_(
       const share::schema::ObTableSchema &orig_table_schema,
       share::schema::AlterTableSchema &inc_table_schema);
@@ -2637,34 +2665,6 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const share::schema::ObTenantSchema &new_tenant_schema);
 
-  //not check belong to the same table
-  int check_same_partition_(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,
-                            const ObPartitionFuncType part_type, bool &is_matched) const;
-  //not check belong to the same table
-  int check_same_subpartition_(const bool is_oracle_mode, const ObSubPartition &l, const ObSubPartition &r,
-                               const ObPartitionFuncType part_type, bool &is_matched) const;
-  //After renaming a partition/subpartition, the consistency of the partition name between the data table and aux table is no longer guaranteed.
-  //Therefore, the partition names in the inc aux table must be synchronized with the ori aux table after assigning the data table's partition
-  //schema to the inc aux table.
-  //This function relies on the assumption that the inc table schema has a valid partition name.
-  int fix_local_idx_part_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-  //This function relies on the assumption that the inc table schema has a valid subpartition name.
-  int fix_local_idx_subpart_name_(const ObSimpleTableSchemaV2 &ori_data_table_schema,
-                                          const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-  //During the process of adding a partition/subpartition, we only check whether the partition schema of the argument is valid.
-  //It's possible for the inc aux table's partition name to duplicate with an existing partition name if one renames a partition/subpartition
-  //to another name and then adds a partition/subpartition with the same name.
-  //In this case, we will generate a name with a part/subpart id to replace the inc part/subpart name to avoid duplication.
-  int fix_local_idx_part_name_for_add_part_(const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-
-  int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
-                                          ObSimpleTableSchemaV2 &inc_table_schema);
-
-private:
   int check_locality_compatible_(ObTenantSchema &schema);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,

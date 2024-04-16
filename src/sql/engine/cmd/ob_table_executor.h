@@ -143,6 +143,12 @@ private:
       ObSQLSessionInfo *my_session,
       const bool is_sync_ddl_user);
 
+  int alter_table_exchange_partition_rpc(
+      obrpc::ObExchangePartitionArg &exchange_partition_arg,
+      obrpc::ObAlterTableRes &res,
+      obrpc::ObCommonRpcProxy *common_rpc_proxy,
+      ObSQLSessionInfo *my_session);
+
   int need_check_constraint_validity(obrpc::ObAlterTableArg &alter_table_arg, bool &need_check);
 
   int set_alter_col_nullable_ddl_stmt_str(

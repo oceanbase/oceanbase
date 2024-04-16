@@ -96,6 +96,20 @@ int64_t ObConstraint::get_convert_size() const
   convert_size += column_cnt_ * sizeof(uint64_t);
   return convert_size;
 }
+/*The following function is used to determine whether the check constraints of the two partition exchange tables are the same.
+  To ensure that the check constraints are exactly the same, the following conditions need to be met:
+  1、rely_flag_、enable_flag_、validate_flag_, these three values are the conditions for determining the constraint state.
+  2、constraint_type_, This value determines the type of constraint.
+  3、check_expr_, at present, it is required that the expression of the constraint must be exactly the same of the two partition exchange tables.
+*/
+bool ObConstraint::is_match_partition_exchange_constraint_conditions(const ObConstraint &r) const
+{
+  return rely_flag_ == r.get_rely_flag() &&
+         enable_flag_ == r.get_enable_flag() &&
+         validate_flag_ == r.get_validate_flag() &&
+         constraint_type_ == r.get_constraint_type() &&
+         (0 == check_expr_.compare(r.get_check_expr_str()));
+}
 
 int ObConstraint::get_not_null_column_name(ObString &cst_col_name) const
 {

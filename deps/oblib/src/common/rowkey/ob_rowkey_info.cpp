@@ -70,6 +70,14 @@ DEFINE_GET_SERIALIZE_SIZE(ObRowkeyColumn)
   len += serialization::encoded_length_vi32(order_);
   return len;
 }
+bool ObRowkeyColumn::is_equal_except_column_id(const ObRowkeyColumn &other) const
+{
+   return length_ == other.length_ &&
+          type_ == other.type_ &&
+          order_ == other.order_ &&
+          fulltext_flag_ == other.fulltext_flag_ &&
+          spatial_flag_ == other.spatial_flag_;
+}
 
 ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
 {
@@ -85,12 +93,8 @@ ObRowkeyColumn& ObRowkeyColumn::operator=(const ObRowkeyColumn &other)
 bool ObRowkeyColumn::operator==(const ObRowkeyColumn &other) const
 {
   return
-      this->length_ == other.length_ &&
       this->column_id_ == other.column_id_ &&
-      this->type_ == other.type_ &&
-      this->order_ == other.order_ &&
-      this->fulltext_flag_ == other.fulltext_flag_ &&
-      this->spatial_flag_ == other.spatial_flag_;
+      this->is_equal_except_column_id(other);
 }
 
 ObRowkeyInfo::ObRowkeyInfo()

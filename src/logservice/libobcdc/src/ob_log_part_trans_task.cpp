@@ -2576,6 +2576,7 @@ int PartTransTask::push_multi_data_source_data(
         }
         case transaction::ObTxDataSourceType::CREATE_TABLET_NEW_MDS:
         case transaction::ObTxDataSourceType::DELETE_TABLET_NEW_MDS:
+        case transaction::ObTxDataSourceType::CHANGE_TABLET_TO_TABLE_MDS:
         {
           if (! is_commit_log) {
             if (OB_FAIL(alloc_and_save_multi_data_source_node_(lsn, mds_buffer_node))) {
