@@ -159,7 +159,8 @@ int ObTransformSimplifyGroupby::check_upper_stmt_validity(ObSelectStmt *upper_st
     LOG_WARN("unexpected null", K(ret));
   } else if (!upper_stmt->has_group_by()) {
     is_valid = false;
-  } else if (!is_only_full_group_by_on(ctx_->session_info_->get_sql_mode())) {
+  } else if (!ObTransformUtils::is_full_group_by(*upper_stmt,
+                                                 ctx_->session_info_->get_sql_mode())) {
     is_valid = false;
   }
   //check condition不存在rownum

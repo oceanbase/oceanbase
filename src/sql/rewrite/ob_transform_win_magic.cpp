@@ -1955,14 +1955,30 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   ObSelectStmt *view_stmt = NULL;
   ObSEArray<ObRawExpr *, 4> renamed_cond;
   ObSEArray<ObDMLStmt::PartExprItem,4> part_exprs;
+  ObSEArray<ObRawExpr *, 4> view_select_list;
+  ObSEArray<ObRawExpr *, 4> view_column_list;
+  ObSEArray<ObQueryRefRawExpr *, 4> query_refs;
+  ObSEArray<ObRawExpr *, 4> old_column;
+  ObSEArray<ObRawExpr *, 4> new_column;
   if (OB_ISNULL(main_stmt) || OB_ISNULL(view_table) || OB_ISNULL(push_down_table) || 
-      OB_ISNULL(view_stmt = view_table->ref_query_)) {
+      OB_ISNULL(view_stmt = view_table->ref_query_) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("pointer is null", K(ret));
-  } else if (OB_FAIL(ObOptimizerUtil::rename_subquery_pushdown_filter(*main_stmt, *view_stmt, view_table->table_id_,
-                                                               ctx_->session_info_, *ctx_->expr_factory_, 
-                                                               cond_to_push_down, renamed_cond))) {
-    LOG_WARN("rename subuqery push down filter failed", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(cond_to_push_down, query_refs))) {
+    LOG_WARN("failed to extract subquery", K(ret));
+  } else if (OB_FAIL(main_stmt->get_view_output(*view_table, view_select_list, view_column_list))) {
+    LOG_WARN("get view output failed", K(ret));
+  } else {
+    ObRawExprCopier copier(*ctx_->expr_factory_);
+    if (OB_FAIL(copier.add_replaced_expr(view_column_list, view_select_list))) {
+      LOG_WARN("failed to add exprs", K(ret));
+    } else if (OB_FAIL(copier.add_skipped_expr(query_refs, false))) {
+      LOG_WARN("failed to add skipped expr", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(cond_to_push_down, renamed_cond))) {
+      LOG_WARN("failed to copy on replace filters", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObTransformUtils::add_table_item(view_stmt, push_down_table))) {
     LOG_WARN("add table item failed", K(ret));
   } else if (OB_FAIL(append(view_stmt->get_condition_exprs(), renamed_cond))) {
@@ -1980,11 +1996,8 @@ int ObTransformWinMagic::push_down_join(ObDMLStmt *main_stmt,
   } else if (!part_exprs.empty() && OB_FAIL(view_stmt->set_part_expr_items(part_exprs))) {
     LOG_WARN("failed to set part expr item", K(ret));
   } else if (OB_FAIL(main_stmt->remove_part_expr_items(push_down_table->table_id_))) {
-      LOG_WARN("failed to remove part epxr", K(ret));
+    LOG_WARN("failed to remove part epxr", K(ret));
   }
-
-  ObSEArray<ObRawExpr *, 4> old_column;
-  ObSEArray<ObRawExpr *, 4> new_column;
   for (int64_t i = 0; OB_SUCC(ret) && i < main_stmt->get_column_size(); i++) {
     if (OB_ISNULL(main_stmt->get_column_item(i)) || OB_ISNULL(main_stmt->get_column_item(i)->expr_)) {
       ret = OB_ERR_UNEXPECTED;
