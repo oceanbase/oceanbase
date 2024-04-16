@@ -192,7 +192,8 @@ public:
     di_user_type_map_(),
     debug_mode_(session_info_.is_pl_debug_on() && func_ast.is_routine()),
     oracle_mode_(oracle_mode),
-    profile_mode_(session_info_.get_pl_profiler() != nullptr)
+    profile_mode_(session_info_.get_pl_profiler() != nullptr),
+    out_params_(allocator)
     { }
 
   virtual ~ObPLCodeGenerator() {}
@@ -793,6 +794,10 @@ public:
 
   static int set_profiler_unit_info_recursive(const ObPLCompileUnit &unit);
 
+
+  inline ObPLSEArray<jit::ObLLVMValue> &get_out_params() { return out_params_; }
+  inline void reset_out_params() { out_params_.reset(); }
+  inline int add_out_params(jit::ObLLVMValue &value) { return out_params_.push_back(value); }
 private:
   int init_di_adt_service();
   int generate_di_prototype();
@@ -804,6 +809,7 @@ private:
   bool debug_mode_;
   bool oracle_mode_;
   bool profile_mode_;
+  ObPLSEArray<jit::ObLLVMValue> out_params_;
 };
 
 class ObPLCodeGenerateVisitor : public ObPLStmtVisitor
