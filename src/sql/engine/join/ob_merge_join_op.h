@@ -240,7 +240,6 @@ private:
       brs_.size_ = 0;
       brs_.end_ = false;
       datum_store_.reuse();
-      backup_datums_.reuse();
       backup_rows_cnt_ = 0;
       backup_rows_used_ = 0;
       brs_holder_.reset();
