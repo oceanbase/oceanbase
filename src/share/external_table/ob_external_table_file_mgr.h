@@ -29,6 +29,7 @@ struct ObExternalFileInfo {
   int64_t file_id_;
   common::ObAddr file_addr_;
   int64_t file_size_;
+  int64_t part_id_;
   TO_STRING_KV(K_(file_url), K_(file_id), K_(file_addr), K_(file_size));
   OB_UNIS_VERSION(1);
 };

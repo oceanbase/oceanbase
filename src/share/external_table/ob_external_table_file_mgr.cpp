@@ -527,7 +527,7 @@ int ObExternalTableFileManager::lock_for_refresh(
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_);
+OB_SERIALIZE_MEMBER(ObExternalFileInfo, file_url_, file_id_, file_addr_, file_size_, part_id_);
 
 }
 }
