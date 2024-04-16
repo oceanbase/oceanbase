@@ -2643,6 +2643,21 @@ int ObRawExprResolverImpl::process_pseudo_column_node(const ParseNode &node, ObR
   } else if (OB_UNLIKELY(false == is_pseudo_column_valid_scope(ctx_.current_scope_))) {
     ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
     LOG_WARN("pseudo column at invalid scope", K(ctx_.current_scope_), K(ret));
+  } else if (T_START_WITH_SCOPE == ctx_.current_scope_) {
+    // Oracle supports LEVEL column in START WITH, and the value of LEVEL is 0.
+    // But, other pseudo columns in START WITH scope are not allowed.
+    ObConstRawExpr *c_expr = NULL;
+    if (OB_UNLIKELY(T_LEVEL != pseudo_column_node->type_)) {
+      ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+      LOG_WARN("invalid pseudo column at START WITH scope", K(pseudo_column_node->type_), K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(ctx_.expr_factory_,
+                                                               ObObjType::ObNumberType,
+                                                               number::ObNumber::get_zero(),
+                                                               c_expr))) {
+      LOG_WARN("failed to create const number expr", K(ret));
+    } else {
+      expr = c_expr;
+    }
   } else if (OB_FAIL(check_pseudo_column_exist(pseudo_column_node->type_, pseudo_column_expr))) {
     LOG_WARN("fail to check pseudo column exist", K(ret));
   } else if (pseudo_column_expr != NULL) {
