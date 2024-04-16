@@ -174,7 +174,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 14;
+  static const int64_t DATA_VERSION_NUM = 15;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -241,6 +241,7 @@ private:
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */
