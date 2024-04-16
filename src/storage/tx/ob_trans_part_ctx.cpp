@@ -1610,7 +1610,8 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
       // do nothing
     } else if (OB_FAIL(deep_copy_mds_array_(ctx_info.exec_info_.multi_data_source_, _unused_))) {
       TRANS_LOG(WARN, "deep copy ctx_info mds_array failed", K(ret));
-    } else if (OB_FAIL(mt_ctx_.update_checksum(exec_info_.checksum_,
+    } else if (exec_info_.need_checksum_ &&
+               OB_FAIL(mt_ctx_.update_checksum(exec_info_.checksum_,
                                                exec_info_.checksum_scn_))) {
       TRANS_LOG(WARN, "recover checksum failed", K(ret), KPC(this), K(ctx_info));
     } else if (!is_local_tx_() && OB_FAIL(ObTxCycleTwoPhaseCommitter::recover_from_tx_table())) {
@@ -1618,6 +1619,10 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
     } else {
       is_ctx_table_merged_ = true;
       replay_completeness_.set(true);
+    }
+
+    if (OB_SUCC(ret) && !exec_info_.need_checksum_) {
+      mt_ctx_.set_skip_checksum_calc();
     }
 
     if (OB_FAIL(ret)) {
