@@ -3623,32 +3623,9 @@ int ObDMLResolver::do_resolve_generate_table(const ParseNode &table_node,
     LOG_WARN("check duplicated column failed", K(ret));
   } else if (OB_FAIL(resolve_generate_table_item(ref_stmt, alias_name, table_item))) {
     LOG_WARN("resolve generate table item failed", K(ret));
-  } else if (enable_var_assign_use_das && OB_FAIL(extract_var_init_exprs(ref_stmt, params_.query_ctx_->var_init_exprs_))) {
-    // Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
-    // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
-    LOG_WARN("extract var init exprs failed", K(ret));
   } else {
     LOG_DEBUG("finish do_resolve_generate_table", K(alias_name), KPC(table_item),
                                                   KPC(table_item->ref_query_));
-  }
-  return ret;
-}
-
-int ObDMLResolver::extract_var_init_exprs(ObSelectStmt *ref_query, ObIArray<ObRawExpr*> &assign_exprs)
-{
-  // Extract the var assign expr in generated table, This is to be compatible with some of mysql's uses of variables
-  // Such as "select c1,(@rownum:= @rownum+1) as CCBH from t1,(SELECT@rownum:=0) B"
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ref_query)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ref query is nullptr", KR(ret));
-  } else if (ref_query->get_from_item_size() <= 0) {
-    for (int i = 0; OB_SUCC(ret) && i < ref_query->get_select_item_size(); ++i) {
-      const SelectItem &select_item = ref_query->get_select_item(i);
-      if (OB_FAIL(ObRawExprUtils::extract_var_assign_exprs(select_item.expr_, assign_exprs))) {
-        LOG_WARN("extract var assign exprs failed", K(ret));
-      }
-    }
   }
   return ret;
 }
