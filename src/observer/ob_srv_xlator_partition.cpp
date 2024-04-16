@@ -54,6 +54,7 @@
 #include "storage/tx/ob_xa_rpc.h"
 
 #include "observer/table_load/ob_table_load_rpc_processor.h"
+#include "observer/table_load/resource/ob_table_load_resource_processor.h"
 #include "observer/net/ob_net_endpoint_ingress_rpc_processor.h"
 #include "share/wr/ob_wr_snapshot_rpc_processor.h"
 
@@ -306,6 +307,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // direct load
   RPC_PROCESSOR(ObDirectLoadControlP, gctx_);
+  // direct load resource
+  RPC_PROCESSOR(ObDirectLoadResourceP, gctx_);
 
   // wr
   RPC_PROCESSOR(ObWrAsyncSnapshotTaskP, gctx_);

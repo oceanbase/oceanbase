@@ -38,6 +38,8 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     session_info_(nullptr),
     allocator_("TLD_TableCtx"),
     ref_count_(0),
+    is_assigned_resource_(false),
+    is_assigned_memory_(false),
     is_dirty_(false),
     is_inited_(false)
 {

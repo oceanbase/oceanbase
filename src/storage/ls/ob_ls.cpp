@@ -69,6 +69,7 @@
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
+#include "observer/table_load/resource/ob_table_load_resource_service.h"
 #include "share/wr/ob_wr_service.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 
@@ -968,6 +969,7 @@ int ObLS::register_sys_service()
       REGISTER_TO_LOGSERVICE(WORKLOAD_REPOSITORY_SERVICE_LOG_BASE_TYPE, GCTX.wr_service_);
       REGISTER_TO_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, MTL(ObHeartbeatService *));
       REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
+      REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     }
     if (is_meta_tenant(tenant_id)) {
       REGISTER_TO_LOGSERVICE(SNAPSHOT_SCHEDULER_LOG_BASE_TYPE, MTL(ObTenantSnapshotScheduler *));
@@ -995,6 +997,7 @@ int ObLS::register_user_service()
     REGISTER_TO_RESTORESERVICE(NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, MTL(ObCreateStandbyFromNetActor *));
     REGISTER_TO_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     REGISTER_TO_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
+    REGISTER_TO_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
   }
 
   if (ls_id.is_user_ls()) {
@@ -1092,6 +1095,7 @@ void ObLS::unregister_sys_service_()
       ObHeartbeatService * heartbeat_service = MTL(ObHeartbeatService*);
       UNREGISTER_FROM_LOGSERVICE(HEARTBEAT_SERVICE_LOG_BASE_TYPE, heartbeat_service);
       UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
+      UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
     }
     if (is_meta_tenant(MTL_ID())) {
       ObTenantSnapshotScheduler * snapshot_scheduler = MTL(ObTenantSnapshotScheduler*);
@@ -1123,6 +1127,7 @@ void ObLS::unregister_user_service_()
     UNREGISTER_FROM_RESTORESERVICE(NET_STANDBY_TNT_SERVICE_LOG_BASE_TYPE, net_standby_tnt_service);
     UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, MTL(table::ObTTLService *));
     UNREGISTER_FROM_LOGSERVICE(MVIEW_MAINTENANCE_SERVICE_LOG_BASE_TYPE, MTL(ObMViewMaintenanceService *));
+    UNREGISTER_FROM_LOGSERVICE(TABLE_LOAD_RESOURCE_SERVICE_LOG_BASE_TYPE, MTL(observer::ObTableLoadResourceService *));
   }
   if (ls_meta_.ls_id_.is_user_ls()) {
     UNREGISTER_FROM_LOGSERVICE(TTL_LOG_BASE_TYPE, tablet_ttl_mgr_);

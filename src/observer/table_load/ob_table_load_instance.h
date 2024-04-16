@@ -46,6 +46,7 @@ public:
   {
     ATOMIC_AAF(&job_stat_->parsed_bytes_, parsed_bytes);
   }
+  const ObTableLoadTableCtx* get_table_ctx() { return table_ctx_; }
 private:
   int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
   int begin();

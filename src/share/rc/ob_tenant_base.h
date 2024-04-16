@@ -184,6 +184,7 @@ namespace observer
   class ObTenantMetaChecker;
   class QueueThread;
   class ObTableLoadService;
+  class ObTableLoadResourceService;
   class ObStartupAccelTaskHandler;
   class ObTabletTableUpdater;
 }
@@ -335,6 +336,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       datadict::ObDataDictService*,                  \
       ArbMTLMember                                   \
       observer::ObTableLoadService*,                 \
+      observer::ObTableLoadResourceService*,         \
       concurrency_control::ObMultiVersionGarbageCollector*, \
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \

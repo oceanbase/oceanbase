@@ -576,12 +576,11 @@ int ObTableLoadClientTask::init_instance()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected empty column idxs", KR(ret));
     } else {
-      session_count_ = MIN(param_.get_parallel(), (int64_t)tenant->unit_max_cpu() * 2);
       ObTableLoadParam load_param;
       load_param.tenant_id_ = param_.get_tenant_id();
       load_param.table_id_ = param_.get_table_id();
       load_param.parallel_ = param_.get_parallel();
-      load_param.session_count_ = session_count_;
+      load_param.session_count_ = load_param.parallel_;
       load_param.batch_size_ = 100;
       load_param.max_error_row_count_ = param_.get_max_error_row_count();
       // load_param.sql_mode_ = 0; // TODO(suzhi.yt) 自增列会用到这个参数
@@ -590,8 +589,15 @@ int ObTableLoadClientTask::init_instance()
       load_param.px_mode_ = false;
       load_param.online_opt_stat_gather_ = false; // 支持统计信息收集需要构造ObExecContext
       load_param.dup_action_ = param_.get_dup_action();
+      const ObTableLoadTableCtx *tmp_ctx = nullptr;
       if (OB_FAIL(instance_.init(load_param, column_idxs, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
+      } else if (OB_ISNULL(tmp_ctx = instance_.get_table_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get table ctx", KR(ret));
+      } else {
+        session_count_ = tmp_ctx->param_.write_session_count_;
+        tmp_ctx = nullptr;
       }
     }
   }

@@ -19,6 +19,7 @@
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "sql/session/ob_sql_session_mgr.h"
+#include "observer/table_load/ob_table_load_struct.h"
 
 namespace oceanbase
 {
@@ -154,7 +155,8 @@ public:
   TO_STRING_KV(K_(table_id), K_(config), K_(column_count), K_(dup_action), K_(px_mode),
                K_(online_opt_stat_gather), K_(dest_table_id), K_(task_id), K_(schema_version),
                K_(snapshot_version), K_(data_version), K_(partition_id_array),
-               K_(target_partition_id_array));
+               K_(target_partition_id_array), K_(avail_memory), K_(write_session_count),
+               K_(exe_mode), K_(cluster_version));
 
 public:
   uint64_t table_id_;
@@ -174,6 +176,10 @@ public:
   table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> target_partition_id_array_; // target table
   sql::ObSQLSessionInfo *session_info_;
   sql::ObFreeSessionCtx free_session_ctx_;
+  int64_t avail_memory_;
+  int32_t write_session_count_;
+  ObTableLoadExeMode exe_mode_;
+  uint64_t cluster_version_;
 };
 
 class ObDirectLoadControlConfirmBeginArg final

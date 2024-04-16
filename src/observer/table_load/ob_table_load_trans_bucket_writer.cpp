@@ -77,7 +77,7 @@ ObTableLoadTransBucketWriter::ObTableLoadTransBucketWriter(ObTableLoadTransCtx *
 ObTableLoadTransBucketWriter::~ObTableLoadTransBucketWriter()
 {
   if (nullptr != session_ctx_array_) {
-    for (int64_t i = 0; i < param_.session_count_; i++) {
+    for (int64_t i = 0; i < param_.write_session_count_; i++) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->~SessionContext();
     }
@@ -110,12 +110,12 @@ int ObTableLoadTransBucketWriter::init_session_ctx_array()
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
-  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * param_.session_count_))) {
+  if (OB_ISNULL(buf = allocator_.alloc(sizeof(SessionContext) * param_.write_session_count_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", KR(ret));
   } else {
-    session_ctx_array_ = new (buf) SessionContext[param_.session_count_];
-    for (int64_t i = 0; OB_SUCC(ret) && i < param_.session_count_; ++i) {
+    session_ctx_array_ = new (buf) SessionContext[param_.write_session_count_];
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_.write_session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->session_id_ = i + 1;
       if (!is_partitioned_) {
@@ -150,7 +150,7 @@ int ObTableLoadTransBucketWriter::advance_sequence_no(int32_t session_id, uint64
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransBucketWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_)) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.write_session_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(sequence_no));
   } else {
@@ -180,7 +180,7 @@ int ObTableLoadTransBucketWriter::write(int32_t session_id, ObTableLoadObjRowArr
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransBucketWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_ || obj_rows.empty())) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.write_session_count_ || obj_rows.empty())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
   } else {
@@ -389,7 +389,7 @@ int ObTableLoadTransBucketWriter::flush(int32_t session_id)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadTransBucketWriter not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.session_count_)) {
+  } else if (OB_UNLIKELY(session_id < 1 || session_id > param_.write_session_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id));
   } else {
