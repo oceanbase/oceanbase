@@ -108,6 +108,7 @@
 #include "rootserver/backup/ob_backup_proxy.h" //ObBackupServiceProxy
 #include "logservice/palf_handle_guard.h"
 #include "logservice/ob_log_service.h"
+#include "rootserver/restore/ob_restore_service.h"
 #include "rootserver/restore/ob_recover_table_initiator.h"
 #include "rootserver/ob_heartbeat_service.h"
 
@@ -11073,6 +11074,13 @@ int ObRootService::handle_recover_table(const obrpc::ObRecoverTableArg &arg)
     } else if (OB_FAIL(initiator.initiate_recover_table(arg))) {
       LOG_WARN("failed to initiate table recover", K(ret), K(arg));
     } else {
+      // wake up restore thread
+      ObRestoreService *restore_service = nullptr;
+      if (OB_ISNULL(restore_service = MTL(ObRestoreService *))) {
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "restore service must not be null");
+      } else {
+        restore_service->wakeup();
+      }
       LOG_INFO("[RECOVER_TABLE] initiate recover table succeed", K(arg));
     }
   }
