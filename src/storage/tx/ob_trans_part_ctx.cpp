@@ -6648,6 +6648,9 @@ OB_NOINLINE int ObPartTransCtx::errsim_submit_prepare_log_()
 
 #ifdef ERRSIM
   ret = EN_SUBMIT_TX_PREPARE_LOG;
+  if(OB_TRANS_NEED_ROLLBACK == ret) {
+    sub_state_.set_force_abort();
+  }
 #endif
 
   return ret;

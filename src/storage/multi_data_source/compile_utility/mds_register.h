@@ -33,6 +33,7 @@
   #include "src/storage/tablet/ob_tablet_finish_transfer_mds_helper.h"
   #include "src/share/balance/ob_balance_task_table_operator.h"
   #include "src/storage/tablet/ob_tablet_abort_transfer_mds_helper.h"
+  #include "src/storage/multi_data_source/ob_tablet_create_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_start_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_abort_transfer_in_mds_ctx.h"
@@ -73,7 +74,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           16,\
                                           TEST3)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletCreateMdsHelper,\
-                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          ::oceanbase::storage::mds::ObTabletCreateMdsCtx,\
                                           3,\
                                           CREATE_TABLET_NEW_MDS)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDeleteMdsHelper,\

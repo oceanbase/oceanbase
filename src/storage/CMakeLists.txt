@@ -584,6 +584,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_start_transfer_in_mds_ctx.cpp
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
   multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_tablet_create_mds_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
 )
 

@@ -24,14 +24,6 @@
 #include "meta_programming/ob_type_traits.h"
 namespace oceanbase
 {
-namespace share
-{
-class ObLSID;
-}
-namespace common
-{
-class ObTabletID;
-}
 namespace storage
 {
 namespace mds

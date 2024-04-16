@@ -266,8 +266,8 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_normal(
       LOG_WARN("fail to check readsnapshot for finish transfer in tx",
           K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
     }
-  } else if (OB_FAIL(check_read_snapshot_for_create_tx(
-        tablet, snapshot_version, user_data, writer, trans_state, trans_version))) {
+  } else if (OB_FAIL(check_read_snapshot_for_create_tx(tablet,
+      snapshot_version, user_data, writer, trans_state, trans_version))) {
     LOG_WARN("fail to check read snapshot for create tx",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(trans_state), K(user_data));
   }
