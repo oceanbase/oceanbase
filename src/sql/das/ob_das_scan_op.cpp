@@ -173,6 +173,10 @@ ObDASScanOp::ObDASScanOp(ObIAllocator &op_alloc)
 
 ObDASScanOp::~ObDASScanOp()
 {
+  if (result_ != nullptr && result_->get_type() == ObNewRowIterator::ObTableScanIterator) {
+    int ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("Fatal Error!!! table scan iter is not released", KPC(this), K(lbt()), K(ret));
+  }
   scan_param_.destroy();
   trans_info_array_.destroy();
 
