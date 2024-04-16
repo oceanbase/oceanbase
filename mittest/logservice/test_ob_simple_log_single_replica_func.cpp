@@ -1902,7 +1902,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, test_raw_read)
   char *read_buf_ptr = reinterpret_cast<char*>(mtl_malloc_align(
     LOG_DIO_ALIGN_SIZE, PALF_BLOCK_SIZE + 2 * LOG_DIO_ALIGN_SIZE, "mittest"));
   EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
-  leader.palf_handle_impl_->log_engine_.log_storage_.hot_cache_ = NULL;
+  leader.palf_handle_impl_->log_engine_.log_storage_.log_cache_->hot_cache_.reset();
   // 提交100条日志, 每条日志大小为30K.
   {
     char *read_buf = read_buf_ptr;

@@ -699,6 +699,11 @@ DEF_STR(standby_db_preferred_upstream_log_region, OB_TENANT_PARAMETER, "",
        "when the preferred upstream log region can not fetch log because of exception etc.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_log_cache, OB_TENANT_PARAMETER, "True",
+         "specifies whether allow to fill log kv cache. "
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",

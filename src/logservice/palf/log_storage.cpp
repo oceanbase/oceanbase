@@ -15,7 +15,7 @@
 #include "lib/ob_errno.h"             // OB_INVALID_ARGUMENT
 #include "lib/stat/ob_session_stat.h" // Session
 #include "log_reader_utils.h"         // ReadBuf
-#include "palf_handle_impl.h"         // LogHotCache
+#include "palf_handle_impl.h"         // LogCache
 #include "share/scn.h"
 
 namespace oceanbase
@@ -38,11 +38,7 @@ LogStorage::LogStorage() :
     delete_block_lock_(common::ObLatchIds::PALF_LOG_ENGINE_LOCK),
     update_manifest_cb_(),
     plugins_(NULL),
-    hot_cache_(NULL),
-    last_accum_read_statistic_time_(OB_INVALID_TIMESTAMP),
-    accum_read_io_count_(0),
-    accum_read_log_size_(0),
-    accum_read_cost_ts_(0),
+    log_cache_(NULL),
     flashback_version_(OB_INVALID_TIMESTAMP),
     is_inited_(false)
 {}
@@ -57,7 +53,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                      const int64_t align_size, const int64_t align_buf_size,
                      const UpdateManifestCallback &update_manifest_cb,
                      ILogBlockPool *log_block_pool, LogPlugins *plugins,
-                     LogHotCache *hot_cache)
+                     LogCache *log_cache)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -72,7 +68,7 @@ int LogStorage::init(const char *base_dir, const char *sub_dir, const LSN &base_
                               update_manifest_cb,
                               log_block_pool,
                               plugins,
-                              hot_cache))) {
+                              log_cache))) {
     PALF_LOG(WARN, "LogStorage do_init_ failed", K(ret), K(base_dir), K(sub_dir), K(palf_id));
   } else {
     PALF_LOG(INFO, "LogStorage init success", K(ret), K(base_dir), K(sub_dir),
@@ -123,10 +119,6 @@ void LogStorage::destroy()
   log_tail_.reset();
   log_reader_.destroy();
   block_mgr_.destroy();
-  last_accum_read_statistic_time_ = OB_INVALID_TIMESTAMP;
-  accum_read_io_count_ = 0;
-  accum_read_log_size_ = 0;
-  accum_read_cost_ts_ = 0;
   PALF_LOG(INFO, "LogStorage destroy success");
 }
 
@@ -279,7 +271,6 @@ int LogStorage::pread(const LSN &read_lsn,
 {
   int ret = OB_SUCCESS;
   bool need_read_with_block_header = false;
-  UNUSED(io_ctx);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "LogStorage not inited!!!", K(ret));
@@ -287,13 +278,12 @@ int LogStorage::pread(const LSN &read_lsn,
              || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(read_lsn), K(in_read_size), K(read_buf));
-  } else if (OB_NOT_NULL(hot_cache_)
-      && OB_SUCCESS == (hot_cache_->read(read_lsn, in_read_size, read_buf.buf_, out_read_size))
-      && out_read_size > 0) {
-    // read data from hot_cache successfully
-  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size))) {
-    PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), KPC(this));
+  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size,
+                                  need_read_with_block_header, read_buf,
+                                  out_read_size, io_ctx))) {
+    PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), K(read_buf), K(out_read_size), KPC(this));
   } else {
+    PALF_LOG(TRACE, "inner_pread_ succeed", K(read_lsn), K(in_read_size), K(read_buf), K(out_read_size));
   }
   return ret;
 }
@@ -301,7 +291,8 @@ int LogStorage::pread(const LSN &read_lsn,
 int LogStorage::pread_with_block_header(const LSN &read_lsn,
                                         const int64_t in_read_size,
                                         ReadBuf &read_buf,
-                                        int64_t &out_read_size)
+                                        int64_t &out_read_size,
+                                        LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   bool need_read_with_block_header = true;
@@ -311,7 +302,7 @@ int LogStorage::pread_with_block_header(const LSN &read_lsn,
   } else if (false == read_lsn.is_valid() || 0 >= in_read_size || false == read_buf.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(read_lsn), K(in_read_size), K(read_buf));
-  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size))) {
+  } else if (OB_FAIL(inner_pread_(read_lsn, in_read_size, need_read_with_block_header, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "inner_pread_ failed", K(ret), K(read_lsn), K(in_read_size), KPC(this));
   } else {
   }
@@ -624,7 +615,7 @@ int LogStorage::do_init_(const char *base_dir,
                          const UpdateManifestCallback &update_manifest_cb,
                          ILogBlockPool *log_block_pool,
                          LogPlugins *plugins,
-                         LogHotCache *hot_cache)
+                         LogCache *log_cache)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
@@ -652,8 +643,7 @@ int LogStorage::do_init_(const char *base_dir,
     logical_block_size_ = logical_block_size;
     update_manifest_cb_ = update_manifest_cb;
     plugins_ = plugins;
-    hot_cache_ = hot_cache;
-    last_accum_read_statistic_time_ = ObTimeUtility::fast_current_time();
+    log_cache_ = log_cache;
     flashback_version_ = 0;
     is_inited_ = true;
   }
@@ -838,6 +828,12 @@ void LogStorage::get_readable_log_tail_guarded_by_lock_(LSN &readable_log_tail,
   flashback_version = flashback_version_;
 }
 
+void LogStorage::get_flashback_version_guarded_by_lock_(int64_t &flashback_version) const
+{
+  ObSpinLockGuard guard(tail_info_lock_);
+  flashback_version = flashback_version_;
+}
+
 offset_t LogStorage::get_phy_offset_(const LSN &lsn) const
 {
   return lsn_2_offset(lsn, logical_block_size_) + MAX_INFO_BLOCK_SIZE;
@@ -869,7 +865,8 @@ int LogStorage::read_block_header_(const block_id_t block_id,
     PALF_LOG(WARN, "block_id is large than max_block_id", K(ret), K(block_id),
              K(readable_log_tail), K(max_block_id), K(log_block_header));
   } else {
-    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size))) {
+    LogIteratorInfo iterator_info(false);
+    if (OB_FAIL(log_reader_.pread(block_id, 0, in_read_size, read_buf, out_read_size, &iterator_info))) {
       PALF_LOG(WARN, "read info block failed", K(ret), K(read_buf));
     } else if (OB_FAIL(log_block_header.deserialize(read_buf.buf_, out_read_size, pos))) {
       PALF_LOG(WARN, "deserialize info block failed", K(ret), K(read_buf),
@@ -921,7 +918,8 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                              const int64_t in_read_size,
                              const bool need_read_log_block_header,
                              ReadBuf &read_buf,
-                             int64_t &out_read_size)
+                             int64_t &out_read_size,
+                             LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   // NB: don't support read data from diffent file.
@@ -935,19 +933,28 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
   const offset_t read_offset = lsn_2_offset(read_lsn, logical_block_size_);
   const offset_t real_read_offset =
     read_offset == 0 && true ==  need_read_log_block_header ? 0 : get_phy_offset_(read_lsn);
-  const int64_t start_ts = ObTimeUtility::fast_current_time();
 
   if (read_lsn >= readable_log_tail) {
     ret = OB_ERR_OUT_OF_UPPER_BOUND;
     PALF_LOG(WARN, "read something out of upper bound", K(ret), K(read_lsn), K(log_tail_));
   } else {
-    if (OB_FAIL(log_reader_.pread(read_block_id,
-                                  real_read_offset,
-                                  real_in_read_size,
-                                  read_buf,
-                                  out_read_size))) {
-      PALF_LOG(
-          WARN, "LogReader pread failed", K(ret), K(read_lsn), K(log_tail_), K(real_in_read_size));
+    if (is_log_cache_inited_()) {
+      if (OB_FAIL(log_cache_->read(flashback_version, read_lsn, real_in_read_size,
+                                   read_buf, out_read_size, io_ctx.get_iterator_info()))) {
+        PALF_LOG(WARN, "read log cache failed", K(flashback_version), K(read_lsn),
+                 K(real_in_read_size), K(read_buf), K(out_read_size), KPC(this));
+      } else {
+        PALF_LOG(TRACE, "read log cache successfully", K(read_lsn), K(in_read_size),
+                 K(need_read_log_block_header), K(read_buf), K(out_read_size));
+      }
+    } else if (OB_FAIL(log_reader_.pread(read_block_id,
+                                         real_read_offset,
+                                         real_in_read_size,
+                                         read_buf,
+                                         out_read_size,
+                                         io_ctx.get_iterator_info()))) {
+      PALF_LOG(WARN, "LogReader pread failed", K(ret), K(read_lsn),
+               K(log_tail_), K(real_in_read_size), KPC(this));
     } else {
       PALF_LOG(TRACE,
                "inner_pread success",
@@ -958,22 +965,8 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
                K(read_lsn),
                K(out_read_size),
                K(readable_log_tail));
-      const int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
-      EVENT_TENANT_INC(ObStatEventIds::PALF_READ_IO_COUNT_FROM_DISK, MTL_ID());
-      EVENT_ADD(ObStatEventIds::PALF_READ_SIZE_FROM_DISK, out_read_size);
-      EVENT_ADD(ObStatEventIds::PALF_READ_TIME_FROM_DISK, cost_ts);
-      ATOMIC_INC(&accum_read_io_count_);
-      ATOMIC_AAF(&accum_read_log_size_, out_read_size);
-      ATOMIC_AAF(&accum_read_cost_ts_, cost_ts);
-      if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, last_accum_read_statistic_time_)) {
-        const int64_t avg_pread_cost = accum_read_cost_ts_ / accum_read_io_count_;
-        PALF_LOG(INFO, "[PALF STAT READ LOG INFO FROM DISK]", KPC(this), K_(accum_read_io_count),
-            K_(accum_read_log_size), K(avg_pread_cost));
-        ATOMIC_STORE(&accum_read_io_count_, 0);
-        ATOMIC_STORE(&accum_read_log_size_, 0);
-        ATOMIC_STORE(&accum_read_cost_ts_, 0);
-      }
     }
+
     // to ensure the data integrity, we should check 'read_block_id' whether has integrity data.
     int tmp_ret = check_read_out_of_bound_(read_block_id, flashback_version, OB_NO_SUCH_FILE_OR_DIRECTORY == ret);
     // overwrite ret code:
@@ -985,6 +978,7 @@ int LogStorage::inner_pread_(const LSN &read_lsn,
       ret = tmp_ret;
     }
   }
+
   return ret;
 }
 
@@ -1012,6 +1006,31 @@ int LogStorage::get_logical_block_size(int64_t &logical_block_size) const
   } else {
     logical_block_size = logical_block_size_;
   }
+  return ret;
+}
+
+LogReader *LogStorage::get_log_reader()
+{
+  return &log_reader_;
+}
+
+bool LogStorage::is_log_cache_inited_()
+{
+  return OB_NOT_NULL(log_cache_) && log_cache_->is_inited();
+}
+
+int LogStorage::fill_cache_when_slide(const LSN &begin_lsn, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  int64_t flashback_version = OB_INVALID_TIMESTAMP;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogStorage has not been inited!", K(ret), K(palf_id_));
+  } else if (FALSE_IT(get_flashback_version_guarded_by_lock_(flashback_version))) {
+  } else if (OB_FAIL(log_cache_->fill_cache_when_slide(begin_lsn, size, flashback_version))) {
+   PALF_LOG(WARN, "failed to fill committed log into cold cache", K(ret), K(begin_lsn), K(size), K(flashback_version));
+  }
+
   return ret;
 }
 

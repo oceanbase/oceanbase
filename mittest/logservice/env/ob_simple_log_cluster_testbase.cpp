@@ -80,6 +80,7 @@ int ObSimpleLogClusterTestBase::start()
   } else if (OB_FAIL(member_region_map_.create(OB_MAX_MEMBER_NUMBER,
       ObMemAttr(MTL_ID(), ObModIds::OB_HASH_NODE, ObCtxIds::DEFAULT_CTX_ID)))) {
   } else if (OB_FAIL(generate_sorted_server_list_(node_cnt_))) {
+  } else if (OB_FAIL(init_log_kv_cache_())) {
   } else {
     // 如果需要新增arb server，将其作为memberlist最后一项
     // TODO by runlin, 这个是暂时的解决方法，以后可以走加减成员的流程
@@ -130,6 +131,9 @@ int ObSimpleLogClusterTestBase::close()
       break;
     }
   }
+
+  OB_LOG_KV_CACHE.destroy();
+  ObKVGlobalCache::get_instance().destroy();
   return ret;
 }
 
@@ -162,6 +166,23 @@ int ObSimpleLogClusterTestBase::generate_sorted_server_list_(const int64_t node_
   }
   if (OB_SUCC(ret)) {
     SERVER_LOG(INFO, "simple log cluster node_list", K_(node_list));
+  }
+  return ret;
+}
+
+int ObSimpleLogClusterTestBase::init_log_kv_cache_()
+{
+  int ret = OB_SUCCESS;
+  const int64_t KV_CACHE_WASH_TIMER_INTERVAL_US = 60 * 1000L * 1000L;
+  const int64_t DEFAULT_BUCKET_NUM = 10000000L;
+  const int64_t DEFAULT_MAX_CACHE_SIZE = 1024L * 1024L * 1024L * 1024L;
+  if (OB_FAIL(ObKVGlobalCache::get_instance().init(
+          &ObTenantMemLimitGetter::get_instance(), DEFAULT_BUCKET_NUM,
+          DEFAULT_MAX_CACHE_SIZE, lib::ACHUNK_SIZE,
+          KV_CACHE_WASH_TIMER_INTERVAL_US))) {
+    PALF_LOG(WARN, "ObKVGlobalCache init failed");
+  } else if (OB_FAIL(OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1))) {
+    PALF_LOG(WARN, "OB_LOG_KV_CACHE init failed");
   }
   return ret;
 }

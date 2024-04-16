@@ -80,7 +80,7 @@ public:
                                 leader_.palf_handle_impl_->log_dir_,
                                 alloc_mgr,
                                 log_block_pool,
-                                &(leader_.palf_handle_impl_->hot_cache_),
+                                &(leader_.palf_handle_impl_->log_cache_),
                                 log_rpc,
                                 log_io_worker,
                                 log_shared_queue_th,

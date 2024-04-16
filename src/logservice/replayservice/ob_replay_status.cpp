@@ -100,6 +100,7 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  share::ObLSID ls_id;
   if (OB_ISNULL(replay_status) || OB_ISNULL(palf_handle)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(type_), K(ret), K(replay_status), K(palf_handle));
@@ -108,6 +109,8 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
   } else if (OB_UNLIKELY(!base_scn.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "base_scn is invalid", K(type_), K(base_lsn), K(base_scn), KR(ret));
+  } else if (OB_FAIL(replay_status->get_ls_id(ls_id))) {
+    CLOG_LOG(WARN, "get ls_id failed", K(ret), K(type_));
   } else {
     replay_status_ = replay_status;
     next_to_submit_lsn_ = base_lsn;
@@ -115,6 +118,8 @@ int ObReplayServiceSubmitTask::init(const palf::LSN &base_lsn,
     base_lsn_ = base_lsn;
     base_scn_ = base_scn;
     type_ = ObReplayServiceTaskType::SUBMIT_LOG_TASK;
+    iterator_.set_palf_id(ls_id.id());
+    iterator_.set_type(palf::LogIOUser::REPLAY);
     if (OB_SUCCESS != (tmp_ret = iterator_.next())) {
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));

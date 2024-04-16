@@ -452,6 +452,9 @@ int ObAllVirtualSysStat::get_cache_size_(const int64_t tenant_id, ObStatEventSet
       } else if (0 == STRNCMP(inst->status_.config_->cache_name_, "bf_cache", MAX_CACHE_NAME_LENGTH)) {
         stat_events.get(ObStatEventIds::BLOOM_FILTER_CACHE_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
             = inst->status_.map_size_ + inst->status_.store_size_;
+      } else if (0 == STRNCMP(inst->status_.config_->cache_name_, "log_kv_cache", MAX_CACHE_NAME_LENGTH)) {
+        stat_events.get(ObStatEventIds::LOG_KV_CACHE_SIZE - ObStatEventIds::STAT_EVENT_ADD_END -1)->stat_value_
+            = inst->status_.map_size_ + inst->status_.store_size_;
       } else {
         //do nothing
       }

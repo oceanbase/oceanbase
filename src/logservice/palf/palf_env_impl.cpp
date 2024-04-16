@@ -193,6 +193,7 @@ PalfEnvImpl::PalfEnvImpl() : palf_meta_lock_(common::ObLatchIds::PALF_ENV_LOCK),
                              palf_handle_impl_map_(64),  // 指定min_size=64
                              last_palf_epoch_(0),
                              rebuild_replica_log_lag_threshold_(0),
+                             enable_log_cache_(false),
                              diskspace_enough_(true),
                              tenant_id_(0),
                              is_inited_(false),
@@ -366,6 +367,7 @@ void PalfEnvImpl::destroy()
   tmp_log_dir_[0] = '\0';
   disk_options_wrapper_.reset();
   rebuild_replica_log_lag_threshold_ = 0;
+  enable_log_cache_ = false;
 }
 
 // NB: not thread safe
@@ -923,6 +925,7 @@ int PalfEnvImpl::update_options(const PalfOptions &options)
   } else if (OB_FAIL(disk_options_wrapper_.update_disk_options(options.disk_options_))) {
     PALF_LOG(WARN, "update_disk_options failed", K(ret), K(options));
   } else {
+    enable_log_cache_ = options.enable_log_cache_;
     PALF_LOG(INFO, "update_options successs", K(options), KPC(this));
   }
   return ret;
@@ -937,6 +940,7 @@ int PalfEnvImpl::get_options(PalfOptions &options)
     options.disk_options_ = disk_options_wrapper_.get_disk_opts_for_recycling_blocks();
     options.compress_options_ = log_rpc_.get_compress_opts();
     options.rebuild_replica_log_lag_threshold_ = rebuild_replica_log_lag_threshold_;
+    options.enable_log_cache_ = enable_log_cache_;
   }
   return ret;
 }

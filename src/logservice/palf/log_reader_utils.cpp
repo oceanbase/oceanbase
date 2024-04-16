@@ -82,7 +82,8 @@ int alloc_read_buf(const char *label, const int64_t buf_len, ReadBuf &read_buf)
 {
   int ret = OB_SUCCESS;
   const int64_t dio_align_size = LOG_DIO_ALIGN_SIZE;
-  const int64_t size = upper_align(buf_len, dio_align_size) + dio_align_size;
+  const int64_t cache_align_size = LOG_CACHE_ALIGN_SIZE;
+  const int64_t size = upper_align(buf_len, dio_align_size) + dio_align_size + cache_align_size;
   if (NULL == (read_buf.buf_ = static_cast<char *>(
       mtl_malloc_align(dio_align_size, size, label)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

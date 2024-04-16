@@ -25,9 +25,10 @@ using namespace common;
 namespace palf
 {
 
-LogReader::LogReader() : is_inited_(false)
-{
-}
+LogReader::LogReader()
+    : last_accum_read_statistic_time_(OB_INVALID_TIMESTAMP),
+      accum_read_io_count_(0), accum_read_log_size_(0), accum_read_cost_ts_(0),
+      is_inited_(false) {}
 
 LogReader::~LogReader()
 {
@@ -41,6 +42,7 @@ int LogReader::init(const char *log_dir, const offset_t block_size)
   } else {
     block_size_ = block_size;
     MEMCPY(log_dir_, log_dir, OB_MAX_FILE_NAME_LENGTH);
+    last_accum_read_statistic_time_ = ObTimeUtility::fast_current_time();
     is_inited_ = true;
   }
   if (false == is_inited_) {
@@ -55,6 +57,10 @@ void LogReader::destroy()
     is_inited_ = false;
     block_size_ = 0;
     MEMSET(log_dir_, '\0', OB_MAX_FILE_NAME_LENGTH);
+    last_accum_read_statistic_time_ = OB_INVALID_TIMESTAMP;
+    accum_read_io_count_ = 0;
+    accum_read_log_size_ = 0;
+    accum_read_cost_ts_ = 0;
   }
 }
 
@@ -62,7 +68,8 @@ int LogReader::pread(const block_id_t block_id,
                      const offset_t offset,
                      int64_t in_read_size,
                      ReadBuf &read_buf,
-                     int64_t &out_read_size) const
+                     int64_t &out_read_size,
+                     LogIteratorInfo *iterator_info) const
 {
   int ret = OB_SUCCESS;
   int read_io_fd = -1;
@@ -89,7 +96,7 @@ int LogReader::pread(const block_id_t block_id,
       const offset_t curr_read_offset = offset + in_read_size - remained_read_size;
       const int64_t curr_read_buf_len = remained_read_buf_len - out_read_size;
       int64_t curr_out_read_size = 0;
-      if (OB_FAIL(inner_pread_(read_io_fd, curr_read_offset, curr_in_read_size, curr_read_buf, curr_read_buf_len, curr_out_read_size))) {
+      if (OB_FAIL(inner_pread_(read_io_fd, curr_read_offset, curr_in_read_size, curr_read_buf, curr_read_buf_len, curr_out_read_size, iterator_info))) {
         PALF_LOG(WARN, "LogReader inner_pread_ failed", K(ret), K(read_io_fd), K(block_id), K(offset),
             K(in_read_size), K(read_buf), K(curr_in_read_size), K(curr_read_offset), K(curr_out_read_size),
             K(remained_read_size), K(block_path));
@@ -105,7 +112,7 @@ int LogReader::pread(const block_id_t block_id,
 
   if (-1 != read_io_fd && -1 == ::close(read_io_fd)) {
     ret = convert_sys_errno();
-    PALF_LOG(ERROR, "close read_io_fd failed", K(ret), K(read_io_fd), K(errno));
+    PALF_LOG(ERROR, "close read_io_fd failed", K(ret), K(read_io_fd));
   }
   return ret;
 }
@@ -115,7 +122,8 @@ int LogReader::inner_pread_(const int read_io_fd,
                             int64_t in_read_size,
                             char *read_buf,
                             const int64_t read_buf_len,
-                            int64_t &out_read_size) const
+                            int64_t &out_read_size,
+                            LogIteratorInfo *iterator_info) const
 {
   int ret = OB_SUCCESS;
   offset_t aligned_start_offset = lower_align(start_offset, LOG_DIO_ALIGN_SIZE);
@@ -140,6 +148,9 @@ int LogReader::inner_pread_(const int read_io_fd,
         K(ret), K(read_io_fd), K(aligned_start_offset), K(backoff),
         K(aligned_in_read_size), K(out_read_size), K(limited_and_aligned_in_read_size), K(errno));
   } else {
+    iterator_info->inc_read_io_cnt();
+    iterator_info->inc_read_io_size(out_read_size);
+
     out_read_size = MIN(out_read_size - static_cast<int32_t>(backoff), in_read_size);
     MEMMOVE(read_buf, read_buf + backoff, in_read_size);
     PALF_LOG(TRACE, "inner_read_ success", K(ret), K(read_io_fd), K(aligned_start_offset),

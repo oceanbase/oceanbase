@@ -54,6 +54,7 @@ class LogIOFlashbackTask;
 class FlashbackCbCtx;
 class LogIOPurgeThrottlingTask;
 class PurgeThrottlingCbCtx;
+class LogFillCacheTask;
 
 #define OVERLOAD_SUBMIT_CHANGE_CONFIG_META_REQ(type)                                \
   virtual int submit_change_config_meta_req(const type &member_list,                \
@@ -102,7 +103,7 @@ public:
            const LogMeta &log_meta,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
-           LogHotCache *hot_cache,
+           LogCache *log_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
            LogSharedQueueTh *log_shared_queue_th,
@@ -116,7 +117,7 @@ public:
            const char *base_dir,
            common::ObILogAllocator *alloc_mgr,
            ILogBlockPool *log_block_pool,
-           LogHotCache *hot_cache,
+           LogCache *log_cache,
            LogRpc *log_rpc,
            LogIOWorker *log_io_worker,
            LogSharedQueueTh *log_shared_queue_th,
@@ -157,6 +158,7 @@ public:
       const TruncatePrefixBlocksCbCtx &truncate_prefix_blocks_ctx);
   int submit_flashback_task(const FlashbackCbCtx &flashback_ctx);
   int submit_purge_throttling_task(const PurgeThrottlingType purge_type);
+  int submit_fill_cache_task(const LSN &lsn, const int64_t size);
 
   // ==================== Submit aysnc task end ==================
 
@@ -177,6 +179,7 @@ public:
   const LSN get_begin_lsn() const;
   int get_block_id_range(block_id_t &min_block_id, block_id_t &max_block_id) const;
   int get_block_min_scn(const block_id_t &block_id, share::SCN &scn) const;
+  int fill_cache_when_slide(const LSN &begin_lsn, const int64_t size);
   int raw_read(const LSN &lsn,
                const int64_t in_read_size,
                const bool need_read_block_header,
@@ -468,6 +471,9 @@ private:
                                LogIOFlashbackTask *&flashback_task);
   int generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge_cb_ctx,
                                       LogIOPurgeThrottlingTask *&purge_task);
+  int generate_fill_cache_task_(const LSN &lsn,
+                                const int64_t size,
+                                LogFillCacheTask *&fill_cache_task);
   int update_config_meta_guarded_by_lock_(const LogConfigMeta &meta, LogMeta &log_meta);
   int try_clear_up_holes_and_check_storage_integrity_(
       const LSN &last_entry_begin_lsn,

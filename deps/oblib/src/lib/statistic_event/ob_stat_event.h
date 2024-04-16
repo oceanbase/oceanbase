@@ -265,6 +265,9 @@ STAT_EVENT_ADD_DEF(SCHEMA_HISTORY_CACHE_MISS, "schema history cache miss", ObSta
 STAT_EVENT_ADD_DEF(OPT_SYSTEM_STAT_CACHE_HIT, "opt system stat cache hit", ObStatClassIds::CACHE, 50063, false, true, true)
 STAT_EVENT_ADD_DEF(OPT_SYSTEM_STAT_CACHE_MISS, "opt system stat cache miss", ObStatClassIds::CACHE, 50064, false, true, true)
 
+STAT_EVENT_ADD_DEF(LOG_KV_CACHE_HIT, "log kv cache hit", ObStatClassIds::CACHE, 50065, false, true, true)
+STAT_EVENT_ADD_DEF(LOG_KV_CACHE_MISS, "log kv cache miss", ObStatClassIds::CACHE, 50066, false, true, true)
+
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_BYTES, "MEMSTORE_LOGICAL_BYTES", STORAGE, "MEMSTORE_LOGICAL_BYTES", true, true, false)
@@ -385,9 +388,9 @@ STAT_EVENT_ADD_DEF(LS_ALL_TABLE_OPERATOR_GET_TIME, "log stream table operator ge
 STAT_EVENT_ADD_DEF(PALF_WRITE_IO_COUNT, "palf write io count to disk",  ObStatClassIds::CLOG, 80001, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_WRITE_SIZE, "palf write size to disk",  ObStatClassIds::CLOG, 80002, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_WRITE_TIME, "palf write total time to disk", ObStatClassIds::CLOG, 80003, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_COUNT_FROM_CACHE, "palf read count from cache", ObStatClassIds::CLOG, 80004, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_CACHE, "palf read size from cache", ObStatClassIds::CLOG, 80005, true, true, true)
-STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_CACHE, "palf read total time from cache", ObStatClassIds::CLOG, 80006, true, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_COUNT_FROM_HOT_CACHE, "palf read count from hot cache", ObStatClassIds::CLOG, 80004, true, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_HOT_CACHE, "palf read size from hot cache", ObStatClassIds::CLOG, 80005, true, true, true)
+STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_HOT_CACHE, "palf read total time from hot cache", ObStatClassIds::CLOG, 80006, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_READ_IO_COUNT_FROM_DISK, "palf read io count from disk", ObStatClassIds::CLOG, 80007, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_READ_SIZE_FROM_DISK, "palf read size from disk", ObStatClassIds::CLOG, 80008, true, true, true)
 STAT_EVENT_ADD_DEF(PALF_READ_TIME_FROM_DISK, "palf read total time from disk", ObStatClassIds::CLOG, 80009, true, true, true)
@@ -584,6 +587,7 @@ STAT_EVENT_SET_DEF(SYS_BLOCK_CACHE_SIZE, "sys block cache size", ObStatClassIds:
 STAT_EVENT_SET_DEF(USER_BLOCK_CACHE_SIZE, "user block cache size", ObStatClassIds::CACHE, 120006, false, true, true)
 STAT_EVENT_SET_DEF(USER_ROW_CACHE_SIZE, "user row cache size", ObStatClassIds::CACHE, 120008, false, true, true)
 STAT_EVENT_SET_DEF(BLOOM_FILTER_CACHE_SIZE, "bloom filter cache size", ObStatClassIds::CACHE, 120009, false, true, true)
+STAT_EVENT_SET_DEF(LOG_KV_CACHE_SIZE, "log kv cache size", ObStatClassIds::CACHE, 120010, false, true, true)
 
 // STORAGE
 STAT_EVENT_SET_DEF(ACTIVE_MEMSTORE_USED, "active memstore used", ObStatClassIds::STORAGE, 130000, false, true, true)

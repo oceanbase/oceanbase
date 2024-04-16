@@ -632,7 +632,7 @@ int ObSimpleLogClusterTestEnv::get_leader(const int64_t id, PalfHandleImplGuard 
     }
   } while (OB_ENTRY_NOT_EXIST == ret);
   if (OB_SUCC(ret) && disable_hot_cache()) {
-    leader.get_palf_handle_impl()->log_engine_.log_storage_.hot_cache_ = NULL;
+    leader.get_palf_handle_impl()->log_engine_.log_storage_.log_cache_->hot_cache_.reset();
   }
   PALF_LOG(INFO, "get_leader finished", K(ret), K(id), K(leader_idx));
   return ret;
@@ -1090,7 +1090,7 @@ int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader)
 int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader, const LSN &lsn)
 {
   int ret = OB_SUCCESS;
-  PalfBufferIterator iterator;
+  PalfBufferIterator iterator(leader.palf_id_);
   if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_buffer_iterator(lsn, iterator))) {
   } else {
     while (OB_SUCCESS == ret) {
@@ -1112,7 +1112,7 @@ int ObSimpleLogClusterTestEnv::read_log(PalfHandleImplGuard &leader, const LSN &
 int ObSimpleLogClusterTestEnv::read_group_log(PalfHandleImplGuard &leader, LSN lsn)
 {
   int ret = OB_SUCCESS;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(leader.palf_id_);
   if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_group_buffer_iterator(lsn, iterator))) {
   } else {
     LogGroupEntry entry;
@@ -1136,7 +1136,7 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleImplGuard &le
                                                          const LSN &start_lsn)
 {
   int ret = OB_SUCCESS;
-  PalfGroupBufferIterator iterator;
+  PalfGroupBufferIterator iterator(leader.palf_id_);
   if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_group_buffer_iterator(LSN(start_lsn), iterator))) {
   } else {
     LogGroupEntry entry;
@@ -1153,7 +1153,7 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleImplGuard &le
     }
     if (OB_ITER_END == ret) {
       wait_until_has_committed(leader_raw_write, LSN(leader.palf_handle_impl_->get_end_lsn()));
-      PalfBufferIterator iterator_raw_write;
+      PalfBufferIterator iterator_raw_write(leader_raw_write.palf_id_);
       if (OB_FAIL(leader_raw_write.palf_handle_impl_->alloc_palf_buffer_iterator(LSN(0), iterator_raw_write))) {
         PALF_LOG(WARN, "leader seek failed", K(ret), K(iterator_raw_write));
       } else {
@@ -1202,7 +1202,7 @@ int ObSimpleLogClusterTestEnv::read_log_from_memory(PalfHandleImplGuard &leader)
 {
   int ret = OB_SUCCESS;
   LSN lsn(0);
-  MemPalfBufferIterator iterator;
+  MemPalfBufferIterator iterator(leader.palf_id_);
   MemoryStorage mem_storage;
   char *buf = nullptr;
   block_id_t min_block_id, max_block_id;
@@ -1367,7 +1367,7 @@ void ObSimpleLogClusterTestEnv::wait_all_replcias_log_sync(const int64_t palf_id
 int ObSimpleLogClusterTestEnv::get_middle_scn(const int64_t log_num, PalfHandleImplGuard &leader, SCN &mid_scn, LogEntryHeader &log_entry_header)
 {
 	int ret = OB_SUCCESS;
-	PalfBufferIterator iterator;
+	PalfBufferIterator iterator(leader.palf_id_);
 	LSN init_lsn(PALF_INITIAL_LSN_VAL);
 	if (OB_FAIL(leader.palf_handle_impl_->alloc_palf_buffer_iterator(init_lsn, iterator))) {
 		PALF_LOG(ERROR, "seek failed", K(ret), K(iterator));

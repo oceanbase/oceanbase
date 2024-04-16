@@ -296,6 +296,7 @@ private:
   int init_px_target_mgr();
   int init_storage();
   int init_tx_data_cache();
+  int init_log_kv_cache();
   int init_gc_partition_adapter();
   int init_loaddata_global_stat();
   int init_bandwidth_throttle();

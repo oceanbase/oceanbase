@@ -361,11 +361,11 @@ int ObArchiveFetcher::handle_log_fetch_task_(ObArchiveLogFetchTask &task)
   int ret = OB_SUCCESS;
   bool need_delay = false;
   bool submit_log = false;
-  PalfGroupBufferIterator iter;
+  const ObLSID id = task.get_ls_id();
+  PalfGroupBufferIterator iter(id.id(), palf::LogIOUser::ARCHIVE);
   PalfHandleGuard palf_handle_guard;
   TmpMemoryHelper helper(unit_size_, allocator_);
   ObArchiveSendTask *send_task = NULL;
-  const ObLSID id = task.get_ls_id();
   const ArchiveWorkStation &station = task.get_station();
   ArchiveKey key = station.get_round();
   SCN commit_scn;

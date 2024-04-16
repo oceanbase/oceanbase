@@ -78,7 +78,8 @@ int IteratorStorage::pread(
     const int64_t pos,
     const int64_t in_read_size,
     char *&buf,
-    int64_t &out_read_size)
+    int64_t &out_read_size,
+    LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   const int64_t real_in_read_size = MIN(in_read_size, get_file_end_lsn_() - (start_lsn_ + pos));
@@ -95,7 +96,7 @@ int IteratorStorage::pread(
   } else if (0 == real_in_read_size) {
     ret = OB_ITER_END;
     PALF_LOG(WARN, "IteratorStorage has iterate end", K(ret), KPC(this));
-  } else if (OB_FAIL(read_data_from_storage_(real_pos, real_in_read_size, buf, out_read_size))) {
+  } else if (OB_FAIL(read_data_from_storage_(real_pos, real_in_read_size, buf, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "read_data_from_storage_ failed", K(ret), K(pos), K(in_read_size), KP(buf), KPC(this));
   } else {
     start_lsn_ = start_lsn_ + real_pos;
@@ -199,11 +200,11 @@ int MemoryIteratorStorage::read_data_from_storage_(
     int64_t &pos,
     const int64_t in_read_size,
     char *&buf,
-    int64_t &out_read_size)
+    int64_t &out_read_size,
+    LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   const LSN start_lsn = start_lsn_ + pos;
-  LogIOContext io_ctx(LogIOUser::DEFAULT);
   if (OB_FAIL(log_storage_->pread(start_lsn, in_read_size, read_buf_, out_read_size, io_ctx))) {
     PALF_LOG(WARN, "MemoryIteratorStorage pread failed", K(ret), KPC(this), K(start_lsn));
   } else {
@@ -228,7 +229,8 @@ int DiskIteratorStorage::read_data_from_storage_(
     int64_t &pos,
     const int64_t in_read_size,
     char *&buf,
-    int64_t &out_read_size)
+    int64_t &out_read_size,
+    LogIOContext &io_ctx)
 {
   int ret = OB_SUCCESS;
   int64_t remain_valid_data_size = 0;
@@ -239,7 +241,6 @@ int DiskIteratorStorage::read_data_from_storage_(
     const LSN curr_round_read_lsn = start_lsn_ + pos + remain_valid_data_size;
     const int64_t real_in_read_size = in_read_size - remain_valid_data_size;
     read_buf_.buf_ += remain_valid_data_size;
-    LogIOContext io_ctx(LogIOUser::DEFAULT);
     if (0ul == real_in_read_size) {
       ret = OB_ERR_UNEXPECTED;
       PALF_LOG(ERROR, "real read size is zero, unexpected error!!!", K(ret), K(real_in_read_size));
@@ -266,7 +267,7 @@ int DiskIteratorStorage::ensure_memory_layout_correct_(
     int64_t &remain_valid_data_size)
 {
   int ret = OB_SUCCESS;
-  const int64_t max_valid_buf_len = read_buf_.buf_len_ - LOG_DIO_ALIGN_SIZE;
+  const int64_t max_valid_buf_len = read_buf_.buf_len_ - LOG_DIO_ALIGN_SIZE - LOG_CACHE_ALIGN_SIZE;
   ReadBuf tmp_read_buf = read_buf_;
   // buf not enough, need alloc or expand
   if (in_read_size > max_valid_buf_len) {

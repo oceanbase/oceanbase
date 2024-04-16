@@ -499,6 +499,7 @@ int LogService::update_palf_options_except_disk_usage_limit_size()
       palf_opts.compress_options_.transport_compress_func_ = compressor_type;
       palf_opts.rebuild_replica_log_lag_threshold_ = tenant_config->_rebuild_replica_log_lag_threshold;
       palf_opts.disk_options_.log_writer_parallelism_ = tenant_config->_log_writer_parallelism;
+      palf_opts.enable_log_cache_ = tenant_config->_enable_log_cache;
       if (OB_FAIL(palf_env_->update_options(palf_opts))) {
         CLOG_LOG(WARN, "palf update_options failed", K(MTL_ID()), K(ret), K(palf_opts));
       } else {

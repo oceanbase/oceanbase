@@ -15,6 +15,7 @@
 
 #include "lib/thread/thread_mgr_interface.h"
 #include "lib/utility/ob_print_utils.h"
+#include "palf_callback.h"
 
 namespace oceanbase
 {

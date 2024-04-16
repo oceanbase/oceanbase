@@ -51,6 +51,7 @@
 #include "logservice/leader_coordinator/ob_failure_detector.h"
 #include <memory>
 #include <map>
+#include "share/ob_tenant_mem_limit_getter.h"
 
 namespace oceanbase
 {

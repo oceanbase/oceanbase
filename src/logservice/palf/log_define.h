@@ -157,6 +157,11 @@ constexpr int64_t LOG_BATCH_PUSH_LOG_REQ = 1;
 constexpr int64_t LOG_BATCH_PUSH_LOG_RESP = 2;
 // =========== BatchRPC end  ==================
 
+// ========== LogCache start =================
+constexpr offset_t LOG_CACHE_ALIGN_SIZE = 64 * 1024;
+constexpr int64_t LOG_CACHE_MEMORY_LIMIT = 20;      // memory limit ratio with tenant memory
+// ========== LogCache end =================
+
 const int64_t OB_INVALID_CONFIG_CHANGE_LOCK_OWNER = -1;
 
 enum ObReplicaState {
@@ -330,6 +335,10 @@ inline bool is_valid_file_desc(const FileDesc &fd)
   return 0 <= fd;
 }
 
+inline bool is_valid_flashback_version(const int64_t flashback_version)
+{
+  return 0 <= flashback_version;
+}
 
 int block_id_to_string(const block_id_t block_id,
                        char *str,

@@ -1410,7 +1410,7 @@ private:
   LogEngine log_engine_;
   ElectionMsgSender election_msg_sender_;
   election::ElectionImpl election_;
-  LogHotCache hot_cache_;
+  LogCache log_cache_;
   FetchLogEngine *fetch_log_engine_;
   common::ObILogAllocator *allocator_;
   int64_t palf_id_;

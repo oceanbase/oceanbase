@@ -149,7 +149,7 @@ void ObRecoveryLSService::do_work()
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(inited_), KP(proxy_));
   } else {
-    palf::PalfBufferIterator iterator;//can not use without palf_guard
+    palf::PalfBufferIterator iterator(SYS_LS.id(), palf::LogIOUser::RECOVERY);//can not use without palf_guard
     int64_t idle_time_us = 100 * 1000L;
     SCN start_scn;
     last_report_ts_ = OB_INVALID_TIMESTAMP;

@@ -14,6 +14,7 @@
 #define OCEANBASE_LOGSERVICE_LOG_IO_CONTEXT_
 #include <cstdint>
 #include "lib/utility/ob_print_utils.h"
+#include "log_iterator_info.h"
 
 namespace oceanbase
 {
@@ -30,7 +31,9 @@ enum class LogIOUser {
   SHARED_UPLOAD = 7,
   META_INFO = 8,
   RESTART = 9,
-  OTHER = 10,
+  FLASHBACK = 10,
+  RECOVERY = 11,
+  OTHER = 12,
 };
 
 inline const char *log_io_user_str(const LogIOUser user_type)
@@ -48,6 +51,8 @@ inline const char *log_io_user_str(const LogIOUser user_type)
     USER_TYPE_STR(SHARED_UPLOAD);
     USER_TYPE_STR(META_INFO);
     USER_TYPE_STR(RESTART);
+    USER_TYPE_STR(FLASHBACK);
+    USER_TYPE_STR(RECOVERY);
     USER_TYPE_STR(OTHER);
     default:
       return "Invalid";
@@ -58,16 +63,33 @@ inline const char *log_io_user_str(const LogIOUser user_type)
 class LogIOContext
 {
 public:
-  LogIOContext(const LogIOUser &user) : user_(user) { }
+  LogIOContext(const LogIOUser &user) : palf_id_(INVALID_PALF_ID), user_(user), iterator_info_() {}
+  LogIOContext(const int64_t palf_id, const LogIOUser &user) : palf_id_(palf_id), user_(user), iterator_info_() {}
   ~LogIOContext() { destroy(); }
   void destroy()
   {
     user_ = LogIOUser::DEFAULT;
+    iterator_info_.reset();
   }
-  TO_STRING_KV("user", log_io_user_str(user_));
+  void set_user_type(const LogIOUser user) {
+    user_ = user;
+  }
+  void set_palf_id(const int64_t palf_id) { palf_id_ = palf_id; }
+  void set_allow_filling_cache(const bool allow_filling_cache) {
+    iterator_info_.set_allow_filling_cache(allow_filling_cache);
+  }
+  void set_start_lsn(const LSN &start_lsn) {
+    iterator_info_.set_start_lsn(start_lsn);
+  }
+  LogIteratorInfo *get_iterator_info() {
+    return &iterator_info_;
+  }
+  TO_STRING_KV("user", log_io_user_str(user_), K(palf_id_), K(iterator_info_));
 
 private:
+  int64_t palf_id_;
   LogIOUser user_;
+  LogIteratorInfo iterator_info_;
 };
 }
 }

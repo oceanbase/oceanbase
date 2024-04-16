@@ -90,7 +90,7 @@ int LogEngine::init(const int64_t palf_id,
                     const LogMeta &log_meta,
                     ObILogAllocator *alloc_mgr,
                     ILogBlockPool *log_block_pool,
-                    LogHotCache *hot_cache,
+                    LogCache *log_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
                     LogSharedQueueTh *log_shared_queue_th,
@@ -120,7 +120,7 @@ int LogEngine::init(const int64_t palf_id,
              K(palf_id),
              K(base_dir),
              K(log_meta),
-             K(hot_cache),
+             K(log_cache),
              K(alloc_mgr),
              K(log_io_worker),
              K(log_shared_queue_th),
@@ -136,7 +136,7 @@ int LogEngine::init(const int64_t palf_id,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
                                             plugins,
-                                            NULL /*set hot_cache to NULL for meta storage*/))) {
+                                            NULL /*set log_cache to NULL for meta storage*/))) {
     PALF_LOG(ERROR, "LogMetaStorage init failed", K(ret), K(palf_id), K(base_dir));
   } else if(0 != log_storage_block_size
       && OB_FAIL(log_storage_.init(base_dir,
@@ -149,7 +149,7 @@ int LogEngine::init(const int64_t palf_id,
                                    log_storage_update_manifest_cb,
                                    log_block_pool,
                                    plugins,
-                                   hot_cache))) {
+                                   log_cache))) {
     PALF_LOG(ERROR, "LogStorage init failed!!!", K(ret), K(palf_id), K(base_dir), K(log_meta));
   } else if (OB_FAIL(log_net_service_.init(palf_id, log_rpc))) {
     PALF_LOG(ERROR, "LogNetService init failed", K(ret), K(palf_id));
@@ -199,7 +199,7 @@ int LogEngine::load(const int64_t palf_id,
                     const char *base_dir,
                     common::ObILogAllocator *alloc_mgr,
                     ILogBlockPool *log_block_pool,
-                    LogHotCache *hot_cache,
+                    LogCache *log_cache,
                     LogRpc *log_rpc,
                     LogIOWorker *log_io_worker,
                     LogSharedQueueTh *log_shared_queue_th,
@@ -240,7 +240,7 @@ int LogEngine::load(const int64_t palf_id,
   } else if (false == is_valid_palf_id(palf_id) || OB_ISNULL(base_dir)
       || OB_ISNULL(alloc_mgr) || OB_ISNULL(log_rpc) || OB_ISNULL(log_io_worker)) {
     ret = OB_INVALID_ARGUMENT;
-    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(base_dir), K(hot_cache), K(alloc_mgr),
+    PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(base_dir), K(log_cache), K(alloc_mgr),
              K(log_io_worker));
   } else if (OB_FAIL(log_meta_storage_.load(base_dir,
                                             "meta",
@@ -252,7 +252,7 @@ int LogEngine::load(const int64_t palf_id,
                                             log_meta_storage_update_manifest_cb,
                                             log_block_pool,
                                             plugins,
-                                            NULL, /*set hot_cache to NULL for meta storage*/
+                                            NULL, /*set log_cache to NULL for meta storage*/
                                             unused_meta_entry_header,
                                             last_meta_entry_start_lsn))) {
     PALF_LOG(ERROR, "LogMetaStorage load failed", K(ret), K(palf_id));
@@ -265,7 +265,7 @@ int LogEngine::load(const int64_t palf_id,
                                           log_storage_block_size, LOG_DIO_ALIGN_SIZE,
                                           LOG_DIO_ALIGNED_BUF_SIZE_REDO,
                                           log_storage_update_manifest_cb, log_block_pool, plugins,
-                                          hot_cache, entry_header, last_group_entry_header_lsn)))) {
+                                          log_cache, entry_header, last_group_entry_header_lsn)))) {
     PALF_LOG(ERROR, "LogStorage load failed", K(ret), K(palf_id), K(base_dir));
   } else if (FALSE_IT(guard.click("load log_storage"))
              || (0 != log_storage_block_size
@@ -597,6 +597,38 @@ int LogEngine::submit_purge_throttling_task(const PurgeThrottlingType purge_type
   return ret;
 }
 
+int LogEngine::submit_fill_cache_task(const LSN &lsn, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  LogFillCacheTask *fill_cache_task = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(ERROR, "LogEngine is not inited!!!", K(ret), KPC(this));
+  } else if (OB_ISNULL(log_shared_queue_th_)) {
+    ret = OB_ERR_UNEXPECTED;
+    PALF_LOG(ERROR, "log_shared_queue_th_ is NULL", K(ret), KPC(this));
+  } else if (OB_FAIL(generate_fill_cache_task_(lsn, size, fill_cache_task))) {
+    PALF_LOG(WARN, "generate fill cache task failed", K(ret), K(lsn), K(size));
+  } else if (OB_FAIL(log_shared_queue_th_->push_task(fill_cache_task))) {
+    if (OB_IN_STOP_STATE == ret) {
+      if (REACH_TIME_INTERVAL(100 * 1000)) {
+        PALF_LOG(WARN, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
+      }
+    } else {
+      PALF_LOG(ERROR, "push task failed", K(ret), KPC(this), KPC(fill_cache_task));
+    }
+  } else {
+    PALF_LOG(TRACE, "log_shared_queue_th_->push_task success", K(ret), KPC(this));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(fill_cache_task)) {
+    alloc_mgr_->free_log_fill_cache_task(fill_cache_task);
+    fill_cache_task = NULL;
+  }
+
+  return ret;
+}
+
 // ====================== LogStorage start =====================
 int LogEngine::append_log(const LSN &lsn, const LogWriteBuf &write_buf, const SCN &scn)
 {
@@ -646,7 +678,7 @@ int LogEngine::read_log(const LSN &lsn,
   } else if (OB_FAIL(log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx))) {
     PALF_LOG(ERROR, "LogEngine read_log failed", K(ret), K(lsn), K(in_read_size), K(read_buf));
   } else {
-    PALF_LOG(TRACE, "LogEngine read_log success", K(ret), K(lsn), K(read_buf), K(out_read_size));
+    PALF_LOG(TRACE, "LogEngine read_log success", K(ret), K(lsn), K(read_buf), K(out_read_size), K(io_ctx));
   }
   return ret;
 }
@@ -658,9 +690,10 @@ int LogEngine::read_group_entry_header(const LSN &lsn, LogGroupEntryHeader &log_
   const int64_t in_read_size = MAX_LOG_HEADER_SIZE;
   ReadBufGuard read_buf_guard("LogEngine", in_read_size);
   ReadBuf &read_buf = read_buf_guard.read_buf_;
+  LogIOContext io_ctx(LogIOUser::DEFAULT);
+  io_ctx.set_allow_filling_cache(false);
   int64_t out_read_size = 0;
   int64_t pos = 0;
-  LogIOContext io_ctx(LogIOUser::DEFAULT);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -948,6 +981,19 @@ int LogEngine::get_total_used_disk_space(int64_t &total_used_size_byte,
   return ret;
 }
 
+int LogEngine::fill_cache_when_slide(const LSN &begin_lsn, const int64_t size)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogEngine is not inited", K(ret), KPC(this));
+  } else if (OB_FAIL(log_storage_.fill_cache_when_slide(begin_lsn, size))) {
+    PALF_LOG(WARN, "fill_cache_when_slide failed", K(ret), K(begin_lsn), K(size));
+  }
+
+  return ret;
+}
+
 int LogEngine::raw_read(const LSN &lsn,
                         const int64_t in_read_size,
                         const bool need_read_block_header,
@@ -965,7 +1011,7 @@ int LogEngine::raw_read(const LSN &lsn,
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K_(palf_id), K_(is_inited), K(lsn), K(in_read_size), K(read_buf));
   } else if (need_read_block_header) {
-    ret = log_storage_.pread_with_block_header(lsn, in_read_size, read_buf, out_read_size);
+    ret = log_storage_.pread_with_block_header(lsn, in_read_size, read_buf, out_read_size, io_ctx);
   } else if (!need_read_block_header) {
     ret = log_storage_.pread(lsn, in_read_size, read_buf, out_read_size, io_ctx);
   } else {}
@@ -1586,6 +1632,31 @@ int LogEngine::generate_purge_throttling_task_(const PurgeThrottlingCbCtx &purge
     purge_task = NULL;
   }
   return ret;
+}
+
+int LogEngine::generate_fill_cache_task_(const LSN &lsn,
+                                         const int64_t size,
+                                         LogFillCacheTask *&fill_cache_task)
+{
+  int ret = OB_SUCCESS;
+  fill_cache_task = NULL;
+
+  if (!lsn.is_valid() || 0 >= size) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(size));
+  } else if (NULL == (fill_cache_task = alloc_mgr_->alloc_log_fill_cache_task(palf_id_, palf_epoch_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    PALF_LOG(WARN, "alloc LogFillCacheTask failed", K(ret), K(palf_id_), K(palf_epoch_), K(lsn), K(size));
+  } else if (OB_FAIL(fill_cache_task->init(lsn, size))) {
+    PALF_LOG(WARN, "LogFillCacheTask init failed", K(ret), K(lsn), K(size));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(fill_cache_task)) {
+    alloc_mgr_->free_log_fill_cache_task(fill_cache_task);
+    fill_cache_task = NULL;
+  }
+  return ret;
+
 }
 
 int LogEngine::serialize_log_meta_(const LogMeta& log_meta, char *buf, int64_t buf_len)
