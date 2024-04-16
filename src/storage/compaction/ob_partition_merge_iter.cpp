@@ -1931,7 +1931,7 @@ int ObPartitionMinorMacroMergeIter::open_curr_macro_block()
         LOG_WARN("Fail to check rowkey first row info", K(ret), KPC(iter));
     } else {
       macro_block_opened_ = true;
-      if (row_queue_.is_empty()) {
+      if (!row_queue_.has_next()) {
         is_rowkey_first_row_already_output_ = !is_first_row;
       }
       if (last_macro_block_reused() && last_macro_block_recycled_) {
