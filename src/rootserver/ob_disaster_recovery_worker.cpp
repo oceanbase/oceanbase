@@ -2052,17 +2052,6 @@ int ObDRWorker::try_tenant_disaster_recovery(
   return ret;
 }
 
-int ObDRWorker::try_assign_unit(
-    DRLSInfo &dr_ls_info)
-{
-  int ret = OB_SUCCESS;
-  /* TODO: (wenduo)
-   * try assign unit_id/unit_group_id for replicas with invalid unit_id/unit_group_id
-   */
-  UNUSED(dr_ls_info);
-  return ret;
-}
-
 int ObDRWorker::try_ls_disaster_recovery(
     const bool only_for_display,
     DRLSInfo &dr_ls_info,
@@ -4960,13 +4949,16 @@ int ObDRWorker::find_valid_readonly_replica_(
         // bypass
       } else if (OB_NOT_NULL(specified_unit_in_group)
           && specified_unit_in_group->get_unit().server_ != replica->get_server()) {
-        // bypass
+        // replica is not on target unit_group, just ignore
       } else if (replica->is_in_service()
                  && server_stat_info->is_alive()
                  && !server_stat_info->is_stopped()
                  && !replica->get_restore_status().is_restore_failed()
+                 && (unit_stat_info->get_unit().is_active_status() || OB_NOT_NULL(specified_unit_in_group))
                  && unit_stat_info->get_server_stat()->is_alive()
                  && !unit_stat_info->get_server_stat()->is_block()) {
+        // if unit_in_group is specified, we ignore unit status
+        // if unit_in_group not specified, it means any locations is ok, so try to find a ACTIVE unit as possible
         if (OB_FAIL(target_replica.assign(*replica))) {
           LOG_WARN("fail to assign replica", KR(ret), KPC(replica));
         } else {

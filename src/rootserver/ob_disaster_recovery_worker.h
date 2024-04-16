@@ -783,9 +783,6 @@ private:
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
-  int try_assign_unit(
-      DRLSInfo &dr_ls_info);
-
   int start();
 
   void statistic_remain_dr_task();
