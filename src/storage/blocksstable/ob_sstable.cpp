@@ -50,7 +50,7 @@ void ObSSTableMetaHandle::reset()
 int ObSSTableMetaHandle::get_sstable_meta(const ObSSTableMeta *&sstable_meta) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(sstable_meta)) {
+  if (OB_ISNULL(meta_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("sstable meta handle not inited", K(ret));
   } else {
@@ -792,22 +792,27 @@ int ObSSTable::check_row_locked(
   return ret;
 }
 
-int ObSSTable::set_upper_trans_version(const int64_t upper_trans_version)
+int ObSSTable::set_upper_trans_version(
+    common::ObArenaAllocator &allocator,
+    const int64_t upper_trans_version)
 {
   int ret = OB_SUCCESS;
-
-  const int64_t old_val = ATOMIC_LOAD(&upper_trans_version_);
-  // only set once
-  if (INT64_MAX == old_val && INT64_MAX != upper_trans_version) {
-    int64_t new_val = std::max(upper_trans_version, max_merged_trans_version_);
-    ATOMIC_CAS(&upper_trans_version_, old_val, new_val);
-    if (OB_NOT_NULL(meta_) && OB_FAIL(meta_->basic_meta_.set_upper_trans_version(upper_trans_version))) {
-      LOG_WARN("failed to update upper trans version of sstable meta", K(ret), KPC(meta_));
+  const int64_t old_val = upper_trans_version_;
+  // make sure meta_ is loaded, otherwise make meta and shell inconsistency.
+  if (!is_loaded() && OB_FAIL(bypass_load_meta(allocator))) {
+    LOG_WARN("failed to load sstable meta", K(ret), K(key_));
+  }
+  if (OB_SUCC(ret) && is_loaded()) {
+    (void) meta_->basic_meta_.set_upper_trans_version(upper_trans_version);
+    if (INT64_MAX == max_merged_trans_version_) {
+      upper_trans_version_ = upper_trans_version;
+    } else {
+      upper_trans_version_ = std::max(upper_trans_version, max_merged_trans_version_);
     }
   }
 
-  LOG_INFO("finish set upper trans version", K(ret), K(key_),
-      K(upper_trans_version), K(upper_trans_version_));
+  LOG_INFO("finish set upper trans version", K(ret), K(key_), K_(meta),
+      K(old_val), K(upper_trans_version), K(upper_trans_version_));
   return ret;
 }
 
@@ -1663,6 +1668,46 @@ int ObSSTable::get_meta(
       LOG_WARN("unexpected null sstable pointer", K(ret), KPC(sstable_ptr));
     } else {
       meta_handle.meta_ = sstable_ptr->meta_;
+    }
+  }
+  return ret;
+}
+
+int ObSSTable::bypass_load_meta(common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (is_loaded()) {
+  } else if (OB_UNLIKELY(!addr_.is_valid() || !addr_.is_block())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid addr", K(ret), KPC(this));
+  } else {
+    common::ObSafeArenaAllocator safe_allocator(allocator);
+    ObSSTableMetaHandle meta_handle;
+    ObStorageMetaCache &meta_cache = OB_STORE_CACHE.get_storage_meta_cache();
+    const ObStorageMetaValue *value = nullptr;
+    ObSSTable *sstable_ptr = nullptr;
+    ObStorageMetaKey meta_key(MTL_ID(), addr_);
+    if (OB_FAIL(meta_cache.bypass_get_meta(ObStorageMetaValue::MetaType::SSTABLE,
+                                           meta_key,
+                                           safe_allocator,
+                                           meta_handle.handle_))) {
+      LOG_WARN("fail to bypass cache get meta", K(ret), K(meta_key));
+    } else if (OB_FAIL(meta_handle.handle_.get_value(value))) {
+      LOG_WARN("fail to get value from meta handle", K(ret), KPC(this));
+    } else if (OB_ISNULL(value)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable cache value", K(ret), K(value), KPC(this));
+    } else if (OB_FAIL(value->get_sstable(sstable_ptr))) {
+      LOG_WARN("fail to get sstable from meta cache value", K(ret), KPC(value), KPC(this));
+    } else if (OB_ISNULL(sstable_ptr)
+        || OB_UNLIKELY(!sstable_ptr->is_valid())
+        || OB_ISNULL(sstable_ptr->meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null sstable pointer", K(ret), KPC(sstable_ptr));
+    } else {
+      // move the owner of new created sstable meta in memory to this
+      meta_ = sstable_ptr->meta_;
+      sstable_ptr->meta_ = nullptr;
     }
   }
   return ret;

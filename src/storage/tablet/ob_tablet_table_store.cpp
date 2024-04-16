@@ -1433,7 +1433,7 @@ int ObTabletTableStore::build_minor_tables(
           } else if (FALSE_IT(current_upper_trans_version = new_upper_trans->at(i+inc_pos))) {
           } else if (INT64_MAX == current_upper_trans_version) {
             break;
-          } else if (OB_FAIL(sstable->set_upper_trans_version(current_upper_trans_version))) {
+          } else if (OB_FAIL(sstable->set_upper_trans_version(allocator, current_upper_trans_version))) {
             LOG_WARN("failed to set new upper_trans_version", K(ret), K(i), KPC(sstable));
           }
         }

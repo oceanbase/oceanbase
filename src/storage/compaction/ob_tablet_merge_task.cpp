@@ -1369,7 +1369,7 @@ int ObTabletMergeFinishTask::try_set_upper_trans_version(
     } else if (OB_TMP_FAIL(ObGCUpperTransHelper::try_get_sstable_upper_trans_version(*ls, sstable, new_upper_trans_version))) {
       LOG_WARN("failed to get new upper_trans_version for sstable", K(tmp_ret), K(param));
     } else if (INT64_MAX != new_upper_trans_version
-            && OB_TMP_FAIL(sstable.set_upper_trans_version(new_upper_trans_version))) {
+            && OB_TMP_FAIL(sstable.set_upper_trans_version(ctx.allocator_, new_upper_trans_version))) {
       LOG_WARN("failed to set upper trans version", K(tmp_ret), K(param));
     } else {
       ctx.time_guard_.click(ObCompactionTimeGuard::UPDATE_UPPER_TRANS);
