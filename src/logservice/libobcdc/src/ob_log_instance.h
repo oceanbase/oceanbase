@@ -244,7 +244,8 @@ private:
   int get_task_count_(
       int64_t &ready_to_seq_task_count,
       int64_t &seq_trans_count,
-      int64_t &part_trans_task_resuable_count);
+      int64_t &part_trans_task_resuable_count,
+      int64_t &ddl_part_trans_count);
 
   // next record
   void do_drc_consume_tps_stat_();
