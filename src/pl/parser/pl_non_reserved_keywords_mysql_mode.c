@@ -104,6 +104,7 @@ static const NonReservedKeyword Mysql_pl_none_reserved_keywords[] =
   {"subclass_origin", SUBCLASS_ORIGIN},
   {"until", UNTIL},
   {"update", UPDATE},
+  {"user", USER},
   {"using", USING},
   {"when", WHEN},
   {"while", WHILE},
