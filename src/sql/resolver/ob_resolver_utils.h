@@ -837,6 +837,7 @@ private:
                                           bool is_const_expr,
                                           ObObj &part_value);
   static int deduce_expect_value_tc(const ObObjType part_column_expr_type,
+                                    const ObPartitionFuncType part_func_type,
                                     const ObCollationType coll_type,
                                     const ObString &column_name,
                                     ObObjTypeClass &expect_value_tc);

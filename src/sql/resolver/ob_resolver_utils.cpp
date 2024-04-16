@@ -3334,7 +3334,7 @@ int ObResolverUtils::resolve_const_expr(ObResolverParams &params,
       }
       if (OB_SUCC(ret)) {
         if (var_infos != NULL) {
-          if (ObRawExprUtils::merge_variables(sys_vars, *var_infos)) {
+          if (OB_FAIL(ObRawExprUtils::merge_variables(sys_vars, *var_infos))) {
             LOG_WARN("merge variables failed", K(ret));
           }
         } else {
@@ -3514,8 +3514,16 @@ bool ObResolverUtils::is_valid_partition_column_type(const ObObjType type,
       //https://dev.mysql.com/doc/refman/5.7/en/partitioning-columns.html
       ObObjTypeClass type_class = ob_obj_type_class(type);
       if (ObIntTC == type_class || ObUIntTC == type_class ||
-        ObDateTimeTC == type_class || ObDateTC == type_class ||
+        (ObDateTimeTC == type_class && ObTimestampType != type) || ObDateTC == type_class ||
         ObStringTC == type_class || ObYearTC == type_class || ObTimeTC == type_class) {
+        bret = true;
+      }else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type &&
+                 GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_1 &&
+                 (ObFloatTC == type_class || ObDoubleTC == type_class ||
+                  ObDecimalIntTC == type_class || ObTimestampType == type)) {
+        /*
+          not compatible with MySql, relaied by size partition
+        */
         bret = true;
       }
     }
@@ -3570,6 +3578,7 @@ int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFu
   const ObObjMeta& part_col_meta_type = static_cast<const ObObjMeta&>(part_value_expr.get_result_type());
   ObObj& result = static_cast<sql::ObConstRawExpr*>(&part_value_expr)->get_value();
   if (OB_FAIL(deduce_expect_value_tc(part_column_expr_type,
+                                     part_func_type,
                                      part_column_expr.get_collation_type(),
                                      part_column_expr.get_column_name(),
                                      expect_value_tc))) {
@@ -3612,6 +3621,7 @@ int ObResolverUtils::check_partition_range_value_result_type(const ObPartitionFu
   ObObjType part_column_expr_type = column_type.get_type();
   const ObObjMeta& part_col_meta_type = part_value.get_meta();
   if (OB_FAIL(deduce_expect_value_tc(part_column_expr_type,
+                                     part_func_type,
                                      column_type.get_collation_type(),
                                      column_name,
                                      expect_value_tc))) {
@@ -3681,8 +3691,7 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
           break;
         }
       }
-    }
-    else {
+    } else {
       /* 处理mysql的date，datetime数据类型。
 
           create table t1_date(c1 date,c2 int) partition by range columns(c1) (partition p0 values less than (date '2020-10-10'));
@@ -3697,6 +3706,10 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
                   && ( ObDateType == part_value_expr_type
                     || ObTimeType == part_value_expr_type)) {
           is_allow = true;
+        } else if (ObTimestampType == part_column_expr_type) {
+          is_allow = (ObDateTimeType == part_value_expr_type) ||
+                     (ObDateType == part_value_expr_type) ||
+                     (ObTimeType == part_value_expr_type);
         }
       }
       bool is_out_of_range = true;
@@ -3716,6 +3729,12 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
           is_allow = true;
         }
       }
+      if (ObFloatType == part_column_expr_type ||
+          ObDoubleType == part_column_expr_type ||
+          ObDecimalIntType == part_column_expr_type) {
+          is_allow = (ObStringTC == part_value_expr_tc || ObDecimalIntTC == part_value_expr_tc
+                      || (ObIntTC <= part_value_expr_tc && part_value_expr_tc <= ObNumberTC));
+      }
     }
     if (OB_SUCC(ret) && !is_allow) {
       ret = (ObTimestampLTZType == part_column_expr_type ? OB_ERR_WRONG_TIMESTAMP_LTZ_COLUMN_VALUE_ERROR: OB_ERR_WRONG_TYPE_COLUMN_VALUE_ERROR);
@@ -3728,6 +3747,7 @@ int ObResolverUtils::check_part_value_result_type(const ObPartitionFuncType part
 }
 
 int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_type,
+                                            const ObPartitionFuncType part_func_type,
                                             const ObCollationType coll_type,
                                             const ObString &column_name,
                                             ObObjTypeClass &expect_value_tc)
@@ -3764,6 +3784,13 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
       need_cs_check = true;
       break;
     }
+    case ObTimestampType: {
+      if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type) {
+        expect_value_tc = ObStringTC;
+        need_cs_check = true;
+        break;
+      }
+    }
     case ObVarcharType:
     case ObCharType:
     case ObNVarchar2Type:
@@ -3784,7 +3811,7 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
     }
     case ObFloatType:
     case ObDoubleType: {
-      if (is_oracle_mode) {
+      if (is_oracle_mode || (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type)) {
         expect_value_tc = ObStringTC;
         break;
       }
@@ -3797,7 +3824,7 @@ int ObResolverUtils::deduce_expect_value_tc(const ObObjType part_column_expr_typ
       }
     }
     case ObDecimalIntType: {
-      if (is_oracle_mode) {
+      if (is_oracle_mode || (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_func_type)) {
         expect_value_tc = ObDecimalIntTC;
         break;
       }

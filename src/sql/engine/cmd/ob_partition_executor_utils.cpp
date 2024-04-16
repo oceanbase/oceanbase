@@ -872,6 +872,9 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
         cast_ctx.res_accuracy_ = &res_acc;
         if (is_list_part) {
           cast_ctx.cast_mode_ |= CM_COLUMN_CONVERT;
+        } else if (!lib::is_oracle_mode()) {
+          // range columns in mysql mode
+          cast_ctx.cast_mode_ |= CM_COLUMN_CONVERT;
         }
       }
       //cast_ctx.dest_collation_ = temp_obj.get_collation_type();
@@ -882,6 +885,17 @@ int ObPartitionExecutorUtils::expr_cal_and_cast_with_check_varchar_len(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to cast obj, but out_val_ptr is NULL", K(ret),
                    K(expected_obj_type), K(fun_expr_type), K(temp_obj));
+        } else if (!lib::is_oracle_mode() && !is_list_part && ObDecimalIntType == expected_obj_type) {
+          // range columns in mysql mode
+          cast_ctx.cast_mode_ &= ~CM_WARN_ON_FAIL;
+          if (OB_FAIL(common::obj_accuracy_check(cast_ctx, dst_res_type.get_accuracy(), fun_collation_type, tmp_out_obj, tmp_out_obj, out_val_ptr))) {
+            LOG_WARN("obj_accuracy_check", K(ret));
+            if (ret == OB_ERR_DATA_TOO_LONG) {
+               ret = OB_ERR_DATA_TOO_LONG_IN_PART_CHECK;
+            }
+          } else {
+            value_obj = *out_val_ptr;
+          }
         } else {
           if (lib::is_oracle_mode() && OB_FAIL(common::obj_accuracy_check(cast_ctx, dst_res_type.get_accuracy(), fun_collation_type, tmp_out_obj, tmp_out_obj, out_val_ptr))) {
             LOG_WARN("obj_accuracy_check", K(ret));
