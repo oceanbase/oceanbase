@@ -27,16 +27,11 @@ enum class ObTableLoadRpcPriority
   HIGH_PRIO = 1,
 };
 
-// template <typename pcode, typename IGNORE = void>
-// struct ObTableLoadRpc
-// {
-// };
-
 #define OB_DEFINE_TABLE_LOAD_RPC_STRUCT(RpcType, pcode, Processor, Request, Result, Arg, Res) \
   template <typename IGNORE>                                                                  \
   struct RpcType<pcode, IGNORE>                                                               \
   {                                                                                           \
-    static constexpr auto PCODE = pcode;                                                      \
+    static constexpr int64_t PCODE = static_cast<int64_t>(pcode);                             \
     typedef Processor ProcessorType;                                                          \
     typedef Request RequestType;                                                              \
     typedef Result ResultType;                                                                \
