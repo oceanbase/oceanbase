@@ -516,7 +516,7 @@ int ObXmlUtil::xml_bin_to_text(
     LOG_WARN("fail to get xml base", K(ret), K(bin));
   } else if (OB_FAIL(base->print(*buffer, 0, 0, 0, CS_TYPE_UTF8MB4_GENERAL_CI))) {
     LOG_WARN("print_document failed", K(ret));
-  } else if (ob_write_string(allocator, buffer->string(), text)) {
+  } else if (OB_FAIL(ob_write_string(allocator, buffer->string(), text))) {
     LOG_WARN("ob_write_string failed", K(ret), K(*buffer));
   }
   return ret;

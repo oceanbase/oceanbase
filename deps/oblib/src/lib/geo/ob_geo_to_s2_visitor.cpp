@@ -254,7 +254,8 @@ int ObWkbToS2Visitor::MakeS2Polygon(T_IBIN *geo, S2Polygon *&res)
   }
 
   S2Polygon* py = new S2Polygon(std::move(s2poly));
-  if (OB_ISNULL(py)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(py)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to alloc s2cell", K(ret));
   } else {
@@ -324,7 +325,8 @@ int ObWkbToS2Visitor::MakeProjS2Polygon(T_IBIN *geo, S2Polygon *&res)
   }
 
   S2Polygon* py = new S2Polygon(std::move(s2poly));
-  if (OB_ISNULL(py)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(py)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to alloc s2cell", K(ret));
   } else {

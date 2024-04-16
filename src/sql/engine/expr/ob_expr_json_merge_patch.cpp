@@ -395,6 +395,7 @@ int ObExprJsonMergePatch::eval_ora_json_merge_patch(const ObExpr &expr, ObEvalCt
         if (dst_type == ObVarcharType && length > dst_len) {
           char res_ptr[OB_MAX_DECIMAL_PRECISION] = {0};
           if (OB_ISNULL(ObCharset::lltostr(dst_len, res_ptr, 10, 1))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to lltostr", K(ret), K(dst_len));
           }
           if (!err_type) {

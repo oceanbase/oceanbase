@@ -267,6 +267,7 @@ int ObSchemaGetterGuard::get_can_read_index_array(
         if (OB_FAIL(index_schema->get_spatial_geo_column_id(geo_col_id))) {
           LOG_WARN("failed to get geometry column id", K(ret));
         } else if (OB_ISNULL(geo_column = table_schema->get_column_schema(geo_col_id))) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get geometry column", K(ret), K(geo_col_id));
         } else if (geo_column->is_default_srid()) {
           is_geo_default_srid = true;

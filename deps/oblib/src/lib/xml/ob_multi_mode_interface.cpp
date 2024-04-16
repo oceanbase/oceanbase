@@ -644,7 +644,7 @@ int ObIMulModeBase::print_cdata(ObStringBuffer& x_buf, uint32_t format_flag)
   if (OB_FAIL(get_value(value))) {
     LOG_WARN("fail to get value.", K(ret));
   } else if (format_flag & ObXmlFormatType::PRINT_CDATA_AS_TEXT) {
-    if (ObXmlParserUtils::escape_xml_text(value, x_buf)) {
+    if (OB_FAIL(ObXmlParserUtils::escape_xml_text(value, x_buf))) {
       LOG_WARN("fail to print escape text", K(ret));
     }
   } else if (OB_FAIL(x_buf.append("<![CDATA["))) {

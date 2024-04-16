@@ -227,8 +227,8 @@ void ObLibXml2SaxHandler::characters(void *ctx, const xmlChar *ch, int len)
     LOG_WARN("get_parser failed", K(ret));
   } else if (OB_UNLIKELY(parser->is_stop_parse())) {
     LOG_INFO("parser is stopped", K(parser->get_last_errno()));
-  } else if (parser->characters(reinterpret_cast<const char*>(ch),
-                                len)) {
+  } else if (OB_FAIL(parser->characters(reinterpret_cast<const char*>(ch),
+                                len))) {
     LOG_WARN("parser characters failed", K(ret));
   }
 
@@ -246,9 +246,9 @@ void ObLibXml2SaxHandler::cdata_block(void* ctx, const xmlChar* value, int len)
     LOG_WARN("get_parser failed", K(ret));
   } else if (OB_UNLIKELY(parser->is_stop_parse())) {
     LOG_INFO("parser is stopped", K(parser->get_last_errno()));
-  } else if (parser->add_text_node(ObMulModeNodeType::M_CDATA,
+  } else if (OB_FAIL(parser->add_text_node(ObMulModeNodeType::M_CDATA,
                                    reinterpret_cast<const char*>(value),
-                                   len)) {
+                                   len))) {
     LOG_WARN("parser cdata block failed", K(ret));
   }
 
@@ -268,9 +268,9 @@ void ObLibXml2SaxHandler::comment(void* ctx, const xmlChar* value)
     LOG_WARN("get_parser failed", K(ret));
   } else if (OB_UNLIKELY(parser->is_stop_parse())) {
     LOG_INFO("parser is stopped", K(parser->get_last_errno()));
-  } else if (parser->add_text_node(ObMulModeNodeType::M_COMMENT,
+  } else if (OB_FAIL(parser->add_text_node(ObMulModeNodeType::M_COMMENT,
                                    src_value,
-                                   STRLEN(src_value))) {
+                                   STRLEN(src_value)))) {
     LOG_WARN("parser comment failed", K(ret));
   }
 
