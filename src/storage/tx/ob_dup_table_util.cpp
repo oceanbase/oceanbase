@@ -1833,6 +1833,7 @@ int ObDupTableLoopWorker::CopyDupLsIdFunctor::operator()(common::hash::HashSetTy
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(ObLSService *);
   common::ObArray<share::ObLSID> ls_id_array;
   CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
@@ -1848,8 +1849,11 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_it
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
-        DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+      if (OB_TMP_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        if (OB_LS_NOT_EXIST != tmp_ret) {
+          ret = tmp_ret;
+          DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+        }
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         DUP_TABLE_LOG(WARN, "ls handler not valid", K(ret), K(cur_ls_id), KPC(ls_service));
@@ -1873,6 +1877,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSLeaseMgrStatIterator &collect_it
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(ObLSService *);
   common::ObArray<share::ObLSID> ls_id_array;
   CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
@@ -1888,8 +1893,11 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
-        DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+      if (OB_TMP_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        if (OB_LS_NOT_EXIST != tmp_ret) {
+          ret = tmp_ret;
+          DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+        }
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         DUP_TABLE_LOG(WARN, "ls handler not valid", K(ret), K(cur_ls_id), KPC(ls_service));
@@ -1913,6 +1921,7 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletSetStatIterator &collect_i
 int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_iter)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObLSService *ls_service = MTL(ObLSService *);
   common::ObArray<share::ObLSID> ls_id_array;
   CopyDupLsIdFunctor copy_dup_ls_id_functor(ls_id_array);
@@ -1928,8 +1937,11 @@ int ObDupTableLoopWorker::iterate_dup_ls(ObDupLSTabletsStatIterator &collect_ite
       ObDupTableLSHandler *cur_dup_ls_handler = nullptr;
       ObLSHandle ls_handle;
 
-      if (OB_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
-        DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+      if (OB_TMP_FAIL(ls_service->get_ls(cur_ls_id, ls_handle, ObLSGetMod::TRANS_MOD))) {
+        if (OB_LS_NOT_EXIST != tmp_ret) {
+          ret = tmp_ret;
+          DUP_TABLE_LOG(WARN, "get ls handler error", K(ret), K(cur_ls_id), KPC(ls_service));
+        }
       } else if (!ls_handle.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         DUP_TABLE_LOG(WARN, "ls handler not valid", K(ret), K(cur_ls_id), KPC(ls_service));
