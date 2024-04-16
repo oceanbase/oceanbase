@@ -819,9 +819,9 @@ const uint64_t OB_ORA_SYS_DATABASE_ID = 6;
 const uint64_t OB_ORA_LBACSYS_DATABASE_ID = 7;
 const uint64_t OB_ORA_AUDITOR_DATABASE_ID = 8;
 const char* const OB_ORA_PUBLIC_SCHEMA_NAME = "PUBLIC";
-// not actual database, only for using and creating outlines without specified database
-const uint64_t OB_OUTLINE_DEFAULT_DATABASE_ID = 9;
-const char* const OB_OUTLINE_DEFAULT_DATABASE_NAME = "__outline_default_db";
+// use only if the 'use database' command is not executed.
+const uint64_t OB_MOCK_DEFAULT_DATABASE_ID = 9;
+const char* const OB_MOCK_DEFAULT_DATABASE_NAME = "__outline_default_db";
 
 // sys unit associated const
 const uint64_t OB_SYS_UNIT_CONFIG_ID = 1;

@@ -60,7 +60,7 @@ int ObOutlineResolver::resolve_outline_name(const ParseNode* node, ObString& db_
     bool perserve_lettercase = share::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
     if (NULL == db_name_node) {
       if (session_info_->get_database_name().empty()) {
-        db_name = OB_OUTLINE_DEFAULT_DATABASE_NAME;
+        db_name = OB_MOCK_DEFAULT_DATABASE_NAME;
       } else {
         db_name = session_info_->get_database_name();
       }

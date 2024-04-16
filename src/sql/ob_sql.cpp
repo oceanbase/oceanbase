@@ -1208,7 +1208,7 @@ inline int ObSql::handle_text_query(const ObString &stmt, ObSqlCtx &context, ObR
     if (OB_FAIL(session.get_database_id(database_id))) {
       LOG_WARN("Failed to get database id", K(ret));
     } else if (FALSE_IT(pc_ctx->bl_key_.db_id_ = (database_id == OB_INVALID_ID)
-                                                     ? combine_id(tenant_id, OB_OUTLINE_DEFAULT_DATABASE_ID)
+                                                     ? combine_id(tenant_id, OB_MOCK_DEFAULT_DATABASE_ID)
                                                      : database_id)) {
       // do nothing
     } else if (!use_plan_cache) {

@@ -157,8 +157,8 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
         case DATABASE_NAME: {
           DBInfo db_info;
           if (outline_info->get_database_id() ==
-              combine_id(outline_info->get_tenant_id(), OB_OUTLINE_DEFAULT_DATABASE_ID)) {
-            cells[cell_idx].set_varchar(OB_OUTLINE_DEFAULT_DATABASE_NAME);
+              combine_id(outline_info->get_tenant_id(), OB_MOCK_DEFAULT_DATABASE_ID)) {
+            cells[cell_idx].set_varchar(OB_MOCK_DEFAULT_DATABASE_NAME);
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           } else if (OB_FAIL(database_infos_.get_refactored(outline_info->get_database_id(), db_info))) {
             LOG_WARN("fail to ge value from database_infos", K(ret), K(outline_info->get_database_id()));
@@ -229,7 +229,7 @@ int ObTenantVirtualOutline::is_output_outline(const ObOutlineInfo *outline_info,
   } else if (outline_info->get_outline_content_str().empty()) {
     is_output = false;
   } else if (outline_info->get_database_id() ==
-             combine_id(outline_info->get_tenant_id(), OB_OUTLINE_DEFAULT_DATABASE_ID)) {
+             combine_id(outline_info->get_tenant_id(), OB_MOCK_DEFAULT_DATABASE_ID)) {
     // __outline_default_db is a logical table and has no physical schema.
     // Therefore, always output this.
     is_output = true;

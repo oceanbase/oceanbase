@@ -1808,7 +1808,7 @@ int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session, ObjNameSpac
   if (OB_FAIL(session.get_database_id(database_id))) {
     LOG_WARN("get database id failed", K(ret));
   } else if (FALSE_IT(pc_key.db_id_ = (database_id == OB_INVALID_ID) ? combine_id(session.get_effective_tenant_id(),
-                                                                           OB_OUTLINE_DEFAULT_DATABASE_ID)
+                                                                           OB_MOCK_DEFAULT_DATABASE_ID)
                                                                      : database_id)) {
     // do nothing
   } else {
