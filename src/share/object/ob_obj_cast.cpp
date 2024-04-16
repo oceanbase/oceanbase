@@ -568,11 +568,13 @@ int real_range_check_only(const ObAccuracy &accuracy, Type value)
   if (OB_LIKELY(precision > 0) &&
       OB_LIKELY(scale >= 0) &&
       OB_LIKELY(precision >= scale)) {
-    Type integer_part = static_cast<Type>(pow(10.0, static_cast<double>(precision - scale)));
-    Type decimal_part = static_cast<Type>(pow(10.0, static_cast<double>(scale)));
-    Type max_value = integer_part - 1 / decimal_part;
-    Type min_value = -max_value;
-    if (OB_FAIL(numeric_range_check(value, min_value, max_value, value))) {
+    // Because double type represents a larger width, use double type instead of float to check
+    // result range.
+    double integer_part = static_cast<double>(pow(10.0, static_cast<double>(precision - scale)));
+    double decimal_part = static_cast<double>(pow(10.0, static_cast<double>(scale)));
+    double max_value = integer_part - 1 / decimal_part;
+    double min_value = -max_value;
+    if (OB_FAIL(numeric_range_check(static_cast<double>(value), min_value, max_value, value))) {
     }
   }
   return ret;
