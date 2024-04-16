@@ -53,7 +53,6 @@ public:
     mattr_.tenant_id_ = tenant_id;
     return init(page_size, mattr_, cache_page_count, total_limit);
   }
-  void destroy() { ObVSliceAlloc::purge_extra_cached_block(0); }
 public:
   void *alloc(const int64_t size) { return ObVSliceAlloc::alloc(size); }
   void *alloc(const int64_t size, const ObMemAttr &attr) { UNUSED(attr); return alloc(size); }

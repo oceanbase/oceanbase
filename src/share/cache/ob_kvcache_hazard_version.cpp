@@ -211,6 +211,16 @@ int GlobalHazardVersion::init(const int64_t thread_waiting_node_threshold)
 void GlobalHazardVersion::destroy()
 {
   COMMON_LOG(INFO, "Hazard version begin to destroy");
+  {
+    lib::ObMutexGuard guard(thread_store_lock_);
+    KVCacheHazardThreadStore *ts = thread_stores_;
+    while (OB_NOT_NULL(ts)) {
+      KVCacheHazardThreadStore *tmp_ts = ts->get_next();
+      ts->~KVCacheHazardThreadStore();
+      thread_store_allocator_.free(ts);
+      ts = tmp_ts;
+    }
+  }
 
   inited_ = false;
   thread_stores_ = nullptr;
