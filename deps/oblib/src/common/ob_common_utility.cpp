@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX COMMON
 #include "common/ob_common_utility.h"
+#include "lib/alloc/malloc_hook.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 using namespace oceanbase::lib;
@@ -108,6 +109,9 @@ int get_stackattr(void *&stackaddr, size_t &stacksize)
     stackaddr = g_stackaddr;
     stacksize = g_stacksize;
   } else {
+    bool in_hook_bak = in_hook();
+    in_hook() = true;
+    DEFER(in_hook() = in_hook_bak);
     pthread_attr_t attr;
     if (OB_UNLIKELY(0 != pthread_getattr_np(pthread_self(), &attr))) {
       ret = OB_ERR_UNEXPECTED;
