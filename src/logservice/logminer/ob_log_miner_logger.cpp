@@ -52,8 +52,8 @@ int LogMinerLogger::log_progress(int64_t record_num, int64_t current_ts, int64_t
   int ret = OB_SUCCESS;
   double percentage = double(current_ts - begin_ts) / double(end_ts - begin_ts);
   double progress = 0;
-  struct winsize w;
   int pb_width = 0;
+  int terminal_width = 0;
   int lpad = 0;
   int rpad = 0;
   int64_t pos = 0;
@@ -65,36 +65,39 @@ int LogMinerLogger::log_progress(int64_t record_num, int64_t current_ts, int64_t
     percentage = 1;
   }
   progress = percentage * 100;
+  terminal_width = get_terminal_width();
+  terminal_width = (terminal_width < MAX_SCREEN_WIDTH) ? terminal_width : MAX_SCREEN_WIDTH;
+  pb_width = terminal_width - FIXED_TERMINAL_WIDTH;
+  pb_width = (pb_width < MIN_PB_WIDTH) ? 0 : pb_width;
 
-  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) < 0) {
-    // don't update pb_width when terminal information cannot be obtained
-    if (isatty(STDOUT_FILENO)) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "stdout was directed to terminal but ioctl failed");
-    }
-  } else {
-    // get the information of terminal window successfully
-    w.ws_col = (w.ws_col < MAX_SCREEN_WIDTH) ? w.ws_col : MAX_SCREEN_WIDTH;
-    // 68: 20->datatime, 2->[], 7->percentage, 19->", written records: ", 20->the length of INT64_MAX
-    pb_width = w.ws_col - 68;
-  }
-  pb_width = (pb_width < 5) ? 0 : pb_width;
-
-  if (pb_width) {
+  if (0 < pb_width) {
     lpad = (int)(percentage * pb_width);
     rpad = pb_width - lpad;
     sprintf(pb_buf, "[%.*s%*s]", lpad, pb_str_, rpad, "");
   }
-  
   if (OB_FAIL(ObTimeConverter::datetime_to_str(current_ts, &LOGMINER_TZ.get_tz_info(),
       nls_format, 0, time_buf, sizeof(time_buf), pos))) {
     LOG_WARN("datetime to string failed", K(current_ts), K(LOGMINER_TZ.get_tz_info()));
-  }
-  if (OB_SUCC(ret)) {
+  } else {
     fprintf(stdout, "\r%s %s %5.1lf%%, written records: %-20jd", time_buf, pb_buf,
         progress, record_num);
     fflush(stdout);
   }
   return ret;
+}
+
+int LogMinerLogger::get_terminal_width()
+{
+  int tmp_ret = OB_SUCCESS;
+  struct winsize terminal_size {};
+  if (isatty(STDOUT_FILENO)) {
+    if (-1 == ioctl(STDOUT_FILENO, TIOCGWINSZ, &terminal_size)) { // On error, -1 is returned
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN_RET(tmp_ret, "get terminal width failed", K(errno), K(strerror(errno)));
+    }
+  }
+  // if get terminal width failed, return 0.
+  return tmp_ret == OB_SUCCESS ? terminal_size.ws_col : 0;
 }
 
 }
