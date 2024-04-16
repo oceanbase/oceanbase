@@ -62,24 +62,6 @@ using namespace palf;
 namespace rootserver
 {
 ERRSIM_POINT_DEF(ERRSIM_END_TRANS_ERROR);
-#define RESTORE_EVENT_ADD                                                      \
-  int ret_code = OB_SUCCESS;                                                   \
-  switch (ret) {                                                               \
-    case -ER_ACCESS_DENIED_ERROR:                                              \
-      ret_code = OB_PASSWORD_WRONG;                                            \
-    case -ER_CONNECT_FAILED:                                                   \
-      ret_code = OB_CONNECT_ERROR;                                             \
-    case OB_IN_STOP_STATE:                                                     \
-      ret_code = OB_IN_STOP_STATE;                                             \
-    default:                                                                   \
-      ret_code = ret;                                                          \
-  }                                                                            \
-  ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",              \
-    "tenant_id", tenant_id_, K(ret),                                           \
-    "ob_error_name", ob_error_name(ret_code),                                  \
-    "ob_error_str", ob_strerror(ret_code),                                     \
-    "primary_user_tenant", user_and_tenant.ptr(),                              \
-    "primary_ip_list", service_attr.addr_);                                    \
 
 int ObRecoveryLSService::init()
 {
@@ -110,9 +92,7 @@ void ObRecoveryLSService::destroy()
   inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   proxy_ = NULL;
-  restore_proxy_.destroy();
   last_report_ts_ = OB_INVALID_TIMESTAMP;
-  primary_is_avaliable_= true;
   restore_status_.reset();
 }
 
@@ -210,11 +190,6 @@ int ObRecoveryLSService::process_thread0_(const ObAllTenantInfo &tenant_info)
 
   (void)try_tenant_upgrade_end_();
 
-  if (tenant_info.is_standby()) {
-    if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) {
-      (void)try_update_primary_ip_list();
-    }
-  }
   return ret;
 }
 
@@ -1320,201 +1295,6 @@ int ObRecoveryLSService::do_ls_balance_alter_task_(
               ls_balance_task.get_ls_group_id(), status_info.unit_group_id_, tenant_info, trans))) {
         LOG_WARN("failed to process alter ls", KR(ret), K(ls_balance_task), K(status_info));
       }
-    }
-  }
-  return ret;
-}
-void ObRecoveryLSService::try_update_primary_ip_list()
-{
-  int ret = OB_SUCCESS;
-  ObLogRestoreSourceMgr restore_source_mgr;
-  ObLogRestoreSourceItem item;
-  common::ObArray<common::ObAddr> primary_addrs;
-  ObSqlString standby_source_value;
-  ObRestoreSourceServiceAttr service_attr;
-  ObMySQLTransaction trans;
-  ObSqlString user_and_tenant;
-  int64_t primary_cluster_id = 0;
-  uint64_t primary_tenant_id = 0;
-  char passwd[OB_MAX_PASSWORD_LENGTH + 1] = { 0 }; //unencrypted password
-
-  if (OB_FAIL(restore_source_mgr.init(tenant_id_, proxy_))) {
-    LOG_WARN("fail to init restore_source_mgr", K_(tenant_id));
-  } else if (OB_FAIL(restore_source_mgr.get_source(item))) {
-    LOG_WARN("get source failed", K_(tenant_id));
-  } else if (!check_need_update_ip_list_(item)) {
-    LOG_INFO("there is no log restore source record or the log restore source type is not service" , K(item));
-  } else if (OB_FAIL(get_restore_source_value_(item, standby_source_value))) {
-    LOG_WARN("fail to get service standby log_restore source value", K(item));
-  } else if (OB_FAIL(service_attr.parse_service_attr_from_str(standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(item), K(standby_source_value));
-  } else if (!service_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("service attr is invalid", K(service_attr));
-  } else if (OB_FAIL(service_attr.get_password(passwd, sizeof(passwd)))) {
-    LOG_WARN("get servcie attr password failed", K(service_attr));
-  } else if (OB_FAIL(service_attr.get_user_str_(user_and_tenant))) {
-    LOG_WARN("get user str failed", K(service_attr.user_.user_name_), K(service_attr.user_.tenant_name_));
-  } else if (!primary_is_avaliable_ && restore_proxy_.is_inited()) {
-    LOG_WARN("primary is not avaliable, retry init restore proxy");
-    restore_proxy_.destroy();
-  } else if (!restore_proxy_.is_inited() && OB_FAIL(restore_proxy_.init(tenant_id_/*standby*/,
-      service_attr.addr_,
-      user_and_tenant.ptr(),
-      passwd,
-      service_attr.user_.mode_ == ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME))) {
-    LOG_WARN("restore_proxy_ fail to connect to primary", K_(tenant_id), K(service_attr.addr_), K(user_and_tenant));
-  } else if (OB_FAIL(restore_proxy_.get_cluster_id(service_attr.user_.tenant_id_, primary_cluster_id))) {
-    LOG_WARN("restore proxy fail to get primary cluster id", K(service_attr.user_.tenant_id_));
-  } else if (OB_FAIL(restore_proxy_.get_tenant_id(service_attr.user_.tenant_name_, primary_tenant_id))) {
-    LOG_WARN("restore proxy fail to get primary tenant id", K(service_attr.user_.tenant_name_));
-  } else if (OB_FAIL(restore_proxy_.get_server_ip_list(service_attr.user_.tenant_id_, primary_addrs))) {
-    LOG_WARN("restore proxy fail to get primary server ip list", K(service_attr.user_.tenant_id_));
-  } else if (primary_addrs.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tenant ip list is empty", K(primary_addrs));
-  } else if ((primary_cluster_id != service_attr.user_.cluster_id_) || (primary_tenant_id != service_attr.user_.tenant_id_)) {
-    LOG_WARN("primary cluster id or tenant id has changed",
-    K(primary_cluster_id), K(service_attr.user_.cluster_id_), K(primary_tenant_id), K(service_attr.user_.tenant_id_));
-  } else {
-    bool cur_primary_state = true;
-    if (cur_primary_state != primary_is_avaliable_) {
-      primary_is_avaliable_ = true;
-      ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",
-        "tenant_id", tenant_id_,
-        "info", "primary connection recovery",
-        "primary_user_tenant", user_and_tenant.ptr(),
-        "primary_ip_list", primary_addrs);
-    }
-
-    bool addr_is_same = false;
-    addr_is_same = service_attr.compare_addr_(primary_addrs);
-    if (!addr_is_same) {
-      common::ObArray<common::ObAddr> tmp_addr;
-      if (OB_FAIL(tmp_addr.assign(service_attr.addr_))) {
-        LOG_WARN("fail to assign service attr addr", K(service_attr.addr_));
-      } else {
-        service_attr.addr_.reset();
-        ARRAY_FOREACH_N(primary_addrs, idx, cnt) {
-          if (OB_FAIL(service_attr.addr_.push_back(primary_addrs.at(idx)))) {
-            LOG_WARN("fail to push back primary addr", K(primary_addrs.at(idx)));
-          }
-        }
-        LOG_INFO("primary ip list has changed", K(addr_is_same), K(primary_addrs), K(service_attr.addr_));
-        if (OB_FAIL(ret)) {
-          LOG_WARN("fail to update primary ip list");
-        } else if (OB_FAIL(do_update_restore_source_(service_attr, restore_source_mgr))) {
-          LOG_WARN("fail to update restore source", K(service_attr));
-        }
-        ROOTSERVICE_EVENT_ADD("root_service", "update_primary_ip_list",
-          "tenant_id", tenant_id_,
-          "info", "do update primary ip list",
-          "primary_user_tenant", user_and_tenant.ptr(),
-          "new_primary_ip_list", primary_addrs,
-          "old_primary_ip_list", tmp_addr);
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-    bool cur_primary_state = false;
-    if (cur_primary_state != primary_is_avaliable_) {
-      primary_is_avaliable_ = false;
-      LOG_WARN("standby recovery ls service state changed");
-      RESTORE_EVENT_ADD;
-    }
-  }
-}
-
-bool ObRecoveryLSService::check_need_update_ip_list_(ObLogRestoreSourceItem &item)
-{
-  return item.is_valid() && ObLogRestoreSourceType::SERVICE == item.type_;
-}
-
-int ObRecoveryLSService::get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString value;
-  if (!item.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("log restore source item is invalid");
-  } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
-    LOG_WARN("fail to assign standby source value", K(item.value_));
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::do_update_restore_source_(
-  ObRestoreSourceServiceAttr &old_attr,
-  ObLogRestoreSourceMgr &restore_source_mgr)
-{
-  int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  ObLogRestoreSourceItem tmp_item;
-  ObRestoreSourceServiceAttr tmp_service_attr;
-  ObSqlString tmp_standby_source_value;
-  char updated_value_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
-
-  if (OB_FAIL(old_attr.gen_service_attr_str(updated_value_str, sizeof(updated_value_str)))) {
-    LOG_WARN("gen service_attr_str failed", K(updated_value_str), K(old_attr));
-  } else if (OB_FAIL(trans.start(proxy_, gen_meta_tenant_id(tenant_id_)))) {
-    LOG_WARN("fail to start trans", K_(tenant_id));
-  } else if (OB_FAIL(restore_source_mgr.get_source_for_update(tmp_item, trans))) {
-    LOG_WARN("fail to get log restore source when double check" , K(tmp_item));
-  } else if (ObLogRestoreSourceType::SERVICE != tmp_item.type_) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source type is not service", K_(tenant_id), K(tmp_item.type_));
-  } else if (OB_FAIL(get_restore_source_value_(tmp_item, tmp_standby_source_value))) {
-    LOG_WARN("fail to get service standby log restore source value", K(tmp_item));
-  } else if (OB_FAIL(tmp_service_attr.parse_service_attr_from_str(tmp_standby_source_value))) {
-    LOG_WARN("fail to parse service attr", K(tmp_item), K(tmp_standby_source_value));
-  } else if (!tmp_service_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("service attr is invalid", K(tmp_service_attr));
-  } else if (!(tmp_service_attr.user_ == old_attr.user_)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source record may be modified", K(tmp_service_attr.user_), K(old_attr.user_));
-  } else if (!(0 == STRCMP(tmp_service_attr.encrypt_passwd_, old_attr.encrypt_passwd_))) {
-    ret = OB_EAGAIN;
-    LOG_WARN("log restore source password may be modified", K_(tenant_id));
-  } else if (OB_FAIL(update_source_inner_table_(updated_value_str, sizeof(updated_value_str), trans, tmp_item))) {
-    LOG_WARN("fail to add service source", K(updated_value_str), K(tmp_item.until_scn_));
-  }
-
-  int temp_ret = OB_SUCCESS;
-  if (trans.is_started()) {
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-      ret = (OB_SUCC(ret)) ? temp_ret : ret;
-    }
-  }
-  return ret;
-}
-
-int ObRecoveryLSService::update_source_inner_table_(char *buf,
-                                                    const int64_t buf_size,
-                                                    ObMySQLTransaction &trans,
-                                                    const ObLogRestoreSourceItem &item)
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument when get source for update",K(buf_size));
-  } else {
-    uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-    ObDMLSqlSplicer dml;
-    ObSqlString sql;
-    if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, tenant_id_))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_pk_column(OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_column(OB_STR_LOG_RESTORE_SOURCE_VALUE, buf))) {
-      LOG_WARN("failed to add column", K_(tenant_id), K(item));
-    } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
-      LOG_WARN("fill update source value sql failed", K(item));
-    } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("failed to exec sql", K(sql), K_(tenant_id));
     }
   }
   return ret;
