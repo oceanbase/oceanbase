@@ -105,24 +105,31 @@ int ObResourcePlanManager::refresh_global_background_cpu()
           GCTX.omt_->get_tenant_ids(ids);
           for (uint64_t i = 0; i < ids.size(); i++) {
             uint64_t tenant_id = ids[i];
-            ObTenantBase *tenant = NULL;
-            MTL_SWITCH(tenant_id)
-            {
-              tenant = MTL_CTX();
-              if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(tenant_id,
-                             is_sys_tenant(tenant_id) ? -1 : tenant->unit_max_cpu(),
-                             OB_INVALID_GROUP_ID,
-                             BACKGROUND_CGROUP))) {
-                LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(tenant_id));
-              } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                      tenant_id, tenant->unit_max_cpu(), USER_RESOURCE_OTHER_GROUP_ID, BACKGROUND_CGROUP))) {
-                LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(ret), K(tenant_id));
-              } else if (is_user_tenant(tenant_id)) {
-                uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
-                if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
-                        meta_tenant_id, tenant->unit_max_cpu(), OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
-                  LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(meta_tenant_id));
-                }
+            double target_cpu = -1;
+            if (!is_virtual_tenant_id(tenant_id)) {
+              MTL_SWITCH(tenant_id)
+              {
+                target_cpu = MTL_CTX()->unit_max_cpu();
+              }
+            }
+            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->compare_cpu(target_cpu, cpu, compare_ret))) {
+              LOG_WARN_RET(tmp_ret, "compare tenant cpu failed", K(tmp_ret), K(tenant_id));
+            } else if (compare_ret > 0) {
+              target_cpu = cpu;
+            }
+            if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(tenant_id,
+                            target_cpu,
+                            OB_INVALID_GROUP_ID,
+                            BACKGROUND_CGROUP))) {
+              LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(tenant_id));
+            } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
+                    tenant_id, target_cpu, USER_RESOURCE_OTHER_GROUP_ID, BACKGROUND_CGROUP))) {
+              LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(ret), K(tenant_id));
+            } else if (is_user_tenant(tenant_id)) {
+              uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
+              if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(
+                      meta_tenant_id, target_cpu, OB_INVALID_GROUP_ID, BACKGROUND_CGROUP))) {
+                LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K(meta_tenant_id));
               }
             }
           }

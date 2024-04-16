@@ -469,6 +469,7 @@ int ObCgroupCtrl::get_cpu_shares(const uint64_t tenant_id, double &cpu, const ui
 
 int ObCgroupCtrl::compare_cpu(const double cpu1, const double cpu2, int &compare_ret) {
   int ret = OB_SUCCESS;
+  compare_ret = 0;
   if (cpu1 != cpu2) {
     if (-1 == cpu1) {
       compare_ret = 1;
