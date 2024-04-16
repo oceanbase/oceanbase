@@ -32,6 +32,7 @@ namespace share
 {
 
 #define WR_INSERT_BATCH_SIZE 5000
+#define WR_ASH_INSERT_BATCH_SIZE 1000
 #define WR_INSERT_SQL_STAT_BATCH_SIZE 16
 
 ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
@@ -400,7 +401,7 @@ int ObWrCollector::collect_ash()
             }
           }
         }
-        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_BATCH_SIZE) {
+        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
           collected_ash_row_count += dml_splicer.get_row_count();
           if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
             LOG_WARN("failed to batch write to wr", KR(ret));
