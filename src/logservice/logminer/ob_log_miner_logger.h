@@ -23,8 +23,7 @@ namespace oblogminer
 ::oceanbase::oblogminer::LogMinerLogger::get_logminer_logger_instance().log_stdout_v(__VA_ARGS__)
 #define LOGMINER_LOGGER \
 ::oceanbase::oblogminer::LogMinerLogger::get_logminer_logger_instance()
-#define PB_STR ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-#define PB_WIDTH 50
+#define MAX_SCREEN_WIDTH 4096
 class LogMinerLogger {
 public:
   LogMinerLogger();
@@ -38,6 +37,7 @@ public:
 
 private:
   bool verbose_;
+  char pb_str_[MAX_SCREEN_WIDTH];
 };
 
 }
