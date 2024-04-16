@@ -6951,8 +6951,49 @@ def_table_schema(
   ],
 )
 
-# 496: __all_detect_lock_info
-# 497: __all_client_to_server_session_info
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name = '__all_detect_lock_info',
+  table_id = '496',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('task_type', 'int'),
+    ('obj_type', 'int'),
+    ('obj_id', 'int'),
+    ('lock_mode', 'int'),
+    ('owner_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('cnt', 'int'),
+    ('detect_func_no', 'int'),
+    ('detect_func_param', 'varbinary:MAX_LOCK_DETECT_PARAM_LENGTH', 'true', '')
+  ],
+)
+
+def_table_schema(
+  owner = 'yangyifei.yyf',
+  table_name = '__all_client_to_server_session_info',
+  table_id = '497',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('server_session_id', 'int')
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('client_session_id', 'int'),
+    ('client_session_create_ts', 'timestamp'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int')
+  ],
+)
+
 all_transfer_partition_task_def= dict(
     owner = 'msy164651',
     table_name    = '__all_transfer_partition_task',
@@ -7116,6 +7157,9 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 ################################################################################
 
 
+################################################################################
+
+# 余留位置
 ################################################################################
 # Virtual Table (10000, 20000]
 # Normally, virtual table's index_using_type should be USING_HASH.
@@ -14008,8 +14052,19 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12447',
   table_name = '__all_virtual_aux_stat',
   keywords = all_def_keywords['__all_aux_stat']))
-# 12448: __all_virtual_detect_lock_info
-# 12449: __all_virtual_client_to_server_session_info
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12448',
+  table_name = '__all_virtual_detect_lock_info',
+  keywords = all_def_keywords['__all_detect_lock_info'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12449',
+  table_name = '__all_virtual_client_to_server_session_info',
+  keywords = all_def_keywords['__all_client_to_server_session_info'],
+  in_tenant_space = True))
+
 def_table_schema(
   owner = 'linzhigang.lzg',
   table_name     = '__all_virtual_sys_variable_default_value',
@@ -14023,6 +14078,7 @@ def_table_schema(
   ('default_value', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'true')
   ],
 )
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12451',
   table_name = '__all_virtual_transfer_partition_task',
@@ -14033,8 +14089,6 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_transfer_partition_task_history',
   keywords = all_def_keywords['__all_transfer_partition_task_history']))
 
-
-
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12453',
   table_name = '__all_virtual_tenant_snapshot_job',
@@ -14043,7 +14097,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
 
 # 12454: __all_virtual_wr_sqltext
 # 12455: __all_virtual_trusted_root_certificate_info
-# 12456: __all_virtual_dbms_lock_allocated
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12456',
+  table_name = '__all_virtual_dbms_lock_allocated',
+  keywords = all_def_keywords['__all_dbms_lock_allocated']))
+
 # 12457: __all_virtual_shared_storage_compaction_info
 
 def_table_schema(
@@ -62391,7 +62449,13 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_transfer_partition_task'])
 
-# 101099: __all_client_to_server_session_info
+def_sys_index_table(
+  index_name = 'idx_client_to_server_session_info_client_session_id',
+  index_table_id = 101099,
+  index_columns = ['client_session_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_client_to_server_session_info'])
 
 def_sys_index_table(
   index_name = 'idx_column_privilege_name',

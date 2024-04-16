@@ -1349,6 +1349,10 @@ public:
   int on_user_disconnect();
   virtual void reset_tx_variable(bool reset_next_scope = true);
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
+  void set_need_send_feedback_proxy_info(bool v) { need_send_feedback_proxy_info_ = v; }
+  bool is_need_send_feedback_proxy_info() const { return need_send_feedback_proxy_info_; }
+  void set_is_lock_session(bool v) { is_lock_session_ = v; }
+  bool is_lock_session() const { return is_lock_session_; }
   int64_t get_plsql_exec_time();
   void update_pure_sql_exec_time(int64_t elapsed_time);
 public:
@@ -1519,6 +1523,8 @@ private:
   bool is_send_control_info_ = false;  // whether send control info to client
   bool auto_flush_trace_ = false;
   bool coninfo_set_by_sess_ = false;
+  bool need_send_feedback_proxy_info_ = false;
+  bool is_lock_session_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
                             //&usr_var_encoder_,

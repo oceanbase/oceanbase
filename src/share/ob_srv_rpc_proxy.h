@@ -237,6 +237,7 @@ public:
   RPC_AP(PR5 net_endpoint_predict_ingress, OB_PREDICT_INGRESS_BW, (obrpc::ObNetEndpointPredictIngressArg), obrpc::ObNetEndpointPredictIngressRes);
   RPC_AP(PR5 net_endpoint_set_ingress, OB_SET_INGRESS_BW, (obrpc::ObNetEndpointSetIngressArg), obrpc::ObNetEndpointSetIngressRes);
   RPC_S(PR5 session_info_verification, OB_SESS_INFO_VERIFICATION, (ObSessInfoVerifyArg), ObSessionInfoVeriRes);
+  RPC_S(PR5 detect_session_alive, OB_DETECT_SESSION_ALIVE, (obrpc::UInt64), obrpc::Bool);
   RPC_AP(PRZ handle_heartbeat, OB_SEND_HEARTBEAT, (share::ObHBRequest), share::ObHBResponse);
   RPC_AP(PR5 get_server_resource_info, OB_GET_SERVER_RESOURCE_INFO, (obrpc::ObGetServerResourceInfoArg), obrpc::ObGetServerResourceInfoResult);
   RPC_AP(PR5 notify_switch_leader, OB_NOTIFY_SWITCH_LEADER, (obrpc::ObNotifySwitchLeaderArg));

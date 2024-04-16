@@ -781,7 +781,7 @@ DEFINE_ERROR(OB_ERR_TOO_MANY_SESSIONS, -5059, ER_TOO_MANY_USER_CONNECTIONS, "420
 DEFINE_ERROR(OB_ERR_TOO_MANY_PS, -5061, -1, "54023", "Too many prepared statements");
 DEFINE_ERROR(OB_ERR_HINT_UNKNOWN, -5063, -1, "42000", "Unknown hint");
 DEFINE_ERROR(OB_ERR_WHEN_UNSATISFIED, -5064, -1, "23000", "When condition not satisfied");
-DEFINE_ERROR(OB_ERR_QUERY_INTERRUPTED, -5065, ER_QUERY_INTERRUPTED, "70100", "Query execution was interrupted");
+DEFINE_ERROR_EXT(OB_ERR_QUERY_INTERRUPTED, -5065, ER_QUERY_INTERRUPTED, "70100", "Query execution was interrupted", "Query execution was interrupted, %s");
 DEFINE_ORACLE_ERROR(OB_ERR_SESSION_INTERRUPTED, -5066, -1, "HY000", "Session interrupted", 1092, "OceanBase instance terminated. Disconnection forced");
 DEFINE_ERROR(OB_ERR_UNKNOWN_SESSION_ID, -5067, -1, "HY000", "Unknown session ID");
 DEFINE_ERROR(OB_ERR_PROTOCOL_NOT_RECOGNIZE, -5068, -1, "HY000", "Incorrect protocol");

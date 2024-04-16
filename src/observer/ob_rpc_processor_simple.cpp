@@ -80,6 +80,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/session/ob_sess_info_verify.h"
 #include "observer/table/ttl/ob_ttl_service.h"
+#include "storage/tablelock/ob_table_lock_live_detector.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
@@ -2871,6 +2872,11 @@ int ObSessInfoVerificationP::after_process(int err_code)
   result_.allocator_.reset();
   ObRpcProcessorBase::after_process(err_code);
   return ret;
+}
+
+int ObRpcDetectSessionAliveP::process()
+{
+  return ObTableLockDetectFuncList::detect_session_alive_for_rpc(arg_, result_);
 }
 
 int ObRpcGetServerResourceInfoP::process()

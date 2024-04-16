@@ -1458,7 +1458,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   if (part_ids.empty()) {
     ObLockTableRequest arg;
     arg.table_id_ = table_id;
-    arg.owner_id_ = 0;
+    arg.owner_id_.set_default();
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;
@@ -1471,7 +1471,7 @@ int ObSqlTransControl::lock_table(ObExecContext &exec_ctx,
   } else {
     ObLockPartitionRequest arg;
     arg.table_id_ = table_id;
-    arg.owner_id_ = 0;
+    arg.owner_id_.set_default();
     arg.lock_mode_ = lock_mode;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.timeout_us_ = lock_timeout_us;

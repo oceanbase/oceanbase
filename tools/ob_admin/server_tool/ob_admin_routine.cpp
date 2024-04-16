@@ -602,13 +602,14 @@ DEF_COMMAND(TRANS, remove_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
+    ObTableLockOwnerID real_owner_id;
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
     ObTableLockOp lock_op;
     lock_id.set(real_obj_type, obj_id);
 
+    real_owner_id.convert_from_value(owner_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);
     if (OB_ISNULL(client_)
@@ -684,7 +685,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     ObLockID lock_id;
     ObLockOBJType real_obj_type = static_cast<ObLockOBJType>(obj_type);
     ObTableLockMode real_lock_mode = static_cast<ObTableLockMode>(lock_mode);
-    ObTableLockOwnerID real_owner_id = static_cast<ObTableLockOwnerID>(owner_id);
+    ObTableLockOwnerID real_owner_id;
     ObTransID real_create_tx_id = create_tx_id;
     ObTableLockOpType real_op_type = static_cast<ObTableLockOpType>(op_type);
     ObTableLockOpStatus real_lock_op_status = static_cast<ObTableLockOpStatus>(lock_op_status);
@@ -692,6 +693,7 @@ DEF_COMMAND(TRANS, update_lock, 1, "tenant_id ls_id obj_type obj_id lock_mode ow
     share::SCN real_commit_version;
     share::SCN real_commit_scn;
 
+    real_owner_id.convert_from_value(owner_id);
     lock_id.set(real_obj_type, obj_id);
     lock_op.set(lock_id, real_lock_mode, real_owner_id, real_create_tx_id, real_op_type,
                 real_lock_op_status, seq_no, create_timestamp, create_schema_version);

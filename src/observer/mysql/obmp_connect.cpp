@@ -360,6 +360,7 @@ int ObMPConnect::process()
       session->set_client_sessid_support(conn->proxy_cap_flags_.is_client_sessid_support()
         || (conn->proxy_sessid_ == 0));
       session->set_session_sync_support(conn->proxy_cap_flags_.is_session_sync_support());
+      session->set_feedback_proxy_info_support(conn->proxy_cap_flags_.is_feedback_proxy_info_support());
       session->get_control_info().support_show_trace_ = conn->proxy_cap_flags_.is_flt_show_trace_support();
       LOG_TRACE("setup user resource group OK",
                "user_id", session->get_user_id(),
@@ -1703,7 +1704,12 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID = 0;
     }
-    conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);//if old java client, set it 0
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0) {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT = 1;
+    } else {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_FEEDBACK_PROXY_SHIFT = 0;
+    }
+    conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);  // if old java client, set it 0
 
     LOG_DEBUG("Negotiated capability",
               K(conn.proxy_cap_flags_.is_proxy_reroute_support()),

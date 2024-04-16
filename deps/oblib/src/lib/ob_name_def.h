@@ -1086,6 +1086,14 @@
 #define N_PRIV_ST_EQUALS                    "st_equals"
 #define N_PRIV_ST_TOUCHES                   "_st_touches"
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
+
+// for lock function
+#define N_GET_LOCK                          "get_lock"
+#define N_IS_FREE_LOCK                      "is_free_lock"
+#define N_IS_USED_LOCK                      "is_used_lock"
+#define N_RELEASE_LOCK                      "release_lock"
+#define N_RELEASE_ALL_LOCKS                 "release_all_locks"
+
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"

@@ -4750,6 +4750,35 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_checkpoint_diagnose_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_detect_lock_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_type	bigint(20)	NO	PRI	NULL	
+obj_type	bigint(20)	NO	PRI	NULL	
+obj_id	bigint(20)	NO	PRI	NULL	
+lock_mode	bigint(20)	NO	PRI	NULL	
+owner_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+cnt	bigint(20)	NO		NULL	
+detect_func_no	bigint(20)	NO		NULL	
+detect_func_param	varbinary(512)	YES			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_detect_lock_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_client_to_server_session_info;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+server_session_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+client_session_id	bigint(20)	NO		NULL	
+client_session_create_ts	timestamp(6)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_client_to_server_session_info;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_sys_variable_default_value;
 Field	Type	Null	Key	Default	Extra
 variable_name	varchar(128)	NO			

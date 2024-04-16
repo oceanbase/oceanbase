@@ -284,6 +284,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 493	__all_ncomp_dll	0	201001	1
 494	__all_aux_stat	0	201001	1
 495	__all_index_usage_info	0	201001	1
+496	__all_detect_lock_info	0	201001	1
+497	__all_client_to_server_session_info	0	201001	1
 498	__all_transfer_partition_task	0	201001	1
 499	__all_transfer_partition_task_history	0	201001	1
 500	__all_tenant_snapshot_job	0	201001	1
@@ -720,10 +722,13 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12443	__all_virtual_routine_privilege	2	201001	1
 12444	__all_virtual_routine_privilege_history	2	201001	1
 12447	__all_virtual_aux_stat	2	201001	1
+12448	__all_virtual_detect_lock_info	2	201001	1
+12449	__all_virtual_client_to_server_session_info	2	201001	1
 12450	__all_virtual_sys_variable_default_value	2	201001	1
 12451	__all_virtual_transfer_partition_task	2	201001	1
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12453	__all_virtual_tenant_snapshot_job	2	201001	1
+12456	__all_virtual_dbms_lock_allocated	2	201001	1
 12458	__all_virtual_ls_snapshot	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
 12462	__all_virtual_column_privilege	2	201001	1

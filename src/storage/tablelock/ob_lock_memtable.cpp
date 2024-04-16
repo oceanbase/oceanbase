@@ -978,7 +978,7 @@ int ObLockMemtable::replay_row(
   int ret = OB_SUCCESS;
 
   ObLockID lock_id;
-  ObTableLockOwnerID owner_id(0);
+  ObTableLockOwnerID owner_id;
   ObTableLockMode lock_mode = NO_LOCK;
   ObTableLockOpType lock_op_type = ObTableLockOpType::UNKNOWN_TYPE;
   transaction::ObTxSEQ seq_no;

@@ -301,6 +301,7 @@ int ObModifyAutoincTask::unlock_table()
   int ret = OB_SUCCESS;
   ObRootService *root_service = GCTX.root_service_;
   ObMySQLTransaction trans;
+  ObTableLockOwnerID owner_id;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObModifyAutoincTask has not been inited", K(ret));
@@ -309,7 +310,10 @@ int ObModifyAutoincTask::unlock_table()
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
-  } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id_, object_id_, ObTableLockOwnerID(task_id_), trans))) {
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 task_id_))) {
+    LOG_WARN("convert owner id failed", K(ret), K(task_id_));
+  } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id_, object_id_, owner_id, trans))) {
     LOG_WARN("failed to unlock table", K(ret));
   }
 

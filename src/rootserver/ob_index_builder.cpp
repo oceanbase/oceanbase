@@ -393,6 +393,7 @@ int ObIndexBuilder::submit_build_index_task(
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
+  ObTableLockOwnerID owner_id;
   ObCreateDDLTaskParam param(index_schema->get_tenant_id(),
                              ObDDLType::DDL_CREATE_INDEX,
                              data_schema,
@@ -409,8 +410,11 @@ int ObIndexBuilder::submit_build_index_task(
     LOG_WARN("schema is invalid", K(ret), KP(data_schema), KP(index_schema), K(tenant_data_version));
   } else if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
     LOG_WARN("submit create index ddl task failed", K(ret));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 task_record.task_id_))) {
+    LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
   } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-      *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+      *data_schema, inc_data_tablet_ids, del_data_tablet_ids, *index_schema, owner_id, trans))) {
     LOG_WARN("failed to lock online ddl lock", K(ret));
   }
   return ret;
@@ -431,6 +435,7 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
   } else {
     int64_t refreshed_schema_version = 0;
     const uint64_t tenant_id = index_schema.get_tenant_id();
+    ObTableLockOwnerID owner_id;
     const ObDDLType ddl_type = (ObIndexArg::DROP_MLOG == arg.index_action_type_) ?
                                ObDDLType::DDL_DROP_MLOG : ObDDLType::DDL_DROP_INDEX;
     ObCreateDDLTaskParam param(tenant_id,
@@ -445,8 +450,11 @@ int ObIndexBuilder::submit_drop_index_task(ObMySQLTransaction &trans,
                                &arg);
     if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
       LOG_WARN("submit create index ddl task failed", K(ret));
+    } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                   task_record.task_id_))) {
+      LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
     } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
-        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, ObTableLockOwnerID(task_record.task_id_), trans))) {
+        data_schema, nullptr/*inc_data_tablet_ids*/, nullptr/*del_data_tablet_ids*/, index_schema, owner_id, trans))) {
       LOG_WARN("failed to lock online ddl lock", K(ret));
     }
   }

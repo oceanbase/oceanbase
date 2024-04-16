@@ -1393,6 +1393,8 @@ public:
   inline void set_client_sessid_support(bool is_client_sessid_support)
               { is_client_sessid_support_ = is_client_sessid_support; }
   inline bool is_client_sessid_support() { return is_client_sessid_support_; }
+  inline void set_feedback_proxy_info_support(const bool is_feedback_proxy_info_support) { is_feedback_proxy_info_support_ = is_feedback_proxy_info_support; }
+  inline bool is_feedback_proxy_info_support() { return is_feedback_proxy_info_support_; }
   int replace_new_session_label(uint64_t policy_id, const share::ObLabelSeSessionLabel &new_session_label);
   int load_default_sys_variable(common::ObIAllocator &allocator, int64_t var_idx);
 
@@ -2377,6 +2379,7 @@ private:
   int64_t process_query_time_;
   int64_t last_update_tz_time_; //timestamp of last attempt to update timezone info
   bool is_client_sessid_support_; //client session id support flag
+  bool is_feedback_proxy_info_support_; // to confirm whether obproxy supports feedback_proxy_info
   bool use_rich_vector_format_;
   int64_t last_refresh_schema_version_;
   // rich format specified hint, e.g. `select /*+opt_param('enable_rich_vector_format', 'true')*/ * from t`

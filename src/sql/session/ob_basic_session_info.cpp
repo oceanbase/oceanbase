@@ -155,6 +155,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       process_query_time_(0),
       last_update_tz_time_(0),
       is_client_sessid_support_(false),
+      is_feedback_proxy_info_support_(false),
       use_rich_vector_format_(false),
       last_refresh_schema_version_(OB_INVALID_VERSION),
       force_rich_vector_format_(ForceRichFormatStatus::Disable),
@@ -446,6 +447,7 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
   process_query_time_ = 0;
   last_update_tz_time_ = 0;
   is_client_sessid_support_ = false;
+  is_feedback_proxy_info_support_ = false;
   use_rich_vector_format_ = true;
   force_rich_vector_format_ = ForceRichFormatStatus::Disable;
   sess_bt_buff_pos_ = 0;

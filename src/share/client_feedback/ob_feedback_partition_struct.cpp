@@ -92,6 +92,17 @@ int ObFeedbackPartitionLocation::deserialize_struct_content(char *buf, const int
   OB_FB_DESER_END;
 }
 
+void ObFeedbackRerouteInfo::assign(const ObFeedbackRerouteInfo &info)
+{
+  server_ = info.server_;
+  role_ = info.role_;
+  replica_type_ = info.replica_type_;
+  MEMCPY(tbl_name_, info.tbl_name_, info.tbl_name_len_);
+  tbl_name_len_ = info.tbl_name_len_;
+  tbl_schema_version_ = info.tbl_schema_version_;
+  for_session_reroute_ = info.for_session_reroute_;
+}
+
 int ObFeedbackRerouteInfo::set_tbl_name(const ObString &table_name)
 {
   int ret = OB_SUCCESS;

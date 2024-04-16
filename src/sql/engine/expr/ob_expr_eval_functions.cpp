@@ -343,6 +343,7 @@
 #include "ob_expr_temp_table_ssid.h"
 #include "ob_expr_between.h"
 #include "ob_expr_align_date4cmp.h"
+#include "ob_expr_lock_func.h"
 #include "ob_expr_extract_cert_expired_time.h"
 #include "ob_expr_transaction_id.h"
 #include "ob_expr_inner_row_cmp_val.h"
@@ -1150,11 +1151,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprMod::mod_decimalint,                                          /* 678 */
   NULL, // ObExprPrivSTGeoHash::eval_priv_st_geohash,                 /* 679 */
   NULL, // ObExprPrivSTMakePoint::eval_priv_st_makepoint,             /* 680 */
-  NULL, // ObExprGetLock::get_lock,                                   /* 681 */
-  NULL, // ObExprIsFreeLock::is_free_lock,                            /* 682 */
-  NULL, // ObExprIsUsedLock::is_used_lock,                            /* 683 */
-  NULL, // ObExprReleaseLock::release_lock,                           /* 684 */
-  NULL, // ObExprReleaseAllLocks::release_all_locks,                  /* 685 */
+  ObExprGetLock::get_lock,                                            /* 681 */
+  ObExprIsFreeLock::is_free_lock,                                     /* 682 */
+  ObExprIsUsedLock::is_used_lock,                                     /* 683 */
+  ObExprReleaseLock::release_lock,                                    /* 684 */
+  ObExprReleaseAllLocks::release_all_locks,                           /* 685 */
   NULL, // ObExprGTIDSubset::eval_subset,                             /* 686 */
   NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
   NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */

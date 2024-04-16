@@ -681,6 +681,7 @@ ob_set_subtarget(ob_storage multi_data_source
 )
 
 ob_set_subtarget(ob_storage tablelock
+  tablelock/ob_lock_func_executor.cpp
   tablelock/ob_lock_memtable.cpp
   tablelock/ob_lock_memtable_mgr.cpp
   tablelock/ob_lock_inner_connection_util.cpp
@@ -696,6 +697,7 @@ ob_set_subtarget(ob_storage tablelock
   tablelock/ob_table_lock_service.cpp
   tablelock/ob_table_lock_rpc_processor.cpp
   tablelock/ob_table_lock_rpc_client.cpp
+  tablelock/ob_table_lock_live_detector.cpp
 )
 
 ob_set_subtarget(ob_storage direct_load

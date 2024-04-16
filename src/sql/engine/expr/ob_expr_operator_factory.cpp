@@ -433,6 +433,8 @@
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
 
+#include "sql/engine/expr/ob_expr_lock_func.h"
+
 using namespace oceanbase::common;
 namespace oceanbase
 {
@@ -1037,6 +1039,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTEquals);
     REG_OP(ObExprPrivSTTouches);
     REG_OP(ObExprAlignDate4Cmp);
+
+    REG_OP(ObExprGetLock);
+    REG_OP(ObExprIsFreeLock);
+    REG_OP(ObExprIsUsedLock);
+    REG_OP(ObExprReleaseLock);
+    REG_OP(ObExprReleaseAllLocks);
     REG_OP(ObExprExtractExpiredTime);
     REG_OP(ObExprTransactionId);
     REG_OP(ObExprInnerRowCmpVal);

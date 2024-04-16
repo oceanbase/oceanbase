@@ -46,7 +46,9 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_id_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjsRequest, ObLockRequest,
-                            objs_);
+                            objs_,
+                            detect_func_no_,
+                            detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
                             table_id_);
@@ -244,16 +246,17 @@ bool ObLockParam::is_valid() const
             || ObLockOBJType::OBJ_TYPE_DATABASE_NAME == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_OBJECT_NAME == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_DBMS_LOCK == lock_id_.obj_type_
-            || ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW == lock_id_.obj_type_)));
+            || ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW == lock_id_.obj_type_
+            || ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC == lock_id_.obj_type_)));
 }
 
 void ObLockRequest::reset()
 {
-  owner_id_ = 0;
+  owner_id_.set_default();
   lock_mode_ = NO_LOCK;
   op_type_ = UNKNOWN_TYPE;
-  type_ = ObLockMsgType::UNKNOWN_MSG_TYPE;
   timeout_us_ = 0;
+  is_from_sql_ = false;
 }
 
 bool ObLockRequest::is_valid() const
@@ -310,6 +313,8 @@ void ObLockObjsRequest::reset()
 {
   ObLockRequest::reset();
   objs_.reset();
+  detect_func_no_ = INVALID_DETECT_TYPE;
+  detect_param_.reset();
 }
 
 bool ObLockObjsRequest::is_valid() const

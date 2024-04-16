@@ -7624,10 +7624,10 @@ static const _error _error_OB_ERR_QUERY_INTERRUPTED = {
       .mysql_errno           = ER_QUERY_INTERRUPTED,
       .sqlstate              = "70100",
       .str_error             = "Query execution was interrupted",
-      .str_user_error        = "Query execution was interrupted",
+      .str_user_error        = "Query execution was interrupted, %s",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5065, Query execution was interrupted",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5065, Query execution was interrupted"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5065, Query execution was interrupted, %s"
 };
 static const _error _error_OB_ERR_SESSION_INTERRUPTED = {
       .error_name            = "OB_ERR_SESSION_INTERRUPTED",

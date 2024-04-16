@@ -576,6 +576,8 @@ public:
   static int all_ncomp_dll_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_client_to_server_session_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_job_schema(share::schema::ObTableSchema &table_schema);
@@ -1012,10 +1014,13 @@ public:
   static int all_virtual_routine_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_aux_stat_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_detect_lock_info_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_client_to_server_session_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sys_variable_default_value_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_transfer_partition_task_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_transfer_partition_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_snapshot_job_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_dbms_lock_allocated_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_snapshot_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_index_usage_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_column_privilege_schema(share::schema::ObTableSchema &table_schema);
@@ -2455,6 +2460,8 @@ public:
   static int all_ncomp_dll_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_client_to_server_session_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2746,6 +2753,8 @@ public:
   static int all_ncomp_dll_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_aux_stat_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_index_usage_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_detect_lock_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_client_to_server_session_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -2947,6 +2956,7 @@ public:
   static int all_mview_refresh_stats_idx_mview_refresh_stats_end_time_schema(share::schema::ObTableSchema &table_schema);
   static int all_mview_refresh_stats_idx_mview_refresh_stats_mview_end_time_schema(share::schema::ObTableSchema &table_schema);
   static int all_transfer_partition_task_idx_transfer_partition_key_schema(share::schema::ObTableSchema &table_schema);
+  static int all_client_to_server_session_info_idx_client_to_server_session_info_client_session_id_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_privilege_idx_column_privilege_name_schema(share::schema::ObTableSchema &table_schema);
 
 private:
@@ -3247,6 +3257,8 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_ncomp_dll_schema,
   ObInnerTableSchema::all_aux_stat_schema,
   ObInnerTableSchema::all_index_usage_info_schema,
+  ObInnerTableSchema::all_detect_lock_info_schema,
+  ObInnerTableSchema::all_client_to_server_session_info_schema,
   ObInnerTableSchema::all_transfer_partition_task_schema,
   ObInnerTableSchema::all_transfer_partition_task_history_schema,
   ObInnerTableSchema::all_tenant_snapshot_job_schema,
@@ -3686,10 +3698,13 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_routine_privilege_schema,
   ObInnerTableSchema::all_virtual_routine_privilege_history_schema,
   ObInnerTableSchema::all_virtual_aux_stat_schema,
+  ObInnerTableSchema::all_virtual_detect_lock_info_schema,
+  ObInnerTableSchema::all_virtual_client_to_server_session_info_schema,
   ObInnerTableSchema::all_virtual_sys_variable_default_value_schema,
   ObInnerTableSchema::all_virtual_transfer_partition_task_schema,
   ObInnerTableSchema::all_virtual_transfer_partition_task_history_schema,
   ObInnerTableSchema::all_virtual_tenant_snapshot_job_schema,
+  ObInnerTableSchema::all_virtual_dbms_lock_allocated_schema,
   ObInnerTableSchema::all_virtual_ls_snapshot_schema,
   ObInnerTableSchema::all_virtual_index_usage_info_schema,
   ObInnerTableSchema::all_virtual_column_privilege_schema,
@@ -5048,6 +5063,7 @@ const schema_create_func sys_index_table_schema_creators [] = {
   ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_end_time_schema,
   ObInnerTableSchema::all_mview_refresh_stats_idx_mview_refresh_stats_mview_end_time_schema,
   ObInnerTableSchema::all_transfer_partition_task_idx_transfer_partition_key_schema,
+  ObInnerTableSchema::all_client_to_server_session_info_idx_client_to_server_session_info_client_session_id_schema,
   ObInnerTableSchema::all_column_privilege_idx_column_privilege_name_schema,
   NULL,};
 
@@ -5320,6 +5336,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_NCOMP_DLL_TID,
   OB_ALL_AUX_STAT_TID,
   OB_ALL_INDEX_USAGE_INFO_TID,
+  OB_ALL_DETECT_LOCK_INFO_TID,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_TID,
   OB_ALL_TENANT_SNAPSHOT_JOB_TID,
@@ -5545,6 +5563,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID,
+  OB_ALL_VIRTUAL_DETECT_LOCK_INFO_TID,
+  OB_ALL_VIRTUAL_CLIENT_TO_SERVER_SESSION_INFO_TID,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_JOB_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TID,
@@ -6686,6 +6706,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_END_TIME_TID,
   OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_MVIEW_END_TIME_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TID,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_IDX_CLIENT_TO_SERVER_SESSION_INFO_CLIENT_SESSION_ID_TID,
   OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TID,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TID,
@@ -7020,6 +7041,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_NCOMP_DLL_AUX_LOB_META_TID,
   OB_ALL_AUX_STAT_AUX_LOB_META_TID,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_META_TID,
+  OB_ALL_DETECT_LOCK_INFO_AUX_LOB_META_TID,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_META_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_META_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TENANT_SNAPSHOT_JOB_AUX_LOB_META_TID,
@@ -7287,6 +7310,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TID,
   OB_ALL_AUX_STAT_AUX_LOB_PIECE_TID,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_PIECE_TID,
+  OB_ALL_DETECT_LOCK_INFO_AUX_LOB_PIECE_TID,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_PIECE_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_PIECE_TID,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_TENANT_SNAPSHOT_JOB_AUX_LOB_PIECE_TID,
@@ -7862,6 +7887,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_NCOMP_DLL_TNAME,
   OB_ALL_AUX_STAT_TNAME,
   OB_ALL_INDEX_USAGE_INFO_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_TNAME,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_TNAME,
   OB_ALL_TENANT_SNAPSHOT_JOB_TNAME,
@@ -8087,6 +8114,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_MEMTABLE_INFO_TNAME,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TNAME,
   OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TNAME,
+  OB_ALL_VIRTUAL_DETECT_LOCK_INFO_TNAME,
+  OB_ALL_VIRTUAL_CLIENT_TO_SERVER_SESSION_INFO_TNAME,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TNAME,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_JOB_TNAME,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TNAME,
@@ -9228,6 +9257,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_END_TIME_TNAME,
   OB_ALL_MVIEW_REFRESH_STATS_IDX_MVIEW_REFRESH_STATS_MVIEW_END_TIME_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_IDX_TRANSFER_PARTITION_KEY_TNAME,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_IDX_CLIENT_TO_SERVER_SESSION_INFO_CLIENT_SESSION_ID_TNAME,
   OB_ALL_COLUMN_PRIVILEGE_IDX_COLUMN_PRIVILEGE_NAME_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DATA_TABLE_ID_REAL_AGENT_TNAME,
   OB_ALL_VIRTUAL_TABLE_REAL_AGENT_ORA_IDX_DB_TB_NAME_REAL_AGENT_TNAME,
@@ -9562,6 +9592,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_NCOMP_DLL_AUX_LOB_META_TNAME,
   OB_ALL_AUX_STAT_AUX_LOB_META_TNAME,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_META_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_AUX_LOB_META_TNAME,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_META_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_META_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TENANT_SNAPSHOT_JOB_AUX_LOB_META_TNAME,
@@ -9829,6 +9861,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_NCOMP_DLL_AUX_LOB_PIECE_TNAME,
   OB_ALL_AUX_STAT_AUX_LOB_PIECE_TNAME,
   OB_ALL_INDEX_USAGE_INFO_AUX_LOB_PIECE_TNAME,
+  OB_ALL_DETECT_LOCK_INFO_AUX_LOB_PIECE_TNAME,
+  OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_PIECE_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_PIECE_TNAME,
   OB_ALL_TRANSFER_PARTITION_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_TENANT_SNAPSHOT_JOB_AUX_LOB_PIECE_TNAME,
@@ -12612,6 +12646,22 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_DETECT_LOCK_INFO_TID,
+    OB_ALL_DETECT_LOCK_INFO_AUX_LOB_META_TID,
+    OB_ALL_DETECT_LOCK_INFO_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_detect_lock_info_aux_lob_meta_schema,
+    ObInnerTableSchema::all_detect_lock_info_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TID,
+    OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_META_TID,
+    OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_client_to_server_session_info_aux_lob_meta_schema,
+    ObInnerTableSchema::all_client_to_server_session_info_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_TRANSFER_PARTITION_TASK_TID,
     OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_META_TID,
     OB_ALL_TRANSFER_PARTITION_TASK_AUX_LOB_PIECE_TID,
@@ -12704,12 +12754,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 288;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 803;
+const int64_t OB_SYS_TABLE_COUNT = 290;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 806;
 const int64_t OB_SYS_VIEW_COUNT = 876;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1972;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1977;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1975;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1980;
 
 } // end namespace share
 } // end namespace oceanbase

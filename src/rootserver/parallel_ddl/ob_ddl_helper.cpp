@@ -433,7 +433,7 @@ int ObDDLHelper::lock_objects_in_map_(
         } else {
           transaction::tablelock::ObLockObjRequest lock_arg;
           lock_arg.obj_type_ = obj_type;
-          lock_arg.owner_id_ = ObTableLockOwnerID(0);
+          lock_arg.owner_id_.set_default();
           lock_arg.obj_id_ = it->get_obj_id();
           lock_arg.lock_mode_ = it->get_lock_mode();
           lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;

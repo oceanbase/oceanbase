@@ -124,7 +124,7 @@ void ObTabletFlushTest::prepare_ddl_lock_table_data(ObLS *&ls)
   ObLockID lock_id2;
   lock_id2.obj_type_ = ObLockOBJType::OBJ_TYPE_TABLE;
   lock_id2.obj_id_ = 1002;
-  table_lock_op1.owner_id_ = 1;
+  table_lock_op1.owner_id_.convert_from_value(1);
   table_lock_op2.lock_id_ = lock_id2;
   table_lock_op2.lock_mode_ = ROW_SHARE;
   table_lock_op2.create_trans_id_ = 3;

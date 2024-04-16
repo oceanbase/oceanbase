@@ -527,7 +527,7 @@ int ObTenantTransferService::lock_table_and_part_(
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_TRANSFER_LOCK_TABLE_AND_PART);
   tablet_ids.reset();
-  lock_owner_id = OB_INVALID_INDEX;
+  lock_owner_id.reset();
   ObTransferPartList ordered_part_list;
   ObArenaAllocator allocator;
   const int64_t start_time = ObTimeUtility::current_time();

@@ -103,13 +103,15 @@ int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObT
   ObLSID dest_ls(1002);
   share::SCN start_scn;
   share::SCN finish_scn;
+  ObTableLockOwnerID owner_id;
   start_scn.convert_for_inner_table_field(1666844202200632);
   finish_scn.convert_for_inner_table_field(1666844202208490);
+  owner_id.convert_from_value(999);
   ObCurTraceId::TraceId trace_id;
   trace_id.init(GCONF.self_addr_);
   ret = task.init(task_id, src_ls, dest_ls, ObString::make_string("500016:500014"), ObString("500030:500031"), ObString("500016:500015"),
-      ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
-      ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), ObTableLockOwnerID(999));
+                  ObString::make_string("1152921504606846983"), ObString::make_string("1152921504606846983:0"), start_scn, finish_scn, status, trace_id, OB_SUCCESS,
+                  ObTransferTaskComment::EMPTY_COMMENT, ObBalanceTaskID(123), owner_id);
   return ret;
 }
 

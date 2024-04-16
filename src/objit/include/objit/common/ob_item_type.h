@@ -880,6 +880,12 @@ typedef enum ObItemType
   T_FUN_SYS_LAST_REFRESH_SCN = 2016,
   T_FUN_SUM_OPNSIZE = 2017,
 
+  T_FUN_SYS_GET_LOCK = 2018,
+  T_FUN_SYS_IS_FREE_LOCK = 2019,
+  T_FUN_SYS_IS_USED_LOCK = 2020,
+  T_FUN_SYS_RELEASE_LOCK = 2021,
+  T_FUN_SYS_RELEASE_ALL_LOCKS = 2022,
+
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id

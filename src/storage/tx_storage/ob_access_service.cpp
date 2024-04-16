@@ -676,7 +676,8 @@ int ObAccessService::check_write_allowed_(
   ObLockParam lock_param;
   const ObTableLockMode lock_mode = ROW_EXCLUSIVE;
   const ObTableLockOpType lock_op_type = IN_TRANS_DML_LOCK;
-  const ObTableLockOwnerID lock_owner(0);
+  ObTableLockOwnerID lock_owner;
+  lock_owner.set_default();
   const bool is_deadlock_avoid_enabled = false;
   bool is_try_lock = lock_wait_timeout_ts <= 0;
   const int64_t abs_timeout_ts = MIN(lock_wait_timeout_ts, tx_desc.get_expire_ts());

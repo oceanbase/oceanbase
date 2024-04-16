@@ -616,7 +616,7 @@ int ObOnlineDDLLock::lock_table_in_trans(
   arg.timeout_us_ = timeout_us;
   arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
   arg.lock_mode_ = lock_mode;
-  arg.owner_id_ = 0;
+  arg.owner_id_.set_default();
   if (OB_ISNULL(iconn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid conn", K(ret));
@@ -645,7 +645,7 @@ int ObOnlineDDLLock::lock_tablets_in_trans(
     arg.timeout_us_ = timeout_us;
     arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     arg.lock_mode_ = lock_mode;
-    arg.owner_id_ = 0;
+    arg.owner_id_.set_default();
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); i++) {
       if (OB_FAIL(lock_id.set(ObLockOBJType::OBJ_TYPE_ONLINE_DDL_TABLET, tablet_ids.at(i).id()))) {
         LOG_WARN("set lock id failed", K(ret), K(i), K(tablet_ids));

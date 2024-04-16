@@ -339,6 +339,8 @@
 # 493: __all_ncomp_dll
 # 494: __all_aux_stat
 # 495: __all_index_usage_info
+# 496: __all_detect_lock_info
+# 497: __all_client_to_server_session_info
 # 498: __all_transfer_partition_task
 # 499: __all_transfer_partition_task_history
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
@@ -1073,6 +1075,10 @@
 # 12444: __all_routine_privilege_history  # BASE_TABLE_NAME1
 # 12447: __all_virtual_aux_stat
 # 12447: __all_aux_stat  # BASE_TABLE_NAME
+# 12448: __all_virtual_detect_lock_info
+# 12448: __all_detect_lock_info  # BASE_TABLE_NAME
+# 12449: __all_virtual_client_to_server_session_info
+# 12449: __all_client_to_server_session_info  # BASE_TABLE_NAME
 # 12450: __all_virtual_sys_variable_default_value
 # 12451: __all_virtual_transfer_partition_task
 # 12451: __all_transfer_partition_task  # BASE_TABLE_NAME
@@ -1081,6 +1087,8 @@
 # 12452: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
 # 12453: __all_virtual_tenant_snapshot_job
 # 12453: __all_tenant_snapshot_job  # BASE_TABLE_NAME
+# 12456: __all_virtual_dbms_lock_allocated
+# 12456: __all_dbms_lock_allocated  # BASE_TABLE_NAME
 # 12458: __all_virtual_ls_snapshot
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
@@ -2954,6 +2962,9 @@
 # 101098: __idx_498_idx_transfer_partition_key
 # 101098: idx_transfer_partition_key  # INDEX_NAME
 # 101098: __all_transfer_partition_task  # DATA_BASE_TABLE_NAME
+# 101099: __idx_497_idx_client_to_server_session_info_client_session_id
+# 101099: idx_client_to_server_session_info_client_session_id  # INDEX_NAME
+# 101099: __all_client_to_server_session_info  # DATA_BASE_TABLE_NAME
 # 101100: __idx_505_idx_column_privilege_name
 # 101100: idx_column_privilege_name  # INDEX_NAME
 # 101100: __all_column_privilege  # DATA_BASE_TABLE_NAME

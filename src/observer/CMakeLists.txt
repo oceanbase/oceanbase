@@ -100,6 +100,7 @@ ob_set_subtarget(ob_server mysql
   mysql/obsm_row.cpp
   mysql/obsm_utils.cpp
   mysql/obmp_set_option.cpp
+  mysql/ob_feedback_proxy_utils.cpp
 )
 
 ob_set_subtarget(ob_server net

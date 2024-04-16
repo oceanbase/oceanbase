@@ -60,7 +60,7 @@ void TestTransferTaskOperator::SetUp()
   finish_scn_.convert_for_inner_table_field(1666844202208490);
   ObString trace_id_str = "YCDC56458724D-0005EBECD3F9DB9D-0-0";
   trace_id_.parse_from_buf(trace_id_str.ptr());
-  lock_owner_id_ = 999;
+  lock_owner_id_.convert_from_value(999);
   for(int64_t i = 0; i < 100; ++i) {
     ObTransferPartInfo part;
     ObTransferTabletInfo tablet;

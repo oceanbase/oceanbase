@@ -264,6 +264,7 @@ enum class ObLockOBJType : char
   OBJ_TYPE_OBJECT_NAME = 10,     // for obj related ddl
   OBJ_TYPE_DBMS_LOCK = 11,  // for dbms lock
   OBJ_TYPE_MATERIALIZED_VIEW = 12, // for materialized view operations
+  OBJ_TYPE_MYSQL_LOCK_FUNC = 13,  // for mysql lock function
   OBJ_TYPE_MAX
 };
 
@@ -320,6 +321,10 @@ int lock_obj_type_to_string(const ObLockOBJType obj_type,
   }
   case ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW: {
     strncpy(str, "MATERIALIZED_VIEW", str_len);
+    break;
+  }
+  case ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC: {
+    strncpy(str, "MYSQL_LOCK_FUNC", str_len);
     break;
   }
   default: {
@@ -408,7 +413,99 @@ int get_lock_id(const uint64_t table_id,
                 ObLockID &lock_id);
 int get_lock_id(const common::ObTabletID &tablet,
                 ObLockID &lock_id);
-typedef share::ObCommonID ObTableLockOwnerID;
+// typedef share::ObCommonID ObTableLockOwnerID;
+
+enum class ObLockOwnerType : unsigned char {
+  DEFAULT_OWNER_TYPE    = 0,
+  SESS_ID_OWNER_TYPE    = 1,
+
+  // make sure this is smaller than INVALID_OWNER_TYPE
+  MAX_OWNER_TYPE,
+
+  INVALID_OWNER_TYPE    = 255,
+};
+
+static inline
+bool is_lock_owner_type_valid(const ObLockOwnerType &type)
+{
+  return (type < ObLockOwnerType::MAX_OWNER_TYPE);
+}
+
+class ObTableLockOwnerID
+{
+public:
+  static const int64_t INVALID_ID = -1;
+  static const int64_t INVALID_RAW_OWNER_ID = ((1L << 54) - 1);
+  static const int64_t MAX_VALID_RAW_OWNER_ID = INVALID_RAW_OWNER_ID - 1;
+
+  ObTableLockOwnerID() : pack_(INVALID_ID) {}
+  ObTableLockOwnerID(const ObTableLockOwnerID &other) : pack_(other.pack_) {}
+  ~ObTableLockOwnerID() { reset(); }
+public:
+  int64_t raw_value() const { return pack_; }
+  int64_t id() const { return id_; }
+  bool is_session_id_owner() const { return type_ == static_cast<unsigned char>(ObLockOwnerType::SESS_ID_OWNER_TYPE); }
+
+
+  void reset() { pack_ = INVALID_ID; }
+  bool is_valid() const
+  {
+    return (INVALID_ID != pack_ &&
+            static_cast<int64_t>(ObLockOwnerType::INVALID_OWNER_TYPE) != type_ &&
+            INVALID_RAW_OWNER_ID != id_);
+  }
+  static ObTableLockOwnerID default_owner();
+  static ObTableLockOwnerID get_owner_by_value(const int64_t packet_id);
+  void set_default()
+  { pack_ = 0; }
+  // without check whether it is valid.
+  int convert_from_value(const int64_t packed_id);
+  // check valid.
+  int convert_from_value(const ObLockOwnerType owner_type, const int64_t raw_owner_id);
+  int convert_to_sessid(int64_t &sessid) const;
+  // assignment
+  ObTableLockOwnerID &operator=(const ObTableLockOwnerID &other)
+  { pack_ = other.pack_; return *this; }
+
+  // compare operator
+  bool operator == (const ObTableLockOwnerID &other) const
+  { return pack_ == other.pack_; }
+  bool operator >  (const ObTableLockOwnerID &other) const
+  { return pack_ > other.pack_; }
+  bool operator != (const ObTableLockOwnerID &other) const
+  { return pack_ != other.pack_; }
+  bool operator <  (const ObTableLockOwnerID &other) const
+  { return pack_ < other.pack_; }
+  bool operator <= (const ObTableLockOwnerID &other) const
+  { return pack_ <= other.pack_; }
+  bool operator >= (const ObTableLockOwnerID &other) const
+  { return pack_ >= other.pack_; }
+  int compare(const ObTableLockOwnerID &other) const
+  {
+   if (pack_ == other.pack_) {
+     return 0;
+   } else if (pack_ < other.pack_) {
+     return -1;
+   } else {
+     return 1;
+   }
+  }
+
+  uint64_t hash() const
+  { return pack_; }
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  TO_STRING_KV(K_(pack), K_(type), K_(id), K_(reserved), K_(valid_flag));
+private:
+  union {
+    struct {
+      int64_t id_             : 54;
+      int64_t type_           : 8;
+      int64_t reserved_       : 1;
+      int64_t valid_flag_     : 1;
+    };
+    int64_t pack_;
+  };
+};
 
 struct ObTableLockOp
 {
@@ -419,7 +516,7 @@ public:
   ObTableLockOp()
     : lock_id_(),
       lock_mode_(NO_LOCK),
-      owner_id_(0),
+      owner_id_(ObTableLockOwnerID::default_owner()),
       create_trans_id_(),
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
@@ -441,7 +538,7 @@ public:
       const int64_t create_schema_version) :
       lock_id_(),
       lock_mode_(NO_LOCK),
-      owner_id_(0),
+      owner_id_(ObTableLockOwnerID::default_owner()),
       create_trans_id_(),
       op_type_(UNKNOWN_TYPE),
       lock_op_status_(UNKNOWN_STATUS),
@@ -563,9 +660,8 @@ typedef common::ObSimpleIterator<ObTableLockOp, ObSimpleIteratorModIds::OB_OBJ_L
 static const int64_t MIN_DEADLOCK_AVOID_TIMEOUT_US = 60 * 1000 * 1000; // 1 min
 bool is_deadlock_avoid_enabled(const bool is_from_sql, const int64_t expire_time);
 
-} // tablelock
-} // transaction
-} // oceanbase
-
+}  // namespace tablelock
+}  // namespace transaction
+}  // namespace oceanbase
 
 #endif /* OCEANBASE_STORAGE_TABLELOCK_OB_TABLE_LOCK_COMMON_ */

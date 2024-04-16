@@ -395,6 +395,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   current_dblink_sequence_id_ = 0;
   dblink_sequence_schemas_.reset();
   is_session_sync_support_ = false;
+  need_send_feedback_proxy_info_ = false;
+  is_lock_session_ = false;
 }
 
 void ObSQLSessionInfo::clean_status()

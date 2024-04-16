@@ -521,14 +521,19 @@ int ObMLogBuilder::do_create_mlog(
                                   &allocator,
                                   &create_index_arg);
       param.tenant_data_version_ = tenant_data_version;
+      ObTableLockOwnerID owner_id;
       if (OB_FAIL(GCTX.root_service_->get_ddl_task_scheduler().create_ddl_task(param, trans, task_record))) {
         LOG_WARN("failed to submit create mlog task", KR(ret));
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                              task_record.task_id_))) {
+        LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
       } else if (OB_FAIL(ObDDLLock::lock_for_add_drop_index(
           src_table_schema,
           nullptr/*inc_data_tablet_ids*/,
           nullptr/*del_data_tablet_ids*/,
           mlog_schema,
-          ObTableLockOwnerID(task_record.task_id_), trans))) {
+          owner_id,
+          trans))) {
         LOG_WARN("failed to lock online ddl lock", KR(ret));
       } else {
         create_mlog_res.mlog_table_id_ = mlog_schema.get_table_id();

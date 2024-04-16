@@ -6044,7 +6044,7 @@ int ObDDLService::lock_mview(ObMySQLTransaction &trans, const ObSimpleTableSchem
     ObLockObjRequest lock_arg;
     lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW;
     lock_arg.obj_id_ = mview_id;
-    lock_arg.owner_id_ = ObTableLockOwnerID(0);
+    lock_arg.owner_id_ = ObTableLockOwnerID::default_owner();
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = 0;
@@ -12612,6 +12612,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                   const_alter_table_arg, is_add_not_null_col, need_modify_notnull_validate))) {
             } else {
               ObDDLTaskRecord task_record;
+              ObTableLockOwnerID owner_id;
               ObCreateDDLTaskParam param(new_table_schema.get_tenant_id(),
                                         is_add_not_null_col ?
                                         ObDDLType::DDL_ADD_NOT_NULL_COLUMN : ObDDLType::DDL_CHECK_CONSTRAINT,
@@ -12625,8 +12626,11 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                         &const_alter_table_arg);
               if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit constraint task failed", K(ret));
+              } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                             task_record.task_id_))) {
+                LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
               } else if (OB_FAIL(ObDDLLock::lock_for_common_ddl(new_table_schema,
-                                                                ObTableLockOwnerID(task_record.task_id_),
+                                                                owner_id,
                                                                 trans))) {
                 LOG_WARN("failed to lock online ddl lock", K(ret));
               } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
@@ -12679,6 +12683,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("can not find foreign key", K(ret));
               } else {
+                ObTableLockOwnerID owner_id;
                 ObCreateDDLTaskParam param(new_table_schema.get_tenant_id(),
                                            ObDDLType::DDL_FOREIGN_KEY_CONSTRAINT,
                                            &new_table_schema,
@@ -12691,12 +12696,15 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                            &const_alter_table_arg);
                 if (OB_FAIL(GCTX.root_service_->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                   LOG_WARN("submit constraint task", K(ret));
+                } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                               task_record.task_id_))) {
+                  LOG_WARN("failed to get owner id", K(ret), K(task_record.task_id_));
                 } else if (nullptr != parent_table_schema && OB_FAIL(ObDDLLock::lock_for_common_ddl(*parent_table_schema,
-                                                                                                    ObTableLockOwnerID(task_record.task_id_),
+                                                                                                    owner_id,
                                                                                                     trans))) {
                   LOG_WARN("failed to lock online ddl lock", K(ret));
                 } else if (OB_FAIL(ObDDLLock::lock_for_common_ddl(new_table_schema,
-                                                                  ObTableLockOwnerID(task_record.task_id_),
+                                                                  owner_id,
                                                                   trans))) {
                   LOG_WARN("failed to lock online ddl lock", K(ret));
                 } else if (OB_FAIL(ddl_tasks.push_back(task_record))) {
@@ -13076,15 +13084,19 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
       int64_t task_id = 0;
       int64_t refreshed_schema_version = 0;
       bool with_primary_key_operation = false;
+      ObTableLockOwnerID owner_id;
       if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
         LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
       } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
         LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
       } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
         LOG_WARN("fetch new task id failed", K(ret));
+      } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                     task_id))) {
+        LOG_WARN("failed to get owner id", K(ret), K(task_id));
       } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
                                                          nullptr,
-                                                         ObTableLockOwnerID(task_id),
+                                                         owner_id,
                                                          trans))) {
         LOG_WARN("failed to lock ddl lock", K(ret));
       }
@@ -13377,6 +13389,7 @@ int ObDDLService::create_hidden_table(
         ObDDLSQLTransaction trans(schema_service_);
         common::ObArenaAllocator allocator;
         ObDDLTaskRecord task_record;
+        ObTableLockOwnerID owner_id;
         int64_t task_id = 0;
         int64_t refreshed_schema_version = 0;
         new_table_schema.set_tenant_id(dest_tenant_id);
@@ -13387,9 +13400,11 @@ int ObDDLService::create_hidden_table(
           LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
         } else if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
           LOG_WARN("fetch new task id failed", K(ret));
+        } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id))) {
+          LOG_WARN("failed to get owner id", K(ret), K(task_id));
         } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*orig_table_schema,
                                                            nullptr,
-                                                           ObTableLockOwnerID(task_id),
+                                                           owner_id,
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
         } else if (OB_FAIL(create_user_hidden_table(
@@ -13584,11 +13599,15 @@ int ObDDLService::mview_complete_refresh_in_trans(
         const bool bind_tablets = true;
         ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
         new_container_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
+        ObTableLockOwnerID owner_id;
         if (OB_FAIL(ObDDLTask::fetch_new_task_id(root_service->get_sql_proxy(), tenant_id, task_id))) {
           LOG_WARN("fetch new task id failed", KR(ret), K(tenant_id));
+        } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                task_id))) {
+          LOG_WARN("failed to get owner id", K(ret), K(task_id));
         } else if (OB_FAIL(ObDDLLock::lock_for_offline_ddl(*container_table_schema,
                                                             nullptr,
-                                                            ObTableLockOwnerID(task_id),
+                                                            owner_id,
                                                             trans))) {
           LOG_WARN("failed to lock ddl lock", KR(ret));
         } else if (OB_FAIL(create_user_hidden_table(*container_table_schema,
@@ -18508,6 +18527,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
       ObSEArray<ObAuxTableMetaInfo, 16> new_simple_index_infos;
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
       schema_guard.set_session_id(alter_table_arg.session_id_);
+      ObTableLockOwnerID owner_id;
       int64_t refreshed_schema_version = 0;
       if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
         LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
@@ -18743,10 +18763,12 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                        orig_table_schema->get_table_id(),
-                                                        ObTableLockOwnerID(alter_table_arg.task_id_),
-                                                        trans))) {
+          if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, alter_table_arg.task_id_))) {
+            LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
+          } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
+                                                               orig_table_schema->get_table_id(),
+                                                               owner_id,
+                                                               trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -19531,10 +19553,14 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
-                                                        orig_table_schema->get_table_id(),
-                                                        ObTableLockOwnerID(alter_table_arg.task_id_),
-                                                        trans))) {
+          ObTableLockOwnerID owner_id;
+          if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                  alter_table_arg.task_id_))) {
+            LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
+          } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
+                                                               orig_table_schema->get_table_id(),
+                                                               owner_id,
+                                                               trans))) {
             LOG_WARN("failed to unlock ddl", K(ret));
           }
         }
@@ -23242,10 +23268,14 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
                           mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */))) {
                 LOG_WARN("ddl_service_ drop_table failed", K(table_item), K(tenant_id), K(ret));
               } else if (drop_table_arg.task_id_ != 0 && is_drop_index_or_mlog) {
-                if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
-                                                                tmp_table_schema,
-                                                                ObTableLockOwnerID(drop_table_arg.task_id_),
-                                                                trans))) {
+                ObTableLockOwnerID owner_id;
+                if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                               drop_table_arg.task_id_))) {
+                  LOG_WARN("failed to get owner id", K(ret), K(drop_table_arg.task_id_));
+                } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
+                                                                        tmp_table_schema,
+                                                                        owner_id,
+                                                                        trans))) {
                   LOG_WARN("failed to unlock for add drop index", K(ret));
                 }
               }
@@ -23611,14 +23641,18 @@ int ObDDLService::update_index_status(const obrpc::ObUpdateIndexStatusArg &arg)
     if (OB_SUCC(ret) && arg.task_id_ != 0) {
       if (table->get_index_status() != new_status && new_status == INDEX_STATUS_AVAILABLE) {
         const ObTableSchema *data_table_schema = nullptr;
+        ObTableLockOwnerID owner_id;
         if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table->get_data_table_id(), data_table_schema))) {
           LOG_WARN("failed to get data table schema", K(ret));
         } else if (nullptr == data_table_schema) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data table has been deleted", K(ret), K(table->get_data_table_id()));
+        } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                       arg.task_id_))) {
+          LOG_WARN("failed to get owner id", K(ret), K(arg.task_id_));
         } else if (OB_FAIL(ObDDLLock::unlock_for_add_drop_index(*data_table_schema,
                                                                 *table,
-                                                                ObTableLockOwnerID(arg.task_id_),
+                                                                owner_id,
                                                                 trans))) {
           LOG_WARN("failed to unlock ddl lock", K(ret));
         }
@@ -36780,7 +36814,7 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
       ObLockObjRequest lock_arg;
       lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_TENANT;
       lock_arg.obj_id_ = tenant_id;
-      lock_arg.owner_id_ = ObTableLockOwnerID(0);
+      lock_arg.owner_id_.set_default();
       lock_arg.lock_mode_ = !enable_parallel ? EXCLUSIVE : SHARE;
       lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
       lock_arg.timeout_us_ = ctx.get_timeout();
@@ -36801,7 +36835,7 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
         ObLockObjRequest lock_arg;
         lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_TENANT;
         lock_arg.obj_id_ = tenant_id;
-        lock_arg.owner_id_ = ObTableLockOwnerID(0);
+        lock_arg.owner_id_.set_default();
         lock_arg.lock_mode_ = !enable_parallel ? EXCLUSIVE : SHARE;
         lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
         lock_arg.timeout_us_ = ctx.get_timeout();

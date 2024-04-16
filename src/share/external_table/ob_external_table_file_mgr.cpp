@@ -1152,12 +1152,16 @@ int ObExternalTableFileManager::lock_for_refresh(
     ObLockObjRequest lock_arg;
     lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_EXTERNAL_TABLE_REFRESH;
     lock_arg.obj_id_ = object_id;
-    lock_arg.owner_id_ = ObTableLockOwnerID(get_tid_cache());
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     lock_arg.timeout_us_ = 1000L * 1000L * 2; //2s
-    while (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn)) && !THIS_WORKER.is_timeout()) {
-      LOG_WARN("lock failed try again", K(ret));
+    if (OB_FAIL(lock_arg.owner_id_.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                      get_tid_cache()))) {
+      LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
+    } else {
+      while (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn)) && !THIS_WORKER.is_timeout()) {
+        LOG_WARN("lock failed try again", K(ret));
+      }
     }
   }
 

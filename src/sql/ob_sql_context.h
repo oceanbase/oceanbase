@@ -494,8 +494,12 @@ public:
     }
     return reroute_info_;
   }
-  share::ObFeedbackRerouteInfo *get_reroute_info() {
+  share::ObFeedbackRerouteInfo *get_reroute_info() const {
     return reroute_info_;
+  }
+  void set_reroute_info(share::ObFeedbackRerouteInfo &reroute_info)
+  {
+    reroute_info_->assign(reroute_info);
   }
 
   bool is_batch_params_execute() const

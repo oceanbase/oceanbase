@@ -56,17 +56,21 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
                                      const uint64_t mview_id, const bool try_lock)
 {
   int ret = OB_SUCCESS;
+  ObTableLockOwnerID owner_id;
   if (OB_UNLIKELY(!trans.is_started() || OB_INVALID_TENANT_ID == tenant_id ||
                   OB_INVALID_ID == mview_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(trans.is_started()), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 get_tid_cache()))) {
+    LOG_WARN("failed to get owner id", K(ret), K(get_tid_cache()));
   } else {
     const int64_t DEFAULT_TIMEOUT = GCONF.internal_sql_execute_timeout;
     ObInnerSQLConnection *conn = nullptr;
     ObLockObjRequest lock_arg;
     lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_MATERIALIZED_VIEW;
     lock_arg.obj_id_ = mview_id;
-    lock_arg.owner_id_ = ObTableLockOwnerID(get_tid_cache());
+    lock_arg.owner_id_ = owner_id;
     lock_arg.lock_mode_ = EXCLUSIVE;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
     if (OB_ISNULL(conn = static_cast<ObInnerSQLConnection *>(trans.get_connection()))) {

@@ -264,7 +264,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
     } else {
       int sret = OB_SUCCESS;
       bool is_partition_hit = session_.get_err_final_partition_hit(ret);
-      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit))) {
+      if (OB_SUCCESS != (sret = sender_.send_error_packet(ret, NULL, is_partition_hit, (void *)ctx_.get_reroute_info()))) {
         LOG_WARN("send error packet fail", K(sret), K(ret));
       }
     }

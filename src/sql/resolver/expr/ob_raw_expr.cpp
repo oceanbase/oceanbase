@@ -835,7 +835,12 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || (T_FUN_UDF == type_
-          && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
+          && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())
+      || T_FUN_SYS_GET_LOCK == type_
+      || T_FUN_SYS_IS_FREE_LOCK == type_
+      || T_FUN_SYS_IS_USED_LOCK == type_
+      || T_FUN_SYS_RELEASE_LOCK == type_
+      || T_FUN_SYS_RELEASE_ALL_LOCKS == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
@@ -934,6 +939,11 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_FOUND_ROWS == type_
           || T_FUN_SYS_CURRENT_USER_PRIV == type_
           || T_FUN_SYS_TRANSACTION_ID == type_
+          || T_FUN_SYS_GET_LOCK == type_
+          || T_FUN_SYS_IS_FREE_LOCK == type_
+          || T_FUN_SYS_IS_USED_LOCK == type_
+          || T_FUN_SYS_RELEASE_LOCK == type_
+          || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
           || T_FUN_SYS_CURRENT_ROLE == type_) {
       is_non_pure = true;
     }

@@ -492,7 +492,7 @@ ObTransferTask::ObTransferTask()
       result_(-1),
       comment_(ObTransferTaskComment::EMPTY_COMMENT),
       balance_task_id_(),
-      table_lock_owner_id_(OB_INVALID_INDEX)
+      table_lock_owner_id_()
 {
 }
 
@@ -514,7 +514,7 @@ void ObTransferTask::reset()
   result_ = -1;
   comment_ = ObTransferTaskComment::EMPTY_COMMENT;
   balance_task_id_.reset();
-  table_lock_owner_id_ = OB_INVALID_INDEX;
+  table_lock_owner_id_.reset();
 }
 
 // init by necessary info, other members take default values

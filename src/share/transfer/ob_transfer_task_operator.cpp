@@ -263,7 +263,7 @@ int ObTransferTaskOperator::fill_dml_splicer_(
       || OB_FAIL(dml_splicer.add_column("result", task.get_result()))
       || OB_FAIL(dml_splicer.add_column("comment", transfer_task_comment_to_str(task.get_comment())))
       || OB_FAIL(dml_splicer.add_column("balance_task_id", task.get_balance_task_id().id()))
-      || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", task.get_table_lock_owner_id().id()))) {
+      || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", task.get_table_lock_owner_id().raw_value()))) {
     LOG_WARN("fail to add column", KR(ret), K(task));
   }
   return ret;
@@ -370,7 +370,7 @@ int ObTransferTaskOperator::update_to_start_status(
         || OB_FAIL(dml_splicer.add_column("tablet_count", new_tablet_list.count()))
         || OB_FAIL(dml_splicer.add_column("status", new_status.str()))
         || OB_FAIL(dml_splicer.add_column("comment", transfer_task_comment_to_str(ObTransferTaskComment::EMPTY_COMMENT))) // reset comment
-        || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", table_lock_owner_id.id()))) {
+        || OB_FAIL(dml_splicer.add_column("table_lock_owner_id", table_lock_owner_id.raw_value()))) {
       LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(task_id), K(part_list_str),
           K(not_exist_part_list_str), K(lock_conflict_part_list_str), K(table_lock_tablet_list_str),
           K(tablet_list_str), K(new_status), K(table_lock_owner_id));
@@ -823,10 +823,11 @@ int ObTransferTaskOperator::parse_sql_result_(
   int64_t result = -1;
   ObString comment;
   int64_t balance_task_id = ObBalanceTaskID::INVALID_ID;
-  int64_t table_lock_owner_id = ObTableLockOwnerID::INVALID_ID;
+  int64_t lock_owner_val = ObTableLockOwnerID::INVALID_ID;
   ObTransferStatus status;
   SCN start_scn;
   SCN finish_scn;
+  ObTableLockOwnerID owner_id;
   common::ObCurTraceId::TraceId trace_id;
 
   if (with_time) {
@@ -847,7 +848,7 @@ int ObTransferTaskOperator::parse_sql_result_(
   (void)GET_COL_IGNORE_NULL(res.get_int, "result", result);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
   (void)GET_COL_IGNORE_NULL(res.get_int, "balance_task_id", balance_task_id);
-  (void)GET_COL_IGNORE_NULL(res.get_int, "table_lock_owner_id", table_lock_owner_id);
+  (void)GET_COL_IGNORE_NULL(res.get_int, "table_lock_owner_id", lock_owner_val);
   EXTRACT_STRBUF_FIELD_MYSQL(res, "trace_id", trace_id_buf, OB_MAX_TRACE_ID_BUFFER_SIZE, real_length);
 
   if (OB_FAIL(ret)) {
@@ -857,6 +858,8 @@ int ObTransferTaskOperator::parse_sql_result_(
   } else if (finish_scn_val != OB_INVALID_SCN_VAL
       && OB_FAIL(finish_scn.convert_for_inner_table_field(finish_scn_val))) {
     LOG_WARN("fail to convert for inner table field", KR(ret), K(finish_scn_val));
+  } else if (OB_FAIL(owner_id.convert_from_value(lock_owner_val))) {
+    LOG_WARN("fail to convert to owner id", K(ret), K(lock_owner_val));
   } else if (OB_FAIL(trace_id.parse_from_buf(trace_id_buf))) {
     LOG_WARN("failed to parse trace id from buf", KR(ret), K(trace_id_buf));
   } else if (OB_FAIL(status.parse_from_str(status_str))) {
@@ -877,10 +880,10 @@ int ObTransferTaskOperator::parse_sql_result_(
       static_cast<int32_t>(result),
       str_to_transfer_task_comment(comment),
       ObBalanceTaskID(balance_task_id),
-      ObTableLockOwnerID(table_lock_owner_id)))) {
+      owner_id))) {
     LOG_WARN("fail to init transfer task", KR(ret), K(task_id), K(src_ls), K(dest_ls), K(part_list_str),
         K(not_exist_part_list_str), K(lock_conflict_part_list_str), K(table_lock_tablet_list_str), K(tablet_list_str), K(start_scn),
-        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(table_lock_owner_id));
+        K(finish_scn), K(status), K(trace_id), K(result), K(comment), K(balance_task_id), K(owner_id));
   }
 
   return ret;

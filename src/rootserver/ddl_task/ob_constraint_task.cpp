@@ -924,16 +924,20 @@ int ObConstraintTask::release_ddl_locks()
   }
 
   ObMySQLTransaction trans;
+  transaction::tablelock::ObTableLockOwnerID owner_id;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
     LOG_WARN("start transaction failed", K(ret));
+  } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE,
+                                                 task_id_))) {
+    LOG_WARN("get owner id failed", K(ret), K(task_id_));
   } else if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*table_schema,
-                                                      transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                      owner_id,
                                                       trans))) {
     LOG_WARN("failed to unlock ddl", K(ret));
   } else if (nullptr != another_table_schema) {
     if (OB_FAIL(ObDDLLock::unlock_for_common_ddl(*another_table_schema,
-                                                 transaction::tablelock::ObTableLockOwnerID(task_id_),
+                                                 owner_id,
                                                  trans))) {
       LOG_WARN("failed to unlock ddl", K(ret));
     }
