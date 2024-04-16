@@ -1675,7 +1675,7 @@ int ObSortOpImpl::sort_inmem_data()
         }
       }
       if (part_cnt_ > 0) {
-        do_partition_sort(*rows_, begin, rows_->count());
+        OZ(do_partition_sort(*rows_, begin, rows_->count()));
       } else if (enable_encode_sortkey_) {
         bool can_encode = true;
         ObAdaptiveQS aqs(*rows_, mem_context_->get_malloc_allocator());
