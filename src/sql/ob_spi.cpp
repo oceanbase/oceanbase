@@ -9242,6 +9242,7 @@ int ObSPIService::spi_copy_opaque(
   ObPLOpaque &src, ObPLOpaque *&dest, uint64_t package_id)
 {
   int ret = OB_SUCCESS;
+  bool is_new_opaque = false;
   UNUSEDx(ctx, package_id);
   if (NULL == dest) {
     CK (OB_NOT_NULL(allocator));
@@ -9250,6 +9251,7 @@ int ObSPIService::spi_copy_opaque(
       LOG_WARN("failed to alloc memory for dest opaque", K(ret), K(src.get_init_size()));
     }
     OX (new (dest)ObPLOpaque());
+    OX (is_new_opaque = true);
   }
   if (OB_SUCC(ret)) {
     switch (src.get_type()) {
@@ -9272,6 +9274,10 @@ int ObSPIService::spi_copy_opaque(
       default: {
         OZ (src.deep_copy(dest));
       } break;
+    }
+    if (OB_FAIL(ret) && is_new_opaque) {
+      dest->~ObPLOpaque();
+      dest = NULL;
     }
   }
   return ret;
