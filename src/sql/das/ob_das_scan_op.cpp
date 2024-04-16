@@ -293,7 +293,9 @@ int ObDASScanOp::init_scan_param()
     } else {
       uint64_t max_idx = 0;
       for (int i = 0; i < scan_param_.ext_file_column_exprs_->count(); i++) {
-        max_idx = std::max(max_idx, scan_param_.ext_file_column_exprs_->at(i)->extra_);
+        if (scan_param_.ext_file_column_exprs_->at(i)->type_ == T_PSEUDO_EXTERNAL_FILE_COL) {
+          max_idx = std::max(max_idx, scan_param_.ext_file_column_exprs_->at(i)->extra_);
+        }
       }
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
     }
@@ -482,6 +484,12 @@ void ObDASScanOp::reset_access_datums_ptr()
       info.point_to_frame_ = true;
     }
     FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_) {
+      (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
+      ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
+      info.point_to_frame_ = true;
+    }
+
+    FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_) {
       (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;

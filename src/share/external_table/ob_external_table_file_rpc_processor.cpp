@@ -27,7 +27,7 @@ int ObFlushExternalTableKVCacheP::process()
   int ret = OB_SUCCESS;
   ObFlushExternalTableFileCacheReq &req = arg_;
   ObFlushExternalTableFileCacheRes &res = result_;
-  if (OB_FAIL(ObExternalTableFileManager::get_instance().flush_cache(req.tenant_id_, req.table_id_))) {
+  if (OB_FAIL(ObExternalTableFileManager::get_instance().flush_cache(req.tenant_id_, req.table_id_, req.partition_id_))) {
     LOG_WARN("erase kvcache result failed", K(ret));
   }
   res.rcode_.rcode_ = ret;

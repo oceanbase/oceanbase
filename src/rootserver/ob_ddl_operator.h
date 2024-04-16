@@ -205,6 +205,10 @@ public:
   static bool is_list_values_equal(
        const common::ObRowkey &fir_values,
        const common::ObIArray<common::ObNewRow> &sed_values);
+
+  int update_default_partition_part_idx_for_external_table(const ObTableSchema &orig_table_schema,
+                                        const ObTableSchema &new_table_schema,
+                                        ObMySQLTransaction &trans);
   int add_table_partitions(const share::schema::ObTableSchema &orig_table_schema,
                            share::schema::ObTableSchema &inc_table_schema,
                            const int64_t schema_version,

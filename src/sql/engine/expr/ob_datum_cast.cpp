@@ -986,7 +986,7 @@ static int common_string_int(const ObExpr &expr,
   int64_t out_val = 0;
   ret = common_string_integer(extra, in_type, in_cs_type, in_str, is_str_integer_cast, out_val);
   if (CAST_FAIL_CM(ret, extra)) {
-    LOG_WARN("string_int failed", K(ret));
+    LOG_WARN("string_int failed", K(ret), K(in_str));
   } else if (out_type < ObIntType &&
       CAST_FAIL_CM(int_range_check(out_type, out_val, out_val), extra)) {
     LOG_WARN("int_range_check failed", K(ret));

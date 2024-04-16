@@ -1095,16 +1095,12 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     &ob_collation_mb_bin_handler,
     PAD_SPACE};
 
-/*[GB+82358F33, GB+82359134] or [U+9FA6, U+9FBB]*/
-const static int GB_2022_CNT_PART_1 = 0x9FBB - 0x9FA6 + 1;
-/*[GB+84318236, GB+84318537]*/
-const static int GB_2022_CNT_PART_2 = (0x85 - 0x82) * 10 + (0x37 - 0x36) + 1;
 
 // These four arrays will be init in ObCharset::init_charset()
-static uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
-static uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
-static uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
-static uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];
+uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
+uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
+uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
+uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];
 
 static uint gb18030_2_idx(const uchar *s)
 {

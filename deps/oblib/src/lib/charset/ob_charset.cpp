@@ -1346,7 +1346,9 @@ int ObCharset::wc_mb(ObCollationType collation_type, int32_t wc, char *buff, int
     } else {
       int tmp = cs->cset->wc_mb(cs, wc, reinterpret_cast<unsigned char*>(buff),
                                 reinterpret_cast<unsigned char*>(buff + buff_len));
-      if (tmp <= 0) {
+      if (tmp <= OB_CS_TOOSMALL) {
+        ret = OB_SIZE_OVERFLOW;
+      } else if (tmp <= 0) {
         ret = OB_ERR_INCORRECT_STRING_VALUE;
       } else {
         ret = OB_SUCCESS;

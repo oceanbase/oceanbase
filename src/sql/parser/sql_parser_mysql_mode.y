@@ -311,7 +311,7 @@ END_P SET_VAR DELIMITER
         MASTER_HOST MASTER_LOG_FILE MASTER_LOG_POS MASTER_PASSWORD MASTER_PORT MASTER_RETRY_COUNT
         MASTER_SERVER_ID MASTER_SSL MASTER_SSL_CA MASTER_SSL_CAPATH MASTER_SSL_CERT MASTER_SSL_CIPHER
         MASTER_SSL_CRL MASTER_SSL_CRLPATH MASTER_SSL_KEY MASTER_USER MAX MAX_CONNECTIONS_PER_HOUR MAX_CPU
-        LOG_DISK_SIZE MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
+        MAX_FILE_SIZE LOG_DISK_SIZE MAX_IOPS MEMORY_SIZE MAX_QUERIES_PER_HOUR MAX_ROWS MAX_SIZE
         MAX_UPDATES_PER_HOUR MAX_USER_CONNECTIONS MEDIUM MEMORY MEMTABLE MESSAGE_TEXT META MICROSECOND
         MIGRATE MIN MIN_CPU MIN_IOPS MIN_MAX MINOR MIN_ROWS MINUS MINUTE MODE MODIFY MONTH MOVE
         MULTILINESTRING MULTIPOINT MULTIPOLYGON MUTEX MYSQL_ERRNO MIGRATION MAX_USED_PART_ID MAXIMIZE
@@ -329,7 +329,7 @@ END_P SET_VAR DELIMITER
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION OBJECT PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
-        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN
+        PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE
 
         QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
 
@@ -343,7 +343,7 @@ END_P SET_VAR DELIMITER
 
         SAMPLE SAVEPOINT SCHEDULE SCHEMA_NAME SCN SCOPE SECOND SECURITY SEED SEQUENCES SERIAL SERIALIZABLE SERVER
         SERVER_IP SERVER_PORT SERVER_TYPE SERVICE SESSION SESSION_USER SET_MASTER_CLUSTER SET_SLAVE_CLUSTER
-        SET_TP SHARE SHUTDOWN SIGNED SIMPLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
+        SET_TP SHARE SHUTDOWN SIGNED SIMPLE SINGLE SKIP_INDEX SLAVE SLOW SLOT_IDX SNAPSHOT SOCKET SOME SONAME SOUNDS
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
@@ -360,7 +360,7 @@ END_P SET_VAR DELIMITER
         TRANSFER
 
         UNCOMMITTED UNDEFINED UNDO_BUFFER_SIZE UNDOFILE UNICODE UNINSTALL UNIT UNIT_GROUP UNIT_NUM UNLOCKED UNTIL
-        UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED
+        UNUSUAL UPGRADE USE_BLOOM_FILTER UNKNOWN USE_FRM USER USER_RESOURCES UNBOUNDED UP UNLIMITED USER_SPECIFIED
 
         VALID VALUE VARIANCE VARIABLES VERBOSE VERIFY VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP VALIDATION
@@ -494,7 +494,7 @@ END_P SET_VAR DELIMITER
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
-%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var
+%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_opt file_option_list file_option file_size_const
 %type <node> string_list text_string string_val_list
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
@@ -529,7 +529,7 @@ END_P SET_VAR DELIMITER
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
 %type <node> external_file_format_list external_file_format external_table_partition_option
-%type <node> dynamic_sampling_hint
+%type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
@@ -6853,6 +6853,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ENABLE_EXTENDED_ROWID, 1, $3);
 }
+| PARTITION_TYPE opt_equal_mark USER_SPECIFIED
+{
+  (void)($2) ; /* make bison mute */
+  malloc_terminal_node($$, result->malloc_pool_, T_EXTERNAL_USER_SPECIFIED_PARTITION);
+}
 | LOCATION opt_equal_mark STRING_VALUE
 {
   (void)($2) ; /* make bison mute */
@@ -9762,9 +9767,9 @@ LIMIT limit_expr OFFSET limit_expr
 ;
 
 into_clause:
-INTO OUTFILE STRING_VALUE opt_charset field_opt line_opt
+INTO OUTFILE STRING_VALUE opt_charset field_opt line_opt file_opt
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 4, $3, $4, $5, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 5, $3, $4, $5, $6, $7);
 }
 | INTO DUMPFILE STRING_VALUE
 {
@@ -9859,6 +9864,53 @@ TERMINATED BY STRING_VALUE
   malloc_non_terminal_node($$, result->malloc_pool_, T_ESCAPED_STR, 1, $3);
 }
 ;
+
+file_opt:
+file_option_list
+{
+  merge_nodes($$, result, T_INTO_FILE_LIST, $1);
+}
+| /*empty*/
+{
+  $$ = NULL;
+}
+;
+
+file_option_list:
+file_option_list file_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+| file_option
+{
+  $$ = $1;
+}
+;
+
+file_option:
+SINGLE opt_equal_mark BOOL_VALUE
+{
+  (void)($2);
+  malloc_terminal_node($$, result->malloc_pool_, T_SINGLE_OPT);
+  $$->value_ = $3->value_;
+  $$->is_hidden_const_ = 1;
+}
+| MAX_FILE_SIZE opt_equal_mark file_size_const
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MAX_FILE_SIZE, 1, $3);
+}
+;
+
+file_size_const:
+INTNUM
+{
+  $$ = $1;
+}
+| STRING_VALUE
+{
+  $$ = $1;
+}
 
 line_opt:
 LINES line_term_list
@@ -15917,7 +15969,57 @@ alter_with_opt_hint TABLE relation_factor alter_column_group_option
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 4, $3, table_actions, NULL, $1);
   $$->value_ = 0;
 }
+|
+alter_with_opt_hint EXTERNAL TABLE relation_factor ADD PARTITION '(' add_external_table_partition_actions ')' LOCATION STRING_VALUE
+{
+  ParseNode *action = NULL;
+  ParseNode *external_node = NULL;
+  merge_nodes(action, result, T_ALTER_EXTERNAL_PARTITION_ADD, $8);
+  ParseNode *external_action = NULL;
+  malloc_non_terminal_node(external_action, result->malloc_pool_, T_ALTER_EXTERNAL_PARTITION_OPTION, 2, action, $11);
+  ParseNode *table_action = NULL;
+  malloc_non_terminal_node(table_action, result->malloc_pool_, T_ALTER_TABLE_ACTION_LIST, 1, external_action);
+  malloc_terminal_node(external_node, result->malloc_pool_, T_EXTERNAL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 4, $4, table_action, external_node, $1);
+  $$->value_ = 0;
+}
+|
+alter_with_opt_hint EXTERNAL TABLE relation_factor DROP PARTITION LOCATION STRING_VALUE
+{
+  (void)($1);
+  ParseNode *action = NULL;
+  ParseNode *external_node = NULL;
+  malloc_non_terminal_node(action, result->malloc_pool_, T_ALTER_EXTERNAL_PARTITION_DROP, 1, $8);
+  ParseNode *external_action = NULL;
+  malloc_non_terminal_node(external_action, result->malloc_pool_, T_ALTER_EXTERNAL_PARTITION_OPTION, 1, action);
+  ParseNode *table_action = NULL;
+  malloc_non_terminal_node(table_action, result->malloc_pool_, T_ALTER_TABLE_ACTION_LIST, 1, external_action);
+  malloc_terminal_node(external_node, result->malloc_pool_, T_EXTERNAL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLE, 4, $4, table_action, external_node, $1);
+  $$->value_ = 0;
+}
 ;
+
+add_external_table_partition_actions:
+add_external_table_partition_action
+{
+  $$ = $1;
+}
+| add_external_table_partition_actions ',' add_external_table_partition_action
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+|
+{ $$ = NULL; }
+
+add_external_table_partition_action:
+column_name opt_equal_mark expr_const
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 2, $1, $3);
+}
+;
+
 
 alter_table_actions:
 alter_table_action_list
@@ -20649,6 +20751,7 @@ ACCOUNT
 |       MAX
 |       MAX_CONNECTIONS_PER_HOUR
 |       MAX_CPU
+|       MAX_FILE_SIZE
 |       LOG_DISK_SIZE
 |       MAX_IOPS
 |       MEMORY_SIZE
@@ -20748,6 +20851,7 @@ ACCOUNT
 |       LS
 |       PARTITIONING
 |       PARTITIONS
+|       PARTITION_TYPE
 |       PATTERN
 |       PERCENT_RANK
 |       PAUSE
@@ -20876,6 +20980,7 @@ ACCOUNT
 |       SIGNED
 |       SIZE %prec LOWER_PARENS
 |       SIMPLE
+|       SINGLE
 |       SKIP_BLANK_LINES
 |       STATEMENT
 |       SKIP_HEADER
@@ -21007,6 +21112,7 @@ ACCOUNT
 |       USE_FRM
 |       USER
 |       USER_RESOURCES
+|       USER_SPECIFIED
 |       UNBOUNDED
 |       UNLIMITED
 |       VALID

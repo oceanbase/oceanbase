@@ -8244,20 +8244,20 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       } else if (OB_FAIL(ObResolverUtils::calc_file_column_idx(columns.at(i).col_name_, file_column_idx))) {
         LOG_WARN("fail to calc file column idx", K(ret));
       } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
-                               pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx))) {
+                               pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, columns.at(i).col_name_))) {
         ObExternalFileFormat format;
         if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
           LOG_WARN("load from string failed", K(ret));
         } else if (OB_FAIL(ObResolverUtils::build_file_column_expr(*params_.expr_factory_, *params_.session_info_,
-                                                            table_item.table_id_, table_item.table_name_,
+                                                            table_item.table_id_, table_item.alias_name_,
                                                             columns.at(i).col_name_, file_column_idx, real_ref_expr,
-                                                            format.csv_format_.cs_type_))) {
+                                                            format.csv_format_.cs_type_, column_schema))) {
           LOG_WARN("fail to build external table file column expr", K(ret));
         } else if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
           LOG_WARN("fail to push back to array", K(ret));
         }
-        LOG_DEBUG("add external file column", KPC(real_ref_expr), K(columns.at(i).col_name_));
       }
+      LOG_TRACE("add external file column", KPC(real_ref_expr), K(columns.at(i).col_name_), K(table_item));
     } else {
       if (OB_FAIL(resolve_basic_column_item(table_item, columns.at(i).col_name_,
                                              false, col_item, stmt))) {
@@ -13114,9 +13114,49 @@ int ObDMLResolver::resolve_pseudo_column(
     if (OB_FAIL(resolve_rowid_pseudo_column(q_name, real_ref_expr))) {
       LOG_WARN("resolve rowid pseudo column failed", K(ret));
     }
+  } else if (0 == q_name.col_name_.case_compare(N_EXTERNAL_FILE_URL)) {
+    const TableItem *table_item = NULL;
+    const ObTableSchema *table_schema = NULL;
+    if (OB_ISNULL(schema_checker_) || OB_ISNULL(get_stmt())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else if (OB_FAIL(column_namespace_checker_.check_ext_table_column_namespace(q_name, table_item))) {
+      LOG_WARN("check ext table column namespce failed", K(ret));
+    } else if (OB_ISNULL(table_item)) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("metadate pseudo column only avaliable in external table", K(ret));
+    } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(),
+                                                     table_item->ref_id_, table_schema))) {
+      LOG_WARN("get table schema failed", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (!table_schema->is_external_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "metadata$fileurl for non external table");
+      LOG_WARN("metadata fileurl for non external table schema is not supported", K(ret));
+    } else if (NULL != (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                              pseudo_external_file_col_exprs_, table_item->table_id_, UINT64_MAX, q_name.col_name_))) {
+      LOG_TRACE("find file name pseudo column", K(*real_ref_expr));
+    } else if (OB_FAIL(ObResolverUtils::build_file_column_expr(*params_.expr_factory_, *params_.session_info_,
+                                                        table_item->table_id_, table_item->alias_name_,
+                                                        q_name.col_name_, UINT64_MAX, real_ref_expr,
+                                                        CHARSET_UTF8MB4))) {
+      LOG_WARN("fail to build external table file column expr", K(ret));
+    } else if (OB_FAIL(pseudo_external_file_col_exprs_.push_back(real_ref_expr))) {
+      LOG_WARN("fail to push back to array", K(ret));
+    }
+    //may be already created, but not added.
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(real_ref_expr->add_relation_id(get_stmt()->get_table_bit_index(table_item->table_id_)))) {
+      LOG_WARN("add relation id failed", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(get_stmt()->get_pseudo_column_like_exprs(), real_ref_expr))) {
+      LOG_WARN("get pseudo column like exprs", K(ret));
+    }
   } else {
     ret = OB_ERR_BAD_FIELD_ERROR;
   }
+  LOG_TRACE("resolve pseudo column finish", KPC(real_ref_expr));
   return ret;
 }
 

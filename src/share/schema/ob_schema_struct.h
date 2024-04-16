@@ -150,6 +150,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG (INT64_C(1) << 1)
 #define EXTERNAL_TABLE_AUTO_REFRESH_FLAG (INT64_C(1) << 2)
 #define EXTERNAL_TABLE_CREATE_ON_REFRESH_FLAG (INT64_C(1) << 3)
+
 // schema array size
 static const int64_t SCHEMA_SMALL_MALLOC_BLOCK_SIZE = 64;
 static const int64_t SCHEMA_MALLOC_BLOCK_SIZE = 128;
@@ -2124,6 +2125,7 @@ public:
   // convert character set.
   int convert_character_for_range_columns_part(const ObCollationType &to_collation);
   int convert_character_for_list_columns_part(const ObCollationType &to_collation);
+
   int set_external_location(common::ObString &location)
   { return deep_copy_str(location, external_location_); }
   const common::ObString &get_external_location() const
@@ -2312,6 +2314,8 @@ public:
   virtual void set_schema_version(const int64_t schema_version) = 0;
   virtual bool is_user_partition_table() const = 0;
   virtual bool is_user_subpartition_table() const = 0;
+
+  virtual bool is_external_table() const = 0;
   virtual ObPartitionLevel get_part_level() const { return part_level_; }
   virtual bool has_self_partition() const = 0;
   virtual int get_primary_zone_inherit(
@@ -2552,7 +2556,7 @@ public:
   int mock_list_partition_array();
   // only used for generate part_name
   int get_max_part_id(int64_t &part_id) const;
-  int get_max_part_idx(int64_t &part_idx) const;
+  int get_max_part_idx(int64_t &part_idx, bool skip_external_table_default_partition = false) const;
   //@param[in] name: the partition name which you want to get partition by
   //@param[out] part: the partition get by the name, when this function could not find the partition
   //            by the name, this param would be nullptr
@@ -2702,6 +2706,7 @@ public:
   inline const common::ObRowkey& get_split_list_row_values() const {
     return split_list_row_values_;
   }
+  virtual inline bool is_external_table() const override { return false; }
 
   // In the current implementation, if the locality of the zone_list of the tablegroup is empty,
   // it will be read from the tenant, otherwise it will be parsed from the locality
@@ -2966,6 +2971,8 @@ public:
       common::ObTabletID &tablet_id,
       common::ObObjectID &subpart_id,
       RelatedTableInfo *related_table = NULL);
+
+  static bool is_default_list_part(const ObPartition &part);
 
   /* ----------------------------------------------------------------- */
 

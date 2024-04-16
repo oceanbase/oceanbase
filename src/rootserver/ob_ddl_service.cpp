@@ -1209,6 +1209,8 @@ int ObDDLService::generate_tablet_id(
   uint64_t tablet_num = OB_INVALID_ID;
   if (is_sys_table(table_schema.get_table_id())) {
     table_schema.set_tablet_id(table_schema.get_table_id());
+  } else if (table_schema.is_external_table()) {
+    //skip
   } else if (OB_FAIL(calc_table_tablet_id_cnt_(table_schema, tablet_num))) {
     LOG_WARN("fail to calc tablet num", KR(ret), K(table_schema));
   } else if (0 == tablet_num) {
@@ -1300,7 +1302,9 @@ int ObDDLService::try_format_partition_schema(ObPartitionSchema &partition_schem
   int ret = OB_SUCCESS;
   // 1. generate missing partition/subpartition.
   bool generated = false;
-  if (OB_FAIL(partition_schema.try_generate_hash_part())) {
+  if (partition_schema.is_external_table()) {
+    //do nothing
+  } else if (OB_FAIL(partition_schema.try_generate_hash_part())) {
     LOG_WARN("fail to generate hash part", KR(ret), K(partition_schema));
   } else if (OB_FAIL(partition_schema.try_generate_hash_subpart(generated))) {
     LOG_WARN("fail to generate hash part", KR(ret), K(partition_schema));
@@ -10738,7 +10742,7 @@ int ObDDLService::gen_inc_table_schema_for_add_part(
   if (orig_table_schema.is_interval_part()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("add interval part will support later", KR(ret));
-  } else if (OB_FAIL(orig_table_schema.get_max_part_idx(max_part_idx))) {
+  } else if (OB_FAIL(orig_table_schema.get_max_part_idx(max_part_idx, orig_table_schema.is_external_table()))) {
     LOG_WARN("fail to get max part idx", KR(ret), K(orig_table_schema));
   } else {
     const int64_t inc_part_num = inc_table_schema.get_part_option().get_part_num();
@@ -11412,12 +11416,16 @@ int ObDDLService::generate_tables_array(const ObAlterTableArg::AlterPartitionTyp
     new_table_schema.unset_sub_part_template_def_valid();
   }
   const ObString new_part_name = inc_table_schema.get_new_part_name();
-  if (!orig_table_schema.has_tablet()
+  if ((!orig_table_schema.has_tablet() && !orig_table_schema.is_external_table())
       || orig_table_schema.is_index_local_storage()
       || orig_table_schema.is_aux_lob_table()
       || orig_table_schema.is_mlog_table()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_schema must be data table or global indexes", KR(ret), K(orig_table_schema));
+  } else if (orig_table_schema.is_external_table() && (obrpc::ObAlterTableArg::ADD_PARTITION != op_type
+                                                    && obrpc::ObAlterTableArg::DROP_PARTITION != op_type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("external should only support add and drop partition ddl", K(ret));
   } else if (OB_FAIL(orig_table_schemas.push_back(&orig_table_schema))) {
     LOG_WARN("failed to push back table_schema", KR(ret), K(orig_table_schema));
   } else if (OB_FAIL(new_table_schemas.push_back(&new_table_schema))) {
@@ -12252,6 +12260,27 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                      K(inc_table_schemas), K(del_table_schemas), KR(ret));
           } else if (alter_table_arg.task_id_ > 0 && OB_FAIL(ObDDLRetryTask::update_task_status_wait_child_task_finish(trans, tenant_id, alter_table_arg.task_id_))) {
             LOG_WARN("update ddl task status failed", K(ret));
+          } else {
+            if (alter_table_schema.is_external_table()) {
+              if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION
+                  || alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION) {
+                for (int64_t i = 0; OB_SUCC(ret) && i < alter_table_schema.get_partition_num(); i++) {
+                  ObAlterTableResArg arg;
+                  CK (OB_NOT_NULL(alter_table_schema.get_part_array()) &&
+                       OB_NOT_NULL(alter_table_schema.get_part_array()[i]));
+                  if (OB_SUCC(ret)) {
+                    arg.schema_id_ = alter_table_schema.get_table_id();
+                    arg.schema_type_ = ObSchemaType::TABLE_SCHEMA;
+                    arg.schema_version_ = alter_table_schema.get_part_array()[i]->get_schema_version();
+                    arg.part_object_id_ = alter_table_schema.get_part_array()[i]->get_part_id();
+                    OZ (res.res_arg_array_.push_back(arg));
+                  }
+                }
+              } else {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("alter external table op type is not valid", K(ret));
+              }
+            }
           }
         }
 
@@ -12406,7 +12435,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
               LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
             } else {
               ObTabletDrop tablet_drop(tenant_id, trans, new_schema_version);
-              if (OB_FAIL(tablet_drop.init())) {
+              if (alter_table_arg.alter_table_schema_.is_external_table()) {
+              } else if (OB_FAIL(tablet_drop.init())) {
                 LOG_WARN("fail to init tablet drop", KR(ret), K(del_table_schema_ptrs));
               } else if (OB_FAIL(tablet_drop.add_drop_tablets_of_table_arg(del_table_schema_ptrs))) {
                 LOG_WARN("failed to add drop tablets", KR(ret), K(del_table_schema_ptrs));
@@ -12424,7 +12454,8 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
             SCN frozen_scn;
             const bool need_check_tablet_cnt = obrpc::ObAlterTableArg::ADD_PARTITION == alter_table_arg.alter_part_type_
                      || obrpc::ObAlterTableArg::ADD_SUB_PARTITION == alter_table_arg.alter_part_type_;
-            if (OB_ISNULL(GCTX.root_service_)) {
+            if (alter_table_arg.alter_table_schema_.is_external_table()) {
+            } else if (OB_ISNULL(GCTX.root_service_)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("root service is null", KR(ret));
             } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
@@ -14315,12 +14346,12 @@ int ObDDLService::check_alter_drop_partitions(const share::schema::ObTableSchema
     LOG_WARN("cannot drop/truncate partition with foreign keys", K(ret), K(alter_table_arg));
   } else if (is_truncate) {
   } else if (alter_table_schema.get_part_option().get_part_num() >=
-             orig_table_schema.get_part_option().get_part_num()) {
+              orig_table_schema.get_part_option().get_part_num()) {
     ret = OB_ERR_DROP_LAST_PARTITION;
     LOG_WARN("cannot drop all partitions",
-             "partitions current", orig_table_schema.get_part_option().get_part_num(),
-             "partitions to be dropped", alter_table_schema.get_part_option().get_part_num(),
-             K(ret));
+            "partitions current", orig_table_schema.get_part_option().get_part_num(),
+            "partitions to be dropped", alter_table_schema.get_part_option().get_part_num(),
+            K(ret));
     LOG_USER_ERROR(OB_ERR_DROP_LAST_PARTITION);
   }
   if (OB_SUCC(ret)) {
@@ -14746,7 +14777,7 @@ int ObDDLService::check_add_list_partition(const share::schema::ObPartitionSchem
           }
           for (int j = 0; OB_SUCC(ret) && j < orig_list_value->count(); ++j) {
             const common::ObNewRow *new_row = &(orig_list_value->at(j));
-            if (1 == new_row->get_count() && new_row->get_cell(0).is_max_value()) {
+            if (!orig_part.is_external_table() && 1 <= new_row->get_count() && new_row->get_cell(0).is_max_value()) {
               ret = OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST;
               LOG_WARN("can add a table has default partition", K(ret), K(orig_part_array));
               LOG_USER_ERROR(OB_ERR_ADD_PARTITION_TO_DEFAULT_LIST);

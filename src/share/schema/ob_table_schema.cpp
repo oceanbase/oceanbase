@@ -960,6 +960,7 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(partition_num),
     K_(def_subpartition_num),
     "partition_array", ObArrayWrap<ObPartition *>(partition_array_, partition_num_),
+    K_(partition_array_capacity),
     "def_subpartition_array", ObArrayWrap<ObSubPartition *>(def_subpartition_array_, def_subpartition_num_),
     "hidden_partition_array",
     ObArrayWrap<ObPartition *>(hidden_partition_array_, hidden_partition_num_),

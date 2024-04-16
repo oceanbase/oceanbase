@@ -904,6 +904,8 @@ int ObStaticEngineCG::generate_calc_exprs(
             && T_CTE_SEARCH_COLUMN != raw_expr->get_expr_type()
             && T_CTE_CYCLE_COLUMN != raw_expr->get_expr_type()
             && T_PSEUDO_EXTERNAL_FILE_COL != raw_expr->get_expr_type()
+            && T_PSEUDO_EXTERNAL_FILE_URL != raw_expr->get_expr_type()
+            && T_PSEUDO_PARTITION_LIST_COL != raw_expr->get_expr_type()
             && !(raw_expr->is_const_expr() || raw_expr->has_flag(IS_DYNAMIC_USER_VARIABLE))
             && !(T_FUN_SYS_PART_HASH == raw_expr->get_expr_type() || T_FUN_SYS_PART_KEY == raw_expr->get_expr_type())) {
           if (raw_expr->is_calculated()) {
@@ -7478,10 +7480,14 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("unexpected count of children", K(ret), K(op.get_num_of_child()));
   } else if (OB_FAIL(deep_copy_obj(alloc, op.get_outfile_name(), spec.outfile_name_))) {
     LOG_WARN("fail to set outfile name", K(op.get_outfile_name()), K(ret));
-  } else if (OB_FAIL(deep_copy_obj(alloc, op.get_filed_str(), spec.filed_str_))) {
-    LOG_WARN("fail to set filed str", K(op.get_filed_str()), K(ret));
+  } else if (OB_FAIL(deep_copy_obj(alloc, op.get_field_str(), spec.field_str_))) {
+    LOG_WARN("fail to set field str", K(op.get_field_str()), K(ret));
   } else if (OB_FAIL(deep_copy_obj(alloc, op.get_line_str(), spec.line_str_))) {
     LOG_WARN("fail to set line str", K(op.get_line_str()), K(ret));
+  } else if (OB_FAIL(deep_copy_obj(alloc, op.get_closed_cht(), spec.closed_cht_))) {
+    LOG_WARN("fail to set closed cht", K(op.get_closed_cht()), K(ret));
+  } else if (OB_FAIL(deep_copy_obj(alloc, op.get_escaped_cht(), spec.escaped_cht_))) {
+    LOG_WARN("fail to set escaped cht", K(op.get_escaped_cht()), K(ret));
   } else if (OB_FAIL(spec.user_vars_.init(op.get_user_vars().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
   } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
@@ -7510,8 +7516,10 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     }
     if (OB_SUCC(ret)) {
       spec.into_type_ = op.get_into_type();
-      spec.closed_cht_ = op.get_closed_cht();
       spec.is_optional_ = op.get_is_optional();
+      spec.is_single_ = op.get_is_single();
+      spec.max_file_size_ = op.get_max_file_size();
+      spec.cs_type_ = op.get_cs_type();
       spec.plan_->need_drive_dml_query_ = true;
     }
   }

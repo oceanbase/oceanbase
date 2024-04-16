@@ -1068,7 +1068,7 @@ int ObLogicalOperator::compute_property(Path *path)
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
     } else if (OB_FAIL(check_property_valid())) {
-      LOG_WARN("failed to check property valid", K(ret));
+      LOG_WARN("failed to check property valid", K(ret), KPC(path));
     } else {
       LOG_TRACE("compute property finished",
                 K(get_op_name(type_)),
@@ -3694,7 +3694,7 @@ int ObLogicalOperator::set_plan_root_output_exprs()
     const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt*>(get_stmt());
     bool is_unpivot = (LOG_UNPIVOT == type_ && sel_stmt->is_unpivot_select());
     uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-    if (OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
+    if (!sel_stmt->has_select_into() && OB_FAIL(sel_stmt->get_select_exprs(output_exprs_, is_unpivot))) {
       LOG_WARN("failed to get select exprs", K(ret));
     } else if (((min_cluster_version >= CLUSTER_VERSION_4_2_2_0
                  && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
@@ -3915,8 +3915,33 @@ int ObLogicalOperator::explain_print_partitions(ObTablePartitionInfo &table_part
       OZ(part_infos.push_back(part_info));
     } else {
       const ObTabletID &tablet_id = part_loc.get_tablet_id();
-      OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
-      OZ(part_infos.push_back(part_info));
+      if (table_schema->is_external_table()) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < table_schema->get_partition_num(); j++) {
+          if (OB_ISNULL(table_schema->get_part_array())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("table shcema is invalid", K(ret));
+          } else {
+            ObPartition *partition = table_schema->get_part_array()[j];
+            if (OB_ISNULL(partition)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected error", K(ret));
+            } else if (partition->get_part_id() == part_loc.get_partition_id()) {
+              part_info.part_id_ = j;
+            }
+            LOG_TRACE("show external table partition", K(tablet_id), KPC(partition), K(partitions.at(i)), K(part_info));
+          }
+        }
+        OZ(part_infos.push_back(part_info));
+      } else {
+        OZ(table_schema->get_part_idx_by_tablet(tablet_id, part_info.part_id_, part_info.subpart_id_));
+        OZ(part_infos.push_back(part_info));
+      }
+      // if (OB_FAIL(ret) || part_info.part_id_ == OB_INVALID_INDEX) {
+      //   //do nothing
+      // } else if (!table_schema->is_external_table() || common::ObTabletID::INVALID_TABLET_ID == tablet_id.id()) {
+      //   //do nothing
+      // } else {
+      // }
       LOG_TRACE("explain print partition", K(tablet_id), K(part_info), K(ref_table_id));
     }
   }

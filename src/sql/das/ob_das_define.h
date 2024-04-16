@@ -85,6 +85,7 @@ enum ObDASOpType
 };
 
 typedef common::ObFixedArray<common::ObTableID, common::ObIAllocator> DASTableIDArray;
+
 typedef common::ObIArrayWrap<common::ObTableID> DASTableIDArrayWrap;
 
 struct ObDASTableLocMeta

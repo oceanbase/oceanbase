@@ -641,7 +641,6 @@ int ObStaticEngineExprCG::classify_exprs(const ObIArray<ObRawExpr *> &raw_exprs,
       }
     }
   }
-
   return ret;
 }
 
@@ -1721,7 +1720,6 @@ int ObStaticEngineExprCG::divide_probably_local_exprs(common::ObIArray<ObRawExpr
   int ret = OB_SUCCESS;;
   int64_t begin = 0;
   int64_t end = exprs.count() - 1;
-
   while (begin < end) {
     while (begin <= end && !exprs.at(begin)->has_flag(IS_PROBABLY_LOCAL)) {
       begin++;
@@ -1735,7 +1733,6 @@ int ObStaticEngineExprCG::divide_probably_local_exprs(common::ObIArray<ObRawExpr
       end--;
     }
   }
-
   return ret;
 }
 

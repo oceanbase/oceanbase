@@ -271,7 +271,8 @@ public:
                                     bool print_sub_part_element,
                                     bool agent_mode = false,
                                     bool tablegroup_def = false,
-                                    const common::ObTimeZoneInfo *tz_info = NULL) const;
+                                    const common::ObTimeZoneInfo *tz_info = NULL,
+                                    bool is_external_table = false) const;
   int print_range_partition_elements(const ObPartitionSchema *&schema,
                                char* buf,
                                const int64_t& buf_len,

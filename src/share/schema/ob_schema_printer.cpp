@@ -1636,7 +1636,7 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
   }
-  if (OB_SUCCESS == ret && !is_index_tbl && !is_for_table_status
+  if (OB_SUCCESS == ret && !table_schema.is_external_table() && !is_index_tbl && !is_for_table_status
       && !is_no_field_options(sql_mode) && !is_no_table_options(sql_mode)) {
     uint64_t auto_increment = 0;
     if (OB_FAIL(share::ObAutoincrementService::get_instance().get_sequence_value(
@@ -1894,6 +1894,12 @@ static int print_partition_func(const ObTableSchema &table_schema,
   bool is_oracle_mode = false;
   if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), K(table_schema));
+  } else if (table_schema.is_external_table()) {
+    if (OB_FAIL(disp_part_str.append_fmt("partition by (%.*s)",
+                                              func_expr.length(),
+                                              func_expr.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to append diaplay partition expr", K(ret), K(type_str), K(func_expr));
+    }
   } else if (OB_FAIL(get_part_type_str(is_oracle_mode, type, type_str))) {
     SHARE_SCHEMA_LOG(WARN, "failed to get part type string", K(ret));
   } else if (OB_FAIL(disp_part_str.append_fmt("partition by %.*s(%.*s)",
@@ -1901,7 +1907,6 @@ static int print_partition_func(const ObTableSchema &table_schema,
                                               type_str.ptr(),
                                               func_expr.length(),
                                               func_expr.ptr()))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to append diaplay partition expr", K(ret), K(type_str), K(func_expr));
   } else if (is_subpart) { // sub part
     const ObPartitionOption &sub_part_opt = table_schema.get_sub_part_option();
     ObString sub_type_str;
@@ -2062,7 +2067,9 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
         }
       } else if (table_schema.is_list_part()) {
         if (OB_FAIL(print_list_partition_elements(partition_schema, buf, buf_len, pos,
-                                                  print_sub_part_element, agent_mode, false, tz_info))) {
+                                                  print_sub_part_element,
+                                                  agent_mode, false, tz_info,
+                                                  table_schema.is_external_table()))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print partition elements", K(ret));
         }
       } else if (is_hash_like_part(table_schema.get_part_option().get_part_func_type())) {
@@ -3180,13 +3187,16 @@ int ObSchemaPrinter::print_list_partition_elements(const ObPartitionSchema *&sch
                                                    bool print_sub_part_element,
                                                    bool agent_mode/*false*/,
                                                    bool tablegroup_def/*false*/,
-                                                   const common::ObTimeZoneInfo *tz_info/*NULL*/) const
+                                                   const common::ObTimeZoneInfo *tz_info/*NULL*/,
+                                                   bool is_external_table/*false*/) const
 {
   int ret = common::OB_SUCCESS;
   bool is_oracle_mode = false;
   if (OB_ISNULL(schema)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_SCHEMA_LOG(WARN, "schema is null", K(ret));
+  } else if (is_external_table) {
+    //do nothing
   } else if (OB_FAIL(schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), KPC(schema));
   } else {
@@ -5259,10 +5269,15 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
   // 1. print file location, pattern
   const ObString &location = table_schema.get_external_file_location();
   const ObString &pattern = table_schema.get_external_file_pattern();
+  const bool user_specified = table_schema.is_user_specified_partition_for_external_table();
   if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nLOCATION='%.*s'", location.length(), location.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
   } else if (!pattern.empty() && OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
+  } else if (user_specified) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPARTITION_TYPE=USER_SPECIFIED"))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
+    }
   }
 
   // 2. print file format

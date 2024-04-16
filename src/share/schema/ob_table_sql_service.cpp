@@ -494,19 +494,20 @@ int ObTableSqlService::rename_inc_part_info(
     ObISQLClient &sql_client,
     const ObTableSchema &table_schema,
     const ObTableSchema &inc_table_schema,
-    const int64_t new_schema_version)
+    const int64_t new_schema_version,
+    const bool update_part_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_ddl_allowed(table_schema))) {
     LOG_WARN("check ddl allowed failed", KR(ret), K(table_schema));
-  } else if (!table_schema.is_user_table()) {
+  } else if (!table_schema.is_user_table() && !table_schema.is_external_table()) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("unsupport behavior on not user table", KR(ret), K(table_schema));
+    LOG_WARN("unsupport behavior on not user table", KR(ret), K(table_schema.is_external_table()),K(table_schema));
   } else {
     const ObPartitionSchema *table_schema_ptr = &table_schema;
     const ObPartitionSchema *inc_table_schema_ptr = &inc_table_schema;
     ObRenameIncPartHelper rename_part_helper(table_schema_ptr, inc_table_schema_ptr, new_schema_version, sql_client);
-    if (OB_FAIL(rename_part_helper.rename_partition_info())) {
+    if (OB_FAIL(rename_part_helper.rename_partition_info(update_part_idx))) {
       LOG_WARN("fail to rename partition", KR(ret), KPC(table_schema_ptr), KPC(inc_table_schema_ptr));
     }
   }
@@ -555,7 +556,7 @@ int ObTableSqlService::drop_inc_part_info(
     } else if (OB_FAIL(drop_inc_partition(sql_client, table_schema, inc_table_schema, is_truncate_table))) {
       // remove from __all_part
       LOG_WARN("failed to drop partition", K(ret), K(inc_table_schema));
-    } else if (OB_FAIL(drop_inc_all_sub_partition(sql_client, table_schema, inc_table_schema, is_truncate_table))) {
+    } else if (!table_schema.is_external_table() && OB_FAIL(drop_inc_all_sub_partition(sql_client, table_schema, inc_table_schema, is_truncate_table))) {
       // remove from __all_sub_part
       LOG_WARN("failed to drop subpartition", K(ret), K(inc_table_schema));
     } else {
@@ -2895,6 +2896,9 @@ int ObTableSqlService::gen_table_dml(
                              || !table.get_external_file_pattern().empty()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("external table is not support before 4.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_3_1_0 && table.get_table_flags() > 1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some table flag is not support before 4.3.1", K(ret), K(table));
   } else if (data_version < DATA_VERSION_4_2_1_2
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
@@ -3053,7 +3057,6 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("max_used_column_group_id", table.get_max_used_column_group_id())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
-
         ) {
       LOG_WARN("add column failed", K(ret));
     }

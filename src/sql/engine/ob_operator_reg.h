@@ -650,8 +650,9 @@ REGISTER_OPERATOR(ObLogErrLog, PHY_ERR_LOG, ObErrLogSpec, ObErrLogOp, NOINPUT);
 class ObLogSelectInto;
 class ObSelectIntoSpec;
 class ObSelectIntoOp;
+class ObSelectIntoOpInput;
 REGISTER_OPERATOR(ObLogSelectInto, PHY_SELECT_INTO, ObSelectIntoSpec, ObSelectIntoOp,
-                  NOINPUT, VECTORIZED_OP);
+                  ObSelectIntoOpInput, VECTORIZED_OP);
 class ObLogLinkScan;
 class ObLinkScanSpec;
 class ObLinkScanOp;

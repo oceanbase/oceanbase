@@ -643,7 +643,7 @@ class ObConfigCapacityParser
 public:
   ObConfigCapacityParser() {}
   virtual ~ObConfigCapacityParser() {}
-  static int64_t get(const char *str, bool &valid, bool check_unit = true);
+  static int64_t get(const char *str, bool &valid, bool check_unit = true, bool use_byte = false);
 private:
   enum CAP_UNIT
   {

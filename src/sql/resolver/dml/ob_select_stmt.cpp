@@ -56,6 +56,8 @@ const char* const ObSelectIntoItem::DEFAULT_LINE_TERM_STR = "\n";
 const char* const ObSelectIntoItem::DEFAULT_FIELD_TERM_STR = "\t";
 const char ObSelectIntoItem::DEFAULT_FIELD_ENCLOSED_CHAR = 0;
 const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
+const bool ObSelectIntoItem::DEFAULT_SINGLE_OPT = true;
+const int64_t ObSelectIntoItem::DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;
 const char ObSelectIntoItem::DEFAULT_FIELD_ESCAPED_CHAR = '\\';
 
 //对于select .. for update 也认为是被更改

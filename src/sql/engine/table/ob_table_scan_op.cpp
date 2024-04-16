@@ -1157,12 +1157,21 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
     } else if (MY_CTDEF.scan_ctdef_.is_external_table_) {
       uint64_t table_loc_id = MY_SPEC.get_table_loc_id();
       ObDASTableLoc *tab_loc = DAS_CTX(ctx_).get_table_loc_by_id(table_loc_id, MY_CTDEF.scan_ctdef_.ref_table_id_);
+      ObArray<int64_t> partition_ids;
       if (OB_ISNULL(tab_loc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table lock is null", K(ret));
+      } else {
+        for (DASTabletLocListIter iter = tab_loc->tablet_locs_begin(); OB_SUCC(ret)
+               && iter != tab_loc->tablet_locs_end(); ++iter) {
+          ret = partition_ids.push_back((*iter)->partition_id_);
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObExternalTableUtils::prepare_single_scan_range(
                                                   ctx_.get_my_session()->get_effective_tenant_id(),
                                                   MY_CTDEF.scan_ctdef_.ref_table_id_,
+                                                  partition_ids,
                                                   key_ranges,
                                                   range_allocator,
                                                   key_ranges,

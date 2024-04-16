@@ -189,7 +189,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     }
   }
 
-  LOG_DEBUG("generate tsc ctdef finish", K(ret), K(op), K(tsc_ctdef));
+  LOG_DEBUG("generate tsc ctdef finish", K(ret), K(op), K(tsc_ctdef),
+                                                    K(tsc_ctdef.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_));
   return ret;
 }
 
@@ -514,7 +515,7 @@ int ObTscCgService::generate_pd_storage_flag(const ObLogPlan *log_plan,
       pd_filter = false;
     } else {
       FOREACH_CNT_X(e, access_exprs, pd_blockscan || pd_filter) {
-        if (T_ORA_ROWSCN == (*e)->get_expr_type()) {
+        if (T_ORA_ROWSCN == (*e)->get_expr_type() || T_PSEUDO_EXTERNAL_FILE_URL == (*e)->get_expr_type()) {
           pd_blockscan = false;
           pd_filter = false;
         } else {
@@ -724,6 +725,8 @@ int ObTscCgService::generate_access_ctdef(const ObLogTableScan &op,
       OZ(access_column_ids.push_back(common::OB_HIDDEN_GROUP_IDX_COLUMN_ID));
     } else if (T_PSEUDO_EXTERNAL_FILE_COL == expr->get_expr_type()) {
       //TODO EXTERNAL-TABLE
+    } else if (T_PSEUDO_PARTITION_LIST_COL == expr->get_expr_type()) {
+    } else if (T_PSEUDO_EXTERNAL_FILE_URL == expr->get_expr_type()) {
     } else {
       ObColumnRefRawExpr* col_expr = static_cast<ObColumnRefRawExpr *>(expr);
       bool is_mapping_vt_table = op.get_real_ref_table_id() != op.get_ref_table_id();

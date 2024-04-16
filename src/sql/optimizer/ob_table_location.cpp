@@ -1792,11 +1792,17 @@ int ObTableLocation::calculate_tablet_ids(ObExecContext &exec_ctx,
     if (OB_SUCC(ret) && partition_ids.empty()) {
       ObObjectID default_partition_id = OB_INVALID_ID;
       ObTabletID default_tablet_id;
-      if (OB_FAIL(tablet_mapper.get_default_tablet_and_object_id(part_level_,
+      if (loc_meta_.is_external_table_) {
+        default_partition_id = 0;
+        default_tablet_id = default_partition_id;
+      } else if (OB_FAIL(tablet_mapper.get_default_tablet_and_object_id(part_level_,
                                                                  part_hint_ids_,
                                                                  default_tablet_id,
                                                                  default_partition_id))) {
         LOG_WARN("get default tablet and object id failed", K(ret), K(part_hint_ids_));
+      }
+
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(partition_ids.push_back(default_partition_id))) {
         LOG_WARN("store default partition id failed", K(ret));
       } else if (OB_FAIL(tablet_ids.push_back(default_tablet_id))) {
@@ -3150,7 +3156,6 @@ int ObTableLocation::calc_partition_ids_by_calc_node(ObExecContext &exec_ctx,
       }
     }
   }
-
   return ret;
 }
 
@@ -5526,7 +5531,6 @@ int ObTableLocation::get_full_leader_table_loc(ObDASLocationRouter &loc_router,
       OZ(table_loc->add_tablet_loc(tablet_loc));
     }
   }
-
   return ret;
 }
 

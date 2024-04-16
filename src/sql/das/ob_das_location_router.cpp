@@ -230,10 +230,22 @@ int ObDASTabletMapper::get_tablet_and_object_id(
     }
     if (OB_FAIL(ret)) {
     } else if (table_schema_->is_external_table()) {
-      if (OB_FAIL(tmp_tablet_ids.push_back(ObTabletID(ObTabletID::INVALID_TABLET_ID)))) {
-        LOG_WARN("fail to push back tablet_id", KR(ret));
-      } else if (OB_FAIL(tmp_part_ids.push_back(table_schema_->get_object_id()))) {
-        LOG_WARN("fail to push back object_id", KR(ret));
+      if (PARTITION_LEVEL_ZERO == part_level) {
+        if (OB_FAIL(tmp_tablet_ids.push_back(ObTabletID(table_schema_->get_object_id())))) {
+          LOG_WARN("fail to push back tablet_id", KR(ret));
+        } else if (OB_FAIL(tmp_part_ids.push_back(table_schema_->get_object_id()))) {
+          LOG_WARN("fail to push back object_id", KR(ret));
+        }
+      } else if (PARTITION_LEVEL_ONE == part_level) {
+        if (OB_UNLIKELY(!table_schema_->is_partitioned_table()) && OB_ISNULL(table_schema_->get_part_array())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("table schema is not a partitioned table", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_partition_num(); i++) {
+          ObPartition *partition = table_schema_->get_part_array()[i];
+          tmp_tablet_ids.push_back(ObTabletID(partition->get_object_id()));
+          tmp_part_ids.push_back(partition->get_object_id());
+        }
       }
     } else if (PARTITION_LEVEL_ZERO == part_level) {
       ObTabletID tablet_id;
@@ -296,6 +308,24 @@ int ObDASTabletMapper::get_tablet_and_object_id(const ObPartitionLevel part_leve
       related_info_ptr = &related_info_;
     }
     if (OB_FAIL(ret)) {
+    } else if (table_schema_->is_external_table()) {
+      if (PARTITION_LEVEL_ZERO == part_level) {
+        tablet_id = table_schema_->get_object_id();
+        object_id = table_schema_->get_object_id();
+      } else if (PARTITION_LEVEL_ONE == part_level) {
+        ObPartition *partition = NULL;
+        for (int64_t i = 0; OB_SUCC(ret) && partition == NULL && i < table_schema_->get_partition_num(); i++) {
+          const ObIArray<common::ObNewRow> &list_row_values = table_schema_->get_part_array()[i]->get_list_row_values();
+          for (int64_t j = 0; OB_SUCC(ret) && partition == NULL && j < list_row_values.count(); j++) {
+            const ObNewRow &list_row = list_row_values.at(j);
+            if (row == list_row) {
+              partition = table_schema_->get_part_array()[i];
+              tablet_id = partition->get_object_id();
+              object_id = partition->get_object_id();
+            }
+          } // end for
+        } // end dor
+      }
     } else if (PARTITION_LEVEL_ZERO == part_level) {
       if (OB_FAIL(ObPartitionUtils::get_tablet_and_object_id(
           *table_schema_, tablet_id, object_id, related_info_ptr))) {

@@ -881,7 +881,7 @@ public:
   { return MATERIALIZED_VIEW_LOG == table_type; }
   inline bool is_in_recyclebin() const
   { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
-  inline bool is_external_table() const { return EXTERNAL_TABLE == table_type_; }
+  virtual inline bool is_external_table() const override { return EXTERNAL_TABLE == table_type_; }
   inline ObTenantTableId get_tenant_table_id() const
   { return ObTenantTableId(tenant_id_, table_id_); }
   inline ObTenantTableId get_tenant_data_table_id() const
@@ -994,6 +994,7 @@ protected:
   ObObjectStatus object_status_;
   bool is_force_view_; // only record in create view path, do not persist to disk
 };
+
 class ObTableSchema : public ObSimpleTableSchemaV2
 {
   OB_UNIS_VERSION(1);
@@ -1135,6 +1136,7 @@ public:
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
+  inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
   template<typename ColumnType>
   int add_column(const ColumnType &column);
   int delete_column(const common::ObString &column_name);
@@ -1281,6 +1283,7 @@ public:
   }
   inline ObNameGeneratedType get_name_generated_type() const { return name_generated_type_; }
   bool is_sys_generated_name(bool check_unknown) const;
+  inline bool is_user_specified_partition_for_external_table() const { return (table_flags_ & EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG) != 0; }
   inline bool is_index_visible() const
   {
     return 0 == (index_attributes_set_ & ((uint64_t)(1) << INDEX_VISIBILITY));

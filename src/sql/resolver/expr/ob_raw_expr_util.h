@@ -449,6 +449,8 @@ public:
                                             ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs);
   static int extract_col_aggr_winfunc_exprs(ObRawExpr* expr,
                                             ObIArray<ObRawExpr*> &column_aggr_winfunc_exprs);
+
+  static int extract_metadata_filename_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr);
   static int find_alias_expr(ObRawExpr *expr, ObAliasRefRawExpr *&alias_expr);
   static int find_flag(const ObRawExpr *expr, ObExprInfoFlag flag, bool &is_found);
   static int find_flag_rec(const ObRawExpr *expr, ObExprInfoFlag flag, bool &is_found);
@@ -1013,6 +1015,8 @@ public:
                                ObRawExpr *param_expr1,
                                ObRawExpr *param_expr2,
                                ObRawExpr *&is_not_expr);
+
+  static int extract_metadata_fileurl_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr);
 
   static int build_is_not_null_expr(ObRawExprFactory &expr_factory,
                                     ObRawExpr *param_expr,

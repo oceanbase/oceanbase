@@ -1016,9 +1016,12 @@ int ObAddIncPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDMLSql
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
   PartitionType partition_type = part_info.partition_type_;
   int64_t part_idx = part_info.part_idx_;
+  uint64_t data_version = 0;
   if (part_idx < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("part_idx is invalid", KR(ret), K(part_info));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -1044,6 +1047,16 @@ int ObAddIncPartDMLGenerator::convert_to_dml(const PartInfo &part_info, ObDMLSql
       || OB_FAIL(dml.add_column("partition_type", partition_type))
       || OB_FAIL(dml.add_column("tablet_id", part_info.tablet_id_.id()))) {
     LOG_WARN("dml add part info failed", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (data_version < DATA_VERSION_4_3_1_0) {
+      if (!part_info.external_location_.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("external location is not supported", K(ret));
+      }
+    } else if (OB_FAIL(dml.add_column("external_location", ObHexEscapeSqlStr(part_info.external_location_)))) {
+      LOG_WARN("add part info column failed", K(ret));
+    }
   }
   if (OB_FAIL(ret)) {
     //nothing todo
@@ -1083,6 +1096,11 @@ int ObAddIncPartDMLGenerator::extract_part_info(PartInfo &part_info)
       part_info.part_name_ = part_.get_part_name();
     } else if (OB_FAIL(gen_interval_part_name(part_info.part_id_, part_info.part_name_))) {
       LOG_WARN("fail to gen_interval_part_name", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!part_.get_external_location().empty()) {
+      part_info.external_location_ = part_.get_external_location();
     }
 
     if (OB_FAIL(ret)) {
@@ -1539,7 +1557,7 @@ int ObDropIncSubPartHelper::drop_subpartition_info()
   return ret;
 }
 
-int ObRenameIncPartHelper::rename_partition_info()
+int ObRenameIncPartHelper::rename_partition_info(const bool update_part_idx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ori_table_) || OB_ISNULL(inc_table_)) {
@@ -1572,6 +1590,8 @@ int ObRenameIncPartHelper::rename_partition_info()
           || OB_FAIL(dml.add_pk_column("part_id", inc_part->get_part_id()))
           || OB_FAIL(dml.add_column("schema_version", schema_version_))
           || OB_FAIL(dml.add_column("part_name", inc_part->get_part_name().ptr()))) {
+      LOG_WARN("dml add column failed", KR(ret));
+    } else if (update_part_idx && OB_FAIL(dml.add_column("part_idx", inc_part->get_part_idx()))) {
       LOG_WARN("dml add column failed", KR(ret));
     } else if (OB_FAIL(dml.splice_update_sql(share::OB_ALL_PART_TNAME, part_sql))) {
       LOG_WARN("dml splice update sql failed", KR(ret));

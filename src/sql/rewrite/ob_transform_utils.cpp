@@ -7005,6 +7005,8 @@ int ObTransformUtils::check_need_pushdown_pseudo_column(const ObRawExpr &expr,
       }
       break;
     }
+    case T_PSEUDO_PARTITION_LIST_COL:
+    case T_PSEUDO_EXTERNAL_FILE_URL:
     case T_PSEUDO_EXTERNAL_FILE_COL: {
       need_pushdown = true;
       break;

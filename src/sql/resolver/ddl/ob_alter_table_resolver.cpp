@@ -22,6 +22,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/dml/ob_delete_resolver.h"
+#include "sql/rewrite/ob_transform_utils.h"
 #include "share/ob_index_builder_util.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
@@ -53,6 +54,7 @@ ObAlterTableResolver::~ObAlterTableResolver()
 {
 }
 
+
 int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
@@ -63,7 +65,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
       ALTER_TABLE_NODE_COUNT != parse_tree.num_child_ ||
       OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
-    SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
+    SQL_RESV_LOG(WARN, "invalid parse tree", K(ret), K(parse_tree.num_child_));
   } else {
     ObAlterTableStmt *alter_table_stmt = NULL;
     //create alter table stmt
@@ -82,7 +84,6 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
     } else {
       stmt_ = alter_table_stmt;
     }
-
     //resolve table
     if (OB_SUCC(ret)) {
       //alter table database_name.table_name ...
@@ -187,7 +188,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
                    && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
-          SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
+          SQL_RESV_LOG(WARN, "assign external table failed", K(ret), K(parse_tree.children_[SPECIAL_TABLE_TYPE]->type_));
         } else if (ObSchemaChecker::is_ora_priv_check()) {
           OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                                   session_info_->get_priv_user_id(),
@@ -589,6 +590,225 @@ int ObAlterTableResolver::check_alter_column_schemas_valid(ObAlterTableStmt &stm
   return ret;
 }
 
+int ObAlterTableResolver::resolve_add_external_partition(const ParseNode &part_element,
+                                                         const ParseNode &location_element)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+
+  if (OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (part_element.type_ != T_ALTER_EXTERNAL_PARTITION_ADD ||
+      (location_element.type_ != T_VARCHAR
+      && location_element.type_ != T_CHAR
+      && location_element.type_ != T_NCHAR)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (part_element.num_child_ != table_schema_->get_partition_key_info().get_size()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "unsatisfactory partition element");
+    LOG_WARN("invalid partition key num", K(ret), K(part_element.num_child_));
+  } else {
+    alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::ADD_PARTITION;
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_part_level(table_schema_->get_part_level());
+    const common::ObPartitionKeyInfo &partition_keys = table_schema_->get_partition_key_info();
+    ParseNode *part_func_node = NULL;
+    ObSEArray<ObString, 4> dummy_part_keys;
+    ObArray<ObRawExpr *> part_value_expr_array;
+    if (OB_FAIL(mock_part_func_node(*table_schema_, false/*is_sub_part*/, part_func_node))) {
+      LOG_WARN("mock part func node failed", K(ret));
+    } else if (OB_FAIL(resolve_part_func(params_, part_func_node,
+                                        table_schema_->get_part_option().get_part_func_type(),
+                                        *table_schema_,
+                                        alter_table_stmt->get_part_fun_exprs(), dummy_part_keys))) {
+      LOG_WARN("resolve part func failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_keys.get_size(); i++) {
+      ObString column_name;
+      if (OB_ISNULL(part_element.children_[i]) || OB_ISNULL(part_element.children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (OB_FAIL(resolve_column_name(column_name, part_element.children_[i]->children_[0]))) {
+        LOG_WARN("failed to resolve new column name", K(ret));
+      }
+      bool found = false;
+      for (int64_t j = 0; OB_SUCC(ret) && !found && j < partition_keys.get_size(); j++) {
+        const ObColumnSchemaV2 *part_column = table_schema_->get_column_schema(partition_keys.get_column(j)->column_id_);
+        if (0 == part_column->get_column_name_str().case_compare(column_name)) {
+          found = true;
+          ObRawExpr *const_expr = NULL;
+          if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_, *part_element.children_[i]->children_[1], const_expr, NULL))) {
+            LOG_WARN("resolve const expr failed", K(ret));
+          } else if (!const_expr->is_const_expr()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("const expr is not const expr", K(ret));
+          } else if (OB_FAIL(part_value_expr_array.push_back(const_expr))) {
+            LOG_WARN("push back failed", K(ret));
+          } else {
+            ObExprResType col_type;
+            col_type.set_meta(part_column->get_meta_type());
+            col_type.set_accuracy(part_column->get_accuracy());
+            if (OB_FAIL(ObResolverUtils::check_partition_range_value_result_type(table_schema_->get_part_option().get_part_func_type(),
+                                                        col_type,
+                                                        column_name,
+                                                        static_cast<ObConstRawExpr *>(const_expr)->get_value()))) {
+              LOG_WARN("check partition range value result type failed", K(ret));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !found) {
+        ret = OB_ERR_SPECIFIY_PARTITION_DESCRIPTION;
+        LOG_WARN("have not specifiy part column value", K(ret));
+      }
+    }
+    ObOpRawExpr *row_expr = NULL;
+    ObString external_location;
+    if (OB_FAIL(ret)) {
+    } else if (part_value_expr_array.count() > partition_keys.get_size()) {
+      ret = OB_ERR_SPECIFIY_PARTITION_DESCRIPTION;
+      LOG_WARN("may have redefine the part column value", K(ret));
+    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_ROW, row_expr))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(row_expr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allcoate memory", K(ret));
+    } else {
+      ObPartition partition;
+      ObString tmp_str = ObString(location_element.str_len_, location_element.str_value_);
+      OZ (ob_write_string(*allocator_, tmp_str, external_location));
+      ObSqlString full_path;
+      OZ (full_path.append(table_schema_->get_external_file_location()));
+      if (OB_SUCC(ret)) {
+        if (full_path.length() == 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("full path length should not be zero", K(ret));
+        } else if (*(full_path.ptr() + full_path.length() - 1) != '/') {
+          OZ (full_path.append("/"));
+        }
+      }
+      OZ (full_path.append(external_location));
+      OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_location(full_path.string()));
+      alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_table_type(EXTERNAL_TABLE);
+      partition.set_external_location(external_location);
+      partition.set_is_empty_partition_name(true);
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_value_expr_array.count(); i++) {
+        if (part_value_expr_array.at(i)->is_const_expr()) {
+          if (OB_FAIL(row_expr->add_param_expr(part_value_expr_array.at(i)))) {
+            LOG_WARN("add param expr failed", K(ret));
+          }
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("not a valid const expr", K(ret));
+        }
+      }
+      OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.add_partition(partition));
+      OZ (alter_table_stmt->get_part_values_exprs().push_back(row_expr));
+    }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_drop_external_partition(const ParseNode &location_node)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  if (OB_ISNULL(alter_table_stmt) || OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (location_node.type_ != T_ALTER_EXTERNAL_PARTITION_DROP
+      || OB_UNLIKELY(location_node.num_child_ != 1)
+      || OB_ISNULL(location_node.children_[0])
+      || (location_node.children_[0]->type_ != T_VARCHAR && location_node.children_[0]->type_ != T_CHAR
+          && location_node.children_[0]->type_ != T_NCHAR)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else {
+    alter_table_stmt->get_alter_table_arg().alter_part_type_ = ObAlterTableArg::DROP_PARTITION;
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_part_level(table_schema_->get_part_level());
+    const common::ObPartitionKeyInfo &partition_keys = table_schema_->get_partition_key_info();
+    ObString tmp_loc(location_node.children_[0]->str_len_, location_node.children_[0]->str_value_);
+    if (table_schema_->get_partition_num() > 0) {
+      CK (OB_NOT_NULL(table_schema_->get_part_array()));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schema_->get_partition_num(); i++) {
+      ObPartition *partition = table_schema_->get_part_array()[i];
+      CK (OB_NOT_NULL(partition));
+      if (OB_SUCC(ret)) {
+        if (0 == partition->get_external_location().compare(tmp_loc)) {
+          OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.add_partition(*partition));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_partition_num() < 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "check the partition location, no partitions to drop");
+      LOG_WARN("already no partitions existed, drop partition is not supported", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_part_level(table_schema_->get_part_level());
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_part_option() = table_schema_->get_part_option();
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_part_option().set_part_num(
+            alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_partition_num());
+    alter_table_stmt->get_alter_table_arg().is_add_to_scheduler_ = false;
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::resolve_external_partition_options(const ParseNode &node)
+{
+  int ret = OB_SUCCESS;
+  ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
+  uint64_t tenant_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+    LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+  } else if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter refresh ext table is not supported in data version less than 4.3.1", K(ret), K(tenant_data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "refresh external table in data version less than 4.3.1");
+  } else if (OB_ISNULL(alter_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("alter table stmt is null", K(ret));
+  } else if (!table_schema_->is_external_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter external partition for non external table");
+    LOG_WARN("alter external partition for non external table is not supported", K(ret));
+  } else if (!table_schema_->is_user_specified_partition_for_external_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non user specified external table attributes");
+    LOG_WARN("alter partition for non user specified partition or other attributes is not supported", K(ret));
+  } else {
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.alter_type_ = OB_DDL_ALTER_TABLE;
+    alter_table_stmt->set_tenant_id(table_schema_->get_tenant_id());
+    alter_table_stmt->set_table_id(table_schema_->get_table_id());
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.
+                      get_part_option().set_part_func_type(table_schema_->get_part_option().get_part_func_type());
+    alter_table_stmt->set_alter_table_partition();
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_part_level(table_schema_->get_part_level());
+    OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
+    OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+    CK (OB_LIKELY(node.type_ == T_ALTER_EXTERNAL_PARTITION_OPTION));
+    if (T_ALTER_EXTERNAL_PARTITION_ADD == node.children_[0]->type_) {
+      CK (OB_LIKELY(node.num_child_ == 2));
+      CK (OB_NOT_NULL(node.children_[0]));
+      CK (OB_NOT_NULL(node.children_[1]));
+      OZ (resolve_add_external_partition(*node.children_[0], *node.children_[1]));
+    } else if (T_ALTER_EXTERNAL_PARTITION_DROP == node.children_[0]->type_) {
+      CK (OB_LIKELY(node.num_child_ == 1));
+      CK (OB_NOT_NULL(node.children_[0]));
+      OZ (resolve_drop_external_partition(*node.children_[0]));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("not supported alter partition action", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
 {
   int ret = OB_SUCCESS;
@@ -649,9 +869,6 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
-      } else if (table_schema_->is_external_table()) {
-        alter_table_stmt->set_alter_external_table_type(action_node->type_);
-        OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
       } else {
         switch (action_node->type_) {
         //deal with alter table option
@@ -921,6 +1138,31 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }
           }
+          break;
+        }
+        case T_ALTER_REFRESH_EXTERNAL_TABLE : {
+          alter_table_stmt->set_alter_external_table_type(action_node->type_);
+          if (table_schema_->is_external_table()) {
+            if (table_schema_->is_user_specified_partition_for_external_table()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter refresh user-specified partition external table");
+              LOG_WARN("alter refresh user-specified partition external table not supported", K(ret), K(action_node->type_));
+            } else {
+              ObString origin_table_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_table_name();
+              ObString origin_db_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_database_name();
+              OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_table_name(origin_table_name);
+              alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_database_name(origin_db_name);
+            }
+          } else {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid to alter non external table", K(ret));
+          }
+          break;
+        }
+        case T_ALTER_EXTERNAL_PARTITION_OPTION: {
+          alter_table_stmt->set_alter_external_table_type(action_node->type_);
+          OZ (resolve_external_partition_options(*action_node));
           break;
         }
         default: {
@@ -1715,7 +1957,6 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
   ParseNode *part_func_node = NULL;
   ParseNode *part_elements_node = NULL;
   alter_table_schema.set_part_level(orig_table_schema.get_part_level());
-
   if (OB_ISNULL(node.children_[0]) ||
       OB_ISNULL(part_elements_node = node.children_[0]->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
@@ -2090,22 +2331,6 @@ int ObAlterTableResolver::mock_part_func_node(const ObTableSchema &table_schema,
 }
 
 
-//int ObAlterTableResolver::check_alter_partition(const obrpc::ObAlterTableArg &arg)
-//{
-//  int ret = OB_SUCCESS;
-//
-//  if (arg.is_alter_partitions_) {
-//    const AlterTableSchema &alter_table_schema = arg.alter_table_schema_;
-//    //ObPartition **partition_array = table_schema.get_part_array();
-//    //int64_t get_partition_num = alter_table_schema.get_partition_num();
-//    //for (int64_t i = 1; OB_SUCC(ret) && i < partition_num; i++) {}
-//    LOG_WARN("nijia", K(alter_table_schema));
-//  }
-//
-//  return ret;
-//}
-
-
 int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg, const bool is_unique_key)
 {
   int ret = OB_SUCCESS;
@@ -2474,9 +2699,9 @@ int ObAlterTableResolver::resolve_drop_partition(const ParseNode &node,
         if (OB_FAIL(part.set_part_name(partition_name))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_RESV_LOG(ERROR, "set partition name failed", K(partition_name), K(ret));
-        } else if (OB_FAIL(alter_table_schema.check_part_name(part))){
+        } else if (OB_FAIL(alter_table_schema.check_part_name(part))) {
           SQL_RESV_LOG(WARN, "check part name failed!", K(part), K(ret));
-        } else if (OB_FAIL(alter_table_schema.add_partition(part))){
+        } else if (OB_FAIL(alter_table_schema.add_partition(part))) {
           SQL_RESV_LOG(WARN, "add partition failed!", K(part), K(ret));
         }
       }

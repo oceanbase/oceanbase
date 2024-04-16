@@ -37,6 +37,7 @@
 #include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/px/ob_granule_pump.h"
 #include "sql/engine/join/hash_join/ob_hash_join_vec_op.h"
+#include "sql/engine/basic/ob_select_into_op.h"
 #include "observer/mysql/obmp_base.h"
 #include "lib/alloc/ob_malloc_callback.h"
 
@@ -742,6 +743,20 @@ int ObPxTaskProcess::OpPreparation::apply(ObExecContext &ctx,
       } else if (hj_spec.is_shared_ht_) {
         input->set_task_id(task_id_);
         LOG_TRACE("debug pre apply info", K(task_id_), K(op.id_));
+      }
+    }
+  } else if (PHY_SELECT_INTO == op.type_) {
+    if (OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObSelectIntoOpInput *input = static_cast<ObSelectIntoOpInput*>(kit->input_);
+      if (OB_ISNULL(input)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("input not found for op", "op_id", op.id_, K(ret));
+      } else {
+        input->set_task_id(task_id_);
+        input->set_sqc_id(sqc_id_);
       }
     }
   }

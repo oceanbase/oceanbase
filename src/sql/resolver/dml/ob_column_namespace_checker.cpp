@@ -217,6 +217,39 @@ int ObColumnNamespaceChecker::check_column_existence_in_using_clause(const uint6
   return ret;
 }
 
+int ObColumnNamespaceChecker::check_ext_table_column_namespace(
+    const ObQualifiedName &q_name,
+    const TableItem *&table_item) {
+  int ret = OB_SUCCESS;
+  table_item = nullptr;
+  const TableItem *cur_table = nullptr;
+  ObTableItemIterator table_item_iter(*this);
+  while (OB_SUCC(ret)
+      && (cur_table = table_item_iter.get_next_table_item()) != nullptr) {
+    if (q_name.tbl_name_.empty()) {
+      if (nullptr == table_item) {
+        table_item = cur_table;
+      } else {
+        ret = OB_NON_UNIQ_ERROR;
+        LOG_WARN("column in all tables is ambiguous", K(ret), K(q_name));
+      }
+    } else {
+      bool is_match = true;
+      if (OB_FAIL(ObResolverUtils::name_case_cmp(params_.session_info_,
+              q_name.tbl_name_,
+              cur_table->get_object_name(),
+              OB_TABLE_NAME_CLASS,
+              is_match))) {
+        LOG_WARN("table name case compare failed", K(ret));
+      } else if (is_match) {
+        table_item = cur_table;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObColumnNamespaceChecker::check_using_column_namespace(const ObString &column_name,
                                                            const TableItem *&left_table,
                                                             const TableItem *&right_table)
@@ -560,11 +593,8 @@ int ObColumnNamespaceChecker::check_rowscn_table_column_namespace(
       }
     }
   }
-  
-
   return ret;
 }
-
 int ObColumnNamespaceChecker::check_rowid_table_column_namespace(const ObQualifiedName &q_name,
                                                                  const TableItem *&table_item,
                                                                  bool is_from_multi_tab_insert/*default false*/)

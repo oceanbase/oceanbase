@@ -118,54 +118,70 @@ struct ObSelectIntoItem
   ObSelectIntoItem()
       : into_type_(),
         outfile_name_(),
-        filed_str_(),
+        field_str_(),
         line_str_(),
         user_vars_(),
         pl_vars_(),
-        closed_cht_(DEFAULT_FIELD_ENCLOSED_CHAR),
+        closed_cht_(),
         is_optional_(DEFAULT_OPTIONAL_ENCLOSED),
-        escaped_cht_(DEFAULT_FIELD_ESCAPED_CHAR)
+        is_single_(DEFAULT_SINGLE_OPT),
+        max_file_size_(DEFAULT_MAX_FILE_SIZE),
+        escaped_cht_()
   {
-    filed_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
-    filed_str_.set_collation_type(ObCharset::get_system_collation());
+    field_str_.set_varchar(DEFAULT_FIELD_TERM_STR);
+    field_str_.set_collation_type(ObCharset::get_system_collation());
     line_str_.set_varchar(DEFAULT_LINE_TERM_STR);
     line_str_.set_collation_type(ObCharset::get_system_collation());
+    escaped_cht_.meta_.set_char();
+    escaped_cht_.set_char_value(&DEFAULT_FIELD_ESCAPED_CHAR, 1);
+    escaped_cht_.set_collation_type(ObCharset::get_system_collation());
+    closed_cht_.meta_.set_char();
+    closed_cht_.set_char_value(NULL, 0);
+    closed_cht_.set_collation_type(ObCharset::get_system_collation());
     cs_type_ = ObCharset::get_system_collation();
   }
   int assign(const ObSelectIntoItem &other) {
     into_type_ = other.into_type_;
     outfile_name_ = other.outfile_name_;
-    filed_str_ = other.filed_str_;
+    field_str_ = other.field_str_;
     line_str_ = other.line_str_;
     closed_cht_ = other.closed_cht_;
     is_optional_ = other.is_optional_;
+    is_single_ = other.is_single_;
+    max_file_size_ = other.max_file_size_;
     escaped_cht_ = other.escaped_cht_;
     cs_type_ = other.cs_type_;
     return user_vars_.assign(other.user_vars_);
   }
   TO_STRING_KV(K_(into_type),
                K_(outfile_name),
-               K_(filed_str),
+               K_(field_str),
                K_(line_str),
                K_(closed_cht),
                K_(is_optional),
+               K_(is_single),
+               K_(max_file_size),
                K_(escaped_cht),
                K_(cs_type));
   ObItemType into_type_;
   common::ObObj outfile_name_;
-  common::ObObj filed_str_; // filed terminated str
+  common::ObObj field_str_; // field terminated str
   common::ObObj line_str_; // line terminated str
   common::ObSEArray<common::ObString, 16> user_vars_; // user variables
   common::ObSEArray<sql::ObRawExpr*, 16> pl_vars_; // pl variables
-  char closed_cht_; // all fileds, "123","ab"
+  common::ObObj closed_cht_; // all fields, "123","ab"
   bool is_optional_; //  for string, closed character, such as "aa"
-  char escaped_cht_;
+  bool is_single_;
+  int64_t max_file_size_;
+  common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
 
   static const char* const DEFAULT_FIELD_TERM_STR;
   static const char* const DEFAULT_LINE_TERM_STR;
   static const char DEFAULT_FIELD_ENCLOSED_CHAR;
   static const bool DEFAULT_OPTIONAL_ENCLOSED;
+  static const bool DEFAULT_SINGLE_OPT;
+  static const int64_t DEFAULT_MAX_FILE_SIZE;
   static const char DEFAULT_FIELD_ESCAPED_CHAR;
 };
 

@@ -3075,6 +3075,7 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
   int64_t begin_time = ObTimeUtility::current_time();
   const uint64_t tenant_id = arg.exec_tenant_id_;
   int ret = OB_SUCCESS;
+  uint64_t compat_version = 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -3083,6 +3084,8 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
     LOG_WARN("invalid arg", KR(ret), K(arg));
   } else if (OB_FAIL(parallel_ddl_pre_check_(tenant_id))) {
     LOG_WARN("pre check failed before parallel ddl execute", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (arg.schema_.is_view_table()) {
     ObCreateViewHelper create_view_helper(schema_service_, tenant_id, arg, res);
     if (OB_FAIL(create_view_helper.init(ddl_service_))) {
@@ -3091,8 +3094,16 @@ int ObRootService::parallel_create_table(const ObCreateTableArg &arg, ObCreateTa
       LOG_WARN("fail to execute create view", KR(ret), K(tenant_id));
     }
   } else {
+    if (arg.schema_.is_external_table() && arg.schema_.is_partitioned_table()) {
+      if (compat_version < DATA_VERSION_4_3_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("version lower than 4.3.1 does not support partition external table", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, partition external table is ");
+      }
+    }
     ObCreateTableHelper create_table_helper(schema_service_, tenant_id, arg, res);
-    if (OB_FAIL(create_table_helper.init(ddl_service_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_table_helper.init(ddl_service_))) {
       LOG_WARN("fail to init create table helper", KR(ret), K(tenant_id));
     } else if (OB_FAIL(create_table_helper.execute())) {
       LOG_WARN("fail to execute create table", KR(ret), K(tenant_id));
@@ -3270,6 +3281,18 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
         //if there is, need to throw error.
         check_type = ObSchemaGetterGuard::NON_TEMP_WITH_NON_HIDDEN_TABLE_TYPE;
       }
+
+      if (table_schema.is_external_table() && table_schema.is_partitioned_table()) {
+        uint64_t compat_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
+          LOG_WARN("fail to get data version", KR(ret));
+        } else if (compat_version < DATA_VERSION_4_3_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.1 does not support partition external table", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, partition external table is ");
+        }
+      }
+
       if (OB_SUCC(ret)) {
         ObArray<ObSchemaType> conflict_schema_types;
         if (!arg.is_alter_view_
@@ -4437,7 +4460,10 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       LOG_WARN("fail to precheck_interval_part", K(arg), KR(ret));
     }
   } else {
+    uint64_t compat_version = 0;
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
     } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
@@ -4466,6 +4492,18 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected ddl type", K(ret), K(nonconst_arg.alter_part_type_), K(nonconst_arg));
       }
+
+      if (OB_FAIL(ret)) {
+      } else if (arg.alter_table_schema_.is_external_table()) {
+        if (compat_version < DATA_VERSION_4_3_1_0
+            && (arg.alter_part_type_ == obrpc::ObAlterTableArg::DROP_PARTITION
+             || arg.alter_part_type_ == obrpc::ObAlterTableArg::ADD_PARTITION)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("version lower than 4.3.1 does not support this operation", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant's data version is below 4.3.1.0, alter external table partition ");
+        }
+      }
+
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
                                                         nonconst_arg.alter_table_schema_.get_database_name(),

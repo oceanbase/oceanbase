@@ -1480,18 +1480,15 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, object_status, table_schema, int64_t, true, ignore_column_error, static_cast<int64_t> (ObObjectStatus::VALID));
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
 
-    ObString external_file_location;
-    ObString external_file_location_access_info;
-    ObString external_file_format;
-    ObString external_file_pattern;
+    ObString empty_str("");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location);
+      result, external_file_location, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, external_file_location_access_info, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_location_access_info);
+      result, external_file_location_access_info, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_format);
+      result, external_file_format, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
-      result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, external_file_pattern);
+      result, external_file_pattern, table_schema, true/*skip null*/, true/*ignore column error*/, empty_str);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
       result, ttl_definition, table_schema, true, ignore_column_error, "");
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
@@ -4765,6 +4762,11 @@ int ObSchemaRetrieveUtils::fill_base_part_info(
     bool ignore_column_error = ObSchemaService::g_ignore_column_retrieve_error_;
     if (OB_SUCC(ret) && !(is_subpart_def && is_subpart_template)) {
       EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, tablet_id, partition, uint64_t, true, ignore_column_error, 0);
+    }
+    if (OB_SUCC(ret)) {
+      ObString empty_str("");
+      EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(
+        result, external_location, partition, true, /* skip null error*/ true,/*skip column error*/ empty_str);
     }
   } else { }//do nothing
   return ret;

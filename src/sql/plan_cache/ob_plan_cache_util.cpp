@@ -309,6 +309,11 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
             LOG_INFO("Physical Location from Location Cache", K(candi_table_loc));
           }
         }
+        if (OB_SUCC(ret)) {
+          if (table_location.get_loc_meta().is_external_table_) {
+            need_check_on_same_server = false;
+          }
+        }
       } // for end
     }
 
@@ -330,6 +335,7 @@ int ObPhyLocationGetter::get_phy_locations(const ObIArray<ObTableLocation> &tabl
       LOG_TRACE("after select_replicas", K(on_same_server), K(has_duplicate_tbl_not_in_dml),
                 K(candi_table_locs), K(table_locations), K(ret));
     }
+    LOG_TRACE("after get_phy_locations", K(on_same_server), K(need_check_on_same_server));
   }
 
   return ret;

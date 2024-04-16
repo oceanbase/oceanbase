@@ -162,6 +162,12 @@ private:
   int mock_part_func_node(const share::schema::ObTableSchema &table_schema,
                           const bool is_sub_part,
                           ParseNode *&part_expr_node);
+
+  //only for external table
+  int resolve_external_partition_options(const ParseNode &node);
+
+  int resolve_drop_external_partition(const ParseNode &location_node);
+  int resolve_add_external_partition(const ParseNode &part_element, const ParseNode &location_element);
   int resolve_pos_column(const ParseNode *node, share::schema::AlterColumnSchema &alter_column_schema);
   int fill_column_schema_according_stat(const ObColumnResolveStat &stat,
                                         share::schema::AlterColumnSchema &alter_column_schema);

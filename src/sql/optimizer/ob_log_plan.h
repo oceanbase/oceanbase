@@ -200,7 +200,7 @@ public:
 
   /*
    * plan root will be set after we generate raw plan (see function generate_raw_plan())
-   * do not involve this function during generate_row_plan()
+   * do not involve this function during generate_raw_plan()
    */
   inline ObLogicalOperator *get_plan_root() const { return root_; }
 
@@ -889,6 +889,11 @@ public:
                                       const bool need_sort,
                                       const bool is_local_order);
 
+  int allocate_dist_range_sort_for_select_into(ObLogicalOperator *&top,
+                                      const ObIArray<OrderItem> &sort_keys,
+                                      const bool need_sort,
+                                      const bool is_local_order);
+
   int try_allocate_sort_as_top(ObLogicalOperator *&top,
                                const ObIArray<OrderItem> &sort_keys,
                                const bool need_sort,
@@ -985,6 +990,8 @@ public:
   /** @brief allocate select into as new top(parent)**/
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
+
+  int check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by);
 
   int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);

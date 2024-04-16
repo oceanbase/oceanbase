@@ -12670,7 +12670,7 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
       }
 
       //2. if the table row count is 0 and not to force use default stat, we try refine it.
-      if (OB_SUCC(ret) &&
+      if (OB_SUCC(ret) && !table_schema.is_external_table() &&
           table_meta_info_.table_row_count_ <= 0 &&
           !OPT_CTX.use_default_stat()) {
         if (OB_FAIL(ObAccessPathEstimation::estimate_full_table_rowcount(OPT_CTX,

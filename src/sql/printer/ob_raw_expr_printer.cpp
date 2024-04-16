@@ -3941,6 +3941,8 @@ int ObRawExprPrinter::print(ObPseudoColumnRawExpr *expr)
         }
         break;
       }
+      case T_PSEUDO_EXTERNAL_FILE_URL:
+      case T_PSEUDO_PARTITION_LIST_COL:
       case T_PSEUDO_EXTERNAL_FILE_COL: {
         if (!expr->get_table_name().empty()) {
           PRINT_IDENT(expr->get_table_name());

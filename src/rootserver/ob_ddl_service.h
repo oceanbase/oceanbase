@@ -2893,7 +2893,7 @@ int ObDDLService::fill_part_name(const SCHEMA &orig_schema,
   if (OB_ISNULL(part_array)) {
     ret = OB_ERR_UNEXPECTED;
     RS_LOG(WARN, "part_array is null", K(ret), K(part_array));
-  } else if (OB_FAIL(orig_schema.get_max_part_idx(max_part_id))) {
+  } else if (OB_FAIL(orig_schema.get_max_part_idx(max_part_id, orig_schema.is_external_table()))) {
     RS_LOG(WARN, "fail to get max part id", KR(ret), K(max_part_id));
   }
   // Supplement the default partition name p+OB_MAX_PARTITION_NUM_MYSQL, accumulate after judging duplicates

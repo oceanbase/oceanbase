@@ -40,8 +40,19 @@ int ObCreateTableResolverBase::resolve_partition_option(
     SQL_RESV_LOG(WARN, "failed to build partition key info!", KR(ret), KP(session_info_));
   } else {
     if (NULL != node) {
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+      } else if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+        if (table_schema.is_external_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("partition ext table is not supported in data version less than 4.3.1", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition external table in data version less than 4.3.1");
+        }
+      }
       ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
-      if (!is_partition_option_node_with_opt) {
+      if (OB_FAIL(ret)) {
+      } else if (!is_partition_option_node_with_opt) {
         if (OB_FAIL(resolve_partition_node(create_table_stmt, node, table_schema))) {
           LOG_WARN("failed to resolve partition option", KR(ret));
         }
@@ -67,6 +78,10 @@ int ObCreateTableResolverBase::resolve_partition_option(
         ret = OB_INVALID_ARGUMENT;
         SQL_RESV_LOG(WARN, "node type is invalid.", KR(ret), K(node->type_));
       }
+    } else if (table_schema.is_external_table() && table_schema.is_user_specified_partition_for_external_table()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "USER SPECIFIED PARTITION TYPE for non partitioned external table");
+      LOG_WARN("USER SPECIFIED PARTITION TYPE for non partitioned external table not supported");
     }
   }
   return ret;

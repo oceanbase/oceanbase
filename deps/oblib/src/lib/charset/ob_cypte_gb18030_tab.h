@@ -18898,3 +18898,13 @@ static const uint16_t gb18030_4_weight_py_p2[] = {
     0,     0,     21632, 0,     0,     0,     0,     0,     0,     0,     0,
     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
     3625,  0,     29104};
+
+/*[GB+82358F33, GB+82359134] or [U+9FA6, U+9FBB]*/
+const static int GB_2022_CNT_PART_1 = 0x9FBB - 0x9FA6 + 1;
+/*[GB+84318236, GB+84318537]*/
+const static int GB_2022_CNT_PART_2 = (0x85 - 0x82) * 10 + (0x37 - 0x36) + 1;
+
+extern uint16 tab_gb18030_2022_2_uni[sizeof(tab_gb18030_2_uni)/sizeof(uint16)];
+extern uint16 tab_gb18030_2022_4_uni[sizeof(tab_gb18030_4_uni)/sizeof(uint16) + GB_2022_CNT_PART_1 + GB_2022_CNT_PART_2];
+extern uint16 tab_uni_gb18030_2022_p1[sizeof(tab_uni_gb18030_p1)/sizeof(uint16) + GB_2022_CNT_PART_1];
+extern uint16 tab_uni_gb18030_2022_p2[sizeof(tab_uni_gb18030_p2)/sizeof(uint16)];

@@ -38,6 +38,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/resolver/cmd/ob_help_resolver.h"
 #include "lib/charset/ob_template_helper.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 
 
 namespace oceanbase
@@ -744,7 +745,11 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
         }
 
         if (OB_SUCC(ret) && create_table_stmt->get_create_table_arg().schema_.is_external_table()) {
-          if (OB_FAIL(add_hidden_external_table_pk_col())) {
+          if (create_table_stmt->get_create_table_arg().schema_.get_part_level() == ObPartitionLevel::PARTITION_LEVEL_ONE) {
+            OZ (create_default_partition_for_table(create_table_stmt->get_create_table_arg().schema_));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(add_hidden_external_table_pk_col())) {
             LOG_WARN("fail to add hidden pk col for external table", K(ret));
           }
         }
@@ -967,7 +972,7 @@ int ObCreateTableResolver::resolve_partition_option(
   } else if (is_oracle_temp_table_ && OB_FAIL(set_partition_info_for_oracle_temp_table(table_schema))) {
     SQL_RESV_LOG(WARN, "set __sess_id as partition key failed", KR(ret));
   }
-  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || is_oracle_temp_table_)) {
+  if (OB_SUCC(ret) && (OB_NOT_NULL(node) || table_schema.is_external_table() || is_oracle_temp_table_)) {
     if (OB_FAIL(check_generated_partition_column(table_schema))) {
       LOG_WARN("Failed to check generate partiton column", KR(ret));
     } else if (OB_FAIL(table_schema.check_primary_key_cover_partition_column())) {
@@ -979,14 +984,130 @@ int ObCreateTableResolver::resolve_partition_option(
   return ret;
 }
 
+int ObCreateTableResolver::create_default_partition_for_table(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition partition;
+  ObRawExpr *maxvalue_expr = NULL;
+  ObConstRawExpr *c_expr = NULL;
+  ObOpRawExpr *row_expr = NULL;
+  if (OB_ISNULL(params_.allocator_)
+      || OB_ISNULL(c_expr = (ObConstRawExpr *) params_.allocator_->alloc(sizeof(ObConstRawExpr)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allcoate memory", K(ret));
+  } else if (OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_ROW, row_expr))) {
+    LOG_WARN("failed to create raw expr", K(ret));
+  } else if (OB_ISNULL(row_expr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allcoate memory", K(ret));
+  } else {
+    c_expr = new(c_expr) ObConstRawExpr();
+    maxvalue_expr = c_expr;
+    maxvalue_expr->set_data_type(common::ObMaxType);
+    if (OB_FAIL(row_expr->add_param_expr(maxvalue_expr))) {
+      LOG_WARN("failed add param expr", K(ret));
+    }
+  }
+  ObDDLStmt::array_t list_values_exprs;
+  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(partition.set_part_name("P_DEFAULT"))) {
+    LOG_WARN("set partition name failed", K(ret));
+  } else if (OB_FAIL(table_schema.add_partition(partition))) {
+    LOG_WARN("add partition failed", K(ret));
+  } else if (OB_FALSE_IT(table_schema.set_part_num(1))) {
+  } else if (OB_FAIL(list_values_exprs.push_back(row_expr))) {
+    LOG_WARN("push back failed", K(ret));
+  } else if (OB_FAIL(create_table_stmt->get_part_values_exprs().assign(list_values_exprs))) {
+    LOG_WARN("failed to assign list values exprs", K(ret));
+  }
+
+  return ret;
+}
+
+int ObCreateTableResolver::check_external_table_generated_partition_column_sanity(ObTableSchema &table_schema,
+                                                                       ObRawExpr *dependant_expr,
+                                                                       ObIArray<int64_t> &external_part_idx)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObRawExpr *> col_exprs;
+  if (OB_ISNULL(dependant_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dependant expr is null", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(dependant_expr, col_exprs, true/*extract pseudo column*/))) {
+    LOG_WARN("extract col exprs failed", K(ret));
+  } else if (table_schema.is_user_specified_partition_for_external_table()) {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
+      if (OB_ISNULL(col_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col expr is null", K(ret));
+      } else if (col_exprs.at(i)->is_pseudo_column_expr()) {
+        if (col_exprs.at(i)->get_expr_type() != T_PSEUDO_PARTITION_LIST_COL ||
+            dependant_expr != col_exprs.at(i)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition dependant expr is not metadata$external_partition pseudo column");
+          LOG_WARN("user specified partition col expr contains non external partition pseudo column is not supported", K(ret));
+        } else if (ObOptimizerUtil::find_item(external_part_idx, col_exprs.at(i)->get_extra())) {
+          ObSqlString tmp;
+          OZ (tmp.append(col_exprs.at(i)->get_expr_name()));
+          OZ (tmp.append(" redefinition"));
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+          LOG_WARN("redefine the metadata$external_partition[i] column", K(ret));
+        } else {
+          OZ (external_part_idx.push_back(col_exprs.at(i)->get_extra()));
+          found = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!found) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition col expr contains no metadata$external_partition pseudo columns");
+        LOG_WARN("user specified partition col expr contains no external partition pseudo column is not supported", K(ret));
+      }
+    }
+  } else {
+    bool found = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
+      if (OB_ISNULL(col_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col expr is null", K(ret));
+      } else if (col_exprs.at(i)->is_pseudo_column_expr()) {
+        if (col_exprs.at(i)->get_expr_type() != T_PSEUDO_EXTERNAL_FILE_URL) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition col expr contains non metadata$fileurl pseudo column");
+          LOG_WARN("partition col expr contains non metadata$fileurl pseudo column is not supported", K(ret));
+        } else {
+          found = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (!found) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition col expr contains no metadata$fileurl pseudo columns");
+        LOG_WARN("partition col expr contains no metadata$fileurln pseudo column is not supported", K(ret));
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
   const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
   const ObPartitionKeyColumn *part_column = NULL;
   const ObColumnSchemaV2 *column_schema = NULL;
-  ObRawExpr *gen_col_expr = NULL;
+  ObRawExpr *dependant_expr = NULL;
   ObString expr_def;
+  ObArray<int64_t> external_part_idx;
   for (int64_t idx = 0; OB_SUCC(ret) && idx < part_key_info.get_size(); ++idx) {
     if (OB_ISNULL(part_column = part_key_info.get_column(idx))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1002,9 +1123,11 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
                                                                      *params_.expr_factory_,
                                                                      *params_.session_info_,
                                                                      table_schema,
-                                                                     gen_col_expr,
+                                                                     dependant_expr,
                                                                      schema_checker_))) {
         LOG_WARN("build generated column expr failed", K(ret));
+      } else if (table_schema.is_external_table()) {
+        OZ (check_external_table_generated_partition_column_sanity(table_schema, dependant_expr, external_part_idx));
       } /*
         if gc column is partition key, then this is no restriction
         else {
@@ -1016,10 +1139,70 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
       }*/
     } else { }//do nothing
   }
+
+  //to check external partition valid
+  if (OB_FAIL(ret)) {
+  } else if (table_schema.is_external_table()) {
+    if (table_schema.is_user_specified_partition_for_external_table()) {
+      if (external_part_idx.count() != part_key_info.get_size()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition key number not equal to generate column with metadata$partition_list_col");
+        LOG_WARN("partition key number not equal to generate column with metadata$partition_list_col is not supported", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < external_part_idx.count(); i++) {
+        if (!ObOptimizerUtil::find_item(external_part_idx, i + 1)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "metadata$partition_list_col id is not continuously from 1");
+          LOG_WARN("metadata$partition_list_col id is not continuously from 1 is not supported", K(ret));
+        }
+      }
+    }
+    ObArray<uint64_t> column_ids;
+    ObArray<uint64_t> part_column_ids;
+    OZ (table_schema.get_column_ids(column_ids));
+    if (OB_SUCC(ret) && part_key_info.get_size() != 0) {
+      OZ (part_key_info.get_column_ids(part_column_ids));
+    }
+    OZ (ObOptimizerUtil::remove_item(column_ids, part_column_ids));
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      ObColumnSchemaV2 *column_schema = NULL;
+      if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_ids.at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Failed to get column schema", K(ret), K(column_ids.at(i)));
+      } else if (column_schema->is_generated_column()) {
+        ObArray<ObRawExpr *> col_exprs;
+        if (OB_FAIL(column_schema->get_cur_default_value().get_string(expr_def))) {
+          LOG_WARN("get string from current default value failed", K(ret), K(column_schema->get_cur_default_value()));
+        } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(NULL,
+                                                                      expr_def,
+                                                                      *params_.expr_factory_,
+                                                                      *params_.session_info_,
+                                                                      table_schema,
+                                                                      dependant_expr,
+                                                                      schema_checker_))) {
+          LOG_WARN("build generated column expr failed", K(ret));
+        } else if (OB_ISNULL(dependant_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("dependant expr is null", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(dependant_expr, col_exprs, true/*extract pseudo column*/))) {
+          LOG_WARN("extract col exprs failed", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < col_exprs.count(); j++) {
+            if (col_exprs.at(j)->get_expr_type() == T_PSEUDO_PARTITION_LIST_COL) {
+              ObSqlString tmp;
+              OZ (tmp.append(col_exprs.at(j)->get_expr_name()));
+              OZ (tmp.append(" defined in not partition column"));
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, to_cstring(tmp.string()));
+              LOG_WARN("metadata$external_partition[i] column defined in normal column", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
   return ret;
 }
-
-
 
 int ObCreateTableResolver::check_column_name_duplicate(const ParseNode *node)
 {

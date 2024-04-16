@@ -150,7 +150,7 @@ int ObDASCtx::build_external_table_location(
   if (OB_ISNULL(local_location = get_table_loc_by_id(table_loc_id, ref_table_id))
       || OB_ISNULL(local_tablet_loc = local_location->get_first_tablet_loc())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected location", K(ret));
+    LOG_WARN("unexpected location", K(ret), K(local_location), K(local_tablet_loc));
   } else {
     ObDASTableLoc *table_loc = NULL;
     ObDASTableLocMeta *loc_meta = NULL;

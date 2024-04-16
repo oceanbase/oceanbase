@@ -2148,7 +2148,17 @@ int ObRawExprUtils::build_generated_column_expr(const obrpc::ObCreateIndexArg *a
                                       NULL));
       OZ (real_exprs.push_back(expr), q_name);
     } else if (table_schema.is_external_table()) {
-      if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr))) {
+      const ObColumnSchemaV2 *column_schema = NULL;
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); i++) {
+        if (OB_ISNULL(table_schema.get_column_schema_by_idx(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (0 == table_schema.get_column_schema_by_idx(i)->get_cur_default_value().get_string().compare(expr_str)) {
+          column_schema = table_schema.get_column_schema_by_idx(i);
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr, column_schema))) {
         LOG_WARN("fail to resolve external table column def", K(ret));
       }
     } else {
@@ -2295,6 +2305,26 @@ int ObRawExprUtils::build_check_constraint_expr(ObRawExprFactory &expr_factory,
     }
   }
 
+  return ret;
+}
+
+int ObRawExprUtils::extract_metadata_fileurl_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr)
+{
+  int ret = OB_SUCCESS;
+  if (file_name_expr != NULL) {
+    //do nothing
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_pseudo_column_expr() && expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+    file_name_expr = expr;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(extract_metadata_fileurl_expr(expr->get_param_expr(i), file_name_expr)))) {
+        LOG_WARN("extract metadata filename expr failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -3095,7 +3125,7 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
                                       NULL));
       OZ (real_exprs.push_back(expr), q_name);
     } else if (table_schema.is_external_table()) {
-      if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr))) {
+      if (OB_FAIL(ObResolverUtils::resolve_external_table_column_def(expr_factory, session_info, q_name, real_exprs, expr, &gen_col_schema))) {
         LOG_WARN("fail to resolve external table column", K(ret));
       }
     } else {
@@ -7372,6 +7402,26 @@ int ObRawExprUniqueSet::flatten_temp_expr(ObRawExpr *raw_expr)
   return ret;
 }
 
+int ObRawExprUtils::extract_metadata_filename_expr(ObRawExpr *expr, ObRawExpr *&file_name_expr)
+{
+  int ret = OB_SUCCESS;
+  if (file_name_expr != NULL) {
+    //do nothing
+  } else if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (expr->is_pseudo_column_expr() && expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL) {
+    file_name_expr = expr;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+      if (OB_FAIL(SMART_CALL(extract_metadata_filename_expr(expr->get_param_expr(i), file_name_expr)))) {
+        LOG_WARN("extract metadata filename expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::try_add_bool_expr(ObCaseOpRawExpr *parent,
                                       ObRawExprFactory &expr_factory)
 {
@@ -8581,44 +8631,34 @@ int ObRawExprUtils::build_to_outfile_expr(ObRawExprFactory &expr_factory,
   int ret = OB_SUCCESS;
   to_outfile_expr = NULL;
   ObOpRawExpr *new_expr = NULL;
-  ObConstRawExpr *filed_expr = NULL;
+  ObConstRawExpr *field_expr = NULL;
   ObConstRawExpr *line_expr = NULL;
-  ObString closed_str;
   ObConstRawExpr *closed_cht_expr = NULL;
   ObRawExpr *is_optional_expr = NULL;
-  ObString escaped_str;
   ObConstRawExpr *escaped_cht_expr = NULL;
   ObConstRawExpr *charset_expr = NULL;
   if (OB_FAIL(expr_factory.create_raw_expr(T_OP_TO_OUTFILE_ROW, new_expr))) {
     LOG_WARN("fail to create raw expr", K(ret));
   } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType,
-      into_item->filed_str_.get_varchar(), into_item->filed_str_.get_collation_type(), filed_expr))) {
+      into_item->field_str_.get_varchar(), into_item->field_str_.get_collation_type(), field_expr))) {
     LOG_WARN("fail to create string expr", K(ret));
   } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType,
       into_item->line_str_.get_varchar(), into_item->line_str_.get_collation_type(), line_expr))) {
     LOG_WARN("fail to create string expr", K(ret));
-  } else if (OB_FAIL(ob_write_string(expr_factory.get_allocator(),
-                                     ObString(1, &(into_item->closed_cht_)), closed_str))) {
-    LOG_WARN("fail to copy closed_cht_", K(ret));
   } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType,
-      into_item->closed_cht_ == 0 ? ObString() : closed_str,
-      into_item->filed_str_.get_collation_type(), closed_cht_expr))) {
+      into_item->closed_cht_.get_varchar(), into_item->closed_cht_.get_collation_type(), closed_cht_expr))) {
     LOG_WARN("fail to create string expr", K(ret));
   } else if (OB_FAIL(build_const_bool_expr(&expr_factory, is_optional_expr,
       into_item->is_optional_))) {
     LOG_WARN("fail to create bool expr", K(ret));
-  } else if (OB_FAIL(ob_write_string(expr_factory.get_allocator(),
-                                     ObString(1, &(into_item->escaped_cht_)), escaped_str))) {
-    LOG_WARN("fail to copy escaped_cht_", K(ret));
   } else if (OB_FAIL(build_const_string_expr(expr_factory, ObVarcharType,
-      into_item->escaped_cht_ == 0 ? ObString() : escaped_str,
-      into_item->filed_str_.get_collation_type(), escaped_cht_expr))) {
+      into_item->escaped_cht_.get_varchar(), into_item->escaped_cht_.get_collation_type(), escaped_cht_expr))) {
     LOG_WARN("fail to create string expr", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
                             expr_factory, ObIntType, into_item->cs_type_, charset_expr))) {
     LOG_WARN("fail to create string expr", K(ret));
-  } else if (OB_FAIL(new_expr->add_param_expr(filed_expr))) {
-    LOG_WARN("fail to add filed_expr", K(ret));
+  } else if (OB_FAIL(new_expr->add_param_expr(field_expr))) {
+    LOG_WARN("fail to add field_expr", K(ret));
   } else if (OB_FAIL(new_expr->add_param_expr(line_expr))) {
     LOG_WARN("fail to add line_expr", K(ret));
   } else if (OB_FAIL(new_expr->add_param_expr(closed_cht_expr))) {

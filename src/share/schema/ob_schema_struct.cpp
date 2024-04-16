@@ -3114,7 +3114,6 @@ int ObPartitionSchema::assign_partition_schema(const ObPartitionSchema &src_sche
     partition_schema_version_ = src_schema.partition_schema_version_;
     partition_status_ = src_schema.partition_status_;
     sub_part_template_flags_ = src_schema.sub_part_template_flags_;
-
     if (OB_SUCC(ret)) {
       part_option_ = src_schema.part_option_;
       if (OB_FAIL(part_option_.get_err_ret())) {
@@ -3560,18 +3559,20 @@ int ObPartitionSchema::get_max_part_id(int64_t &part_id) const
   return ret;
 }
 
-int ObPartitionSchema::get_max_part_idx(int64_t &part_idx) const
+int ObPartitionSchema::get_max_part_idx(int64_t &part_idx, const bool skip_external_table_default_partition) const
 {
   int ret = OB_SUCCESS;
-
-  if (PARTITION_LEVEL_ZERO == part_level_) {
+  if (skip_external_table_default_partition && !is_external_table()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("skip default partition under non-external table is invalid", K(ret));
+  } else if (PARTITION_LEVEL_ZERO == part_level_) {
     // for alter table partition by
     part_idx = 0;
   } else if (OB_ISNULL(partition_array_)
              || partition_num_ <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition_array is null or partition_num is invalid",
-             KR(ret), KP_(partition_array), K_(partition_num));
+            KR(ret), KP_(partition_array), K_(partition_num));
   } else {
     int64_t max_part_idx = OB_INVALID_ID;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_num_; i++) {
@@ -3580,7 +3581,13 @@ int ObPartitionSchema::get_max_part_idx(int64_t &part_idx) const
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("part is null", KR(ret), K(i));
       } else {
-        max_part_idx = max(max_part_idx, part->get_part_idx());
+        if (skip_external_table_default_partition && ObPartitionUtils::is_default_list_part(*part)) {
+          if (partition_num_ == 1) {
+            max_part_idx = 0;
+          }
+        } else {
+          max_part_idx = max(max_part_idx, part->get_part_idx());
+        }
       }
     } // end for
     if (OB_SUCC(ret)) {
@@ -5802,9 +5809,12 @@ OB_DEF_DESERIALIZE(ObBasePartition)
   if (FAILEDx(low_bound_val.deserialize(buf, data_len, pos, true))) {
     LOG_WARN("fail to deserialze low_bound_val", KR(ret));
   }
-  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_, external_location_);
+  ObString external_location;
+  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_, external_location);
   if (OB_SUCC(ret) && OB_FAIL(set_low_bound_val(low_bound_val))) {
     LOG_WARN("Fail to deep copy low_bound_val", K(ret), K(low_bound_val));
+  } else if (OB_FAIL(deep_copy_str(external_location, external_location_))) {
+    LOG_WARN("Fail to deep copy location ", K(ret), K_(external_location));
   }
   return ret;
 }
@@ -6392,7 +6402,7 @@ int ObPartitionUtils::check_param_valid_(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const uint64_t table_id = table_schema.get_table_id();
-  if (!table_schema.has_tablet()) {
+   if (!table_schema.has_tablet()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table schema has no tablet", KR(ret), K(tenant_id), K(table_id),
              "table_type", table_schema.get_table_type(),
@@ -6636,7 +6646,7 @@ int ObPartitionUtils::get_tablet_and_part_id(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported part level", KR(ret), K(table_id), K(part_level));
   }
-  LOG_TRACE("table schema get tablet and part id", K(table_id), K(tablet_ids), K(part_ids));
+  LOG_TRACE("table schema get tablet and part id", K(table_id), K(tablet_ids), K(part_ids), K(partition_indexes));
   return ret;
 }
 
@@ -6709,7 +6719,7 @@ int ObPartitionUtils::get_tablet_and_part_id(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported part level", KR(ret), K(table_id), K(part_level));
   }
-  LOG_TRACE("table schema get tablet and part id", K(table_id), K(tablet_ids), K(part_ids));
+  LOG_TRACE("table schema get tablet and part id", K(table_id), K(tablet_ids), K(part_ids), K(partition_indexes));
   return ret;
 }
 
@@ -7104,7 +7114,7 @@ int ObPartitionUtils::get_list_tablet_and_part_id_(
       || partition_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("partition_array is null or partition_num is invalid",
-             KR(ret), KP(partition_array), K(partition_num));
+              KR(ret), KP(partition_array), K(partition_num));
   } else if (!range.is_single_rowkey()) {
     if (OB_FAIL(get_all_tablet_and_part_id_(
         partition_array, partition_num, indexes))) {
@@ -7536,6 +7546,17 @@ int ObPartitionUtils::calc_hash_part_idx(const uint64_t val,
     LOG_TRACE("get hash part idx", K(lbt()), K(ret), K(val), K(part_num), K(partition_idx));
   }
   return ret;
+}
+
+bool ObPartitionUtils::is_default_list_part(const ObPartition &part)
+{
+  bool is_default = false;
+  if (part.get_list_row_values().count() == 1
+      && part.get_list_row_values().at(0).get_count() >= 1
+      && part.get_list_row_values().at(0).get_cell(0).is_max_value()) {
+    is_default = true;
+  }
+  return is_default;
 }
 
 ///special case: char and varchar && oracle mode int and numberic

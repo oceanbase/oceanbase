@@ -2278,6 +2278,24 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         ret = resolve_lob_storage_parameters(option_node);
         break;
       }
+      case T_EXTERNAL_USER_SPECIFIED_PARTITION: {
+        if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
+          ret = OB_ERR_UNEXPECTED; //TODO-EXTERNAL-TABLE add new error code
+          LOG_WARN("invalid file format option", K(ret));
+        } else {
+          ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
+          if (!arg.schema_.is_external_table()) {
+            ret = OB_NOT_SUPPORTED;
+            ObSqlString err_msg;
+            err_msg.append_fmt("Using PARTITION_TYPE as a CREATE TABLE option");
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+            LOG_WARN("using PARTITION_TYPE as a table option is support in external table only", K(ret));
+          } else {
+            arg.schema_.set_user_specified_partition_for_external_table();
+          }
+        }
+        break;
+      }
       default: {
         /* won't be here */
         ret = OB_ERR_UNEXPECTED;
@@ -10263,16 +10281,23 @@ int ObDDLResolver::resolve_partition_list(ObPartitionedStmt *stmt,
   common::ObSEArray<ObRawExpr*, 8> part_func_exprs;
   ObDDLStmt::array_t list_values_exprs;
 
-  if (OB_ISNULL(stmt) || OB_ISNULL(node) || OB_ISNULL(node->children_) ||
-      OB_ISNULL(node->children_[LIST_ELEMENTS_NODE])) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(node) || OB_ISNULL(node->children_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_RESV_LOG(WARN, "get unexpected null", K(ret), K(stmt), K(node));
+  } else if (!table_schema.is_external_table() && OB_ISNULL(node->children_[LIST_ELEMENTS_NODE])) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "get unexpected null", K(ret), K(stmt), K(node));
   } else if (!is_list_type_partition(node->type_)) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "get unexpected partition type", K(ret), K(node->type_));
   } else if (is_subpartition) {
-    partition_option = &(table_schema.get_sub_part_option());
-    table_schema.set_part_level(share::schema::PARTITION_LEVEL_TWO);
+    if (table_schema.is_external_table()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("external table do not support subpartition now", K(ret));
+    } else {
+      partition_option = &(table_schema.get_sub_part_option());
+      table_schema.set_part_level(share::schema::PARTITION_LEVEL_TWO);
+    }
   } else {
     partition_option = &(table_schema.get_part_option());
     table_schema.set_part_level(share::schema::PARTITION_LEVEL_ONE);
@@ -10314,11 +10339,13 @@ int ObDDLResolver::resolve_partition_list(ObPartitionedStmt *stmt,
       if (partition_num != node->children_[LIST_ELEMENTS_NODE]->num_child_) {
         ret = common::OB_ERR_PARSE_PARTITION_LIST;
       }
+    } else if (node->children_[LIST_ELEMENTS_NODE] == NULL) {
+      partition_num = 0;
     } else {
       partition_num = node->children_[LIST_ELEMENTS_NODE]->num_child_;
     }
     partition_option->set_part_num(partition_num);
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) && !table_schema.is_external_table()) {
       if (OB_FAIL(check_partition_name_duplicate(node->children_[LIST_ELEMENTS_NODE],
                                                  lib::is_oracle_mode()))) {
         SQL_RESV_LOG(WARN, "duplicate partition name", K(ret));

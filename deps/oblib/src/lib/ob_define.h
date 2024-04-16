@@ -607,6 +607,7 @@ const uint64_t OB_HIDDEN_PK_INCREMENT_COLUMN_ID = 1;  // hidden pk is a tablet-l
 const uint64_t OB_CREATE_TIME_COLUMN_ID = 2;
 const uint64_t OB_MODIFY_TIME_COLUMN_ID = 3;
 const uint64_t OB_MOCK_LINK_TABLE_PK_COLUMN_ID = 4;
+
 const uint64_t OB_HIDDEN_ROWID_COLUMN_ID = 6;
 const uint64_t OB_HIDDEN_TRANS_VERSION_COLUMN_ID = 7;
 const uint64_t OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID = 8;

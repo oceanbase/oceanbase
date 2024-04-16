@@ -160,12 +160,18 @@ int ObPXServerAddrUtil::get_external_table_loc(
     //   ret = OB_NOT_SUPPORTED;
     //   LOG_WARN("Has dynamic params in external table or empty range is not supported", K(ret),
     //            K(pre_query_range.has_exec_param()), K(pre_query_range.get_column_count()));
-    if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
+    ObSEArray<int64_t, 16> part_ids;
+    for (DASTabletLocListIter iter = table_loc->tablet_locs_begin(); OB_SUCC(ret)
+               && iter != table_loc->tablet_locs_end(); ++iter) {
+      ret = part_ids.push_back((*iter)->partition_id_);
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObSQLUtils::extract_pre_query_range(
                                     pre_query_range, ctx.get_allocator(), ctx, ranges,
                                     ObBasicSessionInfo::create_dtc_params(ctx.get_my_session())))) {
       LOG_WARN("failed to extract external file fiter", K(ret));
-    } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(
-                            tenant_id, ref_table_id, is_external_files_on_disk,
+    } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(
+                            tenant_id, ref_table_id, part_ids, is_external_files_on_disk,
                             ctx.get_allocator(), ext_file_urls, ranges.empty() ? NULL : &ranges))) {
       LOG_WARN("fail to get external files", K(ret));
     } else if (is_external_files_on_disk
@@ -181,6 +187,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
       ObExternalFileInfo dummy_file;
       dummy_file.file_url_ = dummy_file_name;
       dummy_file.file_id_ = INT64_MAX;
+      dummy_file.part_id_ = ref_table_id;
       if (is_external_files_on_disk) {
         dummy_file.file_addr_ = GCTX.self_addr();
       }
@@ -352,15 +359,14 @@ int ObPXServerAddrUtil::alloc_by_data_distribution_inner(
         dml_full_loc = table_loc;
       }
     } else {
-      if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
-        // create new table loc for a random dfo distribution for external table
-        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
-      } else
       // 通过TSC或者DML获得当前的DFO的partition对应的location信息
       // 后续利用location信息构建对应的SQC meta
       if (OB_ISNULL(table_loc = DAS_CTX(ctx).get_table_loc_by_id(table_location_key, ref_table_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get table loc", K(ret), K(table_location_key), K(ref_table_id), K(DAS_CTX(ctx).get_table_loc_list()));
+      } else if (OB_NOT_NULL(scan_op) && scan_op->is_external_table_) {
+        // create new table loc for a random dfo distribution for external table
+        OZ (get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc));
       }
     }
 
@@ -1042,7 +1048,8 @@ int ObPXServerAddrUtil::set_dfo_accessed_location(ObExecContext &ctx,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get phy table location", K(ret));
     } else if (scan_op->is_external_table_
-               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id, scan_op->get_query_range(), dfo, table_loc))) {
+               && OB_FAIL(get_external_table_loc(ctx, table_location_key, ref_table_id,
+                                                 scan_op->get_query_range(), dfo, table_loc))) {
       LOG_WARN("fail to get external table loc", K(ret));
     } else if (OB_FAIL(set_sqcs_accessed_location(ctx,
           // dml op has already set sqc.get_location information,

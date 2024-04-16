@@ -8440,9 +8440,22 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
 {
   int ret = OB_SUCCESS;
   bool is_part_topn = (NULL != hash_sortkey) && (NULL != topn_expr);
+  bool has_select_into = false;
+  bool is_single = true;
+  bool has_order_by = false;
   if (OB_ISNULL(top)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by))) {
+    LOG_WARN("failed to check select into", K(ret));
+  } else if (exch_info.is_pq_local() && NULL == topn_expr && has_select_into && !is_single
+             && has_order_by) {
+    if (OB_FAIL(allocate_dist_range_sort_for_select_into(top,
+                                                         sort_keys,
+                                                         need_sort,
+                                                         is_local_order))) {
+      LOG_WARN("failed to allocate dist range sort as top", K(ret));
+    } else { /*do nothing*/ }
   } else if (exch_info.is_pq_local() && NULL == topn_expr && GCONF._enable_px_ordered_coord) {
     if (OB_FAIL(allocate_dist_range_sort_as_top(top, sort_keys, need_sort, is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
@@ -8547,6 +8560,37 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
                                         is_fetch_with_ties,
                                         &sort_keys))) {
         LOG_WARN("failed to allocate limit as top", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::allocate_dist_range_sort_for_select_into(ObLogicalOperator *&top,
+                                                        const ObIArray<OrderItem> &sort_keys,
+                                                        const bool need_sort,
+                                                        const bool is_local_order)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(top)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else {
+    // allocate range exchange info
+    ObExchangeInfo range_exch_info;
+    range_exch_info.dist_method_ = ObPQDistributeMethod::RANGE;
+    range_exch_info.sample_type_ = HEADER_INPUT_SAMPLE;
+    if (OB_FAIL(range_exch_info.sort_keys_.assign(sort_keys))) {
+      LOG_WARN("failed to assign sort keys", K(ret));
+    } else if (OB_FAIL(allocate_exchange_as_top(top, range_exch_info))) {
+      LOG_WARN("failed to allocate exchange as top", K(ret));
+    }
+    // allocate sort
+    if (OB_SUCC(ret)) {
+      bool prefix_pos = 0;
+      bool is_local_merge_sort = !need_sort && is_local_order;
+      if (OB_FAIL(allocate_sort_as_top(top, sort_keys, prefix_pos, is_local_merge_sort))) {
+        LOG_WARN("failed to allocate sort as top", K(ret));
       } else { /*do nothing*/ }
     }
   }
@@ -8987,19 +9031,51 @@ int ObLogPlan::allocate_limit_as_top(ObLogicalOperator *&old_top,
   return ret;
 }
 
+int ObLogPlan::check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by){
+  int ret = OB_SUCCESS;
+  has_select_into = false;
+  is_single = true;
+  has_order_by = false;
+  ObSelectIntoItem *into_item = NULL;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!get_stmt()->is_select_stmt()) {
+    // do nothing
+  } else {
+    const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_stmt());
+    has_select_into = stmt->has_select_into();
+    into_item = stmt->get_select_into();
+    if (NULL != into_item && !into_item->is_single_) {
+      is_single = false;
+    }
+    has_order_by = stmt->has_order_by();
+  }
+  return ret;
+}
+
 int ObLogPlan::candi_allocate_select_into()
 {
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
+  bool has_select_into = false;
+  bool is_single = true;
+  bool has_order_by = false;
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> select_into_plans;
+  if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!is_single && !has_order_by) {
+    exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+  }
   for (int64_t i = 0 ; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
     candidate_plan = candidates_.candidate_plans_.at(i);
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (candidate_plan.plan_tree_->is_sharding() &&
-               OB_FAIL((allocate_exchange_as_top(candidate_plan.plan_tree_, exch_info)))) {
+    } else if (!has_order_by && candidate_plan.plan_tree_->is_sharding()
+               && OB_FAIL((allocate_exchange_as_top(candidate_plan.plan_tree_, exch_info)))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_select_into_as_top(candidate_plan.plan_tree_))) {
       LOG_WARN("failed to allocate select into", K(ret));
@@ -9036,28 +9112,20 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
       LOG_WARN("into item is null", K(ret));
     } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
-    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
-               OB_FAIL(ObRawExprUtils::build_to_outfile_expr(
-                                    get_optimizer_context().get_expr_factory(),
-                                    get_optimizer_context().get_session_info(),
-                                    into_item,
-                                    select_exprs,
-                                    to_outfile_expr))) {
-      LOG_WARN("failed to build_to_outfile_expr", K(*into_item), K(ret));
-    } else if (T_INTO_OUTFILE == into_item->into_type_ &&
-               OB_FAIL(select_into->get_select_exprs().push_back(to_outfile_expr))) {
-      LOG_WARN("failed to add into outfile expr", K(ret));
-    } else if (T_INTO_OUTFILE != into_item->into_type_ &&
-               OB_FAIL(select_into->get_select_exprs().assign(select_exprs))) {
+    } else if (OB_FAIL(select_into->get_select_exprs().assign(select_exprs))) {
       LOG_WARN("failed to get select exprs", K(ret));
     } else {
       select_into->set_into_type(into_item->into_type_);
       select_into->set_outfile_name(into_item->outfile_name_);
-      select_into->set_filed_str(into_item->filed_str_);
+      select_into->set_field_str(into_item->field_str_);
       select_into->set_line_str(into_item->line_str_);
       select_into->set_user_vars(into_item->user_vars_);
       select_into->set_is_optional(into_item->is_optional_);
       select_into->set_closed_cht(into_item->closed_cht_);
+      select_into->set_is_single(into_item->is_single_);
+      select_into->set_max_file_size(into_item->max_file_size_);
+      select_into->set_escaped_cht(into_item->escaped_cht_);
+      select_into->set_cs_type(into_item->cs_type_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
       // compute property
       if (OB_FAIL(select_into->compute_property())) {
@@ -11978,7 +12046,9 @@ int ObLogPlan::adjust_expr_properties_for_external_table(ObRawExpr *col_expr, Ob
   if (OB_ISNULL(col_expr) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", K(ret));
-  } else if (expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_COL) {
+  } else if (expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_COL ||
+             expr->get_expr_type() == T_PSEUDO_EXTERNAL_FILE_URL ||
+             expr->get_expr_type() == T_PSEUDO_PARTITION_LIST_COL) {
     // The file column PSEUDO expr does not have relation_ids.
     // Using relation_ids in column expr to act as a column from the table.
     // Relation_ids are required when cg join conditions.

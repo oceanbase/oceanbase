@@ -2292,6 +2292,67 @@ int ObDDLOperator::add_table_constraints(const ObTableSchema &inc_table_schema,
   return ret;
 }
 
+int ObDDLOperator::update_default_partition_part_idx_for_external_table(const ObTableSchema &orig_table_schema,
+                                                     const ObTableSchema &inc_table_schema,
+                                                     ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const int64_t update_step = 1024;
+  const int64_t part_num = orig_table_schema.get_part_option().get_part_num();
+  int64_t max_part_idx = OB_INVALID_INDEX;
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_UNLIKELY(!orig_table_schema.is_external_table() || !orig_table_schema.is_partitioned_table())
+      || OB_ISNULL(orig_table_schema.get_part_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_FAIL(inc_table_schema.get_max_part_idx(max_part_idx, true/*without_default*/))) {
+    LOG_WARN("get max part idx failed", K(ret));
+  }
+  bool found = false;
+  for (int i = 0; OB_SUCC(ret) && !found && i < part_num; i++) {
+    ObPartition *default_part = orig_table_schema.get_part_array()[i];
+    if (OB_ISNULL(default_part)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(ret));
+    } else {
+      const ObIArray<common::ObNewRow>* orig_list_value = &(default_part->get_list_row_values());
+      if (OB_ISNULL(orig_list_value)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("list row value is null", K(ret), K(orig_list_value));
+      } else if (orig_list_value->count() == 1 && orig_list_value->at(0).get_count() >= 1
+          && orig_list_value->at(0).get_cell(0).is_max_value()) {
+        if (default_part->get_part_idx() <= max_part_idx) {
+          default_part->set_part_idx(max_part_idx + update_step);
+          ObTableSchema alter_part_schema;
+          if (OB_FAIL(alter_part_schema.add_partition(*default_part))) {
+            LOG_WARN("add partition failed", K(ret));
+          } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+            LOG_WARN("fail to gen new schema version", KR(ret), K(tenant_id));
+          } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_part_info(trans,
+                                                                                  orig_table_schema,
+                                                                                  alter_part_schema,
+                                                                                  new_schema_version,
+                                                                                  true/*update part idx*/))) {
+            LOG_WARN("rename inc part info failed", KR(ret));
+          }
+        }
+        found = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("update default partition part idx failed", K(ret));
+  }
+  return ret;
+}
+
 int ObDDLOperator::add_table_partitions(const ObTableSchema &orig_table_schema,
                                         ObTableSchema &inc_table_schema,
                                         ObTableSchema &new_table_schema,
@@ -2304,6 +2365,9 @@ int ObDDLOperator::add_table_partitions(const ObTableSchema &orig_table_schema,
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
+  } else if (orig_table_schema.is_external_table()
+            && OB_FAIL(update_default_partition_part_idx_for_external_table(orig_table_schema, inc_table_schema, trans))) {
+    LOG_WARN("update orig table schema failed", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_service->get_table_sql_service().add_inc_partition_info(trans,
@@ -2665,7 +2729,8 @@ int ObDDLOperator::rename_table_partitions(const ObTableSchema &orig_table_schem
   } else if (OB_FAIL(schema_service->get_table_sql_service().rename_inc_part_info(trans,
                                                                           orig_table_schema,
                                                                           inc_table_schema,
-                                                                          new_schema_version))) {
+                                                                          new_schema_version,
+                                                                          false))) {
     LOG_WARN("rename inc part info failed", KR(ret));
   }
   return ret;
@@ -2730,6 +2795,21 @@ int ObDDLOperator::drop_table_partitions(const ObTableSchema &orig_table_schema,
     if (OB_FAIL(schema_service->get_table_sql_service()
                             .update_partition_option(trans, new_table_schema))) {
       LOG_WARN("update partition option failed", K(ret), K(part_num), K(inc_part_num));
+    } else if (orig_table_schema.is_external_table()) {
+      if (inc_part_num > 0) {
+        CK (OB_NOT_NULL(inc_table_schema.get_part_array()));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < inc_part_num; i++)  {
+        if (OB_ISNULL(inc_table_schema.get_part_array()[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is null", K(ret));
+        } else {
+          OZ (ObExternalTableFileManager::get_instance().clear_inner_table_files_within_one_part(tenant_id,
+                                                                                 orig_table_schema.get_table_id(),
+                                                                                 inc_table_schema.get_part_array()[i]->get_part_id(),
+                                                                                 trans));
+        }
+      }
     }
   }
   return ret;

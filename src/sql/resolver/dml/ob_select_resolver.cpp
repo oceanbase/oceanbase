@@ -4777,7 +4777,7 @@ int ObSelectResolver::resolve_into_const_node(const ParseNode *node, ObObj &obj)
   return ret;
 }
 
-int ObSelectResolver::resolve_into_filed_node(
+int ObSelectResolver::resolve_into_field_node(
   const ParseNode *list_node,
   ObSelectIntoItem &into_item)
 {
@@ -4792,31 +4792,35 @@ int ObSelectResolver::resolve_into_filed_node(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("str node or into_item is null", K(ret));
       } else if (T_FIELD_TERMINATED_STR == node->type_) {
-        if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item.filed_str_))) {
-          LOG_WARN("resolve into outfile filed str", K(ret));
+        if (OB_FAIL(resolve_into_const_node(node->children_[0], into_item.field_str_))) {
+          LOG_WARN("resolve into outfile field str", K(ret));
         }
       } else if (T_OPTIONALLY_CLOSED_STR == node->type_
                  || T_CLOSED_STR == node->type_) {
         if (node->num_child_ != 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child num should be one", K(ret));
-        } else if (1 != node->children_[0]->str_len_ || OB_ISNULL(node->children_[0]->str_value_)) {
+        } else if (node->children_[0]->str_len_ == 0 || node->children_[0]->str_len_ == 1) {
+          into_item.closed_cht_.meta_.set_char();
+          into_item.closed_cht_.set_char_value(node->children_[0]->str_value_,
+                                               node->children_[0]->str_len_);
+          into_item.closed_cht_.set_collation_type(params_.session_info_->get_local_collation_connection());
+        } else {
           ret = OB_WRONG_FIELD_TERMINATORS;
           LOG_WARN("closed str should be a character", K(ret), K(node->children_[0]->str_value_));
-        } else {
-          into_item.closed_cht_ = node->children_[0]->str_value_[0];
-          if (T_OPTIONALLY_CLOSED_STR == node->type_) {
-            into_item.is_optional_ = true;
-          }
+        }
+        if (T_OPTIONALLY_CLOSED_STR == node->type_) {
+          into_item.is_optional_ = true;
         }
       } else if (T_ESCAPED_STR == node->type_) {
         if (node->num_child_ != 1) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("child num should be one", K(ret));
-        } else if (node->children_[0]->str_len_ == 0) {
-          into_item.escaped_cht_ = 0;
-        } else if (node->children_[0]->str_len_ == 1) {
-          into_item.escaped_cht_ = node->children_[0]->str_value_[0];
+        } else if (node->children_[0]->str_len_ == 0 || node->children_[0]->str_len_ == 1) {
+          into_item.escaped_cht_.meta_.set_char();
+          into_item.escaped_cht_.set_char_value(node->children_[0]->str_value_,
+                                                node->children_[0]->str_len_);
+          into_item.escaped_cht_.set_collation_type(params_.session_info_->get_local_collation_connection());
         } else {
           ret = OB_WRONG_FIELD_TERMINATORS;
           LOG_WARN("escaped str should be a character", K(ret), K(node->children_[0]->str_value_));
@@ -4843,7 +4847,7 @@ int ObSelectResolver::resolve_into_line_node(const ParseNode *list_node, ObSelec
         ret = OB_ERR_UNEXPECTED;
       } else if (T_LINE_TERMINATED_STR == str_node->type_) {
         if (OB_FAIL(resolve_into_const_node(str_node->children_[0], into_item.line_str_))) {
-          LOG_WARN("resolve into outfile filed str", K(ret));
+          LOG_WARN("resolve into outfile field str", K(ret));
         }
       } else {
         // escape
@@ -4853,6 +4857,81 @@ int ObSelectResolver::resolve_into_line_node(const ParseNode *list_node, ObSelec
   return ret;
 }
 
+int ObSelectResolver::resolve_into_file_node(const ParseNode *list_node, ObSelectIntoItem &into_item)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(list_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("list node is null", K(ret));
+  } else {
+    for (int32_t i = 0 ; OB_SUCC(ret) && i < list_node->num_child_; ++i) {
+      ParseNode *node = list_node->children_[i];
+      if (OB_ISNULL(node)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("child of list node is null", K(ret));
+      } else if (T_SINGLE_OPT == node->type_) {
+        into_item.is_single_ = node->value_;
+      } else if (T_MAX_FILE_SIZE == node->type_) {
+        if (OB_FAIL(resolve_max_file_size_node(node, into_item))) {
+          LOG_WARN("failed to resolve max file size", K(ret));
+        }
+      } else {
+        ret = OB_ERR_PARSE_SQL;
+        LOG_WARN("child of into file node has wrong type", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::resolve_max_file_size_node(const ParseNode *file_size_node, ObSelectIntoItem &into_item)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *child = NULL;
+  int64_t parse_int_value = 0;
+  if (OB_ISNULL(file_size_node) || T_MAX_FILE_SIZE != file_size_node->type_
+      || file_size_node->num_child_ != 1 || OB_ISNULL(child = file_size_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected file size node", K(ret));
+  } else if (T_INT == child->type_) {
+    parse_int_value = static_cast<int64_t>(child->value_);
+  } else if (T_VARCHAR == child->type_) {
+    if (OB_FAIL(resolve_varchar_file_size(child, parse_int_value))) {
+      LOG_WARN("failed to resolve varchar value", K(ret));
+    }
+  } else {
+    ret = OB_ERR_PARSE_SQL;
+    LOG_WARN("child of max file size node has wrong type", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(parse_int_value <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("file size value should be positive", K(ret), K(parse_int_value));
+  } else {
+    into_item.max_file_size_ = parse_int_value;
+  }
+  return ret;
+}
+
+int ObSelectResolver::resolve_varchar_file_size(const ParseNode *child, int64_t &parse_int_value) const
+{
+  int ret = OB_SUCCESS;
+  bool valid = false;
+  common::ObSqlString buf;
+  if (OB_ISNULL(child)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("varchar node get unexpected null", K(ret));
+  } else if (OB_FAIL(buf.append(child->str_value_, child->str_len_))) {
+    LOG_WARN("failed to assign child str", K(ret), K(child->str_value_), K(child->str_len_));
+  } else {
+    parse_int_value = common::ObConfigCapacityParser::get(buf.ptr(), valid, false, true);
+    if (!valid) {
+      ret = OB_ERR_PARSE_SQL;
+      LOG_WARN("failed to parse file size varchar value to int", K(ret), K(buf));
+    }
+  }
+  return ret;
+}
 int ObSelectResolver::resolve_into_clause(const ParseNode *node)
 {
   int ret = OB_SUCCESS;
@@ -4896,12 +4975,21 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
           }
         }
         if (OB_SUCC(ret) && NULL !=  node->children_[2]) { //field
-          if (OB_FAIL(resolve_into_filed_node(node->children_[2], *into_item))) {
-            LOG_WARN("reosolve into filed node failed", K(ret));
+          if (OB_FAIL(resolve_into_field_node(node->children_[2], *into_item))) {
+            LOG_WARN("reosolve into field node failed", K(ret));
           }
         }
         if (OB_SUCC(ret) && NULL != node->children_[3]) { // line
           if (OB_FAIL(resolve_into_line_node(node->children_[3], *into_item))) {
+            LOG_WARN("reosolve into line node failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && NULL != node->children_[4]) { // file: single & max_file_size
+          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support to use file option during updating", K(ret));
+	          LOG_USER_ERROR(OB_NOT_SUPPORTED, "use file option during updating");
+          } else if (OB_FAIL(resolve_into_file_node(node->children_[4], *into_item))) {
             LOG_WARN("reosolve into line node failed", K(ret));
           }
         }

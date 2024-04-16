@@ -24,6 +24,8 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "deps/oblib/src/lib/net/ob_addr.h"
+#include "share/external_table/ob_external_table_file_rpc_processor.h"
+#include "share/external_table/ob_external_table_file_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -139,7 +141,7 @@ int ObExternalTableUtils::resolve_line_number_range(const ObNewRange &range,
 
 int ObExternalTableUtils::convert_external_table_new_range(const ObString &file_url,
                                                            const int64_t file_id,
-                                                           const uint64_t ref_table_id,
+                                                           const uint64_t part_id,
                                                            const ObNewRange &range,
                                                            ObIAllocator &allocator,
                                                            ObNewRange &new_range,
@@ -194,7 +196,7 @@ int ObExternalTableUtils::convert_external_table_new_range(const ObString &file_
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(make_external_table_scan_range(file_url,
                                                file_id,
-                                               ref_table_id,
+                                               part_id,
                                                start_lineno,
                                                end_lineno,
                                                allocator,
@@ -226,7 +228,7 @@ int ObExternalTableUtils::convert_external_table_empty_range(const ObString &fil
 
 int ObExternalTableUtils::make_external_table_scan_range(const common::ObString &file_url,
                                                          const int64_t file_id,
-                                                         const uint64_t ref_table_id,
+                                                         const uint64_t part_id,
                                                          const int64_t first_lineno,
                                                          const int64_t last_lineno,
                                                          common::ObIAllocator &allocator,
@@ -248,9 +250,9 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
     LOG_WARN("fail to alloc memory", K(ret));
   } else {
     obj_start[PARTITION_ID] = ObObj();
-    obj_start[PARTITION_ID].set_uint64(ref_table_id);
+    obj_start[PARTITION_ID].set_uint64(part_id);
     obj_end[PARTITION_ID] = ObObj();
-    obj_end[PARTITION_ID].set_uint64(ref_table_id);
+    obj_end[PARTITION_ID].set_uint64(part_id);
     obj_start[FILE_URL] = ObObj();
     obj_start[FILE_URL].set_varchar(file_url);
     obj_start[FILE_URL].set_collation_type(ObCharset::get_system_collation());
@@ -275,6 +277,7 @@ int ObExternalTableUtils::make_external_table_scan_range(const common::ObString 
 
 int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
                                                     const uint64_t table_id,
+                                                    ObIArray<int64_t> &partition_ids,
                                                     ObIArray<ObNewRange *> &ranges,
                                                     ObIAllocator &range_allocator,
                                                     ObIArray<ObNewRange *> &new_range,
@@ -288,10 +291,10 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
     LOG_WARN("unexpected error", K(ret));
   } else if (OB_FAIL(tmp_ranges.assign(ranges))) {
     LOG_WARN("failed to assign array", K(ret));
-  } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files(tenant_id,
-                                  table_id, is_file_on_disk, range_allocator, file_urls,
+  } else if (OB_FAIL(ObExternalTableFileManager::get_instance().get_external_files_by_part_ids(tenant_id,
+                                  table_id, partition_ids, is_file_on_disk, range_allocator, file_urls,
                                   tmp_ranges.empty() ? NULL : &tmp_ranges))) {
-    LOG_WARN("get external table file error", K(ret));
+    LOG_WARN("get external table file error", K(ret), K(partition_ids));
   } else if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, table_id, all_locations))) {
       LOG_WARN("fail to get external table location", K(ret));
   } else if (is_file_on_disk
@@ -316,7 +319,7 @@ int ObExternalTableUtils::prepare_single_scan_range(const uint64_t tenant_id,
         } else if (OB_FAIL(ObExternalTableUtils::convert_external_table_new_range(
                                                                           file_urls.at(j).file_url_,
                                                                           file_urls.at(j).file_id_,
-                                                                          table_id,
+                                                                          file_urls.at(j).part_id_,
                                                                           *tmp_ranges.at(i),
                                                                           range_allocator,
                                                                           *range,
@@ -450,6 +453,217 @@ int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObEx
       i--;
     }
   }
+  return ret;
+}
+
+int ObExternalTableUtils::collect_local_files_on_servers(
+    const uint64_t tenant_id,
+    const ObString &location,
+    const ObString &pattern,
+    const ObExprRegexpSessionVariables &regexp_vars,
+    ObIArray<ObAddr> &all_servers,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes,
+    ObSqlString &partition_path,
+    ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAddr, 8> target_servers;
+  ObArray<ObString> server_ip_port;
+
+  bool is_absolute_path = false;
+  const int64_t PREFIX_LEN = STRLEN(OB_FILE_PREFIX);
+  if (location.length() <= PREFIX_LEN) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid location", K(ret), K(location));
+  } else {
+    is_absolute_path = ('/' == location.ptr()[PREFIX_LEN]);
+  }
+
+  struct Functor {
+    bool operator()(const ObAddr &l, const ObAddr &r) {
+      return l < r;
+    }
+  };
+
+  if (OB_SUCC(ret)) {
+    if (is_absolute_path) {
+      Functor functor;
+      std::sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
+                functor);
+      ObAddr pre_addr;
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); i++) {
+        ObAddr &cur_addr = all_servers.at(i);
+        if (!cur_addr.is_equal_except_port(pre_addr)) {
+          pre_addr = cur_addr;
+          OZ(target_servers.push_back(cur_addr));
+        }
+      }
+    } else {
+      OZ (target_servers.assign(all_servers));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObAsyncRpcTaskWaitContext<ObRpcAsyncLoadExternalTableFileCallBack> context;
+    int64_t send_task_count = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_servers.count(); i++) {
+      const int64_t ip_len = 64;
+      char *ip_port_buffer = nullptr;
+      if (OB_ISNULL(ip_port_buffer = (char*)(allocator.alloc(ip_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate ip memory", K(ret));
+      }
+      OZ (target_servers.at(i).ip_port_to_string(ip_port_buffer, ip_len));
+      OZ (server_ip_port.push_back(ObString(ip_port_buffer)));
+    }
+    OZ (context.init());
+    OZ (context.get_cb_list().reserve(target_servers.count()));
+    for (int64_t i = 0; OB_SUCC(ret) && i < target_servers.count(); i++) {
+      const int64_t timeout = 10 * 1000000L; //10s
+      ObRpcAsyncLoadExternalTableFileCallBack* async_cb = nullptr;
+      ObLoadExternalFileListReq req;
+      req.location_ = location;
+      req.pattern_ = pattern;
+      req.regexp_vars_ = regexp_vars;
+
+      if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncLoadExternalTableFileCallBack, (&allocator), (&context)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate async cb memory", K(ret));
+      }
+      OZ (context.get_cb_list().push_back(async_cb));
+      OZ (GCTX.external_table_proxy_->to(target_servers.at(i))
+                                        .by(tenant_id)
+                                        .timeout(timeout)
+                                        .load_external_file_list(req, async_cb));
+      if (OB_SUCC(ret)) {
+        send_task_count++;
+      }
+    }
+
+    context.set_task_count(send_task_count);
+
+    do {
+      int temp_ret = context.wait_executing_tasks();
+      if (OB_SUCCESS != temp_ret) {
+        LOG_WARN("fail to wait executing task", K(temp_ret));
+        if (OB_SUCC(ret)) {
+          ret = temp_ret;
+        }
+      }
+    } while(0);
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < context.get_cb_list().count(); i++) {
+      if (OB_FAIL(context.get_cb_list().at(i)->get_task_resp().rcode_.rcode_)) {
+        LOG_WARN("async load files process failed", K(ret));
+      } else {
+        const ObIArray<ObString> &resp_array = context.get_cb_list().at(i)->get_task_resp().file_urls_;
+        OZ (append(file_sizes, context.get_cb_list().at(i)->get_task_resp().file_sizes_));
+        for (int64_t j = 0; OB_SUCC(ret) && j < resp_array.count(); j++) {
+          ObSqlString tmp_file_url;
+          ObString file_url;
+          OZ (tmp_file_url.append(server_ip_port.at(i)));
+          OZ (tmp_file_url.append("%"));
+          OZ (tmp_file_url.append(partition_path.string()));
+          OZ (tmp_file_url.append(resp_array.at(j)));
+          OZ (ob_write_string(allocator, tmp_file_url.string(), file_url));
+          OZ (file_urls.push_back(file_url));
+        }
+      }
+    }
+
+    for (int64_t i = 0; i < context.get_cb_list().count(); i++) {
+      context.get_cb_list().at(i)->~ObRpcAsyncLoadExternalTableFileCallBack();
+    }
+  }
+  LOG_TRACE("update external table file list", K(ret), K(file_urls));
+  return ret;
+}
+
+int ObExternalTableUtils::sort_external_files(ObIArray<ObString> &file_urls,
+                                              ObIArray<int64_t> &file_sizes)
+{
+  int ret = OB_SUCCESS;
+  const int64_t count = file_urls.count();
+  ObSEArray<int64_t, 8> tmp_file_sizes;
+  hash::ObHashMap<ObString, int64_t> file_map;
+  if (0 == count) {
+    /* do nothing */
+  } else if (OB_UNLIKELY(count != file_sizes.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("array size error", K(ret));
+  } else if (OB_FAIL(file_map.create(count, "ExtFileMap", "ExtFileMap"))) {
+      LOG_WARN("fail to init hashmap", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+      if (OB_FAIL(file_map.set_refactored(file_urls.at(i), file_sizes.at(i)))) {
+        LOG_WARN("failed to set refactored to file_map", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      std::sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
+        int64_t file_size = 0;
+        if (OB_FAIL(file_map.get_refactored(file_urls.at(i), file_size))) {
+          if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
+            ret = OB_ERR_UNEXPECTED;
+          }
+          LOG_WARN("failed to get key meta", K(ret));
+        } else if (OB_FAIL(tmp_file_sizes.push_back(file_size))) {
+          LOG_WARN("failed to push back into tmp_file_sizes", K(ret));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(file_sizes.assign(tmp_file_sizes))) {
+        LOG_WARN("failed to assign file_sizes", K(ret));
+      } else if (OB_FAIL(file_map.destroy())) {
+        LOG_WARN("failed to destory file_map");
+      }
+    }
+  }
+  LOG_TRACE("after filter external table files", K(ret), K(file_urls));
+  return ret;
+}
+
+int ObExternalTableUtils::collect_external_file_list(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const ObString &location,
+    const ObString &access_info,
+    const ObString &pattern,
+    const sql::ObExprRegexpSessionVariables &regexp_vars,
+    ObIAllocator &allocator,
+    ObSqlString &full_path,
+    ObIArray<ObString> &file_urls,
+    ObIArray<int64_t> &file_sizes)
+{
+  int ret = OB_SUCCESS;
+
+  ObSEArray<ObAddr, 8> all_servers;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  OZ (GCTX.location_service_->external_table_get(tenant_id, table_id, all_servers));
+  const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(location);
+  if (OB_SUCC(ret) && full_path.length() > 0
+          && *(full_path.ptr() + full_path.length() - 1) != '/' ) {
+    OZ (full_path.append("/"));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_local_storage) {
+    OZ (collect_local_files_on_servers(tenant_id, location, pattern, regexp_vars, all_servers, file_urls, file_sizes, full_path, allocator));
+  } else {
+    OZ (ObExternalTableFileManager::get_instance().get_external_file_list_on_device(
+          location, pattern, regexp_vars, file_urls, file_sizes, access_info, allocator));
+    for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
+      ObSqlString tmp_file_url;
+      ObString &file_url = file_urls.at(i);
+      OZ (tmp_file_url.append(full_path.string()));
+      OZ (tmp_file_url.append(file_urls.at(i)));
+      OZ (ob_write_string(allocator, tmp_file_url.string(), file_url));
+    }
+  }
+
+  OZ (ObExternalTableUtils::sort_external_files(file_urls, file_sizes));
   return ret;
 }
 
