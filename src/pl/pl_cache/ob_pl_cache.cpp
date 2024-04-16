@@ -271,6 +271,7 @@ void ObPLObjectKey::reset()
   mode_ = ObjectMode::NORMAL;
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
+  sys_vars_str_.reset();
 }
 
 int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &other)
@@ -278,6 +279,8 @@ int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &othe
   int ret = OB_SUCCESS;
   const ObPLObjectKey &key = static_cast<const ObPLObjectKey&>(other);
   if (OB_FAIL(common::ob_write_string(allocator, key.name_, name_))) {
+    LOG_WARN("failed to deep copy name", K(ret), K(name_));
+  } else if (OB_FAIL(common::ob_write_string(allocator, key.sys_vars_str_, sys_vars_str_))) {
     LOG_WARN("failed to deep copy name", K(ret), K(name_));
   } else {
     db_id_ = key.db_id_;
@@ -294,6 +297,9 @@ void ObPLObjectKey::destory(common::ObIAllocator &allocator)
   if (nullptr != name_.ptr()) {
     allocator.free(const_cast<char *>(name_.ptr()));
   }
+  if (nullptr != sys_vars_str_.ptr()) {
+    allocator.free(const_cast<char *>(sys_vars_str_.ptr()));
+  }
 }
 
 uint64_t ObPLObjectKey::hash() const
@@ -304,6 +310,7 @@ uint64_t ObPLObjectKey::hash() const
   hash_ret = murmurhash(&mode_, sizeof(mode_), hash_ret);
   hash_ret = name_.hash(hash_ret);
   hash_ret = murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
+  hash_ret = sys_vars_str_.hash(hash_ret);
   return hash_ret;
 }
 
@@ -315,7 +322,8 @@ bool ObPLObjectKey::is_equal(const ObILibCacheKey &other) const
                  sessid_ == key.sessid_ &&
                  mode_ == key.mode_ &&
                  name_ == key.name_ &&
-                 namespace_ == key.namespace_;
+                 namespace_ == key.namespace_ &&
+                 sys_vars_str_ == key.sys_vars_str_;
   return cmp_ret;
 }
 
