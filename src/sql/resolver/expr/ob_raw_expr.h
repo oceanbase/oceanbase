@@ -2243,6 +2243,10 @@ public:
   {
     column_flags_ = column_flags;
   }
+  void set_table_part_key_column()
+  {
+    column_flags_ |= TABLE_PART_KEY_COLUMN_FLAG;
+  }
   inline uint64_t get_column_flags() const
   {
     return column_flags_;
