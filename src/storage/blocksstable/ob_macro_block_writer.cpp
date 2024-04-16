@@ -1167,7 +1167,7 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc)
     micro_block_desc.block_offset_ = macro_blocks_[current_index_].get_data_size();
     if (OB_FAIL(builder_->append_row(micro_block_desc, macro_blocks_[current_index_]))) {
       if (OB_BUF_NOT_ENOUGH != ret) {
-        STORAGE_LOG(ERROR, "Fail to write micro block, ", K(ret), K(micro_block_desc));
+        STORAGE_LOG(WARN, "Fail to write micro block, ", K(ret), K(micro_block_desc));
       } else if (OB_FAIL(try_switch_macro_block())) {
         STORAGE_LOG(WARN, "Fail to switch macro block, ", K(ret));
       } else if (OB_FAIL(alloc_block())) {
