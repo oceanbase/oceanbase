@@ -11381,6 +11381,9 @@ int ObTransformUtils::check_correlated_where_expr_can_pullup(
       // do nothing
     } else if (has_special_expr) {
       can_pullup = false;
+    } else if (subquery.is_scala_group_by()) {
+      // for scalar GROUP BY, pull-up cannot be performed when there are correlated conditions in WHERE clause.
+      can_pullup = false;
     } else if (!is_valid) {
       //No group by and window function
     } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, column_exprs))) {
