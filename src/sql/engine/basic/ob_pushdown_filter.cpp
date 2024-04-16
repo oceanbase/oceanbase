@@ -259,7 +259,8 @@ int ObPushdownWhiteFilterNode::get_filter_val_meta(common::ObObjMeta &obj_meta) 
       is_datum_column_found = true;
       obj_meta = expr_->args_[i]->obj_meta_;
       if (obj_meta.is_decimal_int()) {
-        obj_meta.set_stored_precision(expr_->args_[i]->datum_meta_.precision_);
+        obj_meta.set_stored_precision(MIN(OB_MAX_DECIMAL_PRECISION,
+                                          expr_->args_[i]->datum_meta_.precision_));
       }
     }
   }
