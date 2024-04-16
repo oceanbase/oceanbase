@@ -270,27 +270,26 @@ int ObTabletCreateMdsHelper::check_create_new_tablets(const obrpc::ObBatchCreate
   if (OB_FAIL(ret)) {
   } else if (skip_check) {
   } else if (is_truncate) {
-    bool need_wait = false;
-    const int64_t timeout = THIS_WORKER.get_timeout_remain();
+    // for leader, we should use timeout from ddl request
+    // for follower, quick failure to release replay thread and other resource like lock
+    const int64_t timeout = is_replay ? 0 : THIS_WORKER.get_timeout_remain();
     const int64_t start_time = ObTimeUtility::fast_current_time();
     do {
-      if (need_wait) {
-        ob_usleep(1000 * 1000L); // sleep 1s
-      }
-      need_wait = false;
-      if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("too many partitions, retry timeout", K(ret));
-        break;
-      } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(),
-                  is_replay ? ObTabletCreateThrottlingLevel::FREE : ObTabletCreateThrottlingLevel::SOFT))) {
-        if (OB_TOO_MANY_PARTITIONS_ERROR != ret) {
-          LOG_WARN("fail to check create new tablets", K(ret));
+      ret = check_create_new_tablets(arg.get_tablet_count(),
+                  is_replay ? ObTabletCreateThrottlingLevel::FREE : ObTabletCreateThrottlingLevel::SOFT);
+      if (OB_SUCC(ret)) {
+        // do nothing
+      } else if (OB_UNLIKELY(OB_TOO_MANY_PARTITIONS_ERROR == ret)) {
+        if (ObTimeUtility::fast_current_time() - start_time >= timeout) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("too many partitions, retry timeout", K(ret));
         } else {
-          need_wait = true;
+          ob_usleep(1000 * 1000L); // sleep 1s
         }
+      } else {
+        LOG_WARN("fail to check create new tablets", K(ret));
       }
-    } while (need_wait);
+    } while (OB_TOO_MANY_PARTITIONS_ERROR == ret);
   } else if (OB_FAIL(check_create_new_tablets(arg.get_tablet_count(),
               is_replay ? ObTabletCreateThrottlingLevel::FREE : ObTabletCreateThrottlingLevel::STRICT))) {
     LOG_WARN("fail to create new tablets", K(ret));
