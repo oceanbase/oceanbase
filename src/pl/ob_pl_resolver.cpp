@@ -9903,6 +9903,22 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
   return ret;
 }
 
+int ObPLResolver::set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr)) {
+    if (expr->is_udf_expr()) {
+      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
+      udf_expr->set_loc(line_number);
+    } else {
+      for (int64_t i = 0; i < expr->get_children_count(); ++i) {
+        OZ (SMART_CALL(set_udf_expr_line_number(expr->get_param_expr(i), line_number)));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_expr(const ParseNode *node,
                                ObPLCompileUnitAST &unit_ast,
                                ObRawExpr *&expr,
@@ -9957,11 +9973,10 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   if (OB_SUCC(ret) && lib::is_oracle_mode()) {
     OZ (add_pl_integer_checker_expr(expr_factory_, expr, need_replace));
   }
-  if (OB_SUCC(ret) && expr->is_udf_expr()) {
-    ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
-    udf_expr->set_loc(line_number);
+  if (OB_SUCC(ret)) {
+    OZ (set_udf_expr_line_number(expr, line_number));
   }
-  if (is_mysql_mode()) {
+  if (OB_SUCC(ret) && is_mysql_mode()) {
     ObRawExprWrapEnumSet enum_set_wrapper(expr_factory_, &resolve_ctx_.session_info_);
     OZ (enum_set_wrapper.analyze_expr(expr));
   }

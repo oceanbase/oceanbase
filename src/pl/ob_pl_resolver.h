@@ -756,6 +756,7 @@ private:
   int set_cm_warn_on_fail(ObRawExpr *&expr);
   int analyze_expr_type(ObRawExpr *&expr,
                         ObPLCompileUnitAST &unit_ast);
+  int set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number);
   int resolve_expr(const ParseNode *node, ObPLCompileUnitAST &unit_ast,
                    sql::ObRawExpr *&expr, uint64_t line_number = 0, /* where this expr called */
                    bool need_add = true, const ObPLDataType *expected_type = NULL,
