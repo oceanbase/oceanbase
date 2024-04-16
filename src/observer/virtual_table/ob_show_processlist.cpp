@@ -504,7 +504,7 @@ int ObShowProcesslist::FillScanner::init(ObIAllocator *allocator,
     cur_row_ = cur_row;
     my_session_ = session_info;
     schema_guard_ = schema_guard;
-
+    scanner_->set_tenant_id(session_info->get_effective_tenant_id());
   }
   return ret;
 }
