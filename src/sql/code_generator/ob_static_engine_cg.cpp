@@ -7968,6 +7968,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
           !var_init_expr->has_flag(CNT_ONETIME) &&
           !var_init_expr->has_flag(CNT_ALIAS) &&
           !var_init_expr->has_flag(CNT_DYNAMIC_PARAM) &&
+          !var_init_expr->has_flag(CNT_DYNAMIC_USER_VARIABLE) &&
           !ObOptimizerUtil::has_psedu_column(*var_init_expr) &&
           !ObOptimizerUtil::has_hierarchical_expr(*var_init_expr) &&
           var_init_expr->get_relation_ids().is_empty()) {
