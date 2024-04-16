@@ -512,9 +512,6 @@ int ObTenantFreezer::check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx)
       if (OB_TMP_FAIL(do_minor_freeze_(ctx))) {
         LOG_WARN("[TenantFreezer] fail to do minor freeze", K(tmp_ret));
       }
-      if (OB_TMP_FAIL(post_tx_data_freeze_request_())) {
-        LOG_WARN("[TenantFreezer] fail to do tx data self freeze", KR(tmp_ret));
-      }
     }
   }
   return ret;

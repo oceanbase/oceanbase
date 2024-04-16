@@ -60,6 +60,7 @@ public:
   }
 
   bool is_valid() const { return tx_table_guard_.is_valid(); }
+  bool is_src_valid() const { return src_ls_handle_.is_valid() && src_tx_table_guard_.is_valid(); }
 
   int check_row_locked(
       const transaction::ObTransID &read_tx_id,

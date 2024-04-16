@@ -17,6 +17,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/blocksstable/ob_datum_row.h"
 #include "ob_lob_meta.h"
+#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {
@@ -25,6 +26,16 @@ using namespace common;
 using namespace transaction;
 namespace storage
 {
+
+ObLobAccessParam::~ObLobAccessParam()
+{
+  if (OB_NOT_NULL(dml_base_param_)) {
+    if (OB_NOT_NULL(dml_base_param_->store_ctx_guard_)) {
+      dml_base_param_->store_ctx_guard_->~ObStoreCtxGuard();
+    }
+    dml_base_param_->~ObDMLBaseParam();
+  }
+}
 
 ObCollationType ObLobCharsetUtil::get_collation_type(ObObjType type, ObCollationType ori_coll_type)
 {

@@ -29,6 +29,7 @@
 #include "storage/checkpoint/ob_freeze_checkpoint.h"
 #include "storage/compaction/ob_medium_compaction_mgr.h"
 #include "storage/tx_storage/ob_ls_handle.h" //ObLSHandle
+#include "storage/blocksstable/ob_sstable.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 
 namespace oceanbase
@@ -83,6 +84,34 @@ struct ObMtStat
   int64_t push_table_into_gc_queue_time_;
   int64_t last_print_time_;
   int64_t row_size_;
+};
+
+// report the dml stat to ObOptStatMonitorManager
+struct ObReportedDmlStat
+{
+  static constexpr int64_t REPORT_INTERVAL = 1_s;
+  ObReportedDmlStat() { reset(); }
+  ~ObReportedDmlStat() = default;
+  void reset() {
+    last_report_time_ = 0;
+    insert_row_count_ = 0;
+    update_row_count_ = 0;
+    delete_row_count_ = 0;
+    table_id_ = OB_INVALID_ID;
+    is_reporting_ = false;
+  }
+
+  int64_t last_report_time_;
+  int64_t insert_row_count_;
+  int64_t update_row_count_;
+  int64_t delete_row_count_;
+  // record the table_id for report the residual dml stat when memtable freeze,
+  // in which case the table_id can't be acquired
+  int64_t table_id_;
+  bool is_reporting_;
+
+  TO_STRING_KV(K_(last_report_time), K_(insert_row_count),
+      K_(update_row_count), K_(delete_row_count), K_(table_id), K_(is_reporting));
 };
 
 struct ObMvccRowAndWriteResult
@@ -290,7 +319,8 @@ public:
       storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const storage::ObStoreRow &row,
-      const share::ObEncryptMeta *encrypt_meta);
+      const share::ObEncryptMeta *encrypt_meta,
+      const bool check_exist);
   virtual int set(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
@@ -313,6 +343,13 @@ public:
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       ObRowsInfo &rows_info);
+  int check_rows_locked_on_ddl_merge_sstable(
+      blocksstable::ObSSTable *sstable,
+      const bool check_exist,
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      ObRowsInfo &rows_info);
+
 
   // lock is used to lock the row(s)
   // ctx is the locker tx's context, we need the tx_id, version and scn to do the concurrent control(mvcc_write)
@@ -627,9 +664,9 @@ private:
 	    storage::ObTableAccessContext &context,
 	    const ObMemtableKey *key,
 	    const ObTxNodeArg &arg,
+      const bool check_exist,
 	    bool &is_new_locked,
-      ObMvccRowAndWriteResult *mvcc_row = nullptr,
-      bool check_exist = false);
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
@@ -692,9 +729,9 @@ private:
       const storage::ObStoreRow *old_row,
       const common::ObIArray<int64_t> *update_idx,
       const ObMemtableKey &mtk,
+      const bool check_exist,
       storage::ObTableAccessContext &context,
-      ObMvccRowAndWriteResult *mvcc_row = nullptr,
-      bool check_exist = false);
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
   int multi_set_(
       const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,
@@ -725,6 +762,8 @@ private:
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);
+  int try_report_dml_stat_(const int64_t table_id);
+  int report_residual_dml_stat_();
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMemtable);
@@ -738,6 +777,7 @@ private:
   ObQueryEngine query_engine_;
   ObMvccEngine mvcc_engine_;
   mutable ObMtStat mt_stat_;
+  mutable ObReportedDmlStat reported_dml_stat_;
   int64_t max_schema_version_;  // to record the max schema version of memtable & schema_change_clog
   int64_t max_data_schema_version_;  // to record the max schema version of write data
   int64_t pending_cb_cnt_; // number of transactions have to sync log

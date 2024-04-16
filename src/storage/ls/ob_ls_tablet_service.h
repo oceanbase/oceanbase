@@ -748,6 +748,7 @@ private:
       ObStoreRow &store_row,
       const bool need_copy_cells);
   static int insert_row_to_tablet(
+      const bool check_exist,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       ObStoreRow &tbl_row);

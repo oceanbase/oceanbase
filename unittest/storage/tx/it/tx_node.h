@@ -35,6 +35,8 @@
 #include "../mock_utils/basic_fake_define.h"
 #include "../mock_utils/ob_fake_tx_rpc.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
+#include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "storage/memtable/ob_lock_wait_mgr.h"
 
 namespace oceanbase {
 using namespace transaction;
@@ -305,6 +307,8 @@ public:
   ObTxNodeRole role_;
   ObFakeTxLogAdapter* fake_tx_log_adapter_;
   ObTabletMemtableMgr fake_memtable_mgr_;
+  ObOptStatMonitorManager fake_opt_stat_mgr_;
+  ObLockWaitMgr fake_lock_wait_mgr_;
   storage::ObLS mock_ls_; // TODO mock required member on LS
   common::hash::ObHashSet<int16_t> drop_msg_type_set_;
   ObLSMap fake_ls_map_;

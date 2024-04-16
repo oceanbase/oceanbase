@@ -30,6 +30,7 @@
 #include "storage/tx/ob_trans_event.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/access/ob_rows_info.h"
 
 namespace oceanbase
 {
@@ -737,7 +738,11 @@ int ObMvccRow::remove_callback(ObMvccRowCallback &cb)
         tx_scheduler = static_cast<transaction::ObPartTransCtx*>(tx_ctx)->get_scheduler();
       }
       MTL(ObLockWaitMgr*)->transform_row_lock_to_tx_lock(cb.get_tablet_id(), *cb.get_key(), ObTransID(node->tx_id_), tx_scheduler);
-      MTL(ObLockWaitMgr*)->reset_hash_holder(cb.get_tablet_id(), *cb.get_key(), ObTransID(node->tx_id_));
+      if (cb.is_non_unique_local_index_cb()) {
+        // row lock holder is no need to set for non-unique local index, so the reset can be skipped
+      } else {
+        MTL(ObLockWaitMgr*)->reset_hash_holder(cb.get_tablet_id(), *cb.get_key(), ObTransID(node->tx_id_));
+      }
     }
   }
   return ret;
@@ -776,6 +781,7 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   bool &need_insert = res.need_insert_;
   bool &is_new_locked = res.is_new_locked_;
   ObStoreRowLockState &lock_state = res.lock_state_;
+  ObExistFlag &exist_flag = lock_state.exist_flag_;
   bool need_retry = true;
 
   while (OB_SUCC(ret) && need_retry) {
@@ -784,6 +790,7 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
       can_insert = true;
       need_insert = true;
       is_new_locked = true;
+      exist_flag = ObExistFlag::UNKNOWN;
       need_retry = false;
     } else {
       // Tip 1: The newest node is either delayed cleanout or not depending on
@@ -811,6 +818,8 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         can_insert = true;
         need_insert = true;
         is_new_locked = true;
+        exist_flag =
+          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
         need_retry = false;
       } else if (iter->is_aborted()) {
         // Case 3: the newest node is aborted and the node must be unlinked,
@@ -829,12 +838,16 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
           can_insert = true;
           need_insert = false;
           is_new_locked = false;
+          exist_flag =
+            extract_exist_flag_from_dml_flag(iter->get_dml_flag());
           need_retry = false;
         } else {
           // Case 4.2: the writer node is not lock node, so we do not insert into it
           can_insert = true;
           need_insert = true;
           is_new_locked = false;
+          exist_flag =
+            extract_exist_flag_from_dml_flag(iter->get_dml_flag());
           need_retry = false;
         }
       } else {
@@ -851,6 +864,8 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.mvcc_row_ = this;
         lock_state.trans_scn_ = iter->get_scn();
+        exist_flag =
+          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
       }
     }
   }
@@ -970,6 +985,18 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
       // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
       (void)mvcc_undo();
     }
+  } else if (node.get_dml_flag() == blocksstable::ObDmlFlag::DF_INSERT &&
+             res.lock_state_.row_exist()) {
+    // Case 4. successfully locked while insert into exist row
+    ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+    TRANS_LOG(WARN, "duplicated primary key found", K(ret), K(ctx), K(node),
+              K(*this), K(res));
+    if (!res.has_insert()) {
+      // It may not inserted due to primary key duplicated
+    } else {
+      // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
+      (void)mvcc_undo();
+    }
   }
   return ret;
 }
@@ -989,13 +1016,16 @@ int ObMvccRow::mvcc_write(ObStoreCtx &ctx,
  * return:
  * - OB_SUCCESS
  */
-int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_state)
+int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx,
+                                ObStoreRowLockState &lock_state,
+                                ObRowState &row_state)
 {
   int ret = OB_SUCCESS;
   ObRowLatchGuard guard(latch_);
-
-  auto iter = ATOMIC_LOAD(&list_head_);
-  ObTxTableGuards &tx_table_guards = ctx.get_tx_table_guards();
+  transaction::ObTxSnapshot &snapshot = ctx.snapshot_;
+  const SCN snapshot_version = snapshot.version_;
+  const ObTransID checker_tx_id = ctx.get_tx_id();
+  ObMvccTransNode *iter = ATOMIC_LOAD(&list_head_);
   bool need_retry = true;
 
   while (OB_SUCC(ret) && need_retry) {
@@ -1004,21 +1034,24 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
       lock_state.is_locked_ = false;
       lock_state.trans_version_.set_min();
       lock_state.lock_trans_id_.reset();
+      lock_state.exist_flag_ = ObExistFlag::UNKNOWN;
       need_retry = false;
     } else {
       auto data_tx_id = iter->tx_id_;
       if (!(iter->is_committed() || iter->is_aborted())
           && iter->is_delayed_cleanout()
-          && OB_FAIL(tx_table_guards.cleanout_tx_node(data_tx_id,
-                                                *this,
-                                                *iter,
-                                                false  /*need_row_latch*/))) {
+          && OB_FAIL(ctx.get_tx_table_guards().cleanout_tx_node(data_tx_id,
+                                                                *this,
+                                                                *iter,
+                                                                false  /*need_row_latch*/))) {
         TRANS_LOG(WARN, "cleanout tx state failed", K(ret), K(*this));
       } else if (iter->is_committed() || iter->is_elr()) {
         // Case 2: the newest node is decided, so node currently is not be locked
         lock_state.is_locked_ = false;
         lock_state.trans_version_ = get_max_trans_version();
         lock_state.lock_trans_id_.reset();
+        lock_state.exist_flag_ =
+          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
         need_retry = false;
       } else if (iter->is_aborted()) {
         iter = iter->prev_;
@@ -1031,12 +1064,27 @@ int ObMvccRow::check_row_locked(ObMvccAccessCtx &ctx, ObStoreRowLockState &lock_
         lock_state.lock_dml_flag_ = iter->get_dml_flag();
         lock_state.is_delayed_cleanout_ = iter->is_delayed_cleanout();
         lock_state.trans_scn_ = iter->get_scn();
+        lock_state.exist_flag_ =
+          extract_exist_flag_from_dml_flag(iter->get_dml_flag());
         need_retry = false;
       }
     }
   }
   if (OB_SUCC(ret)) {
     lock_state.mvcc_row_ = this;
+
+    // just for temporary enable the batch insert, so the following code will be
+    // optimized in the future
+    if (!lock_state.is_lock_decided()) {
+      // row is not exist
+    } else if (lock_state.is_locked(checker_tx_id) ||
+               lock_state.trans_version_ > snapshot_version) {
+      // row is locked or tsc
+    } else {
+      if (OB_NOT_NULL(iter)) {
+        row_state.row_dml_flag_ = iter->get_dml_flag();
+      }
+    }
   }
   return ret;
 }

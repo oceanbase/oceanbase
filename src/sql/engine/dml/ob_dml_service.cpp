@@ -1184,6 +1184,7 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
                                  transaction::ObTxReadSnapshot &snapshot,
                                  const int16_t write_branch_id,
                                  ObIAllocator &das_alloc,
+                                 storage::ObStoreCtxGuard &store_ctx_gurad,
                                  storage::ObDMLBaseParam &dml_param)
 {
   int ret = OB_SUCCESS;
@@ -1200,6 +1201,7 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   dml_param.dml_allocator_ = &das_alloc;
   dml_param.snapshot_ = snapshot;
   dml_param.branch_id_ = write_branch_id;
+  dml_param.store_ctx_guard_ = &store_ctx_gurad;
   if (base_ctdef.is_batch_stmt_) {
     dml_param.write_flag_.set_is_dml_batch_opt();
   }

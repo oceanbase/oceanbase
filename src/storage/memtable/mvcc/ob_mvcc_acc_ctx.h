@@ -176,6 +176,14 @@ public:
     tx_table_guards_.src_tx_table_guard_ = tx_table_guard;
     tx_table_guards_.src_ls_handle_ = src_ls_handle;
   }
+  void set_write_flag(const concurrent_control::ObWriteFlag write_flag)
+  {
+    write_flag_ = write_flag;
+  }
+  void set_abs_lock_timeout_ts(const int64_t abs_lock_timeout)
+  {
+    abs_lock_timeout_ts_ = abs_lock_timeout;
+  }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
                    const transaction::ObTransID &tx_id)

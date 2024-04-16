@@ -157,10 +157,20 @@ int ObDASInsertOp::insert_row_with_fetch()
   ObAccessService *as = MTL(ObAccessService *);
   ObDMLBaseParam dml_param;
   ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
+  storage::ObStoreCtxGuard store_ctx_guard;
+
   if (ins_ctdef_->table_rowkey_types_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_rowkey_types is invalid", K(ret));
-  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, write_branch_id_, op_alloc_, dml_param))) {
+  } else if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
+                                                   ins_rtdef_->timeout_ts_,
+                                                   *trans_desc_,
+                                                   *snapshot_,
+                                                   write_branch_id_,
+                                                   store_ctx_guard))) {
+    LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
+  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_,
+      *snapshot_, write_branch_id_, op_alloc_, store_ctx_guard, dml_param))) {
     LOG_WARN("init dml param failed", K(ret), KPC_(ins_ctdef), KPC_(ins_rtdef));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -226,6 +236,7 @@ int ObDASInsertOp::insert_row_with_fetch()
                                                     *snapshot_,
                                                     write_branch_id_,
                                                     op_alloc_,
+                                                    store_ctx_guard,
                                                     dml_param))) {
       LOG_WARN("init index dml param failed", K(ret), KPC(index_ins_ctdef), KPC(index_ins_rtdef));
     }

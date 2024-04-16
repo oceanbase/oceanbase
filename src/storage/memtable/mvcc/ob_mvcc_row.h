@@ -21,11 +21,14 @@
 #include "storage/ob_i_store.h"
 #include "ob_row_latch.h"
 #include "storage/memtable/ob_memtable_data.h"
-#include "storage/ob_i_store.h"
 #include "storage/memtable/mvcc/ob_mvcc_define.h"
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObRowState;
+}
 namespace memtable
 {
 
@@ -295,7 +298,9 @@ struct ObMvccRow
   // key is the row key for lock
   // ctx is the write txn's context, currently the tx_table is the only required field
   // lock_state is the check's result
-  int check_row_locked(ObMvccAccessCtx &ctx, storage::ObStoreRowLockState &lock_state);
+  int check_row_locked(ObMvccAccessCtx &ctx,
+                       storage::ObStoreRowLockState &lock_state,
+                       storage::ObRowState &row_state);
 
   // insert_trans_node insert the tx node for replay
   // ctx is the write txn's context

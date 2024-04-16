@@ -67,11 +67,8 @@ struct ObLobAccessParam {
       inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE), spec_lob_id_(),
       remote_query_ctx_(nullptr)
   {}
-  ~ObLobAccessParam() {
-    if (OB_NOT_NULL(dml_base_param_)) {
-      dml_base_param_->~ObDMLBaseParam();
-    }
-  }
+  ~ObLobAccessParam();
+
 public:
 
   bool is_full_read() const { return op_type_ == ObLobDataOutRowCtx::OpType::SQL && 0 == offset_ && (len_ == byte_size_ || INT64_MAX == len_ || UINT64_MAX == len_); }

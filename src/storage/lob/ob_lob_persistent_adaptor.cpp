@@ -381,12 +381,16 @@ int ObPersistentLobApator::prepare_lob_meta_dml(
   int ret = OB_SUCCESS;
   if (param.dml_base_param_ == nullptr) {
     share::schema::ObTableDMLParam* table_dml_param = nullptr;
-    void *buf = param.allocator_->alloc(sizeof(ObDMLBaseParam));
+    ObStoreCtxGuard *store_ctx_guard = nullptr;
+    void *buf = param.allocator_->alloc(sizeof(ObDMLBaseParam) + sizeof(ObStoreCtxGuard));
+
     if (OB_ISNULL(buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc dml base param", K(ret));
     } else {
       param.dml_base_param_ = new(buf)ObDMLBaseParam();
+      store_ctx_guard = new((char*)buf + sizeof(ObDMLBaseParam)) ObStoreCtxGuard();
+
       buf = param.allocator_->alloc(sizeof(share::schema::ObTableDMLParam));
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -397,7 +401,8 @@ int ObPersistentLobApator::prepare_lob_meta_dml(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_lob_meta_table_dml(param, tenant_id, table_dml_param,
-                                                *param.dml_base_param_, param.column_ids_, data_tablet, lob_meta_tablet))) {
+                                                *param.dml_base_param_, store_ctx_guard,
+                                                param.column_ids_, data_tablet, lob_meta_tablet))) {
       LOG_WARN("failed to build meta schema", K(ret), K(data_tablet), K(lob_meta_tablet));
     }
   } else {
@@ -415,6 +420,19 @@ int ObPersistentLobApator::prepare_lob_meta_dml(
       LOG_WARN("invalid seq no from param.", K(ret), K(param));
     }
   }
+  if (OB_SUCC(ret)) {
+    param.dml_base_param_->store_ctx_guard_->reset();
+    ObAccessService *oas = MTL(ObAccessService *);
+    if (OB_FAIL(oas->get_write_store_ctx_guard(param.ls_id_,
+                                               param.timeout_,
+                                               *param.tx_desc_,
+                                               param.snapshot_,
+                                               0,/*branch_id*/
+                                               *param.dml_base_param_->store_ctx_guard_,
+                                               param.dml_base_param_->spec_seq_no_ ))) {
+      LOG_WARN("fail to get write store tx ctx guard", K(ret), K(param));
+    }
+  }
   return ret;
 }
 
@@ -423,6 +441,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
     const uint64_t tenant_id,
     ObTableDMLParam* dml_param,
     ObDMLBaseParam& dml_base_param,
+    ObStoreCtxGuard *store_ctx_guard,
     ObSEArray<uint64_t, 6>& column_ids,
     const ObTabletHandle& data_tablet,
     const ObTabletHandle& lob_meta_tablet)
@@ -436,8 +455,10 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.encrypt_meta_ = &dml_base_param.encrypt_meta_legacy_;
   dml_base_param.snapshot_ = param.snapshot_;
   dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
+  dml_base_param.store_ctx_guard_ = store_ctx_guard;
   dml_base_param.write_flag_.set_is_insert_up();
   dml_base_param.write_flag_.set_lob_aux();
+
   if (param.seq_no_st_.is_valid()) {
     if (param.used_seq_cnt_ < param.total_seq_cnt_) {
       dml_base_param.spec_seq_no_ = param.seq_no_st_ + param.used_seq_cnt_;

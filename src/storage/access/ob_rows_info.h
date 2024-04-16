@@ -67,7 +67,7 @@ public:
     return is_inited_ && exist_helper_.is_valid() && delete_count_ >= 0
         && rowkeys_.count() >= delete_count_ && OB_NOT_NULL(rows_);
   }
-  OB_INLINE int32_t get_rowkey_cnt() const
+  OB_INLINE int64_t get_rowkey_cnt() const
   {
     return rowkeys_.count();
   }
@@ -169,6 +169,11 @@ public:
   {
     rowkeys_[idx].marked_rowkey_.mark_row_non_existent();
   }
+  inline bool is_row_checked(const int64_t idx) const
+  {
+    const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
+    return marked_rowkey.is_checked();
+  }
   inline bool is_row_skipped(const int64_t idx) const
   {
     const blocksstable::ObMarkedRowkey &marked_rowkey = rowkeys_[idx].marked_rowkey_;
@@ -267,7 +272,7 @@ private:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   blocksstable::ObDatumRowkey min_key_;
   int64_t conflict_rowkey_idx_;
-  int64_t error_code_;
+  int error_code_;
   int64_t delete_count_;
   int16_t rowkey_column_num_;
   bool is_inited_;

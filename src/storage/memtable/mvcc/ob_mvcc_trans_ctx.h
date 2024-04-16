@@ -450,6 +450,7 @@ public:
       memtable_(memtable),
       is_link_(false),
       not_calc_checksum_(false),
+      is_non_unique_local_index_cb_(false),
       seq_no_(),
       column_cnt_(0)
   {}
@@ -462,6 +463,7 @@ public:
       memtable_(memtable),
       is_link_(cb.is_link_),
       not_calc_checksum_(cb.not_calc_checksum_),
+      is_non_unique_local_index_cb_(cb.is_non_unique_local_index_cb_),
       seq_no_(cb.seq_no_),
       column_cnt_(cb.column_cnt_)
   {
@@ -478,7 +480,8 @@ public:
            const ObRowData *old_row,
            const bool is_replay,
            const transaction::ObTxSEQ seq_no,
-           const int64_t column_cnt)
+           const int64_t column_cnt,
+           const bool is_non_unique_local_index_cb)
   {
     UNUSED(is_replay);
 
@@ -501,7 +504,9 @@ public:
       tnode_->set_seq_no(seq_no_);
     }
     column_cnt_ = column_cnt;
+    is_non_unique_local_index_cb_ = is_non_unique_local_index_cb;
   }
+  bool is_non_unique_local_index_cb() const { return is_non_unique_local_index_cb_;}
   bool on_memtable(const ObIMemtable * const memtable) override;
   ObIMemtable *get_memtable() const override;
   virtual MutatorType get_mutator_type() const override;
@@ -566,6 +571,9 @@ private:
   struct {
     bool is_link_ : 1;
     bool not_calc_checksum_ : 1;
+    // this flag is currently only used to skip reset_hash_holder of ObLockWaitMgr,
+    // but it is not set correctly in the replay path which will be fixed later.
+    bool is_non_unique_local_index_cb_ : 1;
   };
   transaction::ObTxSEQ seq_no_;
   int64_t column_cnt_;

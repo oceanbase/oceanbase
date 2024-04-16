@@ -205,6 +205,7 @@ public:
   bool has_lob_column_out_;
   bool is_for_foreign_check_;
   bool limit_prefetch_;
+  bool is_non_unique_local_index_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
 };

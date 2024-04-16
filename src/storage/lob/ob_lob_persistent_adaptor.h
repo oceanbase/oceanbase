@@ -23,6 +23,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObStoreCtxGuard;
+
 class ObLobUpdIterator : public ObNewRowIterator
 {
 public:
@@ -137,6 +139,7 @@ private:
       const uint64_t tenant_id,
       ObTableDMLParam* dml_param,
       ObDMLBaseParam& dml_base_param,
+      ObStoreCtxGuard *store_ctx_guard,
       ObSEArray<uint64_t, 6>& column_ids,
       const ObTabletHandle& data_tablet,
       const ObTabletHandle& lob_meta_tablet);

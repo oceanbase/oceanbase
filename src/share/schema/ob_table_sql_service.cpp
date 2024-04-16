@@ -1031,7 +1031,8 @@ int ObTableSqlService::insert_single_column(
   }
   if (OB_SUCC(ret)) {
     if (new_column_schema.is_autoincrement()) {
-      if (OB_FAIL(add_sequence(new_table_schema.get_tenant_id(),
+      if (OB_FAIL(add_sequence(sql_client,
+                               new_table_schema.get_tenant_id(),
                                new_table_schema.get_table_id(),
                                new_column_schema.get_column_id(),
                                new_table_schema.get_auto_increment(),
@@ -1092,7 +1093,8 @@ int ObTableSqlService::update_single_column(
     if (new_column_schema.is_autoincrement()) {
       if (origin_table_schema.get_autoinc_column_id() == 0 &&
           new_table_schema.get_autoinc_column_id() == new_column_schema.get_column_id()) {
-        if (OB_FAIL(add_sequence(tenant_id,
+        if (OB_FAIL(add_sequence(sql_client,
+                                 tenant_id,
                                  new_table_schema.get_table_id(),
                                  new_column_schema.get_column_id(),
                                  new_table_schema.get_auto_increment(),
@@ -2450,7 +2452,7 @@ int ObTableSqlService::create_table(ObTableSchema &table,
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   }
   if (OB_SUCCESS == ret && 0 != table.get_autoinc_column_id()) {
-    if (OB_FAIL(add_sequence(tenant_id, table.get_table_id(),
+    if (OB_FAIL(add_sequence(sql_client, tenant_id, table.get_table_id(),
                              table.get_autoinc_column_id(), table.get_auto_increment(),
                              table.get_truncate_version()))) {
       LOG_WARN("insert sequence record faild", K(ret), K(table));
@@ -3915,56 +3917,45 @@ int ObTableSqlService::update_data_table_schema_version(
   return ret;
 }
 
-int ObTableSqlService::add_sequence(const uint64_t tenant_id,
+int ObTableSqlService::add_sequence(ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     const uint64_t column_id,
                                     const uint64_t auto_increment,
                                     const int64_t truncate_version)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
   // FIXME:__all_time_zone contains auto increment column. Cyclic dependence may occur.
   const uint64_t exec_tenant_id = tenant_id;
-  if (OB_FAIL(trans.start(sql_proxy_, tenant_id, false))) {
-    LOG_WARN("failed to start trans, ", K(ret), K(tenant_id));
+  ObSqlString sql;
+  ObSqlString values;
+  if (OB_FAIL(sql.append_fmt("INSERT IGNORE INTO %s (", OB_ALL_AUTO_INCREMENT_TNAME))) {
+    LOG_WARN("append table name failed, ", K(ret));
   } else {
-    ObSqlString sql;
-    ObSqlString values;
-    if (OB_FAIL(sql.append_fmt("INSERT IGNORE INTO %s (", OB_ALL_AUTO_INCREMENT_TNAME))) {
-      LOG_WARN("append table name failed, ", K(ret));
-    } else {
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(
-                                        exec_tenant_id, tenant_id), "tenant_id", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(
-                                        exec_tenant_id, table_id),  "sequence_key", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, column_id, "column_id", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 1 : auto_increment, "sequence_value", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 0 : auto_increment - 1, "sync_value", "%lu");
-      SQL_COL_APPEND_VALUE(sql, values, truncate_version, "truncate_version", "%ld");
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(sql.append_fmt(", gmt_modified) VALUES (%.*s, now(6))",
-              static_cast<int32_t>(values.length()), values.ptr()))) {
-        LOG_WARN("append sql failed, ", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      int64_t affected_rows = 0;
-      if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
-        LOG_WARN("fail to execute. ", "sql", sql.ptr(), K(ret));
-      } else {
-        if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected value", K(affected_rows), "sql", sql.ptr(), K(ret));
-        }
-      }
+    SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_tenant_id(
+                                      exec_tenant_id, tenant_id), "tenant_id", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, ObSchemaUtils::get_extract_schema_id(
+                                      exec_tenant_id, table_id),  "sequence_key", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, column_id, "column_id", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 1 : auto_increment, "sequence_value", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, 0 == auto_increment ? 0 : auto_increment - 1, "sync_value", "%lu");
+    SQL_COL_APPEND_VALUE(sql, values, truncate_version, "truncate_version", "%ld");
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(sql.append_fmt(", gmt_modified) VALUES (%.*s, now(6))",
+            static_cast<int32_t>(values.length()), values.ptr()))) {
+      LOG_WARN("append sql failed, ", K(ret));
     }
   }
-  if (trans.is_started()) {
-    int temp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
-      ret = (OB_SUCC(ret)) ? temp_ret : ret;
+  if (OB_SUCC(ret)) {
+    int64_t affected_rows = 0;
+    if (OB_FAIL(sql_client.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute. ", "sql", sql.ptr(), K(ret));
+    } else {
+      if (!is_zero_row(affected_rows) && !is_single_row(affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected value", K(affected_rows), "sql", sql.ptr(), K(ret));
+      }
     }
   }
   return ret;

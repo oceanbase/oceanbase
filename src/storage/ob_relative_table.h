@@ -86,6 +86,7 @@ public:
   bool is_index_table() const;
   bool is_lob_meta_table() const;
   bool is_storage_index_table() const;
+  bool is_index_local_storage() const;
   bool can_read_index() const;
   bool is_unique_index() const;
   bool is_domain_index() const;

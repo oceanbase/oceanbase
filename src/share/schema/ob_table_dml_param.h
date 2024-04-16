@@ -70,6 +70,7 @@ public:
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
   OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
+  OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
 

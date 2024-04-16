@@ -91,6 +91,7 @@ public: // for mvcc engine invoke
   virtual void inc_lock_for_read_retry_count() = 0;
   virtual void add_lock_for_read_elapse(const int64_t n) = 0;
   virtual int64_t get_lock_for_read_elapse() const = 0;
+  virtual void on_key_duplication_retry(const ObMemtableKey& key) = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
                             const share::SCN snapshot_version,
                             const share::SCN max_trans_version,
@@ -154,7 +155,8 @@ public:
       const ObRowData *old_row,
       ObMemtable *memtable,
       const transaction::ObTxSEQ seq_no,
-      const int64_t column_cnt);
+      const int64_t column_cnt,
+      const bool is_non_unique_local_index);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,

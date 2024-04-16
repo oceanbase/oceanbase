@@ -53,7 +53,8 @@ int ObIMvccCtx::register_row_commit_cb(
     const ObRowData *old_row,
     ObMemtable *memtable,
     const transaction::ObTxSEQ seq_no,
-    const int64_t column_cnt)
+    const int64_t column_cnt,
+    const bool is_non_unique_local_index)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = false;
@@ -80,7 +81,8 @@ int ObIMvccCtx::register_row_commit_cb(
             old_row,
             is_replay,
             seq_no,
-            column_cnt);
+            column_cnt,
+            is_non_unique_local_index);
     cb->set_is_link();
 
     if (OB_FAIL(append_callback(cb))) {
@@ -122,7 +124,8 @@ int ObIMvccCtx::register_row_replay_cb(
             NULL,
             is_replay,
             seq_no,
-            column_cnt);
+            column_cnt,
+            false/*is_non_unique_local_index_cb, not setted correctly now, fix later*/);
     {
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();
