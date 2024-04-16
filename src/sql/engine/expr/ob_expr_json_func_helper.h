@@ -491,6 +491,7 @@ public:
 
   int init(ObJsonBin *j_bin);
   int init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_t query_timeout_ts);
+  void reset();
 
   int64_t get_partial_data_serialize_size() const;
   int64_t get_lob_diff_serialize_size() const;

@@ -5370,6 +5370,7 @@ ObJsonBinCtx::~ObJsonBinCtx()
 {
   if (OB_NOT_NULL(update_ctx_) && is_update_ctx_alloc_) {
     update_ctx_->~ObJsonBinUpdateCtx();
+    update_ctx_ = nullptr;
   }
 }
 

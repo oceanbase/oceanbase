@@ -417,6 +417,9 @@ int ObJsonExprHelper::get_json_for_partial_update(
     } else {
       j_base = delta_lob.get_json_bin();
     }
+    if (OB_FAIL(ret)) {
+      delta_lob.reset();
+    }
   } else if (! locator.is_persist_lob() || locator.is_inrow()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("persis lob or no-delta inrow lob locator not support", KR(ret), K(locator));
@@ -449,6 +452,17 @@ int ObJsonExprHelper::get_json_for_partial_update(
   } else if (OB_ISNULL(j_base)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get j_base is null", KR(ret), K(locator));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(j_base)) {
+      j_base->reset();
+      j_base = nullptr;
+    }
+    if (OB_NOT_NULL(cursor)) {
+      cursor->reset();
+      cursor = nullptr;
+    }
   }
   return ret;
 }
@@ -2642,6 +2656,26 @@ int ObJsonDeltaLob::init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_
     LOG_WARN("deserialize json delta lob fail", K(ret), K(locator));
   }
   return ret;
+}
+
+void ObJsonDeltaLob::reset()
+{
+  if (OB_NOT_NULL(j_base_)) {
+    j_base_->reset();
+    j_base_ = nullptr;
+  }
+  if (OB_NOT_NULL(update_ctx_)) {
+    update_ctx_->~ObJsonBinUpdateCtx();
+    update_ctx_ = nullptr;
+  }
+  if (OB_NOT_NULL(cursor_)) {
+    cursor_->~ObLobCursor();
+    cursor_ = nullptr;
+  }
+  if (OB_NOT_NULL(partial_data_)) {
+    partial_data_->~ObLobPartialData();
+    partial_data_ = nullptr;
+  }
 }
 
 int64_t ObJsonDeltaLob::get_lob_diff_serialize_size() const
