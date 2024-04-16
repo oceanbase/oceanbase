@@ -17,6 +17,7 @@
 #include "storage/tx/ob_dup_table_lease.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_dup_table_stat.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -57,7 +58,8 @@ public:
 class ObDupTabletScanTask : public ObITimeoutTask
 {
 public:
-  static const int64_t DUP_TABLET_SCAN_INTERVAL = 10 * 1000 * 1000; // 10s
+  static const int64_t DUP_TABLET_SCAN_INTERVAL = 10 * 1000 * 1000;          // 10s
+  static const int64_t MAX_DUP_LS_REFRESH_INTERVAL = 60 * 60 * 1000 * 1000L; // 60min
 public:
   ObDupTabletScanTask() { reset(); }
   ~ObDupTabletScanTask() { destroy(); }
@@ -70,11 +72,26 @@ public:
   void runTimerTask();
   uint64_t hash() const { return tenant_id_; }
 
+  int64_t get_max_exec_interval() const { return ATOMIC_LOAD(&max_execute_interval_); }
+  int64_t get_last_scan_task_succ_ts() const { return ATOMIC_LOAD(&last_scan_task_succ_time_); }
+
+  TO_STRING_KV(K(tenant_id_),
+               KP(dup_table_scan_timer_),
+               KP(dup_loop_worker_),
+               K(min_dup_ls_status_info_),
+               K(tenant_schema_dup_tablet_set_.size()),
+               K(scan_task_execute_interval_),
+               K(last_dup_ls_refresh_time_),
+               K(last_dup_schema_refresh_time_),
+               K(last_scan_task_succ_time_),
+               K(max_execute_interval_));
+
 private:
   int execute_for_dup_ls_();
-  int refresh_dup_tablet_schema_(bool need_refresh,
-                                 ObTenantDupTabletSchemaHelper::TabletIDSet &tenant_dup_tablet_set,
-                                 share::ObLSStatusInfo &dup_ls_status_info);
+  int refresh_dup_ls_(const int64_t cur_time);
+  int refresh_dup_tablet_schema_(const int64_t cur_time);
+
+  bool has_valid_dup_schema_() const;
 
 private:
   ObTenantDupTabletSchemaHelper dup_schema_helper_;
@@ -82,7 +99,16 @@ private:
   int64_t tenant_id_;
   ObDupTableLeaseTimer *dup_table_scan_timer_;
   ObDupTableLoopWorker *dup_loop_worker_;
-  int64_t last_execute_time_;
+
+  share::ObLSStatusInfo min_dup_ls_status_info_; // min_ls_id
+  ObTenantDupTabletSchemaHelper::TabletIDSet tenant_schema_dup_tablet_set_;
+
+  int64_t scan_task_execute_interval_;
+
+  int64_t last_dup_ls_refresh_time_;
+  int64_t last_dup_schema_refresh_time_;
+
+  int64_t last_scan_task_succ_time_;
   int64_t max_execute_interval_;
 };
 

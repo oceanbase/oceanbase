@@ -230,6 +230,7 @@ public:
   ObIDupTableRpc *get_dup_table_rpc() { return dup_table_rpc_; }
   ObDupTableRpc &get_dup_table_rpc_impl() { return dup_table_rpc_impl_; }
   ObDupTableLoopWorker &get_dup_table_loop_worker() { return dup_table_loop_worker_; }
+  const ObDupTabletScanTask &get_dup_table_scan_task() { return dup_tablet_scan_task_; }
   ObILocationAdapter *get_location_adapter() { return location_adapter_; }
   common::ObMySQLProxy *get_mysql_proxy() { return GCTX.sql_proxy_; }
   bool is_running() const { return is_running_; }
