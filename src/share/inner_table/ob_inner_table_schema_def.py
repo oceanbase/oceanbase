@@ -14727,6 +14727,7 @@ def_table_schema(
                     cast(case when (a.database_id = 201002 or a.table_type = 1) then 'SYSTEM VIEW'
                          when a.table_type in (0, 2) then 'SYSTEM TABLE'
                          when a.table_type = 4 then 'VIEW'
+                         when a.table_type = 14 then 'EXTERNAL TABLE'
                          else 'BASE TABLE' end as char(64)) as TABLE_TYPE,
                     cast(case when a.table_type in (0,3,5,6,7,11,12,13) then 'InnoDB'
                         else 'MEMORY' end as char(64)) as ENGINE,
