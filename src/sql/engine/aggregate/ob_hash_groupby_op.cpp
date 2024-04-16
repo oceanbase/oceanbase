@@ -227,7 +227,13 @@ int ObHashGroupByOp::inner_open()
       LOG_WARN("failed to init group store", K(ret));
     } else if (MY_SPEC.by_pass_enabled_ && OB_FAIL(init_by_pass_op())) {
       LOG_WARN("failed to init by pass op", K(ret));
+    } else if (bypass_ctrl_.by_pass_ctrl_enabled_ &&
+               MY_SPEC.llc_ndv_est_enabled_ &&
+               OB_FAIL(llc_est_.init_llc_map(mem_context_->get_arena_allocator()))) {
+      LOG_WARN("failed to init llc map", K(ret));
     } else {
+      llc_est_.enabled_ = MY_SPEC.by_pass_enabled_ && MY_SPEC.llc_ndv_est_enabled_ && !force_by_pass_;
+      LOG_TRACE("gby switch", K(MY_SPEC.id_), K(llc_est_.enabled_), K(MY_SPEC.by_pass_enabled_), K(MY_SPEC.llc_ndv_est_enabled_), K(bypass_ctrl_.by_pass_ctrl_enabled_), K(ret));
       enable_dump_ = (!(aggr_processor_.has_distinct() || aggr_processor_.has_order_by())
                      && GCONF.is_sql_operator_dump_enabled());
       group_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -447,6 +453,7 @@ int ObHashGroupByOp::inner_rescan()
     LOG_WARN("failed to rescan", K(ret));
   } else {
     iter_end_ = false;
+    llc_est_.enabled_ = MY_SPEC.by_pass_enabled_ && MY_SPEC.llc_ndv_est_enabled_ && !force_by_pass_; // keep lc_est_.enabled_ same as inner_open()
   }
   return ret;
 
@@ -510,6 +517,7 @@ int ObHashGroupByOp::inner_get_next_row()
         bypass_ctrl_.start_by_pass();
         bypass_ctrl_.reset_rebuild_times();
         bypass_ctrl_.reset_state();
+        calc_avg_group_mem();
       }
       if (!bypass_ctrl_.by_passing()) {
         if (OB_FAIL(by_pass_restart_round())) {
@@ -718,7 +726,8 @@ int ObHashGroupByOp::init_distinct_info(bool is_part)
 
     int64_t est_bucket_num = distinct_data_set_.est_bucket_count(est_rows, MY_SPEC.width_,
                                 MIN_GROUP_HT_INIT_SIZE, MAX_GROUP_HT_INIT_SIZE);
-    if (OB_FAIL(distinct_data_set_.set_funcs(&hash_funcs_, &sort_collations_,
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(distinct_data_set_.set_funcs(&hash_funcs_, &sort_collations_,
         &cmp_funcs_, &eval_ctx_))) {
       LOG_WARN("failed to set funcs", K(ret));
     } else if (OB_FAIL(distinct_data_set_.start_round())) {
@@ -1068,6 +1077,15 @@ int ObHashGroupByOp::load_data()
     ret = OB_SUCCESS;
     LOG_DEBUG("debug iter end load data", K(ret), K(cur_part), K(use_distinct_data_));
   }
+
+  if (OB_SUCC(ret) && llc_est_.enabled_) {
+    if (OB_FAIL(local_group_rows_.add_hashval_to_llc_map(llc_est_))) {
+      LOG_WARN("failed add llc map from ht", K(ret));
+    } else {
+      llc_est_.est_cnt_ += agged_row_cnt_;
+      LOG_TRACE("llc map succ to add hash val from insert state", K(ret), K(llc_est_.est_cnt_), K(agged_row_cnt_), K(agged_group_cnt_));
+    }
+  }
   if (OB_SUCC(ret) && NULL == cur_part && !use_distinct_data_ &&
       OB_FAIL(finish_insert_distinct_data())) {
     LOG_WARN("failed to finish insert distinct data", K(ret));
@@ -1265,6 +1283,7 @@ int ObHashGroupByOp::calc_groupby_exprs_hash(ObIArray<ObExpr*> &groupby_exprs,
 bool ObHashGroupByOp::need_start_dump(const int64_t input_rows, int64_t &est_part_cnt,
     const bool check_dump)
 {
+  bool actual_need_dump = false;
   bool need_dump = false;
   const int64_t mem_used = get_mem_used_size();
   const int64_t mem_bound = get_mem_bound_size();
@@ -1304,11 +1323,26 @@ bool ObHashGroupByOp::need_start_dump(const int64_t input_rows, int64_t &est_par
                 K(agged_group_cnt_));
     }
   }
-  if ((need_dump || force_dump_) && MY_SPEC.by_pass_enabled_) {
-    bypass_ctrl_.start_process_ht();
-    bypass_ctrl_.set_max_rebuild_times();
+  if ((need_dump || force_dump_)) {
+    actual_need_dump = true;
+    if (bypass_ctrl_.scaled_llc_est_ndv_) {
+      if (bypass_ctrl_.is_max_mem_insert_state()) {
+        bypass_ctrl_.set_analyze_state();
+      } else {
+        // do nothing
+      }
+      actual_need_dump = false;
+      int ret = OB_SUCCESS; // no use
+      LOG_TRACE("max insert is about to dump, stop it", K(ret), K(get_actual_mem_used_size()), K(get_mem_bound_size()), K(sql_mem_processor_.get_data_ratio()));
+    } else if (MY_SPEC.by_pass_enabled_) {
+      bypass_ctrl_.start_process_ht();
+      bypass_ctrl_.set_max_rebuild_times();
+      actual_need_dump = false;
+    } else {
+      // do nothing
+    }
   }
-  return bypass_ctrl_.processing_ht() ? false : (need_dump || force_dump_);
+  return actual_need_dump;
 }
 
 int ObHashGroupByOp::setup_dump_env(const int64_t part_id, const int64_t input_rows,
@@ -1543,6 +1577,7 @@ int ObHashGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
         bypass_ctrl_.reset_rebuild_times();
         bypass_ctrl_.reset_state();
         by_pass_brs_holder_.restore();
+        calc_avg_group_mem();
       }
       if (!bypass_ctrl_.by_passing()) {
         if (OB_FAIL(by_pass_restart_round())) {
@@ -1686,6 +1721,14 @@ int ObHashGroupByOp::load_data_batch(int64_t max_row_cnt)
   } // while end
 
   row_store_iter.reset();
+  if (OB_SUCC(ret) && llc_est_.enabled_) {
+    if (OB_FAIL(local_group_rows_.add_hashval_to_llc_map(llc_est_))) {
+      LOG_WARN("failed add llc map from ht", K(ret));
+    } else {
+      llc_est_.est_cnt_ += agged_row_cnt_;
+      LOG_TRACE("llc map succ to add hash val from insert state", K(ret), K(llc_est_.est_cnt_), K(agged_row_cnt_), K(agged_group_cnt_));
+    }
+  }
   if (OB_FAIL(ret)) {
   } else if (NULL == cur_part && !use_distinct_data_ && OB_FAIL(finish_insert_distinct_data())) {
     LOG_WARN("failed to finish insert distinct data", K(ret));
@@ -2508,6 +2551,19 @@ int ObHashGroupByOp::load_one_row()
         got_row = true;
       }
     }
+
+    if (OB_SUCC(ret) && llc_est_.enabled_) {
+      const ObChunkDatumStore::StoredRow *srow = NULL;
+      uint64_t hash_val = 0;
+      if (OB_FAIL(calc_groupby_exprs_hash(dup_groupby_exprs_, srow, hash_val))) {
+        LOG_WARN("failed to calc hash", K(ret), K(llc_est_.enabled_));
+      } else if (OB_FAIL(bypass_add_llc_map(hash_val,
+                                            ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
+                                            by_pass_nth_group_ == MY_SPEC.dist_col_group_idxs_.count() : true))) {
+        LOG_WARN("failed to add llc map", K(ret));
+      }
+    }
+
     if (OB_FAIL(ret) || no_non_distinct_aggr_) {
     } else if (OB_ISNULL(by_pass_group_row_)
                 || OB_ISNULL(by_pass_group_row_->group_row_)) {
@@ -2559,6 +2615,20 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
                                                         insert_group_ht))) {
       LOG_WARN("failed to get next permutation row", K(ret));
   }
+
+  if (OB_SUCC(ret) && llc_est_.enabled_) {
+    const ObChunkDatumStore::StoredRow **store_rows = NULL;
+    if (OB_FAIL(eval_groupby_exprs_batch(store_rows, brs_))) {
+      LOG_WARN("fail to calc groupby exprs hash batch", K(ret));
+    } else {
+      calc_groupby_exprs_hash_batch(dup_groupby_exprs_, brs_);
+      if (OB_FAIL(bypass_add_llc_map_batch(ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
+                                           by_pass_nth_group_ == MY_SPEC.dist_col_group_idxs_.count() : true))) {
+        LOG_WARN("failed to add llc map batch", K(ret));
+      }
+    }
+  }
+
   if (OB_FAIL(ret) || no_non_distinct_aggr_) {
   } else if (OB_ISNULL(by_pass_group_batch_)
              || by_pass_batch_size_ <= 0) {
@@ -2747,6 +2817,110 @@ int64_t ObHashGroupByOp::get_input_size() const
     res = std::max(res, res * (MY_SPEC.dist_col_group_idxs_.count() + 1));
   }
   return res;
+}
+
+void ObHashGroupByOp::calc_avg_group_mem()
+{
+  if (0 == llc_est_.avg_group_mem_ && llc_est_.enabled_)
+  {
+    int64_t row_cnt = local_group_rows_.size();
+    int64_t part_cnt = detect_part_cnt(row_cnt);
+    int64_t data_size = get_actual_mem_used_size();
+    int64_t est_extra_size = data_size + part_cnt * ObHashGroupByOp::FIX_SIZE_PER_PART;
+    double data_ratio = (0 == est_extra_size) ? 0 : (data_size * 1.0 / est_extra_size);
+    llc_est_.avg_group_mem_ = (0 == row_cnt || 0 == data_ratio) ? 128 : (data_size * data_ratio / row_cnt);
+  }
+}
+
+int ObGroupRowHashTable::add_hashval_to_llc_map(LlcEstimate &llc_est)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) { //check if buckets_ is NULL
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ObGroupRowHashTable is not inited", K(ret));
+  } else {
+    for (int64_t i = 0; i < get_bucket_num(); ++i) {
+      ObGroupRowItem *item = buckets_->at(i).item_;
+      if (OB_NOT_NULL(item)) {
+        ObAggregateProcessor::llc_add_value(item->hash_, llc_est.llc_map_);
+      }
+    }
+  }
+  return ret;
+}
+
+
+int ObHashGroupByOp::check_llc_ndv()
+{
+  int ret = OB_SUCCESS;
+  int64_t ndv = -1;
+  int64_t global_bound_size = 0;
+  bool ndv_ratio_is_small_enough = false;
+  bool has_enough_mem_for_deduplication = false;
+  ObTenantSqlMemoryManager * tenant_sql_mem_manager = NULL;
+  tenant_sql_mem_manager = MTL(ObTenantSqlMemoryManager*);
+  ObExprEstimateNdv::llc_estimate_ndv(ndv, llc_est_.llc_map_);
+  if (0 == llc_est_.est_cnt_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect zero cnt", K(llc_est_.est_cnt_), K(ret));
+  } else if (FALSE_IT(ndv_ratio_is_small_enough = (ndv * 1.0 / llc_est_.est_cnt_) < LlcEstimate::LLC_NDV_RATIO_)) {
+  } else if (FALSE_IT(llc_est_.last_est_cnt_ = llc_est_.est_cnt_)) {
+  } else if (OB_ISNULL(tenant_sql_mem_manager)) {
+     uint64_t tenant_id  = MTL_ID();
+     if (OB_MAX_RESERVED_TENANT_ID <  tenant_id) {
+       ret = OB_ERR_UNEXPECTED;
+       LOG_WARN("unexpect null ptr", K(ret));
+     } else if (ndv_ratio_is_small_enough) {
+       bypass_ctrl_.bypass_rebackto_insert(ndv);
+       llc_est_.enabled_  = false;
+     }
+  } else {
+    global_bound_size = tenant_sql_mem_manager->get_global_bound_size();
+    has_enough_mem_for_deduplication = (global_bound_size * LlcEstimate::GLOBAL_BOUND_RATIO_) > (llc_est_.avg_group_mem_ * ndv);
+    LOG_TRACE("check llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
+    if (!has_enough_mem_for_deduplication) {
+      //continue bypass and stop estimating llc ndv
+      llc_est_.enabled_ = false;
+      LOG_TRACE("stop check llc ndv and continue bypass", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
+    } else if (ndv_ratio_is_small_enough) {
+      // go to llc_insert_state and stop bypass and stop estimating llc ndv
+      bypass_ctrl_.bypass_rebackto_insert(ndv);
+      llc_est_.enabled_  = false;
+      LOG_TRACE("reback into deduplication state and stop bypass and stop estimating llc ndv", K(ndv_ratio_is_small_enough), K(ndv), K(llc_est_.est_cnt_), K(has_enough_mem_for_deduplication), K(llc_est_.avg_group_mem_), K(global_bound_size), K(get_actual_mem_used_size()));
+    } else {
+      //do nothing, continue bypass and estimate llc ndv
+    }
+  }
+  return ret;
+}
+
+int ObHashGroupByOp::bypass_add_llc_map(uint64_t hash_val, bool ready_to_check_ndv) {
+  int ret = OB_SUCCESS;
+  llc_add_value(hash_val);
+  if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
+    if (OB_FAIL(check_llc_ndv())) {
+      LOG_WARN("failed to check llc ndv", K(ret));
+    } else if (0 < bypass_ctrl_.scaled_llc_est_ndv_) { // means state of bypass_ctrl_ go to INSERT from BYPASS
+      if (OB_ISNULL(last_child_row_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret), K(llc_est_.est_cnt_), K(bypass_ctrl_.scaled_llc_est_ndv_));
+      }
+    }
+  }
+  return ret;
+}
+int ObHashGroupByOp::bypass_add_llc_map_batch(bool ready_to_check_ndv) {
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && llc_est_.enabled_ && i < brs_.size_; ++i) {
+    if (brs_.skip_->exist(i)) { continue; }
+    llc_add_value(hash_vals_[i]);
+  }
+  if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
+    if (OB_FAIL(check_llc_ndv())) {
+      LOG_WARN("failed to check llc ndv", K(ret));
+    }
+  }
+  return ret;
 }
 
 } // end namespace sql

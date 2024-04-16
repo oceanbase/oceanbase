@@ -94,7 +94,7 @@ host	varchar(128)	NO
 db	varchar(128)	YES		NULL	
 command	varchar(4096)	NO			
 sql_id	varchar(32)	NO			
-time	bigint(20)	NO		0	
+time	double	NO		NULL	
 state	varchar(128)	YES		NULL	
 info	varchar(262143)	YES		NULL	
 svr_ip	varchar(46)	NO		NULL	
@@ -109,7 +109,7 @@ thread_id	bigint(20) unsigned	NO		NULL
 ssl_cipher	varchar(4096)	YES		NULL	
 trace_id	varchar(64)	YES			
 trans_state	varchar(32)	YES		NULL	
-total_time	bigint(20)	NO		0	
+total_time	double	NO		NULL	
 retry_cnt	bigint(20)	NO		0	
 retry_info	bigint(20)	NO		0	
 action	varchar(4096)	YES			
@@ -1798,7 +1798,7 @@ host	varchar(128)	NO
 db	varchar(128)	YES		NULL	
 command	varchar(4096)	NO			
 sql_id	varchar(32)	NO			
-time	bigint(20)	NO		0	
+time	double	NO		NULL	
 state	varchar(128)	YES		NULL	
 info	varchar(262143)	YES		NULL	
 svr_ip	varchar(46)	NO		NULL	
@@ -9362,6 +9362,23 @@ ROLE_HOST	varchar(1024)	YES		NULL
 IS_DEFAULT	varchar(1024)	YES		NULL	
 IS_MANDATORY	varchar(1024)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_tracepoint_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tp_no	bigint(20)	NO		NULL	
+tp_name	varchar(128)	NO		NULL	
+tp_describe	varchar(4096)	NO		NULL	
+tp_frequency	bigint(20)	NO		NULL	
+tp_error_code	bigint(20)	NO		NULL	
+tp_occur	bigint(20)	NO		NULL	
+tp_match	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tracepoint_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_tracepoint_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_nic_info;

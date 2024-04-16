@@ -169,7 +169,7 @@ int ObRemoteBaseExecuteP<T>::base_before_process(int64_t tenant_schema_version,
     exec_ctx_.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT, ObCtxIds::EXECUTE_CTX_ID));
     ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx_);
     plan_ctx->set_rich_format(session_info->use_rich_format());
-
+    exec_ctx_.hide_session(); // don't show remote session in show processlist
     vt_ctx.session_ = session_info;
     vt_ctx.vt_iter_factory_ = &vt_iter_factory_;
     vt_ctx.schema_guard_ = &schema_guard_;
@@ -273,6 +273,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
     if (OB_ISNULL(spec = plan.get_root_op_spec())
         || OB_ISNULL(kit = exec_ctx.get_kit_store().get_operator_kit(spec->id_))
         || OB_ISNULL(se_op = kit->op_)) {
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("root op spec is null", K(ret));
     }
   }

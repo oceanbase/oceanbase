@@ -2126,15 +2126,20 @@ int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    EventItem item;
+    item.error_code_ = arg.error_code_;
+    item.occur_ = arg.occur_;
+    item.trigger_freq_ = arg.trigger_freq_;
+    item.cond_ = arg.cond_;
     if (arg.event_name_.length() > 0) {
       ObSqlString str;
       if (OB_FAIL(str.assign(arg.event_name_))) {
         LOG_WARN("string assign failed", K(ret));
-      } else {
-        TP_SET_EVENT(str.ptr(), arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+      } else if (OB_FAIL(EventTable::instance().set_event(str.ptr(), item))) {
+        LOG_WARN("Failed to set tracepoint event, tp_name does not exist.", K(ret), K(arg.event_name_));
       }
-    } else {
-      TP_SET_EVENT(arg.event_no_, arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+    } else if (OB_FAIL(EventTable::instance().set_event(arg.event_no_, item))) {
+      LOG_WARN("Failed to set tracepoint event, tp_no does not exist.", K(ret), K(arg.event_no_));
     }
     LOG_INFO("set event", K(arg));
   }

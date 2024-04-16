@@ -151,6 +151,7 @@ int ObMPStmtFetch::set_session_active(ObSQLSessionInfo &session) const
     session.set_query_start_time(get_receive_timestamp());
     session.set_mysql_cmd(obmysql::COM_STMT_FETCH);
     session.update_last_active_time();
+    session.set_is_request_end(false);
   }
   return ret;
 }

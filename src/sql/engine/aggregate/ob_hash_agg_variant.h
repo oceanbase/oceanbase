@@ -202,21 +202,6 @@ struct GetRowMetaVisitor : public boost::static_visitor<const RowMeta &>
   }
 };
 
-struct GetVisitor : public boost::static_visitor<int>
-{
-  GetVisitor(const int64_t batch_idx, uint64_t hash_val, char *&aggr_row)
-              : batch_idx_(batch_idx), hash_val_(hash_val),
-                aggr_row_(aggr_row) {}
-  template <typename T>
-  int operator() (T &t)
-  {
-    return t->get(batch_idx_, hash_val_, aggr_row_);
-  }
-  int64_t batch_idx_;
-  uint64_t hash_val_;
-  char *&aggr_row_;
-};
-
 struct GetNextBatchVisitor : public boost::static_visitor<int>
 {
   GetNextBatchVisitor(const ObCompactRow **rows,
@@ -231,29 +216,6 @@ struct GetNextBatchVisitor : public boost::static_visitor<int>
   const ObCompactRow **rows_;
   int64_t max_rows_;
   int64_t &read_rows_;
-};
-
-struct AppendVisitor : public boost::static_visitor<int>
-{
-  AppendVisitor(const common::ObIArray<ObExpr *> &gby_exprs,
-                const int64_t batch_idx,
-                uint64_t hash_val,
-                const common::ObIArray<int64_t> &lengths,
-                char *&get_row, bool need_reinit_vectors)
-               : gby_exprs_(gby_exprs), batch_idx_(batch_idx),
-                 hash_val_(hash_val), lengths_(lengths), get_row_(get_row),
-                 need_reinit_vectors_(need_reinit_vectors) {}
-  template <typename T>
-  int operator() (T &t)
-  {
-    return t->append(gby_exprs_, batch_idx_, hash_val_, lengths_, get_row_, need_reinit_vectors_);
-  }
-  const common::ObIArray<ObExpr *> &gby_exprs_;
-  int64_t batch_idx_;
-  uint64_t hash_val_;
-  const common::ObIArray<int64_t> &lengths_;
-  char *&get_row_;
-  const bool need_reinit_vectors_;
 };
 
 struct AppendBatchVisitor : public boost::static_visitor<int>
@@ -486,22 +448,6 @@ public:
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 
-  int get(const int64_t batch_idx, uint64_t hash_val, char *&aggr_row)
-  {
-    GetVisitor visitor(batch_idx, hash_val, aggr_row);
-    return boost::apply_visitor(visitor, hash_table_ptr_);
-  }
-
-  int append(const common::ObIArray<ObExpr *> &gby_exprs,
-             const int64_t batch_idx,
-             const uint64_t hash_val,
-             const common::ObIArray<int64_t> &lengths,
-             char *&get_row,
-             bool need_reinit_vectors = false)
-  {
-    AppendVisitor visitor(gby_exprs, batch_idx, hash_val, lengths, get_row, need_reinit_vectors);
-    return boost::apply_visitor(visitor, hash_table_ptr_);
-  }
   int append_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                    const ObBatchRows &child_brs,
                    const bool *is_dumped,

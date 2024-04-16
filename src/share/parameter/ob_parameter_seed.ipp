@@ -1686,6 +1686,9 @@ DEF_CAP(_pdml_thread_cache_size, OB_CLUSTER_PARAMETER, "2M", "[1B,)",
         "The cache size of per pdml thread."
         "Range:[1B, )",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hgby_llc_ndv_adaptive, OB_TENANT_PARAMETER, "True",
+         "specifies whether llc ndv adptive is activated",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_reserved_user_dcl_restriction, OB_CLUSTER_PARAMETER, "False",
          "specifies whether to forbid non-reserved user to modify reserved users",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

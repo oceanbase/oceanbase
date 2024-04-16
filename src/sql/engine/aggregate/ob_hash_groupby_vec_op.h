@@ -22,11 +22,45 @@
 #include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/aggregate/ob_groupby_vec_op.h"
 #include "sql/engine/basic/ob_hp_infras_vec_op.h"
+#include "src/sql/engine/expr/ob_expr_estimate_ndv.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+
+struct LlcEstimate
+{
+public:
+  LlcEstimate()
+    : avg_group_mem_(0), llc_map_(), est_cnt_(0), last_est_cnt_(0), enabled_(false)
+  {}
+  int init_llc_map(common::ObArenaAllocator &allocator);
+  int reset();
+  double avg_group_mem_;
+  ObString llc_map_;
+  uint64_t est_cnt_;
+  uint64_t last_est_cnt_;
+  bool enabled_;
+  static constexpr const int64_t ESTIMATE_MOD_NUM_ = 4096;
+  static constexpr const double LLC_NDV_RATIO_ = 0.3;
+  static constexpr const double GLOBAL_BOUND_RATIO_ = 0.8;
+};
+
+class AddLlcCallback
+{
+public:
+  explicit AddLlcCallback(LlcEstimate *llc_est_ptr) { llc_est_ptr_ = llc_est_ptr; }
+  AddLlcCallback() = delete;
+  virtual ~AddLlcCallback() = default;
+  int operator()(uint64_t hash_val) {
+    // for performance, do not check if llc_est_ptr_ is NULL ptr or not
+    ObAggregateProcessor::llc_add_value(hash_val, llc_est_ptr_->llc_map_);
+    return OB_SUCCESS;
+  }
+private:
+  LlcEstimate *llc_est_ptr_;
+};
 
 struct ObGroupByDupColumnPairVec
 {
@@ -156,7 +190,8 @@ public:
       aggr_vectors_(nullptr),
       reorder_aggr_rows_(false),
       old_row_selector_(nullptr),
-      batch_aggr_rows_table_()
+      batch_aggr_rows_table_(),
+      llc_est_()
   {
   }
   void reset(bool for_rescan);
@@ -169,7 +204,14 @@ public:
 
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
-
+  void calc_avg_group_mem();
+  OB_INLINE void llc_add_value(int64_t hash_value)
+  {
+    ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
+    ++llc_est_.est_cnt_;
+  }
+  int bypass_add_llc_map_batch(bool ready_to_check_ndv);
+  int check_llc_ndv();
   OB_INLINE int64_t get_hash_groupby_row_count() const
   {
     return local_group_rows_.size();
@@ -389,6 +431,7 @@ private:
   bool reorder_aggr_rows_;
   uint16_t *old_row_selector_;
   BatchAggrRowsTable batch_aggr_rows_table_;
+  LlcEstimate llc_est_;
 };
 
 } // end namespace sql

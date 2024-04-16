@@ -2083,6 +2083,10 @@ const int64_t ASYNC_CLOG = 1 << CLOG_BITS_SHIFT;
 const int64_t WITHOUT_ENCRYPTION = 0 << ENCRYPTION_BITS_SHIFT;
 const int64_t WITH_ENCRYPTION = 1 << ENCRYPTION_BITS_SHIFT;
 
+// tracepoint, refer to OB_MAX_CONFIG_xxx
+const int64_t OB_MAX_TRACEPOINT_NAME_LEN = 128;
+const int64_t OB_MAX_TRACEPOINT_DESCRIBE_LEN = 4096;
+
 // Need to manually maintain the replica_type_to_str function in utility.cpp,
 // Currently there are only three types: REPLICA_TYPE_FULL, REPLICA_TYPE_READONLY, and REPLICA_TYPE_LOGONLY
 enum ObReplicaType

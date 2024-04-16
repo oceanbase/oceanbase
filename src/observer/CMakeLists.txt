@@ -254,6 +254,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_ls_info.cpp
   virtual_table/ob_all_virtual_ls_snapshot.cpp
   virtual_table/ob_all_virtual_timestamp_service.cpp
+  virtual_table/ob_all_virtual_tracepoint_info.cpp
   virtual_table/ob_all_virtual_transaction_freeze_checkpoint.cpp
   virtual_table/ob_all_virtual_transaction_checkpoint.cpp
   virtual_table/ob_all_virtual_checkpoint.cpp

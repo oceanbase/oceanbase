@@ -33,6 +33,7 @@ public:
   friend class ObRecursiveUnionAllOp;
   void set_search_pseudo_column(ObExpr *expr) { search_expr_ = expr; }
   void set_cycle_pseudo_column(ObExpr *expr) { cycle_expr_ = expr; }
+  void set_identify_seq_offset(int64_t offset) { identify_seq_offset_ = offset; }
   inline void set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType strategy)
   {
     strategy_ = strategy;
@@ -68,6 +69,7 @@ protected:
   ObRecursiveInnerDataOp::SearchStrategyType strategy_;
   ObExpr *cycle_value_;
   ObExpr *cycle_default_value_;
+  int64_t identify_seq_offset_;
 };
 
 class ObRecursiveUnionAllOp : public ObOperator
@@ -79,7 +81,8 @@ public:
         MY_SPEC.get_left()->output_,
         MY_SPEC.sort_collations_,
         MY_SPEC.cycle_by_col_lists_,
-        MY_SPEC.output_union_exprs_)
+        MY_SPEC.output_union_exprs_,
+        MY_SPEC.identify_seq_offset_)
   {
   }
   ~ObRecursiveUnionAllOp()

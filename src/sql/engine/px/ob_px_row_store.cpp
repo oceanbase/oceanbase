@@ -600,7 +600,7 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
           }
         }
       } else {
-        bool has_null = true; // TODO : opt
+        bool has_null = (0 != data_buffer.get_nulls(col_idx)->accumulate_bit_cnt(data_buffer.get_row_cnt()));
         if (e->is_fixed_length_data_) {
           const dtl::VectorInfo &col_info = data_buffer.get_info(col_idx);
           if (OB_UNLIKELY(col_info.format_ != e->get_vector_header(eval_ctx).format_)) {

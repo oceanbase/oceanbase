@@ -717,6 +717,7 @@ int ObFreezeResolver::resolve_server_list_(ObFreezeStmt *freeze_stmt, ParseNode 
       for (int64_t i = 0; OB_SUCC(ret) && i < opt_server_list->num_child_; ++i) {
         ParseNode *node = opt_server_list->children_[i];
         if (OB_ISNULL(node)) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("children of server_list should not be null");
         } else {
           addr_str.assign_ptr(node->str_value_, static_cast<int32_t>(node->str_len_));
@@ -2503,11 +2504,24 @@ int ObSetTPResolver::resolve(const ParseNode &parse_tree)
             switch (action_node->type_)
             {
             case T_TP_NO: {        // event no
-              stmt->get_rpc_arg().event_no_ = value->value_;
-            } break;
-            case T_TP_NAME: {
-              stmt->get_rpc_arg().event_name_.assign_ptr(
+              if (stmt->get_rpc_arg().event_name_ != "") {
+                ret = OB_NOT_SUPPORTED;
+                SQL_RESV_LOG(WARN, "Setting tp_no and tp_name simultaneously is not supported.");
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Setting tp_no and tp_name simultaneously is");
+              } else {
+                stmt->get_rpc_arg().event_no_ = value->value_;
+              }
+              break;
+            }
+            case T_TP_NAME: {     // event name
+              if (stmt->get_rpc_arg().event_no_ != 0) {
+                ret = OB_NOT_SUPPORTED;
+                SQL_RESV_LOG(WARN, "Setting tp_no and tp_name simultaneously is not supported.");
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Setting tp_no and tp_name simultaneously is");
+              } else {
+                stmt->get_rpc_arg().event_name_.assign_ptr(
                   value->str_value_, static_cast<ObString::obstr_size_t>(value->str_len_));
+              }
               break;
             }
             case T_OCCUR: {        // occurrence
@@ -3711,6 +3725,7 @@ int ObClearBalanceTaskResolver::resolve(const ParseNode &parse_tree)
       for (int64_t i = 0; OB_SUCC(ret) && i < tenants_node->num_child_; ++i) {
         ParseNode *node = tenants_node->children_[i];
         if (OB_ISNULL(node)) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("children of server_list should not be null");
         } else {
           tenant_name.assign_ptr(node->str_value_,
@@ -3741,6 +3756,7 @@ int ObClearBalanceTaskResolver::resolve(const ParseNode &parse_tree)
       for (int64_t i = 0; OB_SUCC(ret) && i < zone_node->num_child_; ++i) {
         ParseNode *node = zone_node->children_[i];
         if (OB_ISNULL(node)) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("children of server_list should not be null");
         } else {
           parse_zone_name.assign_ptr(node->str_value_,

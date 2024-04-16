@@ -342,6 +342,25 @@ int ObLogTableScan::copy_filter_before_index_back()
 
   return ret;
 }
+
+int ObLogTableScan::find_nearest_rcte_op(ObLogSet *&log_set)
+{
+  int ret = OB_SUCCESS;
+  log_set = nullptr;
+  ObLogicalOperator *op = this->get_parent();
+  while (OB_NOT_NULL(op)) {
+    if (log_op_def::LOG_SET == op->get_type()) {
+      ObLogSet *set_op = static_cast<ObLogSet *>(op);
+      if (set_op->is_recursive_union()) {
+        log_set = set_op;
+        break;
+      }
+    }
+    op = op->get_parent();
+  }
+  return ret;
+}
+
 int ObLogTableScan::generate_access_exprs()
 {
   int ret = OB_SUCCESS;
@@ -394,6 +413,26 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
+    uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && get_contains_fake_cte()
+        && ((min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+             && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+            || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0))) {
+      ObLogSet *rcte_op = nullptr;
+      if (OB_FAIL(find_nearest_rcte_op(rcte_op))) {
+        LOG_WARN("fail to find recursive cte op", K(ret));
+      } else if (OB_ISNULL(rcte_op_ = rcte_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("recursive cte op is NULL", K(ret));
+      } else if (!rcte_op_->is_breadth_search()) {
+        //search depth do nothing
+      } else if (OB_ISNULL(identify_seq_expr_ = rcte_op->get_identify_seq_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("identify seq expr is NULL", K(ret));
+      } else if (OB_FAIL(access_exprs_.push_back(identify_seq_expr_))) {
+        LOG_WARN("fail to add identify seq expr", K(ret));
+      }
+    }
 
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_pseudo_column_like_exprs().count(); i++) {
       ObRawExpr *expr = stmt->get_pseudo_column_like_exprs().at(i);
@@ -655,9 +694,7 @@ int ObLogTableScan::extract_virtual_gen_access_exprs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("rowscan not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+        // keep orign expr
       } else if (OB_ISNULL(mapping_expr = get_real_expr(expr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr is null", K(ret), KPC(expr));
@@ -864,8 +901,9 @@ int ObLogTableScan::add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_expr
     LOG_DEBUG("debug mapping columns for virtual table", K(first_col_expr->get_table_id()), K(ref_table_id_));
     if (share::is_oracle_mapping_real_virtual_table(ref_table_id_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); ++i) {
-        ObRawExpr *real_expr = NULL;
-        if (OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
+        ObRawExpr *real_expr = access_exprs.at(i);
+        if (T_ORA_ROWSCN != access_exprs.at(i)->get_expr_type()
+            && OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
                                               real_expr))) {
           LOG_WARN("failed to add mapping column for vt", K(ret));
         } else if (OB_FAIL(real_expr_map_.push_back(
@@ -882,6 +920,7 @@ int ObLogTableScan::add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
                                               ObRawExpr *&real_expr)
 {
   int ret = OB_SUCCESS;
+  real_expr = nullptr;
   int64_t mapping_table_id = share::schema::ObSchemaUtils::get_real_table_mappings_tid(ref_table_id_);
   if (OB_INVALID_ID == mapping_table_id) {
     ret = OB_ERR_UNEXPECTED;

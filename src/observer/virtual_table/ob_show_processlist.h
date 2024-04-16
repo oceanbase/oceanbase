@@ -92,7 +92,8 @@ private:
         cur_row_(NULL),
         my_session_(NULL),
         schema_guard_(NULL),
-        output_column_ids_()
+        output_column_ids_(),
+        table_schema_(NULL)
     {
       trace_id_[0] = '\0';
     }
@@ -103,7 +104,8 @@ private:
              sql::ObSQLSessionInfo * session_info,
              common::ObNewRow *cur_row,
              const ObIArray<uint64_t> &column_ids,
-             share::schema::ObSchemaGetterGuard* schema_guard);
+             share::schema::ObSchemaGetterGuard* schema_guard,
+             const share::schema::ObTableSchema *table_schema);
     inline void reset();
   public:
     bool has_process_privilege();
@@ -115,6 +117,7 @@ private:
       share::schema::ObSchemaGetterGuard* schema_guard_;
       ObSEArray<uint64_t, common::OB_PREALLOCATED_NUM> output_column_ids_;
       char trace_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+      const share::schema::ObTableSchema *table_schema_;
       DISALLOW_COPY_AND_ASSIGN(FillScanner);
   };
   sql::ObSQLSessionMgr *session_mgr_;

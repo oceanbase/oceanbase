@@ -6067,6 +6067,20 @@ int ObAggregateProcessor::llc_init(AggrCell &aggr_cell)
   return ret;
 }
 
+int ObAggregateProcessor::llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  llc_map_size = get_llc_size();
+  OB_ASSERT(llc_map_size > 0);
+  if (OB_ISNULL(llc_map = static_cast<char *> (alloc.alloc(llc_map_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc llc map", K(ret), K(llc_map_size));
+  } else {
+    MEMSET(llc_map, 0, llc_map_size);
+  }
+  return ret;
+}
+
 int ObAggregateProcessor::llc_init_empty(ObExpr &expr, ObEvalCtx &eval_ctx)
 {
   int ret = OB_SUCCESS;

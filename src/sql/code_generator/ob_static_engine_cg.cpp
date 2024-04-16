@@ -1764,37 +1764,79 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
 {
   int ret = OB_SUCCESS;
   uint64_t last_cte_table_id = OB_INVALID_ID;
+  ObOpSpec* cte_spec = nullptr;
   ObOpSpec *left = nullptr;
   ObOpSpec *right = nullptr;
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
+  bool bulk_search = (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+                      && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+                     || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0);
+  bool add_extra_column = bulk_search && lib::is_oracle_mode() && op.is_breadth_search();
   if (OB_UNLIKELY(spec.get_child_cnt() != 2)
       || OB_ISNULL(left = spec.get_child(0))
       || OB_ISNULL(right = spec.get_child(1))
-      || OB_UNLIKELY(left->get_output_count() != right->get_output_count())
+      || OB_UNLIKELY(left->get_output_count() + add_extra_column != right->get_output_count())
       || OB_UNLIKELY(op.get_output_exprs().count() < left->get_output_count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("recursive union all spec should have two children", K(ret), K(spec.get_child_cnt()));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < left->get_output_count(); i++) {
-      if (left->output_.at(i)->datum_meta_.type_ != right->output_.at(i)->datum_meta_.type_) {
+    int64_t identify_seq_offset = -1;
+    int64_t left_pos = 0, right_pos = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < right->get_output_count(); ++i) {
+      ObExpr *left_expr = nullptr;
+      ObExpr *right_expr = nullptr;
+      if (right_pos >= right->output_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("right pos out of range", K(ret), K(right_pos));
+      } else if (OB_ISNULL(right_expr = right->output_.at(right_pos))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("right expr is nullptr", K(ret), K(right_pos), K(right_expr));
+      } else if (T_PSEUDO_IDENTIFY_SEQ == right_expr->type_) {
+        identify_seq_offset = right_pos;
+        right_pos++;
+      } else if (left_pos >= left->output_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("left pos out of range", K(ret), K(left_pos));
+      } else if (OB_ISNULL(left_expr = left->output_.at(left_pos))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("left expr is nullptr", K(ret), K(left_pos), K(left_expr));
+      } else if (left_expr->datum_meta_.type_ != right_expr->datum_meta_.type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("left and right of recursive union all should have same output data type", K(ret));
+      } else {
+        left_pos++;
+        right_pos++;
+      }
+    }
+    if (OB_SUCC(ret) && add_extra_column) {
+      if (identify_seq_offset < 0 || identify_seq_offset >= right->get_output_count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("calc identify seq offset failed", K(ret), K(identify_seq_offset));
+      } else {
+        spec.set_identify_seq_offset(identify_seq_offset);
       }
     }
   }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_cte_pseudo_column_row_desc(op, spec))) {
     LOG_WARN("Failed to generate cte pseudo", K(ret));
-  } else if (OB_FAIL(fake_cte_tables_.pop_back(last_cte_table_id))) {
+  } else if (OB_FAIL(fake_cte_specs_.pop_back(cte_spec))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Failed to pop last cte table op", K(ret), K(&fake_cte_tables_), K(fake_cte_tables_));
-  } else if (OB_UNLIKELY(OB_INVALID_ID == last_cte_table_id)) {
+    LOG_WARN("Failed to pop last cte table spec", K(ret));
+  } else if (OB_ISNULL(cte_spec)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Last cte table op cann't be null!", K(ret));
+    LOG_WARN("Last cte table spec cann't be null!", K(ret));
   } else {
-    spec.set_fake_cte_table(last_cte_table_id);
-    if (op.is_breadth_search()) {
+    spec.set_fake_cte_table(static_cast<ObFakeCTETableSpec *>(cte_spec)->get_id());
+    if (op.is_breadth_search() && bulk_search) {
+      static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = true;
+      spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::BREADTH_FIRST_BULK);
+    } else if (op.is_breadth_search() && !bulk_search) {
+      static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = false;
       spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::BREADTH_FRIST);
     } else {
+      static_cast<ObFakeCTETableSpec *>(cte_spec)->is_bulk_search_ = false;
       spec.set_search_strategy(ObRecursiveInnerDataOp::SearchStrategyType::DEPTH_FRIST);
     }
 
@@ -3666,7 +3708,7 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     }
     if (OB_FAIL(spec.child_exprs_.init(spec.get_child()->output_.count()))) {
       LOG_WARN("failed to init child exprs", K(ret));
-    } else if (spec.bloom_filter_id_array_.assign(op.get_bloom_filter_ids())) {
+    } else if (OB_FAIL(spec.bloom_filter_id_array_.assign(op.get_bloom_filter_ids()))) {
       LOG_WARN("failed to append bloom filter ids", K(ret));
     } else if (OB_FAIL(spec.child_exprs_.assign(spec.get_child()->output_))) {
       LOG_WARN("failed to append child exprs", K(ret));
@@ -4241,7 +4283,7 @@ int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObFakeCTETableSpec &spec
 int ObStaticEngineCG::generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETableSpec &spec)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(fake_cte_tables_.push_back(spec.get_id()))) {
+  if (OB_FAIL(fake_cte_specs_.push_back(&spec))) {
     LOG_WARN("fake cte table push back failed", K(ret));
   } else {
     const ObIArray<ObRawExpr*> &access_exprs = op.get_access_exprs();
@@ -4255,9 +4297,10 @@ int ObStaticEngineCG::generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETable
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(expr));
       } else if (expr->has_flag(IS_CONST)) {
-      } else if (OB_UNLIKELY(!expr->is_column_ref_expr())) {
+      } else if (OB_UNLIKELY(!expr->is_column_ref_expr())
+                 && OB_UNLIKELY(!expr->is_op_pseudo_column_expr())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expected basic column", K(ret));
+        LOG_WARN("expected basic column or pseudo column", K(ret));
       } else if (OB_FAIL(generate_rt_expr(*expr, rt_expr))) {
         LOG_WARN("Fail to generate rt expr", KPC(expr), K(rt_expr));
       } else if (OB_ISNULL(rt_expr)) {
@@ -4265,7 +4308,7 @@ int ObStaticEngineCG::generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETable
         LOG_WARN("rt expr is null", K(ret));
       } else if (OB_FAIL(mark_expr_self_produced(expr))) { // access_exprs in convert_cte_pump need to set IS_COLUMNLIZED flag
         LOG_WARN("mark expr self produced failed", K(ret));
-      } else {
+      } else if (expr->is_column_ref_expr()) {
         ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(expr);
         int64_t column_offset = col_expr->get_cte_generate_column_projector_offset();
         if (OB_FAIL(spec.column_involved_offset_.push_back(column_offset))) {
@@ -4273,8 +4316,17 @@ int ObStaticEngineCG::generate_cte_table_spec(ObLogTableScan &op, ObFakeCTETable
         } else if (OB_FAIL(spec.column_involved_exprs_.push_back(rt_expr))) {
           LOG_WARN("Fail to add column expr", K(ret));
         }
+      } else if (expr->is_op_pseudo_column_expr()) {
+        spec.identify_seq_expr_ = rt_expr;
       }
     } // end for
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(op.get_identify_seq_expr())) {
+      if (OB_ISNULL(spec.identify_seq_expr_ )) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("identify seq rt expr is null", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -4319,6 +4371,7 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObScalarAggregateSpec &spe
     LOG_WARN("failed to generate distinct aggregate function duplicate columns", K(ret));
   } else {
     spec.by_pass_enabled_ = false;
+    spec.llc_ndv_est_enabled_ = false;
     OZ(set_3stage_info(op, spec));
   }
   LOG_DEBUG("finish generate_spec", K(spec), K(ret));
@@ -4348,6 +4401,7 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObMergeGroupBySpec &spec,
   } else {
     spec.set_rollup(op.has_rollup());
     spec.by_pass_enabled_ = false;
+    spec.llc_ndv_est_enabled_ = false;
     OZ(set_3stage_info(op, spec));
     OZ(set_rollup_adaptive_info(op, spec));
     if (OB_FAIL(ret)) {
@@ -4608,6 +4662,11 @@ int ObStaticEngineCG::generate_spec(ObLogGroupBy &op, ObHashGroupBySpec &spec,
     spec.set_est_group_cnt(op.get_distinct_card());
     OZ(set_3stage_info(op, spec));
     spec.by_pass_enabled_ = op.is_adaptive_aggregate();
+    int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      spec.llc_ndv_est_enabled_ = tenant_config->_enable_hgby_llc_ndv_adaptive;
+    }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(generate_dist_aggr_distinct_columns(op, spec))) {
       LOG_WARN("failed to generate distinct aggregate function duplicate columns", K(ret));
@@ -6879,6 +6938,7 @@ int ObStaticEngineCG::generate_spec(ObLogLinkScan &op, ObLinkScanSpec &spec, con
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (OB_ISNULL(phy_plan_)) {
+    ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (lib::is_oracle_mode() &&
              0 != op.get_dblink_id() &&

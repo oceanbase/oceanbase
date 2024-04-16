@@ -730,6 +730,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12463	__all_virtual_column_privilege_history	2	201001	1
 12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
 12466	ENABLED_ROLES	2	201002	1
+12469	__all_virtual_tracepoint_info	2	201001	1
 12487	__all_virtual_nic_info	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
@@ -1084,6 +1085,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21447	DBA_OB_TENANT_EVENT_HISTORY	1	201001	1
 21448	CDB_OB_TENANT_EVENT_HISTORY	1	201001	1
 21449	GV$OB_FLT_TRACE_CONFIG	1	201001	1
+21459	GV$OB_SESSION	1	201001	1
+21460	V$OB_SESSION	1	201001	1
 21461	GV$OB_PL_CACHE_OBJECT	1	201001	1
 21462	V$OB_PL_CACHE_OBJECT	1	201001	1
 21463	CDB_OB_RECOVER_TABLE_JOBS	1	201001	1
@@ -1136,6 +1139,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21538	DBA_MVREF_CHANGE_STATS	1	201001	1
 21539	CDB_MVREF_STMT_STATS	1	201001	1
 21540	DBA_MVREF_STMT_STATS	1	201001	1
+21543	GV$OB_TRACEPOINT_INFO	1	201001	1
+21544	V$OB_TRACEPOINT_INFO	1	201001	1
 21580	GV$OB_NIC_INFO	1	201001	1
 21581	V$OB_NIC_INFO	1	201001	1
 check sys table count and table_id range success

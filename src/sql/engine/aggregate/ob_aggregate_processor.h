@@ -791,6 +791,7 @@ public:
   inline void set_support_fast_single_row_agg(const bool flag) { support_fast_single_row_agg_ = flag; }
   void set_need_advance_collect() { need_advance_collect_ = true; }
   bool get_need_advance_collect() const { return need_advance_collect_; }
+  static int llc_init_empty(char *&llc_map, int64_t &llc_map_size, common::ObIAllocator &alloc);
   static int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size);
 private:
   template <typename T>

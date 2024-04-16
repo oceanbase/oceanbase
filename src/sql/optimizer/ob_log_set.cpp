@@ -565,8 +565,21 @@ int ObLogSet::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to get exprs", K(ret));
   } else if (is_recursive_union_ && get_stmt()->is_select_stmt()) {
     const ObSelectStmt *select_stmt = static_cast<const ObSelectStmt *>(get_stmt());
+    uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
     // 伪列的产生，search/cycle的伪列都要求在recursive union算子产生
-    if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
+    if (lib::is_oracle_mode() && is_breadth_search_
+        && ((min_cluster_version >= CLUSTER_VERSION_4_2_2_0
+             && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+            || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0))) {
+      if (OB_ISNULL(identify_seq_expr_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("identify seq exor is null", K(ret));
+      } else if (OB_FAIL(all_exprs.push_back(identify_seq_expr_))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(append(all_exprs, select_stmt->get_cte_exprs()))) {
       LOG_WARN("fail to add cte exprs", K(ret));
     } else { /*do nothing*/ }
   } else { /*do nothing*/ }

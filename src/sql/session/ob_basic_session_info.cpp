@@ -477,7 +477,8 @@ int ObBasicSessionInfo::reset_timezone()
   }
 
   ObObj tmp_obj2;
-  if (OB_FAIL(get_sys_variable(SYS_VAR_ERROR_ON_OVERLAP_TIME, tmp_obj2))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_sys_variable(SYS_VAR_ERROR_ON_OVERLAP_TIME, tmp_obj2))) {
     LOG_WARN("get sys var failed", K(ret));
   } else if (OB_FAIL(process_session_overlap_time_value(tmp_obj2))) {
     LOG_WARN("process session overlap time value failed", K(ret), K(tmp_obj2));
@@ -5893,8 +5894,13 @@ int ObBasicSessionInfo::set_session_state_(ObSQLSessionState state)
       LOG_WARN("session state is unknown", K(ret), K(sessid_), K(proxy_sessid_), K(state));
     }
   } else {
+    bool is_state_change = is_active_state_change(thread_data_.state_, state);
     thread_data_.state_ = state;
-    thread_data_.cur_state_start_time_ = ::oceanbase::common::ObClockGenerator::getClock();
+    int64_t current_time = ::oceanbase::common::ObTimeUtility::current_time();
+    if (is_state_change) {
+      thread_data_.retry_active_time_ += (current_time - thread_data_.cur_state_start_time_);
+    }
+    thread_data_.cur_state_start_time_ = current_time;
   }
   return ret;
 }
@@ -5941,6 +5947,7 @@ int ObBasicSessionInfo::set_session_active(const ObString &sql,
     thread_data_.cur_query_start_time_ = query_receive_ts;
     thread_data_.mysql_cmd_ = cmd;
     thread_data_.last_active_time_ = last_active_time_ts;
+    thread_data_.is_request_end_ = false;
     ObActiveSessionGuard::setup_ash(ash_stat_);
   }
   return ret;
@@ -5957,6 +5964,7 @@ int ObBasicSessionInfo::set_session_active(const ObString &label,
     LOG_WARN("fail to set session state", K(ret));
   } else {
     thread_data_.mysql_cmd_ = cmd;
+    thread_data_.is_request_end_ = false;
     ObActiveSessionGuard::setup_ash(ash_stat_);
   }
   return ret;
