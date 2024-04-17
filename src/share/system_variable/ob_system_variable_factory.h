@@ -3009,6 +3009,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SLAVE_SKIP_ERRORS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(407); }
 };
+class ObSysVarInnodbSyncDebug : public ObBoolSysVar
+{
+public:
+  ObSysVarInnodbSyncDebug() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_SYNC_DEBUG; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(408); }
+};
 
 
 class ObSysVarFactory
@@ -3029,7 +3036,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 309;
+  const static int64_t OB_SYS_VARS_COUNT = 310;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

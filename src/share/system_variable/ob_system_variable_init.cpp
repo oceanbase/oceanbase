@@ -5753,13 +5753,26 @@ static struct VarsInit{
     ObSysVars[407].alias_ = "OB_SV_SLAVE_SKIP_ERRORS" ;
     }();
 
+    [&] (){
+      ObSysVars[408].default_value_ = "0" ;
+      ObSysVars[408].info_ = "Enables sync debug checking for the InnoDB storage engine" ;
+      ObSysVars[408].name_ = "innodb_sync_debug" ;
+      ObSysVars[408].data_type_ = ObIntType ;
+      ObSysVars[408].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[408].id_ = SYS_VAR_INNODB_SYNC_DEBUG ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_SYNC_DEBUG)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_SYNC_DEBUG] = 408 ;
+      ObSysVars[408].base_value_ = "0" ;
+    ObSysVars[408].alias_ = "OB_SV_INNODB_SYNC_DEBUG" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 408;
+static int64_t var_amount = 409;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

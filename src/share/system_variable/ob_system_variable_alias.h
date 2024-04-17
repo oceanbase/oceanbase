@@ -424,6 +424,7 @@ namespace share
   static const char* const OB_SV_SKIP_SLAVE_START = "skip_slave_start";
   static const char* const OB_SV_SLAVE_LOAD_TMPDIR = "slave_load_tmpdir";
   static const char* const OB_SV_SLAVE_SKIP_ERRORS = "slave_skip_errors";
+  static const char* const OB_SV_INNODB_SYNC_DEBUG = "innodb_sync_debug";
 
 }
 }

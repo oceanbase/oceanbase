@@ -5965,5 +5965,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/replication-options-replica.html#sysvar_slave_skip_errors"
+  },
+  "innodb_sync_debug": {
+    "id": 10324,
+    "name": "innodb_sync_debug",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Enables sync debug checking for the InnoDB storage engine",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
