@@ -548,8 +548,6 @@ int ObPartitionExchange::check_column_conditions_in_common_(const ObColumnSchema
     LOG_WARN("column skip index attr of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->get_skip_index_attr()), K(inc_table_col_schema->get_skip_index_attr()));
   } else if (OB_UNLIKELY(base_table_col_schema->get_udt_set_id() != inc_table_col_schema->get_udt_set_id())) {
     LOG_WARN("column udt set id of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->get_udt_set_id()), K(inc_table_col_schema->get_udt_set_id()));
-  } else if (OB_UNLIKELY(base_table_col_schema->is_nullable() != inc_table_col_schema->is_nullable())) {
-    LOG_WARN("column is nullable attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_nullable()), K(inc_table_col_schema->is_nullable()));
   } else if (OB_UNLIKELY(base_table_col_schema->is_not_null_rely_column() != inc_table_col_schema->is_not_null_rely_column())) {
     LOG_WARN("is not null rely column attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_not_null_rely_column()), K(inc_table_col_schema->is_not_null_rely_column()));
   } else if (OB_UNLIKELY(base_table_col_schema->is_not_null_enable_column() != inc_table_col_schema->is_not_null_enable_column())) {
@@ -602,6 +600,8 @@ int ObPartitionExchange::check_column_conditions_in_mysql_mode_(const ObColumnSc
       LOG_WARN("column name of exchanging partition tables are not equal", K(ret), K(is_aux_table_column), K(base_table_col_schema->get_column_name_str()), K(inc_table_col_schema->get_column_name_str()));
     } else if (OB_UNLIKELY(base_table_col_schema->is_on_update_current_timestamp() != inc_table_col_schema->is_on_update_current_timestamp())) {
       LOG_WARN("column is on update_current_timestamp attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_on_update_current_timestamp()), K(inc_table_col_schema->is_on_update_current_timestamp()));
+    } else if (OB_UNLIKELY(base_table_col_schema->is_nullable() != inc_table_col_schema->is_nullable())) {
+      LOG_WARN("column is nullable attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_nullable()), K(inc_table_col_schema->is_nullable()));
     } else if (OB_FAIL(check_column_default_value_(base_table_col_schema, inc_table_col_schema, false/*is_oracle_mode*/, is_equal))) {
       LOG_WARN("fail to check column default value", K(ret), KPC(base_table_col_schema), KPC(inc_table_col_schema), K(is_equal));
     } else if (!is_equal) {
@@ -643,6 +643,8 @@ int ObPartitionExchange::check_column_conditions_in_oracle_mode_(const ObColumnS
       LOG_WARN("is always identity column attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_always_identity_column()), K(inc_table_col_schema->is_always_identity_column()));
     } else if (OB_UNLIKELY(base_table_col_schema->is_default_identity_column() != inc_table_col_schema->is_default_identity_column())) {
       LOG_WARN("is default identity column attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_default_identity_column()), K(inc_table_col_schema->is_default_identity_column()));
+    } else if (OB_UNLIKELY((base_table_col_schema->is_rowkey_column() && inc_table_col_schema->is_rowkey_column()) && (base_table_col_schema->is_nullable() != inc_table_col_schema->is_nullable()))) {
+      LOG_WARN("column is nullable attribute of exchanging partition tables are not equal", K(ret), K(base_table_col_schema->is_nullable()), K(inc_table_col_schema->is_nullable()));
     } else if (OB_FAIL(check_column_default_value_(base_table_col_schema, inc_table_col_schema, true/*is_oracle_mode*/, is_equal))) {
       LOG_WARN("fail to check column default value", K(ret), KPC(base_table_col_schema), KPC(inc_table_col_schema), K(is_equal));
     } else if (!is_equal) {
