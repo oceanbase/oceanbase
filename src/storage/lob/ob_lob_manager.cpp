@@ -801,6 +801,7 @@ static int read_all(
   int ret = OB_SUCCESS;
   ObLobQueryResult result;
   meta_iter.set_not_calc_char_len(true);
+  meta_iter.set_not_need_last_info(true);
   while (OB_SUCC(ret)) {
     ret = meta_iter.get_next_row(result.meta_result_);
     const char *lob_data = result.meta_result_.info_.lob_data_.ptr();
@@ -3032,6 +3033,7 @@ int ObLobManager::batch_delete(ObLobAccessParam& param, ObLobMetaScanIter &iter)
   int ret = OB_SUCCESS;
   ObLobPersistDeleteIter delete_iter;
   iter.set_not_calc_char_len(true);
+  iter.set_not_need_last_info(true);
   if (OB_FAIL(delete_iter.init(&param, &iter))) {
     LOG_WARN("init insert iter fail", K(ret));
   } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->batch_delete(param, delete_iter))) {
