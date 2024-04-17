@@ -769,6 +769,9 @@ int RegularCol::check_item_method_json(ObRegCol &col_node, JtScanCtx* ctx)
          && col_node.expr_param_.dst_type_ != ObJsonType) {
       ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
       LOG_USER_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING);
+    } else if (OB_ISNULL(col_node.expr_param_.json_path_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get expr param json path is null", K(ret));
     } else if (col_node.expr_param_.json_path_->is_last_func()
                 && OB_FAIL( ObJsonExprHelper::check_item_func_with_return(col_node.expr_param_.json_path_->get_last_node_type(),
                               col_node.expr_param_.dst_type_, expr->datum_meta_.cs_type_, 1))) {
@@ -782,7 +785,10 @@ int RegularCol::check_item_method_json(ObRegCol &col_node, JtScanCtx* ctx)
       LOG_WARN("fail to check item method with wrapper", K(ret));
     }
   } else if (col_node.type() == COL_TYPE_VALUE) {
-    if (col_node.expr_param_.json_path_->is_last_func()
+    if (OB_ISNULL(col_node.expr_param_.json_path_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get expr param json path is null", K(ret));
+    } else if (col_node.expr_param_.json_path_->is_last_func()
         && OB_FAIL( ObJsonExprHelper::check_item_func_with_return(col_node.expr_param_.json_path_->get_last_node_type(),
                                                                   col_node.expr_param_.dst_type_, expr->datum_meta_.cs_type_, 0))) {
       if (ret == OB_ERR_INVALID_DATA_TYPE_RETURNING) {

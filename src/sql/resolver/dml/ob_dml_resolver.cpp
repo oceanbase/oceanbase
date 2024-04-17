@@ -9603,6 +9603,9 @@ int ObDMLResolver::resolve_json_table_column_name_and_path(const ParseNode *name
     } else if (((table_type == OB_ORA_JSON_TABLE_TYPE && *path_node->str_value_ != '$' && path_node->value_ != 1))
                 && OB_FAIL(json_table_make_json_path(*path_node, allocator, col_def->col_base_info_.path_, table_type))) {
       LOG_WARN("failed to make json path", K(ret));
+    } else if (table_type == OB_ORA_JSON_TABLE_TYPE && path_node->type_ == T_IDENT && path_node->is_input_quoted_ == 1) {
+      ret = OB_ERR_INVALID_IDENTIFIER_JSON_TABLE;
+      LOG_WARN("invalid identifier used for path expression in JSON_TABLE", K(ret), K(path_node->type_));
     }
   } else if (path_node->type_ == T_NULL
              && OB_FAIL(json_table_make_json_path(*name_node, allocator, col_def->col_base_info_.path_, table_type))) {
