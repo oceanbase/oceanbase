@@ -1029,7 +1029,8 @@ public:
       TGHelper *tg_helper = get_tenant_tg_helper();
       // 目前只打印日志
       if (OB_ISNULL(tg_helper)) {
-        OB_LOG(WARN, "create tg tenant but tenant tg helper is null", K(tg_def_id), K(tg_id));
+        // ignore ret
+        OB_LOG(WARN, "create tg tenant but tenant tg helper is null", K(tg_def_id), K(tg_id), K(ret));
       } else {
         tg->tg_helper_ = tg_helper;
         tg_helper->tg_create_cb(tg_id);

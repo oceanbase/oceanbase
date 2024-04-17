@@ -206,6 +206,7 @@ int ObCgroupCtrl::recursion_remove_group_(const char *curr_path)
         }
       }
       if (OB_FAIL(remove_dir_(curr_path))) {
+        // ignore ret
         LOG_WARN("remove sub group directory failed", K(ret), K(curr_path));
       } else {
         LOG_INFO("remove sub group directory success", K(curr_path));

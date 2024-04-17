@@ -324,7 +324,8 @@ private:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(condition)
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
-      OB_LOG_(WARN, "GCTX.sql_proxy_ is null");
+      ret = OB_NULL_CHECK_ERROR;
+      OB_LOG_(WARN, "GCTX.sql_proxy_ is null", K(ret));
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = nullptr;
@@ -371,6 +372,7 @@ private:
     #define PRINT_WRAPPER KR(ret), K(MTL_ID()), K(table), K(condition)
     int ret = common::OB_SUCCESS;
     if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_NULL_CHECK_ERROR;
       OB_LOG_(WARN, "GCTX.sql_proxy_ is null");
     } else {
       HEAP_VAR(ObMySQLProxy::MySQLResult, res) {

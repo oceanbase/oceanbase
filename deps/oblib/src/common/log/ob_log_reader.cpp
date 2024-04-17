@@ -151,11 +151,13 @@ int ObLogReader::revise_log(const bool force)
     } else {
       if (OB_LAST_LOG_NOT_COMPLETE == ret || (force && OB_LAST_LOG_RUINNED == ret)) {
         uint64_t file_id = cur_log_file_id_ + 1;
+        int tmp_ret = OB_SUCCESS;
         if (log_file_reader_->if_file_exist(file_id)) {
+          // ignore ret
           SHARE_LOG(WARN, "the log is not the last", K(cur_log_file_id_), K(ret));
         } else {
-          if (OB_FAIL(log_file_reader_->revise())) {
-            SHARE_LOG(WARN, "revise log failed", K(cur_log_file_id_), K(ret));
+          if (OB_TMP_FAIL(log_file_reader_->revise())) {
+            SHARE_LOG(WARN, "revise log failed", K(cur_log_file_id_), K(tmp_ret), K(ret));
           }
         }
       }

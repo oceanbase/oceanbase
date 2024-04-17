@@ -43,12 +43,16 @@ int ObSqlProcessor::run()
     } else {
     }
   }
-
-  if (OB_FAIL(response(ret))) {
-    LOG_WARN("response rpc result fail", K(ret));
+  int tmp_ret = OB_SUCCESS;
+  int tmp_ret_2 = OB_SUCCESS;
+  if (OB_TMP_FAIL(response(ret))) {
+    ret = (OB_SUCCESS != ret) ? ret : tmp_ret;
+    LOG_WARN("response rpc result fail", K(ret), K(tmp_ret));
   }
-  if (deseri_succ && OB_FAIL(after_process(ret))) {
-    LOG_WARN("after process fail", K(ret));
+
+  if (deseri_succ && OB_UNLIKELY(OB_SUCCESS != (tmp_ret_2 = after_process(ret)))) {
+    ret = (OB_SUCCESS != ret) ? ret : tmp_ret_2;
+    LOG_WARN("after process fail", K(ret), K(tmp_ret_2));
   }
 
   cleanup();

@@ -2077,15 +2077,14 @@ int ObMultiTenant::get_active_tenant_with_tenant_lock(
   return ret;
 }
 
-int ObMultiTenant::get_tenant_unsafe( const uint64_t tenant_id, ObTenant *&tenant) const
+int ObMultiTenant::get_tenant_unsafe(const uint64_t tenant_id, ObTenant *&tenant) const
 {
   int ret = OB_SUCCESS;
 
   tenant = NULL;
-  for (TenantList::iterator it = tenants_.begin();
-       it != tenants_.end() && NULL == tenant;
-       it++) {
+  for (TenantList::iterator it = tenants_.begin(); it != tenants_.end() && NULL == tenant; it++) {
     if (OB_ISNULL(*it)) {
+      // ignore ret
       // process the remains anyway
       LOG_ERROR("unexpected condition");
     } else if ((*it)->id() == tenant_id) {
@@ -2240,10 +2239,9 @@ int ObMultiTenant::get_mtl_tenant_ids(ObIArray<uint64_t> &tenant_ids)
 {
   int ret = OB_SUCCESS;
   SpinRLockGuard guard(lock_);
-  for (TenantList::iterator it = tenants_.begin();
-       it != tenants_.end() && OB_SUCC(ret);
-       it++) {
+  for (TenantList::iterator it = tenants_.begin(); it != tenants_.end() && OB_SUCC(ret); it++) {
     if (OB_ISNULL(*it)) {
+      // ignore ret
       LOG_ERROR("unexpected condition", K(*it));
     } else if (is_virtual_tenant_id((*it)->id())) {
       // do nothing

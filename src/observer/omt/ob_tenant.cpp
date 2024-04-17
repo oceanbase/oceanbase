@@ -195,6 +195,7 @@ void ObPxPools::mtl_stop(ObPxPools *&pools)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pools)) {
+    // ignore ret
     // pools will be null if it's creating tenant and failed.
     LOG_WARN("pools is null");
   } else {

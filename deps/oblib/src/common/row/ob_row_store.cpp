@@ -967,6 +967,7 @@ int ObRowStore::assign(const ObRowStore &other_store)
   if (OB_FAIL(set_col_count(col_count))) {
     OB_LOG(WARN, "fail to set rowstore columns count", K(ret));
   } else if (OB_ISNULL(cell = static_cast<ObObj *>(alloca(sizeof(ObObj) * col_count)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "fail to alloc obj array", K(ret));
   } else {
     cur_row.cells_ = cell;

@@ -404,7 +404,7 @@ template <typename T, int max_block_size,
           bool use_trivial_ctor>
 int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT, use_trivial_ctor>::pop_back(T &obj)
 {
-  int ret = OB_ENTRY_NOT_EXIST;
+  int ret = OB_SUCCESS;
   if (OB_LIKELY(0 < count_)) {
     T *obj_ptr = get_obj_pos(count_ - 1);
     // assign
@@ -414,6 +414,8 @@ int Ob2DArray<T, max_block_size, BlockAllocatorT, auto_free, BlockPointerArrayT,
       obj_ptr->~T();
       --count_;
     }
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
 }

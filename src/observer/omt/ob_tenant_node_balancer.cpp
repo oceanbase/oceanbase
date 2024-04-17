@@ -622,11 +622,13 @@ int ObTenantNodeBalancer::refresh_tenant(TenantUnits &units)
       omt_->set_synced();
     }
 
-    if (OB_FAIL(check_del_tenants(local_units, units))) { // overwrite ret
+    if (OB_FAIL(check_del_tenants(local_units, units))) {
+      // overwrite ret
       LOG_WARN("check delete tenant fail", K(ret));
     }
 
-    if (OB_FAIL(refresh_hidden_sys_memory())) { // overwrite ret
+    if (OB_FAIL(refresh_hidden_sys_memory())) {
+      // overwrite ret
       LOG_WARN("refresh hidden sys memory failed", K(ret));
     }
   }
