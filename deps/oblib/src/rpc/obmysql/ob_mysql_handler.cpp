@@ -73,6 +73,7 @@ void *ObMySQLHandler::decode(easy_message_t *m)
 
   if (OB_FAIL(ret)) {
     m->status = EASY_ERROR;
+    pkt = NULL;
   }
   return pkt;
 }
