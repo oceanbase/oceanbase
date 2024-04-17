@@ -2063,17 +2063,6 @@ int ObDRWorker::try_tenant_disaster_recovery(
   return ret;
 }
 
-int ObDRWorker::try_assign_unit(
-    DRLSInfo &dr_ls_info)
-{
-  int ret = OB_SUCCESS;
-  /* TODO: (wenduo)
-   * try assign unit_id/unit_group_id for replicas with invalid unit_id/unit_group_id
-   */
-  UNUSED(dr_ls_info);
-  return ret;
-}
-
 int ObDRWorker::try_ls_disaster_recovery(
     const bool only_for_display,
     DRLSInfo &dr_ls_info,
@@ -3958,6 +3947,10 @@ int ObDRWorker::find_valid_readonly_replica_(
                  && server_stat_info->is_alive()
                  && !server_stat_info->is_stopped()
                  && !replica->get_restore_status().is_failed()
+                 // TODO@zhennan: after transfer partition cp to master, this condition(unit_stat_info->get_unit().is_active_status())
+                 //               should change to (unit_stat_info->get_unit().is_active_status() || OB_NOT_NULL(specified_unit_in_group))
+                 //               Also make sure add jingyu_alter_unit_group_for_ls_with_several_r_replicas.test back
+                 && unit_stat_info->get_unit().is_active_status()
                  && unit_stat_info->get_server_stat()->is_alive()
                  && !unit_stat_info->get_server_stat()->is_block()) {
         if (OB_FAIL(target_replica.assign(*replica))) {
