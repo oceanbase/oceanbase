@@ -6814,6 +6814,8 @@ def_table_schema(
     ('clone_finished_time', 'timestamp', 'true'),
     ('ret_code', 'int', 'true'),
     ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+    ('data_version', 'uint', 'false', '0'),
+    ('min_cluster_version', 'uint', 'false', '0'),
   ],
 )
 
@@ -6848,6 +6850,8 @@ all_clone_job_history_def = dict(
     ('clone_finished_time', 'timestamp', 'false'),
     ('ret_code', 'int', 'true'),
     ('error_msg', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true'),
+    ('data_version', 'uint', 'false', '0'),
+    ('min_cluster_version', 'uint', 'false', '0'),
   ],
 )
 def_table_schema(**all_clone_job_history_def)

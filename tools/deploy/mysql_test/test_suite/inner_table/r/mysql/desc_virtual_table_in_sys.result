@@ -9081,6 +9081,8 @@ clone_start_time	timestamp(6)	NO		NULL
 clone_finished_time	timestamp(6)	YES		NULL	
 ret_code	bigint(20)	YES		NULL	
 error_msg	varchar(512)	YES		NULL	
+data_version	bigint(20) unsigned	NO		0	
+min_cluster_version	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_clone_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9107,6 +9109,8 @@ clone_start_time	timestamp(6)	NO		NULL
 clone_finished_time	timestamp(6)	NO		NULL	
 ret_code	bigint(20)	YES		NULL	
 error_msg	varchar(512)	YES		NULL	
+data_version	bigint(20) unsigned	NO		0	
+min_cluster_version	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_clone_job_history;
 IF(count(*) >= 0, 1, 0)
 1
