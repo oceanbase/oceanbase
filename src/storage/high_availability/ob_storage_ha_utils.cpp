@@ -622,6 +622,7 @@ int ObStorageHAUtils::check_log_need_rebuild(const uint64_t tenant_id, const sha
                       "tenant_id", tenant_id,
                       "ls_id", ls_id.id(),
                       "result", tmp_ret);
+      DEBUG_SYNC(AFTER_CHECK_LOG_NEED_REBUILD);
     }
   }
 #endif
