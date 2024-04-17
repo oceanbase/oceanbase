@@ -53204,7 +53204,8 @@ SELECT
   LB_VIP,
   LB_VPORT,
   IN_BYTES,
-  OUT_BYTES
+  OUT_BYTES,
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
