@@ -7540,7 +7540,8 @@ int ObRootService::alter_package(const obrpc::ObAlterPackageArg &arg)
           LOG_WARN("package info is null", K(db_schema->get_database_id()), K(package_name), K(package_type), K(ret));
         }
         if (OB_SUCC(ret)) {
-          if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+          if (!((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_4_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) ||
+                GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_1_0)) {
             if (OB_FAIL(ddl_service_.alter_package(schema_guard,
                                                     *package_info,
                                                     public_routine_infos,
