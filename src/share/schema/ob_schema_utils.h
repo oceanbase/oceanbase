@@ -186,7 +186,8 @@ public:
              const ObTimeoutCtx &ctx,
              sql::ObSQLSessionInfo *session,
              const uint64_t tenant_id,
-             const int64_t schema_version);
+             const int64_t schema_version,
+             const bool skip_consensus);
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,

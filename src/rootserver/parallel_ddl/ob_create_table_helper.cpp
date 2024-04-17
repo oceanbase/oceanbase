@@ -164,6 +164,7 @@ int ObCreateTableHelper::execute()
     const ObTableSchema &table = arg_.schema_;
     //create table xx if not exist (...)
     if (arg_.if_not_exist_) {
+      res_.do_nothing_ = true;
       ret = OB_SUCCESS;
       LOG_INFO("table is exist, no need to create again",
                "tenant_id", table.get_tenant_id(),
