@@ -745,7 +745,12 @@ int SimpleServerHelper::write(sqlclient::ObISQLConnection *conn, const char *sql
   return conn->execute_write(OB_SYS_TENANT_ID, sql, affected_rows);
 }
 
-int InjectTxFaultHelper::submit_log(const char *buf, const int64_t size, const share::SCN &base_ts, ObTxBaseLogCb *cb, const bool need_nonblock)
+int InjectTxFaultHelper::submit_log(const char *buf,
+                                    const int64_t size,
+                                    const share::SCN &base_ts,
+                                    ObTxBaseLogCb *cb,
+                                    const bool need_nonblock,
+                                    const int64_t retry_timeout_us)
 {
 
   int ret = OB_SUCCESS;

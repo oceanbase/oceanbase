@@ -497,7 +497,8 @@ private:
                             const share::SCN &base_scn,
                             ObTxLogCb *&log_cb,
                             const int64_t replay_hint = 0,
-                            const ObReplayBarrierType barrier = ObReplayBarrierType::NO_NEED_BARRIER);
+                            const ObReplayBarrierType barrier = ObReplayBarrierType::NO_NEED_BARRIER,
+                            const int64_t retry_timeout_us = 1000);
   int after_submit_log_(ObTxLogBlock &log_block,
                         ObTxLogCb *log_cb,
                         memtable::ObRedoLogSubmitHelper *redo_helper);

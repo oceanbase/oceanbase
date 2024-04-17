@@ -1299,7 +1299,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
   bool blockable = expire_ts > 0;
   do {
     ret = part_ctx->rollback_to_savepoint(op_sn, specified_from_scn, savepoint, tx_seq_base, downstream_parts);
-    if (OB_NEED_RETRY == ret && blockable) {
+    if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;
         TRANS_LOG(WARN, "can not retry rollback_to because of timeout", K(ret), K(retry_cnt));
@@ -1311,7 +1311,7 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
         ob_usleep(50 * 1000);
       }
     }
-  } while (OB_NEED_RETRY == ret && blockable && !part_ctx->is_transfer_deleted());
+  } while ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable && !part_ctx->is_transfer_deleted());
 #ifndef NDEBUG
   TRANS_LOG(INFO, "rollback to savepoint sync", K(ret),
             K(part_ctx->get_trans_id()), K(part_ctx->get_ls_id()), K(retry_cnt),

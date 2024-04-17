@@ -646,8 +646,26 @@ int ObPartTransCtx::handle_timeout(const int64_t delay)
       if (!is_follower_() && is_committing_()) {
         if (is_local_tx_()) {
           try_submit_next_log_();
+        } else if (ObTxState::PREPARE > get_upstream_state() ) {
+          ObTxState next_state = (is_sub2pc() || exec_info_.is_dup_tx_) ?
+                                    ObTxState::REDO_COMPLETE :
+                                    ObTxState::PREPARE;
+          if (OB_FAIL(drive_self_2pc_phase(next_state))) {
+            TRANS_LOG(WARN, "drive to next phase failed", K(ret), K(*this), K(next_state));
+          } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::handle_timeout())) {
+            TRANS_LOG(WARN, "handle 2pc timeout failed", KR(ret), KPC(this));
+          }
         } else if (OB_FAIL(ObTxCycleTwoPhaseCommitter::handle_timeout())) {
           TRANS_LOG(WARN, "handle 2pc timeout failed", KR(ret), KPC(this));
+        }
+      }
+
+      // retry submit abort log
+      if (!is_follower_()
+        && get_upstream_state() == ObTxState::ABORT
+        && get_upstream_state() != get_downstream_state()) {
+        if (OB_FAIL(compensate_abort_log_())) {
+          TRANS_LOG(WARN, "compensate abort log failed", KR(ret), KPC(this));
         }
       }
 
@@ -2042,6 +2060,11 @@ int ObPartTransCtx::compensate_abort_log_()
   } else if(OB_FALSE_IT(sub_state_.set_force_abort())) {
 
   } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_ABORT_LOG))) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_EAGAIN == ret && OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+      TRANS_LOG(WARN, "restart_2pc_trans_timer_ for submit abort log fail",
+        KR(ret), KR(tmp_ret), KPC(this));
+    }
     TRANS_LOG(WARN, "submit abort log failed", KR(ret), K(*this));
   } else {
   }
@@ -3564,6 +3587,7 @@ int ObPartTransCtx::submit_commit_log_()
 int ObPartTransCtx::submit_abort_log_()
 {
   int ret = OB_SUCCESS;
+  set_upstream_state(ObTxState::ABORT);
   ObTxLogCb *log_cb = NULL;
   ObTxLogBlock log_block;
   const int64_t replay_hint = trans_id_.get_id();
@@ -3621,7 +3645,7 @@ int ObPartTransCtx::submit_abort_log_()
     }
   } else if (OB_FAIL(acquire_ctx_ref_())) {
     TRANS_LOG(ERROR, "acquire ctx ref failed", KR(ret), K(*this));
-  } else if (OB_FAIL(submit_log_block_out_(log_block, SCN::min_scn(), log_cb, replay_hint, barrier))) {
+  } else if (OB_FAIL(submit_log_block_out_(log_block, SCN::min_scn(), log_cb, replay_hint, barrier, 50 * 1000))) {
     TRANS_LOG(WARN, "submit log to clog adapter failed", KR(ret), K(*this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -3876,7 +3900,8 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                                           const share::SCN &base_scn,
                                           ObTxLogCb *&log_cb,
                                           const int64_t replay_hint,
-                                          const logservice::ObReplayBarrierType barrier)
+                                          const logservice::ObReplayBarrierType barrier,
+                                          const int64_t retry_timeout_us)
 {
   int ret = OB_SUCCESS;
   bool is_2pc_state_log = false;
@@ -3899,7 +3924,8 @@ int ObPartTransCtx::submit_log_block_out_(ObTxLogBlock &log_block,
                                     log_block.get_size(),
                                     base_scn,
                                     log_cb,
-                                    false))) {
+                                    true,
+                                    retry_timeout_us))) {
       busy_cbs_.add_last(log_cb);
     }
   }
@@ -3933,8 +3959,19 @@ int ObPartTransCtx::submit_log_impl_(const ObTxLogType log_type)
       case ObTxLogType::TX_PREPARE_LOG: {
 	// try generate prepare verison
 	ret = generate_prepare_version_();
-
-	if (OB_SUCC(ret) && mt_ctx_.is_prepared()) {
+        if (get_upstream_state() < ObTxState::PREPARE) {
+          if (OB_FAIL(drive_self_2pc_phase(ObTxState::PREPARE))) {
+            TRANS_LOG(WARN, "drive 2pc prepare phase failed", K(ret), K(*this));
+          }
+        } else if (get_upstream_state() > ObTxState::PREPARE ||
+                   get_downstream_state() >= ObTxState::PREPARE) {
+          TRANS_LOG(INFO, "we need not submit prepare log after the prepare state", K(*this));
+        }
+        if (OB_SUCC(ret) &&
+            mt_ctx_.is_prepared() &&
+            get_upstream_state() == ObTxState::PREPARE &&
+            get_downstream_state() < ObTxState::PREPARE &&
+            !is_2pc_logging()) {
 	  ret = submit_prepare_log_();
 	}
         break;
@@ -7145,7 +7182,7 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
                  != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
         if (tmp_ret == OB_NOT_MASTER) {
           ret = OB_TRANS_NEED_ROLLBACK;
-        } else if (tmp_ret == OB_TX_NOLOGCB) {
+        } else if (tmp_ret == OB_TX_NOLOGCB || tmp_ret == OB_EAGAIN) {
           ret = OB_SUCCESS;
           if (register_flag.need_flush_redo_instantly_) {
             mds_cache_.set_need_retry_submit_mds(true);
@@ -8426,8 +8463,13 @@ int ObPartTransCtx::do_local_commit_tx_()
     }
   } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_COMMIT_LOG))) {
     // log submitting will retry in handle_timeout
-    TRANS_LOG(WARN, "submit commit log fail, will retry later", KR(ret), KPC(this));
-    ret = OB_SUCCESS;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+      TRANS_LOG(WARN, "restart_2pc_trans_timer_ error", KR(ret), KR(tmp_ret), KPC(this));
+      ret = OB_EAGAIN;
+    } else {
+      ret = OB_SUCCESS;
+    }
   }
 
   return ret;

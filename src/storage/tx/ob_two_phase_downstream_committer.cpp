@@ -1214,13 +1214,8 @@ int ObTxCycleTwoPhaseCommitter::decide_2pc_log_type_(bool &need_submit,
       break;
     }
     case ObTxState::REDO_COMPLETE: {
-      if (is_sub2pc()) {
-        need_submit = true;
-        log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO;
-      } else {
-        ret = OB_TRANS_INVALID_STATE;
-        TRANS_LOG(ERROR, "invalid 2pc state", KR(ret), KPC(this));
-      }
+      need_submit = true;
+      log_type = ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO;
       break;
     }
     case ObTxState::PREPARE: {

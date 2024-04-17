@@ -95,7 +95,8 @@ public:
                          const int64_t size,
                          const share::SCN &base_ts,
                          ObTxBaseLogCb *cb,
-                         const bool need_nonblock) override;
+                         const bool need_nonblock,
+                         const int64_t retry_timeout_us = 1000) override;
 private:
   transaction::ObLSTxCtxMgr *mgr_;
   hash::ObHashMap<ObTransID, ObTxLogType> tx_injects_;
