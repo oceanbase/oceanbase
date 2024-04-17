@@ -47,7 +47,6 @@ public:
 public:
   ColumnBRFilterPlugin(ObIAllocator *alloc);
   ~ColumnBRFilterPlugin() { destroy(); };
-  //int init(const char *table_cond_str);
   void destroy();
 
 
@@ -80,7 +79,6 @@ public:
 public:
   OperationBRFilterPlugin();
   ~OperationBRFilterPlugin() { destroy(); }
-  //int init(const char *op_cond_str);
   void destroy();
 
 private:
@@ -96,7 +94,6 @@ public:
 public:
   TransBRFilterPlugin();
   ~TransBRFilterPlugin() { destroy(); }
-  //int init(const char *trans_id_cond);
   void destroy();
 
 private:
