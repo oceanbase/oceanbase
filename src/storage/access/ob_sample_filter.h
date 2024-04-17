@@ -237,7 +237,7 @@ public:
   OB_INLINE int init_evaluated_datums() { return OB_SUCCESS; }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(row_num), K_(interval_infos),
                K_(percent), K_(seed), K_(pd_row_range), K_(block_row_range),
-               K_(row_id_handle_cap), K_(index_prefetch_depth), K_(data_prefetch_depth),
+               K_(index_tree_height), K_(index_prefetch_depth), K_(data_prefetch_depth),
                K_(boundary_point), K_(filter_state), K_(filter),
                KP_(data_row_id_handle), KP_(index_row_id_handle), KP_(allocator));
 private:
@@ -299,7 +299,7 @@ private:
   ObSampleBlockStatistic block_statistic_;
   int32_t index_prefetch_depth_;
   int32_t data_prefetch_depth_;
-  int16_t row_id_handle_cap_;
+  int16_t index_tree_height_;
   bool filter_state_;               // fast to judge whether one single row should be filtered
   bool is_reverse_scan_;
   bool is_inited_;

@@ -262,8 +262,9 @@ int ObCOSSTableRowsFilter::apply_filter(
     LOG_WARN("Failed to prepare bitmap buffer", K(ret), K(range), K(depth), KP(filter));
     // Parent prepare_skip_filter can not be called here.
   } else if (filter->is_sample_node()) {
-    if (OB_FAIL(static_cast<ObSampleFilterExecutor *>(filter)->apply_sample_filter(range, *result->get_inner_bitmap()))) {
-      LOG_WARN("Failed to apply sample filter", K(ret), K(range), KP(result));
+    ObSampleFilterExecutor *sample_executor = static_cast<ObSampleFilterExecutor *>(filter);
+    if (OB_FAIL(sample_executor->apply_sample_filter(range, *result->get_inner_bitmap()))) {
+      LOG_WARN("Failed to apply sample filter", K(ret), K(range), KP(result), KPC(sample_executor));
     }
   } else if (sql::ObPushdownFilterExecutor::INVALID_CG_ITER_IDX != iter_idx) {
     ObICGIterator *cg_iter = filter_iters_.at(iter_idx);

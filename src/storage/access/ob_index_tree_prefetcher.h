@@ -463,9 +463,9 @@ public:
   {
     return border_rowkey_;
   }
-  OB_INLINE int16_t get_tree_handle_cap() const
+  OB_INLINE int16_t get_index_tree_height() const
   {
-    return tree_handle_cap_;
+    return index_tree_height_;
   }
   OB_INLINE int32_t get_index_prefetch_depth() const
   {

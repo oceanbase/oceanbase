@@ -131,10 +131,10 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
       if (nullptr != sample_executor
           && sstable_->is_major_sstable()
           && OB_FAIL(sample_executor->build_row_id_handle(
-                          prefetcher_.get_tree_handle_cap(),
+                          prefetcher_.get_index_tree_height(),
                           prefetcher_.get_index_prefetch_depth(),
                           prefetcher_.get_micro_data_pefetch_depth()))) {
-        LOG_WARN("Failed to build row id handle", K(ret));
+        LOG_WARN("Failed to build row id handle", K(ret), KPC(sample_executor));
       } else if (OB_FAIL(prefetcher_.prefetch())) {
         LOG_WARN("ObSSTableRowScanner prefetch failed", K(ret));
       } else {
@@ -253,7 +253,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
           } else if (OB_FAIL(sample_executor->increase_row_num(access_ctx_->query_flag_.is_reverse_scan() ?
                                                                micro_scanner_->get_current_pos() - micro_scanner_->get_last_pos() + 1 :
                                                                micro_scanner_->get_last_pos() - micro_scanner_->get_current_pos() + 1))) {
-            LOG_WARN("Failed to increase row num in sample filter", K(micro_scanner_->get_last_pos()), K(micro_scanner_->get_current_pos()));
+            LOG_WARN("Failed to increase row num in sample filter", K(micro_scanner_->get_last_pos()), K(micro_scanner_->get_current_pos()), KPC(sample_executor));
           }
         }
         EVENT_INC(ObStatEventIds::BLOCKSCAN_BLOCK_CNT);
