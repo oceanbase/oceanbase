@@ -1281,8 +1281,6 @@ int ObTableLoadCoordinator::finish_trans(const ObTableLoadTransId &trans_id)
     ObTableLoadCoordinatorTrans *trans = nullptr;
     if (OB_FAIL(coordinator_ctx_->get_trans(trans_id, trans))) {
       LOG_WARN("fail to get trans", KR(ret), K(trans_id));
-    } else if (OB_FAIL(trans->set_trans_status_frozen())) {
-      LOG_WARN("fail to freeze trans", KR(ret));
     } else if (OB_FAIL(flush(trans))) {
       LOG_WARN("fail to flush", KR(ret));
     }
@@ -1880,6 +1878,8 @@ int ObTableLoadCoordinator::flush(ObTableLoadCoordinatorTrans *trans)
     // 取出bucket_writer
     if (OB_FAIL(trans->get_bucket_writer_for_flush(bucket_writer))) {
       LOG_WARN("fail to get bucket writer", KR(ret));
+    } else if (OB_FAIL(trans->set_trans_status_frozen())) {
+      LOG_WARN("fail to freeze trans", KR(ret));
     } else {
       for (int32_t session_id = 1; OB_SUCC(ret) && session_id <= param_.write_session_count_; ++session_id) {
         ObTableLoadTask *task = nullptr;
