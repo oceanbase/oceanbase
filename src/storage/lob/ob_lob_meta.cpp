@@ -39,7 +39,8 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 }
 
 ObLobMetaScanIter::ObLobMetaScanIter()
-  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false) {}
+  : lob_adatper_(nullptr), meta_iter_(nullptr), param_(), scan_param_(), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false),
+    not_need_last_info_(false) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -63,11 +64,6 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
           row.byte_len_ = 0;
           row.char_len_ = 0;
           row.seq_id_ = ObString();
-          // when get iter end, do deep copy for last scan result
-          int tmp_ret = cur_info_.deep_copy(*param_.allocator_, cur_info_);
-          if (tmp_ret != OB_SUCCESS) {
-            LOG_WARN("fail to do deep copy for cur info", K(tmp_ret), K(cur_info_));
-          }
         } else {
           LOG_WARN("failed to get next row.", K(ret));
         }
@@ -103,6 +99,14 @@ int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
         // update sum(len)
         cur_pos_ += (is_char) ? row.char_len_ : row.byte_len_;
         cur_byte_pos_ += row.byte_len_;
+        if (OB_SUCC(ret) && ! not_need_last_info() && cur_byte_pos_ == param_.byte_size_) {
+          ObLobMetaInfo info = cur_info_;
+          if (OB_FAIL(cur_info_.deep_copy(*param_.allocator_, info))) {
+            LOG_WARN("fail to do deep copy for cur info", K(info), K(row), K(param_), KPC(this));
+          } else {
+            LOG_DEBUG("deep_copy last info", K(cur_info_), K(param_));
+          }
+        }
       }
     }
   }
