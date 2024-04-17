@@ -946,6 +946,7 @@ int ObLobManager::query(
   INIT_SUCC(ret);
   ObLobAccessParam *param = nullptr;
   bool is_remote_lob = false;
+  bool is_partial_data_alloc = false;
   common::ObAddr dst_addr;
   if (! locator.has_lob_header() || ! locator.is_persist_lob() || locator.is_inrow()) {
     ret = OB_INVALID_ARGUMENT;
@@ -968,6 +969,7 @@ int ObLobManager::query(
   } else if (OB_FAIL(is_remote(*param, is_remote_lob, dst_addr))) {
     LOG_WARN("check is remote fail", K(ret), K(param));
   } else if (OB_ISNULL(partial_data)) {
+    is_partial_data_alloc = true;
     if (OB_ISNULL(partial_data = OB_NEWx(ObLobPartialData, allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc lob param fail", K(ret), "size", sizeof(ObLobPartialData));
@@ -990,6 +992,17 @@ int ObLobManager::query(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(cursor->init(allocator, param, partial_data, lob_ctx_))) {
     LOG_WARN("cursor init fail", K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(cursor)) {
+      cursor->~ObLobCursor();
+      cursor = nullptr;
+    }
+    if (OB_NOT_NULL(partial_data) && is_partial_data_alloc) {
+      partial_data->~ObLobPartialData();
+      partial_data = nullptr;
+    }
   }
   return ret;
 }
