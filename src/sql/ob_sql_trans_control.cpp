@@ -1536,8 +1536,14 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int ObSqlTransControl::cmp_txn_##name##_state(const char* cur_buf, int64_t cur_len, const char* last_buf, int64_t last_len) \
   { return transaction::ObTransService::txn_free_route__cmp_##name##_state(cur_buf, cur_len, last_buf, last_len); } \
   void ObSqlTransControl::display_txn_##name##_state(ObSQLSessionInfo &sess, const char* local_buf, const int64_t local_len, const char* remote_buf, const int64_t remote_len) \
-  { transaction::ObTransService::txn_free_route__display_##name##_state("LOAL", local_buf, local_len); \
-    transaction::ObTransService::txn_free_route__display_##name##_state("REMOTE", remote_buf, remote_len); }
+  {                                                                     \
+    transaction::ObTransService::txn_free_route__display_##name##_state("LOAL", local_buf, local_len); \
+    transaction::ObTransService::txn_free_route__display_##name##_state("REMOTE", remote_buf, remote_len); \
+    ObTxDesc *tx = sess.get_tx_desc();                                  \
+    if (OB_NOT_NULL(tx)) {                                              \
+      tx->print_trace();                                                \
+    }                                                                   \
+  }
 
 DELEGATE_TO_TXN(static);
 DELEGATE_TO_TXN(dynamic);

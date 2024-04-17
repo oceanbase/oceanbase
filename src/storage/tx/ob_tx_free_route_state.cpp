@@ -21,6 +21,15 @@ namespace transaction {
   FLAG flags_ = { .v_ = 0 };          \
   bool can_elr_ = false;              \
   int abort_cause_ = 0;
+
+// only serialize isolation_ when Repeatable Read or SERIALIZABLE
+#define PRE_ENCODE_EXTRA_FOR_VERIFY                             \
+  ObTxIsolationLevel isolation_ = ObTxIsolationLevel::INVALID;  \
+  if (this->isolation_ == ObTxIsolationLevel::RR                \
+      || this->isolation_ == ObTxIsolationLevel::SERIAL) {      \
+    isolation_ = this->isolation_;                              \
+  }
+
 #define PRE_STATIC_DECODE
 #define POST_STATIC_DECODE
 // bookkeep the original before update, then after receive the update,
@@ -135,7 +144,7 @@ TXN_FREE_ROUTE_MEMBERS(parts,,,,
 // the fields 'dup with static' are required when preceding of txn is of query like
 // savepoint or read only stmt with isolation of SERIALIZABLE / REPEATABLE READ
 // because such type of query caused the txn into 'start' in perspective of proxy
-TXN_FREE_ROUTE_MEMBERS(extra, , PRE_EXTRA_DECODE, POST_EXTRA_DECODE,
+TXN_FREE_ROUTE_MEMBERS(extra, PRE_ENCODE_EXTRA_FOR_VERIFY, PRE_EXTRA_DECODE, POST_EXTRA_DECODE,
                        tx_id_,      // dup with static
                        sess_id_,    // dup with static
                        addr_,       // dup with static
