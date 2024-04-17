@@ -581,6 +581,8 @@ all_table_privilege_def = dict(
       ('priv_create_view', 'int', 'false', '0'),
       ('priv_show_view', 'int', 'false', '0'),
       ('priv_others', 'int', 'false', '0'),
+      ('grantor', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+      ('grantor_host', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ],
 )
 
@@ -6870,6 +6872,8 @@ all_routine_privilege_def = dict(
 
     normal_columns = [
       ('all_priv', 'int', 'false', '0'),
+      ('grantor', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+      ('grantor_host', 'varchar:OB_MAX_HOST_NAME_LENGTH', 'true'),
     ],
 )
 
@@ -34078,6 +34082,10 @@ def_table_schema(
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
 )
+
+# 21582: ROLE_TABLE_GRANTS
+# 21583: ROLE_COLUMN_GRANTS
+# 21584: ROLE_ROUTINE_GRANTS
 
 #
 

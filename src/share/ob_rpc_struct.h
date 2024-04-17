@@ -5390,7 +5390,7 @@ public:
                  object_id_(common::OB_INVALID_ID), ins_col_ids_(),
                  upd_col_ids_(), ref_col_ids_(),
                  grantor_id_(common::OB_INVALID_ID), remain_roles_(), is_inner_(false),
-                 sel_col_ids_(), column_names_priv_()
+		             sel_col_ids_(), column_names_priv_(), grantor_(), grantor_host_()
   { }
   virtual ~ObGrantArg() {}
   bool is_valid() const;
@@ -5401,7 +5401,8 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(priv_level), K_(db), K_(table), K_(priv_set),
                K_(users_passwd), K_(hosts), K_(need_create_user), K_(has_create_user_priv),
                K_(option), K_(object_type), K_(object_id), K_(grantor_id), K_(ins_col_ids),
-               K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv));
+               K_(upd_col_ids), K_(ref_col_ids), K_(grantor_id), K_(column_names_priv),
+               K_(grantor), K_(grantor_host));
 
   uint64_t tenant_id_;
   share::schema::ObPrivLevel priv_level_;
@@ -5428,6 +5429,8 @@ public:
   bool is_inner_;
   common::ObSEArray<uint64_t, 4> sel_col_ids_;
   common::ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
+  common::ObString grantor_;
+  common::ObString grantor_host_;
 };
 
 struct ObStandbyGrantArg : public ObDDLArg
@@ -5501,7 +5504,8 @@ public:
                             priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
                             obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
                             obj_priv_array_(), revoke_all_ora_(false), sel_col_ids_(), ins_col_ids_(),
-			    upd_col_ids_(), ref_col_ids_(), column_names_priv_()
+                            upd_col_ids_(), ref_col_ids_(), column_names_priv_(),
+                            grantor_(), grantor_host_()
   { }
 
   int assign(const ObRevokeTableArg& other);
@@ -5517,7 +5521,9 @@ public:
                K_(obj_type),
                K_(grantor_id),
                K_(obj_priv_array),
-               K_(column_names_priv));
+               K_(column_names_priv),
+               K_(grantor),
+               K_(grantor_host));
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -5535,6 +5541,8 @@ public:
   common::ObSEArray<uint64_t, 4> upd_col_ids_;
   common::ObSEArray<uint64_t, 4> ref_col_ids_;
   common::ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv_;
+  common::ObString grantor_;
+  common::ObString grantor_host_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRevokeTableArg);
 };
@@ -5547,7 +5555,7 @@ public:
   ObRevokeRoutineArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_ID), user_id_(common::OB_INVALID_ID),
                             priv_set_(0), grant_(true), obj_id_(common::OB_INVALID_ID),
                             obj_type_(common::OB_INVALID_ID), grantor_id_(common::OB_INVALID_ID),
-                            obj_priv_array_(), revoke_all_ora_(false)
+                            obj_priv_array_(), revoke_all_ora_(false), grantor_(), grantor_host_()
   { }
   bool is_valid() const;
   int assign(const ObRevokeRoutineArg &other);
@@ -5560,7 +5568,9 @@ public:
                K_(obj_id),
                K_(obj_type),
                K_(grantor_id),
-               K_(obj_priv_array));
+               K_(obj_priv_array),
+               K_(grantor),
+               K_(grantor_host));
 
   uint64_t tenant_id_;
   uint64_t user_id_;
@@ -5573,6 +5583,8 @@ public:
   uint64_t grantor_id_;
   share::ObRawObjPrivArray obj_priv_array_;
   bool revoke_all_ora_;
+  common::ObString grantor_;
+  common::ObString grantor_host_;
 };
 
 struct ObRevokeSysPrivArg : public ObDDLArg

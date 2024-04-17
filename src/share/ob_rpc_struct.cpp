@@ -4860,6 +4860,8 @@ int ObGrantArg::assign(const ObGrantArg &other)
   object_id_ = other.object_id_;
   grantor_id_ = other.grantor_id_;
   is_inner_ = other.is_inner_;
+  grantor_ = other.grantor_;
+  grantor_host_ = other.grantor_host_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     SHARE_LOG(WARN, "fail to assign ddl arg", K(ret));
@@ -4914,8 +4916,9 @@ OB_DEF_SERIALIZE(ObGrantArg)
               remain_roles_,
               is_inner_,
               sel_col_ids_,
-              column_names_priv_
-              );
+              column_names_priv_,
+              grantor_,
+              grantor_host_);
 return ret;
 }
 
@@ -4946,7 +4949,9 @@ OB_DEF_DESERIALIZE(ObGrantArg)
               remain_roles_,
               is_inner_,
               sel_col_ids_,
-              column_names_priv_);
+              column_names_priv_,
+              grantor_,
+              grantor_host_);
 
   //compatibility for old version
   if (OB_SUCC(ret) && users_passwd_.count() > 0 && hosts_.empty()) {
@@ -4987,7 +4992,9 @@ OB_DEF_SERIALIZE_SIZE(ObGrantArg)
               remain_roles_,
               is_inner_,
               sel_col_ids_,
-              column_names_priv_);
+              column_names_priv_,
+              grantor_,
+              grantor_host_);
   return len;
 }
 
@@ -5029,6 +5036,8 @@ int ObRevokeTableArg::assign(const ObRevokeTableArg &other)
   obj_type_ = other.obj_type_;
   grantor_id_ = other.grantor_id_;
   revoke_all_ora_ = other.revoke_all_ora_;
+  grantor_ = other.grantor_;
+  grantor_host_ = other.grantor_host_;
 
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", K(ret));
@@ -5070,7 +5079,9 @@ OB_SERIALIZE_MEMBER((ObRevokeTableArg, ObDDLArg),
                     ins_col_ids_,
                     upd_col_ids_,
                     ref_col_ids_,
-                    column_names_priv_);
+                    column_names_priv_,
+                    grantor_,
+                    grantor_host_);
 
 bool ObRevokeRoutineArg::is_valid() const
 {
@@ -5096,6 +5107,8 @@ int ObRevokeRoutineArg::assign(const ObRevokeRoutineArg& other)
     obj_type_ = other.obj_type_;
     grantor_id_ = other.grantor_id_;
     revoke_all_ora_ = other.revoke_all_ora_;
+    grantor_ = other.grantor_;
+    grantor_host_ = other.grantor_host_;
   }
   return ret;
 }
@@ -5111,7 +5124,9 @@ OB_SERIALIZE_MEMBER((ObRevokeRoutineArg, ObDDLArg),
                     obj_type_,
                     grantor_id_,
                     obj_priv_array_,
-                    revoke_all_ora_);
+                    revoke_all_ora_,
+                    grantor_,
+                    grantor_host_);
 
 bool ObRevokeSysPrivArg::is_valid() const
 {

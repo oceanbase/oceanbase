@@ -2491,6 +2491,8 @@ priv_index	bigint(20)	NO		0
 priv_create_view	bigint(20)	NO		0	
 priv_show_view	bigint(20)	NO		0	
 priv_others	bigint(20)	NO		0	
+grantor	varchar(128)	YES		NULL	
+grantor_host	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2516,6 +2518,8 @@ priv_index	bigint(20)	YES		0
 priv_create_view	bigint(20)	YES		0	
 priv_show_view	bigint(20)	YES		0	
 priv_others	bigint(20)	YES		0	
+grantor	varchar(128)	YES		NULL	
+grantor_host	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_privilege_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9172,6 +9176,8 @@ routine_type	bigint(20)	NO	PRI	NULL
 gmt_create	timestamp(6)	NO		NULL	
 gmt_modified	timestamp(6)	NO		NULL	
 all_priv	bigint(20)	NO		0	
+grantor	varchar(128)	YES		NULL	
+grantor_host	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine_privilege;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9187,6 +9193,8 @@ gmt_create	timestamp(6)	NO		NULL
 gmt_modified	timestamp(6)	NO		NULL	
 is_deleted	bigint(20)	NO		NULL	
 all_priv	bigint(20)	YES		0	
+grantor	varchar(128)	YES		NULL	
+grantor_host	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_routine_privilege_history;
 IF(count(*) >= 0, 1, 0)
 1
