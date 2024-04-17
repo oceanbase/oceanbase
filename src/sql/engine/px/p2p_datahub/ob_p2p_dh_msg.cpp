@@ -140,7 +140,7 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
     need_merge = false; // set success, not need to merge
     int reg_dm_ret = OB_SUCCESS;
 #ifdef ERRSIM
-    int reg_dm_ret = OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS;
+    reg_dm_ret = OB_E(EventTable::EN_PX_P2P_MSG_REG_DM_FAILED) OB_SUCCESS;
     if (OB_SUCCESS != reg_dm_ret) {
       LOG_WARN("p2p msg reg dm failed by design", K(ret));
       reg_dm_ret = OB_ALLOCATE_MEMORY_FAILED;
