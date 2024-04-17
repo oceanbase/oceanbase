@@ -271,7 +271,7 @@ void ObMemoryDump::print_malloc_sample_info()
     MallocSamplePairVector::iterator pos;
     ret = vector.insert(&(*it), pos, ObMallocSamplePairCmp());
   }
-  int64_t print_pos = 0;
+  int64_t log_pos = 0;
   int64_t tenant_id = OB_SERVER_TENANT_ID;
   int64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
   const char *label = "";
@@ -279,10 +279,10 @@ void ObMemoryDump::print_malloc_sample_info()
   const int64_t MAX_LABEL_BT_CNT = 5;
   for (MallocSamplePairVector::iterator it = vector.begin(); OB_SUCC(ret) && it != vector.end(); ++it) {
     if ((*it)->first.tenant_id_ != tenant_id || (*it)->first.ctx_id_ != ctx_id) {
-      if (print_pos > 0) {
+      if (log_pos > 0) {
         _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
-              tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(print_pos), print_buf_);
-        print_pos = 0;
+              tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+        log_pos = 0;
       }
       tenant_id = (*it)->first.tenant_id_;
       ctx_id = (*it)->first.ctx_id_;
@@ -295,18 +295,18 @@ void ObMemoryDump::print_malloc_sample_info()
     if (bt_cnt++ < MAX_LABEL_BT_CNT) {
       char bt[MAX_BACKTRACE_LENGTH];
       parray(bt, sizeof(bt), (int64_t*)(*it)->first.bt_, AOBJECT_BACKTRACE_COUNT);
-      ret = databuff_printf(print_buf_, PRINT_BUF_LEN, print_pos, "[MEMORY][BT] mod=%15s, alloc_bytes=% '15ld, alloc_count=% '15ld, bt=%s\n",
+      ret = databuff_printf(log_buf_, LOG_BUF_LEN, log_pos, "[MEMORY][BT] mod=%15s, alloc_bytes=% '15ld, alloc_count=% '15ld, bt=%s\n",
             label, (*it)->second.alloc_bytes_, (*it)->second.alloc_count_, bt);
-      if (OB_SUCC(ret) && print_pos > PRINT_BUF_LEN / 2) {
+      if (OB_SUCC(ret) && log_pos > LOG_BUF_LEN / 2) {
         _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
-            tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(print_pos), print_buf_);
-        print_pos = 0;
+            tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
+        log_pos = 0;
       }
     }
   }
-  if (OB_SUCC(ret) && print_pos > 0) {
+  if (OB_SUCC(ret) && log_pos > 0) {
     _LOG_INFO("\n[MEMORY][BT] tenant_id=%5ld ctx_id=%25s\n%.*s",
-        tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(print_pos), print_buf_);
+        tenant_id, get_global_ctx_info().get_ctx_name(ctx_id), static_cast<int>(log_pos), log_buf_);
   }
 }
 
