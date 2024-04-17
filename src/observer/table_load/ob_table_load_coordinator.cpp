@@ -1599,7 +1599,7 @@ public:
     for (int64_t i = 0; OB_SUCC(ret) && (i < obj_rows.count()); ++i) {
       const ObTableLoadObjRow &src_obj_row = obj_rows.at(i);
       ObTableLoadObjRow out_obj_row;
-      if (src_obj_row.project(idx_array, out_obj_row)) {
+      if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
         LOG_WARN("failed to projecte out_obj_row", KR(ret), K(src_obj_row.count_));
       } else if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
         LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
