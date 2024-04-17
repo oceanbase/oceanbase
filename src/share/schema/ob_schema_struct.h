@@ -123,6 +123,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define USER_SPECIFIED_STORING_COLUMN_FLAG (INT64_C(1) << 17) // whether the storing column in index table is specified by user.
 #define PAD_WHEN_CALC_GENERATED_COLUMN_FLAG (INT64_C(1) << 19)
 #define GENERATED_COLUMN_UDF_EXPR (INT64_C(1) << 20)
+#define UNUSED_COLUMN_FLAG (INT64_C(1) << 21) // check if the column is unused.
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)

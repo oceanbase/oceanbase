@@ -1789,6 +1789,13 @@ OB_SERIALIZE_MEMBER((ObSetCommentArg, ObDDLArg),
                      table_comment_,
                      op_type_);
 
+OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
+                    mview_table_id_,
+                    last_refresh_scn_,
+                    refresh_scn_,
+                    start_time_,
+                    is_mview_complete_refresh_);
+
 bool ObAlterTableArg::is_valid() const
 {
   // TODO(shaohang.lsh): add more check if needed
@@ -2304,7 +2311,9 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       foreign_key_checks_,
       is_add_to_scheduler_,
       inner_sql_exec_addr_,
-      local_session_var_);
+      local_session_var_,
+      mview_refresh_info_,
+      alter_algorithm_);
 
   return ret;
 }
@@ -2394,7 +2403,9 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       foreign_key_checks_,
       is_add_to_scheduler_,
       inner_sql_exec_addr_,
-      local_session_var_);
+      local_session_var_,
+      mview_refresh_info_,
+      alter_algorithm_);
   return ret;
 }
 
@@ -2437,7 +2448,9 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
         foreign_key_checks_,
         is_add_to_scheduler_,
         inner_sql_exec_addr_,
-        local_session_var_);
+        local_session_var_,
+        mview_refresh_info_,
+        alter_algorithm_);
   }
 
   if (OB_FAIL(ret)) {
@@ -2872,6 +2885,8 @@ DEF_TO_STRING(ObAlterIndexArg)
 }
 
 OB_SERIALIZE_MEMBER((ObAlterIndexArg, ObIndexArg), index_visibility_);
+
+OB_SERIALIZE_MEMBER((ObDropLobArg, ObDDLArg), tenant_id_, session_id_, data_table_id_, aux_lob_meta_table_id_);
 
 DEF_TO_STRING(ObDropIndexArg) {
   int64_t pos = 0;
