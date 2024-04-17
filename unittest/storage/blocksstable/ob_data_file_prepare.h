@@ -228,20 +228,22 @@ int TestDataFilePrepareUtil::open()
   } else if (0 != system(cmd)) {
     ret = OB_ERR_SYS;
     STORAGE_LOG(ERROR, "failed to exec cmd", K(ret), K(cmd), K(errno), KERRMSG);
-  } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
-      storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_))) {
-    STORAGE_LOG(WARN, "ObStorageLoggerManager init failed", KR(ret));
-  } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(getter_,
-                                                          bucket_num,
-                                                          max_cache_size,
-                                                          block_size))) {
-    STORAGE_LOG(WARN, "failed to init kv cache", K(ret));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(clog_dir_))) {
     STORAGE_LOG(WARN, "failed to create clog dir", K(ret), K(clog_dir_));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(slog_dir_))) {
     STORAGE_LOG(WARN, "failed to create slog dir", K(ret), K(slog_dir_));
   } else if (OB_FAIL(FileDirectoryUtils::create_full_path(file_dir_))) {
     STORAGE_LOG(WARN, "failed to create file dir", K(ret), K(file_dir_));
+  } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
+      storage_env_.log_spec_.log_dir_,
+      storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_))) {
+    STORAGE_LOG(WARN, "ObStorageLoggerManager init failed", KR(ret));
+  } else if (FALSE_IT(SLOGGERMGR.need_reserved_ = false)) {
+  } else if (OB_FAIL(ObKVGlobalCache::get_instance().init(getter_,
+                                                          bucket_num,
+                                                          max_cache_size,
+                                                          block_size))) {
+    STORAGE_LOG(WARN, "failed to init kv cache", K(ret));
   } else if (disk_num_ > 0) {
     for (int64_t i = 0; OB_SUCC(ret) && i < disk_num_; ++i) {
       if (OB_FAIL(databuff_printf(dirname, sizeof(dirname), "%s/%ld", data_dir_, i))) {

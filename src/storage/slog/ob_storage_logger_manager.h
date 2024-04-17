@@ -33,9 +33,9 @@ public:
   static ObStorageLoggerManager &get_instance();
   int init(
       const char *log_dir,
+      const char *data_dir,
       const int64_t max_log_file_size,
-      const blocksstable::ObLogFileSpec &log_file_spec,
-      const bool need_reserved = false);
+      const blocksstable::ObLogFileSpec &log_file_spec);
   void destroy();
 
   // allocate item and its buffer
@@ -68,6 +68,8 @@ private:
   int free_log_item(ObStorageLogItem *log_item);
 
   int get_using_disk_space(int64_t &using_space) const;
+
+  int check_log_disk(const char *data_dir, const char *log_dir);
 
 private:
   static constexpr int64_t NORMAL_LOG_ITEM_SIZE = 8 * 1024; //8KB
