@@ -146,6 +146,11 @@ enum ObLogBaseType
   // for shared storage pre warm
   SHARED_STORAGE_PRE_WARM_LOG_BASE_TYPE = 46,
 
+#ifdef  OB_BUILD_SHARED_STORAGE
+// for share storage gc macro block in public dir
+  SHARE_STORAGE_PUBLIC_BLOCK_GC_SERVICE_LOG_BASE_TYPE = 47,
+#endif
+
   // pay attention!!!
   // add log type in log_base_type_to_string
   // max value
