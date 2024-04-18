@@ -9031,10 +9031,11 @@ int ObDDLOperator::alter_package(ObPackageInfo &package_info,
           OZ (schema_service_impl->get_routine_sql_service().update_routine(routine_info, &trans));
         }
       }
-      OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
-      OX (package_info.set_schema_version(new_schema_version));
-      OZ (schema_service_impl->get_routine_sql_service().alter_package(package_info, &trans, ddl_stmt_str));
     }
+    // if alter package, we need push up schema version, because we need update package state
+    OZ (schema_service_.gen_new_schema_version(tenant_id, new_schema_version));
+    OX (package_info.set_schema_version(new_schema_version));
+    OZ (schema_service_impl->get_routine_sql_service().alter_package(package_info, &trans, ddl_stmt_str));
   }
 
   OZ (error_info.handle_error_info(trans, &package_info));
