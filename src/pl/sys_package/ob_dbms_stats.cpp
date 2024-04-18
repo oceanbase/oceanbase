@@ -5234,6 +5234,7 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   int64_t duration_time = -1;
   int64_t succeed_cnt = 0;
   bool no_auto_gather = (OB_E(EventTable::EN_LEADER_STORAGE_ESTIMATION) OB_SUCCESS) != OB_SUCCESS;
+  ObSQLSessionInfo::LockGuard query_lock_guard(ctx.get_my_session()->get_query_lock());
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     ret = OB_SUCCESS;
     LOG_INFO("auto gather database statistics abort because of statistic table is unwriteable");

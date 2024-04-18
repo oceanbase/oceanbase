@@ -741,7 +741,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
               cur_part_id = dst_part_id;
               cur_inc_mod_count = inc_mod_count;
             } else if (OB_FAIL(check_partition_stat_state(cur_part_id,
-                                                          has_subpart_invalid_inc ? 0 : cur_inc_mod_count,
+                                                          has_subpart_invalid_inc ? -1 : cur_inc_mod_count,
                                                           stale_percent_threshold,
                                                           partition_stat_infos))) {
               LOG_WARN("failed to check partition stat state", K(ret));
@@ -762,13 +762,13 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
             ret = OB_SUCCESS;
             if (cur_part_id != -1 &&
                 OB_FAIL(check_partition_stat_state(cur_part_id,
-                                                   has_subpart_invalid_inc ? 0 : cur_inc_mod_count,
+                                                   has_subpart_invalid_inc ? -1 : cur_inc_mod_count,
                                                    stale_percent_threshold,
                                                    partition_stat_infos))) {
               LOG_WARN("failed to check partition stat state", K(ret));
             } else if (is_check_global &&
                        OB_FAIL(check_partition_stat_state(global_part_id,
-                                                          has_part_invalid_inc ? 0 : table_inc_modified,
+                                                          has_part_invalid_inc ? -1 : table_inc_modified,
                                                           stale_percent_threshold,
                                                           partition_stat_infos))) {
               LOG_WARN("failed to check partition stat state", K(ret));
@@ -784,6 +784,7 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
         }
       }
     }
+    ObSEArray<int64_t, 4> record_first_part_ids;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
       int64_t partition_id = partition_infos.at(i).part_id_;
       int64_t first_part_id = partition_infos.at(i).first_part_id_;
@@ -794,9 +795,14 @@ int ObBasicStatsEstimator::estimate_stale_partition(ObExecContext &ctx,
           LOG_WARN("failed to push back", K(ret));
         } else {/*do nothing*/}
       }
-      if (first_part_id != OB_INVALID_ID && !is_contain(monitor_modified_part_ids, first_part_id)) {
+      if (first_part_id != OB_INVALID_ID &&
+          !is_contain(monitor_modified_part_ids, first_part_id) &&
+          !is_contain(record_first_part_ids, first_part_id)) {
         ObPartitionStatInfo partition_stat_info(first_part_id, 0, false, true);
-        ret = partition_stat_infos.push_back(partition_stat_info);
+        if (OB_FAIL(partition_stat_infos.push_back(partition_stat_info)) ||
+            OB_FAIL(record_first_part_ids.push_back(first_part_id))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       }
     }
   }
@@ -964,8 +970,12 @@ int ObBasicStatsEstimator::check_partition_stat_state(const int64_t partition_id
   for (int64_t i = 0; !find_it && i < partition_stat_infos.count(); ++i) {
     if (partition_stat_infos.at(i).partition_id_ == partition_id) {
       //locked partition id or no arrived stale percent threshold no need regather stats.
-      double stale_percent = partition_stat_infos.at(i).row_cnt_ <= 0 ? 1.0 :
-                                          1.0 * inc_mod_count / partition_stat_infos.at(i).row_cnt_;
+      double stale_percent = 0.0;
+      if (inc_mod_count < 0 || partition_stat_infos.at(i).row_cnt_ <= 0) {
+        stale_percent = inc_mod_count == 0 ? 0.0 : 1.0;
+      } else {
+        stale_percent = 1.0 * inc_mod_count / partition_stat_infos.at(i).row_cnt_;
+      }
       partition_stat_infos.at(i).is_no_stale_ = stale_percent <= stale_percent_threshold;
       find_it = true;
     }
@@ -1086,17 +1096,14 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
                                            "                 FROM   %s m"\
                                            "                 WHERE  t.table_id = m.table_id"\
                                            "                        AND t.tenant_id = m.tenant_id"\
-                                           "                        AND (last_inserts+last_deletes+last_updates != inserts+deletes+updates"\
-                                           "                             OR NOT EXISTS(SELECT 1 FROM %s stat WHERE  t.table_id = stat.table_id"\
-                                           "                                                                    AND t.tenant_id = stat.tenant_id limit 1))"\
+                                           "                        AND inserts + deletes + updates > 0"\
                                            "                 limit 1); ",
                                            share::OB_ALL_TABLE_TNAME,
                                            gather_table_type_list.ptr(),
                                            offset,
                                            slice_cnt,
                                            share::schema::ObTableType::VIRTUAL_TABLE,
-                                           share::OB_ALL_MONITOR_MODIFIED_TNAME,
-                                           share::OB_ALL_TABLE_STAT_TNAME))) {
+                                           share::OB_ALL_MONITOR_MODIFIED_TNAME))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
