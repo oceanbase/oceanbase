@@ -1727,7 +1727,11 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
   ObSQLSessionInfo *session = nullptr;
   int64_t total_line_count = 0;
 
-  if (OB_ISNULL(session = ctx.get_my_session()) || OB_ISNULL(ctx.get_stmt_factory()) ||
+  if (OB_UNLIKELY(load_args.file_iter_.count() > ObTableLoadSequenceNo::MAX_DATA_ID)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support file counts more than 65535", KR(ret), K(load_args.file_iter_.count()));
+    FORWARD_USER_ERROR_MSG(ret, "not support file counts %ld more than 65535", load_args.file_iter_.count());
+  } else if (OB_ISNULL(session = ctx.get_my_session()) || OB_ISNULL(ctx.get_stmt_factory()) ||
       OB_ISNULL(ctx.get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected", KR(ret), K(ctx));
