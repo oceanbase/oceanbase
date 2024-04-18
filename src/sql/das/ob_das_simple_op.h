@@ -147,4 +147,4 @@ public:
 
 }  // namespace sql
 }  // namespace oceanbase
-#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_DELETE_OP_H_ */
+#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_SIMPLE_OP_H */
