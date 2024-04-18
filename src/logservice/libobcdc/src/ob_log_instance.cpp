@@ -2544,6 +2544,7 @@ void ObLogInstance::global_flow_control_()
       int64_t active_part_trans_task_count = trans_task_pool_.get_alloc_count();
       int64_t active_log_entry_task_count = log_entry_task_pool_->get_alloc_count();
       int64_t reusable_part_trans_task_count = 0;
+      int64_t ddl_part_trans_count = 0;
       int64_t ready_to_seq_task_count = 0;
       int64_t seq_queue_trans_count = 0;
 
@@ -2568,15 +2569,17 @@ void ObLogInstance::global_flow_control_()
       const bool need_pause_dispatch = need_pause_redo_dispatch();
       const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
       const bool is_storage_work_mode = is_storage_working_mode(working_mode_);
+      const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
       const char *reason = "";
 
-      if (OB_FAIL(get_task_count_(ready_to_seq_task_count, seq_queue_trans_count, reusable_part_trans_task_count))) {
+      if (OB_FAIL(get_task_count_(ready_to_seq_task_count, seq_queue_trans_count, reusable_part_trans_task_count, ddl_part_trans_count))) {
         LOG_ERROR("get_task_count fail", KR(ret), K(ready_to_seq_task_count), K(seq_queue_trans_count),
-            K(reusable_part_trans_task_count));
+            K(reusable_part_trans_task_count), K(ddl_part_trans_count));
       } else if (OB_FAIL(dml_parser_->get_log_entry_task_count(dml_parser_part_trans_task_count))) {
         LOG_ERROR("DML parser get_log_entry_task_count fail", KR(ret), K(dml_parser_part_trans_task_count));
       } else {
-        const bool is_seq_queue_not_empty = (seq_queue_trans_count > 0);
+        const bool exist_trans_sequenced_not_handled = (seq_queue_trans_count > queue_backlog_lowest_tolerance);
+        const bool exist_ddl_processing_or_in_queue = (ddl_part_trans_count > queue_backlog_lowest_tolerance);
         int64_t storager_task_count = 0;
         int64_t storager_log_count = 0;
         storager_->get_task_count(storager_task_count, storager_log_count);
@@ -2590,7 +2593,9 @@ void ObLogInstance::global_flow_control_()
         // OR
         // (3) memory is limited and exist trans sequenced but not output
         // OR
-        // (4) memory_limit touch warn threshold and need_pause_dispatch
+        // (4) memory is limited and exist ddl_trans in to handle or handling
+        // OR
+        // (5) memory_limit touch warn threshold and need_pause_dispatch
         bool condition1 = (active_part_trans_task_count >= part_trans_task_active_count_upper_bound)
           || touch_memory_warn_limit
           || (system_memory_avail < system_memory_avail_lower_bound);
@@ -2598,15 +2603,17 @@ void ObLogInstance::global_flow_control_()
           || (ready_to_seq_task_count > ready_to_seq_task_upper_bound);
         bool condition3 = (storager_task_count > storager_task_count_upper_bound) && (memory_hold >= storager_mem_percentage * memory_limit);
 
-        need_slow_down_fetcher = (condition1 && (condition2 || need_pause_dispatch || is_seq_queue_not_empty)) || condition3;
+        need_slow_down_fetcher = (condition1 && (condition2 || need_pause_dispatch || exist_trans_sequenced_not_handled || exist_ddl_processing_or_in_queue)) || condition3;
 
         if (need_slow_down_fetcher) {
           if (condition2) {
             reason = "MEMORY_LIMIT_AND_REUSABLE_PART_TOO_MUCH";
           } else if (need_pause_dispatch) {
             reason = "MEMORY_LIMIT_AND_DISPATCH_PAUSED";
-          } else if (is_seq_queue_not_empty) {
+          } else if (exist_trans_sequenced_not_handled) {
             reason = "MEMORY_LIMIT_AND_EXIST_TRANS_TO_OUTPUT";
+          } else if (exist_ddl_processing_or_in_queue) {
+            reason = "MEMORY_LIMIT_AND_EXIST_DDL_TRANS_TO_HANDLE";
           } else if (condition3) {
             reason = "STORAGER_TASK_OVER_THRESHOLD";
           } else {
@@ -2633,7 +2640,7 @@ void ObLogInstance::global_flow_control_()
               "PART_TRANS(TOTAL=%ld, ACTIVE=%ld/%ld, REUSABLE=%ld/%ld) "
               "LOG_TASK(ACTIVE=%ld) "
               "STORE(%ld/%ld) "
-              "[FETCHER=%ld DML_PARSER=%ld "
+              "[FETCHER=%ld DML_PARSER=%ld DDL=%ld "
               "COMMITER=%ld USER_QUEUE=%ld OUT=%ld RC=%ld] "
               "DIST_TRANS(SEQ_QUEUE=%ld, SEQ=%ld, COMMITTED=%ld) "
               "NEED_PAUSE_DISPATCH=%d REASON=%s",
@@ -2646,7 +2653,7 @@ void ObLogInstance::global_flow_control_()
               reusable_part_trans_task_count, part_trans_task_reusable_count_upper_bound,
               active_log_entry_task_count,
               storager_task_count, storager_task_count_upper_bound,
-              fetcher_part_trans_task_count, dml_parser_part_trans_task_count,
+              fetcher_part_trans_task_count, dml_parser_part_trans_task_count, ddl_part_trans_count,
               committer_ddl_part_trans_task_count + committer_dml_part_trans_task_count,
               br_queue_part_trans_task_count, out_part_trans_task_count,
               resource_collector_part_trans_task_count,
@@ -2808,7 +2815,8 @@ int64_t ObLogInstance::get_memory_limit_() const
 int ObLogInstance::get_task_count_(
     int64_t &ready_to_seq_task_count,
     int64_t &seq_trans_count,
-    int64_t &part_trans_task_resuable_count)
+    int64_t &part_trans_task_resuable_count,
+    int64_t &ddl_part_trans_count)
 {
   int ret = OB_SUCCESS;
   ready_to_seq_task_count = 0;
@@ -2865,7 +2873,8 @@ int ObLogInstance::get_task_count_(
       int64_t fetcher_part_trans_task_count = fetcher_->get_part_trans_task_count();
       committer_->get_part_trans_task_count(committer_ddl_part_trans_task_count,
           committer_dml_part_trans_task_count);
-      int64_t sys_ls_handle_part_trans_task_count = sys_ls_handler_->get_part_trans_task_count();
+      int64_t sys_ls_handle_part_trans_task_count = 0;
+      sys_ls_handler_->get_task_count(sys_ls_handle_part_trans_task_count, ddl_part_trans_count);
       int64_t br_queue_part_trans_task_count = br_queue_.get_part_trans_task_count();
       int64_t out_part_trans_task_count = get_out_part_trans_task_count_();
       int64_t resource_collector_part_trans_task_count = 0;
@@ -2888,7 +2897,8 @@ int ObLogInstance::get_task_count_(
       if (REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL)) {
         _LOG_INFO("------------------------------------------------------------");
         _LOG_INFO("[TASK_COUNT_STAT] [FETCHER] [PART_TRANS_TASK=%ld]", fetcher_part_trans_task_count);
-        _LOG_INFO("[TASK_COUNT_STAT] [SYS_LS_HANDLE] [PART_TRANS_TASK=%ld]", sys_ls_handle_part_trans_task_count);
+        _LOG_INFO("[TASK_COUNT_STAT] [SYS_LS_HANDLE] [PART_TRANS_TASK=%ld][DDL_QUEUED=%ld]",
+            sys_ls_handle_part_trans_task_count, ddl_part_trans_count);
         _LOG_INFO("[TASK_COUNT_STAT] [STORAGER] [LOG_TASK=%ld/%ld]", storager_task_count, storager_log_count);
         _LOG_INFO("[TASK_COUNT_STAT] [SEQUENCER] [PART_TRANS_TASK(QUEUE=%ld TOTAL=[%ld][DDL=%ld DML=%ld HB=%ld])] [TRANS(READY=%ld SEQ=%ld)]",
             seq_stat_info.queue_part_trans_task_count_, seq_stat_info.total_part_trans_task_count_,
