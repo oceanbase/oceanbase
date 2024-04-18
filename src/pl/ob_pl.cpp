@@ -23,7 +23,6 @@
 #include "pl/ob_pl_compile.h"
 #include "pl/ob_pl_code_generator.h"
 #include "pl/ob_pl_user_type.h"
-#include "pl/ob_pl_json_type.h"
 #include "pl/ob_pl_stmt.h"
 #include "pl/ob_pl_interface_pragma.h"
 #include "observer/ob_server_struct.h"
@@ -48,6 +47,7 @@
 #include "pl/debug/ob_pl_debugger.h"
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/ob_pl_profiler.h"
+#include "pl/opaque/ob_pl_json_type.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"

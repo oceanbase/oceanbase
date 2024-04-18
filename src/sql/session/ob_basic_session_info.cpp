@@ -36,7 +36,9 @@
 #include "share/rc/ob_tenant_base.h"
 #include "pl/sys_package/ob_dbms_sql.h"
 #include "pl/ob_pl_package_state.h"
-#include "pl/ob_pl_json_type.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/opaque/ob_pl_json_type.h"
+#endif
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ob_compatibility_control.h"
