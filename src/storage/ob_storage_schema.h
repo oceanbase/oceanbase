@@ -66,6 +66,7 @@ public:
   void reset();
   void destroy(ObIAllocator &allocator);
   bool is_valid() const;
+  int construct_column_param(share::schema::ObColumnParam &column_param) const;
   inline common::ColumnType get_data_type() const { return meta_type_.get_type(); }
   inline bool is_generated_column() const { return is_generated_column_; }
   inline const common::ObObj &get_orig_default_value()  const { return orig_default_value_; }
@@ -278,6 +279,8 @@ public:
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
       "skip_index_cnt", skip_idx_attr_array_.count(), K_(skip_idx_attr_array),
       "column_group_cnt", column_group_array_.count(), K_(column_group_array), K_(has_all_column_group));
+public:
+  static void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum);
 private:
   void copy_from(const share::schema::ObMergeSchema &input_schema);
   int deep_copy_str(const ObString &src, ObString &dest);
@@ -308,7 +311,6 @@ private:
   int64_t get_array_serialize_length(const common::ObIArray<T> &array) const;
   template <typename T>
   bool check_column_array_valid(const common::ObIArray<T> &array) const;
-  void trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum) const;
 
 public:
   static const uint32_t INVALID_ID = UINT32_MAX;

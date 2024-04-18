@@ -108,6 +108,10 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     const uint32_t end_cg_idx,
     const bool check_info_ready) const;
   int init_major_sstable_status();
+  int construct_column_param(
+      const uint64_t column_id,
+      const ObStorageColumnSchema *column_schema,
+      ObColumnParam &column_param);
   int init_table_read_info();
   int inner_loop_prepare_index_tree(
     const uint32_t start_cg_idx,

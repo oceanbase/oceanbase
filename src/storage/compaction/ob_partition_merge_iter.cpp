@@ -457,7 +457,7 @@ int ObPartitionRowMergeIter::construct_out_cols_project(const ObMergeParameter &
       }
       if (OB_SUCC(ret)) {
         access_param_.iter_param_.out_cols_project_ = &out_cols_project_;
-        LOG_DEBUG("chengkong debug: construct out cols project", K(out_cols_project_));
+        LOG_DEBUG("[RowColSwitch] Construct out cols project", K(out_cols_project_));
       }
     }
   } else {

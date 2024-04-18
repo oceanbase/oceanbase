@@ -1847,14 +1847,16 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
   ObCOSSTableV2 *co_sstable = nullptr;
   ObCOMajorSSTableStatus major_sstable_status = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
   int64_t estimate_row_cnt = 0;
+  ObTabletID tablet_id;
 
   if (OB_ISNULL(first_sstable) || OB_UNLIKELY(!first_sstable->is_co_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("first sstable in tables handle is null or not co sstable", K(ret), K(result.handle_));
   } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
+  } else if (FALSE_IT(tablet_id = co_sstable->get_key().tablet_id_)) {
   } else if (OB_FAIL(decide_co_major_sstable_status(*co_sstable, storage_schema, major_sstable_status))) {
     LOG_WARN("failed to decide co major sstable status");
-  } else if (OB_FAIL(estimate_row_cnt_for_major_merge(co_sstable->get_key().tablet_id_.id(), result.handle_, storage_schema, tablet_handle, estimate_row_cnt))) {
+  } else if (OB_FAIL(estimate_row_cnt_for_major_merge(tablet_id.id(), result.handle_, storage_schema, tablet_handle, estimate_row_cnt))) {
     // if estimate row cnt failed, make major sstable match schema
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
     LOG_WARN("failed to estimate row count for co major merge, build column store by default", "estimate_ret", ret, K(major_sstable_status), K(major_merge_type));
@@ -1873,7 +1875,7 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
     } else {
       major_merge_type = BUILD_ROW_STORE_MERGE;
     }
-    LOG_DEBUG("chengkong debug: finish decide major merge type", K(major_sstable_status), K(major_merge_type), K(estimate_row_cnt), K(column_cnt));
+    LOG_DEBUG("[RowColSwitch] finish decide major merge type", K(tablet_id), K(major_sstable_status), K(major_merge_type), K(estimate_row_cnt), K(column_cnt));
   }
   return ret;
 }

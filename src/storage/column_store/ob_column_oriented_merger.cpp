@@ -263,7 +263,7 @@ int ObCOMerger:: alloc_row_writers(
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid cg idx for mock row store cg schema", K(ret), K(start_cg_idx_), K(end_cg_idx_));
     } else {
-      STORAGE_LOG(DEBUG, "chengkong debug: mock row store cg", K(ctx->mocked_row_store_cg_));
+      STORAGE_LOG(DEBUG, "[RowColSwitch] mock row store cg", K(ctx->mocked_row_store_cg_));
     }
   }
 

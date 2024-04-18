@@ -174,10 +174,13 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
   } else if (OB_FAIL(init_major_sstable_status())) {
     LOG_WARN("failed to get major sstable status", K(ret));
-  } else if (OB_FAIL(static_param_.init_co_major_merge_params())) {
-    LOG_WARN("failed to set major merge params", K(ret), K(static_param_));
-  } else if (is_build_row_store_from_rowkey_cg() && OB_FAIL(init_table_read_info())) {
-    STORAGE_LOG(WARN, "fail to init table read info", K(ret));
+  } else if (is_major_merge_type(get_merge_type())) {
+    // meta major merge not support row col switch now
+    if (OB_FAIL(static_param_.init_co_major_merge_params())) {
+      LOG_WARN("failed to set major merge params", K(ret), K(static_param_));
+    } else if (is_build_row_store_from_rowkey_cg() && OB_FAIL(init_table_read_info())) {
+      STORAGE_LOG(WARN, "fail to init table read info", K(ret));
+    }
   }
   return ret;
 }
@@ -487,8 +490,8 @@ int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
     // only exist one co table here, emtpy or empty cg sstables
-    LOG_DEBUG("chengkong debug: FinsihTask with only one co sstable");
     new_sstable = static_cast<ObSSTable *>(base_co_table);
+    LOG_DEBUG("[RowColSwitch] FinsihTask with only one co sstable", KPC(new_sstable));
   }
   return ret;
 }
@@ -535,7 +538,7 @@ int ObCOTabletMergeCtx::inner_add_cg_sstables(const ObSSTable *&new_sstable)
     LOG_WARN("failed to fill cg sstables to co sstable", K(ret), KPC(base_co_table));
   } else {
     new_sstable = base_co_table;
-    LOG_DEBUG("chengkong debug, success to fill cg sstables to co sstable", KPC(new_sstable));
+    LOG_DEBUG("[RowColSwitch] Success to fill cg sstables to co sstable", KPC(new_sstable));
   }
   return ret;
 }
@@ -626,6 +629,8 @@ int ObCOTabletMergeCtx::get_cg_schema_for_merge(const int64_t idx, const ObStora
     } else if (OB_UNLIKELY(!cg_schema_ptr->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get invalid cg schema", K(ret), KPC(cg_schema_ptr), K(idx), K(cg_schemas.at(idx)), KPC(this));
+    } else {
+      LOG_DEBUG("[RowColSwitch] get cg schema for merge", K(idx), KPC(cg_schema_ptr));
     }
   }
   return ret;
@@ -645,6 +650,29 @@ int ObCOTabletMergeCtx::init_major_sstable_status()
     LOG_WARN("fail to init major sstable status", K(ret));
   } else if (should_mock_row_store_cg_schema() && OB_FAIL(prepare_mocked_row_store_cg_schema())) {
     LOG_WARN("fail to init mocked row store cg schema", K(ret));
+  }
+  return ret;
+}
+
+int ObCOTabletMergeCtx::construct_column_param(
+    const uint64_t column_id,
+    const ObStorageColumnSchema *column_schema,
+    ObColumnParam &column_param)
+{
+  int ret = OB_SUCCESS;
+  column_param.set_column_id(column_id);
+  if (OB_ISNULL(column_schema)) {
+    if (OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id
+     || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id) {
+      ObObjMeta meta_type;
+      meta_type.set_int();
+      column_param.set_meta_type(meta_type);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid argument", K(ret), K(column_id));
+    }
+  } else if (OB_FAIL(column_schema->construct_column_param(column_param))) {
+    STORAGE_LOG(WARN, "fail to construct column param from column schema", K(ret), K(column_id));
   }
   return ret;
 }
@@ -672,16 +700,19 @@ int ObCOTabletMergeCtx::init_table_read_info()
     int32_t col_index = OB_INVALID_INDEX;       // to construct table_read_info, extra_rowkey_cnt is ignored
     int32_t multi_version_col_cnt = 0;
     bool is_multi_version_col = false;
+    const ObStorageColumnSchema *column_schema  = nullptr;
     ObColumnParam *column = nullptr;
     for (int32_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
       column_id = all_column_ids.at(i).col_id_;
       cg_idx = OB_INVALID_INDEX;
       col_index = OB_INVALID_INDEX;
+      column_schema = storage_schema->get_column_schema(column_id);
       column = nullptr;
       is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id;
       if (OB_FAIL(ObTableParam::alloc_column(mem_ctx_.get_allocator(), column))) {
         STORAGE_LOG(WARN, "fail to alloc column", K(ret));
-      } else if (FALSE_IT(column->set_column_id(column_id))) {
+      } else if (OB_FAIL(construct_column_param(column_id, column_schema, *column))) {
+        STORAGE_LOG(WARN, "fail to construct column param", K(ret), K(column_id), K(column_schema));
       } else if (OB_FAIL(tmp_cols.push_back(column))) {
         STORAGE_LOG(WARN, "fail to push back column param", K(ret));
       } else if (is_multi_version_col) {
@@ -714,7 +745,7 @@ int ObCOTabletMergeCtx::init_table_read_info()
     }
   }
 
-  LOG_DEBUG("chengkong debug: Generate read info for co merge", K(ret), K(table_read_info_));
+  LOG_INFO("[RowColSwitch] Generate read info for co merge", K(ret), K(table_read_info_));
   return ret;
 }
 

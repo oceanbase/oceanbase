@@ -716,6 +716,11 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   if (ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE != static_param_.merge_reason_) {
     ADD_COMMENT("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(static_param_.merge_reason_));
   }
+  if (is_major_merge_type(get_merge_type())
+      && ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE != static_param_.co_major_merge_type_) {
+    ADD_COMMENT("major", static_param_.major_sstable_status_);
+    ADD_COMMENT("co", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_param_.co_major_merge_type_));
+  }
   int64_t mem_peak_mb = mem_ctx_.get_total_mem_peak() >> 20;
   if (mem_peak_mb > 0) {
     ADD_COMMENT("cost_mb", mem_peak_mb);

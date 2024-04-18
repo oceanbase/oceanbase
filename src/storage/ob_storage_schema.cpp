@@ -96,6 +96,29 @@ bool ObStorageColumnSchema::is_valid() const
   return common::ob_is_valid_obj_type(static_cast<ObObjType>(meta_type_.get_type()));
 }
 
+int ObStorageColumnSchema::construct_column_param(share::schema::ObColumnParam &column_param) const
+{
+  int ret = OB_SUCCESS;
+  column_param.set_meta_type(meta_type_);
+  if (orig_default_value_.is_fixed_len_char_type()) {
+    blocksstable::ObStorageDatum datum;
+    ObObj obj;
+    if (OB_FAIL(datum.from_obj(orig_default_value_))) {
+      STORAGE_LOG(WARN, "fail to covent datum from obj", K(ret), K(orig_default_value_));
+    } else {
+      (void) ObStorageSchema::trim(orig_default_value_.get_collation_type(), datum);
+      if (OB_FAIL(datum.to_obj_enhance(obj, orig_default_value_.get_meta()))) {
+        STORAGE_LOG(WARN, "failed to transfer datum to obj", K(ret), K(datum));
+      } else if (OB_FAIL(column_param.set_orig_default_value(obj))) {
+        STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
+      }
+    }
+  } else if (OB_FAIL(column_param.set_orig_default_value(orig_default_value_))) {
+     STORAGE_LOG(WARN, "fail to set orig default value", K(ret));
+  }
+  return ret;
+}
+
 int ObStorageColumnSchema::deep_copy_default_val(ObIAllocator &allocator, const ObObj &default_val)
 {
   int ret = OB_SUCCESS;
@@ -1609,7 +1632,7 @@ int ObStorageSchema::get_orig_default_row(
   return ret;
 }
 
-void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum) const
+void ObStorageSchema::trim(const ObCollationType type, blocksstable::ObStorageDatum &storage_datum)
 {
     const char *str = storage_datum.ptr_;
     int32_t len = storage_datum.len_;
