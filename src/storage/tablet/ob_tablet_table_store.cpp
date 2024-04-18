@@ -2411,7 +2411,7 @@ int ObTabletTableStore::get_mini_minor_sstables_(ObTableStoreIterator &iter) con
   }
 
   if (OB_SUCC(ret)) {
-    if (max_end_scn < max_fill_tx_scn) {
+    if (!max_fill_tx_scn.is_max() && max_end_scn < max_fill_tx_scn) {
       //do nothing
       LOG_INFO("max end scn is smaller than max fill tx scn, cannot minor merge", K(max_end_scn), K(max_fill_tx_scn), K(minor_tables_));
     } else if (OB_FAIL(iter.add_tables(minor_tables_, 0, minor_tables_.count()))) {
