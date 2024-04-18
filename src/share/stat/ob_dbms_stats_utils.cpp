@@ -182,7 +182,9 @@ int ObDbmsStatsUtils::check_is_stat_table(share::schema::ObSchemaGetterGuard &sc
   } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(!table_schema->is_normal_schema())) {
     //do nothing
   } else {//check user table
-    is_valid = table_schema->is_user_table() || table_schema->is_external_table();
+    is_valid = table_schema->is_user_table()
+               || table_schema->is_external_table()
+               || table_schema->is_mlog_table();
   }
   return ret;
 }
