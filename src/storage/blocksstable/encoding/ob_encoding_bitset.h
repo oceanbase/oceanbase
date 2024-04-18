@@ -878,10 +878,12 @@ struct ObBitMapExcValReadCellFunc<VectorType, ObEncodingDecodeMetodType::D_INTEG
       }
     } else {
       const int64_t cell_len = meta->get_fix_data_size(len);
-      uint64_t integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[store_type]];
       MEMCPY(&unpacked_val, buf + meta->data_offset_ + ref * cell_len, cell_len);
-      if (0 != integer_mask && (unpacked_val & (integer_mask >> 1))) {
-        unpacked_val |= integer_mask;
+      if (common::ObIntTC == ob_obj_type_class(store_type)) {
+        uint64_t integer_mask = ~INTEGER_MASK_TABLE[get_type_size_map()[store_type]];
+        if (0 != integer_mask && (unpacked_val & (integer_mask >> 1))) {
+          unpacked_val |= integer_mask;
+        }
       }
     }
 
