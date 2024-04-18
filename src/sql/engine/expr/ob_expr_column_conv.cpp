@@ -404,6 +404,25 @@ static inline int column_convert_datum_accuracy_check(const ObExpr &expr,
   return ret;
 }
 
+int enum_set_valid_check(const uint64_t val, const int64_t str_values_count, const bool is_enum)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(str_values_count <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected str values count", K(ret), K(str_values_count), K(is_enum));
+  } else if (is_enum && (val > str_values_count)) {
+    // ENUM type, its value should not exceed str_values_count
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected enum value", K(ret), K(val), K(str_values_count));
+  } else if (!is_enum && (str_values_count < OB_MAX_SET_ELEMENT_NUM) &&
+      (val >= (1UL << str_values_count))) {
+    // SET type, its value should not be greater than or equal to 2^(str_values_count)
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected set value", K(ret), K(val), K(str_values_count));
+  }
+  return ret;
+}
+
 int ObExprColumnConv::column_convert(const ObExpr &expr,
                                      ObEvalCtx &ctx,
                                      ObDatum &datum)
@@ -420,12 +439,9 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
     ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObDatum *val = NULL;
     if (ob_is_enum_or_set_type(out_type) && !expr.args_[4]->obj_meta_.is_enum_or_set()) {
-      ObExpr *old_expr = expr.args_[0];
-      expr.args_[0] = expr.args_[4];
-      if (OB_FAIL(expr.eval_enumset(ctx, enumset_info->str_values_, cast_mode, val))) {
-        LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
+      if (OB_FAIL(eval_enumset(expr, ctx, val))) {
+        LOG_WARN("fail to eval enumset result", K(ret));
       }
-      expr.args_[0] = old_expr;
     } else {
       if (OB_FAIL(expr.args_[4]->eval(ctx, val))) {
         LOG_WARN("evaluate parameter failed", K(ret));
@@ -447,6 +463,12 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
             LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
           } else {
             val->set_string(str);
+          }
+        } else if (ob_is_enum_or_set_type(out_type)) {
+          if (OB_FAIL(enum_set_valid_check(val->get_uint64(), enumset_info->str_values_.count(),
+                                           (expr.datum_meta_.type_ == ObEnumType)))) {
+            LOG_WARN("enum set val is invalid", K(ret), K(val->get_uint64()),
+                                                K(enumset_info->str_values_.count()), K(expr));
           }
         }
         if (OB_SUCC(ret)
@@ -536,6 +558,56 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
     }
   }
 
+  return ret;
+}
+
+int ObExprColumnConv::eval_enumset(const ObExpr &expr, ObEvalCtx &ctx, common::ObDatum *&datum)
+{
+  int ret = OB_SUCCESS;
+  const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
+  const uint64_t cast_mode = enumset_info->cast_mode_;
+  const uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (OB_UNLIKELY(expr_ctx_id == ObExpr::INVALID_EXP_CTX_ID)) {
+    ObExpr *old_expr = expr.args_[0];
+    expr.args_[0] = expr.args_[4];
+    if (OB_FAIL(expr.eval_enumset(ctx, enumset_info->str_values_, cast_mode, datum))) {
+      LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
+    }
+    expr.args_[0] = old_expr;
+  } else {
+    ObExprColumnConvCtx *column_conv_ctx = NULL;
+    if (OB_ISNULL(column_conv_ctx = static_cast<ObExprColumnConvCtx *>
+        (ctx.exec_ctx_.get_expr_op_ctx(expr_ctx_id)))) {
+      if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr_ctx_id, column_conv_ctx))) {
+        LOG_WARN("fail to create expr op ctx", K(ret), K(expr_ctx_id));
+      } else if (OB_FAIL(column_conv_ctx->setup_eval_expr(ctx.exec_ctx_.get_allocator(), expr))) {
+        LOG_WARN("fail to init column conv ctx", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(column_conv_ctx->expr_.eval_enumset(ctx, enumset_info->str_values_, cast_mode,
+                                                      datum))) {
+        LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprColumnConv::ObExprColumnConvCtx::setup_eval_expr(ObIAllocator &allocator,
+                                                           const ObExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  const int64_t mem_size = sizeof(ObExpr*) * expr.arg_cnt_;
+  if (OB_ISNULL(args_ = static_cast<ObExpr**>(allocator.alloc(mem_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc args", K(ret), K(mem_size));
+  } else {
+    expr_ = expr;
+    expr_.args_ = args_;
+    MEMCPY(args_, expr.args_, mem_size);
+    args_[0] = args_[4];
+  }
   return ret;
 }
 
