@@ -114,23 +114,12 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
                                                        table_name,
                                                        database_name))) {
           SQL_RESV_LOG(WARN, "failed to resolve table name.", K(table_name), K(database_name), K(ret));
-        } else if (OB_FAIL(schema_checker_->check_table_exists(tenant_id,
-                                                               database_name,
-                                                               table_name,
-                                                               false /*index*/,
-                                                               false/*is_hidden*/,
-                                                               is_exists))) {
-          SQL_RESV_LOG(WARN, "failed to check_table_exist", K(ret), K(tenant_id),
-                                                            K(database_name), K(table_name));
-        } else if (!is_exists) {
-          ret = OB_TABLE_NOT_EXIST;
-          SQL_RESV_LOG(WARN, "table not exist", K(ret), K(tenant_id), K(database_name), K(table_name));
-        } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
-                                                             database_name,
-                                                             table_name,
-                                                             false/*not index table*/,
-                                                             table_schema))) {
-          SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
+        } else if (OB_FAIL(get_table_schema(parse_tree.children_[0]->children_[0],
+                                            tenant_id,
+                                            database_name,
+                                            table_name,
+                                            table_schema))) {
+          SQL_RESV_LOG(WARN, "failed to get table schema", K(table_name), K(database_name), K(ret));
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
@@ -186,12 +175,12 @@ int ObSetCommentResolver::resolve(const ParseNode &parse_tree)
           }
 
           if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
-                                                               database_name,
-                                                               table_name,
-                                                               false/*not index table*/,
-                                                               table_schema))) {
-            SQL_RESV_LOG(WARN, "failed to get table schema", K(ret), K(database_name), K(table_name));
+          } else if (OB_FAIL(get_table_schema(column_ref_node->children_[0],
+                                              tenant_id,
+                                              database_name,
+                                              table_name,
+                                              table_schema))) {
+            SQL_RESV_LOG(WARN, "failed to get table schema", K(table_name), K(database_name), K(ret));
           } else if (OB_ISNULL(table_schema)) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "table schema is null", K(ret), K(database_name));
