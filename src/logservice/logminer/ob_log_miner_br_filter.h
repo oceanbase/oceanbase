@@ -144,11 +144,10 @@ public:
 
 private:
   int filter_br_(ObLogMinerBR &br, bool &need_filter);
-  int add_filter_(IBRFilterPlugin *brFilterPlugin, const char *filter_cond);
+  int add_filter_(IBRFilterPlugin *br_filter_plugin, const char *filter_cond);
 
 private:
   bool is_inited_;
-  ObLogMinerOpCond op_cond_;
   ObArenaAllocator plugin_allocator;
   common::ObSEArray<IBRFilterPlugin *, 4> filter_pipeline_;
   ILogMinerDataManager *data_manager_;

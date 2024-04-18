@@ -360,6 +360,7 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
   ColumnBRFilterPlugin *column_plugin = nullptr;
   OperationBRFilterPlugin *op_plugin = nullptr;
   TransBRFilterPlugin *trans_plugin = nullptr;
+  ObLogMinerOpCond op_cond_local;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_ERROR("oblogminer br_filter is already inited, no need to init again", K(is_inited_),
@@ -378,24 +379,26 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
       static_cast<TransBRFilterPlugin*>(plugin_allocator.alloc(sizeof(TransBRFilterPlugin))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for trans filter plugin failed", K(trans_plugin));
-  } else if (OB_FAIL(op_cond_.init(op_cond))) {
+  } else if (OB_FAIL(op_cond_local.init(op_cond))) {
       LOG_ERROR("op_cond init failed", K(op_cond));
   } else {
     column_plugin = new (column_plugin) ColumnBRFilterPlugin(&plugin_allocator);
     op_plugin = new (op_plugin) OperationBRFilterPlugin();
     trans_plugin = new (trans_plugin) TransBRFilterPlugin();
     
-    if (op_cond_.is_record_type_match(EINSERT) && op_cond_.is_record_type_match(EUPDATE) 
-        && op_cond_.is_record_type_match(EDELETE)) {
+    // If all operation types are included, op_cond will be set to null and Operation filter will not be added
+    if (op_cond_local.is_record_type_match(EINSERT) && op_cond_local.is_record_type_match(EUPDATE) 
+        && op_cond_local.is_record_type_match(EDELETE)) {
       op_cond = nullptr;
     }
+    
     if (OB_FAIL(add_filter_(column_plugin, table_column_cond))) {
       LOG_ERROR("add table filter plugin failed", K(table_column_cond));
     } else if (OB_FAIL(add_filter_(op_plugin, op_cond))) {
       LOG_ERROR("add op filter plugin failed", K(op_cond));
     } else if (OB_FAIL(add_filter_(trans_plugin, trans_id_cond))) {
       LOG_ERROR("add trans filter plugin failed", K(trans_id_cond));
-    }  else {
+    } else {
       data_manager_ = data_manager;
       resource_collector_ = resource_collector;
       br_converter_ = br_converter;
@@ -408,14 +411,14 @@ int ObLogMinerBRFilter::init(const char *table_column_cond,
   return ret;
 }
 
-int ObLogMinerBRFilter::add_filter_(IBRFilterPlugin *brFilterPlugin, const char *filter_cond)
+int ObLogMinerBRFilter::add_filter_(IBRFilterPlugin *br_filter_plugin, const char *filter_cond)
 {
   int ret = OB_SUCCESS;
-  if (!OB_ISNULL(filter_cond)) {
-    if (OB_FAIL(brFilterPlugin->init(filter_cond))) {
+  if (OB_NOT_NULL(filter_cond)) {
+    if (OB_FAIL(br_filter_plugin->init(filter_cond))) {
       LOG_ERROR("filter plugin init failed", K(filter_cond));
-    } else if (OB_FAIL(filter_pipeline_.push_back(brFilterPlugin))) {
-      LOG_ERROR("filter pipeline push back filter_plugin failed", K(brFilterPlugin), K(filter_pipeline_));
+    } else if (OB_FAIL(filter_pipeline_.push_back(br_filter_plugin))) {
+      LOG_ERROR("filter pipeline push back filter_plugin failed", K(br_filter_plugin), K(filter_pipeline_));
     }
   }
   return ret;
