@@ -1558,12 +1558,16 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
-  if (0 != req.get_group_id()) {
+  if (has_stopped()) {
+    ret = OB_TENANT_NOT_IN_SERVER;
+    LOG_WARN("receive large request but tenant has already stopped", K(ret), "tenant_id", id_);
+  } else if (0 != req.get_group_id()) {
     if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
-      LOG_WARN("tenant receive large retry request fail", K(ret));
+      LOG_WARN("tenant receive large retry request fail", K(ret),
+          "tenant_id", id_, "group_id", req.get_group_id());
     }
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
-    LOG_ERROR("recv large request failed", K(id_));
+    LOG_ERROR("recv large request failed", "tenant_id", id_);
   } else {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
@@ -1611,11 +1615,13 @@ void ObTenant::handle_retry_req(bool need_clear)
     if (nullptr != req) {
       if (req->large_retry_flag()) {
         if (OB_FAIL(recv_large_request(*req))) {
-          LOG_ERROR("tenant patrol push req into large_query queue fail", "tenant_id", id_, K(ret));
+          on_translate_fail(req, ret);
+          LOG_WARN("tenant patrol push req into large_query queue fail", "tenant_id", id_, K(ret));
         }
       } else {
         if (OB_FAIL(recv_request(*req))) {
-          LOG_ERROR("tenant patrol push req into common queue fail", "tenant_id", id_, K(ret));
+          on_translate_fail(req, ret);
+          LOG_WARN("tenant patrol push req into common queue fail", "tenant_id", id_, K(ret));
         }
       }
     } else {
