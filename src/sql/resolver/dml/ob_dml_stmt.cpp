@@ -4651,7 +4651,7 @@ int ObDMLStmt::disable_writing_materialized_view()
                 || schema::MATERIALIZED_VIEW_LOG == table_item->table_type_) {
         disable_write_table = true;
       } else if (table_item->is_view_table_ && NULL != table_item->ref_query_) {
-        OZ( table_item->ref_query_->disable_writing_materialized_view() );
+        OZ( SMART_CALL(table_item->ref_query_->disable_writing_materialized_view()) );
       }
     }
   }
@@ -4665,7 +4665,7 @@ int ObDMLStmt::disable_writing_materialized_view()
       LOG_WARN("failed to get stmt's child_stmts", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-        OZ( child_stmts.at(i)->disable_writing_materialized_view() );
+        OZ( SMART_CALL(child_stmts.at(i)->disable_writing_materialized_view()) );
       }
     }
   }
