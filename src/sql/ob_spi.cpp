@@ -4023,18 +4023,13 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                                                 size,
                                                 for_update && !is_server_cursor,
                                                 session_info), K(size));
-                  //if (is_server_cursor) {
-                    // not only server cursor need field set
-                    // normal cursor maybe convert to session cursor by to_cursor_number
-                    // so all kind of cursor need do the copy
-                    CK (OB_NOT_NULL(cursor->get_allocator()));
-                    CK (OB_NOT_NULL(spi_result.get_result_set()));
-                    OZ (ObDbmsInfo::deep_copy_field_columns(
-                      *cursor->get_allocator(),
-                      spi_result.get_result_set()->get_field_columns(),
-                      spi_cursor->fields_));
-                  //}
+                  CK (OB_NOT_NULL(cursor->get_allocator()));
+                  CK (OB_NOT_NULL(spi_result.get_result_set()));
                   OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, new_query_start_time));
+                  OZ (ObDbmsInfo::deep_copy_field_columns(
+                    *cursor->get_allocator(),
+                    spi_result.get_result_set()->get_field_columns(),
+                    spi_cursor->fields_));
                   if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
                     int cli_ret = OB_SUCCESS;
                     retry_ctrl.test_and_save_retry_state(GCTX,
