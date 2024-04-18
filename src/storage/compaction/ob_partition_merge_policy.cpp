@@ -1410,6 +1410,18 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
     if (nullptr == base_table) {
       base_table = static_cast<ObSSTable*>(table_store->get_major_sstables().get_boundary_table(true/*last*/));
     }
+    const ObSSTableArray &minor_tables = table_store->get_minor_sstables();
+    for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
+      const int64_t cur_upper_trans_version = minor_tables[i]->get_upper_trans_version();
+      if (cur_upper_trans_version <= base_table->get_snapshot_version()) {
+        continue;
+      } else if (cur_upper_trans_version > tablet.get_snapshot_version()) {
+        ret = OB_NO_NEED_MERGE;
+        LOG_WARN("first minor upper trans version is bigger than tablet snapshot version, no need to merge",
+            K(ret), K(cur_upper_trans_version), "tablet_snapshot_version", tablet.get_snapshot_version());
+      }
+      break;
+    }
   } else {
     base_table = static_cast<ObSSTable*>(table_store->get_major_sstables().get_boundary_table(true/*last*/));
   }
@@ -1425,7 +1437,7 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
     LOG_DEBUG("no need meta merge when the tablet is doing major merge", K(ret), K(min_snapshot), K(max_snapshot), KPC(base_table));
   } else if (OB_FAIL(base_table->get_meta(base_meta_handle))) {
     LOG_WARN("failed to get sstable meta handle", K(ret), KPC(base_table));
-  } else if (OB_FAIL(add_meta_merge_result(merge_type, base_table, table_store_wrapper.get_meta_handle(), result, true))) {
+  } else if (OB_FAIL(add_meta_merge_result(base_table, table_store_wrapper.get_meta_handle(), result, true))) {
     LOG_WARN("failed to add base table to meta merge result", K(ret), KPC(base_table), K(result));
   } else {
     int64_t tx_determ_table_cnt = 1;
@@ -1441,18 +1453,14 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
       } else if (result.handle_.get_count() <= 1 && table->get_upper_trans_version() <= base_table->get_snapshot_version()) {
         continue; // skip minor sstable which has been merged
       } else if (!table->is_trans_state_deterministic()) {
-        if (is_meta_major_merge(merge_type)) {
-          break;
-        } else {
-          found_undeterm_table = true;
-        }
+        found_undeterm_table = true;
       } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(meta_handle))) {
         LOG_WARN("failed to get sstable meta handle", K(ret), KPC(table));
       } else if (!found_undeterm_table) {
         ++tx_determ_table_cnt;
         inc_row_cnt += meta_handle.get_sstable_meta().get_row_count();
       }
-      if (FAILEDx(add_meta_merge_result(merge_type, table, table_store_wrapper.get_meta_handle(), result, !found_undeterm_table))) {
+      if (FAILEDx(add_meta_merge_result(table, table_store_wrapper.get_meta_handle(), result, !found_undeterm_table))) {
         LOG_WARN("failed to add minor table to meta merge result", K(ret));
       }
     } // end for
@@ -1493,6 +1501,11 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (is_meta_major_merge(merge_type)) {
+      result.version_range_.snapshot_version_ = tablet.get_snapshot_version();
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (result.version_range_.snapshot_version_ < tablet.get_multi_version_start()
             || result.version_range_.snapshot_version_ <= base_table->get_snapshot_version()) {
       ret = OB_NO_NEED_MERGE;
@@ -1517,7 +1530,6 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
 }
 
 int ObAdaptiveMergePolicy::add_meta_merge_result(
-    const ObMergeType &merge_type,
     ObITable *table,
     const ObStorageMetaHandle &table_meta_handle,
     ObGetMergeTablesResult &result,
@@ -1541,10 +1553,7 @@ int ObAdaptiveMergePolicy::add_meta_merge_result(
       result.create_snapshot_version_ = meta_handle.get_sstable_meta().get_basic_meta().create_snapshot_version_;
     }
   } else if (update_snapshot_flag) {
-    int64_t max_snapshot = is_meta_major_merge(merge_type)
-                         ? table->get_upper_trans_version()
-                         : table->get_max_merged_trans_version();
-    max_snapshot = MAX(max_snapshot, result.version_range_.snapshot_version_);
+    int64_t max_snapshot = MAX(table->get_max_merged_trans_version(), result.version_range_.snapshot_version_);
     result.version_range_.multi_version_start_ = max_snapshot;
     result.version_range_.snapshot_version_ = max_snapshot;
     result.scn_range_.end_scn_ = table->get_end_scn();
