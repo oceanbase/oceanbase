@@ -125,6 +125,9 @@ int ObLogFetcherIdlePool::push(LSFetchCtx *task)
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_FETCHER_IDLE_POOL_START_FAIL);
+#endif
 int ObLogFetcherIdlePool::start()
 {
   int ret = OB_SUCCESS;
@@ -132,6 +135,10 @@ int ObLogFetcherIdlePool::start()
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not inited");
     ret = OB_NOT_INIT;
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_FETCHER_IDLE_POOL_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_FETCHER_IDLE_POOL_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
   } else {
