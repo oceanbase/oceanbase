@@ -378,6 +378,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
   affected_rows = 0;
   const ObDASWriteBuffer::DmlRow *dml_row = nullptr;
   ObDASWriteBuffer::Iterator write_iter;
+  const bool with_local_index = related_ctdefs_ != nullptr && !related_ctdefs_->empty();
   if (OB_FAIL(iter.get_write_buffer().begin(write_iter))) {
     LOG_WARN("begin write iterator failed", K(ret));
   }
@@ -405,6 +406,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
       DMLIterator single_row_iter(ctdef_, single_row_buffer, *das_allocator_);
       if (OB_FAIL(ObDMLService::init_dml_param(*ctdef_, *rtdef_, *snapshot_, *das_allocator_, dml_param_))) {
         SQL_DAS_LOG(WARN, "init dml param failed", K(ret), KPC_(ctdef), KPC_(rtdef));
+      } else if (with_local_index && FALSE_IT(dml_param_.write_flag_.set_skip_flush_redo())) {
       } else if (OB_FAIL(write_rows(ls_id_,
                                     tablet_id_,
                                     *ctdef_,
@@ -412,7 +414,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
                                     single_row_iter,
                                     table_affected_rows))) {
         SQL_DAS_LOG(WARN, "write rows failed", K(ret), K(ls_id_), K(tablet_id_), KPC(ctdef_), KPC(rtdef_));
-      } else if (related_ctdefs_ != nullptr && !related_ctdefs_->empty()) {
+      } else if (with_local_index) {
         //write local index
         for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_->count(); ++i) {
           const CtDefType *related_ctdef = static_cast<const CtDefType*>(related_ctdefs_->at(i));
@@ -431,6 +433,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet_with_ignore(DMLIterator &
                                                           dml_param_))) {
             SQL_DAS_LOG(WARN, "init index dml param failed", K(ret),
                         KPC(related_ctdef), KPC(related_rtdef));
+          } else if (i == related_ctdefs_->count() - 1 && FALSE_IT(dml_param_.write_flag_.unset_skip_flush_redo())) {
           } else if (OB_FAIL(write_rows(ls_id_,
                                         related_tablet_id,
                                         *related_ctdef,

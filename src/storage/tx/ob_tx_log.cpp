@@ -763,7 +763,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     // old row
     arg.writer_ptr_->dump_key("OldRow Cols");
     arg.writer_ptr_->start_object();
-    if (OB_FAIL(format_row_data_(old_row, arg))) {
+    if (OB_SUCC(ret) && OB_FAIL(format_row_data_(old_row, arg))) {
       TRANS_LOG(WARN, "format old_row failed", K(ret));
     }
     arg.writer_ptr_->end_object();

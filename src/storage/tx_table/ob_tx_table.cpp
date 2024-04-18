@@ -453,8 +453,7 @@ int ObTxTable::remove_tablet()
   if (OB_NOT_NULL(ls_)) {
     if (OB_FAIL(remove_tablet_(LS_TX_DATA_TABLET))) {
       LOG_WARN("remove tx data tablet failed", K(ret));
-    }
-    if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
+    } else if (OB_FAIL(remove_tablet_(LS_TX_CTX_TABLET))) {
       LOG_WARN("remove tx ctx tablet failed", K(ret));
     }
   }

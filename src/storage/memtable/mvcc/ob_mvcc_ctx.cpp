@@ -287,7 +287,9 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
     int ret = OB_SUCCESS;
     auto tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (OB_NOT_NULL(memtable_)) {
+    if (write_ret_ && OB_SUCCESS == *write_ret_
+        && OB_NOT_NULL(memtable_)
+        && try_flush_redo_) {
       bool is_freeze = memtable_->is_frozen_memtable();
       if (OB_FAIL(tx_ctx->submit_redo_log(is_freeze))) {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
@@ -313,6 +315,9 @@ int ObMvccWriteGuard::write_auth(storage::ObStoreCtx &store_ctx)
               K(exclusive_), K(store_ctx), KPC(mem_ctx));
   } else {
     ctx_ = mem_ctx;
+    try_flush_redo_ = !(store_ctx.mvcc_acc_ctx_.write_flag_.is_skip_flush_redo()
+                        // for lob column write, delay flush redo to its main tablet's write
+                        || store_ctx.mvcc_acc_ctx_.write_flag_.is_lob_aux());
   }
   return ret;
 }

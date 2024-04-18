@@ -2360,7 +2360,7 @@ int ObXACtx::set_exiting_()
       }
       tx_desc_ = NULL;
     }
-    if (OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
+    if (OB_SUCC(ret) && OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
       TRANS_LOG(WARN, "erase xa ctx failed", K(ret), K_(xid), K(*this));
     }
   }

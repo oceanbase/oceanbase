@@ -342,6 +342,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.snapshot_ = param.snapshot_;
   dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
   dml_base_param.schema_version_ = 0;
+  dml_base_param.write_flag_.set_lob_aux();
   {
     for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
       if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
