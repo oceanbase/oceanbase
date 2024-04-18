@@ -2128,11 +2128,15 @@ int ObMultiVersionSchemaService::add_schema(
     if (OB_SUCC(ret)) {
       bool can_switch = false;
       int64_t max_schema_slot_num = OB_MAX_VERSION_COUNT;
-      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
-      if (tenant_config.is_valid()) {
-        max_schema_slot_num = tenant_config->_max_schema_slot_num;
+      if (!ObSchemaService::g_liboblog_mode_) {
+        omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+        if (tenant_config.is_valid()) {
+          max_schema_slot_num = tenant_config->_max_schema_slot_num;
+        }
+      } else {
+        max_schema_slot_num = init_version_cnt_;
       }
-      const int64_t switch_cnt = ObSchemaService::g_liboblog_mode_ ? init_version_cnt_ : max_schema_slot_num;
+      const int64_t switch_cnt = max_schema_slot_num;
       if (OB_FAIL(mem_mgr->check_can_switch_allocator(switch_cnt, can_switch))) {
         LOG_WARN("fail to check can switch allocator", KR(ret));
       } else if (can_switch) {
