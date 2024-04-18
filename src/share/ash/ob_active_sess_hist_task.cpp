@@ -160,7 +160,7 @@ void ObActiveSessHistTask::runTimerTask()
                 inner_sql_wait_to_string(ash_stat.prev_inner_sql_wait_type_id_));
           }
           if (OB_LIKELY(0 != ash_stat.session_id_ && ash_stat.is_bkgd_active_)) {
-            ObActiveSessionStat::calc_db_time_for_background_session(ash_stat, sample_time_);
+            ObActiveSessionStat::calc_db_time(ash_stat, sample_time_);
             ash_stat.sample_time_ = sample_time_;
             ObActiveSessHistList::get_instance().add(ash_stat);
           }
@@ -174,7 +174,7 @@ void ObActiveSessHistTask::runTimerTask()
           if (ash_stat.inner_sql_wait_type_id_ != ObInnerSqlWaitTypeId::NULL_INNER_SQL) {
             snprintf(ash_stat.module_, ASH_MODULE_STR_LEN, "MODULE (%s)", inner_sql_wait_to_string(ash_stat.inner_sql_wait_type_id_));
           }
-          ObActiveSessionStat::calc_db_time_for_background_session(ash_stat, sample_time_);
+          ObActiveSessionStat::calc_db_time(ash_stat, sample_time_);
           ash_stat.sample_time_ = sample_time_;
           ObActiveSessHistList::get_instance().add(ash_stat);
         }

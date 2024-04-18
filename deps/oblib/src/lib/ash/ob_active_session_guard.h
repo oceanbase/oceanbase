@@ -188,7 +188,6 @@ public:
         prev_non_idle_wait_time_(0),
         total_cpu_time_(0),
         tid_(0),
-        di_(nullptr),
         is_bkgd_active_(true),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         pcode_(0),
@@ -217,7 +216,6 @@ public:
     prev_non_idle_wait_time_ = 0;
     total_cpu_time_ = 0;
     tid_ = 0;
-    di_ = nullptr;
     fixup_index_ = -1;
     // NOTICE: reset of fixup_ash_buffer_ is in ObActiveSessionStat::fixup_last_stat
     // fixup_ash_buffer_.reset();
@@ -246,7 +244,6 @@ public:
   void set_bkgd_sess_active();
   void set_bkgd_sess_inactive();
   void accumulate_elapse_time();
-  static void calc_db_time_for_background_session(ObActiveSessionStat &stat, const int64_t sample_time);
   static void calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time);
   // timestamp for last ash sample taken place. could be optimized to rdtsc()
   // FIXME:but should check rdtsc_is_supported on bootstrap.
@@ -263,7 +260,6 @@ public:
   uint64_t prev_non_idle_wait_time_;
   uint64_t total_cpu_time_;  // total cpu time since last ash sample. for cpu-time verification.
   int64_t tid_;  // record current tid for cpu time verification
-  common::ObDiagnoseSessionInfo *di_;
   bool is_bkgd_active_; // Identifies whether the status of the background session is active.
                         // Inactive background thread session will not be collected in ASH.
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
