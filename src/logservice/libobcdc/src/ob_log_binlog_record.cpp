@@ -12,7 +12,7 @@
  * Binlog Record
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_FORMATTER
 
 #ifdef OB_USE_DRCMSG
 #include <drcmsg/MD.h>                        // ITableMeta
@@ -244,14 +244,29 @@ int ObLogBR::put_old(IBinlogRecord *br, const bool is_changed)
     // mark value of OldCol to empty string, use global unique empty string value
     // value of unchanged OldCol as NULL
     const char *val = is_changed ? COLUMN_VALUE_IS_EMPTY : COLUMN_VALUE_IS_NULL;
+    // mark value of unchanged column is PADDING(column value should not be used)
+    VALUE_ORIGIN origin = is_changed ? VALUE_ORIGIN::REDO : VALUE_ORIGIN::PADDING;
 
     int64_t pos = (NULL == val ? 0 : strlen(val));
 
-    (void)br->putOld(val, static_cast<int>(pos));
+    (void)br->putOld(val, static_cast<int>(pos), origin);
   }
 
   return ret;
 }
+
+void ObLogBR::mark_value_populated_by_cdc(IBinlogRecord &br, const bool is_new_col, const char *reason, const int col_idx)
+{
+  if (is_new_col) {
+    // mark for new_cols
+    (void) br.putNew(COLUMN_VALUE_IS_NULL, 0, VALUE_ORIGIN::PADDING);
+  } else {
+    // mark for old_cols
+    (void) br.putOld(COLUMN_VALUE_IS_NULL, 0, VALUE_ORIGIN::PADDING);
+  }
+  LOG_DEBUG("mark_value_populated_by_cdc", K(is_new_col), K(col_idx), KCSTRING(reason));
+}
+
 
 int ObLogBR::get_record_type(int &record_type)
 {

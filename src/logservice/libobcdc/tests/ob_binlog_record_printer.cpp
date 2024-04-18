@@ -628,11 +628,19 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
 
   // FIXME: does not check the value of the field until the length of the default value can be obtained
   //  ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_default_value:%s", column_index, default_val);
-
+  LOG_DEBUG("output column", K(index), K(new_cols_count), K(old_cols_count));
   if (OB_SUCC(ret)) {
     if (index < new_cols_count) {
+      VALUE_ORIGIN newValueOrigin = new_cols[index].m_origin;
+      const bool is_new_value_origin_redo = (VALUE_ORIGIN::REDO == newValueOrigin);
       const char *new_col_value = new_cols[index].buf;
       size_t new_col_value_len = new_cols[index].buf_used_size;
+
+      if (! is_new_value_origin_redo) {
+         ROW_PRINTF(ptr, size, pos, ri, "C[%ld] column_value_new_origin: %s",
+             column_index, newValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
+      }
+
       if (is_type_for_md5_printing && enable_print_lob_md5) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_new_md5:[%s](%ld)",
             column_index, calc_md5_cstr(new_col_value, new_col_value_len), new_col_value_len);
@@ -654,8 +662,15 @@ int ObBinlogRecordPrinter::output_data_file_column_data(IBinlogRecord *br,
     }
 
     if (OB_SUCCESS == ret && index < old_cols_count) {
+      VALUE_ORIGIN oldValueOrigin = old_cols[index].m_origin;
+      const bool is_old_value_origin_redo = (VALUE_ORIGIN::REDO == oldValueOrigin);
       const char *old_col_value = old_cols[index].buf;
       size_t old_col_value_len = old_cols[index].buf_used_size;
+
+      if (! is_old_value_origin_redo) {
+        ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_origin: %s",
+            column_index, oldValueOrigin == 2 ? "PADDING" : "BACK_QUERY");
+      }
 
       if (EMySQLFieldType::MYSQL_TYPE_BIT == ctype) {
         ROW_PRINTF(ptr, size, pos, ri, "[C%ld] column_value_old_hex:", column_index);

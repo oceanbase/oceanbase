@@ -159,7 +159,14 @@ struct ColValue
   uint64_t      column_id_;
   ObString      string_value_;    // The value after converting Obj to a string
   ColValue      *next_;
-  uint8_t       is_out_row_ : 1;  // Column data is stored out row
+  union {
+    uint8_t column_flags_;
+    struct {
+      uint8_t   is_out_row_       : 1;  // Column data is stored out row
+      uint8_t   is_col_nop_       : 1;  // Column data is nop
+      uint8_t   reserve_fields_   : 6;  // reserve fileds
+    };
+  };
 
   // if this ColValue is group value
   // then children_ store group hidden ColValue
@@ -171,7 +178,7 @@ struct ColValue
     column_id_ = common::OB_INVALID_ID;
     string_value_.reset();
     next_ = NULL;
-    is_out_row_ = 0;
+    column_flags_ = 0;
     children_.reset();
   }
 
@@ -194,7 +201,8 @@ struct ColValue
       K_(value),
       K_(column_id),
       K_(string_value),
-      K_(is_out_row));
+      K_(is_out_row),
+      K_(is_col_nop));
 };
 
 ///////////////////////////////////////////////////////////////////////////////////

@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_FORMATTER
 
 #include "ob_cdc_lob_data_merger.h"
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager

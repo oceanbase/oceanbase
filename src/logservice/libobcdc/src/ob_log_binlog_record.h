@@ -20,6 +20,7 @@
 #else
 #include <drcmsg/BR.h>                               // IBinlogRecord
 #include <drcmsg/DRCMessageFactory.h>                // createBinlogRecord
+#include <drcmsg/ValueOrigin.h>                      // VALUE_ORIGIN
 #endif
 #include "lib/queue/ob_link.h"                       // ObLink
 
@@ -46,6 +47,11 @@ public:
 
 public:
   static int put_old(IBinlogRecord *br, const bool is_changed);
+  static void mark_value_populated_by_cdc(
+      IBinlogRecord &br,
+      const bool is_new_col = false,
+      const char *reason = "",
+      const int col_idx = 0);
 
 public:
   void reset();

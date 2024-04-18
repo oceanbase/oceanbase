@@ -137,8 +137,9 @@ private:
 
     bool is_rowkey_[common::OB_MAX_COLUMN_NUMBER];
     bool is_changed_[common::OB_MAX_COLUMN_NUMBER];
-    bool is_null_lob_old_columns_[common::OB_MAX_COLUMN_NUMBER];
-    bool is_diff_[common::OB_MAX_COLUMN_NUMBER];
+    bool is_null_lob_columns_[common::OB_MAX_COLUMN_NUMBER];  // lob column value not recorded in log
+    bool is_diff_[common::OB_MAX_COLUMN_NUMBER]; // is lob_diff column
+    bool is_old_col_nop_[common::OB_MAX_COLUMN_NUMBER];       // old column that marked nop in log(most likely happened in minimal mode)
 
     // invoke before handle format stmt task
     // incase of usage of column_num but row doesn't contain valid column and column_num is not set

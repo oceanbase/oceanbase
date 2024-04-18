@@ -34,7 +34,7 @@
 #include "ob_cdc_lob_ctx.h"             // ObLobDataGetCtx
 #include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_cdc_lob_aux_meta_storager.h"    // ObCDCLobAuxMetaStorager
-#include "ob_cdc_lob_aux_table_parse.h"    // ObCDCLobAuxMetaStorager
+#include "ob_cdc_lob_aux_table_parse.h"      // ObCDCLobAuxMetaStorager
 #include "ob_cdc_udt.h"                 // ObCDCUdtValueBuilder
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 #include "ob_log_timezone_info_getter.h"
@@ -62,8 +62,9 @@ void ObLogFormatter::RowValue::reset()
   (void)memset(orig_default_value_, 0, sizeof(orig_default_value_));
   (void)memset(is_rowkey_, 0, sizeof(is_rowkey_));
   (void)memset(is_changed_, 0, sizeof(is_changed_));
-  (void)memset(is_null_lob_old_columns_, 0, sizeof(is_null_lob_old_columns_));
+  (void)memset(is_null_lob_columns_, 0, sizeof(is_null_lob_columns_));
   (void)memset(is_diff_, 0, sizeof(is_diff_));
+  (void)memset(is_old_col_nop_, 0, sizeof(is_old_col_nop_));
 }
 
 int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_old_column)
@@ -79,8 +80,9 @@ int ObLogFormatter::RowValue::init(const int64_t column_num, const bool contain_
     (void)memset(orig_default_value_, 0, column_num * sizeof(orig_default_value_[0]));
     (void)memset(is_rowkey_, 0, column_num * sizeof(is_rowkey_[0]));
     (void)memset(is_changed_, 0, column_num * sizeof(is_changed_[0]));
-    (void)memset(is_null_lob_old_columns_, 0, column_num * sizeof(is_null_lob_old_columns_[0]));
+    (void)memset(is_null_lob_columns_, 0, column_num * sizeof(is_null_lob_columns_[0]));
     (void)memset(is_diff_, 0, column_num * sizeof(is_diff_[0]));
+    (void)memset(is_old_col_nop_, 0, column_num * sizeof(is_old_col_nop_[0]));
   }
 
   return OB_SUCCESS;
@@ -1334,13 +1336,18 @@ int ObLogFormatter::fill_normal_cols_(
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->new_columns_[usr_column_idx] = nullptr;
+              rv->is_null_lob_columns_[usr_column_idx] = true;
               LOG_INFO("fill_normal_cols_ nullptr", K(is_new_value), KPC(cv), K(lob_ctx_cols));
             }
           }
-          rv->is_changed_[usr_column_idx] = true;
+          rv->is_changed_[usr_column_idx] = (1 != cv->is_col_nop_); // column is not changed if col_value is nop(may be in minimal mode)
         } else {
           if (! cv->is_out_row_) {
-            rv->old_columns_[usr_column_idx] = &cv->string_value_;
+            if (cv->is_col_nop_) {
+              rv->is_old_col_nop_[usr_column_idx] = true;
+            } else {
+              rv->old_columns_[usr_column_idx] = &cv->string_value_;
+            }
           } else {
             ObLobDataGetCtx *lob_data_get_ctx = nullptr;
             ObString *old_col_str = nullptr;
@@ -1356,9 +1363,9 @@ int ObLogFormatter::fill_normal_cols_(
               if (lob_data_get_ctx->is_ext_info_log()) {
                 if (cv->is_json()) {
                   // old data isn't passed when data is partial json
-                  // so need set is_null_lob_old_columns_
+                  // so need set is_null_lob_columns_
                   rv->old_columns_[usr_column_idx] = nullptr;
-                  rv->is_null_lob_old_columns_[usr_column_idx] = true;
+                  rv->is_null_lob_columns_[usr_column_idx] = true;
                 } else {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
@@ -1383,7 +1390,7 @@ int ObLogFormatter::fill_normal_cols_(
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->old_columns_[usr_column_idx] = nullptr;
-              rv->is_null_lob_old_columns_[usr_column_idx] = true;
+              rv->is_null_lob_columns_[usr_column_idx] = true;
               LOG_INFO("fill_normal_cols_ nullptr", K(usr_column_idx), K(is_new_value), KPC(cv), K(lob_ctx_cols));
             }
           }
@@ -1449,7 +1456,7 @@ int ObLogFormatter::fill_rowkey_cols_(
         }
 
         rv->is_rowkey_[rowkey_usr_index] = true;
-        rv->is_changed_[rowkey_usr_index] = true;
+        rv->is_changed_[rowkey_usr_index] = (1 != cv_node->is_col_nop_);
 
         if (rv->contain_old_column_ && NULL == rv->old_columns_[rowkey_usr_index]) {
           rv->old_columns_[rowkey_usr_index] = &(cv_node->string_value_);
@@ -1756,28 +1763,42 @@ int ObLogFormatter::format_dml_delete_(IBinlogRecord *br_data, const RowValue *r
       }
       // Handling non-primary key values
       else {
+        ObString *str = nullptr;
+        bool need_populate_old_value_to_null_or_empty = false;
         if (row_value->contain_old_column_) {
           // When full column logging, the non-rowkey column of oldCold is set to the corresponding value
           // If the column value is not provided, then it is a new column and the corresponding original default value is set
-          ObString *str = row_value->old_columns_[i];
-          if (NULL == str) {
-            str = row_value->orig_default_value_[i];
-          }
-
+          str = row_value->old_columns_[i];
           if (OB_ISNULL(str)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("old column value and original default value are all invalid", KR(ret),
-                K(i), "column_num", row_value->column_num_);
+            if (row_value->is_old_col_nop_[i]) {
+              need_populate_old_value_to_null_or_empty = true;
+              ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "delete_op with nop_old_col_value", i);
+            } else if (row_value->is_null_lob_columns_[i]) {
+              // check if is outrow lob old col
+              need_populate_old_value_to_null_or_empty = true;
+              ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "delete_op with null_lob_col_value", i);
+            } else {
+              if (OB_ISNULL(str = row_value->orig_default_value_[i])) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("old column value and original default value are all invalid", KR(ret),
+                    K(i), "column_num", row_value->column_num_);
+              } else {
+                br_data->putOld(str->ptr(), str->length());
+              }
+            }
           } else {
             br_data->putOld(str->ptr(), str->length());
           }
         } else {
           // Non-rowkey columns of oldCold are set to no-change status for non-full column logging
-          bool is_changed = false;
+          ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "delete_op not contains old_column", i);
+        }
 
-          if (OB_FAIL(ObLogBR::put_old(br_data, is_changed))) {
-            LOG_ERROR("put_old fail", KR(ret), K(br_data), K(is_changed));
-          }
+        if (OB_SUCC(ret)) {
+          LOG_DEBUG("put_old_column_value for delete operation",
+              K(i), K(need_populate_old_value_to_null_or_empty),
+              "value", str == nullptr ? "NULL": to_cstring(*str),
+              "default_val", row_value->orig_default_value_[i]);
         }
       }
     }
@@ -1796,6 +1817,7 @@ int ObLogFormatter::format_dml_insert_(IBinlogRecord *br_data, const RowValue *r
   } else {
     for (int64_t i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
       if (!row_value->is_changed_[i]) {
+        // use defualt value in case of format old data with new schema(e.g. add column)
         ObString *str_val = row_value->orig_default_value_[i];
 
         if (OB_ISNULL(str_val)) {
@@ -1833,27 +1855,33 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
     LOG_ERROR("invalid argument", KR(ret), K(br_data), K(row_value));
   } else {
     for (int i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
+      // fill column value after update
       if (! row_value->is_changed_[i]) {
         if (row_value->contain_old_column_) {
           // In the case of a full column log, for update, if a column is not updated, the new value is filled with the value in old_column
           // If there is no corresponding value in the old column either, the original default value is filled
           ObString *str_val = row_value->old_columns_[i];
 
-          if (NULL == str_val) {
-            str_val = row_value->orig_default_value_[i];
-          }
-
           if (OB_ISNULL(str_val)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("new column value, old column value and original default value "
-                "are all invalid", KR(ret),
-                K(i), "column_num", row_value->column_num_);
+            if (row_value->is_old_col_nop_[i]) {
+              ObLogBR::mark_value_populated_by_cdc(*br_data, true /*is_new_col*/, "update_op unchanged_col with nop_old_col", i);
+            } else if (row_value->is_null_lob_columns_[i]) {
+              ObLogBR::mark_value_populated_by_cdc(*br_data, true /*is_new_col*/, "update_op unchanged_col with null_lob", i);
+            } else if (OB_ISNULL(str_val = row_value->orig_default_value_[i])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("new column value, old column value and original default value "
+                  "are all invalid", KR(ret),
+                  K(i), "column_num", row_value->column_num_);
+            } else {
+              br_data->putNew(str_val->ptr(), str_val->length());
+            }
           } else {
             br_data->putNew(str_val->ptr(), str_val->length());
           }
         } else {
           // Mark as unmodified when not a full column log
-          br_data->putNew(NULL, 0);
+          // e.g. updated columns not include outrow lob column
+          ObLogBR::mark_value_populated_by_cdc(*br_data, true /*is_new_col*/, "update_op unchanged_col without old_col_val", i);
         }
       } else {
         ObString *str_val = row_value->new_columns_[i];
@@ -1870,40 +1898,33 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
         }
       }
 
-      if (OB_SUCCESS == ret) {
+      if (OB_SUCC(ret)) {
+        // fill column value before update
         bool is_changed = row_value->is_changed_[i];
         if (row_value->contain_old_column_) {
           // For full column logging, the old value is always filled with the value in old_column for updates
           // If there is no valid value in the old column, the original default value is filled
           ObString *str_val = row_value->old_columns_[i];
 
-          if (NULL == str_val) {
-            str_val = row_value->orig_default_value_[i];
-          }
-
           if (OB_ISNULL(str_val)) {
-            if (row_value->is_null_lob_old_columns_[i]) {
-              br_data->putOld(NULL, 0);
-              // NOTICE: LOB column doesn't have default value.
-              LOG_DEBUG("old_column is invalid, may outrow lob updated to inrow", K(i), K(row_value));
-            } else {
+            if (row_value->is_old_col_nop_[i]) {
+              ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "update_op with nop_old_col", i);
+            } else if (row_value->is_null_lob_columns_[i]) {
+              ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "update_op with null_lob_col", i);
+            } else if (OB_ISNULL(str_val = row_value->orig_default_value_[i])) {
               ret = OB_ERR_UNEXPECTED;
               LOG_ERROR("old column value and original default value are all invalid", KR(ret),
                   K(i), "column_num", row_value->column_num_,
                   "is_changed", row_value->is_changed_[i]);
+            } else {
+              br_data->putOld(str_val->ptr(), str_val->length());
             }
           } else {
             br_data->putOld(str_val->ptr(), str_val->length());
           }
         } else {
           // When not full column logging, for update, the old value is filled with whether the corresponding column has been modified
-          if (row_value->is_rowkey_[i]) {
-            is_changed = true;
-          }
-
-          if (OB_FAIL(ObLogBR::put_old(br_data, is_changed))) {
-            LOG_ERROR("put_old fail", KR(ret), K(br_data), K(is_changed));
-          }
+          ObLogBR::mark_value_populated_by_cdc(*br_data, false /*is_new_col*/, "update_op with unchanged old_col", i);
         }
       }
     } // end of for
