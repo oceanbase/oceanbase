@@ -205,7 +205,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       out_bytes_(0),
       current_dblink_sequence_id_(0),
       client_non_standard_(false),
-      executing_sql_stat_record_()
+      executing_sql_stat_record_(),
+      job_info_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -399,6 +400,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   dblink_sequence_schemas_.reset();
   MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
   executing_sql_stat_record_.reset();
+  job_info_ = nullptr;
 }
 
 void ObSQLSessionInfo::clean_status()

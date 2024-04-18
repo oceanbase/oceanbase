@@ -225,7 +225,7 @@
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 #include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
-
+#include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2679,6 +2679,15 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               compatibility_control->set_allocator(&allocator);
               vt_iter = static_cast<ObVirtualTableIterator *>(compatibility_control);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID:
+          {
+            ObAllVirtualTenantSchedulerRunningJob *running_job = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSchedulerRunningJob, running_job))) {
+              running_job->set_session_mgr(GCTX.session_mgr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
             }
             break;
           }

@@ -718,6 +718,7 @@ const uint64_t OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TID = 124
 const uint64_t OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TID = 12439; // "__all_virtual_checkpoint_diagnose_info"
 const uint64_t OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TID = 12440; // "__all_virtual_wr_system_event"
 const uint64_t OB_ALL_VIRTUAL_WR_EVENT_NAME_TID = 12441; // "__all_virtual_wr_event_name"
+const uint64_t OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID = 12442; // "__all_virtual_tenant_scheduler_running_job"
 const uint64_t OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_TID = 12443; // "__all_virtual_routine_privilege"
 const uint64_t OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_HISTORY_TID = 12444; // "__all_virtual_routine_privilege_history"
 const uint64_t OB_ALL_VIRTUAL_SQLSTAT_TID = 12445; // "__all_virtual_sqlstat"
@@ -3313,6 +3314,7 @@ const char *const OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_CHECKPOINT_UNIT_INFO_TNAME 
 const char *const OB_ALL_VIRTUAL_CHECKPOINT_DIAGNOSE_INFO_TNAME = "__all_virtual_checkpoint_diagnose_info";
 const char *const OB_ALL_VIRTUAL_WR_SYSTEM_EVENT_TNAME = "__all_virtual_wr_system_event";
 const char *const OB_ALL_VIRTUAL_WR_EVENT_NAME_TNAME = "__all_virtual_wr_event_name";
+const char *const OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME = "__all_virtual_tenant_scheduler_running_job";
 const char *const OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_TNAME = "__all_virtual_routine_privilege";
 const char *const OB_ALL_VIRTUAL_ROUTINE_PRIVILEGE_HISTORY_TNAME = "__all_virtual_routine_privilege_history";
 const char *const OB_ALL_VIRTUAL_SQLSTAT_TNAME = "__all_virtual_sqlstat";

@@ -690,6 +690,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12439	__all_virtual_checkpoint_diagnose_info	2	201001	1
 12440	__all_virtual_wr_system_event	2	201001	1
 12441	__all_virtual_wr_event_name	2	201001	1
+12442	__all_virtual_tenant_scheduler_running_job	2	201001	1
 12443	__all_virtual_routine_privilege	2	201001	1
 12444	__all_virtual_routine_privilege_history	2	201001	1
 12445	__all_virtual_sqlstat	2	201001	1

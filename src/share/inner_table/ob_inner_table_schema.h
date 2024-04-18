@@ -1018,6 +1018,7 @@ public:
   static int all_virtual_checkpoint_diagnose_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_system_event_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_wr_event_name_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_tenant_scheduler_running_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_routine_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sqlstat_schema(share::schema::ObTableSchema &table_schema);
@@ -3629,6 +3630,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_checkpoint_diagnose_info_schema,
   ObInnerTableSchema::all_virtual_wr_system_event_schema,
   ObInnerTableSchema::all_virtual_wr_event_name_schema,
+  ObInnerTableSchema::all_virtual_tenant_scheduler_running_job_schema,
   ObInnerTableSchema::all_virtual_routine_privilege_schema,
   ObInnerTableSchema::all_virtual_routine_privilege_history_schema,
   ObInnerTableSchema::all_virtual_sqlstat_schema,
@@ -9713,7 +9715,8 @@ const uint64_t cluster_distributed_vtables [] = {
   OB_ALL_VIRTUAL_IO_SCHEDULER_TID,
   OB_ALL_VIRTUAL_TX_DATA_TID,
   OB_ALL_VIRTUAL_STORAGE_HA_ERROR_DIAGNOSE_TID,
-  OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID,  };
+  OB_ALL_VIRTUAL_STORAGE_HA_PERF_DIAGNOSE_TID,
+  OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID,  };
 
 const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_PROCESSLIST_TID,
@@ -12436,11 +12439,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 277;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 789;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 790;
 const int64_t OB_SYS_VIEW_COUNT = 861;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1932;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1933;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1935;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1936;
 
 } // end namespace share
 } // end namespace oceanbase

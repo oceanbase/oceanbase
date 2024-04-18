@@ -47,6 +47,7 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -1696,6 +1697,8 @@ public:
   bool is_pl_prepare_stage() const;
   inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
   int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
+  dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
+  void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1727,6 +1730,7 @@ private:
   bool client_non_standard_;
   share::schema::ObUserLoginInfo login_info_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
+  dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

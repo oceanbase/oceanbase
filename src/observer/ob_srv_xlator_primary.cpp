@@ -116,6 +116,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
 
   //dbms_scheduler
   RPC_PROCESSOR(ObRpcRunDBMSSchedJobP, gctx_);
+  RPC_PROCESSOR(ObRpcStopDBMSSchedJobP, gctx_);
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
 }
