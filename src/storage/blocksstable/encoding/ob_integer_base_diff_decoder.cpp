@@ -261,13 +261,17 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
                   col_data,
                   filter,
                   result_bitmap))) {
-        LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
     case sql::WHITE_OP_BT: {
       if (OB_FAIL(bt_operator(parent, col_ctx, col_data, filter, result_bitmap))) {
-        LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
