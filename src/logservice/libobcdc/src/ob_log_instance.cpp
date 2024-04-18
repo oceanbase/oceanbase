@@ -822,19 +822,6 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  // init ObCompatModeGetter
-  if (OB_SUCC(ret)) {
-    if (is_data_dict_refresh_mode(refresh_mode_)) {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
-        LOG_ERROR("compat_mode_getter init fail", KR(ret));
-      }
-    } else {
-      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
-        LOG_ERROR("compat_mode_getter init fail", KR(ret));
-      }
-    }
-  }
-
   // init oblog version，e.g. 2.2.1
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_obcdc_version_components_())) {
@@ -847,6 +834,19 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     if (is_integrated_fetching_mode(fetching_mode_)) {
       if (OB_FAIL(init_ob_cluster_version_())) {
         LOG_ERROR("init_ob_cluster_version_ fail", KR(ret));
+      }
+    }
+  }
+
+  // init ObCompatModeGetter
+  if (OB_SUCC(ret)) {
+    if (is_data_dict_refresh_mode(refresh_mode_) && is_direct_fetching_mode(fetching_mode_)) {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init_for_obcdc())) {
+        LOG_ERROR("compat_mode_getter init fail", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(share::ObCompatModeGetter::instance().init(&(mysql_proxy_.get_ob_mysql_proxy())))) {
+        LOG_ERROR("compat_mode_getter init fail", KR(ret));
       }
     }
   }
