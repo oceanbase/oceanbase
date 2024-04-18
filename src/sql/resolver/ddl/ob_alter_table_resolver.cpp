@@ -188,7 +188,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
                    && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
-          SQL_RESV_LOG(WARN, "assign external table failed", K(ret), K(parse_tree.children_[SPECIAL_TABLE_TYPE]->type_));
+          SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
         } else if (ObSchemaChecker::is_ora_priv_check()) {
           OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                                   session_info_->get_priv_user_id(),
