@@ -80,6 +80,7 @@ const char *ObPrivMgr::priv_names_[] = {
     "RELOAD",
     "CREATE ROLE",
     "DROP ROLE",
+    "TRIGGER",
 };
 
 ObPrivMgr::ObPrivMgr()

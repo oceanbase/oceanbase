@@ -1164,6 +1164,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprDocLength::generate_doc_length,                      /*691*/
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
   NULL, // ObExprIsEnabledRole::eval_is_enabled_role,                 /* 693 */
+  NULL, // ObExprCanAccessTrigger::can_access_trigger,                /* 694 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

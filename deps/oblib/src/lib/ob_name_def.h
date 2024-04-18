@@ -1113,4 +1113,5 @@
 #define N_ST_SYMDIFFERENCE                  "st_symdifference"
 #define N_PRIV_ST_ASMVTGEOM                 "_st_asmvtgeom"
 #define N_PRIV_ST_MAKEVALID                 "_st_makevalid"
+#define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

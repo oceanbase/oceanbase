@@ -503,6 +503,7 @@ typedef enum ObItemType
   T_FUN_SYS_AUDIT_LOG_REMOVE_USER = 772,
   T_FUN_SYS_PASSWORD = 773,
   T_FUN_SYS_IS_ENABLED_ROLE = 774,
+  T_FUN_SYS_CAN_ACCESS_TRIGGER = 775,
   ///< @note add new mysql only function type before this line
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
