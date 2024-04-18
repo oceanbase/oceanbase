@@ -739,6 +739,10 @@ public:
     return slice_cnt;
   }
   bool is_destroyed() const { return is_destroyed_; }
+  bool is_slice_ht() const
+  {
+    return slice_cnt_func_ ? true : false;
+  }
   TO_STRING_KV(K_(tenant_id),
                K_(preprocess_part),
                K_(enable_sql_dumped),
@@ -1220,7 +1224,7 @@ int ObHashPartInfrastructure<HashCol, HashRowStore>::init_hash_table(
     SQL_ENG_LOG(WARN, "allocator is null or it don'e start to round", K(ret), K(start_round_));
   } else if (OB_FAIL(hash_table_.init(alloc_, bucket_cnt,
     [this] () { return get_each_slice_avg_size(sql_mem_processor_->get_mem_bound()); },
-    min_bucket, max_bucket, is_push_down_, get_slice_count() > 1 ? true : false))) {
+    min_bucket, max_bucket, is_push_down_, is_slice_ht()))) {
     SQL_ENG_LOG(WARN, "failed to init hash table", K(ret), K(bucket_cnt));
   }
   return ret;
