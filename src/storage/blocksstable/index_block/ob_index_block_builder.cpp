@@ -279,6 +279,7 @@ void ObSSTableMergeRes::reset()
   for (int64_t i = 0; i < data_block_ids_.count(); ++i) {
     const MacroBlockId &block_id = data_block_ids_.at(i);
     if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(block_id))) {
+      // overwrite ret
       STORAGE_LOG(ERROR, "failed to dec macro block ref cnt",
           K(ret), "macro id", block_id);
     }
@@ -287,6 +288,7 @@ void ObSSTableMergeRes::reset()
   for (int64_t i = 0; i < other_block_ids_.count(); ++i) {
     const MacroBlockId &block_id = other_block_ids_.at(i);
     if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(block_id))) {
+      // overwrite ret
       STORAGE_LOG(ERROR, "failed to dec macro block ref cnt",
           K(ret), "macro id", block_id);
     }

@@ -1446,6 +1446,7 @@ void ObSSTable::dec_macro_ref() const
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {
         if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_id))) {
+          // overwrite ret
           LOG_ERROR("fail to dec other block ref cnt", K(ret), K(macro_id));
         } else {
           LOG_DEBUG("barry debug decrease other ref cnt", K(macro_id), KPC(this), K(lbt()));
@@ -1453,7 +1454,8 @@ void ObSSTable::dec_macro_ref() const
       }
     }
     iterator.reset();
-    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_linked_block_iter(iterator))) { // ignore ret
+    if (OB_FAIL(meta_handle.get_sstable_meta().get_macro_info().get_linked_block_iter(iterator))) {
+      // overwrite ret
       LOG_ERROR("fail to get linked block iterator", K(ret), KPC(this));
     } else {
       while (OB_SUCC(iterator.get_next_macro_id(macro_id))) {

@@ -1329,7 +1329,8 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
           }
         }
       }
-      if (OB_UNLIKELY(!found)) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(!found)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected group by column id", K(ret), K(i), K(output_column_ids), K(group_by_column_ids));
       }

@@ -982,12 +982,14 @@ void ObTmpTenantMemBlockManager::destroy()
       STORAGE_LOG(WARN, "pop wait handle failed", K(ret));
     } else if (FALSE_IT(wait_info = static_cast<IOWaitInfo*>(node))) {
     } else if (OB_FAIL(wait_info->exec_wait())) {
+      // overwrite ret
       STORAGE_LOG(WARN, "fail to exec iohandle wait", K(ret), K_(tenant_id));
     }
   }
   ATOMIC_STORE(&washing_count_, 0);
   DestroyBlockMapOp op;
   if (OB_FAIL(t_mblk_map_.foreach_refactored(op))) {
+    // overwrite ret
     STORAGE_LOG(WARN, "destroy mblk map failed", K(ret));
   }
   t_mblk_map_.destroy();
