@@ -1051,6 +1051,14 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
     }
   }
 
+if (OB_SUCC(ret)) {
+  if (snapshot.snapshot_ls_role_ == common::ObRole::FOLLOWER
+      && snapshot.snapshot_acquire_addr_ != GCTX.self_addr()) {
+    TRANS_LOG(INFO, "get read store_ctx by a follower's max_commit_ts", K(ret), K(snapshot),
+              K(ls_id), K(store_ctx));
+  }
+}
+
   // setup tx_table_guard
   ObTxTableGuard tx_table_guard;
   if (OB_SUCC(ret) &&

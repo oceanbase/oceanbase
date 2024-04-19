@@ -237,6 +237,8 @@ private:
 
   int recover_ckpt_into_memory_();
 
+  int errsim_leader_revoke_();
+
 private:
   share::ObLSID ls_id_;
 

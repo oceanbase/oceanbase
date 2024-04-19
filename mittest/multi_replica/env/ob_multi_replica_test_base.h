@@ -72,6 +72,7 @@ public:
   observer::ObSimpleServerReplica &get_curr_simple_server() { return *replica_; }
 
   static int read_cur_json_document_(rapidjson::Document & json_doc);
+
   static int wait_event_finish(const std::string &event_name,
                                std::string &event_content,
                                int64_t wait_timeout_ms,

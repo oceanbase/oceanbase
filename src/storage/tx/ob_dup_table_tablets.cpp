@@ -1114,8 +1114,10 @@ OB_NOINLINE int ObLSDupTabletsMgr::process_prepare_ser_err_test_()
   ret = EN_DUP_TABLE_LOG_PREPARE_SERIALIZE;
 #endif
 
+  if(OB_FAIL(ret))
+  {
   DUP_TABLE_LOG(INFO, "errsim prepare serialize err test", K(ret),K(ls_id_));
-
+  }
   return ret;
 }
 

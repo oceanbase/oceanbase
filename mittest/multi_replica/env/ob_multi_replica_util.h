@@ -234,23 +234,26 @@ namespace unittest
     common::ObString trace_id;                                                                    \
     common::ObString query_sql;                                                                   \
     int64_t request_time = 0;                                                                     \
+    int64_t snapshot = 0;                                                                         \
     int64_t ret_code = OB_SUCCESS;                                                                \
     int64_t retry_cnt = 0;                                                                        \
     ASSERT_EQ(true, conn != nullptr);                                                             \
-    std::string sql_str =                                                                         \
-        "select TX_ID, TRACE_ID, REQUEST_TIME, RET_CODE, RETRY_CNT, QUERY_SQL from "              \
-        "oceanbase.V$OB_SQL_AUDIT where QUERY_SQL like "                                          \
-        + std::string(" \"") + std::string(sql) + std::string("\" order by REQUEST_TIME DESC");   \
+    std::string sql_str = "select TX_ID, SNAPSHOT_VERSION, TRACE_ID, REQUEST_TIME, RET_CODE, "    \
+                          "RETRY_CNT, QUERY_SQL from "                                            \
+                          "oceanbase.V$OB_SQL_AUDIT where QUERY_SQL like "                        \
+                          + std::string(" \"") + std::string(sql)                                 \
+                          + std::string("\" order by REQUEST_TIME DESC");                         \
     READ_SQL_BY_CONN(conn, process_result, sql_str.c_str());                                      \
     ASSERT_EQ(OB_SUCCESS, process_result->next());                                                \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("TX_ID", tx_id));                               \
+    ASSERT_EQ(OB_SUCCESS, process_result->get_int("SNAPSHOT_VERSION", snapshot));             \
     ASSERT_EQ(OB_SUCCESS, process_result->get_varchar("TRACE_ID", trace_id));                     \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("REQUEST_TIME", request_time));                 \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("RET_CODE", ret_code));                         \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("RETRY_CNT", retry_cnt));                       \
     ASSERT_EQ(OB_SUCCESS, process_result->get_varchar("QUERY_SQL", query_sql));                   \
     SERVER_LOG(INFO, "[ObMultiReplicaTestBase] query sql_audit for tx_id", K(trace_id), K(tx_id), \
-               K(request_time), K(ret_code), K(retry_cnt), K(query_sql));                         \
+               K(snapshot), K(request_time), K(ret_code), K(retry_cnt), K(query_sql));             \
   }
 
 #define PREPARE_CONN_ENV(conn)                                           \
@@ -475,6 +478,7 @@ public:
     ret = OB_SUCCESS;
   }
 };
+
 
 } // namespace unittest
 } // namespace oceanbase
