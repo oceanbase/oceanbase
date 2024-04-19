@@ -134,6 +134,10 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
                                 trunc_name_sql.string(),
                                 stat.name_))) {
       LOG_WARN("failed to write sql", K(ret));
+    } else if (OB_FAIL(ob_write_string(get_allocator(),
+                                       pc_ctx.key_.sys_vars_str_,
+                                       stat_.sys_vars_str_))) {
+      LOG_WARN("failed to write sql", K(ret));
     } else {
       stat.sql_cs_type_ = pc_ctx.session_info_->get_local_collation_connection();
     }

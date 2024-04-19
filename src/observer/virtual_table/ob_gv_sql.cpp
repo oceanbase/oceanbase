@@ -408,10 +408,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::SYS_VARS: {
       if (!cache_stat_updated) {
         cells[i].set_null();
-      } else if (cache_obj->is_sql_crsr()) {
-        ObString sys_vars_str;
+      } else if (cache_obj->is_sql_crsr() ||
+                 NULL != pl_object) {
+        ObString sys_vars_str, origin_str;
+        if (cache_obj->is_sql_crsr()) {
+          origin_str = plan->stat_.sys_vars_str_;
+        } else {
+          origin_str = pl_object->get_stat().sys_vars_str_;
+        }
         if (OB_FAIL(ob_write_string(*allocator_,
-                                    plan->stat_.sys_vars_str_,
+                                    origin_str,
                                     sys_vars_str))) {
           SERVER_LOG(ERROR, "copy sys_vars_str failed", K(ret));
         } else {

@@ -27,13 +27,14 @@ int ObPLCacheMgr::get_pl_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObC
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pc_get_pl_object);
+  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   //guard.get_cache_obj() = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (OB_ISNULL(lib_cache)) {
+  if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
   } else {
-    ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     if (OB_FAIL(lib_cache->get_cache_obj(ctx, &pc_ctx.key_, guard))) {
       PL_CACHE_LOG(DEBUG, "failed to get plan", K(ret));
       // if schema expired, update pl cache;
@@ -106,14 +107,15 @@ int ObPLCacheMgr::add_pl_object(ObPlanCache *lib_cache,
                                       ObILibCacheObject *cache_obj)
 {
   int ret = OB_SUCCESS;
+  ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
   if (OB_ISNULL(cache_obj)) {
     ret = OB_INVALID_ARGUMENT;
     PL_CACHE_LOG(WARN, "invalid cache obj", K(ret));
-  } else if (OB_ISNULL(lib_cache)) {
+  } else if (OB_ISNULL(lib_cache) || OB_ISNULL(pc_ctx.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("lib cache is null");
   } else {
-    ObPLCacheCtx &pc_ctx = static_cast<ObPLCacheCtx&>(ctx);
+    pc_ctx.key_.sys_vars_str_ = pc_ctx.session_info_->get_sys_var_in_pc_str();
     do {
       if (OB_FAIL(lib_cache->add_cache_obj(ctx, &pc_ctx.key_, cache_obj)) && OB_OLD_SCHEMA_VERSION == ret) {
         PL_CACHE_LOG(INFO, "schema in pl cache value is old, start to remove pl object", K(ret), K(pc_ctx.key_));
