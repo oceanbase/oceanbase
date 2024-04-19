@@ -12,6 +12,7 @@
 
 #ifndef OCEANBASE_SQL_RESOLVER_MV_OB_MV_PROVIDER_H_
 #define OCEANBASE_SQL_RESOLVER_MV_OB_MV_PROVIDER_H_
+#include "share/scn.h"
 #include "lib/string/ob_string.h"
 #include "lib/hash_func/ob_hash_func.h"
 #include "lib/container/ob_se_array.h"
@@ -32,18 +33,22 @@ public:
       mview_id_(mview_id),
       for_rt_expand_(for_rt_expand),
       inited_(false),
-      refreshable_type_(OB_MV_REFRESH_INVALID)
+      refreshable_type_(OB_MV_REFRESH_INVALID),
+      operators_(&inner_alloc_),
+      dependency_infos_(&inner_alloc_)
     {}
   ~ObMVProvider() {}
 
+  int init_mv_provider(ObSchemaGetterGuard *schema_guard, ObSQLSessionInfo *session_info)
+  { return init_mv_provider(share::SCN(), share::SCN(), schema_guard, session_info);  }
   int init_mv_provider(const share::SCN &last_refresh_scn,
                        const share::SCN &refresh_scn,
                        ObSchemaGetterGuard *schema_guard,
                        ObSQLSessionInfo *session_info);
   int check_mv_refreshable(bool &can_fast_refresh) const;
-  int get_operators(const ObIArray<ObString> *&operators) const;
+  int get_fast_refresh_operators(const ObIArray<ObString> *&operators) const;
+  int get_real_time_mv_expand_view(ObIAllocator &alloc, ObString &expand_view) const;
   int get_mv_dependency_infos(ObIArray<ObDependencyInfo> &dep_infos) const;
-
 private:
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt);
   int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);
@@ -65,8 +70,8 @@ private:
   const bool for_rt_expand_;
   bool inited_;
   ObMVRefreshableType refreshable_type_;
-  ObSEArray<ObString, 4, common::ModulePageAllocator, true> operators_; // refresh or real time access operator for mv
-  ObSEArray<ObDependencyInfo, 4, common::ModulePageAllocator, true> dependency_infos_;
+  common::ObFixedArray<ObString, common::ObIAllocator> operators_;  // refresh or real time access operator for mv
+  common::ObFixedArray<ObDependencyInfo, common::ObIAllocator> dependency_infos_;
 };
 
 }

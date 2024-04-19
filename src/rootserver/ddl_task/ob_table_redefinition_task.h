@@ -80,6 +80,7 @@ protected:
                                 const int64_t row_scanned,
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
+  virtual bool task_can_retry() const override { return is_ddl_retryable_; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}
@@ -95,9 +96,10 @@ private:
   int check_build_replica_end(bool &is_end);
   int replica_end_check(const int ret_code);
   int check_modify_autoinc(bool &modify_autoinc);
-  int check_use_heap_table_ddl_plan(bool &use_heap_table_ddl_plan);
+  int check_use_heap_table_ddl_plan(const share::schema::ObTableSchema *target_table_schema);
   int get_direct_load_job_stat(common::ObArenaAllocator &allocator, sql::ObLoadDataStat &job_stat);
   int check_target_cg_cnt();
+  int check_ddl_can_retry(const share::schema::ObTableSchema *table_schema);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;
@@ -111,6 +113,8 @@ private:
   bool is_ignore_errors_;
   bool is_do_finish_;
   int64_t target_cg_cnt_;
+  bool use_heap_table_ddl_plan_;
+  bool is_ddl_retryable_;
 };
 
 }  // end namespace rootserver

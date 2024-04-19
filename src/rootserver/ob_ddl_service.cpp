@@ -121,7 +121,7 @@
 #include "share/schema/ob_mview_info.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
-
+#include "rootserver/mview/ob_mview_dependency_service.h"
 
 namespace oceanbase
 {
@@ -4125,11 +4125,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
               } else if (orig_table_schema.get_autoinc_column_id() == 0) {
                 if (orig_column_schema->is_nullable()) {
                   // if the original table has null, we need to do double write to fill the nulls
-                  if (ObDDLType::DDL_INVALID == ddl_type || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
-                    ddl_type = ObDDLType::DDL_MODIFY_COLUMN;
-                  } else {
-                    ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
-                  }
+                  ddl_type = ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION;
                 } else {
                   if (ObDDLType::DDL_INVALID == ddl_type) {
                     ddl_type = ObDDLType::DDL_MODIFY_AUTO_INCREMENT;
@@ -13298,6 +13294,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("submit ddl task failed", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
+          res.ddl_need_retry_at_executor_ = task_record.ddl_need_retry_at_executor_;
         }
       } else if (is_simple_table_long_running_ddl(ddl_type)) {
         ObCreateDDLTaskParam param(tenant_id,
@@ -13317,6 +13314,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
             LOG_WARN("submit ddl task failed", K(ret));
         } else {
           res.task_id_ = task_record.task_id_;
+          res.ddl_need_retry_at_executor_ = task_record.ddl_need_retry_at_executor_;
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -13394,6 +13392,7 @@ int ObDDLService::create_hidden_table(
         int64_t refreshed_schema_version = 0;
         new_table_schema.set_tenant_id(dest_tenant_id);
         new_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
+        new_table_schema.set_table_referenced_by_mv(ObTableReferencedByMVFlag::IS_NOT_REFERENCED_BY_MV);
         if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
           LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
         } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
@@ -18733,6 +18732,14 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                 LOG_WARN("fail to insert schema object dependency", KR(ret), K(dep));
               }
             }
+
+            if (OB_SUCC(ret)) {
+              ObMViewDependencyService mv_dep_service(*schema_service_);
+              if (OB_FAIL(mv_dep_service.update_mview_dep_infos(
+                  trans, schema_guard, tenant_id, mview_table_id, deps))) {
+                LOG_WARN("failed to update mview dep infos", KR(ret));
+              }
+            }
           }
           // update mview_info
           if (OB_SUCC(ret)) {
@@ -21275,6 +21282,15 @@ int ObDDLService::drop_table_in_trans(
       } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard, // drop mv container table
                 table_schema, MATERIALIZED_VIEW, false)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
+      }
+
+      if (OB_SUCC(ret)) {
+        const uint64_t mview_table_id = table_schema.get_table_id();
+        ObMViewDependencyService mv_dep_service(*schema_service_);
+        if (OB_FAIL(mv_dep_service.remove_mview_dep_infos(
+            trans, schema_guard, tenant_id, mview_table_id))) {
+          LOG_WARN("failed to remove mview dep infos", KR(ret));
+        }
       }
     } else if (!table_schema.is_aux_table()) {
       if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
@@ -39018,6 +39034,5 @@ bool ObDDLService::need_modify_dep_obj_status(const obrpc::ObAlterTableArg &alte
           || (alter_table_arg.is_alter_options_
               && alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::TABLE_NAME)));
 }
-
 } // end namespace rootserver
 } // end namespace oceanbase

@@ -3554,6 +3554,16 @@ int ObBasicSessionInfo::is_transformation_enabled(bool &transformation_enabled) 
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_TRANSFORMATION, transformation_enabled);
 }
 
+int ObBasicSessionInfo::get_query_rewrite_enabled(int64_t &query_rewrite_enabled) const
+{
+  return get_int64_sys_var(SYS_VAR_QUERY_REWRITE_ENABLED, query_rewrite_enabled);
+}
+
+int ObBasicSessionInfo::get_query_rewrite_integrity(int64_t &query_rewrite_integrity) const
+{
+  return get_int64_sys_var(SYS_VAR_QUERY_REWRITE_INTEGRITY, query_rewrite_integrity);
+}
+
 int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const
 {
   int ret = OB_SUCCESS;

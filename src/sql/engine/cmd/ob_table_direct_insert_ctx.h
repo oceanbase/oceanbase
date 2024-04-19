@@ -34,7 +34,8 @@ public:
       table_load_instance_(nullptr),
       is_inited_(false),
       is_direct_(false),
-      is_online_gather_statistics_(false) {}
+      is_online_gather_statistics_(false),
+      ddl_task_id_(0) {}
   ~ObTableDirectInsertCtx();
   TO_STRING_KV(K_(is_inited));
 public:
@@ -53,6 +54,14 @@ public:
     is_online_gather_statistics_ = is_online_gather_statistics;
   }
 
+  void set_ddl_task_id(const int64_t ddl_task_id) {
+    ddl_task_id_ = ddl_task_id;
+  }
+
+  int64_t get_ddl_task_id() const {
+    return ddl_task_id_;
+  }
+
 private:
   int init_store_column_idxs(const uint64_t tenant_id, const uint64_t table_id,
                              common::ObIArray<int64_t> &store_column_idxs);
@@ -62,6 +71,7 @@ private:
   bool is_inited_;
   bool is_direct_; //indict whether the plan is direct load plan including insert into append and load data direct
   bool is_online_gather_statistics_;
+  int64_t ddl_task_id_;
 };
 } // namespace observer
 } // namespace oceanbase

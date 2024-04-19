@@ -1257,5 +1257,16 @@ int ObPhysicalPlanCtx::init_param_store_after_deserialize()
   return ret;
 }
 
+uint64_t ObPhysicalPlanCtx::get_last_refresh_scn(uint64_t mview_id) const
+{
+  uint64_t last_refresh_scn = OB_INVALID_SCN_VAL;
+  for (int64_t i = 0; OB_INVALID_SCN_VAL == last_refresh_scn && i < mview_ids_.count(); ++i) {
+    if (mview_id == mview_ids_.at(i)) {
+      last_refresh_scn = last_refresh_scns_.at(i);
+    }
+  }
+  return last_refresh_scn;
+}
+
 } //sql
 } //oceanbase

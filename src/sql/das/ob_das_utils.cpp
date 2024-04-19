@@ -482,18 +482,17 @@ int ObDASUtils::generate_mlog_row(const ObTabletID &tablet_id,
   } else if (OB_FAIL(auto_inc.get_autoinc_seq(tenant_id, tablet_id, autoinc_seq))) {
     LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
   } else {
-    // sequence_col is the first primary key
+    // mlog_row = | base_table_rowkey_cols | partition key cols | sequence_col | ... | dmltype_col | old_new_col |
     int sequence_col = 0;
     int dmltype_col = row.count_ - 2;
     int old_new_col = row.count_ - 1;
     const ObTableDMLParam::ObColDescArray &col_descs = dml_param.table_param_->get_col_descs();
-    bool is_heap_base_table = (OB_MLOG_ROWID_COLUMN_ID == col_descs.at(row.count_ - 1).col_id_);
-    // if the base table is heap table, then the last column is mlog_rowid,
-    // therefore, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col | rowid_col |
-    // otherwise, row = | sequence_col | partition key cols | ... | dmltype_col | old_new_col |
-    if (is_heap_base_table) {
-      dmltype_col = dmltype_col - 1;
-      old_new_col = old_new_col - 1;
+    bool found_seq_col = false;
+    for (int64_t i = 0; !found_seq_col && (i < row.count_); ++i) {
+      if (OB_MLOG_SEQ_NO_COLUMN_ID == col_descs.at(i).col_id_) {
+        sequence_col = i; // sequence_no is the last rowkey
+        found_seq_col = true;
+      }
     }
 
     row.cells_[sequence_col].set_int(ObObjType::ObIntType, static_cast<int64_t>(autoinc_seq));

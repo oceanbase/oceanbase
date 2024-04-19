@@ -187,6 +187,7 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_maintenance_task.cpp
   mview/ob_mview_refresh_stats_maintenance_task.cpp
   mview/ob_mview_timer_task.cpp
+  mview/ob_mview_dependency_service.cpp
 )
 
 ob_server_add_target(ob_rootserver)

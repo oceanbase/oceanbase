@@ -1511,7 +1511,8 @@ public:
 
   static int get_all_child_stmts(ObDMLStmt *stmt,
                                  ObIArray<ObSelectStmt*> &child_stmts,
-                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL);
+                                 hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map = NULL,
+                                 const ObIArray<ObSelectStmt*> *ignore_stmts = NULL);
 
   static int check_select_expr_is_const(ObSelectStmt *stmt, ObRawExpr *expr, bool &is_const);
 
@@ -1883,6 +1884,15 @@ public:
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
+  static int add_aggr_winfun_expr(ObSelectStmt *stmt,
+                                  ObRawExpr *expr);
+  static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
+
+  static int generate_view_stmt_from_query_string(const ObString &expand_view,
+                                                  ObTransformerCtx *ctx,
+                                                  ObSelectStmt *&view_stmt);
+  static int set_expand_mview_flag(ObSelectStmt *view_stmt);
+
   static int is_where_subquery_correlated(const ObIArray<ObExecParamRawExpr *> &exec_params,
                                           const ObSelectStmt &subquery,
                                           bool &is_correlated);
@@ -1920,7 +1930,6 @@ public:
                                            bool &is_ref);
 
   static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
-
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,

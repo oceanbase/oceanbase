@@ -29,7 +29,8 @@ namespace rootserver
 {
 ObMLogBuilder::MLogColumnUtils::MLogColumnUtils()
   : mlog_table_column_array_(),
-    allocator_("MlogColUtil")
+    allocator_("MlogColUtil"),
+    rowkey_count_(0)
 {
 
 }
@@ -85,11 +86,10 @@ int ObMLogBuilder::MLogColumnUtils::check_column_type(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_special_columns(
-    ObTableSchema &mlog_schema)
+int ObMLogBuilder::MLogColumnUtils::add_special_columns()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(add_pk_column(mlog_schema))) {
+  if (OB_FAIL(add_sequence_column())) {
     LOG_WARN("failed to add sequence column", KR(ret));
   } else if (OB_FAIL(add_dmltype_column())) {
     LOG_WARN("failed to add dmltype column", KR(ret));
@@ -99,9 +99,9 @@ int ObMLogBuilder::MLogColumnUtils::add_special_columns(
   return ret;
 }
 
-// sequence column is mlog's rowkey
-int ObMLogBuilder::MLogColumnUtils::add_pk_column(
-    ObTableSchema &mlog_schema)
+// sequence_no is part of mlog's rowkey
+// its rowkey position will be set later
+int ObMLogBuilder::MLogColumnUtils::add_sequence_column()
 {
   int ret = OB_SUCCESS;
   ObColumnSchemaV2 *rowkey_column = nullptr;
@@ -111,17 +111,16 @@ int ObMLogBuilder::MLogColumnUtils::add_pk_column(
     rowkey_column->set_autoincrement(false);
     rowkey_column->set_is_hidden(false);
     rowkey_column->set_nullable(false);
-    rowkey_column->set_rowkey_position(1);
+    rowkey_column->set_rowkey_position(0);
     rowkey_column->set_order_in_rowkey(ObOrderType::ASC);
     rowkey_column->set_column_id(OB_MLOG_SEQ_NO_COLUMN_ID);
     rowkey_column->set_data_type(ObIntType);
     rowkey_column->set_charset_type(CHARSET_BINARY);
     rowkey_column->set_collation_type(CS_TYPE_BINARY);
-    mlog_schema.set_rowkey_column_num(1);
     if (OB_FAIL(rowkey_column->set_column_name(OB_MLOG_SEQ_NO_COLUMN_NAME))) {
       LOG_WARN("failed to set column name", KR(ret));
-    } else if (OB_FAIL(mlog_schema.add_column(*rowkey_column))) {
-      LOG_WARN("failed to add rowkey column to mlog schema", KR(ret));
+    } else if (OB_FAIL(mlog_table_column_array_.push_back(rowkey_column))) {
+      LOG_WARN("failed to push back column to mlog table column array", KR(ret), KPC(rowkey_column));
     }
   }
   return ret;
@@ -201,9 +200,9 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         LOG_WARN("failed to assign rowkey_column to ref_column",
             KR(ret), KPC(rowkey_column));
       } else {
+        // preserve the rowkey position of the column
         ref_column->set_autoincrement(false);
         ref_column->set_is_hidden(false);
-        ref_column->set_rowkey_position(0);
         ref_column->set_index_position(0);
         ref_column->set_prev_column_id(UINT64_MAX);
         ref_column->set_next_column_id(UINT64_MAX);
@@ -215,6 +214,8 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_pk_columns(
         } else if (OB_FAIL(mlog_table_column_array_.push_back(ref_column))) {
           LOG_WARN("failed to push back column to mlog table column array",
               KR(ret), KP(ref_column));
+        } else {
+          ++rowkey_count_;
         }
       }
     }
@@ -269,7 +270,7 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_columns(
   return ret;
 }
 
-int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
+int ObMLogBuilder::MLogColumnUtils::implicit_add_base_table_part_key_columns(
     const ObPartitionKeyInfo &part_key_info,
     ObRowDesc &row_desc,
     const ObTableSchema &base_table_schema)
@@ -327,12 +328,12 @@ int ObMLogBuilder::MLogColumnUtils::add_base_table_part_key_columns(
   int ret = OB_SUCCESS;
   const ObPartitionKeyInfo &part_key_info = base_table_schema.get_partition_key_info();
   const ObPartitionKeyInfo &sub_part_key_info = base_table_schema.get_subpartition_key_info();
-  if (OB_FAIL(add_base_table_part_key_columns(
+  if (OB_FAIL(implicit_add_base_table_part_key_columns(
       part_key_info, row_desc, base_table_schema))) {
-    LOG_WARN("failed to add base table part key columns", KR(ret));
-  } else if (OB_FAIL(add_base_table_part_key_columns(
+    LOG_WARN("failed to implicit add base table part key columns", KR(ret));
+  } else if (OB_FAIL(implicit_add_base_table_part_key_columns(
       sub_part_key_info, row_desc, base_table_schema))) {
-    LOG_WARN("failed to add base table sub part key columns", KR(ret));
+    LOG_WARN("failed to implicit add base table sub part key columns", KR(ret));
   }
   return ret;
 }
@@ -350,7 +351,6 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
     ObTableSchema &mlog_schema)
 {
   int ret = OB_SUCCESS;
-  int64_t rowkey_pos = 1; // the first rowkey is seq_no
   // sort mlog_table_column_array first
   struct ColumnSchemaCmp {
     inline bool operator()(const ObColumnSchemaV2 *a, const ObColumnSchemaV2 *b) {
@@ -361,8 +361,13 @@ int ObMLogBuilder::MLogColumnUtils::construct_mlog_table_columns(
 
   for (int64_t i = 0; OB_SUCC(ret) && (i < mlog_table_column_array_.count()); ++i) {
     ObColumnSchemaV2 *column = mlog_table_column_array_.at(i);
-    if (column->is_part_key_column() || column->is_subpart_key_column()) {
-      column->set_rowkey_position(++rowkey_pos);
+    // columns referencing base table primary keys have already been assigned rowkey position
+    if ((column->is_part_key_column() || column->is_subpart_key_column())
+        && (0 == column->get_rowkey_position())) {
+      column->set_rowkey_position(++rowkey_count_);
+    } else if (OB_MLOG_SEQ_NO_COLUMN_ID == column->get_column_id()) {
+      // mlog seq_no column must be the last rowkey
+      column->set_rowkey_position(++rowkey_count_);
     }
     if (OB_FAIL(mlog_schema.add_column(*column))) {
       LOG_WARN("failed to add column to mlog schema", KR(ret), KPC(column));
@@ -686,50 +691,44 @@ int ObMLogBuilder::set_table_columns(
     LOG_WARN("ObMLogBuilder not init", KR(ret));
   } else {
     HEAP_VAR(ObRowDesc, row_desc) {
-      if (OB_FAIL(mlog_column_utils_.add_special_columns(mlog_schema))) {
+      if (base_table_schema.is_heap_table()) {
+        if (create_mlog_arg.with_primary_key_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create mlog on heap table cannot use with primary key option",
+              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+        } else if (!create_mlog_arg.with_rowid_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create mlog on heap table should use with rowid option",
+              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+        }
+      } else {
+        if (create_mlog_arg.with_rowid_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create mlog on non-heap table cannot use with rowid option",
+              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
+        } else if (!create_mlog_arg.with_primary_key_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("create mlog on non-heap table should use with primary key option",
+              KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
+        }
+      }
+
+      // the primary key of a mlog is consist of:
+      // the base table pk + the base table part key + the mlog sequence no
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(
+          row_desc, base_table_schema))) {
+        LOG_WARN("failed to add base table pk columns", KR(ret));
+      } else if (OB_FAIL(mlog_column_utils_.add_base_table_columns(
+          create_mlog_arg, row_desc, base_table_schema))) {
+        LOG_WARN("failed to add base table columns", KR(ret));
+      } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(
+          row_desc, base_table_schema))) {
+        LOG_WARN("failed to add base table part key columns", KR(ret));
+      } else if (OB_FAIL(mlog_column_utils_.add_special_columns())) {
         LOG_WARN("failed to add special columns", KR(ret));
-      }
-
-      if (OB_SUCC(ret)) {
-        if (base_table_schema.is_heap_table()) {
-          if (create_mlog_arg.with_primary_key_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create mlog on heap table cannot use with primary key option",
-                KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
-          } else if (!create_mlog_arg.with_rowid_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create mlog on heap table should use with rowid option",
-                KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
-          }
-        } else {
-          if (create_mlog_arg.with_rowid_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create mlog on non-heap table cannot use with rowid option",
-                KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_rowid_));
-          } else if (!create_mlog_arg.with_primary_key_) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("create mlog on non-heap table should use with primary key option",
-                KR(ret), K(base_table_schema.is_heap_table()), K(create_mlog_arg.with_primary_key_));
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(mlog_column_utils_.add_base_table_pk_columns(
-              row_desc, base_table_schema))) {
-            LOG_WARN("failed to add base table pk columns", KR(ret));
-          }
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(mlog_column_utils_.add_base_table_columns(
-            create_mlog_arg, row_desc, base_table_schema))) {
-          LOG_WARN("failed to add base table columns", KR(ret));
-        } else if (OB_FAIL(mlog_column_utils_.add_base_table_part_key_columns(
-            row_desc, base_table_schema))) {
-          LOG_WARN("failed to add base table part key columns", KR(ret));
-        } else if (OB_FAIL(mlog_column_utils_.construct_mlog_table_columns(mlog_schema))) {
-          LOG_WARN("failed to construct mlog table columns", KR(ret));
-        }
+      } else if (OB_FAIL(mlog_column_utils_.construct_mlog_table_columns(mlog_schema))) {
+        LOG_WARN("failed to construct mlog table columns", KR(ret));
       }
     }
   }

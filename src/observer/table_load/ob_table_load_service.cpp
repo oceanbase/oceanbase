@@ -393,12 +393,17 @@ int ObTableLoadService::check_tenant()
   return ret;
 }
 
-int ObTableLoadService::check_support_direct_load(uint64_t table_id)
+int ObTableLoadService::check_support_direct_load(
+    const uint64_t table_id,
+    const ObDirectLoadMethod::Type method,
+    const ObDirectLoadInsertMode::Type insert_mode)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id ||
+                  !ObDirectLoadMethod::is_type_valid(method) ||
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(table_id));
+    LOG_WARN("invalid args", KR(ret), K(table_id), K(method), K(insert_mode));
   } else {
     const uint64_t tenant_id = MTL_ID();
     ObSchemaGetterGuard schema_guard;
@@ -453,6 +458,15 @@ int ObTableLoadService::check_support_direct_load(uint64_t table_id)
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
+    } else if (OB_UNLIKELY(ObDirectLoadMethod::is_incremental(method))) { // incremental direct-load
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("incremental direct-load is not supported", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "incremental direct-load is not supported");
+    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+      if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+      }
     }
   }
   return ret;

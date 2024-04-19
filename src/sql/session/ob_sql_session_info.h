@@ -1216,6 +1216,7 @@ public:
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
+  const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
   bool is_table_name_hidden() const { return is_table_name_hidden_; }
   void set_table_name_hidden(const bool is_hidden) { is_table_name_hidden_ = is_hidden; }

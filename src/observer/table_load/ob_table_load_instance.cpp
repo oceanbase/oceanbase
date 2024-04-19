@@ -81,8 +81,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param, const ObIArray<int64_t> &
       LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
     }
     // check support
-    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_))) {
-      LOG_WARN("fail to check support direct load", KR(ret), K(param.table_id_));
+    else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
+                                                                   param.method_,
+                                                                   param.insert_mode_))) {
+      LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // create table ctx
     else if (OB_FAIL(create_table_ctx(param, idx_array))) {

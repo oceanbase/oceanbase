@@ -94,7 +94,7 @@ struct ObQueryHint {
                               const ObIArray<uint32_t> &src_hash_val,
                               int64_t *sub_num = NULL);
 
-  int generate_orig_stmt_qb_name(ObIAllocator &allocator);
+  int generate_orig_stmt_qb_name(ObIAllocator &allocator, int64_t inited_stmt_count);
   int generate_qb_name_for_stmt(ObIAllocator &allocator,
                                 const ObDMLStmt &stmt,
                                 const ObString &src_qb_name,
@@ -172,6 +172,9 @@ struct ObQueryHint {
   ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> used_trans_hints_;
   ObSEArray<QbNames, 8, common::ModulePageAllocator, true> stmt_id_map_;	//	stmt id -> qb name list, position is stmt id
   hash::ObHashMap<ObString, int64_t> qb_name_map_;	// qb name -> stmt id
+  int64_t sel_start_id_;
+  int64_t set_start_id_;
+  int64_t other_start_id_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObQueryHint);

@@ -208,7 +208,22 @@ int ObDirectLoadRangeSplitUtils::construct_origin_table_rowkey_iters(
   } else {
     const ObITableReadInfo &read_info =
       origin_table->get_tablet_handle().get_obj()->get_rowkey_read_info();
-    if (nullptr != origin_table->get_major_sstable()) {
+    if (!ObDirectLoadInsertMode::need_origin_data(origin_table->get_meta().insert_mode_)) {
+      ObDirectLoadDatumRowkeyEmptyIterator *rowkey_iter = nullptr;
+      if (OB_ISNULL(rowkey_iter = OB_NEWx(ObDirectLoadDatumRowkeyEmptyIterator, &allocator))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadDatumRowkeyEmptyIterator", KR(ret));
+      } else if (OB_FAIL(rowkey_iters.push_back(rowkey_iter))) {
+        LOG_WARN("fail to push back rowkey iter", KR(ret));
+      }
+      if (OB_FAIL(ret)) {
+        if (nullptr != rowkey_iter) {
+          rowkey_iter->~ObDirectLoadDatumRowkeyEmptyIterator();
+          allocator.free(rowkey_iter);
+          rowkey_iter = nullptr;
+        }
+      }
+    } else if (nullptr != origin_table->get_major_sstable()) {
       ObSSTable *major_sstable = origin_table->get_major_sstable();
       ObIDirectLoadDatumRowkeyIterator *rowkey_iter = nullptr;
       if (OB_FAIL(ObDirectLoadRangeSplitUtils::construct_rowkey_iter(

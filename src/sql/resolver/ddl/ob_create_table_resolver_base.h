@@ -38,6 +38,11 @@ protected:
                                share::schema::ObTableSchema &table_schema,
                                const bool is_partition_option_node_with_opt);
   int set_table_option_to_schema(share::schema::ObTableSchema &table_schema);
+  int add_primary_key_part(const ObString &column_name,
+                           ObTableSchema &table_schema,
+                           const int64_t cur_rowkey_size,
+                           int64_t &pk_data_length,
+                           ObColumnSchemaV2 *&col);
 
 };
 

@@ -429,6 +429,8 @@ public:
   bool is_order_siblings() const { return is_order_siblings_; }
   void set_hierarchical_query(bool is_hierarchical_query) { is_hierarchical_query_ = is_hierarchical_query; }
   bool is_hierarchical_query() const { return is_hierarchical_query_; }
+  inline void set_expanded_mview(bool is_expanded_mview) { is_expanded_mview_ = is_expanded_mview; }
+  inline bool is_expanded_mview() const { return is_expanded_mview_; }
   int contain_hierarchical_query(bool &contain_hie_query) const;
   void set_has_prior(bool has_prior) { has_prior_ = has_prior; }
   bool has_prior() const { return has_prior_; }
@@ -454,7 +456,8 @@ public:
   bool has_hidden_rowid() const;
   virtual int clear_sharable_expr_reference() override;
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                           ObSQLSessionInfo *session_info) override;
+                                           ObSQLSessionInfo *session_info,
+                                           bool explicit_for_col) override;
 
   const common::ObIArray<OrderItem>& get_search_by_items() const { return search_by_items_; }
   const common::ObIArray<ColumnItem>& get_cycle_items() const { return cycle_by_items_; }
@@ -707,6 +710,7 @@ private:
   bool is_hierarchical_query_;
   bool has_prior_;
   bool has_reverse_link_;
+  bool is_expanded_mview_;
 };
 }
 }

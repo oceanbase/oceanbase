@@ -3556,6 +3556,8 @@ public:
   int get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_t &pos) const;
   void set_op_id(int64_t operator_id) { operator_id_ = operator_id; }
   int64_t get_op_id() const { return operator_id_; }
+  void set_mview_id(uint64_t mview_id) { mview_id_ = mview_id; }
+  uint64_t get_mview_id() const { return mview_id_; }
   void set_dblink_name(const common::ObString &name) { dblink_name_ = name; }
   const common::ObString &get_dblink_name() const { return dblink_name_; }
   void set_dblink_id(int64_t dblink_id) { dblink_id_ = dblink_id; }
@@ -3572,7 +3574,8 @@ public:
                                             K_(dblink_name),
                                             K_(dblink_id),
                                             K_(local_session_var),
-                                            K_(local_session_var_id));
+                                            K_(local_session_var_id),
+                                            K_(mview_id));
   virtual int set_local_session_vars(const share::schema::ObLocalSessionVar *local_sys_vars,
                                      const ObBasicSessionInfo *session,
                                      int64_t ctx_array_idx);
@@ -3581,8 +3584,10 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObSysFunRawExpr);
   common::ObString func_name_;
   common::ObString dblink_name_;
-  //用于记录rownum表达式归属的count算子的op_id_
-  uint64_t operator_id_;
+  union {
+    uint64_t operator_id_;  // for rownum expr
+    uint64_t mview_id_;     // for last_refresh_scn expr
+  };
   uint64_t dblink_id_;
 };
 

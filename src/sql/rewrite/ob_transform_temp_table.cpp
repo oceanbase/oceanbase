@@ -167,7 +167,8 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     OPT_TRACE("stmt has for update, can not extract CTE");
   } else if (OB_FAIL(parent_map.create(128, "TempTable"))) {
     LOG_WARN("failed to init stmt map", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map))) {
+  } else if (!ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, stmt) &&
+             OB_FAIL(ObTransformUtils::get_all_child_stmts(stmt, child_stmts, &parent_map, &ctx_->temp_table_ignore_stmts_))) {
     LOG_WARN("failed to get all child stmts", K(ret));
   } else if (OB_FAIL(get_non_correlated_subquery(stmt, non_correlated_stmts))) {
     LOG_WARN("failed to get non correlated subquery", K(ret));
@@ -1025,8 +1026,6 @@ int ObTransformTempTable::remove_simple_stmts(ObIArray<ObSelectStmt*> &stmts)
       LOG_WARN("failed to check has rownum", K(ret));
     } else if (has_rownum) {
       //do nothing
-    } else if (ObOptimizerUtil::find_item(ctx_->temp_table_ignore_stmts_, subquery)) {
-      //do nothing
     } else if (OB_FAIL(check_stmt_can_materialize(subquery, false, is_valid))) {
       LOG_WARN("failed to check stmt is valid", K(ret));
     } else if (!is_valid) {
@@ -1590,7 +1589,6 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
                                           ObStmtMapInfo& map_info)
 {
   int ret = OB_SUCCESS;
-  ObStmtCompareContext context;
   //视图的select items
   ObSEArray<ObRawExpr*, 16> view_select_list;
   //视图的select items转换为temp table对应的select items
@@ -1607,154 +1605,156 @@ int ObTransformTempTable::apply_temp_table(ObSelectStmt *parent_stmt,
   ObSEArray<ColumnItem, 16> new_column_items;
   ObSEArray<ObRawExpr*, 16> old_column_exprs;
   ObSelectStmt *view = NULL;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(temp_table_query) ||
-      OB_ISNULL(view_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (!view_table->is_generated_table()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expect generate table", KPC(view_table), K(ret));
-  } else if (OB_ISNULL(view = view_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null ref query", KPC(view_table), K(ret));
-  } else if (OB_FAIL(view->get_select_exprs(view_select_list))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(view->get_column_exprs(view_column_list))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(temp_table_query->get_select_exprs(temp_table_select_list))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(temp_table_query->get_column_exprs(temp_table_column_list))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else {
-    context.init(temp_table_query, view, map_info,
-                 &parent_stmt->get_query_ctx()->calculable_items_);
-  }
-  //找到对应的column item，不存在于temp table的column需要添加到temp table
-  for (int64_t i = 0; OB_SUCC(ret) && i < view_column_list.count(); ++i) {
-    ObRawExpr *view_column = view_column_list.at(i);
-    bool find = false;
-    if (OB_ISNULL(view_column)) {
+  SMART_VAR(ObStmtCompareContext, context) {
+    if (OB_ISNULL(parent_stmt) || OB_ISNULL(temp_table_query) ||
+        OB_ISNULL(view_table)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null column expr", K(ret));
+      LOG_WARN("unexpect null param", K(ret));
+    } else if (!view_table->is_generated_table()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expect generate table", KPC(view_table), K(ret));
+    } else if (OB_ISNULL(view = view_table->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null ref query", KPC(view_table), K(ret));
+    } else if (OB_FAIL(view->get_select_exprs(view_select_list))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(view->get_column_exprs(view_column_list))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(temp_table_query->get_select_exprs(temp_table_select_list))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(temp_table_query->get_column_exprs(temp_table_column_list))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else {
+      context.init(temp_table_query, view, map_info,
+                  &parent_stmt->get_query_ctx()->calculable_items_);
     }
-    //column item是否存在于temp table中
-    for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_column_list.count(); ++j) {
-      ObRawExpr *temp_table_column = temp_table_column_list.at(j);
-      if (OB_ISNULL(temp_table_column)) {
+    //找到对应的column item，不存在于temp table的column需要添加到temp table
+    for (int64_t i = 0; OB_SUCC(ret) && i < view_column_list.count(); ++i) {
+      ObRawExpr *view_column = view_column_list.at(i);
+      bool find = false;
+      if (OB_ISNULL(view_column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null column expr", K(ret));
-      } else if (!temp_table_column->same_as(*view_column, &context)) {
-        //do nothing
-      } else if (OB_FAIL(new_column_list.push_back(temp_table_column))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
-        find = true;
+      }
+      //column item是否存在于temp table中
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_column_list.count(); ++j) {
+        ObRawExpr *temp_table_column = temp_table_column_list.at(j);
+        if (OB_ISNULL(temp_table_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null column expr", K(ret));
+        } else if (!temp_table_column->same_as(*view_column, &context)) {
+          //do nothing
+        } else if (OB_FAIL(new_column_list.push_back(temp_table_column))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else {
+          find = true;
+        }
+      }
+      //不存在于temp table中的column需要添加到temp table中
+      if (OB_SUCC(ret) && !find) {
+        TableItem *table = NULL;
+        ColumnItem *column_item = NULL;
+        ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(view_column);
+        uint64_t table_id = OB_INVALID_ID;
+        if (!view_column->is_column_ref_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect column ref expr", KPC(view_column), K(ret));
+        } else if (OB_ISNULL(column_item = view->get_column_item_by_id(col_ref->get_table_id(),
+                                                                      col_ref->get_column_id()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null column item", K(ret));
+        } else if (OB_FAIL(get_map_table_id(view,
+                                            temp_table_query,
+                                            map_info,
+                                            col_ref->get_table_id(),
+                                            table_id))) {
+          LOG_WARN("failed to get map table id", K(ret));
+        } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
+        } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
+        } else if (OB_FAIL(new_column_items.push_back(*column_item))) {
+          LOG_WARN("failed to push back column item", K(ret));
+        } else if (OB_FAIL(new_column_list.push_back(view_column))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_ISNULL(table = temp_table_query->get_table_item_by_id(table_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null table item", K(ret));
+        } else {
+          col_ref->set_table_name(table->get_table_name());
+        }
       }
     }
-    //不存在于temp table中的column需要添加到temp table中
-    if (OB_SUCC(ret) && !find) {
-      TableItem *table = NULL;
-      ColumnItem *column_item = NULL;
-      ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(view_column);
-      uint64_t table_id = OB_INVALID_ID;
-      if (!view_column->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expect column ref expr", KPC(view_column), K(ret));
-      } else if (OB_ISNULL(column_item = view->get_column_item_by_id(col_ref->get_table_id(),
-                                                                     col_ref->get_column_id()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null column item", K(ret));
-      } else if (OB_FAIL(get_map_table_id(view,
-                                          temp_table_query,
-                                          map_info,
-                                          col_ref->get_table_id(),
-                                          table_id))) {
-        LOG_WARN("failed to get map table id", K(ret));
-      } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
-      } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
-      } else if (OB_FAIL(new_column_items.push_back(*column_item))) {
-        LOG_WARN("failed to push back column item", K(ret));
-      } else if (OB_FAIL(new_column_list.push_back(view_column))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_ISNULL(table = temp_table_query->get_table_item_by_id(table_id))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table item", K(ret));
-      } else {
-        col_ref->set_table_name(table->get_table_name());
+    //添加新的column item
+    if (OB_SUCC(ret) && !new_column_items.empty()) {
+      if (OB_FAIL(temp_table_query->add_column_item(new_column_items))) {
+        LOG_WARN("failed to add table item", K(ret));
       }
     }
-  }
-  //添加新的column item
-  if (OB_SUCC(ret) && !new_column_items.empty()) {
-    if (OB_FAIL(temp_table_query->add_column_item(new_column_items))) {
-      LOG_WARN("failed to add table item", K(ret));
-    }
-  }
-  //找到不同的select item
-  for (int64_t i = 0; OB_SUCC(ret) && i < view_select_list.count(); ++i) {
-    ObRawExpr *view_select = view_select_list.at(i);
-    ObColumnRefRawExpr *col_expr = NULL;
-    bool find = false;
-    if (OB_ISNULL(view_select)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null select expr", K(ret));
-    } else if (NULL == (col_expr = parent_stmt->get_column_expr_by_id(view_table->table_id_,
-                                                                      i + OB_APP_MIN_COLUMN_ID))) {
-      // unused select item, skip following procedure
-      find = true;
-    } else if (OB_FAIL(old_column_exprs.push_back(col_expr))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    }
-    //select item是否存在于temp table中
-    for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_select_list.count(); ++j) {
-      ObRawExpr *temp_table_select = temp_table_select_list.at(j);
-      if (OB_ISNULL(temp_table_select)) {
+    //找到不同的select item
+    for (int64_t i = 0; OB_SUCC(ret) && i < view_select_list.count(); ++i) {
+      ObRawExpr *view_select = view_select_list.at(i);
+      ObColumnRefRawExpr *col_expr = NULL;
+      bool find = false;
+      if (OB_ISNULL(view_select)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null select expr", K(ret));
-      } else if (!temp_table_select->same_as(*view_select, &context)) {
-        //do nothing
-      } else if (OB_FAIL(new_select_list.push_back(temp_table_select))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
+      } else if (NULL == (col_expr = parent_stmt->get_column_expr_by_id(view_table->table_id_,
+                                                                        i + OB_APP_MIN_COLUMN_ID))) {
+        // unused select item, skip following procedure
         find = true;
-      }
-    }
-    //不存在于temp table中的select expr需要转换成temp table的select item
-    if (OB_SUCC(ret) && !find) {
-      ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
-      ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-      if (OB_FAIL(ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(new_select_list.push_back(view_select))) {
+      } else if (OB_FAIL(old_column_exprs.push_back(col_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(view_select, aggr_items))) {
-        LOG_WARN("failed to extract aggr expr", K(ret));
-      } else if (OB_FAIL(append(temp_table_query->get_aggr_items(), aggr_items))) {
-        LOG_WARN("failed to append aggr items", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_winfun_expr(view_select, win_func_exprs))) {
-        LOG_WARN("failed to extract win func exprs", K(ret));
-      } else if (OB_FAIL(append(temp_table_query->get_window_func_exprs(), win_func_exprs))) {
-        LOG_WARN("failed to append win func exprs", K(ret));
+      }
+      //select item是否存在于temp table中
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < temp_table_select_list.count(); ++j) {
+        ObRawExpr *temp_table_select = temp_table_select_list.at(j);
+        if (OB_ISNULL(temp_table_select)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null select expr", K(ret));
+        } else if (!temp_table_select->same_as(*view_select, &context)) {
+          //do nothing
+        } else if (OB_FAIL(new_select_list.push_back(temp_table_select))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else {
+          find = true;
+        }
+      }
+      //不存在于temp table中的select expr需要转换成temp table的select item
+      if (OB_SUCC(ret) && !find) {
+        ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
+        ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
+        if (OB_FAIL(ObTransformUtils::replace_expr(view_column_list, new_column_list, view_select))) {
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (OB_FAIL(new_select_list.push_back(view_select))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(view_select, aggr_items))) {
+          LOG_WARN("failed to extract aggr expr", K(ret));
+        } else if (OB_FAIL(append(temp_table_query->get_aggr_items(), aggr_items))) {
+          LOG_WARN("failed to append aggr items", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::extract_winfun_expr(view_select, win_func_exprs))) {
+          LOG_WARN("failed to extract win func exprs", K(ret));
+        } else if (OB_FAIL(append(temp_table_query->get_window_func_exprs(), win_func_exprs))) {
+          LOG_WARN("failed to append win func exprs", K(ret));
+        }
       }
     }
-  }
-  //为temp table创建新的select item，并替换parent stmt的引用
-  if (OB_SUCC(ret)) {
-    ObSEArray<ObRawExpr*, 16> new_column_exprs;
-    view_table->ref_query_ = temp_table_query;
-    if (OB_FALSE_IT(parent_stmt->clear_column_items())) {
-    } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
-                                                                *view_table,
-                                                                parent_stmt,
-                                                                new_select_list,
-                                                                new_column_exprs))) {
-      LOG_WARN("failed to create column for view", K(ret));
-    } else if (OB_FAIL(parent_stmt->replace_relation_exprs(old_column_exprs, new_column_exprs))) {
-      LOG_WARN("failed to replace inner stmt expr", K(ret));
-    } else if (OB_FAIL(temp_table_query->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
+    //为temp table创建新的select item，并替换parent stmt的引用
+    if (OB_SUCC(ret)) {
+      ObSEArray<ObRawExpr*, 16> new_column_exprs;
+      view_table->ref_query_ = temp_table_query;
+      if (OB_FALSE_IT(parent_stmt->clear_column_items())) {
+      } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(ctx_,
+                                                                  *view_table,
+                                                                  parent_stmt,
+                                                                  new_select_list,
+                                                                  new_column_exprs))) {
+        LOG_WARN("failed to create column for view", K(ret));
+      } else if (OB_FAIL(parent_stmt->replace_relation_exprs(old_column_exprs, new_column_exprs))) {
+        LOG_WARN("failed to replace inner stmt expr", K(ret));
+      } else if (OB_FAIL(temp_table_query->adjust_subquery_list())) {
+        LOG_WARN("failed to adjust subquery list", K(ret));
+      }
     }
-  }
+  } // end smart var
   return ret;
 }
 

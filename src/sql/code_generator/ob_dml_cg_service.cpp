@@ -1508,14 +1508,20 @@ int ObDmlCgService::check_upd_need_all_columns(ObLogDelUpd &op,
   need_all_columns = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   ObSQLSessionInfo *session = cg_.opt_ctx_->get_session_info();
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(schema_guard) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
+    LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(schema_guard), KP(table_schema));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
   } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
+  } else if (table_schema->has_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("update table with materialized view log, need all columns", K(table_schema->has_mlog_table()));
+  } else if (table_schema->is_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("update materialized view log, need all columns", K(table_schema->is_mlog_table()));
   } else if (!is_primary_index) {
     // index_table if update PK, also need record all_columns
     if (OB_FAIL(check_has_upd_rowkey(op, table_schema, index_dml_info, is_update_pk))) {
@@ -1658,14 +1664,20 @@ int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
   bool has_not_null_uk = false;
   int64_t binlog_row_image = ObBinlogRowImage::FULL;
   ObSQLSessionInfo *session = cg_.opt_ctx_->get_session_info();
-  if (OB_ISNULL(session)) {
+  if (OB_ISNULL(session) || OB_ISNULL(schema_guard) || OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null ptr", K(ret));
+    LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(schema_guard), KP(table_schema));
   } else if (OB_FAIL(session->get_binlog_row_image(binlog_row_image))) {
     LOG_WARN("fail to get binlog image", K(ret));
   } else if (binlog_row_image == ObBinlogRowImage::FULL || op.has_instead_of_trigger()) {
     // full mode
     need_all_columns = true;
+  } else if (table_schema->has_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from table with materialized view log, need all columns", K(table_schema->has_mlog_table()));
+  } else if (table_schema->is_mlog_table()) {
+    need_all_columns = true;
+    LOG_TRACE("delete from materialized view log, need all columns", K(table_schema->is_mlog_table()));
   } else if (table_schema->is_heap_table()) {
     if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
       LOG_WARN("fail to check whether has not null unique key", K(ret), K(table_schema->get_table_name_str()));

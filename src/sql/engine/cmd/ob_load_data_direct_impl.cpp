@@ -31,6 +31,7 @@ namespace sql
 using namespace common;
 using namespace observer;
 using namespace share;
+using namespace storage;
 using namespace table;
 using namespace omt;
 
@@ -2042,6 +2043,8 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
+  load_param.method_ = ObDirectLoadMethod::FULL;
+  load_param.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
   if (OB_FAIL(direct_loader_.init(load_param, execute_param_.store_column_idxs_,
                                   &execute_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));

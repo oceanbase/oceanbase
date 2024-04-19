@@ -476,6 +476,9 @@ public:
       const bool is_oracle_mode,
       ObSqlString &sql_string);
 
+  static int generate_order_by_str_for_mview(const schema::ObTableSchema &container_table_schema,
+                                             ObSqlString &rowkey_column_sql_string);
+
   static int ddl_get_tablet(
       storage::ObLSHandle &ls_handle,
       const ObTabletID &tablet_id,
@@ -526,6 +529,15 @@ public:
      uint64_t &data_format_version,
      int64_t &snapshot_version,
      share::ObDDLTaskStatus &task_status);
+
+  static int get_data_information(
+     const uint64_t tenant_id,
+     const uint64_t task_id,
+     uint64_t &data_format_version,
+     int64_t &snapshot_version,
+     share::ObDDLTaskStatus &task_status,
+     uint64_t &target_object_id,
+     int64_t &schema_version);
 
   static int replace_user_tenant_id(
     const ObDDLType &ddl_type,
@@ -638,6 +650,7 @@ public:
     }
     return res;
   }
+  static bool use_idempotent_mode(const int64_t data_format_version);
 
 private:
   static int batch_check_tablet_checksum(
@@ -771,7 +784,6 @@ private:
       const int64_t execution_id,
       const ObIArray<ObTabletID> &tablet_ids,
       bool &tablet_checksum_status);
-
 };
 
 typedef common::ObCurTraceId::TraceId DDLTraceId;

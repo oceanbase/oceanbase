@@ -22,6 +22,7 @@
 #include "share/table/ob_table_load_dml_stat.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "storage/direct_load/ob_direct_load_origin_table.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
@@ -54,7 +55,9 @@ public:
   TO_STRING_KV(K_(table_id), K_(target_table_id), K_(rowkey_column_num), K_(store_column_count),
               K_(snapshot_version), K_(table_data_desc), KP_(datum_utils), KP_(col_descs),
               KP_(lob_column_cnt), KP_(cmp_funcs), K_(is_heap_table), K_(is_fast_heap_table),
-              K_(is_column_store), K_(online_opt_stat_gather), KP_(insert_table_ctx),
+              K_(is_column_store), K_(online_opt_stat_gather),
+              "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_),
+              KP_(insert_table_ctx),
               KP_(dml_row_handler));
 public:
   uint64_t table_id_;
@@ -73,6 +76,7 @@ public:
   bool is_column_store_;
   bool online_opt_stat_gather_;
   bool px_mode_;
+  ObDirectLoadInsertMode::Type insert_mode_;
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
 };

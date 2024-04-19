@@ -7128,7 +7128,26 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 515 : __all_user_proxy_role_info_history
 # 516 : __all_service
 # 517 : __all_storage_io_usage
-# 518 : __all_mview_dep
+
+def_table_schema(
+  owner = 'yuya.yu',
+  table_name = '__all_mview_dep',
+  table_id = '518',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('mview_id', 'int'),
+    ('p_order', 'int')
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('p_obj', 'int'),
+    ('p_type', 'int'),
+    ('qbcid', 'int'),
+    ('flags', 'int')
+  ]
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位

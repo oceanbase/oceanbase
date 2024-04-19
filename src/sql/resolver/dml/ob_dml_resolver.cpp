@@ -5577,32 +5577,26 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         //the feature only use in mysqtest case, not open for user
         const ObTableSchema *tab_schema = NULL;
         item->is_index_table_ = tschema->is_index_table();
-
-        if (tschema->is_materialized_view()) {
-          item->ref_id_ = tschema->get_data_table_id();
-          item->table_type_ = tschema->get_table_type();
-        } else {
-          item->ref_id_ = tschema->get_table_id();
-        }
         item->table_id_ = generate_table_id();
         item->type_ = TableItem::ALIAS_TABLE;
         //主表schema
         if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
           LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
         } else {
-          item->table_name_ = tab_schema->get_table_name_str(); //主表的名字
-          if (alias_name.length() == 0) {
-            if (tschema->is_materialized_view()) {
-              if (!synonym_name.empty()) {
-                item->alias_name_ = synonym_name; //mv可能有同义词，需要考虑同义词
-              } else {
-                item->alias_name_ = tschema->get_table_name_str(); //将mv作为主表的alias name
-              }
-            } else {
-              item->alias_name_ = tschema->get_table_name_str(); //将索引名作为主表的alias name
-            }
+          if (tschema->is_materialized_view()) {
+            item->ref_id_ = tschema->get_data_table_id();
+            item->mview_id_ = tschema->get_table_id();
+            item->table_type_ = tschema->get_table_type();
+            item->need_expand_rt_mv_ = !params_.is_for_rt_mv_ && tschema->mv_on_query_computation();
+            item->table_name_ = tschema->get_table_name_str();
+            item->alias_name_ = alias_name.empty() ? tschema->get_table_name_str() : alias_name;
+            LOG_DEBUG("resolve mv table", K(ret), K(tschema->get_table_name()), K(params_.is_for_rt_mv_),
+                    K(tschema->mv_enable_query_rewrite()), K(tschema->mv_on_query_computation()));
           } else {
-            item->alias_name_ = alias_name;
+            item->ref_id_ = tschema->get_table_id();
+            item->table_name_ = tab_schema->get_table_name_str(); //主表的名字
+            //将索引名作为主表的alias name
+            item->alias_name_ = alias_name.empty() ? tschema->get_table_name_str() : alias_name;
           }
           //如果是查索引表，需要将主表的依赖也要加入到plan中
           ObSchemaObjVersion table_version;
@@ -14210,7 +14204,14 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_PLACE_GROUP_BY:
     case T_NO_PLACE_GROUP_BY: {
       if (OB_FAIL(resolve_place_group_by_hint(hint_node, trans_hint))) {
-        LOG_WARN("failed to resolve win magic hint", K(ret));
+        LOG_WARN("failed to resolve place group by hint", K(ret));
+      }
+      break;
+    }
+    case T_MV_REWRITE:
+    case T_MV_NO_REWRITE: {
+      if (OB_FAIL(resolve_mv_rewrite_hint(hint_node, trans_hint))) {
+        LOG_WARN("failed to resolve mv rewrite hint", K(ret));
       }
       break;
     }
@@ -15122,6 +15123,32 @@ int ObDMLResolver::resolve_place_group_by_hint(const ParseNode &hint_node,
     group_by_hint->set_qb_name(qb_name);
     hint = group_by_hint;
     LOG_DEBUG("show group_by_hint hint", K(*group_by_hint));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_mv_rewrite_hint(const ParseNode &hint_node,
+                                           ObTransHint *&hint)
+{
+  int ret = OB_SUCCESS;
+  hint = NULL;
+  ObMVRewriteHint *mv_rewrite_hint = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(1 != hint_node.num_child_ && 2 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mv rewrite hint", K(ret), K(hint_node.num_child_));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, mv_rewrite_hint))) {
+    LOG_WARN("failed to create eliminate join hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("Failed to resolve qb name node", K(ret));
+  } else if (2 == hint_node.num_child_ && NULL != hint_node.children_[1] &&
+             OB_FAIL(resolve_simple_table_list_in_hint(hint_node.children_[1],
+                                                       mv_rewrite_hint->get_mv_list()))) {
+    LOG_WARN("failed to resovle simple table list in hint", K(ret));
+  } else {
+    mv_rewrite_hint->set_qb_name(qb_name);
+    hint = mv_rewrite_hint;
+    LOG_DEBUG("show mv_rewrite_hint hint", KPC(mv_rewrite_hint));
   }
   return ret;
 }

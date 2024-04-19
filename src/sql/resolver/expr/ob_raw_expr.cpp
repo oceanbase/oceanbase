@@ -834,6 +834,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
+      || T_FUN_SYS_LAST_REFRESH_SCN == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())
       || T_FUN_SYS_GET_LOCK == type_
@@ -4007,6 +4008,8 @@ bool ObSysFunRawExpr::inner_same_as(
              T_OP_GET_SYS_VAR == get_expr_type() ||
              (has_flag(IS_STATE_FUNC) && (NULL == check_context ||
                           (NULL != check_context && check_context->need_check_deterministic_)))) {
+  } else if (T_FUN_SYS_LAST_REFRESH_SCN == get_expr_type()) {
+    bool_ret = get_mview_id() == static_cast<const ObSysFunRawExpr&>(expr).get_mview_id();
   } else if (get_expr_class() == expr.get_expr_class()) {
     //for EXPR_UDF and EXPR_SYS_FUNC
     const ObSysFunRawExpr *s_expr = static_cast<const ObSysFunRawExpr *>(&expr);
@@ -4277,6 +4280,10 @@ int ObSysFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t
     } else if (T_FUN_SYS_INNER_ROW_CMP_VALUE == get_expr_type()) {
       CK(3 == get_param_count());
       OZ(get_param_expr(2)->get_name(buf, buf_len, pos, type));
+    } else if (T_FUN_SYS_LAST_REFRESH_SCN == get_expr_type()) {
+      if (OB_FAIL(BUF_PRINTF("%ld", get_mview_id()))) {
+        LOG_WARN("fail to BUF_PRINTF", K(ret));
+      }
     } else {
       int64_t i = 0;
       if (get_param_count() > 1) {

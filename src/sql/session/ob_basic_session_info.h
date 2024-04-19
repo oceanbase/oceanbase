@@ -1024,6 +1024,8 @@ public:
   // 以下helper函数是为了方便查看某系统变量的值
   int if_aggr_pushdown_allowed(bool &aggr_pushdown_allowed) const;
   int is_transformation_enabled(bool &transformation_enabled) const;
+  int get_query_rewrite_enabled(int64_t &query_rewrite_enabled) const;
+  int get_query_rewrite_integrity(int64_t &query_rewrite_integrity) const;
   int is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const;
   int is_storage_estimation_enabled(bool &storage_estimation_enabled) const;
   bool is_use_trace_log() const

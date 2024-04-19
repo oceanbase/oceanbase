@@ -78,6 +78,15 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
     LOG_TRACE("succeed to adjust duplicated table name", K(is_happened), K(ret));
 
     if (OB_SUCC(ret)) {
+      if (OB_FAIL(expand_materialized_view(stmt, is_happened))) {
+        LOG_WARN("failed to expand materialized view", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        OPT_TRACE("expand materialized view:", is_happened);
+        LOG_TRACE("succeed to expand materialized view",K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(flatten_conditions(stmt, is_happened))) {
         LOG_WARN("failed to flatten_condition", K(ret));
       } else {
@@ -330,6 +339,49 @@ int ObTransformPreProcess::need_transform(const common::ObIArray<ObParentDMLStmt
   UNUSED(stmt);
   need_trans = true;
   return OB_SUCCESS;
+}
+
+// for realtime view, replace basic table as generated view
+int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  const ObHint *hint = NULL;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
+  } else if (ctx_->session_info_->is_inner()) {
+    // when refresh mview, do not expand rt-mv
+  } else if (NULL != (hint = stmt->get_stmt_hint().get_normal_hint(T_MV_REWRITE))
+             && hint->is_disable_hint()) {
+    // use no_mv_rewrite to disable expand rt mview
+  } else {
+    ObIArray<TableItem*> &tables = stmt->get_table_items();
+    TableItem *table_item = NULL;
+    bool is_modified = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+      if (OB_ISNULL(table_item = tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null", K(ret), K(table_item));
+      } else if (MATERIALIZED_VIEW != table_item->table_type_
+                 || !table_item->need_expand_rt_mv_) {
+        /* do nothing */
+      } else if (OB_FAIL(stmt->check_table_be_modified(table_item->ref_id_, is_modified))) {
+        LOG_WARN("fail to check table be modified", K(ret));
+      } else if (is_modified) {
+        /* do nothing */
+      } else if (OB_UNLIKELY(!table_item->part_ids_.empty())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "access some partitions of real-time materialized view now");
+        LOG_WARN("access some partitions of real-time materialized view is not supported now", K(ret));
+      } else if (OB_FAIL(ObTransformUtils::expand_mview_table(ctx_, stmt, table_item))) {
+        LOG_WARN("fail to expand mview table", K(ret));
+      } else {
+        trans_happened = true;
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTransformPreProcess::add_all_rowkey_columns_to_stmt(ObDMLStmt *stmt, bool &trans_happened)

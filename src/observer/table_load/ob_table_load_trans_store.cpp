@@ -442,7 +442,7 @@ int ObTableLoadTransStoreWriter::handle_autoinc_column(const ObColumnSchemaV2 *c
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadAutoincNextval::eval_nextval(
         &(store_ctx_->session_ctx_array_[session_id - 1].autoinc_param_), datum, tc,
-        param_.sql_mode_))) {
+        store_ctx_->ctx_->session_info_->get_sql_mode()))) {
     LOG_WARN("fail to get auto increment next value", KR(ret));
   }
   return ret;

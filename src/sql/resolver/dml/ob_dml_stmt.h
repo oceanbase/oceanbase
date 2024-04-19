@@ -227,7 +227,8 @@ struct TableItem
     for_update_ = false;
     for_update_wait_us_ = -1;
     skip_locked_ = false;
-    mock_id_ = common::OB_INVALID_ID;
+    need_expand_rt_mv_ = false;
+    mview_id_ = common::OB_INVALID_ID;
     node_ = NULL;
     view_base_item_ = NULL;
     flashback_query_expr_ = nullptr;
@@ -254,7 +255,6 @@ struct TableItem
                N_FOR_UPDATE, for_update_,
                N_WAIT, for_update_wait_us_,
                K_(skip_locked),
-               N_MOCK_ID, mock_id_,
                "view_base_item",
                (NULL == view_base_item_ ? OB_INVALID_ID : view_base_item_->table_id_),
                K_(dblink_id), K_(dblink_name), K_(link_database_name), K_(is_reverse_link),
@@ -262,8 +262,7 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K(table_values_),
-               K_(exec_params));
+               K(table_values_), K_(exec_params), K_(mview_id), K_(need_expand_rt_mv));
 
   enum TableType
   {
@@ -381,8 +380,8 @@ struct TableItem
   bool for_update_;
   int64_t for_update_wait_us_;//0 means nowait, -1 means infinite
   bool skip_locked_;
-  //在hierarchical query, 记录由当前table_item mock出来的table_item的table id
-  uint64_t mock_id_;
+  bool need_expand_rt_mv_; // for real-time materialized view
+  uint64_t mview_id_; // for materialized view, ref_id_ is mv container table id, mview_id_ is the view id
   const ParseNode* node_;
   // base table item for updatable view
   const TableItem *view_base_item_; // seems to be useful only in the resolve phase
@@ -821,14 +820,17 @@ public:
   int pull_all_expr_relation_id();
   int formalize_stmt(ObSQLSessionInfo *session_info);
   int formalize_relation_exprs(ObSQLSessionInfo *session_info);
-  int formalize_stmt_expr_reference(ObRawExprFactory *expr_factory, ObSQLSessionInfo *session_info);
+  int formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
+                                    ObSQLSessionInfo *session_info,
+                                    bool explicit_for_col = false);
   int formalize_child_stmt_expr_reference(ObRawExprFactory *expr_factory,
                                           ObSQLSessionInfo *session_info);
   int set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType ref_type);
   int check_pseudo_column_valid();
   int get_ora_rowscn_column(const uint64_t table_id, ObPseudoColumnRawExpr *&ora_rowscn);
   virtual int remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                           ObSQLSessionInfo *session_info);
+                                           ObSQLSessionInfo *session_info,
+                                           bool explicit_for_col);
   virtual int clear_sharable_expr_reference();
   virtual int get_from_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
   virtual int get_subquery_stmts(common::ObIArray<ObSelectStmt*> &child_stmts) const;
@@ -1163,7 +1165,7 @@ public:
   int check_has_subquery_in_function_table(bool &has_subquery_in_function_table) const;
 
   int disable_writing_external_table(bool basic_stmt_is_dml = false);
-  int disable_writing_materialized_view();
+  int disable_writing_materialized_view() const;
   int formalize_query_ref_exprs();
 
   int formalize_query_ref_exec_params(ObStmtExecParamFormatter &formatter,
@@ -1178,6 +1180,10 @@ public:
 
   int do_formalize_lateral_derived_table_pre();
 
+  int deep_copy_join_tables(ObIAllocator &allocator,
+                            ObIRawExprCopier &expr_copier,
+                            const ObDMLStmt &other);
+
   int do_formalize_lateral_derived_table_post();
 
 protected:
@@ -1185,9 +1191,6 @@ protected:
   //获取到stmt中所有查询相关的表达式(由查询语句中指定的属性生成的表达式)的root expr
 
 protected:
-  int deep_copy_join_tables(ObIAllocator &allocator,
-                            ObIRawExprCopier &expr_copier,
-                            const ObDMLStmt &other);
   int construct_join_table(const ObDMLStmt &other,
                            const JoinedTable &other_joined_table,
                            JoinedTable &joined_table);

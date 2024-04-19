@@ -3760,8 +3760,8 @@
   "query_rewrite_enabled": {
     "id": 10179,
     "name": "query_rewrite_enabled",
-    "default_value": "1",
-    "base_value": "1",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "Whether to enable the materialized view rewriting",
     "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INFLUENCE_PLAN",

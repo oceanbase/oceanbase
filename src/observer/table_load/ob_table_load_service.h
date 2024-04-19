@@ -22,6 +22,7 @@
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_proxy.h"
 #include "observer/table_load/resource/ob_table_load_resource_service.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -34,7 +35,9 @@ class ObTableLoadService
 public:
   static int mtl_init(ObTableLoadService *&service);
   static int check_tenant();
-  static int check_support_direct_load(uint64_t table_id);
+  static int check_support_direct_load(const uint64_t table_id,
+                                       const storage::ObDirectLoadMethod::Type method,
+                                       const storage::ObDirectLoadInsertMode::Type insert_mode);
   static ObTableLoadTableCtx *alloc_ctx();
   static void free_ctx(ObTableLoadTableCtx *table_ctx);
   static int add_ctx(ObTableLoadTableCtx *table_ctx);

@@ -52,6 +52,7 @@
 #include "storage/tx/ob_xa_ctx.h"
 #include "sql/engine/dml/ob_link_op.h"
 #include <cctype>
+#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -588,6 +589,14 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(start_stmt())) {
     LOG_WARN("fail start stmt", K(ret));
+  } else if (!physical_plan_->get_mview_ids().empty() && OB_PHY_PLAN_REMOTE != physical_plan_->get_plan_type()
+             && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(physical_plan_->get_mview_ids(),
+                                                                    ctx.get_sql_proxy(),
+                                                                    ctx.get_my_session(),
+                                                                    ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                    ctx.get_physical_plan_ctx()->get_mview_ids(),
+                                                                    ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
+    LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
     /* 执行plan,

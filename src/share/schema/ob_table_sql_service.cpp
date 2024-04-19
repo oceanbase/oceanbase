@@ -2727,6 +2727,77 @@ int ObTableSqlService::update_mview_status(
   return ret;
 }
 
+int ObTableSqlService::update_mview_reference_table_status(
+    const ObTableSchema &table_schema,
+    common::ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t tenant_id = table_schema.get_tenant_id();
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  share::schema::ObTableMode table_mode_struct = table_schema.get_table_mode_struct();
+  uint64_t table_id = table_schema.get_table_id();
+  int64_t new_schema_version = table_schema.get_schema_version();
+  ObDMLSqlSplicer dml;
+  if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
+                                             exec_tenant_id, tenant_id)))
+      || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
+                                               exec_tenant_id, table_id)))
+      || OB_FAIL(dml.add_column("schema_version", new_schema_version))
+      || OB_FAIL(dml.add_column("table_mode", table_mode_struct.mode_))) {
+    LOG_WARN("failed to add column", KR(ret), K(exec_tenant_id), K(tenant_id));
+  } else {
+    int64_t affected_rows = 0;
+    const char *table_name = NULL;
+    if (OB_FAIL(ObSchemaUtils::get_all_table_name(exec_tenant_id, table_name))) {
+      LOG_WARN("fail to get all table name", KR(ret), K(exec_tenant_id));
+    } else if (OB_FAIL(exec_update(sql_client,
+        tenant_id, table_id, table_name, dml, affected_rows))) {
+      LOG_WARN("failed to exec update", KR(ret),
+          K(tenant_id), K(table_id), K(table_name));
+    } else if (!is_single_row(affected_rows)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", KR(ret), K(affected_rows));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObRefreshSchemaStatus schema_status;
+    schema_status.tenant_id_ = tenant_id;
+    const bool update_object_status_ignore_version = false;
+    SMART_VAR(ObTableSchema, new_schema) {
+      if (OB_FAIL(schema_service_.get_table_schema_from_inner_table(
+          schema_status, table_id, sql_client, new_schema))) {
+        LOG_WARN("failed to get table schema for inner table", KR(ret), K(table_id));
+      } else {
+        const bool only_history = true;
+        new_schema.set_table_referenced_by_mv(ObTableMode::get_table_referenced_by_mv_flag(table_mode_struct.mode_));
+        new_schema.set_schema_version(new_schema_version);
+        new_schema.set_in_offline_ddl_white_list(table_schema.get_in_offline_ddl_white_list());
+        if (OB_FAIL(add_table(sql_client,
+                              new_schema,
+                              update_object_status_ignore_version,
+                              only_history))) {
+          LOG_WARN("failed to add_table", KR(ret), K(new_schema), K(only_history));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObSchemaOperation opt;
+    opt.tenant_id_ = tenant_id;
+    opt.database_id_ = 0;
+    opt.tablegroup_id_ = 0;
+    opt.table_id_ = table_id;
+    opt.op_type_ = OB_DDL_MODIFY_MVIEW_REFERENCE_TABLE_STATUS;
+    opt.schema_version_ = new_schema_version;
+    if (OB_FAIL(log_operation_wrapper(opt, sql_client))) {
+      LOG_WARN("log operation failed", K(ret), K(opt));
+    }
+  }
+  return ret;
+}
 
 int ObTableSqlService::add_transition_point_val(ObDMLSqlSplicer &dml,
                                                 const ObTableSchema &table) {

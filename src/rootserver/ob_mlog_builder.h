@@ -54,20 +54,22 @@ private:
                                   const share::schema::ObTableSchema &base_table_schema);
     int add_base_table_part_key_columns(common::ObRowDesc &row_desc,
                                         const share::schema::ObTableSchema &base_table_schema);
-    int add_special_columns(share::schema::ObTableSchema &mlog_schema);
+    int add_special_columns();
     int construct_mlog_table_columns(share::schema::ObTableSchema &mlog_schema);
   private:
-    int add_pk_column(share::schema::ObTableSchema &mlog_schema);
+    int add_sequence_column();
     int add_dmltype_column();
     int add_old_new_column();
-    int add_base_table_part_key_columns(const common::ObPartitionKeyInfo &part_key_info,
-                                        common::ObRowDesc &row_desc,
-                                        const share::schema::ObTableSchema &base_table_schema);
+    int implicit_add_base_table_part_key_columns(
+        const common::ObPartitionKeyInfo &part_key_info,
+        common::ObRowDesc &row_desc,
+        const share::schema::ObTableSchema &base_table_schema);
     int alloc_column(ObColumnSchemaV2 *&column);
   public:
     ObArray<ObColumnSchemaV2 *> mlog_table_column_array_;
   private:
     ObArenaAllocator allocator_;
+    int64_t rowkey_count_;
   };
 
 private:

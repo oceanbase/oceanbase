@@ -844,6 +844,11 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
     OZ(add_output_datum_check_flag(spec));
   }
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(extract_all_mview_ids(cur_op_exprs_))) {
+      LOG_WARN("fail to extract all mview ids", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
     CK (OB_NOT_NULL(op.get_plan())
         && OB_NOT_NULL(op.get_plan()->get_stmt())
         && OB_NOT_NULL(op.get_plan()->get_stmt()->get_query_ctx()));
@@ -856,6 +861,37 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
         LOG_WARN("fail to check rowsets enabled", K(ret));
       } else if (val.is_varchar() && 0 == val.get_varchar().case_compare("MANULE")) {
         phy_plan_->disable_auto_memory_mgr();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::extract_all_mview_ids(const ObIArray<ObRawExpr *> &exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (OB_FAIL(extract_all_mview_ids(exprs.at(i)))) {
+      LOG_WARN("extract all mview ids failed", K(ret), K(i), KPC(exprs.at(i)));
+    }
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::extract_all_mview_ids(const ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret), K(expr));
+  } else if (ObItemType::T_FUN_SYS_LAST_REFRESH_SCN == expr->get_expr_type()) {
+    if (OB_FAIL(add_var_to_array_no_dup(mview_ids_, static_cast<const ObSysFunRawExpr*>(expr)->get_mview_id()))) {
+      LOG_WARN("failed to add var to array no dup", K(ret), K(mview_ids_.count()));
+    }
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(extract_all_mview_ids(expr->get_param_expr(i))))) {
+        LOG_WARN("extract all mview ids failed", K(ret), KPC(expr->get_param_expr(i)));
       }
     }
   }
@@ -7883,6 +7919,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       LOG_WARN("set expected worker map", K(ret));
     } else if (OB_FAIL(phy_plan.set_minimal_worker_map(log_plan.get_optimizer_context().get_minimal_worker_map()))) {
       LOG_WARN("set minimal worker map", K(ret));
+    } else if (OB_FAIL(phy_plan.set_mview_ids(mview_ids_))) {
+      LOG_WARN("failed to set set mview_ids", K(ret), K(mview_ids_.count()));
     } else {
       if (log_plan.get_optimizer_context().is_online_ddl()) {
         if (log_plan.get_stmt()->get_table_items().count() > 0) {
@@ -7897,6 +7935,17 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
             phy_plan.set_ddl_table_id(insert_table_item->ddl_table_id_);
             phy_plan.set_ddl_execution_id(ddl_execution_id);
             phy_plan.set_ddl_task_id(ddl_task_id);
+          }
+        }
+      }
+      if (log_plan.get_optimizer_context().get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
+        if (log_plan.get_stmt()->get_table_items().count() > 0) {
+          const TableItem *insert_table_item = log_plan.get_stmt()->get_table_item(0);
+          if (nullptr != insert_table_item) {
+            int64_t ddl_task_id = 0;
+            const ObOptParamHint *opt_params = &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
+            OZ(opt_params->get_integer_opt_param(ObOptParamHint::DDL_TASK_ID, ddl_task_id));
+            log_plan.get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx().set_ddl_task_id(ddl_task_id);
           }
         }
       }

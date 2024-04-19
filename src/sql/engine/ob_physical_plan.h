@@ -512,6 +512,8 @@ public:
   const ObSubSchemaCtx &get_subschema_ctx() const { return subschema_ctx_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
   ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
+  inline const ObIArray<uint64_t> &get_mview_ids() const { return mview_ids_; }
+  int set_mview_ids(const ObIArray<uint64_t> &mview_ids) { return mview_ids_.assign(mview_ids); }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -692,7 +694,6 @@ public:
   bool disable_auto_memory_mgr_;
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;
-
 public:
   bool udf_has_dml_stmt_;
 private:

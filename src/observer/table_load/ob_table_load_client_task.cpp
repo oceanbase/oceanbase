@@ -589,6 +589,8 @@ int ObTableLoadClientTask::init_instance()
       load_param.px_mode_ = false;
       load_param.online_opt_stat_gather_ = false; // 支持统计信息收集需要构造ObExecContext
       load_param.dup_action_ = param_.get_dup_action();
+      load_param.method_ = ObDirectLoadMethod::FULL;
+      load_param.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
       const ObTableLoadTableCtx *tmp_ctx = nullptr;
       if (OB_FAIL(instance_.init(load_param, column_idxs, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));

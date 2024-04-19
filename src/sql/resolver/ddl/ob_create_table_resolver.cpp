@@ -90,76 +90,33 @@ int ObCreateTableResolver::add_primary_key_part(const ObString &column_name,
 {
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-  bool is_oracle_mode = lib::is_oracle_mode();
-  if (OB_ISNULL(session_info_) || OB_ISNULL(create_table_stmt)) {
+  ObColumnSchemaV2 *col = NULL;
+  if (OB_ISNULL(create_table_stmt)) {
     ret = OB_NOT_INIT;
-    SQL_RESV_LOG(WARN, "session or stmt is null", KP(session_info_), KP(create_table_stmt), K(ret));
-  } else if (static_cast<int64_t>(table_id_) > 0
-             && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
-             session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
-    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
-  } else {
-    ObColumnSchemaV2 *col = NULL;
-    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
-    col = table_schema.get_column_schema(column_name);
-    if (OB_ISNULL(col)) {
-      ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-      LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret), K(to_cstring(column_name)));
-    } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
-      LOG_WARN("the column can not be primary key", K(ret));
-    } else {
-      int64_t index = -1;
-      bool is_found = false;
-      for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < stats.count(); ++i) {
-        if (stats.at(i).column_id_ == col->get_column_id()) {
-          index = i;
-          is_found = true;
-        }
-      }
-      if (-1 == index) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "fail to find column stat", K(ret), K(column_name));
-      } else if (!is_oracle_mode) {
-        // mysql 模式下，建表时主键列被 set null 或被 set default value = null，都要报错
-        // oracle 模式下，建表时主键列被 set null 或被 set default value = null，都不会报错，所以跳过下面这个检查
-        if (stats.at(index).is_set_null_
-            || (stats.at(index).is_set_default_value_ && col->get_cur_default_value().is_null())) {
-          ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
-
-        }
-      } else { /*do nothing*/ }
-    }
-    if (OB_SUCC(ret)) {
-      if (col->get_rowkey_position() > 0) {
-        ret = OB_ERR_COLUMN_DUPLICATE;
-        LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
-      } else if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == primary_keys_.count()) {
-        ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
-        LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
-      } else if (col->is_string_type()) {
-        int64_t length = 0;
-        if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, false))) {
-          SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
-        } else if ((pk_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
-          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
-          LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
-        } else if (length <= 0) {
-          ret = OB_ERR_WRONG_KEY_COLUMN;
-          LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
-        } else {
-          // do nothing
-        }
+    SQL_RESV_LOG(WARN, "stmt is null", KP(create_table_stmt), K(ret));
+  } else if (OB_FAIL(ObCreateTableResolverBase::add_primary_key_part(column_name,
+                                                              create_table_stmt->get_create_table_arg().schema_,
+                                                              primary_keys_.count(),
+                                                              pk_data_length,
+                                                              col))) {
+    LOG_WARN("failed to add primary key part", KR(ret), K(column_name));
+  } else if (OB_FAIL(primary_keys_.push_back(col->get_column_id()))) {
+    SQL_RESV_LOG(WARN, "push primary key to array failed", K(ret));
+  } else if (!lib::is_oracle_mode()) {
+    // mysql 模式下，建表时主键列被 set null 或被 set default value = null，都要报错
+    // oracle 模式下，建表时主键列被 set null 或被 set default value = null，都不会报错，所以跳过下面这个检查
+    ObColumnResolveStat *stat = NULL;
+    for (int64_t i = 0; NULL == stat && OB_SUCC(ret) && i < stats.count(); ++i) {
+      if (stats.at(i).column_id_ == col->get_column_id()) {
+        stat = &stats.at(i);
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(primary_keys_.push_back(col->get_column_id()))) {
-        SQL_RESV_LOG(WARN, "push primary key to array failed", K(ret));
-      } else {
-        col->set_rowkey_position(primary_keys_.count());
-        col->set_nullable(false);
-        ret = table_schema.set_rowkey_info(*col);
-      }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(stat)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "fail to find column stat", K(ret), K(column_name));
+    } else if (stat->is_set_null_ || (stat->is_set_default_value_ && col->get_cur_default_value().is_null())) {
+      ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
     }
   }
   return ret;

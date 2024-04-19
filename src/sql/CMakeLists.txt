@@ -33,6 +33,7 @@ ob_set_subtarget(ob_sql common_mixed
   resolver/mv/ob_mv_checker.cpp
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
+  resolver/mv/ob_mv_dep_utils.cpp
 )
 
 ob_set_subtarget(ob_sql das
@@ -719,6 +720,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
+  engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
 )
 
@@ -1282,6 +1284,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_expr_pullup.cpp
   rewrite/ob_transformer_impl.cpp
   rewrite/ob_transform_dblink.cpp
+  rewrite/ob_transform_mv_rewrite.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
 )

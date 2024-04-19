@@ -300,6 +300,10 @@ public:
         v.retry_type_ = RETRY_TYPE_NONE;
       }
       v.no_more_test_ = true;
+    } else if (v.session_.get_ddl_info().is_retryable_ddl()) {
+      v.client_ret_ = err;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.no_more_test_ = true;
     } else if (is_load_local(v)) {
       v.client_ret_ = err;
       v.retry_type_ = RETRY_TYPE_NONE;

@@ -371,7 +371,8 @@ struct ObResolverParams
        is_expanding_view_(false),
        is_resolve_lateral_derived_table_(false),
        package_guard_(NULL),
-       star_expansion_infos_()
+       star_expansion_infos_(),
+       is_for_rt_mv_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 
@@ -443,6 +444,7 @@ public:
   bool is_resolve_lateral_derived_table_; // used to mark resolve lateral derived table.
   pl::ObPLPackageGuard *package_guard_;
   common::ObArray<ObStarExpansionInfo> star_expansion_infos_;
+  bool is_for_rt_mv_; // call resolve in transformation for expanding inline real-time materialized view
 };
 } // end namespace sql
 } // end namespace oceanbase

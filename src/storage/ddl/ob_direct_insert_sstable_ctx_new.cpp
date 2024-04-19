@@ -870,12 +870,18 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
     }
   }
   if (OB_SUCC(ret) && nullptr != row_iter) {
+    ObDDLInsertRowIterator *ddl_row_iter = reinterpret_cast<ObDDLInsertRowIterator*>(row_iter);
     const ObDatumRow *row = nullptr;
     const bool skip_lob = true;
     while (OB_SUCC(ret)) {
       if (OB_FAIL(THIS_WORKER.check_status())) {
         LOG_WARN("check status failed", K(ret));
-      } else if (OB_FAIL(static_cast<ObDDLInsertRowIterator*>(row_iter)->get_next_row(skip_lob, row))) {
+      } else {
+        if (ddl_row_iter != nullptr) {
+          ret = ddl_row_iter->get_next_row(skip_lob, row);
+        } else {
+          ret = row_iter->get_next_row(row);
+        }
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;

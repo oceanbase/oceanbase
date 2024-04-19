@@ -136,6 +136,8 @@ public:
 
   virtual int update_mview_status(const ObTableSchema &mview_table_schema,
                                  common::ObISQLClient &sql_client);
+  virtual int update_mview_reference_table_status(const ObTableSchema &table_schema,
+                                                  common::ObISQLClient &sql_client);
   // TODO: merge these two API
   int sync_aux_schema_version_for_history(common::ObISQLClient &sql_client,
                                           const ObTableSchema &index_schema1,

@@ -814,6 +814,9 @@ int ObDDLTask::get_ddl_type_str(const int64_t ddl_type, const char *&ddl_type_st
     case DDL_MANUAL_SPLIT_NON_RANGE:
       ddl_type_str = "manual split non range";
       break;
+    case DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
+      ddl_type_str = "modify auto increment column with redefinition";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
   }
@@ -980,6 +983,7 @@ int ObDDLTask::convert_to_record(
   task_record.task_version_ = get_task_version();
   task_record.execution_id_ = get_execution_id();
   task_record.ret_code_ = get_ret_code();
+  task_record.ddl_need_retry_at_executor_ = !task_can_retry();
   const ObString &ddl_stmt_str = get_ddl_stmt_str();
   if (serialize_param_size > 0) {
     char *buf = nullptr;
@@ -1413,7 +1417,7 @@ int64_t ObDDLTask::get_execution_id() const
   return execution_id_;
 }
 
-int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id)
+int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -1429,17 +1433,35 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
   } else {
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
-    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
-      LOG_WARN("update task status failed", K(ret));
+    } else {
+      LOG_INFO("push execution id", K(tenant_id), K(task_id), K(task_status), K(execution_id), K(ret_code));
+      if (ObDDLUtil::use_idempotent_mode(data_format_version)) {
+        if (0 == execution_id) {
+          // has been executed before
+          if (!ddl_can_retry) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("do not retry for heap table ddl plan", K(tenant_id), K(task_id), K(ddl_can_retry));
+          } else {
+            if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, 0L/*execution id*/))) {
+              LOG_WARN("update task status failed", K(ret));
+            } else {
+              new_execution_id = 0L;
+            }
+          }
+        }
+      } else {
+        if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, execution_id + 1))) {
+          LOG_WARN("update task status failed", K(ret));
+        } else {
+          new_execution_id = execution_id + 1;
+        }
+      }
     }
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("fail to end trans", K(tmp_ret));
       ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
-    }
-    if (OB_SUCC(ret)) {
-      new_execution_id = execution_id + 1;
     }
   }
   return ret;

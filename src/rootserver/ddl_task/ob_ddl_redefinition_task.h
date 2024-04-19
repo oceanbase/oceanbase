@@ -42,7 +42,8 @@ public:
       const int64_t mview_table_id,
       ObRootService *root_service,
       const common::ObAddr &inner_sql_exec_addr,
-      const int64_t data_format_version = 0);
+      const int64_t data_format_version,
+      const bool is_retryable_ddl);
   int init(
       const ObTableSchema &orig_table_schema,
       const ObTableSchema &hidden_table_schema,
@@ -72,6 +73,7 @@ private:
   int64_t parallelism_;
   bool use_heap_table_ddl_plan_;
   bool is_mview_complete_refresh_;
+  bool is_retryable_ddl_;
   int64_t mview_table_id_;
   common::ObArray<share::schema::ObBasedSchemaObjectInfo> based_schema_object_infos_;
   ObRootService *root_service_;

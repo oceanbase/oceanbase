@@ -37,8 +37,11 @@ struct ObSessionDDLInfo final
 {
 public:
   ObSessionDDLInfo()
-    : ddl_info_(0)
-  {}
+    : is_ddl_(false), is_source_table_hidden_(false), is_dest_table_hidden_(false), is_heap_table_ddl_(false),
+      is_ddl_check_default_value_bit_(false), is_mview_complete_refresh_(false), is_refreshing_mview_(false),
+      is_retryable_ddl_(false), reserved_bit_(0)
+  {
+  }
   ~ObSessionDDLInfo() = default;
   void set_is_ddl(const bool is_ddl) { is_ddl_ = is_ddl; }
   bool is_ddl() const { return is_ddl_; }
@@ -78,7 +81,7 @@ public:
       uint64_t is_mview_complete_refresh_: IS_MVIEW_COMPLETE_REFRESH_BIT;
       uint64_t is_refreshing_mview_: IS_REFRESHING_MVIEW_BIT;
       uint64_t is_retryable_ddl_: IS_RETRYABLE_DDL_BIT;
-      uint64_t reserved_bit : RESERVED_BIT;
+      uint64_t reserved_bit_ : RESERVED_BIT;
     };
   };
 };

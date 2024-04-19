@@ -1020,6 +1020,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>LEADING  { return LEADING_HINT; }
 <hint>ORDERED  { return ORDERED; }
 <hint>NO_REWRITE { return NO_REWRITE; }
+<hint>MV_REWRITE { return MV_REWRITE; }
+<hint>NO_MV_REWRITE { return NO_MV_REWRITE; }
 <hint>FULL  { return FULL_HINT; }
 <hint>USE_MERGE  { return USE_MERGE; }
 <hint>NO_USE_MERGE  { return NO_USE_MERGE; }

@@ -974,6 +974,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_AGGR_FIRST_UNNEST:           return T_AGGR_FIRST_UNNEST;
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
     case T_NO_DECORRELATE :       return T_DECORRELATE;
+    case T_MV_NO_REWRITE:       return T_MV_REWRITE;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -1031,6 +1032,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_AGGR_FIRST_UNNEST:           return is_enable_hint ? "AGGR_FIRST_UNNEST" : "NO_AGGR_FIRST_UNNEST";
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
     case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
+    case T_MV_REWRITE:          return is_enable_hint ? "MV_REWRITE" : "NO_MV_REWRITE";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
@@ -1906,6 +1908,56 @@ bool ObCoalesceSqHint::has_qb_name_list(const ObIArray<ObString> & qb_names) con
     }
   }
   return bret;
+}
+
+int ObMVRewriteHint::assign(const ObMVRewriteHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  } else if (OB_FAIL(mv_list_.assign(other.mv_list_))) {
+    LOG_WARN("failed to assign mv list", K(ret));
+  }
+  return ret;
+}
+
+int ObMVRewriteHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  if (!mv_list_.empty()) {
+    char *buf = plan_text.buf_;
+    int64_t &buf_len = plan_text.buf_len_;
+    int64_t &pos = plan_text.pos_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < mv_list_.count(); ++i) {
+      if (i > 0 && OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("fail to print comma", K(ret));
+      } else if (OB_FAIL(mv_list_.at(i).print_table_in_hint(plan_text, true))) {
+        LOG_WARN("fail to print mv table", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMVRewriteHint::check_mv_match_hint(ObCollationType cs_type,
+                                         const ObTableSchema *mv_schema,
+                                         const ObDatabaseSchema *db_schema,
+                                         bool &is_match) const
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (OB_ISNULL(mv_schema) || OB_ISNULL(db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(mv_schema), K(db_schema));
+  } else if (mv_list_.empty()) {
+    is_match = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < mv_list_.count(); ++i) {
+    const ObTableInHint &table_in_hint = mv_list_.at(i);
+    is_match = 0 == ObCharset::strcmp(cs_type, table_in_hint.table_name_, mv_schema->get_table_name()) &&
+    (table_in_hint.db_name_.empty() || 0 == ObCharset::strcmp(cs_type, table_in_hint.db_name_, db_schema->get_database_name_str()));
+  }
+  return ret;
 }
 
 int ObTableParallelHint::assign(const ObTableParallelHint &other)

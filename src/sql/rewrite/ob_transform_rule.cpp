@@ -67,6 +67,7 @@ void ObTransformerCtx::reset()
   groupby_pushdown_stmts_.reset();
   is_spm_outline_ = false;
   push_down_filters_.reset();
+  iteration_level_ = 0;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -86,7 +87,7 @@ int ObTransformerCtx::add_src_hash_val(uint64_t trans_type)
   const char *str = NULL;
   if (OB_ISNULL(str = get_trans_type_string(trans_type))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to convert trans type to src value", K(ret));
+    LOG_WARN("failed to convert trans type to src value", K(ret), K(trans_type));
   } else {
     uint32_t hash_val = src_hash_val_.empty() ? 0 : src_hash_val_.at(src_hash_val_.count() - 1);
     hash_val = fnv_hash2(str, strlen(str), hash_val);
@@ -135,6 +136,7 @@ const char* ObTransformerCtx::get_trans_type_string(uint64_t trans_type)
     TRANS_TYPE_TO_STR(SELECT_EXPR_PULLUP)
     TRANS_TYPE_TO_STR(PROCESS_DBLINK)
     TRANS_TYPE_TO_STR(DECORRELATE)
+    TRANS_TYPE_TO_STR(MV_REWRITE)
     default:  return NULL;
   }
 }

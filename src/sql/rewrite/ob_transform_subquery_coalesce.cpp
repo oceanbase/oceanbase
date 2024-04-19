@@ -502,82 +502,83 @@ int ObTransformSubqueryCoalesce::transform_diff_exprs(
     bool &rule_based_trans_happened)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<TransformParam, 1> where_params;
-  ObSEArray<TransformParam, 1> having_params;
   bool where_is_false = false;
   bool having_is_false = false;
   bool hint_force_trans = false;
   ObSelectStmt *select_stmt = NULL;
   ObSelectStmt *select_trans_stmt = NULL;
   rule_based_trans_happened = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(stmt), K(ctx_));
-  } else if (stmt->is_select_stmt() && OB_ISNULL(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(stmt), K(select_stmt));
-  } else if (OB_FAIL(check_conditions_validity(stmt, 
-                                               stmt->get_condition_exprs(), 
-                                               where_params, 
-                                               where_is_false,
-                                               hint_force_trans))) {
-    LOG_WARN("failed to check condition validity", K(ret));
-  } else if (OB_NOT_NULL(select_stmt) &&
-             OB_FAIL(check_conditions_validity(stmt, 
-                                               select_stmt->get_having_exprs(),
-                                               having_params,
-                                               having_is_false,
-                                               hint_force_trans))) {
-    LOG_WARN("failed to check having validity", K(ret));
-  } else if (where_is_false && OB_FAIL(make_false(stmt->get_condition_exprs())))  {
-    LOG_WARN("failed to make condition false", K(ret));
-  } else if (having_is_false && OB_FAIL(make_false(select_stmt->get_having_exprs()))) {
-    LOG_WARN("failed to make condition false", K(ret));
-  } else if ((where_is_false || where_params.empty()) &&
-             (having_is_false || having_params.empty())) {
-    // do nothing
-  } else if (!hint_force_trans && 
-             OB_FAIL(ObTransformUtils::copy_stmt(*ctx_->stmt_factory_, stmt, trans_stmt))) {
-    LOG_WARN("failed to copy stmt", K(ret));
-  } else if (hint_force_trans &&
-             OB_FALSE_IT(trans_stmt = stmt)) {
-  } else if (trans_stmt->is_select_stmt() &&
-             OB_ISNULL(select_trans_stmt = static_cast<ObSelectStmt*>(trans_stmt))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(trans_stmt), K(select_trans_stmt));
-  } else if (!where_is_false && OB_FAIL(coalesce_diff_exists_exprs(trans_stmt, trans_stmt->get_condition_exprs(), where_params))) {
-    LOG_WARN("failed to do coalesce diff where conditions", K(ret));
-  //bug:
-  // } else if (OB_NOT_NULL(select_trans_stmt) && !having_is_false &&
-  //            OB_FAIL(coalesce_diff_exists_exprs(trans_stmt,
-  //                                               select_trans_stmt->get_having_exprs(),
-  //                                               having_params))) {
-  //   LOG_WARN("failed to do coalesce diff having conditions", K(ret));
-  } else if (!where_is_false && OB_FAIL(coalesce_diff_any_all_exprs(trans_stmt, trans_stmt->get_condition_exprs(), where_params))) {
-    LOG_WARN("failed to do coalesce diff where conditions", K(ret));
-  } else if (OB_NOT_NULL(select_trans_stmt) && !having_is_false &&
-             OB_FAIL(coalesce_diff_any_all_exprs(trans_stmt,
-                                                 select_trans_stmt->get_having_exprs(),
-                                                 having_params))) {
-    LOG_WARN("failed to do coalesce diff having conditions", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    rule_based_trans_happened = where_is_false || having_is_false || hint_force_trans;
-    ObIArray<ObPCParamEqualInfo> *where_equal_infos = where_is_false ?
-        &rule_based_equal_infos : &cost_based_equal_infos;
-    ObIArray<ObPCParamEqualInfo> *having_equal_infos = having_is_false ?
-        &rule_based_equal_infos : &cost_based_equal_infos;
-    for (int64_t i = 0; OB_SUCC(ret) && i < where_params.count(); ++i) {
-      if (OB_FAIL(append(*where_equal_infos, where_params.at(i).map_info_.equal_param_map_))) {
-        LOG_WARN("failed to append equal infos", K(ret));
+  typedef ObSEArray<TransformParam, 1> ParamArray;
+  SMART_VARS_2((ParamArray, where_params), (ParamArray, having_params)) {
+    if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret), K(stmt), K(ctx_));
+    } else if (stmt->is_select_stmt() && OB_ISNULL(select_stmt = static_cast<ObSelectStmt*>(stmt))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret), K(stmt), K(select_stmt));
+    } else if (OB_FAIL(check_conditions_validity(stmt,
+                                                stmt->get_condition_exprs(),
+                                                where_params,
+                                                where_is_false,
+                                                hint_force_trans))) {
+      LOG_WARN("failed to check condition validity", K(ret));
+    } else if (OB_NOT_NULL(select_stmt) &&
+              OB_FAIL(check_conditions_validity(stmt,
+                                                select_stmt->get_having_exprs(),
+                                                having_params,
+                                                having_is_false,
+                                                hint_force_trans))) {
+      LOG_WARN("failed to check having validity", K(ret));
+    } else if (where_is_false && OB_FAIL(make_false(stmt->get_condition_exprs())))  {
+      LOG_WARN("failed to make condition false", K(ret));
+    } else if (having_is_false && OB_FAIL(make_false(select_stmt->get_having_exprs()))) {
+      LOG_WARN("failed to make condition false", K(ret));
+    } else if ((where_is_false || where_params.empty()) &&
+              (having_is_false || having_params.empty())) {
+      // do nothing
+    } else if (!hint_force_trans &&
+              OB_FAIL(ObTransformUtils::copy_stmt(*ctx_->stmt_factory_, stmt, trans_stmt))) {
+      LOG_WARN("failed to copy stmt", K(ret));
+    } else if (hint_force_trans &&
+              OB_FALSE_IT(trans_stmt = stmt)) {
+    } else if (trans_stmt->is_select_stmt() &&
+              OB_ISNULL(select_trans_stmt = static_cast<ObSelectStmt*>(trans_stmt))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret), K(trans_stmt), K(select_trans_stmt));
+    } else if (!where_is_false && OB_FAIL(coalesce_diff_exists_exprs(trans_stmt, trans_stmt->get_condition_exprs(), where_params))) {
+      LOG_WARN("failed to do coalesce diff where conditions", K(ret));
+    //bug:
+    // } else if (OB_NOT_NULL(select_trans_stmt) && !having_is_false &&
+    //            OB_FAIL(coalesce_diff_exists_exprs(trans_stmt,
+    //                                               select_trans_stmt->get_having_exprs(),
+    //                                               having_params))) {
+    //   LOG_WARN("failed to do coalesce diff having conditions", K(ret));
+    } else if (!where_is_false && OB_FAIL(coalesce_diff_any_all_exprs(trans_stmt, trans_stmt->get_condition_exprs(), where_params))) {
+      LOG_WARN("failed to do coalesce diff where conditions", K(ret));
+    } else if (OB_NOT_NULL(select_trans_stmt) && !having_is_false &&
+              OB_FAIL(coalesce_diff_any_all_exprs(trans_stmt,
+                                                  select_trans_stmt->get_having_exprs(),
+                                                  having_params))) {
+      LOG_WARN("failed to do coalesce diff having conditions", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      rule_based_trans_happened = where_is_false || having_is_false || hint_force_trans;
+      ObIArray<ObPCParamEqualInfo> *where_equal_infos = where_is_false ?
+          &rule_based_equal_infos : &cost_based_equal_infos;
+      ObIArray<ObPCParamEqualInfo> *having_equal_infos = having_is_false ?
+          &rule_based_equal_infos : &cost_based_equal_infos;
+      for (int64_t i = 0; OB_SUCC(ret) && i < where_params.count(); ++i) {
+        if (OB_FAIL(append(*where_equal_infos, where_params.at(i).map_info_.equal_param_map_))) {
+          LOG_WARN("failed to append equal infos", K(ret));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < having_params.count(); ++i) {
+        if (OB_FAIL(append(*having_equal_infos, having_params.at(i).map_info_.equal_param_map_))) {
+          LOG_WARN("failed to append equal infos", K(ret));
+        }
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < having_params.count(); ++i) {
-      if (OB_FAIL(append(*having_equal_infos, having_params.at(i).map_info_.equal_param_map_))) {
-        LOG_WARN("failed to append equal infos", K(ret));
-      }
-    }
-  }
+  } // end smart vars
   return ret;
 }
 
@@ -1935,138 +1936,140 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
   // if the select items have same udf, need check if they are deterministic
   // eg: select func(c1), func(c1) from t1;
   bool need_check_deterministic = true;
-  ObStmtCompareContext context(coalesce_query,
-                               subquery,
-                               map_info,
-                               &query_ctx->calculable_items_,
-                               need_check_deterministic);
-  if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_query) || 
-      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
-      OB_ISNULL(query_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (OB_FAIL(subquery->get_select_exprs(subquery_select_list))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(subquery->get_column_exprs(subquery_column_list))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  } else if (OB_FAIL(coalesce_query->get_select_exprs(coalesce_select_list))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  } else if (OB_FAIL(coalesce_query->get_column_exprs(coalesce_column_list))) {
-    LOG_WARN("failed to get column exprs", K(ret));
-  }
-  //check column item
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_column_list.count(); ++i) {
-    ObRawExpr *subquery_column = subquery_column_list.at(i);
-    bool find = false;
-    if (OB_ISNULL(subquery_column)) {
+  SMART_VAR(ObStmtCompareContext, context,
+            coalesce_query,
+            subquery,
+            map_info,
+            &query_ctx->calculable_items_,
+            need_check_deterministic) {
+    if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_query) ||
+        OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
+        OB_ISNULL(query_ctx)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null column expr", K(ret));
+      LOG_WARN("unexpect null param", K(ret));
+    } else if (OB_FAIL(subquery->get_select_exprs(subquery_select_list))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(subquery->get_column_exprs(subquery_column_list))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(coalesce_query->get_select_exprs(coalesce_select_list))) {
+      LOG_WARN("failed to get select exprs", K(ret));
+    } else if (OB_FAIL(coalesce_query->get_column_exprs(coalesce_column_list))) {
+      LOG_WARN("failed to get column exprs", K(ret));
     }
-    //Check if the column is already in the combined subquery
-    for (int64_t j = 0; OB_SUCC(ret) && !find && j < coalesce_column_list.count(); ++j) {
-      ObRawExpr *coalesce_column = coalesce_column_list.at(j);
-      if (OB_ISNULL(coalesce_column)) {
+    //check column item
+    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_column_list.count(); ++i) {
+      ObRawExpr *subquery_column = subquery_column_list.at(i);
+      bool find = false;
+      if (OB_ISNULL(subquery_column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null column expr", K(ret));
-      } else if (!coalesce_column->same_as(*subquery_column, &context)) {
-        //do nothing
-      } else if (OB_FAIL(new_column_list.push_back(coalesce_column))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
-        find = true;
+      }
+      //Check if the column is already in the combined subquery
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < coalesce_column_list.count(); ++j) {
+        ObRawExpr *coalesce_column = coalesce_column_list.at(j);
+        if (OB_ISNULL(coalesce_column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null column expr", K(ret));
+        } else if (!coalesce_column->same_as(*subquery_column, &context)) {
+          //do nothing
+        } else if (OB_FAIL(new_column_list.push_back(coalesce_column))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        } else {
+          find = true;
+        }
+      }
+      //If not, it needs to be added to the combined subquery
+      if (OB_SUCC(ret) && !find) {
+        ColumnItem *column_item = NULL;
+        ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(subquery_column);
+        uint64_t table_id = OB_INVALID_ID;
+        if (!subquery_column->is_column_ref_expr()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("expect column ref expr", KPC(subquery_column), K(ret));
+        } else if (OB_ISNULL(column_item = subquery->get_column_item_by_id(col_ref->get_table_id(),
+                                                                          col_ref->get_column_id()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null column item", K(ret));
+        } else if (OB_FAIL(get_map_table_id(subquery,
+                                            coalesce_query,
+                                            map_info,
+                                            col_ref->get_table_id(),
+                                            table_id))) {
+          LOG_WARN("failed to get map table id", K(ret));
+        } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
+        } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
+        } else if (OB_FAIL(new_column_items.push_back(*column_item))) {
+          LOG_WARN("failed to push back column item", K(ret));
+        } else if (OB_FAIL(new_column_list.push_back(subquery_column))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
       }
     }
-    //If not, it needs to be added to the combined subquery
-    if (OB_SUCC(ret) && !find) {
-      ColumnItem *column_item = NULL;
-      ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr*>(subquery_column);
-      uint64_t table_id = OB_INVALID_ID;
-      if (!subquery_column->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expect column ref expr", KPC(subquery_column), K(ret));
-      } else if (OB_ISNULL(column_item = subquery->get_column_item_by_id(col_ref->get_table_id(),
-                                                                         col_ref->get_column_id()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null column item", K(ret));
-      } else if (OB_FAIL(get_map_table_id(subquery,
-                                          coalesce_query,
-                                          map_info,
-                                          col_ref->get_table_id(),
-                                          table_id))) {
-        LOG_WARN("failed to get map table id", K(ret));
-      } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
-      } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
-      } else if (OB_FAIL(new_column_items.push_back(*column_item))) {
-        LOG_WARN("failed to push back column item", K(ret));
-      } else if (OB_FAIL(new_column_list.push_back(subquery_column))) {
-        LOG_WARN("failed to push back expr", K(ret));
+    if (OB_SUCC(ret) && !new_column_items.empty()) {
+      if (OB_FAIL(coalesce_query->add_column_item(new_column_items))) {
+        LOG_WARN("failed to add table item", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret) && !new_column_items.empty()) {
-    if (OB_FAIL(coalesce_query->add_column_item(new_column_items))) {
-      LOG_WARN("failed to add table item", K(ret));
-    }
-  }
-  //check select item
-  for (int64_t i = 0; OB_SUCC(ret) && i < subquery_select_list.count(); ++i) {
-    ObRawExpr *subquery_select = subquery_select_list.at(i);
-    bool find = false;
-    if (OB_ISNULL(subquery_select)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null select expr", K(ret));
-    } else if (OB_FAIL(select_exprs.push_back(subquery_select))) {
-      LOG_WARN("failed to push back expr", K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && !find && j < coalesce_select_list.count(); ++j) {
-      ObRawExpr *coalesce_select = coalesce_select_list.at(j);
-      if (OB_ISNULL(coalesce_select)) {
+    //check select item
+    for (int64_t i = 0; OB_SUCC(ret) && i < subquery_select_list.count(); ++i) {
+      ObRawExpr *subquery_select = subquery_select_list.at(i);
+      bool find = false;
+      if (OB_ISNULL(subquery_select)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null select expr", K(ret));
-      } else if (!coalesce_select->same_as(*subquery_select, &context)) {
-        // do nothing
-      } else if (!is_first_subquery &&
-                  OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                               coalesce_select,
-                                                               coalesce_query))) {
-        LOG_WARN("failed to create column for subquery", K(ret));
-      } else if (OB_FAIL(index_map.push_back(is_first_subquery ? j : coalesce_query->get_select_item_size() - 1))) {
-        LOG_WARN("failed to push back index", K(ret));
-      } else {
-        find = true;
+      } else if (OB_FAIL(select_exprs.push_back(subquery_select))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && !find && j < coalesce_select_list.count(); ++j) {
+        ObRawExpr *coalesce_select = coalesce_select_list.at(j);
+        if (OB_ISNULL(coalesce_select)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpect null select expr", K(ret));
+        } else if (!coalesce_select->same_as(*subquery_select, &context)) {
+          // do nothing
+        } else if (!is_first_subquery &&
+                    OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                                coalesce_select,
+                                                                coalesce_query))) {
+          LOG_WARN("failed to create column for subquery", K(ret));
+        } else if (OB_FAIL(index_map.push_back(is_first_subquery ? j : coalesce_query->get_select_item_size() - 1))) {
+          LOG_WARN("failed to push back index", K(ret));
+        } else {
+          find = true;
+        }
+      }
+      if (OB_SUCC(ret) && !find) {
+        ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
+        ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
+        if (OB_FAIL(ObTransformUtils::replace_expr(subquery_column_list, new_column_list, subquery_select))) {
+          LOG_WARN("failed to replace expr", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(subquery_select,
+                                                              aggr_items))) {
+          LOG_WARN("failed to extract aggr expr", K(ret));
+        } else if (OB_FAIL(append(coalesce_query->get_aggr_items(), aggr_items))) {
+          LOG_WARN("failed to append aggr items", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::extract_winfun_expr(subquery_select, win_func_exprs))) {
+          LOG_WARN("failed to extract win func exprs", K(ret));
+        } else if (OB_FAIL(append(coalesce_query->get_window_func_exprs(), win_func_exprs))) {
+          LOG_WARN("failed to append win func exprs", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+                                                                subquery_select,
+                                                                coalesce_query))) {
+          LOG_WARN("failed to create column for subquery", K(ret));
+        } else if (OB_FAIL(index_map.push_back(coalesce_query->get_select_item_size() - 1))) {
+          LOG_WARN("failed to push back index", K(ret));
+        }
       }
     }
-    if (OB_SUCC(ret) && !find) {
-      ObSEArray<ObAggFunRawExpr*, 8> aggr_items;
-      ObSEArray<ObWinFunRawExpr*, 8> win_func_exprs;
-      if (OB_FAIL(ObTransformUtils::replace_expr(subquery_column_list, new_column_list, subquery_select))) {
-        LOG_WARN("failed to replace expr", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_aggr_expr(subquery_select,
-                                                             aggr_items))) {
-        LOG_WARN("failed to extract aggr expr", K(ret));
-      } else if (OB_FAIL(append(coalesce_query->get_aggr_items(), aggr_items))) {
-        LOG_WARN("failed to append aggr items", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::extract_winfun_expr(subquery_select, win_func_exprs))) {
-        LOG_WARN("failed to extract win func exprs", K(ret));
-      } else if (OB_FAIL(append(coalesce_query->get_window_func_exprs(), win_func_exprs))) {
-        LOG_WARN("failed to append win func exprs", K(ret));
-      } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
-                                                              subquery_select,
-                                                              coalesce_query))) {
-        LOG_WARN("failed to create column for subquery", K(ret));
-      } else if (OB_FAIL(index_map.push_back(coalesce_query->get_select_item_size() - 1))) {
-        LOG_WARN("failed to push back index", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(coalesce_query->adjust_subquery_list())) {
+        LOG_WARN("failed to adjust subquery list", K(ret));
+      } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
+                                context.equal_param_info_))) {
+        LOG_WARN("failed to append equal param constraints", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(coalesce_query->adjust_subquery_list())) {
-      LOG_WARN("failed to adjust subquery list", K(ret));
-    } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_, 
-                              context.equal_param_info_))) {
-      LOG_WARN("failed to append equal param constraints", K(ret));
-    }
-  }
+  } // end smart var
   return ret;
 }
 

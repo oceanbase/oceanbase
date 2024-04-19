@@ -3709,7 +3709,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[263].default_value_ = "1" ;
+      ObSysVars[263].default_value_ = "0" ;
       ObSysVars[263].info_ = "Whether to enable the materialized view rewriting" ;
       ObSysVars[263].name_ = "query_rewrite_enabled" ;
       ObSysVars[263].data_type_ = ObIntType ;
@@ -3718,7 +3718,7 @@ static struct VarsInit{
       ObSysVars[263].id_ = SYS_VAR_QUERY_REWRITE_ENABLED ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_ENABLED)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_QUERY_REWRITE_ENABLED] = 263 ;
-      ObSysVars[263].base_value_ = "1" ;
+      ObSysVars[263].base_value_ = "0" ;
     ObSysVars[263].alias_ = "OB_SV_QUERY_REWRITE_ENABLED" ;
     }();
 

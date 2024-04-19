@@ -28,6 +28,7 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "share/ob_share_util.h"
 #include "share/stat/ob_incremental_stat_estimator.h"
+#include "observer/omt/ob_tenant.h"
 
 namespace oceanbase
 {
@@ -484,15 +485,12 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
     arg.dup_action_ = param_.dup_action_;
     arg.px_mode_ = param_.px_mode_;
     arg.online_opt_stat_gather_ = param_.online_opt_stat_gather_;
-    arg.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
-    arg.task_id_ = ctx_->ddl_param_.task_id_;
-    arg.schema_version_ = ctx_->ddl_param_.schema_version_;
-    arg.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
-    arg.data_version_ = ctx_->ddl_param_.data_version_;
-    arg.cluster_version_ = ctx_->ddl_param_.cluster_version_;
+    arg.ddl_param_ = ctx_->ddl_param_;
     arg.session_info_ = ctx_->session_info_;
     arg.write_session_count_ = param_.write_session_count_;
     arg.exe_mode_ = ctx_->param_.exe_mode_;
+    arg.method_ = param_.method_;
+    arg.insert_mode_ = param_.insert_mode_;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =

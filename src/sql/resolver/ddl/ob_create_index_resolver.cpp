@@ -258,6 +258,14 @@ int ObCreateIndexResolver::resolve_index_column_node(
       }
     }
 
+    if (OB_SUCC(ret) && cnt_func_index) {
+      if (OB_UNLIKELY(tbl_schema->mv_container_table())) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("use functional index on materialized view not supported", K(ret), KPC(tbl_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use functional index on materialized view");
+      }
+    }
+
     // In oracle mode, we need to check if the new index is on the same cols with old indexes.
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {

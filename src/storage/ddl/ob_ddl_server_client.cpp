@@ -281,7 +281,7 @@ int ObDDLServerClient::abort_redef_table(const obrpc::ObAbortRedefTableArg &arg,
       const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
       int64_t MAX_ABORT_WAIT_TIMEOUT = 60 * 1000 * 1000; //60s
       THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + MAX_ABORT_WAIT_TIMEOUT);
-      if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, session, common_rpc_proxy))) {
+      if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(arg.tenant_id_, arg.task_id_, DDL_DIRECT_LOAD, session, common_rpc_proxy))) {
         if (OB_CANCELED == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("ddl abort success", K_(arg.task_id));
@@ -356,7 +356,7 @@ int ObDDLServerClient::finish_redef_table(const obrpc::ObFinishRedefTableArg &fi
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(build_ddl_single_replica_response(build_single_arg))) {
         LOG_WARN("build ddl single replica response", K(ret), K(build_single_arg));
-    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, &session, common_rpc_proxy))) {
+    } else if (OB_FAIL(sql::ObDDLExecutorUtil::wait_ddl_finish(finish_redef_arg.tenant_id_, finish_redef_arg.task_id_, DDL_DIRECT_LOAD, &session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret), K(finish_redef_arg.tenant_id_), K(finish_redef_arg.task_id_));
     }
     if (OB_TMP_FAIL(heart_beat_clear(finish_redef_arg.task_id_, tenant_id))) {

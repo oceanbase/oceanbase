@@ -17,6 +17,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "share/table/ob_table_load_array.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "storage/direct_load/ob_direct_load_struct.h"
 
 namespace oceanbase
 {
@@ -145,7 +146,9 @@ struct ObTableLoadParam
       dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
       avail_memory_(0),
       write_session_count_(0),
-      exe_mode_(ObTableLoadExeMode::MAX_TYPE)
+      exe_mode_(ObTableLoadExeMode::MAX_TYPE),
+      method_(storage::ObDirectLoadMethod::INVALID_METHOD),
+      insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE)
   {
   }
 
@@ -167,12 +170,37 @@ struct ObTableLoadParam
            parallel_ > 0 &&
            session_count_ > 0 &&
            batch_size_ > 0 &&
-           column_count_ > 0;
+           column_count_ > 0 &&
+           sql::ObLoadDupActionType::LOAD_INVALID_MODE != dup_action_ &&
+           storage::ObDirectLoadMethod::is_type_valid(method_) &&
+           storage::ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+           (storage::ObDirectLoadMethod::is_full(method_)
+              ? storage::ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode_)
+              : true) &&
+           (storage::ObDirectLoadMethod::is_incremental(method_)
+              ? storage::ObDirectLoadInsertMode::is_valid_for_incremental_method(insert_mode_)
+              : true) &&
+           (storage::ObDirectLoadInsertMode::INC_REPLACE == insert_mode_
+              ? sql::ObLoadDupActionType::LOAD_REPLACE == dup_action_
+              : true);
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
-               K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dup_action), K_(avail_memory), K_(write_session_count), K_(exe_mode));
+  TO_STRING_KV(K_(tenant_id),
+               K_(table_id),
+               K_(parallel),
+               K_(session_count),
+               K_(batch_size),
+               K_(max_error_row_count),
+               K_(column_count),
+               K_(need_sort),
+               K_(px_mode),
+               K_(online_opt_stat_gather),
+               K_(dup_action),
+               K_(avail_memory),
+               K_(write_session_count),
+               K_(exe_mode),
+               "method", storage::ObDirectLoadMethod::get_type_string(method_),
+               "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -180,7 +208,7 @@ public:
   int32_t session_count_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;
-  uint64_t sql_mode_;
+  uint64_t sql_mode_; // unused
   int32_t column_count_;
   bool need_sort_;
   bool px_mode_;
@@ -189,10 +217,13 @@ public:
   int64_t avail_memory_;
   int32_t write_session_count_;
   ObTableLoadExeMode exe_mode_;
+  storage::ObDirectLoadMethod::Type method_;
+  storage::ObDirectLoadInsertMode::Type insert_mode_;
 };
 
 struct ObTableLoadDDLParam
 {
+  OB_UNIS_VERSION(1);
 public:
   ObTableLoadDDLParam()
     : dest_table_id_(common::OB_INVALID_ID),

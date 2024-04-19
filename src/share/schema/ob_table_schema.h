@@ -378,7 +378,10 @@ public:
                "rowid_mode", rowid_mode_,
                "view_column_filled_flag", view_column_filled_flag_,
                "mv_container_table_flag", mv_container_table_flag_,
-               "mv_available_flag", mv_available_flag_);
+               "mv_available_flag", mv_available_flag_,
+               "table_referenced_by_mv_flag", table_referenced_by_mv_flag_,
+               "mv_enable_query_rewrite_flag", mv_enable_query_rewrite_flag_,
+               "mv_on_query_computation_flag", mv_on_query_computation_flag_);
   union {
     int32_t mode_;
     struct {
@@ -392,6 +395,9 @@ public:
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
       uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS;
       uint32_t mv_available_flag_ : TM_MV_AVAILABLE_BITS;
+      uint32_t table_referenced_by_mv_flag_ : TM_TABLE_REFERENCED_BY_MV_BITS;
+      uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
+      uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -705,6 +711,18 @@ public:
   { return IS_MV_AVAILABLE == (enum ObMVAvailableFlag)table_mode_.mv_available_flag_; }
   inline void set_mv_available(const ObMVAvailableFlag flag)
   { table_mode_.mv_available_flag_ = flag; }
+  inline bool table_referenced_by_mv() const
+  { return IS_REFERENCED_BY_MV == (enum ObTableReferencedByMVFlag)table_mode_.table_referenced_by_mv_flag_; }
+  inline void set_table_referenced_by_mv(const ObTableReferencedByMVFlag flag)
+  { table_mode_.table_referenced_by_mv_flag_ = flag; }
+  inline bool mv_enable_query_rewrite() const
+  { return IS_MV_ENABLE_QUERY_REWRITE == (enum ObMVEnableQueryRewriteFlag)table_mode_.mv_enable_query_rewrite_flag_; }
+  inline void set_mv_enable_query_rewrite(const ObMVEnableQueryRewriteFlag flag)
+  { table_mode_.mv_enable_query_rewrite_flag_ = flag; }
+  inline bool mv_on_query_computation() const
+  { return IS_MV_ON_QUERY_COMPUTATION == (enum ObMVOnQueryComputationFlag)table_mode_.mv_on_query_computation_flag_; }
+  inline void set_mv_on_query_computation(const ObMVOnQueryComputationFlag flag)
+  { table_mode_.mv_on_query_computation_flag_ = flag; }
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }

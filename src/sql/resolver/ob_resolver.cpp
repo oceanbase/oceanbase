@@ -1211,8 +1211,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_external_table()) );
     }
 
-    if (OB_SUCC(ret) && stmt->is_dml_stmt()
-        && !params_.session_info_->is_inner()) {
+    if (OB_SUCC(ret) && !params_.session_info_->is_inner()
+        && stmt->is_dml_stmt() && !stmt->is_explain_stmt() && 0 == stmt->get_stmt_id()) {
+      // allowed explain for dml write mv, allowed refresh mv sql write mv
       OZ( (static_cast<ObDMLStmt*>(stmt)->disable_writing_materialized_view()) );
     }
 

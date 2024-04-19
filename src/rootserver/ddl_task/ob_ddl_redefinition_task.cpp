@@ -52,12 +52,13 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
     const int64_t mview_table_id,
     ObRootService *root_service,
     const common::ObAddr &inner_sql_exec_addr,
-    const int64_t data_format_version)
+    const int64_t data_format_version,
+    const bool is_retryable_ddl)
   : is_inited_(false), tenant_id_(tenant_id), task_id_(task_id), data_table_id_(data_table_id),
     dest_table_id_(dest_table_id), schema_version_(schema_version), snapshot_version_(snapshot_version),
     execution_id_(execution_id), consumer_group_id_(consumer_group_id), sql_mode_(sql_mode), trace_id_(trace_id),
     parallelism_(parallelism), use_heap_table_ddl_plan_(use_heap_table_ddl_plan),
-    is_mview_complete_refresh_(is_mview_complete_refresh), mview_table_id_(mview_table_id),
+    is_mview_complete_refresh_(is_mview_complete_refresh), is_retryable_ddl_(is_retryable_ddl), mview_table_id_(mview_table_id),
     root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), data_format_version_(0)
 {
   set_retry_times(0); // do not retry
@@ -130,7 +131,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
     if (is_mview_complete_refresh_) {
       if (OB_FAIL(ObDDLUtil::generate_build_mview_replica_sql(tenant_id_,
                                                               mview_table_id_,
-                                                              dest_table_id_,
+                                                              data_table_id_,
                                                               schema_guard,
                                                               snapshot_version_,
                                                               execution_id_,
@@ -167,11 +168,12 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       ObSessionParam session_param;
       session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
       session_param.tz_info_wrap_ = &tz_info_wrap_;
-      session_param.ddl_info_.set_is_ddl(true);
+      session_param.ddl_info_.set_is_ddl(!is_mview_complete_refresh_);
       session_param.ddl_info_.set_source_table_hidden(false);
       session_param.ddl_info_.set_dest_table_hidden(true);
       session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
       session_param.ddl_info_.set_mview_complete_refresh(is_mview_complete_refresh_);
+      session_param.ddl_info_.set_retryable_ddl(is_retryable_ddl_);
       session_param.use_external_session_ = true;  // means session id dispatched by session mgr
       session_param.consumer_group_id_ = consumer_group_id_;
 
@@ -200,7 +202,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
                 oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
           LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
         }
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_mview_complete_refresh_) {
           if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
             LOG_WARN("fail to check sstable checksum_report_finish",
               K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
@@ -257,7 +259,8 @@ ObAsyncTask *ObDDLRedefinitionSSTableBuildTask::deep_copy(char *buf, const int64
         mview_table_id_,
         root_service_,
         inner_sql_exec_addr_,
-        data_format_version_);
+        data_format_version_,
+        is_retryable_ddl_);
     if (OB_FAIL(new_task->tz_info_wrap_.deep_copy(tz_info_wrap_))) {
       LOG_WARN("failed to copy tz info wrap", K(ret));
     } else if (OB_FAIL(new_task->col_name_map_.assign(col_name_map_))) {

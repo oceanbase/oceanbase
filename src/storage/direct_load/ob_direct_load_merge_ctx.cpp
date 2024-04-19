@@ -59,6 +59,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     is_column_store_(false),
     online_opt_stat_gather_(false),
     px_mode_(false),
+    insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr)
 {
@@ -73,6 +74,7 @@ bool ObDirectLoadMergeParam::is_valid() const
   return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < store_column_count_ &&
          snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
          nullptr != col_descs_ && nullptr != cmp_funcs_ &&
+         ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
          nullptr != insert_table_ctx_ && nullptr != dml_row_handler_;
 }
 
@@ -210,6 +212,7 @@ int ObDirectLoadTabletMergeCtx::init(ObTableLoadTableCtx *ctx,
     origin_table_param.table_id_ = param.table_id_;
     origin_table_param.tablet_id_ = ls_partition_id.part_tablet_id_.tablet_id_;
     origin_table_param.ls_id_ = ls_partition_id.ls_id_;
+    origin_table_param.insert_mode_ = param.insert_mode_;
     if (OB_FAIL(origin_table_.init(origin_table_param))) {
       LOG_WARN("fail to init origin sstable", KR(ret));
     } else {

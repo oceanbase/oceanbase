@@ -350,6 +350,7 @@
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
 # 507: __all_tenant_snapshot_ls_replica_history
+# 518: __all_mview_dep
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index

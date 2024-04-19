@@ -188,6 +188,21 @@ public:
              const uint64_t tenant_id,
              const int64_t schema_version,
              const bool skip_consensus);
+
+  // Use to check if the sys table (exclude core table) does exist
+  // by querying __all_table when the table is not accessible.
+  //
+  // @param[in] sql_client: ObISQLClient
+  // @param[in] tenant_id:  target tenant_id
+  // @param[in] table_id:   sys table_id (exclude core table)
+  // @param[out] exist:  whether the table really exists
+  // @return: OB_SUCCESS if success
+  static int check_sys_table_exist_by_sql(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const ObObjectID &table_id,
+      bool &exist);
+
 private:
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,

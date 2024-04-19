@@ -30,6 +30,7 @@
 #include "sql/ob_sql.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/tx/ob_trans_service.h"
+#include "sql/engine/expr/ob_expr_last_refresh_scn.h"
 
 namespace oceanbase
 {
@@ -463,6 +464,14 @@ int ObRemoteBaseExecuteP<T>::execute_remote_plan(ObExecContext &exec_ctx,
           LOG_WARN("created operator is NULL", K(ret));
         } else if (OB_FAIL(plan_ctx->reserve_param_space(plan.get_param_count()))) {
           LOG_WARN("reserve rescan param space failed", K(ret), K(plan.get_param_count()));
+        } else if (!plan.get_mview_ids().empty() && plan_ctx->get_mview_ids().empty()
+                   && OB_FAIL(ObExprLastRefreshScn::set_last_refresh_scns(plan.get_mview_ids(),
+                                                                          exec_ctx.get_sql_proxy(),
+                                                                          exec_ctx.get_my_session(),
+                                                                          exec_ctx.get_das_ctx().get_snapshot().core_.version_,
+                                                                          plan_ctx->get_mview_ids(),
+                                                                          plan_ctx->get_last_refresh_scns()))) {
+          LOG_WARN("fail to set last_refresh_scns", K(ret), K(plan.get_mview_ids()));
         } else {
           if (OB_FAIL(se_op->open())) {
             LOG_WARN("fail open task", K(ret));

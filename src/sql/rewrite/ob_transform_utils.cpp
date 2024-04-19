@@ -34,6 +34,10 @@
 #include "sql/rewrite/ob_equal_analysis.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/dml/ob_select_resolver.h"
+#include "sql/parser/ob_parser.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 
 namespace oceanbase {
 using namespace common;
@@ -1712,7 +1716,7 @@ int ObTransformUtils::flatten_joined_table(ObDMLStmt *stmt)
           LOG_WARN("failed to push back joined table", K(ret));
         } else if (i < origin_joined_table_count) {
           /* do nohing */
-        } else if (stmt->add_from_item(table->table_id_, true)) {
+        } else if (OB_FAIL(stmt->add_from_item(table->table_id_, true))) {
           LOG_WARN("failed to add from item", K(ret), K(right_table));
         }
       } else if (OB_FAIL(append(stmt->get_condition_exprs(), table->get_join_conditions()))) {
@@ -1723,13 +1727,13 @@ int ObTransformUtils::flatten_joined_table(ObDMLStmt *stmt)
       } else {
         if (left_table->is_joined_table()) {
           ret = tmp_joined_tables.push_back(static_cast<JoinedTable*>(left_table));
-        } else if (stmt->add_from_item(left_table->table_id_, false)) {
+        } else if (OB_FAIL(stmt->add_from_item(left_table->table_id_, false))) {
           LOG_WARN("failed to add from item", K(ret), K(left_table));
         }
         if (OB_FAIL(ret)) {
         } else if (right_table->is_joined_table()) {
           ret = tmp_joined_tables.push_back(static_cast<JoinedTable*>(right_table));
-        } else if (stmt->add_from_item(right_table->table_id_, false)) {
+        } else if (OB_FAIL(stmt->add_from_item(right_table->table_id_, false))) {
           LOG_WARN("failed to add from item", K(ret), K(right_table));
         }
       }
@@ -10881,7 +10885,8 @@ int ObTransformUtils::add_param_bool_constraint(ObTransformerCtx *ctx,
 
 int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
                                           ObIArray<ObSelectStmt*> &child_stmts,
-                                          hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map)
+                                          hash::ObHashMap<uint64_t, ObParentDMLStmt> *parent_map,
+                                          const ObIArray<ObSelectStmt*> *ignore_stmts  /* default null */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObSelectStmt*, 8> temp_stmts;
@@ -10907,8 +10912,17 @@ int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(append(child_stmts, temp_stmts))) {
-      LOG_WARN("failed to append temp stmts", K(ret));
+    if (NULL == ignore_stmts) {
+      if (OB_FAIL(append(child_stmts, temp_stmts))) {
+        LOG_WARN("failed to append temp stmts", K(ret));
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret)&& i < temp_stmts.count(); ++i) {
+        if (!ObOptimizerUtil::find_item(*ignore_stmts, temp_stmts.at(i))
+            && OB_FAIL(child_stmts.push_back(temp_stmts.at(i)))) {
+          LOG_WARN("failed to push back stmt", K(ret));
+        }
+      }
     }
   }
   for (int64_t i = 0; OB_SUCC(ret)&& i < temp_stmts.count(); ++i) {
@@ -10924,9 +10938,11 @@ int ObTransformUtils::get_all_child_stmts(ObDMLStmt *stmt,
     if (OB_ISNULL(temp_stmts.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("temp stmt is null", K(ret));
+    } else if (NULL != ignore_stmts && ObOptimizerUtil::find_item(*ignore_stmts, temp_stmts.at(i))) {
+      /* do nothing */
     } else if (parent_map != NULL && OB_FAIL(parent_map->set_refactored(key, parent_stmt))) {
       LOG_WARN("failed to add parent child relation", K(ret));
-    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts.at(i), child_stmts, parent_map)))) {
+    } else if (OB_FAIL(SMART_CALL(get_all_child_stmts(temp_stmts.at(i), child_stmts, parent_map, ignore_stmts)))) {
       LOG_WARN("failed to get all child stmts", K(ret));
     }
   }
@@ -14331,6 +14347,161 @@ int ObTransformUtils::expand_temp_table(ObTransformerCtx *ctx, ObDMLStmt::TempTa
   return ret;
 }
 
+int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *mv_schema = NULL;
+  if (OB_ISNULL(ctx) || OB_ISNULL(upper_stmt) || OB_ISNULL(rt_mv_table)
+      || OB_ISNULL(ctx->allocator_)
+      || OB_UNLIKELY(!rt_mv_table->need_expand_rt_mv_)
+      || OB_UNLIKELY(!ctx->is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null", K(ret), K(ctx), KPC(rt_mv_table));
+  } else {
+    const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
+    const char *EXPAND_VIEW_PREFIX = "RT_";
+    ObString expand_view;
+    ObString expand_view_name;
+    int64_t pos = 0;
+    char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
+    int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
+    ObSelectStmt *view_stmt = NULL;
+    OPT_TRACE("expand real time materialized view: ", rt_mv_table->get_object_name());
+    OPT_TRACE_BEGIN_SECTION;
+    ObMVProvider mv_provider(ctx->session_info_->get_effective_tenant_id(), rt_mv_table->mview_id_, true);
+    if (OB_FAIL(mv_provider.init_mv_provider(ctx->sql_schema_guard_->get_schema_guard(),
+                                             ctx->session_info_))) {
+      LOG_WARN("fail to init mv provider", K(ret));
+    } else if (OB_FAIL(mv_provider.get_real_time_mv_expand_view(*ctx->allocator_, expand_view))) {
+      LOG_WARN("fail to get real time mv expand view", K(ret));
+    } else if (OB_FAIL(generate_view_stmt_from_query_string(expand_view, ctx, view_stmt))) {
+      LOG_WARN("fail to genearte real time mview stmt", K(ret), K(expand_view));
+    } else if (OB_FAIL(ctx->temp_table_ignore_stmts_.push_back(view_stmt))) {
+      LOG_WARN("failed to push back", K(ret));
+    } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
+      LOG_WARN("fail to set expand mview flag", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%s", EXPAND_VIEW_PREFIX))) {
+      LOG_WARN("append expand view prefix to buf error", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("%.*s", rt_mv_table->get_object_name().length(), rt_mv_table->get_object_name().ptr()))) {
+      LOG_WARN("append mv table name to buf error", K(ret));
+    } else if (OB_FALSE_IT(expand_view_name = common::ObString::make_string(buf))) {
+    } else if (OB_FAIL(ob_write_string(*ctx->allocator_,
+                                       expand_view_name,
+                                       rt_mv_table->table_name_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else {
+      rt_mv_table->type_ = TableItem::GENERATED_TABLE;
+      rt_mv_table->ref_id_ = OB_INVALID_ID;
+      rt_mv_table->mview_id_ = OB_INVALID_ID;
+      rt_mv_table->database_name_ = ObString::make_string("");
+      rt_mv_table->ref_query_ = view_stmt;
+      rt_mv_table->table_type_ = MAX_TABLE_TYPE;
+      rt_mv_table->need_expand_rt_mv_ = false;
+      const ObIArray<ColumnItem> &col_items = upper_stmt->get_column_items();
+      ObIArray<SelectItem> &sel_items = view_stmt->get_select_items();
+      int64_t pos = OB_INVALID_ID;
+      // keep the result type for expand real-time view select items
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_items.count(); ++i) {
+        if (OB_ISNULL(col_items.at(i).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (col_items.at(i).table_id_ != rt_mv_table->table_id_) {
+          /* do nothing */
+        } else if (FALSE_IT(pos = col_items.at(i).expr_->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+        } else if (OB_UNLIKELY(pos < 0 || pos >= sel_items.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid array pos", K(pos), K(sel_items.count()), K(ret));
+        } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx->expr_factory_,
+                                                                          col_items.at(i).expr_,
+                                                                          sel_items.at(pos).expr_,
+                                                                          ctx->session_info_))) {
+          LOG_WARN("try add cast expr above failed", K(ret));
+        } else {
+          col_items.at(i).expr_->set_is_rowkey_column(false);
+        }
+      }
+    }
+    OPT_TRACE_END_SECTION;
+  }
+  return ret;
+}
+
+// 1. 不进行参数化
+// 2. 不需要检查权限
+// 3. 添加 dependency table
+// 4. parser 特殊路径处理: batch multi stmt 禁止，values table
+int ObTransformUtils::generate_view_stmt_from_query_string(const ObString &query_str,
+                                                           ObTransformerCtx *ctx,
+                                                           ObSelectStmt *&view_stmt)
+{
+  int ret = OB_SUCCESS;
+  view_stmt = NULL;
+  ParseResult parse_result;
+  ParseNode *node = NULL;
+  ObParser parser(*ctx->allocator_, ctx->session_info_->get_sql_mode(), ctx->session_info_->get_charsets4parser());
+  ObResolverParams resolver_ctx;
+  resolver_ctx.is_for_rt_mv_ = true;
+  resolver_ctx.allocator_ = ctx->allocator_;
+  resolver_ctx.schema_checker_ = ctx->schema_checker_;
+  resolver_ctx.session_info_ = ctx->session_info_;
+  resolver_ctx.expr_factory_ = ctx->expr_factory_;
+  resolver_ctx.stmt_factory_ = ctx->stmt_factory_;
+  resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
+  resolver_ctx.query_ctx_ = ctx->stmt_factory_->get_query_ctx();
+  ObSelectResolver select_resolver(resolver_ctx);
+  ObTransformPreProcess trans(ctx);
+  trans.set_transformer_type(PRE_PROCESS);
+  uint64_t dummy_value = 0;
+  ObDMLStmt *dml_stmt = NULL;
+  ObQueryHint &query_hint = ctx->stmt_factory_->get_query_ctx()->get_query_hint_for_update();
+  const int64_t stmt_count = query_hint.stmt_id_map_.count();
+  if (OB_ISNULL(resolver_ctx.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(resolver_ctx.query_ctx_));
+  } else if (OB_FAIL(parser.parse(query_str, parse_result))) {
+    LOG_WARN("parse view definition failed", K(ret), K(query_str));
+  } else if (OB_ISNULL(node = parse_result.result_tree_->children_[0]) || OB_UNLIKELY(T_SELECT != node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid mv select node", K(ret), K(node), K(node->type_));
+  } else if (OB_FALSE_IT(resolver_ctx.query_ctx_->question_marks_count_ += static_cast<int64_t>(parse_result.question_mark_ctx_.count_))) {
+  } else if (OB_FAIL(select_resolver.resolve(*node))) {
+    LOG_WARN("resolve view definition failed", K(ret));
+  } else if (OB_ISNULL(dml_stmt = static_cast<ObDMLStmt*>(select_resolver.get_basic_stmt()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid mv stmt", K(ret), K(dml_stmt));
+  } else if (OB_FAIL(query_hint.generate_orig_stmt_qb_name(*ctx->allocator_, stmt_count))) {
+    LOG_WARN("failed to generate stmt name after resolve", K(ret));
+  } else if (OB_FAIL(query_hint.distribute_hint_to_orig_stmt(dml_stmt))) {
+    LOG_WARN("faild to distribute hint to orig stmt", K(ret));
+  } else if (OB_FAIL(trans.transform(dml_stmt, dummy_value))) {
+    LOG_WARN("failed to do transform pre processing", K(ret));
+  } else {
+    view_stmt = static_cast<ObSelectStmt*>(dml_stmt);
+    LOG_DEBUG("generate mv stmt", KPC(view_stmt));
+  }
+  return ret;
+}
+
+int ObTransformUtils::set_expand_mview_flag(ObSelectStmt *view_stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt*, 4> child_stmts;
+  if (OB_ISNULL(view_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view_stmt is null", K(ret));
+  } else if (OB_FAIL(view_stmt->get_child_stmts(child_stmts))) {
+    LOG_WARN("failed to get child stmts", K(ret));
+  } else {
+    view_stmt->set_expanded_mview(true);
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(set_expand_mview_flag(child_stmts.at(i))))) {
+        LOG_WARN("failed to set child expand mview flag", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
 ObSelectStmtPointer::ObSelectStmtPointer() : stmt_group_() {
 }
 
@@ -14858,6 +15029,33 @@ int ObTransformUtils::check_child_projection_validity(const ObSelectStmt *child_
       *      union all select c1,c2 from t1) v where b is true;
       */
       is_valid = false;
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::add_aggr_winfun_expr(ObSelectStmt *stmt,
+                                           ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(expr), K(stmt));
+  } else if (expr->is_aggr_expr()) {
+    ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr*>(expr);
+    if (OB_FAIL(stmt->add_agg_item(*agg_expr))) {
+      LOG_WARN("failed to add agg item", K(ret), KPC(agg_expr));
+    }
+  } else if (expr->is_win_func_expr()) {
+    ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(expr);
+    if (OB_FAIL(stmt->get_window_func_exprs().push_back(win_expr))) {
+      LOG_WARN("failed to add win func expr", K(ret), KPC(win_expr));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(add_aggr_winfun_expr(stmt, expr->get_param_expr(i))))) {
+        LOG_WARN("failed to add aggr winfun expr", K(ret), KPC(expr->get_param_expr(i)));
+      }
     }
   }
   return ret;

@@ -759,6 +759,7 @@ ob_set_subtarget(ob_storage direct_load
   direct_load/ob_direct_load_sstable_scan_merge.cpp
   direct_load/ob_direct_load_sstable_scan_merge_loser_tree.cpp
   direct_load/ob_direct_load_sstable_scanner.cpp
+  direct_load/ob_direct_load_struct.cpp
   direct_load/ob_direct_load_table_data_desc.cpp
   direct_load/ob_direct_load_table_store.cpp
   direct_load/ob_direct_load_tmp_file.cpp

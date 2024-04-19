@@ -34,7 +34,7 @@ int ObDirectLoadControlPreBeginExecutor::deserialize()
 int ObDirectLoadControlPreBeginExecutor::check_args()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.task_id_)) {
+  if (OB_UNLIKELY(OB_INVALID_ID == arg_.table_id_ || 0 == arg_.ddl_param_.task_id_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg_));
   }
@@ -65,15 +65,9 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.avail_memory_ = arg_.avail_memory_;
     param.write_session_count_ = arg_.write_session_count_;
     param.exe_mode_ = arg_.exe_mode_;
-    ObTableLoadDDLParam ddl_param;
-    uint64_t data_version = 0;
-    ddl_param.dest_table_id_ = arg_.dest_table_id_;
-    ddl_param.task_id_ = arg_.task_id_;
-    ddl_param.schema_version_ = arg_.schema_version_;
-    ddl_param.snapshot_version_ = arg_.snapshot_version_;
-    ddl_param.data_version_ = arg_.data_version_;
-    ddl_param.cluster_version_ = arg_.cluster_version_;
-    if (OB_FAIL(create_table_ctx(param, ddl_param, table_ctx))) {
+    param.method_ = arg_.method_;
+    param.insert_mode_ = arg_.insert_mode_;
+    if (OB_FAIL(create_table_ctx(param, arg_.ddl_param_, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
     if (OB_SUCC(ret)) {

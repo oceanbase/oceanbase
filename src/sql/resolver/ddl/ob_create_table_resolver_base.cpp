@@ -400,5 +400,52 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
   return ret;
 }
 
+int ObCreateTableResolverBase::add_primary_key_part(const ObString &column_name,
+                                                    ObTableSchema &table_schema,
+                                                    const int64_t cur_rowkey_size,
+                                                    int64_t &pk_data_length,
+                                                    ObColumnSchemaV2 *&col)
+{
+  int ret = OB_SUCCESS;
+  col = NULL;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  int64_t length = 0;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_NOT_INIT;
+    SQL_RESV_LOG(WARN, "session is null", KP(session_info_), K(ret));
+  } else if (static_cast<int64_t>(table_id_) > 0
+             && OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_table_id(
+             session_info_->get_effective_tenant_id(), table_id_, is_oracle_mode))) {
+    LOG_WARN("fail to check oracle mode", KR(ret), K_(table_id));
+  } else if (OB_ISNULL(col = table_schema.get_column_schema(column_name))) {
+    ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+    LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
+    SQL_RESV_LOG(WARN, "column '%s' does not exists", K(ret), K(to_cstring(column_name)));
+  } else if (OB_FAIL(check_add_column_as_pk_allowed(*col))) {
+    LOG_WARN("the column can not be primary key", K(ret));
+  } else if (col->get_rowkey_position() > 0) {
+    ret = OB_ERR_COLUMN_DUPLICATE;
+    LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, column_name.length(), column_name.ptr());
+  } else if (OB_USER_MAX_ROWKEY_COLUMN_NUMBER == cur_rowkey_size) {
+    ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+    LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+  } else if (OB_FALSE_IT(col->set_nullable(false))
+             || OB_FALSE_IT(col->set_rowkey_position(cur_rowkey_size + 1))) {
+  } else if (OB_FAIL(table_schema.set_rowkey_info(*col))) {
+    LOG_WARN("failed to set rowkey info", K(ret));
+  } else if (!col->is_string_type()) {
+    /* do nothing */
+  } else if (OB_FAIL(col->get_byte_length(length, is_oracle_mode, false))) {
+    SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
+  } else if ((pk_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
+    ret = OB_ERR_TOO_LONG_KEY_LENGTH;
+    LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
+  } else if (length <= 0) {
+    ret = OB_ERR_WRONG_KEY_COLUMN;
+    LOG_USER_ERROR(OB_ERR_WRONG_KEY_COLUMN, column_name.length(), column_name.ptr());
+  }
+  return ret;
+}
+
 }//end namespace sql
 }//end namespace oceanbase

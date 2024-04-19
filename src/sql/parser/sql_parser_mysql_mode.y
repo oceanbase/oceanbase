@@ -176,6 +176,7 @@ PROJECT_PRUNE NO_PROJECT_PRUNE SIMPLIFY_SET NO_SIMPLIFY_SET OUTER_TO_INNER NO_OU
 COALESCE_SQ NO_COALESCE_SQ COUNT_TO_EXISTS NO_COUNT_TO_EXISTS LEFT_TO_ANTI NO_LEFT_TO_ANTI
 ELIMINATE_JOIN NO_ELIMINATE_JOIN PUSH_LIMIT NO_PUSH_LIMIT PULLUP_EXPR NO_PULLUP_EXPR
 WIN_MAGIC NO_WIN_MAGIC AGGR_FIRST_UNNEST NO_AGGR_FIRST_UNNEST JOIN_FIRST_UNNEST NO_JOIN_FIRST_UNNEST
+MV_REWRITE NO_MV_REWRITE
 DECORRELATE NO_DECORRELATE
 // optimize hint
 INDEX_HINT FULL_HINT NO_INDEX_HINT USE_DAS_HINT NO_USE_DAS_HINT
@@ -272,7 +273,7 @@ END_P SET_VAR DELIMITER
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
-        COMPRESSED COMPRESSION COMPUTE CONCURRENT CONDENSED CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
+        COMPRESSED COMPRESSION COMPUTATION COMPUTE CONCURRENT CONDENSED CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
@@ -302,7 +303,8 @@ END_P SET_VAR DELIMITER
 
         KEY_BLOCK_SIZE KEY_VERSION KVCACHE KV_ATTRIBUTES
 
-        LAG LANGUAGE LAST LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
+        LAG LANGUAGE LAST LAST_REFRESH_SCN LAST_VALUE LATERAL LEAD LEADER LEAVES LESS LEAK LEAK_MOD LEAK_RATE LIB LINESTRING LIST_
+
         LISTAGG LOB_INROW_THRESHOLD LOCAL LOCALITY LOCATION LOCKED LOCKS LOGFILE LOGONLY_REPLICA_NUM LOGS LOCK_ LOGICAL_READS
 
         LEVEL LN LOG LS LINK LOG_RESTORE_SOURCE LINE_DELIMITER
@@ -336,7 +338,7 @@ END_P SET_VAR DELIMITER
         REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
-        RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE ROLLBACK ROLLUP ROOT
+        RESTORE RESUME RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
         ROOTTABLE ROOTSERVICE ROOTSERVICE_LIST ROUTINE ROW ROLLING ROWID ROW_COUNT ROW_FORMAT ROWS RTREE RUN
         RECYCLEBIN ROTATE ROW_NUMBER RUDUNDANT RECURSIVE RANDOM REDO_TRANSPORT_OPTIONS REMOTE_OSS RT
         RANK READ_ONLY RECOVERY REJECT ROLE
@@ -418,7 +420,7 @@ END_P SET_VAR DELIMITER
 %type <node> sort_list sort_key opt_asc_desc sort_list_for_group_by sort_key_for_group_by opt_asc_desc_for_group_by opt_column_id
 %type <node> opt_query_expression_option_list query_expression_option_list query_expression_option opt_distinct opt_distinct_or_all opt_separator projection
 %type <node> from_list table_references table_reference table_factor normal_relation_factor dot_relation_factor relation_factor
-%type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list
+%type <node> relation_factor_in_hint relation_factor_in_hint_list relation_factor_in_pq_hint opt_relation_factor_in_hint_list relation_factor_in_use_join_hint_list relation_factor_in_mv_hint_list opt_relation_factor_in_mv_hint_list
 %type <node> relation_factor_in_leading_hint_list joined_table tbl_name table_subquery table_subquery_alias
 %type <node> relation_factor_with_star relation_with_star_list opt_with_star
 %type <node> index_hint_type key_or_index index_hint_scope index_element index_list opt_index_list
@@ -474,9 +476,9 @@ END_P SET_VAR DELIMITER
 %type <node> drop_index_stmt hint_options opt_expr_as_list expr_as_list expr_with_opt_alias substr_params opt_comma substr_or_substring
 %type <node> /*frozen_type*/ opt_binary
 %type <node> ip_port
-%type <node> create_view_stmt view_name opt_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
-%type <node> create_mview_stmt create_mview_refresh mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause
-%type <ival> mv_refresh_method
+%type <node> create_view_stmt view_name opt_column_list opt_mv_column_list mv_column_list opt_table_id opt_tablet_id view_select_stmt opt_check_option opt_tablet_id_no_empty
+%type <node> create_mview_stmt create_mview_opts mview_refresh_opt mv_refresh_on_clause mv_refresh_mode mv_refresh_interval mv_start_clause mv_next_clause
+%type <ival> mv_refresh_method mview_enable_disable
 %type <node> name_list
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
@@ -3074,6 +3076,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_ASMVT, 5, $3, $5, $7, $9, $11);
   $$->reserved_ = 0;
+}
+| LAST_REFRESH_SCN '(' INTNUM ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_LAST_REFRESH_SCN, 1, $3);
 }
 | SUM_OPNSIZE '(' expr ')'
 {
@@ -8100,7 +8106,8 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
  *
  *****************************************************************************/
 create_mview_stmt:
-create_with_opt_hint MATERIALIZED VIEW view_name opt_column_list opt_table_option_list opt_partition_option create_mview_refresh AS view_select_stmt opt_check_option
+create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option create_mview_opts
+AS view_select_stmt opt_check_option
 {
   ParseNode *table_options = NULL;
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
@@ -8114,7 +8121,7 @@ create_with_opt_hint MATERIALIZED VIEW view_name opt_column_list opt_table_optio
                            NULL,
 						               $11,   /* with option */
                            NULL,   /* force view opt */
-                           $8,
+                           $8,  /* mview options */
                            $7, /* partition option */
                            table_options, /* table options */
                            $1 /* hint */
@@ -8124,7 +8131,46 @@ create_with_opt_hint MATERIALIZED VIEW view_name opt_column_list opt_table_optio
 }
 ;
 
-create_mview_refresh:
+create_mview_opts:
+mview_refresh_opt
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $1);
+  $$->value_ = 0;
+}
+| mview_refresh_opt mview_enable_disable ON QUERY COMPUTATION
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $1);
+  $$->value_ = $2[0];
+}
+| mview_refresh_opt mview_enable_disable QUERY REWRITE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $1);
+  $$->value_ = $2[0] << 1;
+}
+| mview_refresh_opt mview_enable_disable ON QUERY COMPUTATION mview_enable_disable QUERY REWRITE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $1);
+  $$->value_ = $2[0] | ($6[0] << 1);
+}
+| mview_refresh_opt mview_enable_disable QUERY REWRITE mview_enable_disable ON QUERY COMPUTATION
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $1);
+  $$->value_ = $5[0] | ($2[0] << 1);
+}
+;
+
+mview_enable_disable:
+DISABLE
+{
+  $$[0] = 0;
+}
+| ENABLE
+{
+  $$[0] = 1;
+}
+;
+
+mview_refresh_opt:
 REFRESH mv_refresh_method mv_refresh_on_clause mv_refresh_interval
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_INFO, 2,
@@ -8293,6 +8339,35 @@ OR REPLACE
 view_name:
 relation_factor
 { $$ = $1; }
+;
+
+opt_mv_column_list:
+'(' mv_column_list ')'
+{
+  merge_nodes($$, result, T_COLUMN_LIST, $2);
+}
+| /*EMPTY*/ { $$ = NULL; }
+;
+
+mv_column_list:
+column_name_list
+{
+  $$ = $1;
+}
+| column_name_list ',' PRIMARY KEY opt_index_using_algorithm '(' column_name_list ')' opt_index_using_algorithm opt_comment
+{
+  ParseNode *col_list= NULL;
+  ParseNode *pk_node = NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $7);
+  malloc_non_terminal_node(pk_node, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $9 ? $9 : $5, $10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, pk_node);
+}
+| PRIMARY KEY opt_index_using_algorithm '(' column_name_list ')' opt_index_using_algorithm opt_comment
+{
+  ParseNode *col_list= NULL;
+  merge_nodes(col_list, result, T_COLUMN_LIST, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PRIMARY_KEY, 3, col_list, NULL != $7 ? $7 : $3, $8);
+}
 ;
 
 opt_column_list:
@@ -10214,6 +10289,18 @@ transform_hint:
 NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_REWRITE, 1, $2);
+}
+| MV_REWRITE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REWRITE, 2, NULL, NULL);
+}
+| MV_REWRITE '(' qb_name_option opt_relation_factor_in_mv_hint_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REWRITE, 2, $3, $4);
+}
+| NO_MV_REWRITE opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_NO_REWRITE, 1, $2);
 }
 | MERGE_HINT opt_qb_name
 {
@@ -12353,6 +12440,30 @@ relation_sep_option:
 {}
 | /* empty */
 {}
+;
+
+relation_factor_in_mv_hint_list:
+normal_relation_factor
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR_IN_HINT, 2, $1, NULL);
+}
+| relation_factor_in_mv_hint_list relation_sep_option normal_relation_factor
+{
+  ParseNode *mock_rel_in_hint_node = NULL;
+  malloc_non_terminal_node(mock_rel_in_hint_node, result->malloc_pool_, T_RELATION_FACTOR_IN_HINT, 2, $3, NULL);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, mock_rel_in_hint_node);
+}
+;
+
+opt_relation_factor_in_mv_hint_list:
+/* EMPTY */
+{
+  $$ = NULL;
+}
+| relation_factor_in_mv_hint_list
+{
+  merge_nodes($$, result, T_RELATION_FACTOR_IN_HINT_LIST, $1);
+}
 ;
 
 opt_relation_factor_in_hint_list:
@@ -20520,6 +20631,7 @@ ACCOUNT
 |       COMPLETION
 |       COMPRESSED
 |       COMPRESSION
+|       COMPUTATION
 |       COMPUTE
 |       CONCURRENT
 |       CONDENSED
@@ -20701,6 +20813,7 @@ ACCOUNT
 |       LATERAL %prec LOWER_PARENS
 |       LANGUAGE
 |       LAST
+|       LAST_REFRESH_SCN
 |       LAST_VALUE
 |       LEAD
 |       LEADER
@@ -20935,6 +21048,7 @@ ACCOUNT
 |       RETURNING
 |       RETURNS
 |       REVERSE
+|       REWRITE
 |       ROLE
 |       ROLLBACK
 |       ROLLING

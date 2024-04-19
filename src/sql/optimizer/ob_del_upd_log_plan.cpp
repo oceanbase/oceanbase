@@ -23,6 +23,7 @@
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/dblink/ob_dblink_utils.h"
 #include "sql/engine/cmd/ob_table_direct_insert_service.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -69,7 +70,7 @@ int ObDelUpdLogPlan::compute_dml_parallel()
       LOG_WARN("get unexpected parallel", K(ret), K(dml_parallel), K(opt_ctx.get_parallel_rule()));
     } else {
       max_dml_parallel_ = dml_parallel;
-      use_pdml_ = (opt_ctx.is_online_ddl() ||
+      use_pdml_ = (opt_ctx.is_online_ddl() || session_info->get_ddl_info().is_mview_complete_refresh() ||
                   (ObGlobalHint::DEFAULT_PARALLEL < dml_parallel &&
                   is_strict_mode(session_info->get_sql_mode())));
     }

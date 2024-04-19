@@ -638,6 +638,7 @@ struct DistinctObjMeta
   int flatten_conditions(ObDMLStmt *stmt, bool &trans_happened);
   int recursive_flatten_join_conditions(ObDMLStmt *stmt, TableItem *table, bool &trans_happened);
   int do_flatten_conditions(ObDMLStmt *stmt, ObIArray<ObRawExpr*> &conditions, bool &trans_happened);
+  int expand_materialized_view(ObDMLStmt *stmt, bool &trans_happened);
   int preserve_order_for_pagination(ObDMLStmt *stmt,
                                     bool &trans_happened);
   int check_stmt_need_preserve_order(ObDMLStmt *stmt,

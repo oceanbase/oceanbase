@@ -55,15 +55,12 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       LOG_WARN("fail to new ObTableLoadInstance", KR(ret));
     } else {
       load_exec_ctx_->exec_ctx_ = exec_ctx;
-      uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
       omt::ObTenant *tenant = nullptr;
       if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
         LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
       } else if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
-      } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_SQL_MODE, sql_mode))) {
-        LOG_WARN("fail to get sys variable", KR(ret));
       } else {
         ObTableLoadParam param;
         param.column_count_ = store_column_idxs.count();
@@ -77,8 +74,11 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;
-        param.sql_mode_ = sql_mode;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
+        param.method_ = ObDirectLoadMethod::FULL;
+        param.insert_mode_ = (exec_ctx->get_my_session()->get_ddl_info().is_mview_complete_refresh()
+                                ? ObDirectLoadInsertMode::OVERWRITE
+                                : ObDirectLoadInsertMode::NORMAL);
         if (OB_FAIL(table_load_instance_->init(param, store_column_idxs, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {

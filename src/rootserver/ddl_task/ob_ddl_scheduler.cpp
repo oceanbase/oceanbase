@@ -1025,6 +1025,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
       case DDL_DIRECT_LOAD_INSERT:
       case DDL_ALTER_COLUMN_GROUP:
       case DDL_MVIEW_COMPLETE_REFRESH:
+      case DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
         if (OB_FAIL(create_table_redefinition_task(proxy,
                                                    param.type_,
                                                    param.src_table_schema_,
@@ -2076,6 +2077,7 @@ int ObDDLScheduler::schedule_ddl_task(const ObDDLTaskRecord &record)
       case DDL_DIRECT_LOAD_INSERT:
       case DDL_ALTER_COLUMN_GROUP:
       case DDL_MVIEW_COMPLETE_REFRESH:
+      case DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
         ret = schedule_table_redefinition_task(record);
         break;
       case DDL_CREATE_MVIEW:
@@ -2648,6 +2650,7 @@ int ObDDLScheduler::on_sstable_complement_job_reply(
           case ObDDLType::DDL_TABLE_REDEFINITION:
           case ObDDLType::DDL_ALTER_COLUMN_GROUP:
           case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
+          case ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->update_complete_sstable_job_status(tablet_id, snapshot_version, execution_id, ret_code, addition_info))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }
@@ -2781,6 +2784,7 @@ int ObDDLScheduler::notify_update_autoinc_end(const ObDDLTaskKey &task_key,
           case ObDDLType::DDL_DIRECT_LOAD_INSERT:
           case ObDDLType::DDL_ALTER_COLUMN_GROUP:
           case ObDDLType::DDL_MVIEW_COMPLETE_REFRESH:
+          case ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION:
             if (OB_FAIL(static_cast<ObTableRedefinitionTask *>(&task)->notify_update_autoinc_finish(autoinc_val, ret_code))) {
               LOG_WARN("update complete sstable job status", K(ret));
             }

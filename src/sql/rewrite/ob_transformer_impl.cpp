@@ -47,6 +47,7 @@
 #include "sql/rewrite/ob_transform_count_to_exists.h"
 #include "sql/rewrite/ob_transform_expr_pullup.h"
 #include "sql/rewrite/ob_transform_dblink.h"
+#include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_decorrelate.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
@@ -295,6 +296,7 @@ int ObTransformerImpl::transform_rule_set(ObDMLStmt *&stmt,
     int64_t i = 0;
     for (i = 0; OB_SUCC(ret) && need_next_iteration && i < iteration_count; ++i) {
       bool trans_happened_in_iteration = false;
+      ctx_->iteration_level_ = i;
       LOG_TRACE("start to transform one iteration", K(i));
       OPT_TRACE("-- begin ", i, " iteration");
       if (OB_FAIL(transform_rule_set_in_one_iteration(stmt,
@@ -336,6 +338,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
      * The ordering to apply the following rules is important,
      * think carefully when new rules are added
      */
+    APPLY_RULE_IF_NEEDED(MV_REWRITE, ObTransformMVRewrite);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_EXPR, ObTransformSimplifyExpr);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_DISTINCT, ObTransformSimplifyDistinct);
     APPLY_RULE_IF_NEEDED(SIMPLIFY_GROUPBY, ObTransformSimplifyGroupby);
@@ -502,7 +505,7 @@ int ObTransformerImpl::check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &fun
   return ret;
 }
 
-int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
+int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt)) {
@@ -527,7 +530,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
   }
   for (int64_t i = 0; OB_SUCC(ret) && !func.contain_link_table_ &&
                       i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
+    const TableItem *table = stmt->get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -537,7 +540,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
   }
   for (int64_t i = 0; OB_SUCC(ret) && !func.contain_json_table_ &&
                       i < stmt->get_table_items().count(); ++i) {
-    TableItem *table = stmt->get_table_item(i);
+    const TableItem *table = stmt->get_table_item(i);
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null table item", K(ret));
@@ -554,7 +557,7 @@ int ObTransformerImpl::check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func)
                        stmt->is_update_stmt() ||
                        stmt->is_merge_stmt() ||
                        stmt->is_insert_stmt())) {
-    ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt *>(stmt);
+    const ObDelUpdStmt *del_upd_stmt = static_cast<const ObDelUpdStmt *>(stmt);
     func.update_global_index_ = func.update_global_index_ || del_upd_stmt->has_global_index();
   }
   if (OB_SUCC(ret) && !func.all_found()) {

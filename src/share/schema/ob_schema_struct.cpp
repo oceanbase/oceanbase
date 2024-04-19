@@ -6473,8 +6473,8 @@ int ObPartitionUtils::check_param_valid_(
               index_exist = true;
             }
           } // end for simple_index_infos
-          if (OB_SUCC(ret) && !finded && table_schema.has_mlog_table()) {
-            finded = (related_tid == table_schema.get_mlog_tid());
+          if (OB_SUCC(ret) && !finded && data_schema->has_mlog_table()) {
+            finded = (related_tid == data_schema->get_mlog_tid());
           }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
             ret = OB_TABLE_NOT_EXIST;

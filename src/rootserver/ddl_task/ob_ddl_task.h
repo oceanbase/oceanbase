@@ -75,7 +75,8 @@ public:
   bool is_valid() const;
   void reset();
   TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
-      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code), K_(execution_id));
+      K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code), K_(execution_id),
+      K_(ddl_need_retry_at_executor));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
@@ -96,6 +97,7 @@ public:
   int64_t ret_code_;
   int64_t execution_id_;
   ObString ddl_stmt_str_;
+  bool ddl_need_retry_at_executor_;
 };
 
 struct ObDDLTaskInfo final
@@ -557,7 +559,12 @@ public:
   bool need_schedule() { return next_schedule_ts_ <= ObTimeUtility::current_time(); }
   bool is_replica_build_need_retry(const int ret_code);
   int64_t get_execution_id() const;
-  static int push_execution_id(const uint64_t tenant_id, const int64_t task_id, int64_t &new_execution_id);
+  static int push_execution_id(
+      const uint64_t tenant_id,
+      const int64_t task_id,
+      const bool ddl_can_retry,
+      const int64_t data_format_version,
+      int64_t &new_execution_id);
   void check_ddl_task_execute_too_long();
   static bool check_is_load_data(share::ObDDLType task_type);
   virtual bool support_longops_monitoring() const { return false; }
@@ -608,10 +615,11 @@ protected:
   int copy_longops_stat(share::ObLongopsValue &value);
   virtual bool is_error_need_retry(const int ret_code)
   {
-    return !share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
-             || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
+    return task_can_retry() && (!share::ObIDDLTask::in_ddl_retry_black_list(ret_code) && (share::ObIDDLTask::in_ddl_retry_white_list(ret_code)
+             || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_));
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
+  virtual bool task_can_retry() const { return true; }
 protected:
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
   common::TCRWLock lock_;

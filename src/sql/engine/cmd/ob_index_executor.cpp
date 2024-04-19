@@ -99,7 +99,7 @@ int ObCreateIndexExecutor::execute(ObExecContext &ctx, ObCreateIndexStmt &stmt)
         ret = OB_ERR_ADD_INDEX;
         LOG_WARN("index table id is invalid", KR(ret));
       }
-    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, my_session, common_rpc_proxy))) {
+    } else if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(create_index_arg.tenant_id_, res.task_id_, false/*do not need retry at executor*/, my_session, common_rpc_proxy))) {
       LOG_WARN("failed to wait ddl finish", K(ret));
     }
   }

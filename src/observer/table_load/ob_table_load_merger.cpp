@@ -284,6 +284,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.is_column_store_ = store_ctx_->ctx_->schema_.is_column_store_;
   merge_param.fill_cg_thread_cnt_ = param_.session_count_;
   merge_param.px_mode_ = param_.px_mode_;
+  merge_param.insert_mode_ = param_.insert_mode_;
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
   merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
   if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_ctx_->ls_partition_ids_,

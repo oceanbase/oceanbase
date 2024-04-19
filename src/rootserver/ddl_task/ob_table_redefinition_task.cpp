@@ -39,7 +39,8 @@ ObTableRedefinitionTask::ObTableRedefinitionTask()
     has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false),
     allocator_(lib::ObLabel("RedefTask")),
     is_copy_indexes_(true), is_copy_triggers_(true), is_copy_constraints_(true), is_copy_foreign_keys_(true),
-    is_ignore_errors_(false), is_do_finish_(false), target_cg_cnt_(0)
+    is_ignore_errors_(false), is_do_finish_(false), target_cg_cnt_(0), use_heap_table_ddl_plan_(false),
+    is_ddl_retryable_(true)
 {
 }
 
@@ -114,6 +115,8 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
       LOG_WARN("fail to get target cg cnt", K(ret), KPC(dst_table_schema));
     } else if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
+    } else if (OB_FAIL(check_ddl_can_retry(dst_table_schema))) {
+      LOG_WARN("check use heap table ddl plan failed", K(ret));
     } else {
       is_inited_ = true;
       ddl_tracing_.open();
@@ -259,7 +262,6 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
 {
   int ret = OB_SUCCESS;
   bool modify_autoinc = false;
-  bool use_heap_table_ddl_plan = false;
   ObRootService *root_service = GCTX.root_service_;
   int64_t new_execution_id = 0;
   if (OB_ISNULL(root_service)) {
@@ -269,9 +271,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(check_modify_autoinc(modify_autoinc))) {
     LOG_WARN("failed to check modify autoinc", K(ret));
-  } else if (OB_FAIL(check_use_heap_table_ddl_plan(use_heap_table_ddl_plan))) {
-    LOG_WARN("fail to check heap table ddl plan", K(ret));
-  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, new_execution_id))) {
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, is_ddl_retryable_, data_format_version_, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
@@ -300,12 +300,13 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
         sql_mode,
         trace_id_,
         parallelism_,
-        use_heap_table_ddl_plan,
+        use_heap_table_ddl_plan_,
         alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_,
         alter_table_arg_.mview_refresh_info_.mview_table_id_,
         GCTX.root_service_,
         alter_table_arg_.inner_sql_exec_addr_,
-        data_format_version_);
+        data_format_version_,
+        is_ddl_retryable_);
     if (OB_FAIL(root_service->get_ddl_service().get_tenant_schema_guard_with_version_in_inner_table(tenant_id_, schema_guard))) {
       LOG_WARN("get schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, orig_table_schema))) {
@@ -331,7 +332,7 @@ int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
     ret_code_ = complete_sstable_job_ret_code_;
     is_end = true;
     LOG_WARN("complete sstable job failed", K(ret_code_), K(object_id_), K(target_object_id_));
-    if (is_replica_build_need_retry(ret_code_)) {
+    if (is_replica_build_need_retry(ret_code_) && is_ddl_retryable_) {
       build_replica_request_time_ = 0;
       complete_sstable_job_ret_code_ = INT64_MAX;
       ret_code_ = OB_SUCCESS;
@@ -345,30 +346,42 @@ int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
   return ret;
 }
 
-int ObTableRedefinitionTask::check_use_heap_table_ddl_plan(bool &use_heap_table_ddl_plan)
+int ObTableRedefinitionTask::check_ddl_can_retry(const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
-  use_heap_table_ddl_plan = false;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *target_table_schema = nullptr;
-  ObRootService *root_service = GCTX.root_service_;
-  if (OB_ISNULL(root_service)) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("error sys, root service must not be nullptr", K(ret));
+  is_ddl_retryable_ = true;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(table_schema));
+  } else if (OB_FAIL(check_use_heap_table_ddl_plan(table_schema))) {
+    LOG_WARN("check use heap table ddl plan failed", K(ret));
+  } else if (DDL_MVIEW_COMPLETE_REFRESH == task_type_) {
+    is_ddl_retryable_ = false;
+  } else {
+    if (ObDDLUtil::use_idempotent_mode(data_format_version_)) {
+      if (use_heap_table_ddl_plan_) {
+        is_ddl_retryable_ = false;
+      } else if (DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION == task_type_) {
+        is_ddl_retryable_ = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableRedefinitionTask::check_use_heap_table_ddl_plan(const ObTableSchema *target_table_schema)
+{
+  int ret = OB_SUCCESS;
+  use_heap_table_ddl_plan_ = false;
+  if (OB_ISNULL(target_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(target_table_schema));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, TABLE_REDEF_TASK_CHECK_USE_HEAP_PLAN_FAILED))) {
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(root_service->get_ddl_service()
-                      .get_tenant_schema_guard_with_version_in_inner_table(dst_tenant_id_, schema_guard))) {
-    LOG_WARN("get schema guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_table_schema(dst_tenant_id_, target_object_id_, target_table_schema))) {
-    LOG_WARN("fail to get table schema", K(ret), K(target_object_id_));
-  } else if (OB_ISNULL(target_table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, table schema must not be nullptr", K(ret), K(target_object_id_));
   } else if (target_table_schema->is_heap_table() &&
              (DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_ ||
               DDL_MVIEW_COMPLETE_REFRESH == task_type_)) {
-    use_heap_table_ddl_plan = true;
+    use_heap_table_ddl_plan_ = true;
   }
   return ret;
 }
@@ -838,7 +851,6 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
   ObRootService *root_service = GCTX.root_service_;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  bool use_heap_table_ddl_plan = false;
   ObDDLTaskStatus new_status = next_task_status;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -857,9 +869,7 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
   } else if (!table_schema->is_user_hidden_table()) {
     LOG_INFO("target schema took effect", K(target_object_id_));
-  } else if (OB_FAIL(check_use_heap_table_ddl_plan(use_heap_table_ddl_plan))) {
-    LOG_WARN("fail to check heap table ddl plan", K(ret));
-  } else if (table_schema->is_heap_table() && !use_heap_table_ddl_plan && OB_FAIL(sync_tablet_autoinc_seq())) {
+  } else if (table_schema->is_heap_table() && !use_heap_table_ddl_plan_ && OB_FAIL(sync_tablet_autoinc_seq())) {
     if (OB_TIMEOUT == ret || OB_NOT_MASTER == ret) {
       ret = OB_SUCCESS;
       new_status = ObDDLTaskStatus::TAKE_EFFECT;
@@ -1064,7 +1074,9 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
          + serialization::encoded_length_i8(copy_constraints) + serialization::encoded_length_i8(copy_foreign_keys)
          + serialization::encoded_length_i8(ignore_errors) + serialization::encoded_length_i8(do_finish)
          + serialization::encoded_length_i64(target_cg_cnt_)
-         + serialization::encoded_length_i64(complete_sstable_job_ret_code_);
+         + serialization::encoded_length_i64(complete_sstable_job_ret_code_)
+         + serialization::encoded_length_i8(use_heap_table_ddl_plan_)
+         + serialization::encoded_length_i8(is_ddl_retryable_);
 }
 
 int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1099,6 +1111,10 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
     LOG_WARN("fail to serialize target_cg_cnt", K(ret));
   } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, complete_sstable_job_ret_code_))) {
     LOG_WARN("fail to serialize complete sstable job ret code", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, use_heap_table_ddl_plan_))) {
+    LOG_WARN("fail to serialize use heap table ddl plan", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, is_ddl_retryable_))) {
+    LOG_WARN("fail to serialize ddl can retry", K(ret));
   }
   FLOG_INFO("serialize message for table redefinition", K(ret),
       K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
@@ -1152,7 +1168,23 @@ int ObTableRedefinitionTask::deserlize_params_from_message(const uint64_t tenant
     }
     if (OB_SUCC(ret) && pos < data_len) {
       if (OB_FAIL(serialization::decode_i64(buf, data_len, pos, &complete_sstable_job_ret_code_))) {
-        LOG_WARN("fail to deserialize is_do_finish_", K(ret));
+        LOG_WARN("fail to deserialize complete sstable job ret code", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      int8_t use_heap_table_ddl_plan = false;
+      if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &use_heap_table_ddl_plan))) {
+        LOG_WARN("fail to deserialize use heap table ddl plan", K(ret));
+      } else {
+        use_heap_table_ddl_plan_ = use_heap_table_ddl_plan;
+      }
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      int8_t ddl_can_retry = false;
+      if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &ddl_can_retry))) {
+        LOG_WARN("fail to deserialize ddl can retry", K(ret));
+      } else {
+        is_ddl_retryable_ = ddl_can_retry;
       }
     }
   }

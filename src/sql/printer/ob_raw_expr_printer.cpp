@@ -3304,6 +3304,10 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         PRINT_EXPR(expr->get_param_expr(2));
         break;
       }
+      case T_FUN_SYS_LAST_REFRESH_SCN: {
+        DATA_PRINTF("%.*s(%ld)", LEN_AND_PTR(func_name), expr->get_mview_id());
+        break;
+      }
       // for bugfix: 52438113/52226266
       case T_FUN_SYS_PRIV_SQL_UDT_CONSTRUCT: {
         OZ(print_sql_udt_construct(expr));

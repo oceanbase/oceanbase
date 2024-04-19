@@ -1195,6 +1195,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         }
         break;
       }
+      case T_FUN_SYS_LAST_REFRESH_SCN: {
+        if (OB_FAIL(process_last_refresh_scn_node(node, expr))) {
+          LOG_WARN("failed to process last refresh scn node", K(ret));
+        }
+        break;
+      }
       case T_DBLINK_UDF: {
         if (OB_FAIL(process_dblink_udf_node(node, expr))) {
           LOG_WARN("failed to process dblink udf node", K(ret), K(node));
@@ -8353,6 +8359,69 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
   return ret;
 }
 
+int ObRawExprResolverImpl::process_last_refresh_scn_node(const ParseNode *expr_node,
+                                                         ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  expr = NULL;
+  const ParseNode *child_node = NULL;
+  ObSysFunRawExpr *func_expr = NULL;
+  uint64_t mview_id = OB_INVALID_ID;
+  if (OB_ISNULL(expr_node) || OB_UNLIKELY(1 != expr_node->num_child_)
+      || OB_ISNULL(child_node = expr_node->children_[0])) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(expr_node), K(child_node));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_LAST_REFRESH_SCN, func_expr))) {
+    LOG_WARN("fail to create raw expr", K(ret));
+  } else if (OB_ISNULL(func_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("func_expr is null");
+  } else if (T_INT == child_node->type_) {
+    mview_id = static_cast<uint64_t>(child_node->value_);
+  } else if (OB_UNLIKELY(T_QUESTIONMARK != child_node->type_)
+             || OB_ISNULL(ctx_.query_ctx_) || OB_ISNULL(ctx_.param_list_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected params", K(ret), K(get_type_name(child_node->type_)), K(ctx_.query_ctx_), K(ctx_.param_list_));
+  } else {  // question mark need add const constaint.
+    ObPCConstParamInfo const_param_info;
+    const int64_t idx = child_node->value_;
+    const ObObj &val = ctx_.param_list_->at(idx);
+    number::ObNumber number;
+    if (val.is_integer_type()) {
+      mview_id = static_cast<uint64_t>(val.get_int());
+    } else if (val.is_decimal_int()) {
+      bool is_valid = false;
+      if (OB_FAIL(wide::check_range_valid_uint64(val.get_decimal_int(), val.get_int_bytes(),
+                                                 is_valid, mview_id))) {
+        LOG_WARN("check_range_valid_uint64 failed", K(ret), K(val.get_int_bytes()));
+      } else if (OB_UNLIKELY(!is_valid)) {
+        ret = OB_OBJ_TYPE_ERROR;
+        LOG_WARN("failed to get uint64", K(ret), K(val));
+      }
+    } else if (OB_FAIL(val.get_number(number))) {
+      LOG_WARN("failed to get number", K(ret), K(val.get_meta()), K(val));
+    } else if (OB_UNLIKELY(!number.is_valid_uint64(mview_id))) {
+      ret = OB_OBJ_TYPE_ERROR;
+      LOG_WARN("failed to get uint64", K(ret), K(number));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(const_param_info.const_idx_.push_back(idx))
+               || OB_FAIL(const_param_info.const_params_.push_back(val))) {
+      LOG_WARN("failed to push back param idx and value", K(ret));
+    } else if (OB_FAIL(ctx_.query_ctx_->all_plan_const_param_constraints_.push_back(const_param_info))) {
+      LOG_WARN("failed to push back const param info", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    func_expr->set_mview_id(mview_id);
+    func_expr->set_func_name(ObString::make_string(N_SYS_LAST_REFRESH_SCN));
+    expr = func_expr;
+    LOG_DEBUG("finish resolve last_refresh_scn expr", K(get_type_name(child_node->type_)), K(func_expr->get_mview_id()));
+  }
+  return ret;
+}
 
 } //namespace sql
 } //namespace oceanbase

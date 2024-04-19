@@ -143,7 +143,7 @@ public:
     bool contain_link_table_;
     bool contain_json_table_;
   };
-  int check_stmt_functions(ObDMLStmt *stmt, StmtFunc &func);
+  static int check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &func);
   int check_temp_table_functions(ObDMLStmt *stmt, StmtFunc &func);
   inline ObTransformerCtx *get_trans_ctx() { return ctx_; }
 private:
@@ -190,21 +190,22 @@ int ObTransformerImpl::transform_one_rule(ObDMLStmt *&stmt,
     LOG_WARN("unexpect null param", K(ret));
   } else if (is_type_needed(needed_types & needed_transform_types_,
                             type)) {
-    T trans(ctx_);
-    trans.set_transformer_type(type);
-    OPT_TRACE_TITLE("start transform rule", rule_name);
-    if (OB_FAIL(THIS_WORKER.check_status())) {
-      LOG_WARN("check status fail", K(ret));
-    } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {
-      LOG_WARN("failed to transform a rewrite rule", "class", rule_name, K(ret), K(ctx_->outline_trans_hints_));
-    } else if (OB_FAIL(collect_trans_stat(trans))) {
-      LOG_WARN("failed to collect transform stat", K(ret));
-    } else {
-      trans_happened |= trans.get_trans_happened();
-      OPT_TRACE_TIME_USED;
-      OPT_TRACE_MEM_USED;
-      LOG_TRACE("succeed to transform a rewrite rule", "class",
-                rule_name, K(trans.get_trans_happened()), K(ret));
+    SMART_VAR(T, trans, ctx_) {
+      trans.set_transformer_type(type);
+      OPT_TRACE_TITLE("start transform rule", rule_name);
+      if (OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status fail", K(ret));
+      } else if (OB_FAIL(trans.transform(stmt, needed_transform_types_))) {
+        LOG_WARN("failed to transform a rewrite rule", "class", rule_name, K(ret), K(ctx_->outline_trans_hints_));
+      } else if (OB_FAIL(collect_trans_stat(trans))) {
+        LOG_WARN("failed to collect transform stat", K(ret));
+      } else {
+        trans_happened |= trans.get_trans_happened();
+        OPT_TRACE_TIME_USED;
+        OPT_TRACE_MEM_USED;
+        LOG_TRACE("succeed to transform a rewrite rule", "class",
+                  rule_name, K(trans.get_trans_happened()), K(ret));
+      }
     }
   } else {
     LOG_TRACE("skip tranform a rewrite rule", "class", rule_name);

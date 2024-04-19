@@ -16,6 +16,7 @@
 #include "sql/resolver/dml/ob_raw_expr_sets.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/ob_optimizer_trace_impl.h"
+#include "sql/ob_sql_context.h"
 namespace oceanbase
 {
 namespace common
@@ -68,7 +69,8 @@ struct ObTransformerCtx
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
     is_spm_outline_(false),
-    push_down_filters_()
+    push_down_filters_(),
+    iteration_level_(0)
   { }
   virtual ~ObTransformerCtx() {}
 
@@ -129,6 +131,7 @@ struct ObTransformerCtx
   /* end used for hint and outline below */
   bool is_spm_outline_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
+  uint64_t iteration_level_;
 };
 
 enum TransMethod
@@ -175,6 +178,7 @@ enum TRANSFORM_TYPE {
   SELECT_EXPR_PULLUP            ,
   PROCESS_DBLINK                ,
   DECORRELATE                   ,
+  MV_REWRITE                    ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -272,7 +276,8 @@ public:
       (1L << GROUPBY_PUSHDOWN) |
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
-      (1L << SEMI_TO_INNER);
+      (1L << SEMI_TO_INNER) |
+      (1L << MV_REWRITE);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,

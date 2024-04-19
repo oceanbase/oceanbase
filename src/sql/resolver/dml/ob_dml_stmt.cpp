@@ -256,7 +256,8 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   for_update_ = other.for_update_;
   for_update_wait_us_ = other.for_update_wait_us_;
   skip_locked_ = other.skip_locked_;
-  mock_id_ = other.mock_id_;
+  need_expand_rt_mv_ = other.need_expand_rt_mv_;
+  mview_id_ = other.mview_id_;
   node_ = other.node_; // should deep copy ? seems to be unnecessary
   flashback_query_type_ = other.flashback_query_type_;
   // dblink
@@ -1836,7 +1837,8 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
 }
 
 int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
-                                             ObSQLSessionInfo *session_info)
+                                             ObSQLSessionInfo *session_info,
+                                             bool explicit_for_col /* default false */)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 32> stmt_exprs;
@@ -1892,7 +1894,7 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
       } else { /*do nothing*/ }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(remove_useless_sharable_expr(expr_factory, session_info))) {
+      if (OB_FAIL(remove_useless_sharable_expr(expr_factory, session_info, explicit_for_col))) {
         LOG_WARN("failed to remove useless sharable expr", K(ret));
       } else if (OB_FAIL(check_pseudo_column_valid())) {
         LOG_WARN("failed to check pseudo column", K(ret));
@@ -2081,37 +2083,41 @@ int ObDMLStmt::generated_column_depend_column_is_referred(ObRawExpr *expr, bool 
 }
 
 int ObDMLStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
-                                            ObSQLSessionInfo *session_info)
+                                            ObSQLSessionInfo *session_info,
+                                            bool explicit_for_col)
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_factory);
   UNUSED(session_info);
   for (int64_t i = column_items_.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
     ObColumnRefRawExpr *expr = NULL;
+    bool is_referred = false;
+    bool need_remove = false;
     if (OB_ISNULL(expr = column_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (expr->is_explicited_reference() || expr->is_rowkey_column()
-               || expr->is_spatial_generated_column()) {
-      /*do nothing*/
+    } else if (expr->is_explicited_reference()) {
+      need_remove = false;
+    } else if (explicit_for_col) {
+      need_remove = true;
+    } else if (expr->is_rowkey_column() || expr->is_spatial_generated_column()) {
+      need_remove = false;
+    } else if (OB_FAIL(is_referred_by_partitioning_expr(expr, is_referred))) {
+      LOG_WARN("failed to check whether is referred by partitioning expr", K(ret));
+    } else if (is_referred) {
+      need_remove = false;
+    } else if (OB_FAIL(generated_column_depend_column_is_referred(expr, is_referred))) {
+      //if the generate column's depend expr has columns referred.
+      LOG_WARN("generated expr has normal column depends", K(ret));
     } else {
-      bool is_referred = true;
-      if (OB_FAIL(is_referred_by_partitioning_expr(expr, is_referred))) {
-        LOG_WARN("failed to check whether is referred by partitioning expr", K(ret));
-      }
+      need_remove = !is_referred;
+    }
 
-      if (OB_FAIL(ret) || is_referred) {
-        //if the generate column's depend expr has columns referred.
-      } else if (OB_FAIL(generated_column_depend_column_is_referred(expr, is_referred))) {
-        LOG_WARN("generated expr has normal column depends", K(ret));
-      }
-
-      if (OB_SUCC(ret) && !is_referred) {
-        if (OB_FAIL(column_items_.remove(i))) {
-          LOG_WARN("failed to remove column item", K(ret));
-        } else {
-          LOG_TRACE("succeed to remove column items", K(expr), K(lbt()));
-        }
+    if (OB_SUCC(ret) && need_remove) {
+      if (OB_FAIL(column_items_.remove(i))) {
+        LOG_WARN("failed to remove column item", K(ret));
+      } else {
+        LOG_TRACE("succeed to remove column items", K(expr), K(lbt()));
       }
     }
   }
@@ -4630,14 +4636,14 @@ int ObDMLStmt::disable_writing_external_table(bool basic_stmt_is_dml /* defualt 
   return ret;
 }
 
-int ObDMLStmt::disable_writing_materialized_view()
+int ObDMLStmt::disable_writing_materialized_view() const
 {
   int ret = OB_SUCCESS;
   bool disable_write_table = false;
   const TableItem *table_item = NULL;
   if (is_dml_write_stmt()) {
-    ObSEArray<ObDmlTableInfo*, 4> dml_table_infos;
-    if (OB_FAIL(static_cast<ObDelUpdStmt*>(this)->get_dml_table_infos(dml_table_infos))) {
+    ObSEArray<const ObDmlTableInfo*, 4> dml_table_infos;
+    if (OB_FAIL(static_cast<const ObDelUpdStmt*>(this)->get_dml_table_infos(dml_table_infos))) {
       LOG_WARN("failed to get dml table infos");
     }
     for (int64_t i = 0; OB_SUCC(ret) && !disable_write_table && i < dml_table_infos.count(); ++i) {
