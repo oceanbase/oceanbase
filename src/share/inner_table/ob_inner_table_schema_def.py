@@ -34576,6 +34576,7 @@ def_table_schema(
       AND B.TABLE_TYPE != 12 AND B.TABLE_TYPE != 13
       AND BITAND((B.TABLE_MODE / 4096), 15) IN (0,1)
       AND BITAND(B.INDEX_ATTRIBUTES_SET, 16) = 0
+      AND BITAND(C.COLUMN_FLAGS, 2097152) = 0
 """.replace("\n", " ")
 )
 
