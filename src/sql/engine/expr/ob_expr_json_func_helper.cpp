@@ -460,7 +460,7 @@ int ObJsonExprHelper::get_json_for_partial_update(
       j_base = nullptr;
     }
     if (OB_NOT_NULL(cursor)) {
-      cursor->reset();
+      cursor->~ObLobCursor();
       cursor = nullptr;
     }
   }
