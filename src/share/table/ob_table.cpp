@@ -2275,6 +2275,7 @@ int ObTableSingleOpEntity::deep_copy(common::ObIAllocator &allocator, const ObIT
 
     const ObTableBitMap *other_rowkey_bp = other.get_rowkey_names_bitmap();
     if (OB_ISNULL(other_rowkey_bp)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get_rowkey_names_bitmap", K(ret), K(other));
     } else if (OB_FAIL(rowkey_names_bp_.init_bitmap_size(other_rowkey_bp->get_valid_bits_num()))) {
       LOG_WARN("failed to init_bitmap_size", K(ret), KPC(other_rowkey_bp));
@@ -2291,6 +2292,7 @@ int ObTableSingleOpEntity::deep_copy(common::ObIAllocator &allocator, const ObIT
       if (OB_SUCC(ret)) {
         const ObTableBitMap *other_prop_name_bp = other.get_properties_names_bitmap();
         if (OB_ISNULL(other_prop_name_bp)) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get_properties_names_bitmap", K(ret), K(other));
         } else if (OB_FAIL(properties_names_bp_.init_bitmap_size(other_prop_name_bp->get_valid_bits_num()))) {
           LOG_WARN("failed to init_bitmap_size", K(ret), KPC(other_prop_name_bp));
@@ -2317,6 +2319,7 @@ int ObTableSingleOpEntity::construct_names_bitmap(const ObITableEntity &req_enti
   if (this->get_rowkey_size() != 0) {
     const ObTableBitMap *other_rowkey_bp = req_entity.get_rowkey_names_bitmap();
     if (OB_ISNULL(other_rowkey_bp)) {
+      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get_rowkey_names_bitmap", K(ret), K(req_entity));
     } else {
       rowkey_names_bp_ = *other_rowkey_bp;
@@ -2329,12 +2332,73 @@ int ObTableSingleOpEntity::construct_names_bitmap(const ObITableEntity &req_enti
     if (this->get_properties_count() != 0) {
       const ObTableBitMap *other_prop_name_bp = req_entity.get_properties_names_bitmap();
       if (OB_ISNULL(other_prop_name_bp)) {
+        ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get_properties_names_bitmap", K(ret), K(req_entity));
       } else {
         properties_names_bp_ = *other_prop_name_bp;
       }
     } else if (OB_FAIL(properties_names_bp_.init_bitmap_size(0))) {
       LOG_WARN("failed to init bitmap size", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSingleOpEntity::construct_names_bitmap_by_dict(const ObITableEntity &req_entity)
+{
+  int ret = OB_SUCCESS;
+  if (this->get_rowkey_size() != 0) {
+    const ObTableBitMap *other_rowkey_bp = req_entity.get_rowkey_names_bitmap();
+    if (OB_ISNULL(other_rowkey_bp)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get_rowkey_names_bitmap", K(ret), K(req_entity));
+    } else {
+      rowkey_names_bp_ = *other_rowkey_bp;
+    }
+  } else if (OB_FAIL(rowkey_names_bp_.init_bitmap_size(0))) {
+    LOG_WARN("failed to init bitmap size", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (this->get_properties_count() != 0) {
+      if (OB_FAIL(construct_properties_bitmap_by_dict(req_entity))) {
+        LOG_WARN("failed to construct properties bitmap by dict", K(ret));
+      }
+    } else if (OB_FAIL(properties_names_bp_.init_bitmap_size(0))) {
+      LOG_WARN("failed to init bitmap size", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableSingleOpEntity::construct_properties_bitmap_by_dict(const ObITableEntity &req_entity)
+{
+  int ret = OB_SUCCESS;
+  int64_t all_prop_count = OB_INVALID_SIZE; // all_prop_count = -1
+  if (OB_ISNULL(this->all_properties_names_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("all properties names is NULL", K(ret));
+  } else if (FALSE_IT(all_prop_count = this->all_properties_names_->count())) {
+  } else if (OB_FAIL(properties_names_bp_.init_bitmap(all_prop_count))) {
+    LOG_WARN("failed to init bitmap size", K(ret));
+  } else if (all_prop_count == this->get_properties_count()) {
+    // fastpath: propterties in entity has all columns
+    // and the result is from scan iterator, so we can ensure the property counts means all columns
+    if (OB_FAIL(properties_names_bp_.set_all_bits_true())) {
+      LOG_WARN("failed set all bits true", K(ret));
+    }
+  } else {
+    // slow path: find each property position in dict and set bitmap
+    const ObIArray<ObString> &prop_name = this->get_properties_names();
+    for (int64_t i = 0; i < prop_name.count() && OB_SUCC(ret); i++) {
+      int64_t idx = -1;
+      if (!has_exist_in_array(*all_properties_names_, prop_name.at(i), &idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("property name is not exist in properties name dict", K(ret),
+                  K(prop_name.at(i)), KPC(all_properties_names_), K(i));
+      } else if (OB_FAIL(properties_names_bp_.set(idx))) {
+        LOG_WARN("failed to set bitmap", K(ret), K(idx), K(prop_name.at(i)), K(properties_names_bp_));
+      }
     }
   }
   return ret;
@@ -2593,6 +2657,31 @@ int ObTableBitMap::init_bitmap_size(int64_t valid_bits_num)
   return ret;
 }
 
+int ObTableBitMap::init_bitmap(int64_t valid_bits_num)
+{
+  int ret = OB_SUCCESS;
+  int64_t block_nums = get_need_blocks_num(valid_bits_num);
+  if (block_nums < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("block_nums less than zero", K(ret), K(block_nums));
+  } else if (block_count_ >= 0) {
+    if (block_nums != block_count_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("bitmap had init before with diffrent val", K(ret), K(block_count_), K(block_nums));
+    }
+  } else {
+    for (int64_t i = 0; i < block_nums && OB_SUCC(ret); i++) {
+      if (OB_FAIL(datas_.push_back(0))) {
+        LOG_WARN("failed to init block value", K(ret), K(i));
+      }
+    }
+    block_count_ = block_nums;
+    valid_bits_num_ = valid_bits_num;
+  }
+
+  return ret;
+}
+
 int ObTableBitMap::reset()
 {
   int ret = OB_SUCCESS;
@@ -2666,6 +2755,19 @@ int ObTableBitMap::set(int64_t bit_pos)
     }
   }
 
+  return ret;
+}
+
+int ObTableBitMap::set_all_bits_true()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(datas_.count() != block_count_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("datas_.count is not equal to block_count_", K(ret), K(block_count_), K(datas_.count()));
+  }
+  for (int64_t i = 0; i < block_count_ && OB_SUCC(ret); i++) {
+    datas_.at(i) = SIZE_TYPE_MAX;
+  }
   return ret;
 }
 

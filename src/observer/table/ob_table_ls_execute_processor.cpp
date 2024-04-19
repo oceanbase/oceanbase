@@ -39,9 +39,10 @@ int ObTableLSExecuteP::before_process()
   int ret = OB_SUCCESS;
   const ObIArray<ObString>& all_rowkey_names = arg_.ls_op_.get_all_rowkey_names();
   const ObIArray<ObString>& all_properties_names = arg_.ls_op_.get_all_properties_names();
+  bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
   if (OB_FAIL(result_.assign_rowkey_names(all_rowkey_names))) {
     LOG_WARN("fail to assign rowkey names", K(ret), K(all_rowkey_names));
-  } else if (OB_FAIL(result_.assign_properties_names(all_properties_names))) {
+  } else if (!need_all_prop && OB_FAIL(result_.assign_properties_names(all_properties_names))) {
     LOG_WARN("fail to assign properties names", K(ret), K(all_properties_names));
   } else {
     ret = ParentType::before_process();
@@ -171,6 +172,7 @@ int ObTableLSExecuteP::try_process()
   ObLSID ls_id = ls_op.get_ls_id();
   uint64_t table_id = ls_op.get_table_id();
   bool exist_global_index = false;
+  bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
   table_id_ = table_id;  // init move response need
   if (OB_FAIL(init_schema_info(table_id))) {
     LOG_WARN("fail to init schema info", K(ret), K(table_id));
@@ -178,6 +180,17 @@ int ObTableLSExecuteP::try_process()
     LOG_WARN("fail to get ls id", K(ret));
   } else if (OB_FAIL(check_table_has_global_index(exist_global_index))) {
     LOG_WARN("fail to check global index", K(ret), K(table_id));
+  } else if (need_all_prop) {
+    ObSEArray<ObString, 8> all_prop_name;
+    const ObIArray<ObTableColumnInfo *>&column_info_array = schema_cache_guard_.get_column_info_array();
+    if (OB_FAIL(ObTableApiUtil::expand_all_columns(column_info_array, all_prop_name))) {
+      LOG_WARN("fail to expand all columns", K(ret));
+    } else if (OB_FAIL(result_.assign_properties_names(all_prop_name))) {
+      LOG_WARN("fail to assign property names to result", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  arg_.consistency_level_,
                                  ls_id,
@@ -501,8 +514,13 @@ int ObTableLSExecuteP::add_dict_and_bm_to_result_entity(const table::ObTableTabl
     const ObTableSingleOp &single_op = tablet_op.at(i);
     const ObTableSingleOpEntity &req_entity= single_op.get_entities().at(0);
     ObTableSingleOpEntity *result_entity = static_cast<ObTableSingleOpEntity *>(tablet_result.at(i).get_entity());
-    result_entity->set_dictionary(&ls_op.get_all_rowkey_names(), &ls_op.get_all_properties_names());
-    if (OB_FAIL(result_entity->construct_names_bitmap(req_entity))) {
+    bool need_rebuild_bitmap = arg_.ls_op_.need_all_prop_bitmap() && single_op.get_op_type() == ObTableOperationType::GET;
+    result_entity->set_dictionary(&result_.get_rowkey_names(), &result_.get_properties_names());
+    if (need_rebuild_bitmap) { // construct result entity bitmap based on all columns dict
+      if (OB_FAIL(result_entity->construct_names_bitmap_by_dict(req_entity))) {
+        LOG_WARN("fail to construct name bitmap by all columns", K(ret), K(i));
+      }
+    } else if (OB_FAIL(result_entity->construct_names_bitmap(req_entity))) { // directly use request bitmap as result bitmap
       LOG_WARN("fail to construct name bitmap", K(ret), K(i));
     }
   }

@@ -395,8 +395,8 @@ int ObTableLSExecuteEndTransCb::assign_ls_execute_result(const ObTableLSOpResult
     if (OB_FAIL(dst_tablet_result.prepare_allocate(single_res_cnt))) {
       LOG_WARN("fail to prepare allocatate single op result", K(ret), K(i), K(single_res_cnt));
     } else {
-      dst_tablet_result.assign_properties_names(&result_.get_rowkey_names());
-      dst_tablet_result.set_all_rowkey_names(&result_.get_properties_names());
+      dst_tablet_result.assign_properties_names(&result_.get_properties_names());
+      dst_tablet_result.set_all_rowkey_names(&result_.get_rowkey_names());
     }
     for (int64_t j = 0; OB_SUCC(ret) && j < single_res_cnt; j++) {
       const ObTableSingleOpResult &src_single_result = src_tablet_result.at(j);

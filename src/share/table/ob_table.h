@@ -65,6 +65,7 @@ enum class ObTableEntityType
 class ObTableBitMap {
 public:
   typedef uint8_t size_type;
+  static const size_type SIZE_TYPE_MAX = UINT8_MAX;
   static const size_type BYTES_PER_BLOCK = sizeof(size_type);   // 1
   static const size_type BITS_PER_BLOCK = BYTES_PER_BLOCK * 8;  // 1 * 8 = 8
   static const size_type BLOCK_MOD_BITS = 3;                    // 2^3 = 8
@@ -79,8 +80,10 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_serialize_size() const;
-
+  // init bitmap wihtout allocating any blocks in datas_ (datas_.count() == 0)
   int init_bitmap_size(int64_t valid_bits_num);
+  // init bitmap with blocks in datas_
+  int init_bitmap(int64_t valid_bits_num);
   void clear()
   {
     datas_.reset();
@@ -99,6 +102,8 @@ public:
   }
 
   int set(int64_t bit_pos);
+
+  int set_all_bits_true();
 
   OB_INLINE int64_t get_block_count() const
   {
@@ -1339,6 +1344,10 @@ public:
 
   virtual int deep_copy(common::ObIAllocator &allocator, const ObITableEntity &other) override;
 
+  int construct_names_bitmap_by_dict(const ObITableEntity& req_entity);
+
+  int construct_properties_bitmap_by_dict(const ObITableEntity& req_entity);
+
   static int construct_column_names(const ObTableBitMap &names_bit_map,
                                               const ObIArray<ObString> &all_column_names,
                                               ObIArray<ObString> &column_names);
@@ -1549,6 +1558,7 @@ public:
   OB_INLINE const ObIArray<ObString>& get_all_rowkey_names() {return rowkey_names_; }
   OB_INLINE const ObIArray<ObString>& get_all_properties_names() {return properties_names_; }
   OB_INLINE bool return_one_result() const { return return_one_result_; }
+  OB_INLINE bool need_all_prop_bitmap() const { return need_all_prop_bitmap_; }
 
   TO_STRING_KV(K_(ls_id),
                K_(table_name),
@@ -1560,7 +1570,8 @@ public:
                K_(rowkey_names),
                K_(properties_names),
                "tablet_ops_count_", tablet_ops_.count(),
-               K_(tablet_ops));
+               K_(tablet_ops),
+               K_(need_all_prop_bitmap));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableLSOp);
   share::ObLSID ls_id_;
@@ -1576,7 +1587,8 @@ private:
       bool is_same_type_ : 1;
       bool is_same_properties_names_ : 1;
       bool return_one_result_ : 1;
-      uint64_t reserved : 61;
+      bool need_all_prop_bitmap_ : 1;
+      uint64_t reserved : 60;
     };
   };
 
