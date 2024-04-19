@@ -2695,7 +2695,14 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not base table or alias from base table", K_(table_item.type), K(ret));
   } else if (NULL != (col_item = stmt->get_column_item(table_item.table_id_, column_name))) {
-    //exist, ignore resolve...
+    if (!include_hidden) {
+      if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
+        //do nothing
+      } else if (current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_WARN("not allowed update insert hidden pk increment column", K(ret));
+      }
+    }
   } else {
     bool is_uni = false;
     bool is_mul = false;
@@ -2708,6 +2715,8 @@ int ObDMLResolver::resolve_basic_column_item(const TableItem &table_item,
     if (!include_hidden) {
       if (!ObCharset::case_insensitive_equal(column_name, OB_HIDDEN_PK_INCREMENT_COLUMN_NAME)) {
         //do nothing
+      } else if (current_scope_ == T_UPDATE_SCOPE || current_scope_ == T_INSERT_SCOPE) {
+        //do nothing include is false
       } else if (ObResolverUtils::is_restore_user(*session_info_)
                  || ObResolverUtils::is_drc_user(*session_info_)
                  || session_info_->is_inner()) {

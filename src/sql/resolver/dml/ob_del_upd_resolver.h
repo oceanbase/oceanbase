@@ -273,6 +273,9 @@ protected:
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
   int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
+  int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
+  int select_items_has_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;
