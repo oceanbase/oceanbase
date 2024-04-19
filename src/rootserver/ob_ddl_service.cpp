@@ -693,16 +693,64 @@ int ObDDLService::create_mlog_table(
       table_schema.get_tenant_id(), new_table_id))) {
     LOG_WARN("failed to fetch new table id", KR(ret));
   } else if (OB_FALSE_IT(table_schema.set_table_id(new_table_id))) {
-  } else if (OB_FAIL(create_index_or_mlog_table_in_trans(
-      table_schema,
-      &arg.ddl_stmt_str_,
-      &sql_trans,
-      schema_guard,
-      true /*need_check_tablet_cnt*/,
-      tenant_data_version))) {
-    LOG_WARN("failed to create index or mlog table in trans", KR(ret), K(arg.ddl_stmt_str_), K(table_schema));
-  } else if (OB_FAIL(add_mlog(sql_trans, arg, schema_guard, table_schema))) {
-    LOG_WARN("failed to add mlog", KR(ret));
+  } else if (is_oracle_mode) {
+    // add pk constraint
+    ObArenaAllocator allocator("CreateMlog");
+    ObString cst_name;
+    ObConstraint cst;
+    if (OB_FAIL(ObTableSchema::create_cons_name_automatically(
+        cst_name,
+        table_schema.get_table_name_str(),
+        allocator,
+        CONSTRAINT_TYPE_PRIMARY_KEY,
+        is_oracle_mode))) {
+      LOG_WARN("failed to create cons name automatically", KR(ret));
+    } else if (cst_name.length() > OB_MAX_CONSTRAINT_NAME_LENGTH_ORACLE) {
+      ret = OB_ERR_TOO_LONG_IDENT;
+      LOG_WARN("constraint_name length overflow", KR(ret), K(cst_name.length()));
+    } else if (OB_FAIL(cst.set_constraint_name(cst_name))) {
+      LOG_WARN("failed to set constraint name", KR(ret));
+    } else {
+      uint64_t new_cst_id = OB_INVALID_ID;
+      bool cst_name_exist = false;
+      cst.set_name_generated_type(GENERATED_TYPE_SYSTEM);
+      cst.set_constraint_type(CONSTRAINT_TYPE_PRIMARY_KEY);
+      cst.set_tenant_id(tenant_id);
+      cst.set_table_id(table_schema.get_table_id());
+      if (OB_FAIL(schema_service->fetch_new_constraint_id(tenant_id, new_cst_id))) {
+        LOG_WARN("failed to fetch new constraint id", K(ret));
+      } else if (FALSE_IT(cst.set_constraint_id(new_cst_id))) {
+      } else if (cst.get_constraint_name_str().empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("cst name is empty", KR(ret));
+      } else if (OB_FAIL(check_constraint_name_is_exist(
+          schema_guard, table_schema, cst.get_constraint_name_str(), false, cst_name_exist))) {
+        LOG_WARN("failed to check constraint name is exist", KR(ret), K(cst.get_constraint_name_str()));
+      } else if (cst_name_exist) {
+        ret = OB_ERR_CONSTRAINT_NAME_DUPLICATE;
+        if (!is_oracle_mode) {
+          LOG_USER_ERROR(OB_ERR_CONSTRAINT_NAME_DUPLICATE,
+              cst.get_constraint_name_str().length(), cst.get_constraint_name_str().ptr());
+        }
+        LOG_WARN("cst name is duplicate", KR(ret), K(cst.get_constraint_name_str()));
+      } else if (OB_FAIL(table_schema.add_constraint(cst))) {
+        LOG_WARN("failed to add constraint", KR(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(create_index_or_mlog_table_in_trans(
+        table_schema,
+        &arg.ddl_stmt_str_,
+        &sql_trans,
+        schema_guard,
+        true /*need_check_tablet_cnt*/,
+        tenant_data_version))) {
+      LOG_WARN("failed to create index or mlog table in trans", KR(ret), K(arg.ddl_stmt_str_), K(table_schema));
+    } else if (OB_FAIL(add_mlog(sql_trans, arg, schema_guard, table_schema))) {
+      LOG_WARN("failed to add mlog", KR(ret));
+    }
   }
   return ret;
 }
