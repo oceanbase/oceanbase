@@ -177,6 +177,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // should consider that if is supported when upgrade from such version.
 #define MOCK_CLUSTER_VERSION_4_2_1_4 (oceanbase::common::cal_version(4, 2, 1, 4))
 #define MOCK_CLUSTER_VERSION_4_2_1_5 (oceanbase::common::cal_version(4, 2, 1, 5))
+#define MOCK_CLUSTER_VERSION_4_2_1_6 (oceanbase::common::cal_version(4, 2, 1, 6))
 #define CLUSTER_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
 #define CLUSTER_VERSION_4_2_2_1 (oceanbase::common::cal_version(4, 2, 2, 1))
 #define CLUSTER_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
@@ -208,6 +209,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 // should consider that if is supported when upgrade from such version.
 #define MOCK_DATA_VERSION_4_2_1_4 (oceanbase::common::cal_version(4, 2, 1, 4))
 #define MOCK_DATA_VERSION_4_2_1_5 (oceanbase::common::cal_version(4, 2, 1, 5))
+#define MOCK_DATA_VERSION_4_2_1_6 (oceanbase::common::cal_version(4, 2, 1, 6))
 #define DATA_VERSION_4_2_2_0 (oceanbase::common::cal_version(4, 2, 2, 0))
 #define DATA_VERSION_4_2_2_1 (oceanbase::common::cal_version(4, 2, 2, 1))
 #define DATA_VERSION_4_2_3_0 (oceanbase::common::cal_version(4, 2, 3, 0))
