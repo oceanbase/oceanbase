@@ -10,6 +10,40 @@
  * See the Mulan PubL v2 for more details.
  */
 
+// ################################### 使用多源事务兼容性占位须知 ##################################
+// # 占位代码需要书写于宏定义块【NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION】中
+// # 占位方式: 通过【注释】占位，占位需要信息：Helper类型名/Ctx类型名/Enum数值/Enum命名
+// #
+// # 注意：
+// # 0. 在‘余留位置’之前占位
+// # 1. 始终先在master占位，保证master分支是其他所有分支的超集
+// # 2. master占位之后，开发分支上不可修改注册宏中的对应信息，否则FARM会认为占位冲突，如果有这种场景，需要先修改master占位
+// # 3. 所有类型名的书写从全局命名空间'::oceanbase'开始
+// # 4. Enum数值采用递增方式占位
+// # 5. Enum命名不可同前文重复
+// # 6. 由于采用注释方式占位，因此【不需要】书写对应的类型定义并包含在【NEED_MDS_REGISTER_DEFINE】中
+// ############################################################################################
+
+// ################################### 使用多源数据兼容性占位须知 ##################################
+// # 占位代码需要书写于宏定义块【GENERATE_MDS_UNIT】中，更近一步的:
+// # 1. 如果想要添加tablet级别元数据，则将占位信息增加至【GENERATE_NORMAL_MDS_TABLE】中
+// # 2. 如果想要添加日志流级别元数据，则将占位信息增加至【GENERATE_LS_INNER_MDS_TABLE】中
+// # 占位方式: 通过【定义】占位，占位需要信息：Key类型名/Value类型名/多版本语义支持
+// #
+// # 注意：
+// # 0. 在‘余留位置’之前占位
+// # 1. 始终先在master占位，保证master分支是其他所有分支的超集
+// # 2. master占位之后，开发分支上不可修改注册宏中的对应信息，否则FARM会认为占位冲突，如果有这种场景，需要先修改master占位
+// # 3. 所有类型名的书写从全局命名空间'::oceanbase'开始
+// # 4. 若Key类型名非'::oceanbase::storage::mds::DummyKey'，则需要提供对应的Key类型定义，并将对应头文件包含在【NEED_MDS_REGISTER_DEFINE】中
+// # 5. 需要提供对应的Value类型定义，并将对应头文件包含在【NEED_MDS_REGISTER_DEFINE】中
+// # 6. Key/Value的类型仅需要空定义，不需要定义成员方法和变量，但需要实现框架所需的接口，以通过框架的编译期检查，包括(占位时实现为空)：
+// #    a. 打印函数：[int64_t T::to_string(char *, const int64_t) const]
+// #    b. 比较函数的某种实现，例如：[bool T::operator==(const T &) const] and [bool T::operator<(const T &) const]
+// #    c. 序列化函数的某种实现，例如：[int serialize(char *, const int64_t, int64_t &) const] and [int deserialize(const char *, const int64_t, int64_t &)] and [int64_t get_serialize_size() const]
+// #    d. 拷贝/移动函数的某种实现，例如：[int T::assign(const T &)]
+// ############################################################################################
+
 // the MDS FRAME must know the defination of some class type to generate legal CPP codes, including:
 // 1. DATA type defination if you need multi source data support.
 //    1.a. KEY type defination if you need multi source data support with multi key support.
@@ -34,6 +68,9 @@
   #include "src/storage/tablet/ob_tablet_finish_transfer_mds_helper.h"
   #include "src/share/balance/ob_balance_task_table_operator.h"
   #include "src/storage/tablet/ob_tablet_transfer_tx_ctx.h"
+  #include "src/storage/multi_data_source/ob_tablet_create_mds_ctx.h"
+  #include "src/storage/multi_data_source/ob_start_transfer_in_mds_ctx.h"
+  #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
 #endif
 /**************************************************************************************************/
 
@@ -71,7 +108,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           16,\
                                           TEST3)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletCreateMdsHelper,\
-                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          ::oceanbase::storage::mds::ObTabletCreateMdsCtx,\
                                           3,\
                                           CREATE_TABLET_NEW_MDS)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDeleteMdsHelper,\
@@ -87,7 +124,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           20,\
                                           START_TRANSFER_OUT)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletStartTransferInHelper,\
-                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          ::oceanbase::storage::mds::ObStartTransferInMdsCtx,\
                                           21,\
                                           START_TRANSFER_IN)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletFinishTransferOutHelper,\
@@ -95,7 +132,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           22,\
                                           FINISH_TRANSFER_OUT)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletFinishTransferInHelper,\
-                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          ::oceanbase::storage::mds::ObFinishTransferInMdsCtx,\
                                           23,\
                                           FINISH_TRANSFER_IN)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObBalanceTaskMDSHelper,\
@@ -118,12 +155,23 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::ObTransferDestPrepareTxCtx,\
                                           28,\
                                           TRANSFER_DEST_PREPARE)
-  // UNBIND_LOB_TABLET: ID = 29 for drop lob tablet when drop column instant.
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletUnbindLobMdsHelper,\
+  //                                         ::oceanbase::storage::mds::MdsCtx,\
+  //                                         29,\
+  //                                         UNBIND_LOB_TABLET)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObChangeTabletToTableHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           30,\
                                           CHANGE_TABLET_TO_TABLE_MDS)
-  // TABLET_SPLIT: ID = 31 for auto_split.
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletSplitMdsHelper,\
+  //                                         ::oceanbase::storage::mds::MdsCtx,\
+  //                                         31,\
+  //                                         TABLET_SPLIT)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletAbortTransferHelper,\
+  //                                         ::oceanbase::storage::mds::ObAbortTransferInMdsCtx,\
+  //                                         32,\
+  //                                         TRANSFER_IN_ABORTED)
+  // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/
@@ -188,11 +236,13 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::compaction::ObMediumCompactionInfoKey,\
                     ::oceanbase::compaction::ObMediumCompactionInfo,\
                     false)
+  // # 余留位置（此行之前占位）
 #endif
 
 #ifdef GENERATE_LS_INNER_MDS_TABLE
   GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
                     ::oceanbase::unittest::ExampleUserData1,\
                     true) // replace this line if you are the first user to register LS INNER TABLET
+  // # 余留位置（此行之前占位）
 #endif
 /**************************************************************************************************/

@@ -677,6 +677,9 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
+  multi_data_source/ob_start_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_tablet_create_mds_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
 )
 
