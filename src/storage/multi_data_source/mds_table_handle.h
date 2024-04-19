@@ -15,6 +15,8 @@
 #include "lib/ob_errno.h"
 #include "mds_table_impl.h"
 #include "lib/guard/ob_light_shared_gaurd.h"
+#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
+#include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
 namespace oceanbase
 {
@@ -60,6 +62,8 @@ public:
                  const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_latest_committed(OP &&read_op) const;
+  template <typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData>&))>
+  int get_tablet_status_node(OP &&read_op, const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_snapshot(OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
