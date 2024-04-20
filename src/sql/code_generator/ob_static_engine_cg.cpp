@@ -7556,6 +7556,7 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       spec.is_single_ = op.get_is_single();
       spec.max_file_size_ = op.get_max_file_size();
       spec.cs_type_ = op.get_cs_type();
+      spec.parallel_ = op.get_parallel();
       spec.plan_->need_drive_dml_query_ = true;
     }
   }

@@ -29,7 +29,7 @@ namespace sql
 OB_SERIALIZE_MEMBER(ObSelectIntoOpInput, task_id_, sqc_id_);
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_,
     outfile_name_, field_str_, line_str_, closed_cht_, is_optional_, select_exprs_, is_single_,
-    max_file_size_, escaped_cht_, cs_type_);
+    max_file_size_, escaped_cht_, cs_type_, parallel_);
 
 
 int ObSelectIntoOp::inner_open()
@@ -118,29 +118,27 @@ int ObSelectIntoOp::inner_open()
       input_file_name = file_location_ == IntoFileLocation::REMOTE_OSS
                         ? path.split_on('?').trim()
                         : path;
-      if (OB_ISNULL(input)){
+      if (input_file_name.length() == 0 || path.length() == 0 || OB_ISNULL(input)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("select into operator input is null", K(ret));
-      } else if (input_file_name.ptr()[input_file_name.length() - 1] == '/'){
-        file_name_with_suffix.append_fmt("%sdata_%ld_%ld_%ld",
-                                         to_cstring(input_file_name),
-                                         input->sqc_id_,
-                                         input->task_id_,
-                                         split_file_id_);
+        LOG_WARN("get unexpected path or input is null", K(ret));
       } else {
-        file_name_with_suffix.append_fmt("%s_%ld_%ld_%ld",
-                                         to_cstring(input_file_name),
-                                         input->sqc_id_,
-                                         input->task_id_,
-                                         split_file_id_);
+        if (input_file_name.ptr()[input_file_name.length() - 1] == '/'){
+          file_name_with_suffix.append_fmt("%sdata", to_cstring(input_file_name));
+        } else {
+          file_name_with_suffix.append_fmt("%s", to_cstring(input_file_name));
+        }
+        if (MY_SPEC.parallel_ > 1) {
+          file_name_with_suffix.append_fmt("_%ld_%ld_%ld", input->sqc_id_, input->task_id_, split_file_id_);
+        } else {
+          file_name_with_suffix.append_fmt("_%ld", split_file_id_);
+        }
+        if (file_location_ == IntoFileLocation::REMOTE_OSS) {
+          file_name_with_suffix.append_fmt("?%s", to_cstring(path));
+        }
+        path = file_name_with_suffix.string();
       }
-      if (file_location_ == IntoFileLocation::REMOTE_OSS) {
-        file_name_with_suffix.append_fmt("?%s", to_cstring(path));
-      }
-      path = file_name_with_suffix.string();
     }
     if (OB_FAIL(ret)) {
-      // do nothing
     } else if (file_location_ == IntoFileLocation::REMOTE_OSS) {
       ObString temp_url = path.split_on('?');
       temp_url.trim();
@@ -557,8 +555,6 @@ int ObSelectIntoOp::try_split_file()
              || (file_location_ == IntoFileLocation::REMOTE_OSS
                  && ((!MY_SPEC.is_single_ && curr_bytes > min(MY_SPEC.max_file_size_, MAX_OSS_FILE_SIZE))
                      || (MY_SPEC.is_single_ && curr_bytes > MAX_OSS_FILE_SIZE)))) {
-    LOG_DEBUG("debug select into", K(curr_bytes), K(MY_SPEC.max_file_size_),
-             K(data_writer_.get_curr_line_len()), K(data_writer_.get_curr_pos()));
     if (OB_FAIL(split_file())) {
       LOG_WARN("failed to split file", K(ret));
     } else {
@@ -571,7 +567,6 @@ int ObSelectIntoOp::try_split_file()
     } else {
       write_bytes_ = has_split ? 0 : curr_bytes;
       data_writer_.reset_curr_line_len();
-      LOG_DEBUG("debug select into", K(has_split), K(write_bytes_));
     }
     data_writer_.update_last_line_pos();
   }

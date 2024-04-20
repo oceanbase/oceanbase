@@ -65,7 +65,8 @@ public:
       select_exprs_(alloc),
       is_single_(true),
       max_file_size_(DEFAULT_MAX_FILE_SIZE),
-      escaped_cht_()
+      escaped_cht_(),
+      parallel_(1)
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -82,6 +83,7 @@ public:
   int64_t max_file_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
+  int64_t parallel_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
 };
 
