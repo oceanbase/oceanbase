@@ -2284,9 +2284,14 @@ int cast_identity_enum_set(const sql::ObExpr &expr,
   UNUSED(cast_mode);
   UNUSED(str_values);
   EVAL_ARG() {
-    res_datum.set_enum(child_res->get_enum());
+    if (ob_is_null(expr.args_[0]->datum_meta_.type_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null type with non-null value", K(ret), K(child_res->get_enum()));
+    } else {
+      res_datum.set_enum(child_res->get_enum());
+    }
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 int cast_not_support_enum_set(const sql::ObExpr &expr,
