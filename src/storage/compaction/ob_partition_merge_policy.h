@@ -268,7 +268,6 @@ private:
         const storage::ObTablet &tablet,
         storage::ObGetMergeTablesResult &result);
   static int add_meta_merge_result(
-      const ObMergeType &merge_type,
       storage::ObITable *table,
       const storage::ObStorageMetaHandle &table_meta_handle,
       storage::ObGetMergeTablesResult &result,
