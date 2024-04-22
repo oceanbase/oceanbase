@@ -531,16 +531,6 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
       }
       eval_flags.set(i);
     }
-  } else if (expr.args_[0]->datum_meta_.is_clob()) {
-    for (int i = bound.start(); i < bound.end(); i++) {
-      if (skip.at(i) || eval_flags.at(i)) {
-        continue;
-      } else if (ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
-                                 expr.args_[0]->obj_meta_.has_lob_header(), i)) {
-        res_vec->set_lob_locator(i, text_vec->get_lob_locator(i));
-        eval_flags.set(i);
-      }
-    }
   } else if (lib::is_mysql_mode() && !pattern->is_null(0) && pattern->get_string(0).empty()) {
     if (NULL == match_type || !match_type->is_null(0)) {
       ret = OB_ERR_REGEXP_ERROR;
@@ -635,6 +625,11 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
         } else {
           res_vec->set_null(i);
         }
+      } else if (expr.args_[0]->datum_meta_.is_clob()
+                 && ob_is_empty_lob(expr.args_[0]->datum_meta_.type_, text_vec,
+                                    expr.args_[0]->obj_meta_.has_lob_header(), i)) {
+        res_vec->set_string(i, text_vec->get_string(i));
+        eval_flags.set(i);
       } else {
         ObString text_utf16;
         ObString text_str;
