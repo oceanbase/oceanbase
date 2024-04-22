@@ -4166,7 +4166,7 @@ bool ObLobQueryIter::fill_buffer_to_data(ObString& data)
         }
         write_size = data.write_front(last_data_.ptr() + remain_size, write_size);
         bret = true;
-        last_data_.set_length(remain_size);
+        last_data_.assign_ptr(last_data_.ptr(), remain_size);
       } else {
         if (cs_type_ != CS_TYPE_BINARY) {
           write_size = ObCharset::max_bytes_charpos(cs_type_, last_data_.ptr(), last_data_.length(), write_size, write_char_len);
