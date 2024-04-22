@@ -32,7 +32,6 @@ public:
     TRANSFER_OUT = 4,
     TRANSFER_IN  = 5,
     TRANSFER_OUT_DELETED = 6,
-    SPLIT_SRC = 7,
     MAX,
   };
 public:
@@ -65,7 +64,6 @@ private:
     "TRANSFER_OUT",
     "TRANSFER_IN",
     "TRANSFER_OUT_DELETED",
-    "SPLIT_SRC",
     "MAX"
   };
 
