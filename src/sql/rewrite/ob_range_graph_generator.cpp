@@ -1266,6 +1266,15 @@ int ObRangeGraphGenerator::generate_expr_final_info()
       range_map.expr_final_infos_.at(idx).rowid_idx_ = static_cast<uint32_t>(ctx_.rowid_idxs_.at(i).second) + 1;
     }
   }
+  for (int64_t i = 0; OB_SUCC(ret) && i < ctx_.non_first_in_row_value_idxs_.count(); ++i) {
+    int64_t idx = ctx_.non_first_in_row_value_idxs_.at(i);
+    if (OB_UNLIKELY(idx < 0 || idx >= range_map.expr_final_infos_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected row value idx", K(idx), K(range_map.expr_final_infos_.count()));
+    } else {
+      range_map.expr_final_infos_.at(idx).is_not_first_col_in_row_ = true;
+    }
+  }
 
   if (OB_SUCC(ret)) {
     if (OB_FAIL(range_map.in_params_.assign(ctx_.in_params_))) {

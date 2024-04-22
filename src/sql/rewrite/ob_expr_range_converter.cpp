@@ -591,6 +591,8 @@ int ObExprRangeConverter::gen_row_column_cmp_node(const ObRawExpr &l_expr,
           cmp_type = T_OP_GE;
         } else if (expr_depth == 0 && OB_FAIL(set_column_flags(key_idx, cmp_type))) {
           LOG_WARN("failed to set column flags", K(ret));
+        } else if (i > 0 && OB_FAIL(ctx_.non_first_in_row_value_idxs_.push_back(const_val))) {
+          LOG_WARN("failed to push back value idx", K(const_val));
         } else {
           bool is_lt_with_lob = (cmp_type == T_OP_LT || cmp_type == T_OP_LE) &&
                                 (ctx_.final_exprs_flag_.at(const_val)

@@ -118,7 +118,8 @@ public:
          *  255   : current final info is physical rowid
         */
         uint32_t rowid_idx_:      8;
-        uint32_t reserved_:      20;
+        uint32_t is_not_first_col_in_row_: 1;
+        uint32_t reserved_:      19;
       };
     };
     union {
@@ -205,6 +206,7 @@ struct ObQueryRangeCtx
   common::ObSEArray<ObRangeColumnMeta*, 4> column_metas_;
   common::ObSEArray<std::pair<int64_t, int64_t>, 16> rowid_idxs_;
   common::ObSEArray<int64_t, 4> column_flags_;
+  common::ObSEArray<int64_t, 16> non_first_in_row_value_idxs_;
   int64_t max_mem_size_;
   bool enable_not_in_range_;
   uint64_t optimizer_features_enable_version_;

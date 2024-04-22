@@ -745,6 +745,9 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
     LOG_WARN("failed to generate tmp range");
   } else {
     bool always_false = false;
+    bool check_next = true;
+    int64_t truncated_key_idx_start = -1;
+    int64_t truncated_key_idx_end = -1;
     for (int64_t i = 0; OB_SUCC(ret) && !always_false && i < pre_range_graph_->get_column_cnt(); ++i) {
       int64_t start = node->start_keys_[i];
       int64_t end = node->end_keys_[i];
@@ -766,7 +769,12 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
         } else if (OB_FAIL(get_result_value(start, range->start_[i], is_valid, exec_ctx_))) {
           LOG_WARN("failed to get result vlaue", K(start));
         } else if (!is_valid) {
-          always_false = true;
+          const ObRangeMap::ExprFinalInfo& expr_info = range_map_.expr_final_infos_.at(start);
+          if (expr_info.is_not_first_col_in_row_ && -1 == truncated_key_idx_start) {
+            truncated_key_idx_start = i;
+          } else {
+            always_false = true;
+          }
         }
         if (OB_FAIL(ret) || always_false) {
         } else if (end == OB_RANGE_MIN_VALUE) {
@@ -778,8 +786,23 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
         } else if (OB_FAIL(get_result_value(end, range->end_[i], is_valid, exec_ctx_))) {
           LOG_WARN("failed to get result vlaue", K(end));
         } else if (!is_valid) {
-          always_false = true;
+          const ObRangeMap::ExprFinalInfo& expr_info = range_map_.expr_final_infos_.at(end);
+          if (expr_info.is_not_first_col_in_row_ && -1 == truncated_key_idx_end) {
+            truncated_key_idx_end = i;
+          } else {
+            always_false = true;
+          }
         }
+      }
+    }
+    if (OB_SUCC(ret) && truncated_key_idx_start != -1) {
+      for (int64_t i = truncated_key_idx_start; i < pre_range_graph_->get_column_cnt(); ++i) {
+        range->start_[i].set_min_value();
+      }
+    }
+    if (OB_SUCC(ret) && truncated_key_idx_end != -1) {
+      for (int64_t i = truncated_key_idx_end; i < pre_range_graph_->get_column_cnt(); ++i) {
+        range->end_[i].set_max_value();
       }
     }
     if (OB_SUCC(ret)) {
