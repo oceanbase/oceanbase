@@ -551,6 +551,33 @@ int ObExpandAggregateUtils::add_aggr_item(ObIArray<ObAggFunRawExpr*> &new_aggr_i
   return ret;
 }
 
+int ObExpandAggregateUtils::add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
+                                         ObWinFunRawExpr *&win_expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(win_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(win_expr));
+  } else {
+    int64_t i = 0;
+    for (; OB_SUCC(ret) && i < new_win_exprs.count(); ++i) {
+      if (OB_ISNULL(new_win_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(new_win_exprs.at(i)));
+      } else if (win_expr->same_as(*new_win_exprs.at(i))) {
+        win_expr = new_win_exprs.at(i);
+        break;
+      } else {/*do nothing*/}
+    }
+    if (OB_SUCC(ret) && i == new_win_exprs.count()) {
+      if (OB_FAIL(new_win_exprs.push_back(win_expr))) {
+        LOG_WARN("failed to push back aggr expr", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 //T_FUN_VAR_POP == node->type_: (SUM(expr*expr) - SUM(expr)* SUM(expr)/ COUNT(expr)) / COUNT(expr)
 //T_FUN_VAR_SAMP== node->type_: (SUM(expr*expr) - SUM(expr)* SUM(expr)/ COUNT(expr)) / (COUNT(expr) - 1)
 int ObExpandAggregateUtils::expand_var_expr(ObAggFunRawExpr *aggr_expr,

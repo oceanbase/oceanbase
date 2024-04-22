@@ -42,6 +42,12 @@ public:
                               ObRawExpr *&replace_expr,
                               ObIArray<ObAggFunRawExpr*> &new_aggr_items);
 
+  static int add_aggr_item(common::ObIArray<ObAggFunRawExpr*> &new_aggr_items,
+                           ObAggFunRawExpr *&aggr_expr);
+
+  static int add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
+                          ObWinFunRawExpr *&win_expr);
+
 private:
   int extract_candi_aggr(ObDMLStmt *select_stmt,
                          common::ObIArray<ObRawExpr*> &candi_aggr_items,
@@ -58,9 +64,6 @@ private:
   int expand_corr_expr(ObAggFunRawExpr *aggr_expr,
                        ObRawExpr *&replace_expr,
                        common::ObIArray<ObAggFunRawExpr*> &new_aggr_items);
-
-  int add_aggr_item(common::ObIArray<ObAggFunRawExpr*> &new_aggr_items,
-                    ObAggFunRawExpr *&aggr_expr);
 
   int expand_var_expr(ObAggFunRawExpr *aggr_expr,
                       ObRawExpr *&replace_expr,

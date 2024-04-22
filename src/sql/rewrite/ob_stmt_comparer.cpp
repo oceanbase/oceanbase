@@ -987,6 +987,7 @@ int ObStmtComparer::inner_compute_expr(const ObRawExpr *target_expr,
   // Try to match each param expr
   if (OB_SUCC(ret) && !is_match
       && (ObRawExpr::EXPR_OPERATOR == target_expr->get_expr_class()
+          || ObRawExpr::EXPR_CASE_OPERATOR == target_expr->get_expr_class()
           || ObRawExpr::EXPR_AGGR == target_expr->get_expr_class()
           || ObRawExpr::EXPR_SYS_FUNC == target_expr->get_expr_class()
           || ObRawExpr::EXPR_WINDOW == target_expr->get_expr_class()

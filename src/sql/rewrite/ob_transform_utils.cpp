@@ -38,6 +38,7 @@
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/parser/ob_parser.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
+#include "sql/rewrite/ob_expand_aggregate_utils.h"
 
 namespace oceanbase {
 using namespace common;
@@ -5859,7 +5860,7 @@ int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
         LOG_WARN("Failed to get column id", K(ret));
       } else if (OB_ISNULL(col_expr = stmt->get_column_expr_by_id(item->table_id_, column_id))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+        LOG_WARN("failed to get column expr", K(item->table_id_), K(column_id), K(ret));
       } else if (FALSE_IT(col_expr->set_explicited_reference())) {
       } else if (OB_FAIL(unique_keys.push_back(col_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
@@ -14397,6 +14398,11 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
                                        expand_view_name,
                                        rt_mv_table->table_name_))) {
       LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(adjust_col_and_sel_for_expand_mview(ctx,
+                                                           upper_stmt->get_column_items(),
+                                                           view_stmt->get_select_items(),
+                                                           rt_mv_table->table_id_))) {
+      LOG_WARN("failed to adjust column items and select items", K(ret));
     } else {
       rt_mv_table->type_ = TableItem::GENERATED_TABLE;
       rt_mv_table->ref_id_ = OB_INVALID_ID;
@@ -14405,31 +14411,53 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       rt_mv_table->ref_query_ = view_stmt;
       rt_mv_table->table_type_ = MAX_TABLE_TYPE;
       rt_mv_table->need_expand_rt_mv_ = false;
-      const ObIArray<ColumnItem> &col_items = upper_stmt->get_column_items();
-      ObIArray<SelectItem> &sel_items = view_stmt->get_select_items();
-      int64_t pos = OB_INVALID_ID;
-      // keep the result type for expand real-time view select items
-      for (int64_t i = 0; OB_SUCC(ret) && i < col_items.count(); ++i) {
-        if (OB_ISNULL(col_items.at(i).expr_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpected null", K(ret));
-        } else if (col_items.at(i).table_id_ != rt_mv_table->table_id_) {
-          /* do nothing */
-        } else if (FALSE_IT(pos = col_items.at(i).expr_->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
-        } else if (OB_UNLIKELY(pos < 0 || pos >= sel_items.count())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid array pos", K(pos), K(sel_items.count()), K(ret));
-        } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx->expr_factory_,
-                                                                          col_items.at(i).expr_,
-                                                                          sel_items.at(pos).expr_,
-                                                                          ctx->session_info_))) {
-          LOG_WARN("try add cast expr above failed", K(ret));
-        } else {
-          col_items.at(i).expr_->set_is_rowkey_column(false);
-        }
-      }
     }
     OPT_TRACE_END_SECTION;
+  }
+  return ret;
+}
+
+// remove mview hidden column from upper column items and add cast for view select items
+int ObTransformUtils::adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
+                                                          ObIArray<ColumnItem> &uppper_col_items,
+                                                          ObIArray<SelectItem> &view_sel_items,
+                                                          uint64_t mv_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ColumnItem, 8> new_col_items;
+  int64_t pos = OB_INVALID_ID;
+  if (OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < uppper_col_items.count(); ++i) {
+    if (OB_ISNULL(uppper_col_items.at(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (uppper_col_items.at(i).table_id_ != mv_table_id) {
+      // not mview column
+      if (OB_FAIL(new_col_items.push_back(uppper_col_items.at(i)))) {
+        LOG_WARN("failed to push back column item", K(ret));
+      }
+    } else if (FALSE_IT(pos = uppper_col_items.at(i).expr_->get_column_id() - OB_APP_MIN_COLUMN_ID)) {
+    } else if (OB_UNLIKELY(pos >= view_sel_items.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid array pos", K(pos), K(view_sel_items.count()), K(ret));
+    } else if (pos < 0) {
+      // do nothing, it is hidden column of mview
+    } else if (OB_FAIL(new_col_items.push_back(uppper_col_items.at(i)))) {
+      LOG_WARN("failed to push back column item", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::add_cast_for_replace_if_need(*ctx->expr_factory_,
+                                                                      new_col_items.at(new_col_items.count() - 1).expr_,
+                                                                      view_sel_items.at(pos).expr_,
+                                                                      ctx->session_info_))) {
+      LOG_WARN("try add cast expr above failed", K(ret));
+    } else {
+      new_col_items.at(new_col_items.count() - 1).expr_->set_is_rowkey_column(false);
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(uppper_col_items.assign(new_col_items))) {
+    LOG_WARN("failed to assign column items", K(ret));
   }
   return ret;
 }
@@ -15099,12 +15127,12 @@ int ObTransformUtils::add_aggr_winfun_expr(ObSelectStmt *stmt,
     LOG_WARN("get unexpected null", K(ret), K(expr), K(stmt));
   } else if (expr->is_aggr_expr()) {
     ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr*>(expr);
-    if (OB_FAIL(stmt->add_agg_item(*agg_expr))) {
+    if (OB_FAIL(ObExpandAggregateUtils::add_aggr_item(stmt->get_aggr_items(), agg_expr))) {
       LOG_WARN("failed to add agg item", K(ret), KPC(agg_expr));
     }
   } else if (expr->is_win_func_expr()) {
     ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(expr);
-    if (OB_FAIL(stmt->get_window_func_exprs().push_back(win_expr))) {
+    if (OB_FAIL(ObExpandAggregateUtils::add_win_expr(stmt->get_window_func_exprs(), win_expr))) {
       LOG_WARN("failed to add win func expr", K(ret), KPC(win_expr));
     }
   } else {

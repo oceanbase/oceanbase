@@ -1895,6 +1895,10 @@ public:
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
                                   ObRawExpr *expr);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
+  static int adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
+                                                 ObIArray<ColumnItem> &uppper_col_items,
+                                                 ObIArray<SelectItem> &view_sel_items,
+                                                 uint64_t mv_table_id);
 
   static int generate_view_stmt_from_query_string(const ObString &expand_view,
                                                   ObTransformerCtx *ctx,

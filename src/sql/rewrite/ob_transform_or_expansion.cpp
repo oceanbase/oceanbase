@@ -2201,7 +2201,7 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
     LOG_WARN("failed to preprocess or condition", K(ret));
   } else if (ctx.is_set_distinct_ && !ctx.is_unique_ &&
              OB_FAIL(unique_key_provider.recursive_set_stmt_unique(view_stmt, ctx_, true))) {
-    LOG_WARN("failed to set stmt unique", K(ret));
+    LOG_WARN("failed to set stmt unique", K(ret), KPC(view_stmt));
   } else if (!ctx.is_valid_topk_
              && OB_FAIL(classify_or_expr(*view_stmt, conds_exprs->at(view_expr_pos)))) {
     LOG_WARN("failed to classify or expr", K(ret), KPC(conds_exprs->at(view_expr_pos)));

@@ -400,11 +400,11 @@ int ObTransformMVRewrite::generate_mv_info(const ObDMLStmt *stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("data table schema is null", K(ret), K(mv_list.at(i)));
       } else if (OB_FAIL(mv_infos_.push_back(MvInfo(mv_list.at(i),
-                                                     data_table_id,
-                                                     mv_schema,
-                                                     data_table_schema,
-                                                     db_schema,
-                                                     NULL)))) {
+                                                    data_table_id,
+                                                    mv_schema,
+                                                    data_table_schema,
+                                                    db_schema,
+                                                    NULL)))) {
         LOG_WARN("failed to push back mv info", K(ret));
       }
     }
@@ -623,6 +623,7 @@ int ObTransformMVRewrite::try_transform_with_one_mv(ObSelectStmt *origin_stmt,
     LOG_WARN("failed to add transform hint", K(ret));
   } else {
     transform_happened = true;
+    LOG_DEBUG("succeed to transform with one mv", KPC(new_stmt));
   }
   if (OB_SUCC(ret) && !transform_happened
      && OB_FAIL(try_trans_helper.recover(origin_stmt->get_query_ctx()))) {
@@ -795,13 +796,14 @@ int ObTransformMVRewrite::create_mv_column_item(const MvInfo &mv_info,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(helper.new_stmt_), K(helper.mv_item_), K(mv_info));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < mv_info.view_stmt_->get_select_item_size(); ++i) {
+  // create mv column item
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_info.data_table_schema_->get_column_count(); ++i) {
     const ObColumnSchemaV2 *col_schema = NULL;
     ObColumnRefRawExpr *col_expr = NULL;
     bool is_uni = false;
     bool is_mul = false;
     ColumnItem column_item;
-    if (OB_ISNULL(col_schema = mv_info.data_table_schema_->get_column_schema(OB_APP_MIN_COLUMN_ID + i))) {
+    if (OB_ISNULL(col_schema = mv_info.data_table_schema_->get_column_schema_by_idx(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column schema is null", K(ret));
     } else if (OB_FAIL(ObRawExprUtils::build_column_expr(*ctx_->expr_factory_, *col_schema, col_expr))) {
@@ -854,9 +856,17 @@ int ObTransformMVRewrite::create_mv_column_item(const MvInfo &mv_info,
         LOG_WARN("add column item to stmt failed", K(ret));
       } else if (OB_FAIL(col_expr->pull_relation_id())) {
         LOG_WARN("failed to pullup relation ids", K(ret));
-      } else if (OB_FAIL(helper.col_copier_.add_replaced_expr(mv_info.view_stmt_->get_select_item(i).expr_, col_expr))) {
-        LOG_WARN("failed to add replaced expr", K(ret), KPC(mv_info.view_stmt_->get_select_item(i).expr_), KPC(col_expr));
       }
+    }
+  }
+  // add column expr to copier
+  for (int64_t i = 0; OB_SUCC(ret) && i < mv_info.view_stmt_->get_select_item_size(); ++i) {
+    ObColumnRefRawExpr *col_expr = NULL;
+    if (OB_ISNULL(col_expr = helper.new_stmt_->get_column_expr_by_id(helper.mv_item_->table_id_, OB_APP_MIN_COLUMN_ID + i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column id", K(ret), K(helper.mv_item_->table_id_), K(OB_APP_MIN_COLUMN_ID + i));
+    } else if (OB_FAIL(helper.col_copier_.add_replaced_expr(mv_info.view_stmt_->get_select_item(i).expr_, col_expr))) {
+      LOG_WARN("failed to add replaced expr", K(ret), KPC(mv_info.view_stmt_->get_select_item(i).expr_), KPC(col_expr));
     }
   }
   return ret;
