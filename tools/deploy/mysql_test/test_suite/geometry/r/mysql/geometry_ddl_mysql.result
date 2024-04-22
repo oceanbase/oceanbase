@@ -638,3 +638,10 @@ ALTER TABLE test_wrong_table MODIFY COLUMN the_geom varbinary(200) NOT NULL;
 ERROR 42000: A SPATIAL index may only contain a geometrical type column.
 DELETE FROM test_wrong_table;
 drop table test_wrong_table;
+bugfix: 55864433
+drop table if exists t1;
+drop view if exists v1;
+create TABLE t1(pt POINT);
+CREATE VIEW v1 AS (SELECT * FROM t1 ) UNION (SELECT * FROM t1 );
+drop table t1;
+drop view v1;

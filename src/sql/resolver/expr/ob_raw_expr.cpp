@@ -689,40 +689,53 @@ bool ObRawExpr::is_priv_geo_expr() const
   return IS_PRIV_GEO_OP(get_expr_type());
 }
 
+// has already been confirmed that the result type is geometry.
 ObGeoType ObRawExpr::get_geo_expr_result_type() const
 {
-  if (!is_geo_expr() && T_FUN_SYS_CAST != this->get_expr_type()) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Expr is not a geo expr");
-    return ObGeoType::GEOTYPEMAX;
-  } else {
-    switch (this->get_expr_type()) {
-      case T_FUN_SYS_CAST: {
-        int ret = OB_SUCCESS;
-        ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
-        if (OB_FAIL(get_geo_cast_result_type(geo_type))) {
-          LOG_WARN("could not get geo type from cast", K(ret));
-        }
-        return geo_type;
+  ObGeoType geo_type = ObGeoType::GEOTYPEMAX;
+  switch (this->get_expr_type()) {
+    case T_FUN_SYS_CAST: {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(get_geo_cast_result_type(geo_type))) {
+        geo_type = ObGeoType::GEOTYPEMAX;
       }
-      case T_FUN_SYS_POINT:
-      case T_FUN_SYS_ST_CENTROID:
-        return ObGeoType::POINT;
-      case T_FUN_SYS_LINESTRING:
-        return ObGeoType::LINESTRING;
-      case T_FUN_SYS_MULTIPOINT:
-        return ObGeoType::MULTIPOINT;
-      case T_FUN_SYS_MULTILINESTRING:
-        return ObGeoType::MULTILINESTRING;
-      case T_FUN_SYS_POLYGON:
-        return ObGeoType::POLYGON;
-      case T_FUN_SYS_MULTIPOLYGON:
-        return ObGeoType::MULTIPOLYGON;
-      case T_FUN_SYS_GEOMCOLLECTION:
-        return ObGeoType::GEOMETRYCOLLECTION;
-      default:
-        return ObGeoType::GEOMETRY;
+      break;
+    }
+    case T_FUN_SYS_POINT:
+    case T_FUN_SYS_ST_CENTROID: {
+      geo_type = ObGeoType::POINT;
+      break;
+    }
+    case T_FUN_SYS_LINESTRING: {
+      geo_type = ObGeoType::LINESTRING;
+      break;
+    }
+    case T_FUN_SYS_MULTIPOINT: {
+      geo_type = ObGeoType::MULTIPOINT;
+      break;
+    }
+    case T_FUN_SYS_MULTILINESTRING: {
+      geo_type = ObGeoType::MULTILINESTRING;
+      break;
+    }
+    case T_FUN_SYS_POLYGON: {
+      geo_type = ObGeoType::POLYGON;
+      break;
+    }
+    case T_FUN_SYS_MULTIPOLYGON: {
+      geo_type = ObGeoType::MULTIPOLYGON;
+      break;
+    }
+    case T_FUN_SYS_GEOMCOLLECTION: {
+      geo_type = ObGeoType::GEOMETRYCOLLECTION;
+      break;
+    }
+    default: {
+      geo_type = ObGeoType::GEOMETRY;
+      break;
     }
   }
+  return geo_type;
 }
 
 int ObRawExpr::get_geo_cast_result_type(ObGeoType& geo_type) const

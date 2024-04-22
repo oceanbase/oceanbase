@@ -2755,6 +2755,7 @@ public:
 
   bool is_xml_column() const { return ob_is_xml_pl_type(get_data_type(), get_udt_id())
                                       || ob_is_xml_sql_type(get_data_type(), get_subschema_id()); }
+  bool is_geo_column() const { return get_data_type() == ObObjType::ObGeometryType; }
   bool is_udt_hidden_column() const { return is_hidden_column() && get_udt_set_id() > 0;}
 
   inline common::ObGeoType get_geo_type() const { return static_cast<common::ObGeoType>(srs_info_.geo_type_); }

@@ -800,3 +800,14 @@ INSERT INTO test_wrong_table (id, the_geom) VALUES (21, st_geomfromtext('POLYGON
 ALTER TABLE test_wrong_table MODIFY COLUMN the_geom varbinary(200) NOT NULL; 
 DELETE FROM test_wrong_table; 
 drop table test_wrong_table;
+
+--echo bugfix: 55864433
+--disable_warnings
+drop table if exists t1;
+--disable_warnings
+drop view if exists v1;
+create TABLE t1(pt POINT);
+CREATE VIEW v1 AS (SELECT * FROM t1 ) UNION (SELECT * FROM t1 );
+
+drop table t1;
+drop view v1;

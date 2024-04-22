@@ -224,3 +224,23 @@ drop table if exists spatial_index;
 CREATE TABLE spatial_index (i INT, g GEOMETRY NOT NULL SRID 4326, PRIMARY KEY (i),  SPATIAL KEY (g))with column group ( each column);
 select i, st_astext(g) from spatial_index where ST_Intersects(g, ST_GEOMFROMTEXT('POINT(2 2)', 4326));
 i	st_astext(g)
+drop table if exists t1;
+create table t1(a int,b int);
+create index idx1 on t1(a);
+SELECT st_astext(a) FROM t1  WHERE st_equals(a, point(7, 7));
+st_astext(a)
+explain SELECT st_astext(a) FROM t1  WHERE st_equals(a, point(7, 7));
+Query Plan
+===============================================
+|ID|OPERATOR       |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------
+|0 |TABLE FULL SCAN|t1  |1       |22          |
+===============================================
+Outputs & filters:
+-------------------------------------
+  0 - output([st_astext(cast(t1.a, LONGTEXT(536870911)))]), filter([st_equals(cast(t1.a, VARCHAR(1048576)), point(cast(7, DOUBLE(-1, -1)), cast(7, DOUBLE(-1,
+       -1))))]), rowset=8
+      access([t1.a]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+drop table t1;

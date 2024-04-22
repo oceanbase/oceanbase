@@ -171,7 +171,7 @@ void build_obj_double(double num, ObArenaAllocator &allocator, ObObj &res) {
   double_to_number(num, allocator, nmb);
   res.set_number(nmb);
 }
-
+#ifdef OB_BUILD_ORACLE_PL
 void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator &ctx_allocator, common::ObObj &result)
 {
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
@@ -303,7 +303,7 @@ TEST_F(TestGeoCommon, sql_udt_to_wkt)
 
 } // namespace common
 } // namespace oceanbase
-
+#endif
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

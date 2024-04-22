@@ -3673,6 +3673,8 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (!l_expr->has_flag(CNT_COLUMN) && !r_expr->has_flag(CNT_COLUMN)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else {
       op_type = get_geo_relation(expr->get_expr_type());
       if (OB_UNLIKELY(r_expr->has_flag(CNT_COLUMN))) {
@@ -3693,7 +3695,10 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
         LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
       }
 
-      if (OB_SUCC(ret)) {
+      if (OB_FAIL(ret)) {
+      } else if (!column_item->is_geo_column()) { // not geo column, do not extract geo query range
+        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+      } else {
         bool is_cellid_col = false;
         uint64_t column_id = column_item->get_column_id();
          ObGeoColumnInfo column_info;
