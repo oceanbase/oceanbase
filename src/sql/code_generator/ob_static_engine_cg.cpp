@@ -6378,8 +6378,11 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
     spec.table_location_uncertain_ = op.is_table_location_uncertain(); // row-movement target table
     spec.is_pdml_update_split_ = op.is_pdml_update_split();
     if (GCONF._ob_enable_direct_load) {
+      const ObGlobalHint &global_hint = op.get_plan()->get_optimizer_context().get_global_hint();
       spec.plan_->set_append_table_id(op.get_append_table_id());
-      spec.plan_->set_enable_append(op.get_plan()->get_optimizer_context().get_global_hint().has_append());
+      spec.plan_->set_enable_append(global_hint.has_direct_load());
+      spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
+      spec.plan_->set_enable_replace(global_hint.has_replace());
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
     if (OB_FAIL(get_pdml_partition_id_column_idx(spec.get_child(0)->output_, partition_expr_idx))) {

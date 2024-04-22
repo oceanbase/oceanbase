@@ -14161,6 +14161,15 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_DIRECT: {
+      ObDirectLoadHint direct_load_hint;
+      if (OB_FAIL(resolve_direct_load_hint(hint_node, direct_load_hint))) {
+        LOG_WARN("fail to resolve direct load hint", KR(ret));
+      } else {
+        global_hint.merge_direct_load_hint(direct_load_hint);
+      }
+      break;
+    }
     default: {
       resolved_hint = false;
       break;
@@ -16634,6 +16643,47 @@ int ObDMLResolver::resolve_table_dynamic_sampling_hint(const ParseNode &hint_nod
     opt_hint = dynamic_sampling_hint;
   }
   LOG_TRACE("resolve_table_dynamic_sampling_hint", K(is_valid_hint));
+  return ret;
+}
+
+int ObDMLResolver::resolve_direct_load_hint(const ParseNode &hint_node, ObDirectLoadHint &hint)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *child0 = nullptr; // need_sort
+  ParseNode *child1 = nullptr; // max_error_row_count
+  ParseNode *child2 = nullptr; // load_method
+  hint.reset();
+  if (OB_UNLIKELY(3 != hint_node.num_child_) ||
+      OB_ISNULL(child0 = hint_node.children_[0]) ||
+      OB_ISNULL(child1 = hint_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hint node", K(ret), K(hint_node.num_child_), K(child0), K(child1));
+  } else {
+    const int64_t need_sort_value = child0->value_;
+    const int64_t error_rows_value = hint_node.children_[1]->value_;
+    ObString load_method_str;
+    ObDirectLoadHint::LoadMethod load_method_value = ObDirectLoadHint::INVALID_LOAD_METHOD;
+    if (OB_NOT_NULL(child2 = hint_node.children_[2])) {
+      load_method_str.assign_ptr(child2->str_value_, child2->str_len_);
+      load_method_value = ObDirectLoadHint::get_load_method_value(load_method_str);
+    } else {
+      load_method_value = ObDirectLoadHint::FULL;
+    }
+    if (OB_UNLIKELY(error_rows_value < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid error rows value", KR(ret), K(error_rows_value));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "error rows in direct hint");
+    } else if (OB_UNLIKELY(ObDirectLoadHint::INVALID_LOAD_METHOD == load_method_value)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid load method value", KR(ret), K(load_method_str));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "load method in direct hint");
+    } else {
+      hint.is_enable_ = true;
+      hint.need_sort_ = (need_sort_value != 0);
+      hint.max_error_row_count_ = error_rows_value;
+      hint.load_method_ = load_method_value;
+    }
+  }
   return ret;
 }
 

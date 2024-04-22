@@ -1333,7 +1333,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   HEAP_VAR(ObWholeDataStoreDesc, data_desc, true) {
     ObArray<int64_t> report_col_checksums;
     ObArray<int64_t> report_col_ids;
-    ObDDLRedoLogWriter sstable_redo_writer;
     ObDDLRedoLogWriterCallback callback;
     ObITable::TableKey hidden_table_key;
     ObMacroDataSeq macro_start_seq(0);
@@ -1407,8 +1406,6 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_UNLIKELY(!hidden_table_key.is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("hidden table key is invalid", K(ret), K(hidden_table_key));
-      } else if (OB_FAIL(sstable_redo_writer.init(param_->dest_ls_id_, param_->dest_tablet_id_))) {
-        LOG_WARN("fail to init sstable redo writer", K(ret));
       } else if (OB_ISNULL(current_dag = static_cast<ObComplementDataDag *>(get_dag()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("the dag of this task is null", K(ret));
@@ -1430,12 +1427,13 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_UNLIKELY(context_->start_scn_ != direct_load_hdl.get_full_obj()->get_start_scn())) {
         ret = OB_TASK_EXPIRED;
         LOG_WARN("task expired", K(ret), K(context_->start_scn_), "start_scn", direct_load_hdl.get_full_obj()->get_start_scn());
-      } else if (OB_FAIL(callback.init(DDL_MB_DATA_TYPE,
+      } else if (OB_FAIL(callback.init(param_->dest_ls_id_,
+                                       param_->dest_tablet_id_,
+                                       DDL_MB_DATA_TYPE,
                                        hidden_table_key,
                                        param_->task_id_,
                                        context_->start_scn_,
-                                       param_->data_format_version_,
-                                       &sstable_redo_writer))) {
+                                       param_->data_format_version_))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
       } else if (OB_FAIL(writer.open(data_desc.get_desc(), macro_start_seq, &callback))) {
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));

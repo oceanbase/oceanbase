@@ -34,11 +34,13 @@ namespace common
 {
 class ObTabletID;
 };
-
+namespace storage
+{
+class ObIMemtable;
+};
 namespace memtable
 {
 class ObMemtableCtxCbAllocator;
-class ObIMemtable;
 class ObMemtable;
 class ObCallbackScope;
 typedef ObIArray<ObCallbackScope> ObCallbackScopeArray;
@@ -506,9 +508,9 @@ public:
     column_cnt_ = column_cnt;
     is_non_unique_local_index_cb_ = is_non_unique_local_index_cb;
   }
+  bool on_memtable(const storage::ObIMemtable * const memtable) override;
+  storage::ObIMemtable *get_memtable() const override;
   bool is_non_unique_local_index_cb() const { return is_non_unique_local_index_cb_;}
-  bool on_memtable(const ObIMemtable * const memtable) override;
-  ObIMemtable *get_memtable() const override;
   virtual MutatorType get_mutator_type() const override;
   int get_redo(RedoDataNode &node);
   ObIMvccCtx &get_ctx() const { return ctx_; }
@@ -527,7 +529,7 @@ public:
   int64_t to_string(char *buf, const int64_t buf_len) const;
   virtual int before_append(const bool is_replay) override;
   virtual void after_append(const bool is_replay) override;
-  virtual int log_submitted(const share::SCN scn, ObIMemtable *&last_mt) override;
+  virtual int log_submitted(const share::SCN scn, storage::ObIMemtable *&last_mt) override;
   int64_t get_data_size()
   {
     return data_size_;

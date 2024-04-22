@@ -26,7 +26,6 @@ namespace oceanbase
 
 namespace blocksstable
 {
-struct ObDDLMacroBlockRedoInfo;
 struct ObSSTableMergeRes;
 }
 
@@ -39,6 +38,31 @@ class ObLogHandler;
 namespace storage
 {
 class ObLSHandle;
+class ObDDLNeedStopWriteChecker
+{
+public:
+  virtual bool check_need_stop_write() = 0;
+};
+
+class ObDDLFullNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
+{
+public:
+  ObDDLFullNeedStopWriteChecker(ObDDLKvMgrHandle &ddl_kv_mgr_handle) : ddl_kv_mgr_handle_(ddl_kv_mgr_handle) {}
+  virtual ~ObDDLFullNeedStopWriteChecker() {}
+  virtual bool check_need_stop_write() override;
+public:
+  ObDDLKvMgrHandle &ddl_kv_mgr_handle_;
+};
+
+class ObDDLIncNeedStopWriteChecker : public ObDDLNeedStopWriteChecker
+{
+public:
+  ObDDLIncNeedStopWriteChecker(ObTablet &tablet) : tablet_(tablet) {}
+  virtual ~ObDDLIncNeedStopWriteChecker() {}
+  virtual bool check_need_stop_write() override;
+public:
+  ObTablet &tablet_;
+};
 
 // control the write speed of ddl clog for 4.0 . More detailly,
 // a. set write speed to the log archive speed if archive is on;
@@ -57,9 +81,9 @@ public:
   int limit_and_sleep(const int64_t bytes,
                       const uint64_t tenant_id,
                       const int64_t task_id,
-                      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                      ObDDLNeedStopWriteChecker &checker,
                       int64_t &real_sleep_us);
-  int check_need_stop_write(ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+  int check_need_stop_write(ObDDLNeedStopWriteChecker &checker,
                             bool &is_need_stop_write);
   // for ref_cnt_
   void inc_ref() { ATOMIC_INC(&ref_cnt_); }
@@ -74,7 +98,7 @@ private:
   int do_sleep(const int64_t next_available_ts,
                const uint64_t tenant_id,
                const int64_t task_id,
-               ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+               ObDDLNeedStopWriteChecker &checker,
                int64_t &real_sleep_us);
 private:
   static const int64_t MIN_WRITE_SPEED = 50L;
@@ -98,7 +122,7 @@ public:
                       const share::ObLSID &ls_id,
                       const int64_t bytes,
                       const int64_t task_id,
-                      ObDDLKvMgrHandle &ddl_kv_mgr_handle,
+                      ObDDLNeedStopWriteChecker &checker,
                       int64_t &real_sleep_us);
 
 private:
@@ -258,12 +282,12 @@ public:
       uint32_t &lock_tid,
       share::SCN &start_scn);
   int write_macro_block_log(
-      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+      const storage::ObDDLMacroBlockRedoInfo &redo_info,
       const blocksstable::MacroBlockId &macro_block_id,
       const bool allow_remote_write,
       const int64_t task_id);
   int wait_macro_block_log_finish(
-      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+      const storage::ObDDLMacroBlockRedoInfo &redo_info,
       const blocksstable::MacroBlockId &macro_block_id);
   int write_commit_log(
       const bool allow_remote_write,
@@ -310,12 +334,12 @@ private:
       share::SCN &commit_scn);
   int retry_remote_write_macro_redo(
       const int64_t task_id,
-      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
+      const storage::ObDDLMacroBlockRedoInfo &redo_info);
   int retry_remote_write_commit_clog(
       const obrpc::ObRpcRemoteWriteDDLCommitLogArg &arg,
       share::SCN &commit_scn);
   int local_write_ddl_macro_redo(
-      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+      const storage::ObDDLMacroBlockRedoInfo &redo_info,
       const share::ObLSID &ls_id,
       const int64_t task_id,
       logservice::ObLogHandler *log_handler,
@@ -324,7 +348,7 @@ private:
       ObDDLRedoLogHandle &handle);
   int remote_write_ddl_macro_redo(
       const int64_t task_id,
-      const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
+      const storage::ObDDLMacroBlockRedoInfo &redo_info);
 private:
   bool is_inited_;
   bool remote_write_;
@@ -343,12 +367,13 @@ public:
   ObDDLRedoLogWriterCallback();
   virtual ~ObDDLRedoLogWriterCallback();
   int init(
-      const blocksstable::ObDDLMacroBlockType block_type,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const storage::ObDDLMacroBlockType block_type,
       const ObITable::TableKey &table_key,
       const int64_t task_id,
       const share::SCN &start_scn,
       const uint64_t data_format_version,
-      ObDDLRedoLogWriter *ddl_writer,
       const int64_t row_id_offset = -1);
   void reset();
   int write(
@@ -364,11 +389,11 @@ private:
   int retry(const int64_t timeout_us);
 private:
   bool is_inited_;
-  blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
-  blocksstable::ObDDLMacroBlockType block_type_;
+  storage::ObDDLMacroBlockRedoInfo redo_info_;
+  storage::ObDDLMacroBlockType block_type_;
   ObITable::TableKey table_key_;
   blocksstable::MacroBlockId macro_block_id_;
-  ObDDLRedoLogWriter *ddl_writer_;
+  ObDDLRedoLogWriter ddl_writer_;
   int64_t task_id_;
   share::SCN start_scn_;
   uint64_t data_format_version_;

@@ -201,12 +201,12 @@ int ObTxCtxMemtable::on_memtable_flushed()
   return get_ls_tx_ctx_mgr()->on_tx_ctx_table_flushed();
 }
 
-bool ObTxCtxMemtable::is_frozen_memtable() const
+bool ObTxCtxMemtable::is_frozen_memtable()
 {
   return ATOMIC_LOAD(&is_frozen_);
 }
 
-bool ObTxCtxMemtable::is_active_memtable() const
+bool ObTxCtxMemtable::is_active_memtable()
 {
   return !ATOMIC_LOAD(&is_frozen_);
 }

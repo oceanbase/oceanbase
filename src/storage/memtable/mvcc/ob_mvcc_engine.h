@@ -14,12 +14,8 @@
 #define OCEANBASE_MEMTABLE_MVCC_OB_MVCC_ENGINE_
 
 #include "share/ob_define.h"
-#include "storage/memtable/mvcc/ob_mvcc_define.h"
-#include "storage/memtable/mvcc/ob_multi_version_iterator.h"
-#include "storage/memtable/mvcc/ob_mvcc_iterator.h"
-#include "storage/memtable/mvcc/ob_query_engine.h"
-#include "storage/memtable/ob_row_compactor.h"
-#include "storage/memtable/ob_memtable_context.h"
+#include "storage/memtable/ob_concurrent_control.h"
+// #include "storage/memtable/ob_memtable_context.h"
 
 namespace oceanbase
 {
@@ -34,11 +30,20 @@ namespace memtable
 struct ObRowData;
 class ObMemtableCtx;
 class ObMvccAccessCtx;
-class RowHeaderGetter;
 class ObMemtableData;
-class ObMemtableDataHeader;
 class ObMemtable;
 class ObMTKVBuilder;
+class ObQueryEngine;
+class ObMemtableKey;
+class ObMvccRow;
+class ObTxNodeArg;
+class ObMvccWriteResult;
+class ObMvccReplayResult;
+class ObMvccValueIterator;
+class ObMvccScanRange;
+class ObMvccRowIterator;
+class ObMvccTransNode;
+class ObMultiVersionRowIterator;
 
 // class for concurrent control
 class ObMvccEngine
@@ -60,7 +65,6 @@ public:
                 const bool is_insert,
                 ObMemtableKey *stored_key,
                 ObMvccRow *&value,
-                RowHeaderGetter &getter,
                 bool &is_new_add);
 
   // mvcc_write builds the ObMvccTransNode according to the arg and write

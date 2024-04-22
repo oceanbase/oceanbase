@@ -96,10 +96,14 @@ public:
   {
     whole_flag_ = 0;
   }
-  OB_INLINE void set_flag(ObDmlFlag row_flag)
+  OB_INLINE void set_flag(ObDmlFlag row_flag, ObDmlRowFlagType flag_type = DF_TYPE_NORMAL)
   {
+    reset();
     if (OB_LIKELY(row_flag >= DF_NOT_EXIST && row_flag < DF_MAX)) {
       flag_ = row_flag;
+    }
+    if (OB_LIKELY(flag_type >= DF_TYPE_NORMAL && flag_type < DF_TYPE_MAX)) {
+      flag_type_ = flag_type;
     }
   }
   OB_INLINE bool is_delete() const
@@ -133,7 +137,7 @@ public:
   OB_INLINE bool is_valid() const
   {
     return (DF_TYPE_NORMAL == flag_type_ && DF_DELETE >= flag_)
-        || (DF_TYPE_INSERT_DELETE == flag_type_ && DF_DELETE == flag_);
+        || (DF_TYPE_INSERT_DELETE == flag_type_ && (DF_INSERT == flag_ || DF_DELETE == flag_));
   }
   OB_INLINE bool is_extra_delete() const
   {
@@ -142,6 +146,10 @@ public:
   OB_INLINE bool is_insert_delete() const
   {
     return DF_TYPE_INSERT_DELETE == flag_type_ && DF_DELETE == flag_;
+  }
+  OB_INLINE bool is_delete_insert() const
+  {
+    return DF_TYPE_INSERT_DELETE == flag_type_ && DF_INSERT == flag_;
   }
   OB_INLINE void fuse_flag(const ObDmlRowFlag input_flag)
   {

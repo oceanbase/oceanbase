@@ -131,6 +131,7 @@ enum class ObTableLoadExeMode {
 
 struct ObTableLoadParam
 {
+public:
   ObTableLoadParam()
     : tenant_id_(common::OB_INVALID_ID),
       table_id_(common::OB_INVALID_ID),
@@ -191,6 +192,7 @@ struct ObTableLoadParam
                K_(session_count),
                K_(batch_size),
                K_(max_error_row_count),
+               K_(sql_mode),
                K_(column_count),
                K_(need_sort),
                K_(px_mode),
@@ -241,6 +243,7 @@ public:
     schema_version_ = 0;
     snapshot_version_ = 0;
     data_version_ = 0;
+    cluster_version_ = 0;
   }
   bool is_valid() const
   {

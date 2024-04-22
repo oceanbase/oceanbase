@@ -17,7 +17,6 @@
 #include "lib/oblog/ob_log_module.h"
 #include "lib/objectpool/ob_concurrency_objpool.h"
 #include "storage/memtable/mvcc/ob_keybtree.h"
-#include "storage/memtable/mvcc/ob_mvcc_row.h"
 #include "storage/memtable/ob_memtable_key.h"
 #include "storage/memtable/ob_mt_hash.h"
 

@@ -471,7 +471,8 @@ int ObTxTable::load_tx_ctx_table_()
   } else if (FALSE_IT(tablet = handle.get_obj())) {
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_CTX_TABLET, 0 /* schema_version */))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
+                 LS_TX_CTX_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     const ObSSTableArray &sstables = table_store_wrapper.get_member()->get_minor_sstables();

@@ -34,8 +34,12 @@ ObTableDirectInsertCtx::~ObTableDirectInsertCtx()
   destroy();
 }
 
-int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
-    const uint64_t table_id, const int64_t parallel)
+int ObTableDirectInsertCtx::init(
+    ObExecContext *exec_ctx,
+    const uint64_t table_id,
+    const int64_t parallel,
+    const bool is_incremental,
+    const bool enable_inc_replace)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -57,7 +61,11 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       load_exec_ctx_->exec_ctx_ = exec_ctx;
       ObSEArray<int64_t, 16> store_column_idxs;
       omt::ObTenant *tenant = nullptr;
-      if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
+      ObSQLSessionInfo *sesssion_info = exec_ctx->get_my_session();
+      if (OB_UNLIKELY(sesssion_info->get_ddl_info().is_mview_complete_refresh() && enable_inc_replace)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected mview complete refresh enable inc replace", KR(ret));
+      } else if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
         LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
       } else if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
@@ -73,12 +81,17 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.online_opt_stat_gather_ = true;
         param.need_sort_ = true;
         param.max_error_row_count_ = 0;
-        param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;
+        param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
+                                                : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
-        param.method_ = ObDirectLoadMethod::FULL;
-        param.insert_mode_ = (exec_ctx->get_my_session()->get_ddl_info().is_mview_complete_refresh()
-                                ? ObDirectLoadInsertMode::OVERWRITE
-                                : ObDirectLoadInsertMode::NORMAL);
+        param.method_ = (is_incremental ? ObDirectLoadMethod::INCREMENTAL : ObDirectLoadMethod::FULL);
+        if (sesssion_info->get_ddl_info().is_mview_complete_refresh()) {
+          param.insert_mode_ = ObDirectLoadInsertMode::OVERWRITE;
+        } else if (enable_inc_replace) {
+          param.insert_mode_ = ObDirectLoadInsertMode::INC_REPLACE;
+        } else {
+          param.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
+        }
         if (OB_FAIL(table_load_instance_->init(param, store_column_idxs, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {
@@ -114,7 +127,6 @@ int ObTableDirectInsertCtx::finish()
   } else if (OB_FAIL(table_load_instance_->px_commit_ddl())) {
     LOG_WARN("failed to do px_commit_ddl", KR(ret));
   } else {
-    table_load_instance_->destroy();
     LOG_DEBUG("succeeded to finish direct loader");
   }
   return ret;
@@ -130,6 +142,9 @@ void ObTableDirectInsertCtx::destroy()
     load_exec_ctx_->~ObTableLoadSqlExecCtx();
     load_exec_ctx_ = nullptr;
   }
+  is_inited_ = false;
+  is_direct_ = false;
+  is_online_gather_statistics_ = false;
 }
 
 int ObTableDirectInsertCtx::init_store_column_idxs(const uint64_t tenant_id,

@@ -23,7 +23,7 @@
 
 #include "lib/allocator/ob_allocator.h"             // ObIAllocator
 #include "lib/thread/ob_multi_fixed_queue_thread.h" // ObMQThread
-#include "storage/blocksstable/ob_datum_row.h"      // ObDmlFlag
+#include "storage/blocksstable/ob_datum_row.h"      // ObDmlRowFlag
 
 #include "ob_log_binlog_record.h"                   // IBinlogRecord,  ObLogBR
 
@@ -266,7 +266,7 @@ private:
       ObLogBR *br,
       RowValue *rv,
       const int64_t new_column_cnt,
-      const blocksstable::ObDmlFlag &dml_flag,
+      const blocksstable::ObDmlRowFlag &dml_flag,
       const TABLE_SCHEMA *simple_table_schema);
   // HBase mode put
   // 1. hbase table
@@ -274,18 +274,19 @@ private:
   // 3. new value all columns, old value empty
   int is_hbase_mode_put_(
       const uint64_t table_id,
-      const blocksstable::ObDmlFlag &dml_flag,
+      const blocksstable::ObDmlRowFlag &dml_flag,
       const int64_t column_number,
       const int64_t new_column_cnt,
       const bool contain_old_column,
       bool &is_hbase_mode_put);
   int set_src_category_(IBinlogRecord *br,
       RowValue *rv,
-      const blocksstable::ObDmlFlag &dml_flag,
+      const blocksstable::ObDmlRowFlag &dml_flag,
       const bool is_hbase_mode_put);
   int format_dml_delete_(IBinlogRecord *binlog_record, const RowValue *row_value);
   int format_dml_insert_(IBinlogRecord *binlog_record, const RowValue *row_value);
   int format_dml_update_(IBinlogRecord *binlog_record, const RowValue *row_value);
+  int format_dml_put_(IBinlogRecord *binlog_record, const RowValue *row_value);
   template<class TABLE_SCHEMA>
   int fill_orig_default_value_(
       RowValue *rv,

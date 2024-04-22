@@ -317,6 +317,7 @@ static inline bool is_direct_load_retry_err(const int ret)
     || ret == OB_NOT_MASTER
     || ret == OB_TASK_EXPIRED
     || ret == OB_REPLICA_NOT_READABLE
+    || ret == OB_TRANS_CTX_NOT_EXIST
     ;
 }
 

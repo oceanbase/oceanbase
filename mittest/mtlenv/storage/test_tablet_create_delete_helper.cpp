@@ -3142,7 +3142,7 @@ TEST_F(TestTabletCreateDeleteHelper, empty_memtable_replay_commit)
   ret = ObTabletCreateDeleteHelper::get_tablet(key, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTableHandleV2 handle;
-  memtable::ObIMemtable *memtable;
+  ObIMemtable *memtable;
   ret = tablet_handle.get_obj()->get_active_memtable(handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = handle.get_memtable(memtable);
@@ -3158,7 +3158,7 @@ TEST_F(TestTabletCreateDeleteHelper, empty_memtable_replay_commit)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTableHandleV2 new_handle;
-  memtable::ObIMemtable *new_memtable;
+  ObIMemtable *new_memtable;
   ret = tablet_handle.get_obj()->get_active_memtable(new_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = new_handle.get_memtable(new_memtable);

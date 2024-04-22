@@ -34,6 +34,7 @@ class ObTabletID;
 
 namespace storage
 {
+class ObIMemtable;
 class ObLSTxService;
 class ObTransSubmitLogFunctor;
 class ObTxCtxTable;
@@ -43,7 +44,6 @@ struct ObTransferMoveTxParam;
 
 namespace memtable
 {
-class ObIMemtable;
 class ObMemtable;
 class ObIMemtableCtx;
 }

@@ -38,7 +38,7 @@ class ObTxDataTable;
 
 
 // The basic unit that manages tx_data
-class ObTxDataMemtable : public memtable::ObIMemtable
+class ObTxDataMemtable : public ObIMemtable
 {
 private:
   // The MINI_MERGE of TxDataTable uses recycle_scn to recycle the pre-processed commit versions. But it no need be
@@ -255,7 +255,7 @@ public:  // ObTxDataMemtable
 
 public: /* derived from ObITable */
 
-  virtual bool is_active_memtable() const override { return ObTxDataMemtable::State::ACTIVE == state_; }
+  virtual bool is_active_memtable() override { return ObTxDataMemtable::State::ACTIVE == state_; }
 
   /**
    * @brief Scan this memtable to flush the tx data
@@ -287,7 +287,7 @@ public: /* derived from ObITable */
   // not supported
   virtual int get_frozen_schema_version(int64_t &schema_version) const override;
   // check if this memtable is frozen
-  virtual bool is_frozen_memtable() const { return ObTxDataMemtable::State::FROZEN == state_; }
+  virtual bool is_frozen_memtable() { return ObTxDataMemtable::State::FROZEN == state_; }
 
 public: /* derived from ObIMemtable */
   virtual int64_t get_occupied_size() const;

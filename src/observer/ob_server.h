@@ -38,7 +38,6 @@
 
 #include "storage/tx/wrs/ob_weak_read_service.h"         // ObWeakReadService
 #include "storage/tx/wrs/ob_black_list.h"
-#include "storage/ob_partition_component_factory.h"
 
 #include "rootserver/ob_root_service.h"
 
@@ -64,7 +63,6 @@
 #include "observer/ob_startup_accel_task_handler.h"
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
 #include "storage/ob_locality_manager.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/ddl/ob_ddl_heart_beat_task.h"
 
 #include "storage/ob_disk_usage_reporter.h"
@@ -409,7 +407,6 @@ private:
   share::ObLocationService location_service_;
 
   // storage related
-  storage::ObPartitionComponentFactory partition_cfy_;
   common::ObInOutBandwidthThrottle bandwidth_throttle_;
   int64_t sys_bkgd_net_percentage_;
   int64_t ethernet_speed_;

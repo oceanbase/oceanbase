@@ -90,7 +90,6 @@ public:
     } else {
       tablet_id_ = tablet_id;
       t3m_ = t3m;
-      table_type_ = ObITable::TableType::TX_DATA_MEMTABLE;
       freezer_ = freezer;
       tx_data_table_ = tx_data_table;
       ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
@@ -126,6 +125,11 @@ public:
     OB_ASSERT(OB_SUCCESS == mgr_.init(tablet_id, this, &freezer_, t3m));
 
     return ret;
+  }
+
+  void destroy()
+  {
+    mgr_.destroy();
   }
 
 private:
@@ -349,7 +353,7 @@ void TestTxDataTable::init_memtable_mgr_(ObTxDataMemtableMgr *memtable_mgr)
 {
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(SCN::min_scn(), 1, SCN::min_scn()));
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 }
 
@@ -385,6 +389,7 @@ void TestTxDataTable::do_basic_test()
 
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   init_memtable_mgr_(memtable_mgr);
+
   fprintf(stdout, "start insert tx data\n");
   insert_tx_data_();
   fprintf(stdout, "start insert rollback tx data\n");
@@ -445,8 +450,7 @@ void TestTxDataTable::do_basic_test()
   }
 
   // free memtable
-  freezing_memtable->reset();
-  active_memtable->reset();
+  memtable_mgr->offline();
 }
 
 void TestTxDataTable::do_undo_status_test()
@@ -564,6 +568,7 @@ void TestTxDataTable::do_tx_data_serialize_test()
   test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE * 100);
   test_serialize_with_action_cnt_(TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE * 100 + 1);
   test_commit_versions_serialize_();
+  memtable_mgr->offline();
 }
 
 void TestTxDataTable::test_commit_versions_serialize_()
@@ -632,7 +637,7 @@ void TestTxDataTable::do_repeat_insert_test() {
   ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
   ASSERT_NE(nullptr, memtable_mgr);
   memtable_mgr->set_freezer(&tx_data_table_.freezer_);
-  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(SCN::min_scn(), 1, SCN::min_scn()));
+  ASSERT_EQ(OB_SUCCESS, memtable_mgr->create_memtable(CreateMemtableArg(1, SCN::min_scn(), SCN::min_scn(), false, false)));
   ASSERT_EQ(1, memtable_mgr->get_memtable_count_());
 
   insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());

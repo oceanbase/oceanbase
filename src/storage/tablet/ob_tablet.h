@@ -40,36 +40,15 @@
 
 namespace oceanbase
 {
-namespace common
-{
-class ObThreadCond;
-}
-
 namespace share
 {
 class ObLSID;
 struct ObTabletAutoincInterval;
-
-namespace schema
-{
-class ObTableSchema;
-}
 }
 
 namespace logservice
 {
 class ObLogHandler;
-}
-
-namespace memtable
-{
-class ObIMemtable;
-class ObIMultiSourceDataUnit;
-}
-
-namespace blocksstable
-{
-class ObSSTable;
 }
 
 namespace compaction
@@ -94,6 +73,7 @@ class ObAllVirtualMdsNodeStat;
 
 namespace storage
 {
+class ObIMemtable;
 class ObStoreCtx;
 class ObTableHandleV2;
 class ObFreezer;
@@ -508,7 +488,6 @@ public:
       int64_t &required_size,
       const bool need_checksums = true);
   int check_and_set_initial_state();
-  int set_memtable_clog_checkpoint_scn(const ObMigrationTabletParam *tablet_meta);
   int read_mds_table(
       common::ObIAllocator &allocator,
       ObTabletMdsData &mds_data,
@@ -578,6 +557,9 @@ public:
   int get_max_column_cnt_on_schema_recorder(int64_t &max_column_cnt);
   static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
   int get_all_minor_sstables(ObTableStoreIterator &table_store_iter) const;
+  int set_macro_block(const ObDDLMacroBlock &macro_block,
+                      const int64_t snapshot_version,
+                      const uint64_t data_format_version);
 protected:// for MDS use
   virtual bool check_is_inited_() const override final { return is_inited_; }
   virtual const ObTabletMdsData &get_mds_data_() const override final { return mds_data_; }
@@ -638,7 +620,10 @@ private:
       const lib::Worker::CompatMode compat_mode,
       ObFreezer *freezer);
   int build_read_info(common::ObArenaAllocator &allocator, const ObTablet *tablet = nullptr);
-  int create_memtable(const int64_t schema_version, const share::SCN clog_checkpoint_scn, const bool for_replay=false);
+  int create_memtable(const int64_t schema_version,
+                      const share::SCN clog_checkpoint_scn,
+                      const bool for_direct_load,
+                      const bool for_replay);
   int try_update_start_scn();
   int try_update_ddl_checkpoint_scn();
   int try_update_table_store_flag(const ObUpdateTableStoreParam &param);
@@ -663,11 +648,11 @@ private:
       ObStoreCtx &store_ctx,
       memtable::ObMemtable *&write_memtable);
 
-  // used for freeze_tablet
   int inner_create_memtable(
-      const share::SCN clog_checkpoint_scn = share::SCN::base_scn(),/*1 for first memtable, filled later*/
-      const int64_t schema_version = 0/*0 for first memtable*/,
-      const bool for_replay = false);
+      const share::SCN clog_checkpoint_scn,
+      const int64_t schema_version,
+      const bool for_direct_load,
+      const bool for_replay);
 
   int inner_get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active) const;
 
@@ -798,9 +783,9 @@ private:
   int rebuild_memtable(
       const share::SCN &clog_checkpoint_scn,
       common::ObIArray<ObTableHandleV2> &handle_array);
-  int add_memtable(memtable::ObIMemtable* const table);
+  int add_memtable(ObIMemtable* const table);
   bool exist_memtable_with_end_scn(const ObITable *table, const share::SCN &end_scn);
-  int assign_memtables(memtable::ObIMemtable * const *memtables, const int64_t memtable_count);
+  int assign_memtables(ObIMemtable * const *memtables, const int64_t memtable_count);
   int assign_ddl_kvs(ObDDLKV * const *ddl_kvs, const int64_t ddl_kv_count);
   int pull_ddl_memtables(ObArenaAllocator &allocator, ObDDLKV **&ddl_kvs_addr, int64_t &ddl_kv_count);
   void reset_ddl_memtables();
@@ -847,7 +832,7 @@ private:
   // through ObTabletPointerHandle.
   // may be some day will fix this issue, then the pointers have no need to exist.
   // won't persist
-  memtable::ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
+  ObIMemtable *memtables_[MAX_MEMSTORE_CNT];
   ObArenaAllocator *allocator_;
   mutable common::SpinRWLock memtables_lock_;                // size: 12B, alignment: 4B
   logservice::ObLogHandler *log_handler_;

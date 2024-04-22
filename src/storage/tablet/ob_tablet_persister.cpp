@@ -494,7 +494,7 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
     arg.is_row_store_ = tablet.is_row_store();
     arg.ddl_kvs_ = tablet.ddl_kvs_;
     arg.ddl_kv_count_ = tablet.ddl_kv_count_;
-    MEMCPY(arg.memtables_, tablet.memtables_, sizeof(memtable::ObIMemtable*) * MAX_MEMSTORE_CNT);
+    MEMCPY(arg.memtables_, tablet.memtables_, sizeof(ObIMemtable*) * MAX_MEMSTORE_CNT);
     arg.memtable_count_ = tablet.memtable_count_;
   }
   return ret;

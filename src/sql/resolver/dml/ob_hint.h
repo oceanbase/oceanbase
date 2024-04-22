@@ -89,6 +89,53 @@ struct ObOptimizerStatisticsGatheringHint
   int print_osg_hint(PlanText &plan_text) const;
 };
 
+struct ObDirectLoadHint
+{
+public:
+#define DIRECT_LOAD_METHOD_DEF(DEF) \
+  DEF(INVALID_LOAD_METHOD, = 0)     \
+  DEF(FULL, = 1)                  \
+  DEF(INC, = 2)                   \
+  DEF(INC_REPLACE, = 3)           \
+  DEF(MAX_LOAD_METHOD, )
+
+  DECLARE_ENUM(LoadMethod, load_method, DIRECT_LOAD_METHOD_DEF, static);
+
+public:
+  ObDirectLoadHint() : flags_(0), max_error_row_count_(0), load_method_(INVALID_LOAD_METHOD) {}
+  ~ObDirectLoadHint() = default;
+
+  void reset();
+  int assign(const ObDirectLoadHint &other);
+  int print_direct_load_hint(PlanText &plan_text) const;
+
+  OB_INLINE bool is_enable() const { return is_enable_; }
+  OB_INLINE bool need_sort() const { return need_sort_; }
+  OB_INLINE int64_t get_max_error_row_count() const { return max_error_row_count_; }
+  OB_INLINE bool is_full_load_method() const { return LoadMethod::FULL == load_method_; }
+  OB_INLINE bool is_inc_load_method() const { return LoadMethod::INC == load_method_; }
+  OB_INLINE bool is_inc_replace_load_method() const { return LoadMethod::INC_REPLACE == load_method_; }
+  OB_INLINE bool is_full_direct_load() const { return is_full_load_method(); }
+  OB_INLINE bool is_inc_direct_load() const { return is_inc_load_method() || is_inc_replace_load_method(); }
+
+  TO_STRING_KV(K_(is_enable),
+               K_(need_sort),
+               K_(flags),
+               K_(max_error_row_count),
+               "load_method", get_load_method_string(load_method_));
+public:
+  union {
+    struct {
+      uint64_t is_enable_ : 1;
+      uint64_t need_sort_ : 1;
+      uint64_t reserved_ : 62;
+    };
+    uint64_t flags_;
+  };
+  int64_t max_error_row_count_;
+  LoadMethod load_method_;
+};
+
 struct ObOptParamHint
 {
   ObOptParamHint() {};
@@ -201,6 +248,7 @@ struct ObGlobalHint {
   void merge_opt_features_version_hint(uint64_t opt_features_version);
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
+  void merge_direct_load_hint(const ObDirectLoadHint &other);
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(PlanText &plan_text) const;
@@ -234,7 +282,18 @@ struct ObGlobalHint {
       merge_osg_hint(ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT);
     }
   }
-
+  bool has_direct_load() const
+  {
+    return (has_append() || direct_load_hint_.is_enable());
+  }
+  bool has_inc_direct_load() const
+  {
+    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_direct_load());
+  }
+  bool has_replace() const
+  {
+    return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
+  }
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
@@ -310,6 +369,7 @@ struct ObGlobalHint {
   bool flashback_read_tx_uncommitted_;
   int64_t dynamic_sampling_;
   common::ObSArray<ObAllocOpHint> alloc_op_hints_;
+  ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
 };
 

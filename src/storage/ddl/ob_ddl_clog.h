@@ -114,7 +114,7 @@ public:
   ObDDLMacroBlockClogCb();
   virtual ~ObDDLMacroBlockClogCb();
   int init(const share::ObLSID &ls_id,
-           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+           const storage::ObDDLMacroBlockRedoInfo &redo_info,
            const blocksstable::MacroBlockId &macro_block_id,
            ObTabletHandle &tablet_handle);
   virtual int on_success() override;
@@ -128,7 +128,7 @@ private:
   bool is_inited_;
   ObDDLClogCbStatus status_;
   share::ObLSID ls_id_;
-  blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
+  storage::ObDDLMacroBlockRedoInfo redo_info_;
   blocksstable::MacroBlockId macro_block_id_;
   ObSpinLock data_buffer_lock_;
   bool is_data_buffer_freed_;
@@ -217,13 +217,13 @@ class ObDDLRedoLog final
 public:
   ObDDLRedoLog();
   ~ObDDLRedoLog() = default;
-  int init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info);
+  int init(const storage::ObDDLMacroBlockRedoInfo &redo_info);
   bool is_valid() const { return redo_info_.is_valid(); }
-  blocksstable::ObDDLMacroBlockRedoInfo get_redo_info() const { return redo_info_; }
+  storage::ObDDLMacroBlockRedoInfo get_redo_info() const { return redo_info_; }
   TO_STRING_KV(K_(redo_info));
   OB_UNIS_VERSION_V(1);
 private:
-  blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
+  storage::ObDDLMacroBlockRedoInfo redo_info_;
 };
 
 class ObDDLCommitLog final

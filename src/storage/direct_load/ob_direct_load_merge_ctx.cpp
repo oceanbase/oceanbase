@@ -22,11 +22,6 @@
 #include "storage/direct_load/ob_direct_load_range_splitter.h"
 #include "storage/direct_load/ob_direct_load_partition_rescan_task.h"
 #include "observer/table_load/ob_table_load_schema.h"
-#include "share/stat/ob_opt_table_stat.h"
-#include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "share/stat/ob_opt_stat_manager.h"
-#include "share/stat/ob_opt_column_stat.h"
-#include "share/stat/ob_stat_item.h"
 
 namespace oceanbase
 {
@@ -48,17 +43,12 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     target_table_id_(OB_INVALID_ID),
     rowkey_column_num_(0),
     store_column_count_(0),
-    snapshot_version_(0),
-    lob_column_cnt_(0),
     fill_cg_thread_cnt_(0),
     datum_utils_(nullptr),
     col_descs_(nullptr),
-    cmp_funcs_(nullptr),
     is_heap_table_(false),
     is_fast_heap_table_(false),
-    is_column_store_(false),
-    online_opt_stat_gather_(false),
-    px_mode_(false),
+    is_incremental_(false),
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
     insert_table_ctx_(nullptr),
     dml_row_handler_(nullptr)
@@ -71,10 +61,12 @@ ObDirectLoadMergeParam::~ObDirectLoadMergeParam()
 
 bool ObDirectLoadMergeParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < store_column_count_ &&
-         snapshot_version_ > 0 && table_data_desc_.is_valid() && nullptr != datum_utils_ &&
-         nullptr != col_descs_ && nullptr != cmp_funcs_ &&
+  return OB_INVALID_ID != table_id_ && OB_INVALID_ID != target_table_id_ &&
+         0 < rowkey_column_num_ && 0 < store_column_count_ && table_data_desc_.is_valid() &&
+         nullptr != datum_utils_ && nullptr != col_descs_ &&
          ObDirectLoadInsertMode::is_type_valid(insert_mode_) &&
+         (ObDirectLoadInsertMode::INC_REPLACE == insert_mode_ ? is_incremental_ : true) &&
+         (ObDirectLoadInsertMode::OVERWRITE == insert_mode_ ? !is_incremental_ : true) &&
          nullptr != insert_table_ctx_ && nullptr != dml_row_handler_;
 }
 
@@ -226,121 +218,6 @@ int ObDirectLoadTabletMergeCtx::init(ObTableLoadTableCtx *ctx,
   }
   return ret;
 }
-
-int ObDirectLoadTabletMergeCtx::collect_sql_statistics(
-  const ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, ObTableLoadSqlStatistics &sql_statistics)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadTabletMergeCtx not init", KR(ret), KP(this));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, param_.target_table_id_, schema_guard,
-                                                  table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(param_));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
-  } else {
-    int64_t table_row_cnt = 0;
-    int64_t table_avg_len = 0;
-    int64_t col_cnt = param_.table_data_desc_.column_count_;
-    ObOptTableStat *table_stat = nullptr;
-    StatLevel stat_level;
-    if (table_schema->get_part_level() == PARTITION_LEVEL_ZERO) {
-      stat_level = TABLE_LEVEL;
-    } else if (table_schema->get_part_level() == PARTITION_LEVEL_ONE) {
-      stat_level = PARTITION_LEVEL;
-    } else if (table_schema->get_part_level() == PARTITION_LEVEL_TWO) {
-      stat_level = SUBPARTITION_LEVEL;
-    } else {
-      stat_level = INVALID_LEVEL;
-    }
-    if (OB_FAIL(sql_statistics.allocate_table_stat(table_stat))) {
-      LOG_WARN("fail to allocate table stat", KR(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
-        int64_t col_id = param_.is_heap_table_ ? i + 1 : i;
-        int64_t row_count = 0;
-        ObOptOSGColumnStat *osg_col_stat = nullptr;
-        if (OB_FAIL(sql_statistics.allocate_col_stat(osg_col_stat))) {
-          LOG_WARN("fail to allocate table stat", KR(ret));
-        }
-        // scan task_array
-        for (int64_t j = 0; OB_SUCC(ret) && j < task_array_.count(); ++j) {
-          ObOptOSGColumnStat *tmp_col_stat = task_array_.at(j)->get_column_stat_array().at(i);
-          if (task_array_.at(j)->get_row_count() != 0) {
-            if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
-              LOG_WARN("fail to merge column stat", KR(ret));
-            } else {
-              row_count += task_array_.at(j)->get_row_count();
-            }
-          }
-        }
-        // scan fast heap table
-        for (int64_t j = 0; OB_SUCC(ret) && j < fast_heap_table_array.count(); ++j) {
-          ObOptOSGColumnStat *tmp_col_stat = fast_heap_table_array.at(j)->get_column_stat_array().at(i);
-          if (fast_heap_table_array.at(j)->get_row_count() != 0) {
-            if (OB_FAIL(osg_col_stat->merge_column_stat(*tmp_col_stat))) {
-              LOG_WARN("fail to merge column stat", KR(ret));
-            } else {
-              row_count += fast_heap_table_array.at(j)->get_row_count();
-            }
-          }
-        }
-        if (OB_SUCC(ret)) {
-          table_row_cnt = row_count;
-          osg_col_stat->col_stat_->calc_avg_len();
-          table_avg_len += osg_col_stat->col_stat_->get_avg_len();
-          osg_col_stat->col_stat_->set_table_id(param_.target_table_id_);
-          osg_col_stat->col_stat_->set_partition_id(target_partition_id_);
-          osg_col_stat->col_stat_->set_stat_level(stat_level);
-          osg_col_stat->col_stat_->set_column_id(param_.col_descs_->at(col_id).col_id_);
-          osg_col_stat->col_stat_->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(osg_col_stat->col_stat_->get_llc_bitmap()));
-          if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
-            LOG_WARN("failed to set min max datum to obj", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        table_stat->set_table_id(param_.target_table_id_);
-        table_stat->set_partition_id(target_partition_id_);
-        table_stat->set_object_type(stat_level);
-        table_stat->set_row_count(table_row_cnt);
-        table_stat->set_avg_row_size(table_avg_len);
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadTabletMergeCtx::collect_dml_stat(const common::ObIArray<ObDirectLoadFastHeapTable *> &fast_heap_table_array, ObTableLoadDmlStat &dml_stats)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  int64_t insert_row_cnt = 0;
-  ObOptDmlStat *dml_stat = nullptr;
-  if (OB_FAIL(dml_stats.allocate_dml_stat(dml_stat))) {
-    LOG_WARN("fail to allocate table stat", KR(ret));
-  } else {
-    // scan task_array
-    for (int64_t i = 0; OB_SUCC(ret) && i < task_array_.count(); ++i) {
-      insert_row_cnt += task_array_.at(i)->get_row_count();
-    }
-    // scan fast heap table
-    for (int64_t i = 0; OB_SUCC(ret) && i < fast_heap_table_array.count(); ++i) {
-      insert_row_cnt += fast_heap_table_array.at(i)->get_row_count();
-    }
-    dml_stat->tenant_id_ = tenant_id;
-    dml_stat->table_id_ = param_.target_table_id_;
-    dml_stat->tablet_id_ = target_tablet_id_.id();
-    dml_stat->insert_row_count_ = insert_row_cnt;
-  }
-  return ret;
-}
-
 
 int ObDirectLoadTabletMergeCtx::init_sstable_array(
   const ObIArray<ObIDirectLoadPartitionTable *> &table_array)

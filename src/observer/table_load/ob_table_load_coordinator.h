@@ -34,7 +34,7 @@ class ObTableLoadCoordinatorTrans;
 
 class ObTableLoadCoordinator
 {
-  static const int64_t WAIT_INTERVAL_US = 1LL * 1000 * 1000; // 1s
+  static const int64_t WAIT_INTERVAL_US = 3 * 1000 * 1000; // 3s
   static const int64_t DEFAULT_TIMEOUT_US = 10LL * 1000 * 1000; // 10s
   static const int64_t HEART_BEAT_RPC_TIMEOUT_US = 1LL * 1000 * 1000; // 1s
   // 申请和释放资源失败等待间隔时间
@@ -52,15 +52,12 @@ public:
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
   static int abort_peers_ctx(ObTableLoadTableCtx *ctx);
-  static int abort_redef_table(ObTableLoadTableCtx *ctx);
 
 // table load ctrl interface
 public:
   int begin();
   int finish();
   int commit(table::ObTableLoadResultInfo &result_info);
-  int px_commit_data();
-  int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
@@ -69,9 +66,8 @@ private:
   int confirm_begin_peers();
   int pre_merge_peers();
   int start_merge_peers();
-  int commit_peers();
-  int commit_redef_table();
-  int drive_sql_stat(sql::ObExecContext *ctx);
+  int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
+  int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics);
   int heart_beat_peer();
 private:
   int add_check_merge_result_task();

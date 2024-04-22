@@ -207,13 +207,12 @@ public:
 
   // ddl kv interface
   int acquire_ddl_kv(ObDDLKVHandle &handle);
-  void release_ddl_kv(ObDDLKV *ddl_kv);
-
-  // memtable interfaces
-  int acquire_memtable(ObTableHandleV2 &handle);
+  int acquire_direct_load_memtable(ObTableHandleV2 &handle);
+  int acquire_data_memtable(ObTableHandleV2 &handle);
   int acquire_tx_data_memtable(ObTableHandleV2 &handle);
   int acquire_tx_ctx_memtable(ObTableHandleV2 &handle);
   int acquire_lock_memtable(ObTableHandleV2 &handle);
+  void release_ddl_kv(ObDDLKV *ddl_kv);
 
   // tablet create and acquire interfaces
   //  - create_xx_tablet() is used for the first time to construct a tablet object and create a

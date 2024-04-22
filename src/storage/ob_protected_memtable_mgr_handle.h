@@ -37,18 +37,15 @@
     } \
   } while (OB_SUCC(ret));
 
-#define DELEGATE_FOR_MEMTABLE_MGR_WITH_CREATE(function) \
-template <typename ...Args> \
-int function(const ObTabletMeta &tablet_meta, \
-    Args &&...args) \
-{ \
-  int ret = OB_SUCCESS; \
-  PROCESS_FOR_MEMTABLE_MGR( \
-  { \
-    ret = memtable_mgr_handle_.get_memtable_mgr()->function(std::forward<Args>(args)...); \
-  }) \
-  return ret; \
-}
+#define DELEGATE_FOR_MEMTABLE_MGR_WITH_CREATE(function)                                            \
+  template <typename... Args>                                                                      \
+  int function(const ObTabletMeta &tablet_meta, Args &&...args)                                    \
+  {                                                                                                \
+    int ret = OB_SUCCESS;                                                                          \
+    PROCESS_FOR_MEMTABLE_MGR(                                                                      \
+        { ret = memtable_mgr_handle_.get_memtable_mgr()->function(std::forward<Args>(args)...); }) \
+    return ret;                                                                                    \
+  }
 
 #define DELEGATE_FOR_MEMTABLE_MGR(function, ignore_not_exist_error) \
 template <typename ...Args> \
@@ -95,18 +92,9 @@ int process(const ObTabletMeta &tablet_meta, \
 
 namespace oceanbase
 {
-namespace logservice
-{
-class ObLogHandler;
-}
-namespace memtable
-{
-class ObIMemtable;
-}
 
 namespace storage
 {
-
 class ObProtectedMemtableMgrHandle
 {
 public:
@@ -165,6 +153,7 @@ public:
   DELEGATE_FOR_MEMTABLE_MGR(set_is_tablet_freeze_for_active_memtable, false);
   DELEGATE_FOR_MEMTABLE_MGR(get_last_frozen_memtable, false);
   DELEGATE_FOR_MEMTABLE_MGR(get_memtable_for_replay, false);
+  DELEGATE_FOR_MEMTABLE_MGR(get_direct_load_memtables_for_write, true);
 
   DELEGATE_FOR_MEMTABLE_MGR_WITH_CREATE(create_memtable);
 

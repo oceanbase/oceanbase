@@ -29,6 +29,7 @@ namespace observer
 {
 using namespace common;
 using namespace sql;
+using namespace storage;
 using namespace table;
 
 /**
@@ -583,7 +584,6 @@ int ObTableLoadClientTask::init_instance()
       load_param.session_count_ = load_param.parallel_;
       load_param.batch_size_ = 100;
       load_param.max_error_row_count_ = param_.get_max_error_row_count();
-      // load_param.sql_mode_ = 0; // TODO(suzhi.yt) 自增列会用到这个参数
       load_param.column_count_ = column_idxs.count();
       load_param.need_sort_ = true;
       load_param.px_mode_ = false;
@@ -613,8 +613,10 @@ int ObTableLoadClientTask::commit_instance()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
-    if (OB_FAIL(instance_.commit(result_info_))) {
+    if (OB_FAIL(instance_.commit())) {
       LOG_WARN("fail to commit instance", KR(ret));
+    } else {
+      result_info_ = instance_.get_result_info();
     }
   }
   return ret;

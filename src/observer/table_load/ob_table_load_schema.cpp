@@ -253,6 +253,29 @@ int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t 
   return ret;
 }
 
+int ObTableLoadSchema::get_lob_meta_tid(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    uint64_t &lob_meta_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *data_table_schema = nullptr;
+  lob_meta_table_id = OB_INVALID_ID;
+  if (OB_FAIL(ObTableLoadSchema::get_table_schema(
+      tenant_id, data_table_id, schema_guard, data_table_schema))) {
+    LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("data table not exist", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (!data_table_schema->has_lob_aux_table()) {
+    // bypass
+  } else {
+    lob_meta_table_id = data_table_schema->get_aux_lob_meta_tid();
+  }
+  return ret;
+}
+
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),
@@ -264,6 +287,7 @@ ObTableLoadSchema::ObTableLoadSchema()
     store_column_count_(0),
     lob_column_cnt_(0),
     collation_type_(CS_TYPE_INVALID),
+    part_level_(PARTITION_LEVEL_ZERO),
     schema_version_(0),
     is_inited_(false)
 {
@@ -289,6 +313,7 @@ void ObTableLoadSchema::reset()
   store_column_count_ = 0;
   lob_column_cnt_ = 0;
   collation_type_ = CS_TYPE_INVALID;
+  part_level_ = PARTITION_LEVEL_ZERO;
   schema_version_ = 0;
   column_descs_.reset();
   multi_version_column_descs_.reset();
@@ -332,6 +357,7 @@ int ObTableLoadSchema::init_table_schema(const ObTableSchema *table_schema)
     has_autoinc_column_ = (table_schema->get_autoinc_column_id() != 0);
     rowkey_column_count_ = table_schema->get_rowkey_column_num();
     collation_type_ = table_schema->get_collation_type();
+    part_level_ = table_schema->get_part_level();
     schema_version_ = table_schema->get_schema_version();
     if (OB_FAIL(ObTableLoadUtils::deep_copy(table_schema->get_table_name_str(), table_name_,
                                             allocator_))) {

@@ -41,8 +41,6 @@ public:
   int start();
   void stop();
   int handle_table_compact_success();
-  int collect_sql_statistics(table::ObTableLoadSqlStatistics &sql_statistics);
-  int collect_dml_stat(table::ObTableLoadDmlStat &dml_stats);
 private:
   int build_merge_ctx();
   int build_rescan_ctx();

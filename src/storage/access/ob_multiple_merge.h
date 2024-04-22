@@ -35,6 +35,8 @@ namespace oceanbase
 namespace storage
 {
 class ObBlockRowStore;
+class ObDDLKV;
+class ObDDLMemtable;
 class ObMultipleMerge : public ObQueryRowIterator
 {
 public:

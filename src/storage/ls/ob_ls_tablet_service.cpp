@@ -2331,6 +2331,7 @@ int ObLSTabletService::rollback_remove_tablet_without_lock(
 int ObLSTabletService::create_memtable(
     const common::ObTabletID &tablet_id,
     const int64_t schema_version,
+    const bool for_direct_load,
     const bool for_replay,
     const share::SCN clog_checkpoint_scn)
 {
@@ -2370,7 +2371,7 @@ int ObLSTabletService::create_memtable(
         ret = OB_EAGAIN;
         LOG_WARN("tablet status not allow create new memtable", K(ret), K(is_committed), K(user_data));
       }
-      if (FAILEDx(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_replay))) {
+      if (FAILEDx(old_tablet.create_memtable(schema_version, clog_checkpoint_scn, for_direct_load, for_replay))) {
         if (OB_MINOR_FREEZE_NOT_ALLOW != ret) {
           LOG_WARN("fail to create memtable", K(ret), K(new_tablet_handle), K(schema_version), K(tablet_id));
         }
@@ -2382,6 +2383,7 @@ int ObLSTabletService::create_memtable(
       }
     }
   }
+
   return ret;
 }
 

@@ -308,6 +308,14 @@ void ObGlobalHint::merge_opt_features_version_hint(uint64_t opt_features_version
   }
 }
 
+void ObGlobalHint::merge_direct_load_hint(const ObDirectLoadHint &other)
+{
+  direct_load_hint_.flags_ |= other.flags_;
+  direct_load_hint_.max_error_row_count_ =
+      std::max(direct_load_hint_.max_error_row_count_, other.max_error_row_count_);
+  direct_load_hint_.load_method_ = other.load_method_;
+}
+
 // zhanyue todo: try remove this later
 bool ObGlobalHint::has_hint_exclude_concurrent() const
 {
@@ -337,7 +345,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || has_gather_opt_stat_hint()
          || false != has_dbms_stats_hint_
          || -1 != dynamic_sampling_
-         || flashback_read_tx_uncommitted_;
+         || flashback_read_tx_uncommitted_
+         || has_direct_load();
 }
 
 void ObGlobalHint::reset()
@@ -368,6 +377,7 @@ void ObGlobalHint::reset()
   flashback_read_tx_uncommitted_ = false;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
   alloc_op_hints_.reuse();
+  direct_load_hint_.reset();
   dblink_hints_.reset();
 }
 
@@ -396,6 +406,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
   dblink_hints_ = other.dblink_hints_;
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
+  merge_direct_load_hint(other.direct_load_hint_);
   if (OB_FAIL(merge_alloc_op_hints(other.alloc_op_hints_))) {
     LOG_WARN("failed to merge alloc op hints", K(ret));
   } else if (OB_FAIL(merge_dop_hint(other.dops_))) {
@@ -575,6 +586,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && get_flashback_read_tx_uncommitted()) {
     PRINT_GLOBAL_HINT_STR("FLASHBACK_READ_TX_UNCOMMITTED");
+  }
+  if (OB_SUCC(ret) && OB_FAIL(direct_load_hint_.print_direct_load_hint(plan_text))) {
+    LOG_WARN("failed to print direct load hint", KR(ret));
   }
   return ret;
 }
@@ -2951,6 +2965,42 @@ int ObAllocOpHint::assign(const ObAllocOpHint& other) {
   id_ = other.id_;
   flags_ = other.flags_;
   alloc_level_ = other.alloc_level_;
+  return ret;
+}
+
+DEFINE_ENUM_FUNC(ObDirectLoadHint::LoadMethod, load_method, DIRECT_LOAD_METHOD_DEF, ObDirectLoadHint::);
+
+void ObDirectLoadHint::reset()
+{
+  flags_ = 0;
+  max_error_row_count_ = 0;
+  load_method_ = INVALID_LOAD_METHOD;
+}
+
+int ObDirectLoadHint::assign(const ObDirectLoadHint &other)
+{
+  int ret = OB_SUCCESS;
+  flags_ = other.flags_;
+  max_error_row_count_ = other.max_error_row_count_;
+  load_method_ = other.load_method_;
+  return ret;
+}
+
+int ObDirectLoadHint::print_direct_load_hint(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  const char* outline_indent = ObQueryHint::get_outline_indent(plan_text.is_oneline_);
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (is_enable_) {
+    const char *need_sort_str = need_sort_ ? "TRUE" : "FALSE";
+    const char *load_method_str = get_load_method_string(load_method_);
+    if (OB_FAIL(BUF_PRINTF("%sDIRECT(%s, %ld, '%s')",
+        outline_indent, need_sort_str, max_error_row_count_, load_method_str))) {
+      LOG_WARN("failed to print direct load hint", KR(ret));
+    }
+  }
   return ret;
 }
 

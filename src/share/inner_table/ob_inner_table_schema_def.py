@@ -17771,7 +17771,7 @@ SELECT
  M.SVR_PORT,
  (case M.TABLE_TYPE
     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'
-    when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
+    when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'
     when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'DDL_MERGE'
@@ -55756,7 +55756,7 @@ SELECT
  M.SVR_PORT,
   (case M.TABLE_TYPE
     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'
-    when 3 then 'LOCK_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
+    when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT' when 20 then 'DDL_MERGE'
     else 'INVALID'

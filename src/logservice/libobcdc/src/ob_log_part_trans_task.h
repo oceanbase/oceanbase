@@ -205,81 +205,56 @@ struct ColValue
       K_(is_col_nop));
 };
 
-///////////////////////////////////////////////////////////////////////////////////
-
 typedef LightyList<ColValue> ColValueList;
 class ObObj2strHelper;
 
-// row value
-class MutatorRow : public memtable::ObMemtableMutatorRow
+//////////////////////////////////////// MutatorRow ///////////////////////////////////////////////
+class MutatorRow
 {
 public:
   explicit MutatorRow(common::ObIAllocator &allocator);
   virtual ~MutatorRow();
-
 public:
   common::ObIAllocator &get_allocator() { return allocator_; }
-
-  // Deserialize a row
-  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
-
-  // Support for filtering table data within PG
-  // Deserialize some fields: first step to get row_size, table_id
-  int deserialize_first(
-      const char *buf,
-      const int64_t data_len,
-      int64_t &pos,
-      int32_t &row_size);
-
-  // Deserialize some fields: Step 2 continues the parsing to get the table_version
-  int deserialize_second(
-      const char *buf,
-      const int64_t data_len,
-      int64_t &pos,
-      int64_t &table_version);
-
   void reset();
-
   // Parse the column data
   // If obj2str_helper is empty, do not convert obj to string
-  int parse_cols(
+  virtual int parse_cols(
       ObObj2strHelper *obj2str_helper = NULL,
       const uint64_t tenant_id = OB_INVALID_TENANT_ID,
       const uint64_t table_id = OB_INVALID_ID,
       const TableSchemaInfo *tb_schema_info = NULL,
       const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
       const bool enable_output_hidden_primary_key = false,
-      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
-
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL) = 0;
   // Parse the column data based on ObTableSchema
-  template<class CDC_INNER_TABLE_SCHEMA>
-  int parse_cols(
-      const CDC_INNER_TABLE_SCHEMA &lob_aux_table_schema_info);
-
+  virtual int parse_cols( const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info) = 0;
+  virtual int parse_ext_info_log(ObString &ext_info_log) = 0;
   int get_cols(
       ColValueList **rowkey_cols,
       ColValueList **new_cols,
       ColValueList **old_cols,
       ObLobDataOutRowCtxList **new_lob_ctx_cols);
-
   ObLobDataOutRowCtxList &get_new_lob_ctx_cols() { return new_lob_ctx_cols_; }
-
-  int parse_ext_info_log(ObString &ext_info_log);
+  virtual uint64_t hash(const uint64_t hash) const = 0;
+  virtual uint64_t get_table_id() const = 0;
+  virtual blocksstable::ObDmlRowFlag get_dml_flag() const  = 0;
+  virtual const transaction::ObTxSEQ &get_seq_no() const = 0;
 
 public:
   TO_STRING_KV(
-      "Row", static_cast<const memtable::ObMemtableMutatorRow &>(*this),
-      K_(deserialized),
-      K_(cols_parsed),
-      K_(new_cols),
-      K_(old_cols),
-      K_(rowkey_cols));
+     K_(deserialized),
+     K_(cols_parsed),
+     K_(new_cols),
+     K_(old_cols),
+     K_(rowkey_cols));
 
-private:
+protected:
   int parse_columns_(
       const bool is_parse_new_col,
-      const char *col_data,
-      const int64_t col_data_size,
+      const blocksstable::ObDatumRow &datum_row,
+      const blocksstable::ObDmlRowFlag &dml_flag,
+      const int64_t rowkey_cnt,
       ObObj2strHelper *obj2str_helper,
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -330,8 +305,7 @@ private:
   template<class CDC_INNER_TABLE_SCHEMA>
   int parse_columns_(
       const bool is_parse_new_col,
-      const char *col_data,
-      const int64_t col_data_size,
+      const blocksstable::ObDatumRow &datum_row,
       const CDC_INNER_TABLE_SCHEMA &inner_table_schema,
       ColValueList &cols);
   template<class TABLE_SCHEMA>
@@ -351,22 +325,129 @@ private:
       ObObjMeta &obj_meta,
       ObObj &obj);
 
-private:
-  common::ObIAllocator  &allocator_;
-
-  bool                  deserialized_;
-  bool                  cols_parsed_;
-  ColValueList          new_cols_;     // A list of new values for the columns, currently no primary key values are stored, only normal columns
-  ColValueList          old_cols_;     // A list of old values for the columns, currently no primary key values are stored, only normal columns
-  ColValueList          rowkey_cols_;  // rowkey column
-
-  ObLobDataOutRowCtxList new_lob_ctx_cols_;
-
+protected:
+  common::ObIAllocator     &allocator_;
+  bool                     deserialized_;
+  bool                     cols_parsed_;
+  ColValueList             new_cols_;     // A list of new values for the columns, currently no primary key values are stored, only normal columns
+  ColValueList             old_cols_;     // A list of old values for the columns, currently no primary key values are stored, only normal columns
+  ColValueList             rowkey_cols_;  // rowkey column
+  ObLobDataOutRowCtxList   new_lob_ctx_cols_;
 private:
   DISALLOW_COPY_AND_ASSIGN(MutatorRow);
 };
+//////////////////////////////////////// MutatorRow ///////////////////////////////////////////////
 
-///////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// MacroBlockMutatorRow ///////////////////////////////////////////////
+class MacroBlockMutatorRow : public MutatorRow
+{
+public:
+  explicit MacroBlockMutatorRow(
+      common::ObIAllocator &allocator,
+      const blocksstable::ObDmlRowFlag &dml_flag,
+      const transaction::ObTxSEQ &seq_no);
+
+  virtual ~MacroBlockMutatorRow();
+public:
+  int init(ObIAllocator &allocator, const blocksstable::ObDatumRow &src_datum_row, const common::ObStoreRowkey &src_row_key);
+  void reset();
+  // Parse the column data
+  // If obj2str_helper is empty, do not convert obj to string
+  int parse_cols(
+      ObObj2strHelper *obj2str_helper = NULL,
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID,
+      const uint64_t table_id = OB_INVALID_ID,
+      const TableSchemaInfo *tb_schema_info = NULL,
+      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
+      const bool enable_output_hidden_primary_key = false,
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
+  // Parse the column data based on ObTableSchema
+  int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
+  int parse_ext_info_log(ObString &ext_info_log);
+  uint64_t hash(const uint64_t hash) const { return row_key_.murmurhash(hash); }
+  void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
+  uint64_t get_table_id() const { return table_id_; }
+  blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }
+  const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
+
+public:
+  TO_STRING_KV(
+      K_(is_inited),
+      K_(table_id),
+      K_(dml_flag),
+      K_(seq_no),
+      K_(row),
+      K_(row_key));
+private:
+  bool                              is_inited_;
+  uint64_t                          table_id_;
+  blocksstable::ObDmlRowFlag        dml_flag_;
+  transaction::ObTxSEQ              seq_no_;
+  blocksstable::ObDatumRow          row_;
+  common::ObStoreRowkey             row_key_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(MacroBlockMutatorRow);
+};
+
+//////////////////////////////////////// MacroBlockMutatorRow ///////////////////////////////////////////////
+
+//////////////////////////////////////// MemtableMutatorRow ///////////////////////////////////////////////
+class MemtableMutatorRow : public memtable::ObMemtableMutatorRow, public MutatorRow
+{
+public:
+  explicit MemtableMutatorRow(common::ObIAllocator &allocator);
+  virtual ~MemtableMutatorRow();
+
+public:
+  // Deserialize a row
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+
+  // Support for filtering table data within PG
+  // Deserialize some fields: first step to get row_size, table_id
+  int deserialize_first(
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos,
+      int32_t &row_size);
+
+  // Deserialize some fields: Step 2 continues the parsing to get the table_version
+  int deserialize_second(
+      const char *buf,
+      const int64_t data_len,
+      int64_t &pos,
+      int64_t &table_version);
+
+  void reset();
+
+  // Parse the column data
+  // If obj2str_helper is empty, do not convert obj to string
+  int parse_cols(
+      ObObj2strHelper *obj2str_helper = NULL,
+      const uint64_t tenant_id = OB_INVALID_TENANT_ID,
+      const uint64_t table_id = OB_INVALID_ID,
+      const TableSchemaInfo *tb_schema_info = NULL,
+      const ObTimeZoneInfoWrap *tz_info_wrap = nullptr,
+      const bool enable_output_hidden_primary_key = false,
+      const ObLogAllDdlOperationSchemaInfo *all_ddl_operation_table_schema_info = NULL);
+
+  // Parse the column data based on ObTableSchema
+  int parse_cols(const ObCDCLobAuxTableSchemaInfo &lob_aux_table_schema_info);
+  int parse_ext_info_log(ObString &ext_info_log);
+  uint64_t hash(const uint64_t hash) const { return rowkey_.murmurhash(hash); }
+  uint64_t get_table_id() const { return table_id_; }
+  blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }
+  const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
+
+public:
+  TO_STRING_KV(
+    "MutatorRow", static_cast<const MutatorRow &>(*this),
+    "MemtableMutatorRow", static_cast<const memtable::ObMemtableMutatorRow &>(*this));
+private:
+  DISALLOW_COPY_AND_ASSIGN(MemtableMutatorRow);
+};
+
+//////////////////////////////////////// MemtableMutatorRow ///////////////////////////////////////////////
 #define DELIMITER_STR "_"
 
 // The DML unique ID is part_trans_id(tenant_id + ls_id + trans_id) + redo_log_lsn  + row_index, the separator is `_`
@@ -429,15 +510,17 @@ public:
   void reset();
 
   int64_t get_global_schema_version() const;
-  int64_t get_table_version() const { return row_.table_version_; }
+  int64_t get_table_version() const { return 0; }
   uint64_t get_table_id() const { return table_id_; }
   void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   const logservice::TenantLSID &get_tls_id() const;
-  const common::ObStoreRowkey &get_rowkey() const { return row_.rowkey_; }
-  blocksstable::ObDmlFlag get_dml_flag() const { return row_.dml_flag_; }
-  bool is_insert() const { return blocksstable::ObDmlFlag::DF_INSERT == row_.dml_flag_; }
-  bool is_update() const { return blocksstable::ObDmlFlag::DF_UPDATE == row_.dml_flag_; }
-  bool is_delete() const { return blocksstable::ObDmlFlag::DF_DELETE == row_.dml_flag_; }
+  // TODO(fankun.fan)
+  // const common::ObStoreRowkey &get_rowkey() const {}
+  blocksstable::ObDmlRowFlag get_dml_flag() const { return row_.get_dml_flag(); }
+  bool is_insert() const { return row_.get_dml_flag().is_insert(); }
+  bool is_update() const { return row_.get_dml_flag().is_update(); }
+  bool is_delete() const { return row_.get_dml_flag().is_delete(); }
+  bool is_put() const { return row_.get_dml_flag().is_delete_insert(); }
 
   // Parse the column data
   // If obj2str_helper is empty, then no conversion of obj to string
@@ -474,7 +557,7 @@ public:
 
   ObLogEntryTask &get_redo_log_entry_task() { return log_entry_task_; }
 
-  const transaction::ObTxSEQ get_row_seq_no() const { return row_.seq_no_; }
+  const transaction::ObTxSEQ &get_row_seq_no() const { return row_.get_seq_no(); }
 
   bool is_callback() const { return 1 == is_callback_; }
   void mark_callback() { is_callback_ = 1; }
@@ -559,7 +642,7 @@ public:
   uint64_t get_op_tablegroup_id() const { return ddl_op_tablegroup_id_; }
   int64_t get_op_schema_version() const { return ddl_op_schema_version_; }
   uint64_t get_exec_tenant_id() const { return ddl_exec_tenant_id_; }
-  const transaction::ObTxSEQ &get_row_seq_no() const { return row_.seq_no_; }
+  const transaction::ObTxSEQ &get_row_seq_no() const { return row_.get_seq_no(); }
 
 public:
   // tennat_id(UINT64_MAX: 20) + schema_version(INT64_MAX:19)
@@ -646,7 +729,7 @@ typedef LightyList<IStmtTask> StmtList;
 class ObLogEntryTask
 {
 public:
-  ObLogEntryTask(PartTransTask &host);
+  ObLogEntryTask(PartTransTask &host, const bool is_direct_load_inc_log = false);
   virtual ~ObLogEntryTask();
   void reset();
   bool is_valid() const;
@@ -799,6 +882,13 @@ public:
   /// @retval OB_ENTRY_EXIST redo log already exists
   /// @retval OB_LOG_MISSING redo log missing, current log push failed: LOB intermediate log scenario, missing LOB start log
   int push_redo_log(
+      const transaction::ObTransID &trans_id,
+      const palf::LSN &log_lsn,
+      const int64_t tstamp,
+      const char *buf,
+      const int64_t buf_len);
+
+  int push_direct_load_inc_log(
       const transaction::ObTransID &trans_id,
       const palf::LSN &log_lsn,
       const int64_t tstamp,
@@ -1234,7 +1324,7 @@ private:
       const int64_t mutator_row_size);
   int push_dml_redo_on_row_start_(
       const bool need_store_data,
-      const memtable::ObMemtableMutatorMeta &meta,
+      const bool is_direct_load_inc_log,
       const palf::LSN &log_lsn,
       const char *redo_data,
       const int64_t redo_data_size,

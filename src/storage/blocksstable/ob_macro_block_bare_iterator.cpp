@@ -24,8 +24,9 @@ namespace oceanbase
 namespace blocksstable
 {
 
-ObMicroBlockBareIterator::ObMicroBlockBareIterator()
-  : allocator_(), macro_block_buf_(nullptr), macro_block_buf_size_(0), common_header_(),
+ObMicroBlockBareIterator::ObMicroBlockBareIterator(const uint64_t tenant_id)
+  : allocator_(), macro_block_buf_(nullptr), macro_block_buf_size_(0),
+    macro_reader_(tenant_id), index_reader_(tenant_id), common_header_(),
     macro_block_header_(), reader_(nullptr), micro_reader_helper_(),
     index_rowkey_cnt_(0),
     begin_idx_(0), end_idx_(0), iter_idx_(0), read_pos_(0),
@@ -484,8 +485,8 @@ int ObMicroBlockBareIterator::set_reader(const ObRowStoreType store_type)
   return ret;
 }
 
-ObMacroBlockRowBareIterator::ObMacroBlockRowBareIterator(common::ObIAllocator &allocator)
-  : row_(), micro_iter_(), column_types_(nullptr), column_checksums_(nullptr),
+ObMacroBlockRowBareIterator::ObMacroBlockRowBareIterator(common::ObIAllocator &allocator, const uint64_t tenant_id)
+  : row_(tenant_id), micro_iter_(tenant_id), column_types_(nullptr), column_checksums_(nullptr),
     rowkey_descs_(allocator), allocator_(&allocator), micro_reader_(nullptr),
     curr_micro_block_data_(), curr_block_row_idx_(-1), curr_block_row_cnt_(0), is_inited_(false)
 {

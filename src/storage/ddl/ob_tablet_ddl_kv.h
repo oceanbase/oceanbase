@@ -26,6 +26,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_sstable.h"
+#include "storage/access/ob_store_row_iterator.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,24 @@ class ObDataMacroBlockMeta;
 
 namespace storage
 {
+
+class ObDDLKVEmptyIterator : public ObStoreRowIterator
+{
+public:
+  ObDDLKVEmptyIterator() {};
+  virtual ~ObDDLKVEmptyIterator() {}
+  void reset() {}
+  void reuse() {}
+  int get_next_row(const blocksstable::ObDatumRow *&store_row) { return OB_ITER_END; }
+protected:
+  int inner_open(
+      const ObTableIterParam &iter_param,
+      ObTableAccessContext &access_ctx,
+      ObITable *table,
+      const void *query_range) { return OB_SUCCESS; }
+  virtual int inner_get_next_row(const blocksstable::ObDatumRow *&store_row) { return OB_ITER_END; }
+
+};
 
 class ObBlockMetaTreeValue final
 {
@@ -198,18 +217,92 @@ private:
   ObBlockMetaTree block_meta_tree_;
 };
 
-class ObDDLKV
+class ObDDLKV : public ObITabletMemtable
 {
 public:
   ObDDLKV();
   ~ObDDLKV();
+// full direct load.
   int init(const share::ObLSID &ls_id,
            const common::ObTabletID &tablet_id,
            const share::SCN &ddl_start_scn,
            const int64_t snapshot_version,
            const share::SCN &last_freezed_scn,
            const uint64_t data_format_version);
+
+public : // derived from ObITabletMemtable
+  virtual int init(const ObITable::TableKey &table_key,
+                   ObLSHandle &ls_handle,
+                   ObFreezer *freezer,
+                   ObTabletMemtableMgr *memtable_mgr,
+                   const int64_t schema_version,
+                   const uint32_t freeze_clock) override;
+  virtual void print_ready_for_flush() override;
+  virtual bool is_inited() const override { return is_inited_; }
+  virtual bool is_frozen_memtable() override;
+
+public:  // derived from ObSSTable
+  virtual int exist(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const blocksstable::ObDatumRowkey &rowkey,
+    bool &is_exist,
+    bool &has_found);
+
+  virtual int exist(
+      ObRowsInfo &rowsInfo,
+      bool &is_exist,
+      bool &has_found);
+
+  virtual int scan(
+      const ObTableIterParam &param,
+      ObTableAccessContext &context,
+      const blocksstable::ObDatumRange &key_range,
+      ObStoreRowIterator *&row_iter) override;
+  virtual int get(
+      const storage::ObTableIterParam &param,
+      storage::ObTableAccessContext &context,
+      const blocksstable::ObDatumRowkey &rowkey,
+      ObStoreRowIterator *&row_iter) override;
+
+  virtual int get(const storage::ObTableIterParam &param,
+                  storage::ObTableAccessContext &context,
+                  const blocksstable::ObDatumRowkey &rowkey,
+                  blocksstable::ObDatumRow &row) override;
+  virtual int multi_get(
+      const ObTableIterParam &param,
+      ObTableAccessContext &context,
+      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys,
+      ObStoreRowIterator *&row_iter) override;
+
+  virtual int multi_scan(
+      const ObTableIterParam &param,
+      ObTableAccessContext &context,
+      const common::ObIArray<blocksstable::ObDatumRange> &ranges,
+      ObStoreRowIterator *&row_iter) override;
+  virtual int get_frozen_schema_version(int64_t &schema_version) const;
+  int check_row_locked(
+      const ObTableIterParam &param,
+      const blocksstable::ObDatumRowkey &rowkey,
+      ObTableAccessContext &context,
+      ObStoreRowLockState &lock_state,
+      ObRowState &row_state,
+      bool check_exist = false);
+  int check_rows_locked(
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
+      share::SCN &max_trans_version,
+      ObRowsInfo &rows_info);
+
+public: // derived from ObFreezeCheckpoint
+  virtual int flush(share::ObLSID ls_id) override;
+  virtual bool ready_for_flush() override;
+  virtual bool rec_scn_is_stable() override;
+  virtual void set_allow_freeze(const bool allow_freeze) override;
+
+public:
   void reset();
+  void set_freeze_need_retry() { ATOMIC_STORE(&is_independent_freezed_, false); }
   int set_macro_block(
       ObTablet &tablet,
       const ObDDLMacroBlock &macro_block,
@@ -217,55 +310,75 @@ public:
       const uint64_t data_format_version,
       const bool can_freeze);
 
-  int freeze(const share::SCN &freeze_scn);
-  bool is_freezed() const { return ATOMIC_LOAD(&is_freezed_); }
+  int freeze(const share::SCN &freeze_scn = share::SCN::min_scn());
+  bool is_freezed();
   int close();
   int prepare_sstable(const bool need_check = true);
+  int decide_right_boundary();
   bool is_closed() const { return is_closed_; }
   share::SCN get_min_scn() const { return min_scn_; }
   share::SCN get_freeze_scn() const { return freeze_scn_; }
   share::SCN get_ddl_start_scn() const { return ddl_start_scn_; }
-  share::SCN get_start_scn() const { return last_freezed_scn_; }
-  share::SCN get_end_scn() const { return freeze_scn_; }
   int64_t get_macro_block_cnt() const { return macro_block_count_; }
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
   int get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
   ObIArray<ObDDLMemtable *> &get_ddl_memtables() { return ddl_memtables_; }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();
-  void inc_ref();
-  int64_t dec_ref();
-  int64_t get_ref() { return ATOMIC_LOAD(&ref_cnt_); }
-  const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
-  int64_t get_snapshot_version() const { return snapshot_version_; }
+  // const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
+  int64_t get_snapshot_version() const { return ddl_snapshot_version_; }
+  uint64_t get_data_format_version() const { return data_format_version_; }
+  const transaction::ObTransID &get_trans_id() const { return trans_id_; }
   int64_t get_memory_used() const;
-  TO_STRING_KV(K_(is_inited), K_(is_closed), K_(ref_cnt), K_(ls_id), K_(tablet_id),
-      K_(ddl_start_scn), K_(snapshot_version), K_(data_format_version),
-      K_(is_freezed), K_(last_freezed_scn), K_(min_scn), K_(max_scn), K_(freeze_scn), K_(pending_cnt),
-      K_(macro_block_count), K_(ddl_memtables));
+  OB_INLINE bool is_inc_ddl_kv() const { return is_inc_ddl_kv_; }
+  virtual int set_frozen() override {  ATOMIC_SET(&is_independent_freezed_, true);; return OB_SUCCESS; }
+
+  INHERIT_TO_STRING_KV("ObITabletMemtable",
+                       ObITabletMemtable,
+                       K_(is_inited),
+                       K_(is_closed),
+                       K_(is_inc_ddl_kv),
+                       K_(is_independent_freezed),
+                       K_(ls_id),
+                       K_(tablet_id),
+                       K_(ddl_start_scn),
+                       K_(snapshot_version),
+                       K_(data_format_version),
+                       K_(trans_id),
+                       K_(min_scn),
+                       K_(max_scn),
+                       K_(freeze_scn),
+                       K_(pending_cnt),
+                       K_(macro_block_count),
+                       K_(ddl_memtables));
+
 private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
+  bool ready_for_flush_();
   int wait_pending();
+  int full_load_freeze_(const share::SCN &freeze_scn);
+  int inc_load_freeze_();
+
+  int get_empty_iter(const ObTableIterParam &param, ObTableAccessContext &context,
+      const void *anges, ObStoreRowIterator *&row_iter);
 private:
   static const int64_t TOTAL_LIMIT = 10 * 1024 * 1024 * 1024L;
   static const int64_t HOLD_LIMIT = 10 * 1024 * 1024 * 1024L;
   bool is_inited_;
   bool is_closed_;
-  int64_t ref_cnt_;
+  bool is_inc_ddl_kv_;
+  bool is_independent_freezed_;
   common::TCRWLock lock_; // lock for block_meta_tree_ and freeze_log_ts_
   common::ObArenaAllocator arena_allocator_;
-  share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   share::SCN ddl_start_scn_; // the log ts of ddl start log
-  int64_t snapshot_version_; // the snapshot version for major sstable which is completed by ddl
+  int64_t ddl_snapshot_version_; // the snapshot version for major sstable which is completed by ddl
   uint64_t data_format_version_;
+  transaction::ObTransID trans_id_; // for incremental direct load only
 
   // freeze related
-  bool is_freezed_;
-  share::SCN last_freezed_scn_; // the freezed log ts of last ddl kv. the log ts range of this ddl kv is (last_freezed_log_ts_, freeze_log_ts_]
   share::SCN min_scn_; // the min log ts of macro blocks
   share::SCN max_scn_; // the max log ts of macro blocks
-  share::SCN freeze_scn_; // ddl kv refuse data larger than freeze log ts, freeze_log_ts >= max_log_ts
   int64_t pending_cnt_; // the amount of kvs that are replaying
 
   int64_t macro_block_count_;

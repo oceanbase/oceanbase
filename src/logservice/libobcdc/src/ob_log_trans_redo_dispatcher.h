@@ -55,7 +55,9 @@ class ObLogTransRedoDispatcher: public IObLogTransRedoDispatcher
 public:
   ObLogTransRedoDispatcher();
   virtual ~ObLogTransRedoDispatcher();
-  int init(const int64_t redo_dispatcher_memory_limit, const bool enable_sort_by_seq_no, IObLogTransStatMgr &trans_stat_mgr);
+  int init(const int64_t redo_dispatcher_memory_limit,
+           const bool enable_sort_by_seq_no,
+           IObLogTransStatMgr &trans_stat_mgr);
   void destroy();
 
 public:
@@ -118,7 +120,6 @@ private:
   int64_t                   cur_dispatched_redo_memory_; // can dynamicly modify
   IObLogTransStatMgr        *trans_stat_mgr_;
   bool                      enable_sort_by_seq_no_; // config by init and can't change unless progress restart
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogTransRedoDispatcher);
 };

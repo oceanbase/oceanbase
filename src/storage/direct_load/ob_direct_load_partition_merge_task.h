@@ -18,7 +18,7 @@
 #include "storage/direct_load/ob_direct_load_merge_ctx.h"
 #include "storage/direct_load/ob_direct_load_multiple_heap_table_scanner.h"
 #include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
-#include "sql/engine/expr/ob_expr_sys_op_opnsize.h"
+#include "storage/direct_load/ob_direct_load_lob_builder.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
 namespace oceanbase
@@ -27,10 +27,10 @@ namespace blocksstable
 {
 class ObDatumRange;
 } // namespace blocksstable
-namespace common
+namespace table
 {
-class ObOptOSGColumnStat;
-} // namespace common
+class ObTableLoadSqlStatistics;
+} // namespace table
 namespace storage
 {
 class ObDirectLoadOriginTable;
@@ -44,28 +44,22 @@ public:
   ObDirectLoadPartitionMergeTask();
   virtual ~ObDirectLoadPartitionMergeTask();
   int process();
-  const common::ObIArray<ObOptOSGColumnStat*> &get_column_stat_array() const
-  {
-    return column_stat_array_;
-  }
   int64_t get_row_count() const { return affected_rows_; }
   void stop();
   TO_STRING_KV(KPC_(merge_param), KPC_(merge_ctx), K_(parallel_idx));
 protected:
   virtual int construct_row_iter(common::ObIAllocator &allocator,
                                  ObIStoreRowIterator *&row_iter) = 0;
-private:
-  int init_sql_statistics();
-  int init_lob_builder();
 protected:
   observer::ObTableLoadTableCtx *ctx_;
   const ObDirectLoadMergeParam *merge_param_;
   ObDirectLoadTabletMergeCtx *merge_ctx_;
   int64_t parallel_idx_;
   int64_t affected_rows_;
-  common::ObArray<ObOptOSGColumnStat*> column_stat_array_;
   ObDirectLoadLobBuilder lob_builder_;
   common::ObArenaAllocator allocator_;
+  ObDirectLoadInsertTabletContext *insert_tablet_ctx_;
+  table::ObTableLoadSqlStatistics *sql_statistics_;
   bool is_stop_;
   bool is_inited_;
 };
@@ -93,16 +87,16 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
-             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadSSTable *> &sstable_array,
-             const blocksstable::ObDatumRange &range);
+             const blocksstable::ObDatumRange &range,
+             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadSSTableDataFuse data_fuse_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
-    bool is_inited_;
   };
 private:
   ObDirectLoadOriginTable *origin_table_;
@@ -133,16 +127,16 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
-             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-             const blocksstable::ObDatumRange &range);
+             const blocksstable::ObDatumRange &range,
+             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadMultipleSSTableDataFuse data_fuse_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
-    bool is_inited_;
   };
 private:
   ObDirectLoadOriginTable *origin_table_;
@@ -172,9 +166,10 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadExternalTable *external_table,
-             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
-             const share::ObTabletCacheInterval &pk_interval);
+             const share::ObTabletCacheInterval &pk_interval,
+             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadExternalSequentialScanner<ObDirectLoadExternalRow> scanner_;
@@ -183,7 +178,6 @@ private:
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
     ObDirectLoadDMLRowHandler *dml_row_handler_;
-    bool is_inited_;
   };
 private:
   ObDirectLoadExternalTable *external_table_;
@@ -212,9 +206,10 @@ private:
     int init(const ObDirectLoadMergeParam &merge_param,
              const common::ObTabletID &tablet_id,
              ObDirectLoadMultipleHeapTable *heap_table,
-             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
-             const share::ObTabletCacheInterval &pk_interval);
+             const share::ObTabletCacheInterval &pk_interval,
+             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     ObDirectLoadMultipleHeapTableTabletWholeScanner scanner_;
@@ -223,7 +218,6 @@ private:
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
     ObDirectLoadDMLRowHandler *dml_row_handler_;
-    bool is_inited_;
   };
 private:
   ObDirectLoadMultipleHeapTable *heap_table_;
@@ -251,10 +245,11 @@ private:
     virtual ~RowIterator();
     int init(const ObDirectLoadMergeParam &merge_param, const common::ObTabletID &tablet_id,
              ObDirectLoadOriginTable *origin_table,
-             common::ObIArray<ObOptOSGColumnStat*> &column_stat_array,
+             table::ObTableLoadSqlStatistics *sql_statistics,
              ObDirectLoadLobBuilder &lob_builder,
              const common::ObIArray<ObDirectLoadMultipleHeapTable *> *heap_table_array,
-             const share::ObTabletCacheInterval &pk_interval);
+             const share::ObTabletCacheInterval &pk_interval,
+             ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
   private:
     int switch_next_heap_table();
@@ -276,7 +271,6 @@ private:
     int64_t deserialize_datum_cnt_;
     share::ObTabletCacheInterval pk_interval_;
     ObDirectLoadDMLRowHandler *dml_row_handler_;
-    bool is_inited_;
   };
 private:
   ObDirectLoadOriginTable *origin_table_;

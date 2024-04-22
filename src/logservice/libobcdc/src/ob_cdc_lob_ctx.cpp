@@ -75,7 +75,7 @@ void ObLobDataGetCtx::reset()
   type_ = ObLobDataGetTaskType::FULL_LOB;
   host_ = nullptr;
   column_id_ = common::OB_INVALID_ID;
-  dml_flag_ = blocksstable::ObDmlFlag::DF_MAX;
+  dml_flag_.reset();
   new_lob_data_ = nullptr;
   old_lob_data_ = nullptr;
   lob_col_value_handle_done_count_ = 0;
@@ -87,7 +87,7 @@ void ObLobDataGetCtx::reset()
 void ObLobDataGetCtx::reset(
     void *host,
     const uint64_t column_id,
-    const blocksstable::ObDmlFlag &dml_flag,
+    const blocksstable::ObDmlRowFlag &dml_flag,
     const common::ObLobData *new_lob_data)
 {
   host_ = host;
@@ -222,8 +222,8 @@ int64_t ObLobDataGetCtx::to_string(char *buf, const int64_t buf_len) const
     }
 
     (void)common::databuff_printf(buf, buf_len, pos,
-        "column_id=%ld, dml=%s, ref_cnt[new=%d, old=%d], handle_cnt=%d, type=%d, ",
-        column_id_, print_dml_flag(dml_flag_), new_lob_col_ctx_.get_col_ref_cnt(),
+        "column_id=%ld, dml_flag=%s, dml_serialize_flag=%d, ref_cnt[new=%d, old=%d], handle_cnt=%d, type=%d, ",
+        column_id_, dml_flag_.getFlagStr(), dml_flag_.get_serialize_flag(), new_lob_col_ctx_.get_col_ref_cnt(),
         old_lob_col_ctx_.get_col_ref_cnt(), lob_col_value_handle_done_count_, type_);
 
     if (nullptr != new_lob_data_) {

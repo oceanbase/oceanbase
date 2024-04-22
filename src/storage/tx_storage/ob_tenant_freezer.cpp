@@ -297,7 +297,7 @@ int ObTenantFreezer::tablet_freeze_(ObLS *ls,
     need_retry = false;
     retry_times++;
     if (OB_SUCC(need_rewrite_tablet_meta
-                ? ls->tablet_freeze_with_rewrite_meta(tablet_id, abs_timeout_ts)
+                ? ls->tablet_freeze_with_rewrite_meta(tablet_id, nullptr/* result */, abs_timeout_ts)
                 : ls->tablet_freeze(tablet_id, is_sync, abs_timeout_ts))) {
     } else {
       current_ts = ObTimeUtil::current_time();

@@ -41,6 +41,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
@@ -1181,6 +1182,15 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       OZ (txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE));
       ret = OB_TRANS_NEED_ROLLBACK;
       LOG_WARN("trans result incomplete, trans aborted", K(ret));
+    } else if (plan->get_enable_append()
+               && plan->get_enable_inc_direct_load()
+               && OB_UNLIKELY(OB_SUCCESS != exec_errcode)) {
+      if (!rollback) {
+        LOG_ERROR("direct load failed, but rollback not issued");
+      }
+      OZ (txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE));
+      ret = OB_TRANS_NEED_ROLLBACK;
+      LOG_WARN("direct load failed, trans aborted", KR(ret));
     } else if (rollback) {
       auto stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
       auto &touched_ls = tx_result.get_touched_ls();

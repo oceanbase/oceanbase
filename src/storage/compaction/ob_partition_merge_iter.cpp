@@ -1731,7 +1731,7 @@ int ObPartitionMinorRowMergeIter::collect_tnode_dml_stat(
 /*
  *ObPartitionMinorMacroMergeIter
  */
-ObPartitionMinorMacroMergeIter::ObPartitionMinorMacroMergeIter(common::ObIAllocator &allocator)
+ObPartitionMinorMacroMergeIter::ObPartitionMinorMacroMergeIter(common::ObIAllocator &allocator, bool reuse_uncommit_row)
   : ObPartitionMinorRowMergeIter(allocator),
     macro_block_iter_(nullptr),
     curr_block_desc_(),
@@ -1740,7 +1740,8 @@ ObPartitionMinorMacroMergeIter::ObPartitionMinorMacroMergeIter(common::ObIAlloca
     last_macro_block_reused_(-1),
     last_macro_block_recycled_(false),
     last_mvcc_row_already_output_(true),
-    have_macro_output_row_(false)
+    have_macro_output_row_(false),
+    reuse_uncommit_row_(reuse_uncommit_row)
 {
   curr_block_desc_.macro_meta_ = &curr_block_meta_;
 }
@@ -1822,12 +1823,13 @@ int ObPartitionMinorMacroMergeIter::check_need_open_curr_macro_block(bool &need)
 {
   int ret = OB_SUCCESS;
   need = false;
-  if (curr_block_desc_.contain_uncommitted_row_) {
+  if (!reuse_uncommit_row_ && curr_block_desc_.contain_uncommitted_row_) {
     need = true;
     LOG_INFO("need rewrite one dirty macro", K_(curr_block_desc));
-  } else if ((last_macro_block_recycled_ && !last_mvcc_row_already_output_) ||
-             (!curr_block_desc_.contain_uncommitted_row_ &&
-              curr_block_desc_.max_merged_trans_version_ <= access_context_.trans_version_range_.base_version_)) {
+  //TODO:only for recyle multi version row
+  // } else if ((last_macro_block_recycled_ && !last_mvcc_row_already_output_) ||
+  //            (!curr_block_desc_.contain_uncommitted_row_ &&
+  //             curr_block_desc_.max_merged_trans_version_ <= access_context_.trans_version_range_.base_version_)) {
     // 1. last_macro_recycled and current_macro can not be recycled:
     //    need to open to recycle left rows of the last rowkey in recycled macro block
     // 2. last_macro_reused and current can be recycled: need to open to recycle micro blocks

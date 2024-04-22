@@ -31,6 +31,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -1315,16 +1316,29 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
       }
     }
     if (OB_SUCC(ret) && need_table) {
+      ObITable *target_table_ptr = table_ptr;
       if (table_ptr->no_data_to_read()) {
         LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
       } else if (table_ptr->is_memtable()) {
         read_released_memtable = read_released_memtable ||
-            memtable::ObMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
+            TabletMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
         ++memtable_cnt;
+        if (table_ptr->is_direct_load_memtable()) {
+          ObDDLMemtable *ddl_memtable = nullptr;
+          if (OB_FAIL((static_cast<ObDDLKV*>(table_ptr)->get_ddl_memtable(0, ddl_memtable)))) {
+            LOG_WARN("fail to get ddl memtable but ignore the failure, return nullpoint", K(ret));
+          } else if (OB_ISNULL(ddl_memtable)) {
+            continue;
+          } else {
+            target_table_ptr = ddl_memtable;
+          }
+        }
       }
-      if (OB_FAIL(tables_.push_back(table_ptr))) {
-        LOG_WARN("add table fail", K(ret), K(*table_ptr));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(tables_.push_back(target_table_ptr))) {
+          LOG_WARN("add table fail", K(ret), K(*table_ptr));
+        }
       }
     }
   } // end while

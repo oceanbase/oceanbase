@@ -21,6 +21,7 @@
 
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_trans_part_ctx.h"
+#include "storage/tx/ob_tx_log_operator.h"
 #include "storage/tx/ob_tx_replay_executor.h"
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
@@ -221,6 +222,18 @@ int ObTxReplayExecutor::replay_tx_log_(const ObTxLogType log_type)
   case ObTxLogType::TX_MULTI_DATA_SOURCE_LOG: {
     if (OB_FAIL(replay_multi_source_data_())) {
       TRANS_LOG(WARN, "[Replay Tx] replay multi source data log error", KR(ret));
+    }
+    break;
+  }
+  case ObTxLogType::TX_DIRECT_LOAD_INC_LOG: {
+    ObTxDirectLoadIncLog::ReplayArg replay_arg;
+    replay_arg.part_log_no_ = tx_part_log_no_;
+    replay_arg.ddl_log_handler_ptr_ = ls_->get_ddl_log_handler();
+    ObTxDirectLoadIncLog::TempRef temp_ref;
+    ObTxDirectLoadIncLog::ConstructArg  construct_arg(temp_ref);
+    ObTxCtxLogOperator<ObTxDirectLoadIncLog> dli_log_op(ctx_, &log_block_, &construct_arg, replay_arg, log_ts_ns_, lsn_);
+    if (OB_FAIL(dli_log_op(ObTxLogOpType::REPLAY))) {
+      TRANS_LOG(WARN, "[Replay Tx] replay direct load inc log error", KR(ret));
     }
     break;
   }

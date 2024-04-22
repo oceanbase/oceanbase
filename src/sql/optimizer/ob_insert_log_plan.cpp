@@ -270,8 +270,8 @@ int ObInsertLogPlan::generate_osg_share_info(OSGShareInfo *&info)
 // 1. pdml insert
 // 2. _ob_enable_direct_load
 // 3. insert into select clause
-// 4. append hint
-// 5. auto_commit, not in a transaction
+// 4. append hint or direct_load hint
+// 5. full_direct_load(auto_commit, not in a transaction) or inc_direct_load
 int ObInsertLogPlan::set_is_direct_insert() {
   int ret = OB_SUCCESS;
   is_direct_insert_ = false;
@@ -281,14 +281,17 @@ int ObInsertLogPlan::set_is_direct_insert() {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(session_info));
   } else if (!get_stmt()->value_from_select()
-             || !get_optimizer_context().get_global_hint().has_append()
-             || !GCONF._ob_enable_direct_load
-             || session_info->is_in_transaction()) {
-    /* is not direct insert */
-  } else if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
-    LOG_WARN("failed to get auto commit", KR(ret));
+             || !get_optimizer_context().get_global_hint().has_direct_load()
+             || !GCONF._ob_enable_direct_load) {
+  } else if (get_optimizer_context().get_global_hint().has_inc_direct_load()) {
+    is_direct_insert_ = true;
   } else {
-    is_direct_insert_ = auto_commit;
+    // full direct load
+    if (OB_FAIL(session_info->get_autocommit(auto_commit))) {
+      LOG_WARN("failed to get auto commit", KR(ret));
+    } else if (auto_commit && !session_info->is_in_transaction()){
+      is_direct_insert_ = true;
+    }
   }
   return ret;
 }

@@ -31,6 +31,7 @@
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
+#include "storage/tx/ob_direct_load_tx_ctx_define.h"
 #include "ob_multi_data_source.h"
 #include "share/scn.h"
 
@@ -1870,7 +1871,8 @@ public:
                K_(is_empty_ctx_created_by_transfer),
                K_(exec_epoch),
                K_(serial_final_scn),
-               K_(serial_final_seq_no));
+               K_(serial_final_seq_no),
+               K_(dli_batch_set));
     return pos;
   }
   ObTxState state_;
@@ -1915,6 +1917,7 @@ public:
   // used to decide whether a branch level savepoint rollback log
   // need set pre-barrier to wait previous redo replayed
   ObTxSEQ serial_final_seq_no_;
+  ObDLIBatchSet dli_batch_set_;
 };
 
 static const int64_t USEC_PER_SEC = 1000 * 1000;

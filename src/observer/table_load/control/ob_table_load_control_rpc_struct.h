@@ -20,7 +20,6 @@
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_sql_statistics.h"
 #include "sql/session/ob_sql_session_mgr.h"
-#include "observer/table_load/ob_table_load_struct.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/tx/ob_trans_define_v4.h"
 

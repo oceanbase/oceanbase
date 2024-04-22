@@ -770,6 +770,7 @@ void ObTxExecInfo::reset()
   exec_epoch_ = 0;
   serial_final_scn_.reset();
   serial_final_seq_no_.reset();
+  dli_batch_set_.destroy();
 }
 
 void ObTxExecInfo::destroy(ObTxMDSCache &mds_cache)
@@ -898,6 +899,8 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     TRANS_LOG(WARN, "commit parts assign error", KR(ret), K(exec_info));
   } else if (OB_FAIL(transfer_parts_.assign(exec_info.transfer_parts_))) {
     TRANS_LOG(WARN, "transfer_epoch assign error", KR(ret), K(exec_info));
+  } else if (OB_FAIL(dli_batch_set_.assign(exec_info.dli_batch_set_))) {
+    TRANS_LOG(WARN, "direct load inc batch set assign error", K(ret), K(exec_info.dli_batch_set_));
   } else {
     // Prepare version should be initialized before state_
     // for ObTransPartCtx::get_prepare_version_if_preapred();
@@ -968,7 +971,9 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     checksum_,
                     checksum_scn_,
                     serial_final_scn_,
-                    serial_final_seq_no_);
+                    serial_final_seq_no_,
+                    dli_batch_set_  // FARM COMPAT WHITELIST
+                    );
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 

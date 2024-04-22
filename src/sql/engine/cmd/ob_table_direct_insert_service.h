@@ -34,7 +34,7 @@ public:
   // all insert-tasks within an insert into select clause are wrapped by a single direct insert instance
   static int start_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan);
   static int commit_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan);
-  static int finish_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan);
+  static int finish_direct_insert(ObExecContext &ctx, ObPhysicalPlan &plan, const bool commit);
   // each insert-task is processed in a single thread and is wrapped by a table load trans
   static int open_task(const uint64_t table_id,
                        const int64_t task_id,

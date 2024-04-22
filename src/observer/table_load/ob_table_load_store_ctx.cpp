@@ -83,14 +83,6 @@ int ObTableLoadStoreCtx::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(partition_id_array), K(target_partition_id_array));
   } else {
-    ObDirectLoadInsertTableParam insert_table_param;
-    insert_table_param.table_id_ = ctx_->param_.table_id_;
-    insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
-    insert_table_param.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
-    insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
-    insert_table_param.execution_id_ = 1; //仓氐说暂时设置为1，不然后面检测过不了
-    insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
-    insert_table_param.reserved_parallel_ = ctx_->param_.session_count_;
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_id_array.count(); ++i) {
       const ObLSID &ls_id = partition_id_array[i].ls_id_;
       const ObTableLoadPartitionId &part_tablet_id = partition_id_array[i].part_tablet_id_;
@@ -167,10 +159,6 @@ int ObTableLoadStoreCtx::init(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(insert_table_param.ls_partition_ids_.assign(ls_partition_ids_))) {
-      LOG_WARN("fail to assign ls tablet ids", KR(ret));
-    } else if (OB_FAIL(insert_table_param.target_ls_partition_ids_.assign(target_ls_partition_ids_))) {
-      LOG_WARN("fail to assign ls tablet ids", KR(ret));
     }
     // init trans_allocator_
     else if (OB_FAIL(trans_allocator_.init("TLD_STransPool", ctx_->param_.tenant_id_))) {
@@ -208,12 +196,41 @@ int ObTableLoadStoreCtx::init(
       LOG_WARN("fail to init merger", KR(ret));
     }
     // init insert_table_ctx_
-    else if (OB_ISNULL(insert_table_ctx_ =
+    if (OB_SUCC(ret)) {
+      ObDirectLoadInsertTableParam insert_table_param;
+      insert_table_param.table_id_ = ctx_->ddl_param_.dest_table_id_;
+      insert_table_param.schema_version_ = ctx_->ddl_param_.schema_version_;
+      insert_table_param.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
+      insert_table_param.ddl_task_id_ = ctx_->ddl_param_.task_id_;
+      insert_table_param.data_version_ = ctx_->ddl_param_.data_version_;
+      insert_table_param.parallel_ = ctx_->param_.session_count_;
+      insert_table_param.reserved_parallel_ = is_fast_heap_table_ ? ctx_->param_.session_count_ : 0;
+      insert_table_param.rowkey_column_count_ = ctx_->schema_.rowkey_column_count_;
+      insert_table_param.column_count_ = ctx_->schema_.store_column_count_;
+      insert_table_param.lob_column_count_ = ctx_->schema_.lob_column_cnt_;
+      insert_table_param.is_partitioned_table_ = ctx_->schema_.is_partitioned_table_;
+      insert_table_param.is_heap_table_ = ctx_->schema_.is_heap_table_;
+      insert_table_param.is_column_store_ = ctx_->schema_.is_column_store_;
+      insert_table_param.online_opt_stat_gather_ = ctx_->param_.online_opt_stat_gather_;
+      insert_table_param.is_incremental_ = ObDirectLoadMethod::is_incremental(ctx_->param_.method_);
+      insert_table_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
+      insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
+      insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
+      if (insert_table_param.is_incremental_ && OB_FAIL(init_trans_param(insert_table_param.trans_param_))) {
+        LOG_WARN("fail to init trans param", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::get_lob_meta_tid(ctx_->param_.tenant_id_,
+          insert_table_param.table_id_, insert_table_param.lob_meta_tid_))) {
+        LOG_WARN("fail to get lob meta tid", KR(ret),
+            K(ctx_->param_.tenant_id_), K(insert_table_param.table_id_));
+      } else if (OB_ISNULL(insert_table_ctx_ =
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
-    } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param))) {
-      LOG_WARN("fail to init insert table ctx", KR(ret));
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to new ObDirectLoadInsertTableContext", KR(ret));
+      } else if (OB_FAIL(insert_table_ctx_->init(insert_table_param, ls_partition_ids_, target_ls_partition_ids_))) {
+        LOG_WARN("fail to init insert table ctx", KR(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     }
     // init tmp_file_mgr_
     else if (OB_ISNULL(tmp_file_mgr_ = OB_NEWx(ObDirectLoadTmpFileManager, (&allocator_)))) {
@@ -398,6 +415,30 @@ void ObTableLoadStoreCtx::heart_beat()
 bool ObTableLoadStoreCtx::check_heart_beat_expired(const uint64_t expired_time_us)
 {
   return ObTimeUtil::current_time() > (last_heart_beat_ts_ + expired_time_us);
+}
+
+int ObTableLoadStoreCtx::init_trans_param(ObDirectLoadTransParam &trans_param)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = nullptr;
+  transaction::ObTxDesc *tx_desc = nullptr;
+  trans_param.reset();
+  if (OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null session info", KR(ret));
+  } else if (OB_UNLIKELY(!session_info->is_in_transaction())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not in transaction", KR(ret));
+  } else if (OB_ISNULL(tx_desc = session_info->get_tx_desc())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null tx desc", KR(ret));
+  } else {
+    trans_param.tx_desc_ = tx_desc;
+    trans_param.tx_id_ = tx_desc->get_tx_id();
+    trans_param.tx_seq_ = tx_desc->inc_and_get_tx_seq(0);
+    LOG_INFO("init trans param", K(trans_param));
+  }
+  return ret;
 }
 
 int ObTableLoadStoreCtx::generate_autoinc_params(AutoincParam &autoinc_param)

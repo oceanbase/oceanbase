@@ -194,14 +194,12 @@ TEST_F(ObTestMemtableNewSafeToDestroy, test_safe_to_destroy)
   WRITE_SQL_BY_CONN(user_connection, "begin;");
   WRITE_SQL_FMT_BY_CONN(user_connection, "insert into qcc values(1);");
 
-
-
   ASSERT_EQ(0, SSH::find_tx(user_connection, qcc_tx_id));
   ObTableHandleV2 handle;
   ObTabletID tablet_id;
   ASSERT_EQ(0, SSH::select_table_tablet(tenant_id, "qcc", tablet_id));
   get_memtable(tenant_id, share::ObLSID(1001), tablet_id, handle);
-  memtable::ObIMemtable *imemtable;
+  ObIMemtable *imemtable;
   handle.get_memtable(imemtable);
   memtable::ObMemtable *memtable = dynamic_cast<memtable::ObMemtable *>(imemtable);
   TRANS_LOG(INFO, "qcc print", KPC(memtable));
@@ -221,7 +219,7 @@ TEST_F(ObTestMemtableNewSafeToDestroy, test_safe_to_destroy)
 
   handle.reset();
 
-  storage::ObTabletMemtableMgr *memtable_mgr = memtable->get_memtable_mgr_();
+  storage::ObTabletMemtableMgr *memtable_mgr = memtable->get_memtable_mgr();
   EXPECT_EQ(OB_SUCCESS, memtable_mgr->release_memtables());
 
   TRANS_LOG(INFO, "qcc print2", KPC(memtable));;

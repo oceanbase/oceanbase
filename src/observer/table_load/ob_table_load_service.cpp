@@ -32,6 +32,7 @@ namespace observer
 using namespace common;
 using namespace lib;
 using namespace share::schema;
+using namespace storage;
 using namespace table;
 using namespace omt;
 
@@ -476,14 +477,31 @@ int ObTableLoadService::check_support_direct_load(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table with materialized view log", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table with materialized view log");
-    } else if (OB_UNLIKELY(ObDirectLoadMethod::is_incremental(method))) { // incremental direct-load
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("incremental direct-load is not supported", KR(ret));
-      FORWARD_USER_ERROR_MSG(ret, "incremental direct-load is not supported");
-    } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
-      if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+    } else if (ObDirectLoadMethod::is_incremental(method)) { // incremental direct-load
+      uint64_t compat_version = 0;
+      if (OB_UNLIKELY(ObDirectLoadInsertMode::INC_REPLACE != insert_mode)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("using incremental direct-load without inc_replace is not supported", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "using incremental direct-load without inc_replace is not supported");
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version < DATA_VERSION_4_3_1_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("version lower than 4.3.1.0 does not support incremental direct-load", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "version lower than 4.3.1.0 does not support incremental direct-load");
+      } else if (table_schema->get_index_tid_count() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support table with indexes", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with indexes");
+      } else if (table_schema->get_foreign_key_infos().count() > 0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
+      } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
+        if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected insert mode for full direct-load", KR(ret), K(method), K(insert_mode));
+        }
       }
     }
   }

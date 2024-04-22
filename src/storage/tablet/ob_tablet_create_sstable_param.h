@@ -120,7 +120,8 @@ public:
       K_(recycle_version),
       K_(nested_offset),
       K_(nested_size),
-      KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+      KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+      K_(uncommitted_tx_id));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -170,6 +171,7 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
+  int64_t uncommitted_tx_id_;
 };
 
 } // namespace storage

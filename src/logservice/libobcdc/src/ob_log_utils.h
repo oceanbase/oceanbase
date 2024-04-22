@@ -236,8 +236,8 @@ private:
 
 int get_local_ip(common::ObString &local_ip);
 
-RecordType get_record_type(const blocksstable::ObDmlFlag &dml_flag);
-const char *print_dml_flag(const blocksstable::ObDmlFlag &dml_flag);
+RecordType get_record_type(const blocksstable::ObDmlRowFlag &dml_flag);
+const char *print_dml_flag(const blocksstable::ObDmlRowFlag &dml_flag);
 const char *print_record_type(int type);
 const char *print_src_category(int src_category);
 const char *print_record_src_type(int type);

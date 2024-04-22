@@ -36,26 +36,24 @@ namespace oceanbase
 {
 using namespace share;
 
-namespace memtable
+namespace memtable {
+
+int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(const ObLSID, const memtable::ObMemtableSet *)
 {
-int ObMemtable::get_ls_id(share::ObLSID &ls_id)
+  int ret = OB_SUCCESS;
+  return ret;
+}
+
+}  // namespace memtable
+
+namespace storage
+{
+
+int ObIMemtable::get_ls_id(share::ObLSID &ls_id)
 {
   ls_id = share::ObLSID(1001);
   return OB_SUCCESS;
 }
-
-int ObMemtable::batch_remove_unused_callback_for_uncommited_txn(
-  const ObLSID , const memtable::ObMemtableSet *)
-{
-  int ret = OB_SUCCESS;
-
-  return ret;
-}
-
-}
-
-namespace storage
-{
 
 int ObTablet::check_and_set_initial_state()
 {
@@ -435,9 +433,13 @@ TEST_F(TestTenantMetaMemMgr, test_memtable)
   int ret = OB_SUCCESS;
   ObTableHandleV2 handle;
 
-  ret = t3m_.acquire_memtable(handle);
+  bool for_inc_direct_load = false;
+  ret = t3m_.acquire_data_memtable(handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(nullptr != handle.table_);
+  handle.get_table()->set_table_type(ObITable::TableType::DATA_MEMTABLE);
+
+
   ASSERT_EQ(1, t3m_.memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, handle.get_table()->get_ref());
 
@@ -467,6 +469,8 @@ TEST_F(TestTenantMetaMemMgr, test_tx_ctx_memtable)
   ret = t3m_.acquire_tx_ctx_memtable(handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(nullptr != handle.table_);
+  handle.get_table()->set_table_type(ObITable::TableType::TX_CTX_MEMTABLE);
+
   ASSERT_EQ(1, t3m_.tx_ctx_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, handle.get_table()->get_ref());
 
@@ -496,6 +500,8 @@ TEST_F(TestTenantMetaMemMgr, test_tx_data_memtable)
   ret = t3m_.acquire_tx_data_memtable(handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(nullptr != handle.table_);
+  handle.get_table()->set_table_type(ObITable::TableType::TX_DATA_MEMTABLE);
+
   ASSERT_EQ(1, t3m_.tx_data_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, handle.get_table()->get_ref());
 
@@ -525,6 +531,8 @@ TEST_F(TestTenantMetaMemMgr, test_lock_memtable)
   ret = t3m_.acquire_lock_memtable(handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_TRUE(nullptr != handle.table_);
+  handle.get_table()->set_table_type(ObITable::TableType::LOCK_MEMTABLE);
+
   ASSERT_EQ(1, t3m_.lock_memtable_pool_.inner_used_num_);
   ASSERT_EQ(1, handle.get_table()->get_ref());
 
@@ -1396,7 +1404,7 @@ TEST_F(TestTenantMetaMemMgr, test_table_gc)
   ObTableHandleV2 tx_data_memtable_handle;
   ObTableHandleV2 tx_ctx_memtable_handle;
   ObTableHandleV2 lock_memtable_handle;
-  ASSERT_EQ(OB_SUCCESS, t3m_.acquire_memtable(memtable_handle));
+  ASSERT_EQ(OB_SUCCESS, t3m_.acquire_data_memtable(memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_tx_data_memtable(tx_data_memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_tx_ctx_memtable(tx_ctx_memtable_handle));
   ASSERT_EQ(OB_SUCCESS, t3m_.acquire_lock_memtable(lock_memtable_handle));

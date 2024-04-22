@@ -20,6 +20,7 @@ namespace oceanbase
 namespace observer
 {
 using namespace sql;
+using namespace storage;
 using namespace table;
 
 OB_SERIALIZE_MEMBER(ObDirectLoadControlRequest,

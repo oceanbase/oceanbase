@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace storage
 {
+class ObDirectLoadTransParam;
 class ObDirectLoadInsertTableContext;
 class ObDirectLoadTmpFileManager;
 }  // namespace storage
@@ -130,6 +131,7 @@ private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
   int alloc_trans(const table::ObTableLoadTransId &trans_id, ObTableLoadStoreTrans *&trans);
   int init_session_ctx_array();
+  int init_trans_param(ObDirectLoadTransParam &trans_param);
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
 public:

@@ -130,7 +130,7 @@ int ObFastFreezeChecker::check_need_fast_freeze(
 }
 
 void ObFastFreezeChecker::check_hotspot_need_fast_freeze(
-    const memtable::ObMemtable &memtable,
+    memtable::ObMemtable &memtable,
     bool &need_fast_freeze)
 {
   need_fast_freeze = false;
@@ -141,7 +141,7 @@ void ObFastFreezeChecker::check_hotspot_need_fast_freeze(
 
 void ObFastFreezeChecker::check_tombstone_need_fast_freeze(
     const ObTablet &tablet,
-    const memtable::ObMemtable &memtable,
+    memtable::ObMemtable &memtable,
     bool &need_fast_freeze)
 {
   need_fast_freeze = false;
@@ -149,7 +149,7 @@ void ObFastFreezeChecker::check_tombstone_need_fast_freeze(
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
   if (memtable.is_active_memtable()) {
-    const memtable::ObMtStat &mt_stat = memtable.get_mt_stat(); // dirty read
+    const ObMtStat &mt_stat = memtable.get_mt_stat(); // dirty read
     int64_t adaptive_threshold = TOMBSTONE_DEFAULT_ROW_COUNT;
     try_update_tablet_threshold(ObTabletStatKey(ls_id, tablet_id), mt_stat, memtable.get_timestamp(), adaptive_threshold);
 
@@ -173,7 +173,7 @@ void ObFastFreezeChecker::check_tombstone_need_fast_freeze(
 
 void ObFastFreezeChecker::try_update_tablet_threshold(
     const ObTabletStatKey &key,
-    const memtable::ObMtStat &mt_stat,
+    const ObMtStat &mt_stat,
     const int64_t memtable_create_timestamp,
     int64_t &adaptive_threshold)
 {

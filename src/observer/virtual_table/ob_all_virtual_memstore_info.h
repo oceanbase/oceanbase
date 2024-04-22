@@ -50,7 +50,7 @@ private:
   int get_next_ls(ObLS *&ls);
   int get_next_tablet(storage::ObTabletHandle &tablet_handle);
   int get_next_memtable(memtable::ObMemtable *&mt);
-  void get_freeze_time_dist(const memtable::ObMtStat& mt_stat);
+  void get_freeze_time_dist(const ObMtStat& mt_stat);
 private:
   common::ObAddr addr_;
   int64_t ls_id_;

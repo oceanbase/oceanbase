@@ -3580,10 +3580,13 @@ int ObTxCtxTable::release_ref_()
 
   return ret;
 }
+void ObITabletMemtable::unset_logging_blocked_for_active_memtable_()
+{
+}
 } // namespace storage
 
-namespace memtable
-{
+namespace memtable{
+
 int ObMemtable::lock_row_on_frozen_stores_(
     const storage::ObTableIterParam &,
     const ObTxNodeArg &,
@@ -3598,9 +3601,6 @@ int ObMemtable::lock_row_on_frozen_stores_(
   } else {
     return OB_SUCCESS;
   }
-}
-void ObMemtable::unset_logging_blocked_for_active_memtable()
-{
 }
 }
 

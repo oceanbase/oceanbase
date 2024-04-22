@@ -15,7 +15,6 @@
 
 #include "storage/blocksstable/ob_sstable.h"
 #include "storage/ob_partition_scheduler.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/blocksstable/ob_macro_block_writer.h"
 #include "storage/ob_store_row_comparer.h"
 #include "storage/ob_parallel_external_sort.h"

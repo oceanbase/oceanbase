@@ -382,6 +382,7 @@ ObSSTableMeta::ObSSTableMeta()
     cg_sstables_(),
     column_checksums_(nullptr),
     column_checksum_count_(0),
+    tx_ids_(),
     is_inited_(false)
 {
 }
@@ -414,6 +415,7 @@ void ObSSTableMeta::reset()
   basic_meta_.reset();
   column_checksums_ = nullptr;
   column_checksum_count_ = 0;
+  tx_ids_.reset();
   is_inited_ = false;
 }
 
@@ -545,6 +547,12 @@ int ObSSTableMeta::init(
     }
   }
 
+  if (OB_SUCC(ret) && transaction::ObTransID(param.uncommitted_tx_id_).is_valid()) {
+    if (OB_FAIL(tx_ids_.push_back(param.uncommitted_tx_id_))) {
+      LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(param));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (param.is_ready_for_read_) {
       basic_meta_.status_ = SSTABLE_READY_FOR_READ;
@@ -609,6 +617,8 @@ int ObSSTableMeta::serialize_(char *buf, const int64_t buf_len, int64_t &pos) co
       LOG_WARN("fail to serialize macro info", K(ret), K(buf_len), K(pos), K(macro_info_));
     } else if (OB_FAIL(cg_sstables_.serialize(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize cg sstables", K(ret), K(buf_len), K(pos), K(cg_sstables_));
+    } else if (OB_FAIL(tx_ids_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ids_));
     }
   }
   return ret;
@@ -684,6 +694,8 @@ int ObSSTableMeta::deserialize_(
       LOG_WARN("fail to deserialize macro info", K(ret), K(data_len), K(pos), K(des_meta));
     } else if (pos < data_len && OB_FAIL(cg_sstables_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize cg sstables", K(ret), K(data_len), K(pos));
+    } else if (pos < data_len && OB_FAIL(tx_ids_.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize tx ids", K(ret), K(data_len), K(pos));
     }
   }
   return ret;
@@ -708,6 +720,7 @@ int64_t ObSSTableMeta::get_serialize_size_() const
   len += data_root_info_.get_serialize_size();
   len += macro_info_.get_serialize_size();
   len += cg_sstables_.get_serialize_size();
+  len += tx_ids_.get_serialize_size();
   return len;
 }
 
@@ -746,6 +759,8 @@ int ObSSTableMeta::deep_copy(
       LOG_WARN("fail to deep copy macro info", K(ret), KP(buf), K(buf_len), K(pos), K(macro_info_));
     } else if (OB_FAIL(cg_sstables_.deep_copy(buf, buf_len, pos, dest->cg_sstables_))) {
       LOG_WARN("fail to deep copy cg sstables", K(ret), KP(buf), K(buf_len), K(pos), K(cg_sstables_));
+    } else if (OB_FAIL(dest->tx_ids_.assign(tx_ids_))) {
+      LOG_WARN("fail to deep copy cg sstables", K(ret), K(tx_ids_));
     } else {
       dest->is_inited_ = is_inited_;
     }

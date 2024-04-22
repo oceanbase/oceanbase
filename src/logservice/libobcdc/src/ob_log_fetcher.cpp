@@ -84,6 +84,7 @@ ObLogFetcher::~ObLogFetcher()
 
 int ObLogFetcher::init(
     const bool is_loading_data_dict_baseline_data,
+    const bool enable_direct_load_inc,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest,
     IObLogFetcherDispatcher *dispatcher,
@@ -200,6 +201,7 @@ int ObLogFetcher::init(
       heartbeat_dispatch_tid_ = 0;
       last_timestamp_ = OB_INVALID_TIMESTAMP;
       is_loading_data_dict_baseline_data_ = is_loading_data_dict_baseline_data;
+      enable_direct_load_inc_ = enable_direct_load_inc;
       fetching_mode_ = fetching_mode;
       archive_dest_ = archive_dest;
       log_ext_handler_concurrency_ = cfg.cdc_read_archive_log_concurrency;
@@ -212,7 +214,7 @@ int ObLogFetcher::init(
       IObCDCPartTransResolver::test_checkpoint_mode_on = cfg.test_checkpoint_mode_on;
       IObCDCPartTransResolver::test_mode_ignore_log_type = static_cast<IObCDCPartTransResolver::IgnoreLogType>(cfg.test_mode_ignore_log_type.get());
 
-      LOG_INFO("init fetcher succ", K_(is_loading_data_dict_baseline_data),
+      LOG_INFO("init fetcher succ", K_(is_loading_data_dict_baseline_data), K(enable_direct_load_inc),
           "test_mode_on", IObCDCPartTransResolver::test_mode_on,
           "test_mode_ignore_log_type", IObCDCPartTransResolver::test_mode_ignore_log_type,
           "test_mode_ignore_redo_count", IObCDCPartTransResolver::test_mode_ignore_redo_count,
@@ -441,7 +443,7 @@ int ObLogFetcher::add_ls(
   }
   // Push LS into ObLogLSFetchMgr
   else if (OB_FAIL(ls_fetch_mgr_.add_ls(tls_id, start_parameters, is_loading_data_dict_baseline_data_,
-      fetching_mode_, archive_dest_))) {
+      enable_direct_load_inc_, fetching_mode_, archive_dest_))) {
     LOG_ERROR("add partition by part fetch mgr fail", KR(ret), K(tls_id), K(start_parameters),
         K(is_loading_data_dict_baseline_data_));
   } else if (OB_FAIL(ls_fetch_mgr_.get_ls_fetch_ctx(tls_id, ls_fetch_ctx))) {

@@ -12,9 +12,10 @@
 
 #pragma once
 
-#include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_osg_column_stat.h"
+#include "share/stat/ob_opt_table_stat.h"
+#include "share/stat/ob_stat_define.h"
 
 namespace oceanbase
 {
@@ -33,17 +34,21 @@ public:
   }
   ~ObTableLoadSqlStatistics() { reset(); }
   void reset();
-  bool is_empty() const
-  {
-    return table_stat_array_.count() == 0 || col_stat_array_.count() == 0;
-  }
+  OB_INLINE int64_t get_table_stat_count() const { return table_stat_array_.count(); }
+  OB_INLINE int64_t get_col_stat_count() const { return col_stat_array_.count(); }
+  OB_INLINE bool is_empty() const { return table_stat_array_.empty() && col_stat_array_.empty(); }
+  int create(int64_t column_count);
+  int merge(const ObTableLoadSqlStatistics &other);
+  int get_table_stat(int64_t idx, ObOptTableStat *&table_stat);
+  int get_col_stat(int64_t idx, ObOptOSGColumnStat *&osg_col_stat);
+  int get_table_stat_array(ObIArray<ObOptTableStat *> &table_stat_array) const;
+  int get_col_stat_array(ObIArray<ObOptColumnStat *> &col_stat_array) const;
+  int get_table_stats(TabStatIndMap &table_stats) const;
+  int get_col_stats(ColStatIndMap &col_stats) const;
+  TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
+private:
   int allocate_table_stat(ObOptTableStat *&table_stat);
   int allocate_col_stat(ObOptOSGColumnStat *&col_stat);
-  int add(const ObTableLoadSqlStatistics& other);
-  int get_table_stat_array(ObIArray<ObOptTableStat*> &table_stat_array) const;
-  int get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array) const;
-  int persistence_col_stats();
-  TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 public:
   common::ObArray<ObOptTableStat *> table_stat_array_;
   common::ObArray<ObOptOSGColumnStat *> col_stat_array_;

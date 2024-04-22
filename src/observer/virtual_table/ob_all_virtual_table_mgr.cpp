@@ -235,7 +235,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case SIZE: {
           int64_t size = 0;
           if (table->is_memtable()) {
-            size = static_cast<memtable::ObIMemtable *>(table)->get_occupied_size();
+            size = static_cast<ObIMemtable *>(table)->get_occupied_size();
           } else if (table->is_sstable()) {
             size = static_cast<blocksstable::ObSSTable *>(table)->get_occupy_size();
           }
@@ -276,7 +276,7 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
         case IS_ACTIVE: {
           bool is_active = false;
           if (table->is_memtable()) {
-            is_active = static_cast<memtable::ObIMemtable *>(table)->is_active_memtable();
+            is_active = static_cast<ObIMemtable *>(table)->is_active_memtable();
           }
           cur_row_.cells_[i].set_varchar(is_active ? "YES" : "NO");
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));

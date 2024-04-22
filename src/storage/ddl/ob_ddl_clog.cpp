@@ -26,6 +26,7 @@ namespace oceanbase
 
 using namespace blocksstable;
 using namespace share;
+using namespace common;
 
 namespace storage
 {
@@ -170,7 +171,7 @@ ObDDLMacroBlockClogCb::~ObDDLMacroBlockClogCb()
 }
 
 int ObDDLMacroBlockClogCb::init(const share::ObLSID &ls_id,
-                                const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+                                const storage::ObDDLMacroBlockRedoInfo &redo_info,
                                 const blocksstable::MacroBlockId &macro_block_id,
                                 ObTabletHandle &tablet_handle)
 {
@@ -429,7 +430,7 @@ ObDDLRedoLog::ObDDLRedoLog()
 {
 }
 
-int ObDDLRedoLog::init(const blocksstable::ObDDLMacroBlockRedoInfo &redo_info)
+int ObDDLRedoLog::init(const storage::ObDDLMacroBlockRedoInfo &redo_info)
 {
   int ret = OB_SUCCESS;
   if (!redo_info.is_valid()) {
@@ -466,7 +467,6 @@ int ObDDLCommitLog::init(const ObITable::TableKey &table_key,
 }
 
 OB_SERIALIZE_MEMBER(ObDDLCommitLog, table_key_, start_scn_, lob_meta_tablet_id_);
-
 
 ObTabletSchemaVersionChangeLog::ObTabletSchemaVersionChangeLog()
   : tablet_id_(), schema_version_(-1)

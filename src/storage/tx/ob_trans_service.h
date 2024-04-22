@@ -73,28 +73,12 @@ class ObAliveServerTracer;
 
 namespace storage
 {
-struct ObStoreCtx;
-class ObIFreezeCb;
-class LeaderActiveArg;
-class ObLSService;
-class ObLSTxService;
+class ObIMemtable;
 }
 
 namespace memtable
 {
-class ObIMemtable;
-class ObMemtable;
-class ObIMemtableCtx;
 class ObMemtableCtx;
-class ObIMemtableCtxFactory;
-}
-
-namespace rpc
-{
-namespace frame
-{
-class ObReqTransport;
-}
 }
 
 namespace obrpc

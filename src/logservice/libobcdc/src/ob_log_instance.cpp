@@ -751,6 +751,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
   const char *tb_black_list = TCONF.get_tb_black_list_buf() != NULL ?  TCONF.get_tb_black_list_buf()
       : TCONF.tb_black_list.str();
 
+  const bool enable_direct_load_inc = (1 == TCONF.enable_direct_load_inc);
+
   if (OB_UNLIKELY(! is_working_mode_valid(working_mode))) {
     ret = OB_INVALID_CONFIG;
     LOG_ERROR("working_mode is not valid", KR(ret), K(working_mode_str), "working_mode", print_working_mode(working_mode));
@@ -965,7 +967,8 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit, enable_sort_by_seq_no, *trans_stat_mgr_);
+  INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit,
+      enable_sort_by_seq_no, *trans_stat_mgr_);
 
   INIT(ddl_processor_, ObLogDDLProcessor, schema_getter_, TCONF.skip_reversed_schema_verison,
       TCONF.enable_white_black_list);
@@ -991,15 +994,15 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
-  INIT(fetcher_, ObLogFetcher, false/*is_load_data_dict_baseline_data*/, fetching_mode, archive_dest,
-      &dispatcher_, sys_ls_handler_, &trans_task_pool_, log_entry_task_pool_,
+  INIT(fetcher_, ObLogFetcher, false/*is_load_data_dict_baseline_data*/, enable_direct_load_inc, fetching_mode,
+      archive_dest, &dispatcher_, sys_ls_handler_, &trans_task_pool_, log_entry_task_pool_,
       &mysql_proxy_.get_ob_mysql_proxy(), err_handler, cluster_info.cluster_id_, TCONF, start_seq);
 
   if (OB_SUCC(ret)) {
     if (is_data_dict_refresh_mode(refresh_mode_)) {
       if (OB_FAIL(ObLogMetaDataService::get_instance().init(start_tstamp_ns, fetching_mode, archive_dest,
               sys_ls_handler_, &mysql_proxy_.get_ob_mysql_proxy(), err_handler, *part_trans_parser_,
-              cluster_info.cluster_id_, TCONF, start_seq))) {
+              cluster_info.cluster_id_, TCONF, start_seq, enable_direct_load_inc))) {
         LOG_ERROR("ObLogMetaDataService init failed", KR(ret), K(start_tstamp_ns));
       }
     }
@@ -1702,7 +1705,7 @@ int ObLogInstance::verify_ob_trace_id_(IBinlogRecord *br)
   } else {
     int record_type = br->recordType();
 
-    if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) {
+    if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) {
       // only verify insert\update\delete type
       const ObString ob_trace_id_config(ob_trace_id_str_);
       ObLogBR *oblog_br = NULL;
@@ -1815,7 +1818,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
 
     int record_type = br->recordType();
 
-    if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) {
+    if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) {
       // only verify insert\update\delete type
       ObLogBR *oblog_br = NULL;
       ObLogEntryTask *log_entry_task = NULL;

@@ -48,7 +48,7 @@ OB_SERIALIZE_MEMBER(ObTableLoadResultInfo,
                     skipped_,
                     warnings_);
 
-OB_SERIALIZE_MEMBER(ObTableLoadSequenceNo, sequence_no_);
+OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadSequenceNo, sequence_no_);
 
 }  // namespace table
 }  // namespace oceanbase

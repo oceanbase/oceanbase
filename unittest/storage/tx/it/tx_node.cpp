@@ -129,7 +129,6 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   lock_memtable_handle.set_table(&lock_memtable_, &t3m_, ObITable::LOCK_MEMTABLE);
   lock_memtable_.key_.table_type_ = ObITable::LOCK_MEMTABLE;
   fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.t3m_ = &t3m_;
-  fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.table_type_ = ObITable::TableType::LOCK_MEMTABLE;
   fake_ls_.ls_tablet_svr_.lock_memtable_mgr_.add_memtable_(lock_memtable_handle);
   fake_lock_table_.is_inited_ = true;
   fake_lock_table_.parent_ = &fake_ls_;

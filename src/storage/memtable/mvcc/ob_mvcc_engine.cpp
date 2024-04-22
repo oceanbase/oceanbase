@@ -260,7 +260,6 @@ int ObMvccEngine::create_kv(
     const bool is_insert,
     ObMemtableKey *stored_key,
     ObMvccRow *&value,
-    RowHeaderGetter &getter,
     bool &is_new_add)
 {
   int64_t loop_cnt = 0;
@@ -285,8 +284,6 @@ int ObMvccEngine::create_kv(
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "get NULL value");
         }
-      } else if (OB_FAIL(getter.get())) {
-        TRANS_LOG(WARN, "get row header error");
       } else if (OB_FAIL(kv_builder_->dup_key(tmp_key,
                                               *engine_allocator_,
                                               key->get_rowkey()))) {

@@ -177,7 +177,6 @@ ObServer::ObServer()
     lst_operator_(), tablet_operator_(),
     server_tracer_(),
     location_service_(),
-    partition_cfy_(),
     bandwidth_throttle_(),
     sys_bkgd_net_percentage_(0),
     ethernet_speed_(0),

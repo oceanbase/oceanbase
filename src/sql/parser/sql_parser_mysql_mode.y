@@ -10365,7 +10365,11 @@ READ_CONSISTENCY '(' consistency_level ')'
 }
 | DIRECT '(' BOOL_VALUE ',' INTNUM ')'
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_DIRECT, 2, $3, $5);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DIRECT, 3, $3, $5, NULL);
+}
+| DIRECT '(' BOOL_VALUE ',' INTNUM ',' STRING_VALUE ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DIRECT, 3, $3, $5, $7);
 }
 | APPEND
 {

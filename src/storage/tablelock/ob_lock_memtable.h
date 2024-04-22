@@ -41,7 +41,7 @@ namespace tablelock
 struct ObLockParam;
 
 class ObLockMemtable
-  : public memtable::ObIMemtable,
+  : public ObIMemtable,
     public storage::checkpoint::ObCommonCheckpoint
 {
 public:
@@ -121,8 +121,8 @@ public:
   virtual bool can_be_minor_merged() override;
 
   int on_memtable_flushed() override;
-  bool is_frozen_memtable() const override;
-  bool is_active_memtable() const override;
+  bool is_frozen_memtable() override;
+  bool is_active_memtable() override;
 
   // =========== INHERITED FROM ObCommonCheckPoint ==========
   virtual share::SCN get_rec_scn();

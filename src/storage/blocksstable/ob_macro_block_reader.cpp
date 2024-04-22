@@ -34,13 +34,13 @@ using namespace compaction;
 namespace blocksstable
 {
 
-ObMacroBlockReader::ObMacroBlockReader()
+ObMacroBlockReader::ObMacroBlockReader(const uint64_t tenant_id)
     :compressor_(NULL),
      uncomp_buf_(NULL),
      uncomp_buf_size_(0),
      decrypt_buf_(NULL),
      decrypt_buf_size_(0),
-     allocator_(ObModIds::OB_CS_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+     allocator_(ObModIds::OB_CS_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
      encryption_(nullptr)
 {
   if (share::is_reserve_mode()) {

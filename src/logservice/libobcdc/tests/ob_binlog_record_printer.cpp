@@ -386,7 +386,7 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
           ROW_PRINTF(ptr, size, pos, ri, "unique_id:[%.*s](%d)", unique_id.length(), unique_id.ptr(), unique_id.length());
         }
       }
-    } else if ((EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) && ! only_print_dml_tx_checksum) {
+    } else if ((EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) && ! only_print_dml_tx_checksum) {
       ri++;
       ITableMeta *table_meta = br->getTableMeta();
       int64_t column_count = table_meta ? table_meta->getColCount() : -1;
@@ -915,7 +915,7 @@ void ObBinlogRecordPrinter::do_br_statistic_(IBinlogRecord &br)
     } else if (EDDL == record_type) {
       total_tx_count_++;
       total_br_count_++;
-    } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type) {
+    } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type || EPUT == record_type) {
       dml_tx_br_count_++;
       total_br_count_++;
       binlogBuf *new_cols = br.newCols((unsigned int &)new_cols_count);

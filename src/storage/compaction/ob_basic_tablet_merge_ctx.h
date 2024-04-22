@@ -92,6 +92,7 @@ public:
   const ObStorageSchema *schema_;
   observer::ObIMetaReport *report_;
   ObStorageSnapshotInfo snapshot_info_;
+  int64_t tx_id_;
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };

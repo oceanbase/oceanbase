@@ -36,7 +36,6 @@ class MacroBlockId;
 namespace memtable
 {
 class ObMemtable;
-struct ObMtStat;
 }
 namespace storage
 {
@@ -62,15 +61,15 @@ public:
   TO_STRING_KV(K_(enable_fast_freeze));
 private:
   void check_hotspot_need_fast_freeze(
-      const memtable::ObMemtable &memtable,
+      memtable::ObMemtable &memtable,
       bool &need_fast_freeze);
   void check_tombstone_need_fast_freeze(
       const storage::ObTablet &tablet,
-      const memtable::ObMemtable &memtable,
+      memtable::ObMemtable &memtable,
       bool &need_fast_freeze);
   void try_update_tablet_threshold(
       const storage::ObTabletStatKey &key,
-      const memtable::ObMtStat &mt_stat,
+      const storage::ObMtStat &mt_stat,
       const int64_t memtable_create_timestamp,
       int64_t &adaptive_threshold);
 private:

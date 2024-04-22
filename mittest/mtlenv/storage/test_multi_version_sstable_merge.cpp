@@ -16,7 +16,6 @@
 #define UNITTEST
 #include "lib/container/ob_iarray.h"
 #include "storage/memtable/ob_memtable_interface.h"
-#include "storage/ob_partition_component_factory.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "storage/blocksstable/ob_row_generate.h"
 #include "observer/ob_service.h"

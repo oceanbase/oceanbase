@@ -40,6 +40,7 @@ class ObAddr;
 namespace storage
 {
 struct ObStoreRowLockState;
+class ObDDLRedoLog;
 }
 
 namespace transaction
@@ -143,6 +144,9 @@ private:
   const T &tmp_info_;
 };
 
+template <typename>
+class ObTxCtxLogOperator;
+
 // participant transaction context
 class ObPartTransCtx : public ObTransCtx,
                        public ObTsCbTask,
@@ -156,6 +160,8 @@ class ObPartTransCtx : public ObTransCtx,
   friend class ObTxELRHandler;
   friend class ObIRetainCtxCheckFunctor;
   friend class memtable::ObRedoLogGenerator;
+  template<typename T>
+  friend class ObTxCtxLogOperator;
 public:
   ObPartTransCtx()
       : ObTransCtx("participant", ObTransCtxType::PARTICIPANT), ObTsCbTask(),
@@ -348,6 +354,8 @@ private:
   int on_success_ops_(ObTxLogCb * log_cb);
   void check_and_register_timeout_task_();
   int recover_ls_transfer_status_();
+
+  int check_dli_batch_completed_(ObTxLogType submit_log_type);
 public:
   // ========================================================
   // newly added for 4.0
@@ -367,6 +375,17 @@ public:
   // for instant logging and freezing
   int submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no);
   int submit_redo_log_for_freeze(const uint32_t freeze_clock);
+  int submit_direct_load_inc_redo_log(storage::ObDDLRedoLog &ddl_redo_log,
+                                 logservice::AppendCb *extra_cb,
+                                 const int64_t replay_hint,
+                                 share::SCN &scn);
+  int submit_direct_load_inc_start_log(storage::ObDDLIncStartLog &ddl_start_log,
+                                 logservice::AppendCb *extra_cb,
+                                 share::SCN &scn);
+  int submit_direct_load_inc_commit_log(storage::ObDDLIncCommitLog &ddl_commit_log,
+                                 logservice::AppendCb *extra_cb,
+                                 share::SCN &scn,
+                                 bool need_free_extra_cb = false);
   int return_redo_log_cb(ObTxLogCb *log_cb);
   int push_replaying_log_ts(const share::SCN log_ts_ns, const int64_t log_entry_no);
   int push_replayed_log_ts(const share::SCN log_ts_ns,
@@ -520,6 +539,15 @@ private:
   int submit_pending_log_block_(ObTxLogBlock &log_block,
                                 memtable::ObRedoLogSubmitHelper &helper,
                                 const logservice::ObReplayBarrierType &barrier);
+  template <typename DLI_LOG>
+  int submit_direct_load_inc_log_(DLI_LOG &dli_log,
+                                  const ObTxDirectLoadIncLog::DirectLoadIncLogType dli_log_type,
+                                  const ObDDLIncLogBasic &batch_key,
+                                  logservice::AppendCb *extra_cb,
+                                  const logservice::ObReplayBarrierType replay_barrier,
+                                  const int64_t replay_hint,
+                                  share::SCN &scn,
+                                  bool need_free_extra_cb = false);
   bool should_switch_to_parallel_logging_();
   void switch_to_parallel_logging_(const share::SCN serial_final_scn,
                                    const ObTxSEQ max_seq_no);

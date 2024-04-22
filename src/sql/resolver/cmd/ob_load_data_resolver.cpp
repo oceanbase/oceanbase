@@ -126,20 +126,14 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
   if (OB_SUCC(ret)) {
     /* 2. opt_duplicate */
     ObLoadArgument &load_args = load_stmt->get_load_arguments();
-    ObLoadDupActionType dupl_action = ObLoadDupActionType::LOAD_STOP_ON_DUP;
+    ObLoadDupActionType dupl_action = ObLoadDupActionType::LOAD_INVALID_MODE;
     if (NULL == node->children_[ENUM_DUPLICATE_ACTION]) {
-      if (ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_ &&
-          lib::is_mysql_mode()) {
-        // https://dev.mysql.com/doc/refman/8.0/en/load-data.html
-        // In MySQL, LOCAL modifier has the same effect as the IGNORE modifier.
-        dupl_action = ObLoadDupActionType::LOAD_IGNORE;
-      }
+      dupl_action = ObLoadDupActionType::LOAD_STOP_ON_DUP;
     } else if (T_IGNORE == node->children_[ENUM_DUPLICATE_ACTION]->type_) {
       dupl_action = ObLoadDupActionType::LOAD_IGNORE;
     } else if (T_REPLACE == node->children_[ENUM_DUPLICATE_ACTION]->type_) {
       dupl_action = ObLoadDupActionType::LOAD_REPLACE;
     } else {
-      dupl_action = ObLoadDupActionType::LOAD_INVALID_MODE;
       ret = OB_ERR_UNEXPECTED;
       //should not be here, parser will put error before this
       LOG_WARN("unknown dumplicate settings", K(ret));
@@ -352,6 +346,19 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
   }
 
   if (OB_SUCC(ret)) {
+    ObLoadArgument &load_args = load_stmt->get_load_arguments();
+    const ObDirectLoadHint &direct_load_hint = load_stmt->get_hints().get_direct_load_hint();
+    if (ObLoadDupActionType::LOAD_STOP_ON_DUP == load_args.dupl_action_ &&
+        ObLoadFileLocation::CLIENT_DISK == load_args.load_file_storage_ &&
+        lib::is_mysql_mode() &&
+        (!direct_load_hint.is_enable() || !direct_load_hint.is_inc_replace_load_method())) {
+      // https://dev.mysql.com/doc/refman/8.0/en/load-data.html
+      // In MySQL, LOCAL modifier has the same effect as the IGNORE modifier.
+      load_args.dupl_action_ = ObLoadDupActionType::LOAD_IGNORE;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(validate_stmt(load_stmt))) {
       LOG_WARN("failed to validate stmt");
     }
@@ -397,24 +404,9 @@ int ObLoadDataResolver::resolve_hints(const ParseNode &node)
 
       switch (hint_node->type_) {
       case T_DIRECT: {
-        if (hint_node->num_child_ != 2) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected hint node", K(ret), K(hint_node->num_child_));
-        } else {
-          int64_t need_sort = hint_node->children_[0]->value_;
-          int64_t error_rows_value = hint_node->children_[1]->value_;
-          if (error_rows_value < 0) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid error rows value", K(ret), K(error_rows_value));
-          } else if (OB_FAIL(stmt_hints.set_value(
-                          ObLoadDataHint::ENABLE_DIRECT, 1))) {
-            LOG_WARN("fail to enable direct", K(ret));
-          } else if (OB_FAIL(stmt_hints.set_value(
-                          ObLoadDataHint::NEED_SORT, need_sort))) {
-            LOG_WARN("fail to enable sort", K(ret));
-          } else if (OB_FAIL(stmt_hints.set_value(ObLoadDataHint::ERROR_ROWS, error_rows_value))) {
-            LOG_WARN("fail to set error rows", K(ret), K(error_rows_value));
-          }
+        ObDirectLoadHint &direct_load_hint = stmt_hints.get_direct_load_hint();
+        if (OB_FAIL(ObDMLResolver::resolve_direct_load_hint(*hint_node, direct_load_hint))) {
+          LOG_WARN("fail to resolve direct load hint", KR(ret));
         }
         break;
       }

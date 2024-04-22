@@ -189,57 +189,44 @@ int get_local_ip(ObString &local_ip)
   return ret;
 }
 
-RecordType get_record_type(const ObDmlFlag &dml_flag)
+RecordType get_record_type(const ObDmlRowFlag &dml_flag)
 {
   RecordType record_type = EUNKNOWN;
 
   // Set record type
   // Note: The REPLACE type is not handled, it does not exist in Redo
-  switch (dml_flag) {
-    case ObDmlFlag::DF_INSERT:
-      record_type = EINSERT;
-      break;
-
-    case ObDmlFlag::DF_UPDATE:
-      record_type = EUPDATE;
-      break;
-
-    case ObDmlFlag::DF_DELETE:
-      record_type = EDELETE;
-      break;
-
-    default:
-      record_type = EUNKNOWN;
-      break;
+  // Note: must judge is_delete_insert first because PUT is also is_insert, but it's flag_type is DF_TYPE_INSERT_DELETE
+  if (OB_UNLIKELY(dml_flag.is_delete_insert())) {
+    record_type = EPUT;
+  } else if (dml_flag.is_insert()) {
+    record_type = EINSERT;
+  } else if (dml_flag.is_update()) {
+    record_type = EUPDATE;
+  } else if (dml_flag.is_delete()) {
+    record_type = EDELETE;
+  }  else {
+    record_type = EUNKNOWN;
   }
 
   return record_type;
 }
 
-const char *print_dml_flag(const blocksstable::ObDmlFlag &dml_flag)
+const char *print_dml_flag(const blocksstable::ObDmlRowFlag &dml_flag)
 {
   const char *str = "UNKNOWN";
 
-  switch (dml_flag) {
-    case ObDmlFlag::DF_INSERT:
-      str = "insert";
-      break;
-
-    case ObDmlFlag::DF_UPDATE:
-      str = "update";
-      break;
-
-    case ObDmlFlag::DF_DELETE:
-      str = "delete";
-      break;
-
-    case ObDmlFlag::DF_LOCK:
-      str = "lock";
-      break;
-
-    default:
-      str = "UNKNOWN";
-      break;
+  if (dml_flag.is_delete_insert()) {
+    str = "put";
+  } else if (dml_flag.is_insert()) {
+    str = "insert";
+  } else if (dml_flag.is_update()) {
+    str = "update";
+  } else if (dml_flag.is_delete()) {
+    str = "delete";
+  } else if (dml_flag.is_lock()) {
+    str = "lock";
+  } else {
+    str = "UNKNOWN";
   }
 
   return str;
@@ -310,6 +297,10 @@ const char *print_record_type(int type)
 
     case EDML:
       str = "EDML";
+      break;
+
+    case EPUT:
+      str = "EPUT";
       break;
 
     default:

@@ -950,9 +950,11 @@ private:
                               ObWindowDistHint::WinDistOption &dist_option,
                               bool &is_valid);
   int resolve_table_dynamic_sampling_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+public:
+  static int resolve_direct_load_hint(const ParseNode &hint_node, ObDirectLoadHint &hint);
   //////////end of functions for sql hint/////////////
 
-
+private:
   int resolve_table_check_constraint_items(const TableItem *table_item,
                                            const ObTableSchema *table_schema);
   int resolve_table_constraint_items(const TableItem *table_item,

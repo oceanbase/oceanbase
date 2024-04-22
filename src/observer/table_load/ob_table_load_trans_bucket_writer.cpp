@@ -191,8 +191,9 @@ int ObTableLoadTransBucketWriter::write(int32_t session_id, ObTableLoadObjRowArr
       }
     } else {
       if (coordinator_ctx_->partition_calc_.is_partition_with_autoinc_ &&
-          OB_FAIL(handle_partition_with_autoinc_identity(session_ctx, obj_rows,
-              trans_ctx_->ctx_->session_info_->get_sql_mode(), session_id))) {
+          OB_FAIL(handle_partition_with_autoinc_identity(
+            session_ctx, obj_rows, coordinator_ctx_->ctx_->session_info_->get_sql_mode(),
+            session_id))) {
         LOG_WARN("fail to handle partition column with autoincrement or identity", KR(ret));
       } else if (OB_FAIL(write_for_partitioned(session_ctx, obj_rows))) {
         LOG_WARN("fail to write for partitioned", KR(ret));

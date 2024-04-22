@@ -1285,7 +1285,7 @@ int ObCompactionDiagnoseMgr::diagnose_tablet_mini_merge(
   } else if (nullptr != first_frozen_memtable) { // have frozen memtable
     bool diagnose_flag = false;
     ObSSTable *latest_sstable = nullptr;
-    memtable::ObIMemtable *frozen_memtable = static_cast<memtable::ObIMemtable *>(first_frozen_memtable);
+    ObIMemtable *frozen_memtable = static_cast<ObIMemtable *>(first_frozen_memtable);
     if (OB_ISNULL(latest_sstable = static_cast<ObSSTable*>(
         table_store_wrapper.get_member()->get_minor_sstables().get_boundary_table(true/*last*/)))) {
       diagnose_flag = true;

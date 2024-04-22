@@ -14,6 +14,7 @@
 #define OCEANBASE_STORAGE_OB_DDL_REDO_LOG_REPLAYER_H
 
 #include "storage/ddl/ob_ddl_clog.h"
+#include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
@@ -34,6 +35,8 @@ public:
   int replay_start(const ObDDLStartLog &log, const share::SCN &scn);
   int replay_redo(const ObDDLRedoLog &log, const share::SCN &scn);
   int replay_commit(const ObDDLCommitLog &log, const share::SCN &scn);
+  int replay_inc_start(const ObDDLIncStartLog &log, const share::SCN &scn);
+  int replay_inc_commit(const ObDDLIncCommitLog &log, const share::SCN &scn);
 private:
   void destroy();
 

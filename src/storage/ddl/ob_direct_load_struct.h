@@ -29,6 +29,8 @@
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_imacro_block_flush_callback.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/ddl/ob_ddl_inc_redo_log_writer.h"
+#include "storage/ddl/ob_ddl_inc_clog_callback.h"
 #include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
@@ -217,11 +219,11 @@ struct ObDirectInsertRuntimeOnlyParam final
 {
 public:
   ObDirectInsertRuntimeOnlyParam()
-    : exec_ctx_(nullptr), task_id_(0), table_id_(OB_INVALID_ID), schema_version_(0), task_cnt_(0), need_online_opt_stat_gather_(false), trans_id_(), seq_no_(0), parallel_(1)
+    : exec_ctx_(nullptr), task_id_(0), table_id_(OB_INVALID_ID), schema_version_(0), task_cnt_(0), need_online_opt_stat_gather_(false), tx_desc_(nullptr), trans_id_(), seq_no_(0), parallel_(1)
   {}
   ~ObDirectInsertRuntimeOnlyParam() = default;
   bool is_valid() const { return OB_INVALID_ID != task_id_ && OB_INVALID_ID != table_id_ && schema_version_ > 0 && task_cnt_ >= 0; }
-  TO_STRING_KV(KP_(exec_ctx), K_(task_id), K_(table_id), K_(schema_version), K_(task_cnt), K_(need_online_opt_stat_gather), K_(trans_id), K_(seq_no), K_(parallel));
+  TO_STRING_KV(KP_(exec_ctx), K_(task_id), K_(table_id), K_(schema_version), K_(task_cnt), K_(need_online_opt_stat_gather), KP_(tx_desc), K_(trans_id), K_(seq_no), K_(parallel));
 public:
   sql::ObExecContext *exec_ctx_;
   int64_t task_id_;
@@ -229,6 +231,7 @@ public:
   int64_t schema_version_;
   int64_t task_cnt_;
   bool need_online_opt_stat_gather_;
+  transaction::ObTxDesc *tx_desc_;
   // default value is invalid tx_id,
   // participant tx_id for the incremental direct load,
   // and invalid tx_id for the full_direct_load.
@@ -335,7 +338,14 @@ public:
   ObTabletDDLParam();
   ~ObTabletDDLParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(direct_load_type), K_(ls_id), K_(start_scn), K_(commit_scn), K_(data_format_version), K_(table_key), K_(snapshot_version));
+  TO_STRING_KV(K_(direct_load_type),
+               K_(ls_id),
+               K_(start_scn),
+               K_(commit_scn),
+               K_(data_format_version),
+               K_(table_key),
+               K_(snapshot_version),
+               K_(trans_id));
 public:
   ObDirectLoadType direct_load_type_;
   share::ObLSID ls_id_;
@@ -344,6 +354,7 @@ public:
   uint64_t data_format_version_;
   ObITable::TableKey table_key_;
   int64_t snapshot_version_; // used for full direct load only.
+  transaction::ObTransID trans_id_; // used for incremental direct load only
 };
 
 struct ObDDLTableMergeDagParam : public share::ObIDagInitParam
@@ -433,8 +444,13 @@ public:
 class ObMacroBlockSliceStore: public ObTabletSliceStore
 {
 public:
-  ObMacroBlockSliceStore() : is_inited_(false) {}
-  virtual ~ObMacroBlockSliceStore() {}
+  ObMacroBlockSliceStore()
+   : is_inited_(false), ddl_redo_callback_(nullptr) {}
+  virtual ~ObMacroBlockSliceStore() {
+    if (ddl_redo_callback_ != nullptr) {
+      common::ob_delete(ddl_redo_callback_);
+    }
+  }
   int init(
       ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const blocksstable::ObMacroDataSeq &data_seq,
@@ -445,8 +461,7 @@ public:
   TO_STRING_KV(K(is_inited_), K(macro_block_writer_));
 private:
   bool is_inited_;
-  ObDDLRedoLogWriter ddl_redo_writer_;
-  ObDDLRedoLogWriterCallback write_ddl_redo_callback_;
+  blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
   blocksstable::ObMacroBlockWriter macro_block_writer_;
 };
 
@@ -611,7 +626,6 @@ private:
   blocksstable::ObWholeDataStoreDesc data_desc_;
   blocksstable::ObSSTableIndexBuilder index_builder_;
   blocksstable::ObMacroBlockWriter macro_block_writer_;
-  storage::ObDDLRedoLogWriter ddl_clog_writer_;
   storage::ObDDLRedoLogWriterCallback flush_callback_;
   blocksstable::ObDatumRow cg_row_;
 };

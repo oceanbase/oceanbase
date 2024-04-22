@@ -25,8 +25,8 @@
 #include "observer/table_load/ob_table_load_utils.h"
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
-#include "share/stat/ob_dbms_stats_utils.h"
 #include "storage/blocksstable/ob_sstable.h"
+#include "share/table/ob_table_load_dml_stat.h"
 
 namespace oceanbase
 {
@@ -34,6 +34,7 @@ namespace observer
 {
 using namespace common;
 using namespace table;
+using namespace transaction;
 
 ObTableLoadStore::ObTableLoadStore(ObTableLoadTableCtx *ctx)
   : ctx_(ctx), param_(ctx->param_), store_ctx_(ctx->store_ctx_), is_inited_(false)
@@ -299,67 +300,41 @@ int ObTableLoadStore::start_merge()
   return ret;
 }
 
-int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info)
+int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
+                             ObTableLoadSqlStatistics &sql_statistics,
+                             ObTxExecResult &trans_result)
 {
   int ret = OB_SUCCESS;
+  sql_statistics.reset();
+  trans_result.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store commit");
+    ObTransService *txs = nullptr;
     ObMutexGuard guard(store_ctx_->get_op_lock());
     ObTableLoadDmlStat dml_stats;
-    ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
+    if (OB_ISNULL(MTL(ObTransService *))) {
+      ret = OB_ERR_SYS;
+      LOG_WARN("trans service is null", KR(ret));
+    } else if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
       LOG_WARN("fail to check store status", KR(ret));
+    } else if (OB_FAIL(store_ctx_->insert_table_ctx_->commit(dml_stats, sql_statistics))) {
+      LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(store_ctx_->merger_->collect_sql_statistics(sql_statistics))) {
-      LOG_WARN("fail to collect sql stats", KR(ret));
-    } else if (param_.online_opt_stat_gather_ &&
-               OB_FAIL(commit_sql_statistics(sql_statistics))) {
-      LOG_WARN("fail to commit sql stats", KR(ret));
-    } else if (OB_FAIL(store_ctx_->merger_->collect_dml_stat(dml_stats))) {
-      LOG_WARN("fail to build dml stat", KR(ret));
     } else if (OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
+    } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
+               txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result)) {
+      LOG_WARN("fail to get tx exec result", KR(ret));
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
       store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }
-  }
-  return ret;
-}
-
-int ObTableLoadStore::commit_sql_statistics(const ObTableLoadSqlStatistics &sql_statistics)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-  const uint64_t table_id = param_.table_id_;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObArray<ObOptColumnStat *> part_column_stats;
-  ObArray<ObOptTableStat *> part_table_stats;
-  part_column_stats.set_tenant_id(MTL_ID());
-  part_table_stats.set_tenant_id(MTL_ID());
-  if (sql_statistics.is_empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql statistics is empty", K(ret));
-  } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard,
-                                                         table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(sql_statistics.get_col_stat_array(part_column_stats))) {
-    LOG_WARN("failed to get column stat array");
-  } else if (OB_FAIL(sql_statistics.get_table_stat_array(part_table_stats))) {
-    LOG_WARN("failed to get table stat array");
-  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(
-               &schema_guard, store_ctx_->ctx_->session_info_, GCTX.sql_proxy_, part_table_stats,
-               part_column_stats))) {
-    LOG_WARN("failed to batch write stats", K(ret), K(sql_statistics.table_stat_array_),
-             K(sql_statistics.col_stat_array_));
   }
   return ret;
 }

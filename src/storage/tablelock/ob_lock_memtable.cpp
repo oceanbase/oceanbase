@@ -898,12 +898,12 @@ bool ObLockMemtable::can_be_minor_merged()
   return bool_ret;
 }
 
-bool ObLockMemtable::is_frozen_memtable() const
+bool ObLockMemtable::is_frozen_memtable()
 {
   return ATOMIC_LOAD(&is_frozen_);
 }
 
-bool ObLockMemtable::is_active_memtable() const
+bool ObLockMemtable::is_active_memtable()
 {
   return !ATOMIC_LOAD(&is_frozen_);
 }

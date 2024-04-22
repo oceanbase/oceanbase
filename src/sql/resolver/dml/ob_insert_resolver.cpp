@@ -120,7 +120,7 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
       ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
       if (OB_ISNULL(query_ctx)) {
         LOG_WARN("query ctx should not be NULL", KR(ret), KP(query_ctx));
-      } else if (query_ctx->get_query_hint().get_global_hint().has_append()) {
+      } else if (query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
         // For insert into select clause with direct-insert mode, plan cache is disabled
         query_ctx->get_query_hint_for_update().global_hint_.merge_plan_cache_hint(OB_USE_PLAN_CACHE_NONE);
       }

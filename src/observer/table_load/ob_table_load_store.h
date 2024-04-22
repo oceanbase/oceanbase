@@ -17,10 +17,13 @@
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_row_array.h"
-#include "share/table/ob_table_load_sql_statistics.h"
 
 namespace oceanbase
 {
+namespace table
+{
+class ObTableLoadSqlStatistics;
+} // namespace table
 namespace observer
 {
 class ObTableLoadTableCtx;
@@ -46,11 +49,11 @@ public:
   int confirm_begin();
   int pre_merge(const table::ObTableLoadArray<table::ObTableLoadTransId> &committed_trans_id_array);
   int start_merge();
-  int commit(table::ObTableLoadResultInfo &result_info);
+  int commit(table::ObTableLoadResultInfo &result_info,
+             table::ObTableLoadSqlStatistics &sql_statistics,
+             transaction::ObTxExecResult &trans_result);
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
-private:
-  int commit_sql_statistics(const table::ObTableLoadSqlStatistics &sql_statistics);
 private:
   class MergeTaskProcessor;
   class MergeTaskCallback;

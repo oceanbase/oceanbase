@@ -221,7 +221,7 @@ public:
   void check_memtable_cleanout(ObTableHandleV2 &handle,
                                const bool memtable_is_all_delay_cleanout)
   {
-    memtable::ObIMemtable *imemtable;
+    ObIMemtable *imemtable;
     handle.get_memtable(imemtable);
     memtable::ObMemtable *memtable = dynamic_cast<memtable::ObMemtable *>(imemtable);
 

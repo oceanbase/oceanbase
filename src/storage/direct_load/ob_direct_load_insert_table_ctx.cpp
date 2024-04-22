@@ -13,8 +13,12 @@
 
 #include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "share/ob_tablet_autoincrement_service.h"
-#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tablet/ob_tablet.h"
+#include "storage/tx_storage/ob_ls_service.h"
+#include "share/table/ob_table_load_dml_stat.h"
+#include "share/table/ob_table_load_sql_statistics.h"
+#include "share/stat/ob_stat_item.h"
+#include "storage/direct_load/ob_direct_load_origin_table.h"
 
 namespace oceanbase
 {
@@ -33,74 +37,45 @@ using namespace share;
 
 ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
   : table_id_(OB_INVALID_ID),
-    schema_version_(0),
+    lob_meta_tid_(OB_INVALID_ID),
+    schema_version_(OB_INVALID_VERSION),
     snapshot_version_(0),
-    execution_id_(0),
     ddl_task_id_(0),
     data_version_(0),
+    parallel_(0),
     reserved_parallel_(0),
-    ls_partition_ids_(),
-    target_ls_partition_ids_()
+    rowkey_column_count_(0),
+    column_count_(0),
+    lob_column_count_(0),
+    is_partitioned_table_(false),
+    is_heap_table_(false),
+    is_column_store_(false),
+    online_opt_stat_gather_(false),
+    is_incremental_(false),
+    datum_utils_(nullptr),
+    col_descs_(nullptr),
+    cmp_funcs_(nullptr)
 {
-  ls_partition_ids_.set_attr(ObMemAttr(MTL_ID(), "DLITP_ids"));
-  target_ls_partition_ids_.set_attr(ObMemAttr(MTL_ID(), "DLITP_t_ids"));
 }
 
-ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam()
-{
-}
+ObDirectLoadInsertTableParam::~ObDirectLoadInsertTableParam() {}
 
 bool ObDirectLoadInsertTableParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && schema_version_ >= 0 && snapshot_version_ >= 0 &&
-         execution_id_ >= 0 && ddl_task_id_ > 0 && data_version_ >= 0 && reserved_parallel_ >= 0 &&
-         ls_partition_ids_.count() > 0 &&
-         ls_partition_ids_.count() == target_ls_partition_ids_.count();
-}
-
-int ObDirectLoadInsertTableParam::assign(const ObDirectLoadInsertTableParam &other)
-{
-  int ret = OB_SUCCESS;
-  table_id_ = other.table_id_;
-  schema_version_ = other.schema_version_;
-  snapshot_version_ = other.snapshot_version_;
-  execution_id_ = other.execution_id_;
-  ddl_task_id_ = other.ddl_task_id_;
-  data_version_ = other.data_version_;
-  reserved_parallel_ = other.reserved_parallel_;
-  if (OB_FAIL(ls_partition_ids_.assign(other.ls_partition_ids_))) {
-    LOG_WARN("fail to assign ls tablet ids", KR(ret));
-  } else if (OB_FAIL(target_ls_partition_ids_.assign(other.target_ls_partition_ids_))) {
-    LOG_WARN("fail to assign ls tablet ids", KR(ret));
-  }
-  return ret;
-}
-
-/**
- * ObDirectLoadInsertTabletParam
- */
-
-ObDirectLoadInsertTabletParam::ObDirectLoadInsertTabletParam()
-  : tenant_id_(OB_INVALID_TENANT_ID),
-    table_id_(OB_INVALID_ID),
-    schema_version_(0),
-    snapshot_version_(0),
-    execution_id_(0),
-    ddl_task_id_(0),
-    data_version_(0),
-    reserved_parallel_(0),
-    context_id_(0)
-{
-}
-
-ObDirectLoadInsertTabletParam::~ObDirectLoadInsertTabletParam() {}
-
-bool ObDirectLoadInsertTabletParam::is_valid() const
-{
-  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && OB_INVALID_ID != table_id_ &&
-         tablet_id_.is_valid() && origin_tablet_id_.is_valid() && schema_version_ >= 0 &&
-         snapshot_version_ >= 0 && execution_id_ >= 0 && ddl_task_id_ > 0 && data_version_ >= 0 &&
-         reserved_parallel_ >= 0 && context_id_ >= 0;
+  return OB_INVALID_ID != table_id_ &&
+         OB_INVALID_VERSION != schema_version_ &&
+         snapshot_version_ >= 0 &&
+         ddl_task_id_ > 0 &&
+         data_version_ >= 0 &&
+         parallel_ > 0 &&
+         reserved_parallel_ >= 0 &&
+         rowkey_column_count_ > 0 &&
+         column_count_ > 0 && column_count_ >= rowkey_column_count_ &&
+         lob_column_count_ >= 0 && lob_column_count_ < column_count_ &&
+         (!is_incremental_ || trans_param_.is_valid()) &&
+         nullptr != datum_utils_ &&
+         nullptr != col_descs_ && col_descs_->count() == column_count_ &&
+         nullptr != cmp_funcs_;
 }
 
 /**
@@ -108,27 +83,123 @@ bool ObDirectLoadInsertTabletParam::is_valid() const
  */
 
 ObDirectLoadInsertTabletContext::ObDirectLoadInsertTabletContext()
-  : is_open_(false), is_inited_(false)
+  : table_ctx_(nullptr),
+    param_(nullptr),
+    context_id_(0),
+    row_count_(0),
+    open_err_(OB_SUCCESS),
+    is_open_(false),
+    is_create_(false),
+    is_cancel_(false),
+    is_inited_(false)
 {
 }
 
 ObDirectLoadInsertTabletContext::~ObDirectLoadInsertTabletContext()
 {
+  int ret = OB_SUCCESS;
+  if (is_create_) {
+    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
+    if (OB_FAIL(sstable_insert_mgr->close_tablet_direct_load(
+          context_id_, !param_->is_incremental_, ls_id_, tablet_id_, false /*need_commit*/,
+          true /*emergent_finish*/))) {
+      LOG_WARN("fail to close tablet direct load", KR(ret), K(ls_id_), K(tablet_id_));
+    } else {
+      is_create_ = false;
+      handle_.reset();
+    }
+  }
 }
 
-int ObDirectLoadInsertTabletContext::init(const ObDirectLoadInsertTabletParam &param)
+int ObDirectLoadInsertTabletContext::init(ObDirectLoadInsertTableContext *table_ctx,
+                                          const ObLSID &ls_id,
+                                          const ObTabletID &origin_tablet_id,
+                                          const ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadInsertTabletContext init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid())) {
+  } else if (OB_UNLIKELY(nullptr == table_ctx || !ls_id.is_valid() ||
+                         !origin_tablet_id.is_valid() || !tablet_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param));
+    LOG_WARN("invalid args", KR(ret), KPC(table_ctx), K(ls_id), K(origin_tablet_id), K(tablet_id));
   } else {
-    param_ = param;
-    start_seq_.set_parallel_degree(param.reserved_parallel_);
-    is_inited_ = true;
+    const uint64_t tenant_id = MTL_ID();
+    ObLSService *ls_service = nullptr;
+    ObLSHandle ls_handle;
+    ObTabletHandle tablet_handle;
+    ObTabletBindingMdsUserData ddl_data;
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle,
+                                                 ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+      LOG_WARN("get tablet handle failed", K(ret));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
+      LOG_WARN("get ddl data failed", K(ret));
+    } else {
+      table_ctx_ = table_ctx;
+      param_ = &table_ctx->get_param();
+      context_id_ = table_ctx->get_context_id();
+      ls_id_ = ls_id;
+      origin_tablet_id_ = origin_tablet_id;
+      tablet_id_ = tablet_id;
+      lob_tablet_id_ = ddl_data.lob_meta_tablet_id_;
+      start_seq_.set_parallel_degree(param_->reserved_parallel_);
+      if (param_->is_incremental_ && OB_FAIL(check_lob_meta_empty())) {
+        LOG_WARN("failed to check lob meta empty", KR(ret));
+      } else {
+        is_inited_ = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::check_lob_meta_empty()
+{
+  int ret = OB_SUCCESS;
+  uint64_t lob_meta_tid = param_->lob_meta_tid_;
+  if (OB_INVALID_ID == lob_meta_tid) {
+    // bypass
+  } else {
+    ObArenaAllocator iter_allocator("TLD_Iter");
+    ObDirectLoadOriginTable origin_table;
+    ObIStoreRowIterator *lob_row_iter = nullptr;
+    const blocksstable::ObDatumRow *row = nullptr;
+    blocksstable::ObDatumRange range;
+    ObDirectLoadOriginTableCreateParam table_param;
+    table_param.table_id_ = lob_meta_tid;
+    table_param.tablet_id_ = lob_tablet_id_;
+    table_param.ls_id_ = ls_id_;
+    table_param.insert_mode_ = ObDirectLoadInsertMode::NORMAL;
+    iter_allocator.set_tenant_id(MTL_ID());
+    range.set_whole_range();
+
+    if (OB_FAIL(origin_table.init(table_param))) {
+      LOG_WARN("failed to init origin table", KR(ret));
+    } else if (OB_FAIL(origin_table.scan(range, iter_allocator, lob_row_iter))) {
+      LOG_WARN("fail to scan origin table", KR(ret));
+    } else if (OB_FAIL(lob_row_iter->get_next_row(row))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS; // empty table
+      } else {
+        LOG_WARN("failed to get next row", KR(ret));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("incremental direct-load to table with outrow lob data is not supported", KR(ret));
+      FORWARD_USER_ERROR(ret, "incremental direct-load to table with outrow lob data is not supported");
+    }
+    // release row iter
+    if (OB_NOT_NULL(lob_row_iter)) {
+      lob_row_iter->~ObIStoreRowIterator();
+      iter_allocator.free(lob_row_iter);
+      lob_row_iter = nullptr;
+    }
   }
   return ret;
 }
@@ -139,34 +210,52 @@ int ObDirectLoadInsertTabletContext::open()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
   } else if (is_open_) {
     // do nothing
   } else {
     lib::ObMutexGuard guard(mutex_);
-    if (!is_open_) {
+    if (OB_FAIL(open_err_)) {
+      LOG_WARN("open has error", KR(ret), K(origin_tablet_id_), K(tablet_id_));
+    } else if (!is_open_) {
       ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
       ObTabletDirectLoadInsertParam direct_load_param;
       direct_load_param.is_replay_ = false;
-      direct_load_param.common_param_.direct_load_type_ = ObDirectLoadType::DIRECT_LOAD_LOAD_DATA;
-      direct_load_param.common_param_.data_format_version_ = param_.data_version_;
-      direct_load_param.common_param_.read_snapshot_ = param_.snapshot_version_;
-      direct_load_param.common_param_.ls_id_ = param_.ls_id_;
-      direct_load_param.common_param_.tablet_id_ = param_.tablet_id_;
+      direct_load_param.common_param_.direct_load_type_ =
+        param_->is_incremental_ ? ObDirectLoadType::DIRECT_LOAD_INCREMENTAL
+                                : ObDirectLoadType::DIRECT_LOAD_LOAD_DATA;
+      direct_load_param.common_param_.data_format_version_ = param_->data_version_;
+      direct_load_param.common_param_.read_snapshot_ = param_->snapshot_version_;
+      direct_load_param.common_param_.ls_id_ = ls_id_;
+      direct_load_param.common_param_.tablet_id_ = tablet_id_;
       direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
-      direct_load_param.runtime_only_param_.task_id_ = param_.ddl_task_id_;
-      direct_load_param.runtime_only_param_.table_id_ = param_.table_id_;
-      direct_load_param.runtime_only_param_.schema_version_ = param_.schema_version_;
+      direct_load_param.runtime_only_param_.task_id_ = param_->ddl_task_id_;
+      direct_load_param.runtime_only_param_.table_id_ = param_->table_id_;
+      direct_load_param.runtime_only_param_.schema_version_ = param_->schema_version_;
       direct_load_param.runtime_only_param_.task_cnt_ = 1; // default value.
-      direct_load_param.runtime_only_param_.parallel_ = param_.reserved_parallel_;
-      if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(
-            param_.context_id_, param_.execution_id_, direct_load_param))) {
-        LOG_WARN("create tablet manager failed", K(ret));
-      } else if (OB_FAIL(sstable_insert_mgr->open_tablet_direct_load(
-                   true, param_.ls_id_, param_.tablet_id_, param_.context_id_, start_scn_,
-                   handle_))) {
-        LOG_WARN("fail to open tablet direct load", KR(ret), K(param_.tablet_id_));
+      direct_load_param.runtime_only_param_.parallel_ = param_->parallel_;
+      direct_load_param.runtime_only_param_.tx_desc_ = param_->trans_param_.tx_desc_;
+      direct_load_param.runtime_only_param_.trans_id_ = param_->trans_param_.tx_id_;
+      direct_load_param.runtime_only_param_.seq_no_ = param_->trans_param_.tx_seq_.cast_to_int();
+      if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(context_id_,
+                                                                context_id_ /*execution_id*/,
+                                                                direct_load_param))) {
+        LOG_WARN("create tablet manager failed", KR(ret), K(direct_load_param));
+      } else if (FALSE_IT(is_create_ = true)) {
+      } else if (OB_FAIL(sstable_insert_mgr->open_tablet_direct_load(!param_->is_incremental_,
+                                                                     ls_id_,
+                                                                     tablet_id_,
+                                                                     context_id_,
+                                                                     start_scn_,
+                                                                     handle_))) {
+        LOG_WARN("fail to open tablet direct load", KR(ret), K(tablet_id_));
       } else {
         is_open_ = true;
+      }
+      if (OB_FAIL(ret)) {
+        open_err_ = ret; // avoid open repeatedly when failed
       }
     }
   }
@@ -179,32 +268,50 @@ int ObDirectLoadInsertTabletContext::close()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTabletContext not init", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!is_open_)) {
+  } else if (OB_UNLIKELY(!is_open_ || is_cancel_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("expected does not open", KR(ret));
+    LOG_WARN("unexpected to close", KR(ret), K(is_open_), K(is_cancel_));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     if (OB_FAIL(sstable_insert_mgr->close_tablet_direct_load(
-          param_.context_id_, true, param_.ls_id_, param_.tablet_id_, true, true))) {
-      LOG_WARN("fail to close tablet direct load", KR(ret), K(param_.ls_id_),
-               K(param_.tablet_id_));
+          context_id_, !param_->is_incremental_, ls_id_, tablet_id_, true /*need_commit*/,
+          true /*emergent_finish*/))) {
+      LOG_WARN("fail to close tablet direct load", KR(ret), K(ls_id_), K(tablet_id_));
     } else {
-      handle_.reset();
       is_open_ = false;
+      handle_.reset();
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::cancel()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", K(ret), KP(this));
+  } else {
+    LOG_INFO("start to remove slice writers", K(tablet_id_));
+    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
+    if (OB_FAIL(sstable_insert_mgr->cancel(context_id_, ls_id_, tablet_id_, !param_->is_incremental_))) {
+      LOG_WARN("cancel direct load fill task failed", K(ret), K(context_id_), K(tablet_id_));
+    } else {
+      is_cancel_ = true;
     }
   }
   return ret;
 }
 
 int ObDirectLoadInsertTabletContext::get_pk_interval(uint64_t count,
-                                                     share::ObTabletCacheInterval &pk_interval)
+                                                     ObTabletCacheInterval &pk_interval)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(pk_cache_.fetch(count, pk_interval))) {
     if (OB_UNLIKELY(OB_EAGAIN != ret)) {
       LOG_WARN("fail to fetch from pk cache", KR(ret));
     } else {
-      if (OB_FAIL(refresh_pk_cache(param_.origin_tablet_id_, pk_cache_))) {
+      if (OB_FAIL(refresh_pk_cache(origin_tablet_id_, pk_cache_))) {
         LOG_WARN("fail to refresh pk cache", KR(ret));
       } else if (OB_FAIL(pk_cache_.fetch(count, pk_interval))) {
         LOG_WARN("fail to fetch from pk cache", KR(ret));
@@ -215,14 +322,14 @@ int ObDirectLoadInsertTabletContext::get_pk_interval(uint64_t count,
 }
 
 int ObDirectLoadInsertTabletContext::get_lob_pk_interval(uint64_t count,
-                                                         share::ObTabletCacheInterval &pk_interval)
+                                                         ObTabletCacheInterval &pk_interval)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(lob_pk_cache_.fetch(count, pk_interval))) {
     if (OB_UNLIKELY(OB_EAGAIN != ret)) {
       LOG_WARN("fail to fetch from pk cache", KR(ret));
     } else {
-      if (OB_FAIL(refresh_pk_cache(param_.lob_tablet_id_, lob_pk_cache_))) {
+      if (OB_FAIL(refresh_pk_cache(lob_tablet_id_, lob_pk_cache_))) {
         LOG_WARN("fail to refresh pk cache", KR(ret));
       } else if (OB_FAIL(lob_pk_cache_.fetch(count, pk_interval))) {
         LOG_WARN("fail to fetch from pk cache", KR(ret));
@@ -258,8 +365,7 @@ int ObDirectLoadInsertTabletContext::get_lob_write_ctx(ObDirectLoadInsertTabletW
     LOG_WARN("ObDirectLoadLobTabletContext not init", KR(ret), KP(this));
   } else {
     ObMutexGuard guard(mutex_);
-    if (OB_FAIL(
-          get_lob_pk_interval(WRITE_BATCH_SIZE, write_ctx.pk_interval_))) {
+    if (OB_FAIL(get_lob_pk_interval(WRITE_BATCH_SIZE, write_ctx.pk_interval_))) {
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = lob_start_seq_.macro_data_seq_;
@@ -269,20 +375,49 @@ int ObDirectLoadInsertTabletContext::get_lob_write_ctx(ObDirectLoadInsertTabletW
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::refresh_pk_cache(const common::ObTabletID &tablet_id, share::ObTabletCacheInterval &pk_cache)
+int ObDirectLoadInsertTabletContext::refresh_pk_cache(const ObTabletID &tablet_id,
+                                                      ObTabletCacheInterval &pk_cache)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
   ObTabletAutoincrementService &auto_inc = ObTabletAutoincrementService::get_instance();
   pk_cache.tablet_id_ = tablet_id;
   pk_cache.cache_size_ = PK_CACHE_SIZE;
-  if (OB_FAIL(auto_inc.get_tablet_cache_interval(param_.tenant_id_, pk_cache))) {
-    LOG_WARN("get_autoinc_seq fail", K(ret), K_(param_.tenant_id), K(tablet_id));
+  if (OB_FAIL(auto_inc.get_tablet_cache_interval(tenant_id, pk_cache))) {
+    LOG_WARN("get_autoinc_seq fail", K(ret), K(tenant_id), K(tablet_id));
   } else if (OB_UNLIKELY(PK_CACHE_SIZE > pk_cache.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected autoincrement value count", K(ret), K(pk_cache));
   }
   return ret;
+}
 
+int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", K(ret), KP(this));
+  } else {
+    const int64_t real_column_count =
+      param_->column_count_ + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    if (OB_FAIL(datum_row.init(real_column_count))) {
+      LOG_WARN("fail to init datum row", KR(ret), K(real_column_count));
+    } else {
+      const int64_t trans_version =
+        !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
+      datum_row.trans_id_ = param_->trans_param_.tx_id_;
+      datum_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT, !param_->is_incremental_ ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
+      datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
+      datum_row.mvcc_row_flag_.set_uncommitted_row(param_->is_incremental_);
+      // fill trans_version
+      datum_row.storage_datums_[param_->rowkey_column_count_].set_int(-trans_version);
+      // fill sql_no
+      datum_row.storage_datums_[param_->rowkey_column_count_ + 1].set_int(
+        -param_->trans_param_.tx_seq_.cast_to_int());
+    }
+  }
+  return ret;
 }
 
 int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
@@ -293,17 +428,22 @@ int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
+  } else if (OB_UNLIKELY(!is_open_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not open", KR(ret));
   } else {
     ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     ObDirectLoadSliceInfo slice_info;
-    // slice_info.is_full_direct_load_ = !param_.px_mode_;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = false;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
-    slice_info.context_id_ = param_.context_id_;
+    slice_info.context_id_ = context_id_;
     if (OB_FAIL(sstable_insert_mgr->fill_sstable_slice(slice_info, &iter, affected_rows))) {
       LOG_WARN("fail to fill sstable slice", KR(ret));
     }
@@ -313,46 +453,57 @@ int ObDirectLoadInsertTabletContext::fill_sstable_slice(const int64_t &slice_id,
 
 int ObDirectLoadInsertTabletContext::fill_lob_sstable_slice(ObIAllocator &allocator,
                                                             const int64_t &lob_slice_id,
-                                                            share::ObTabletCacheInterval &pk_interval,
-                                                            blocksstable::ObDatumRow &datum_row)
+                                                            ObTabletCacheInterval &pk_interval,
+                                                            ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
+  } else if (OB_UNLIKELY(!is_open_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not open", KR(ret));
   } else {
     ObDirectLoadSliceInfo slice_info;
-    // slice_info.is_full_direct_load_ = !param_.px_mode_;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = true;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = lob_slice_id;
-    slice_info.context_id_ = param_.context_id_;
-    if (OB_FAIL(handle_.get_obj()->fill_lob_sstable_slice(allocator, slice_info, start_scn_, pk_interval, datum_row))) {
+    slice_info.context_id_ = context_id_;
+    if (OB_UNLIKELY(!handle_.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected invalid handle", KR(ret));
+    } else if (OB_FAIL(handle_.get_obj()->fill_lob_sstable_slice(allocator, slice_info, start_scn_,
+                                                          pk_interval, datum_row))) {
       LOG_WARN("fail to fill sstable slice", KR(ret), K(slice_info), K(datum_row));
     }
   }
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::open_sstable_slice(
-  const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id)
+int ObDirectLoadInsertTabletContext::open_sstable_slice(const ObMacroDataSeq &start_seq,
+                                                        int64_t &slice_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     ObDirectLoadSliceInfo slice_info;
-    // slice_info.is_full_direct_load_ = !param_.px_mode_;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = false;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
-    slice_info.context_id_ = param_.context_id_;
+    slice_info.context_id_ = context_id_;
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(sstable_insert_mgr->open_sstable_slice(start_seq, slice_info))) {
@@ -364,23 +515,25 @@ int ObDirectLoadInsertTabletContext::open_sstable_slice(
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::open_lob_sstable_slice(
-  const blocksstable::ObMacroDataSeq &start_seq, int64_t &slice_id)
+int ObDirectLoadInsertTabletContext::open_lob_sstable_slice(const ObMacroDataSeq &start_seq,
+                                                            int64_t &slice_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     ObDirectLoadSliceInfo slice_info;
-    // slice_info.is_full_direct_load_ = !param_.px_mode_;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = true;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
-    slice_info.context_id_ = param_.context_id_;
+    slice_info.context_id_ = context_id_;
     if (OB_FAIL(open())) {
       LOG_WARN("fail to open tablet direct load", KR(ret));
     } else if (OB_FAIL(sstable_insert_mgr->open_sstable_slice(start_seq, slice_info))) {
@@ -401,16 +554,15 @@ int ObDirectLoadInsertTabletContext::close_sstable_slice(const int64_t slice_id)
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     ObDirectLoadSliceInfo slice_info;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = false;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
-    slice_info.context_id_ = param_.context_id_;
+    slice_info.context_id_ = context_id_;
     blocksstable::ObMacroDataSeq unused_seq;
     if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, unused_seq))) {
-      LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id),
-               K(param_.tablet_id_));
+      LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id), K(tablet_id_));
     }
   }
   return ret;
@@ -425,16 +577,15 @@ int ObDirectLoadInsertTabletContext::close_lob_sstable_slice(const int64_t slice
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
     ObDirectLoadSliceInfo slice_info;
-    slice_info.is_full_direct_load_ = true;
+    slice_info.is_full_direct_load_ = !param_->is_incremental_;
     slice_info.is_lob_slice_ = true;
-    slice_info.ls_id_ = param_.ls_id_;
-    slice_info.data_tablet_id_ = param_.tablet_id_;
+    slice_info.ls_id_ = ls_id_;
+    slice_info.data_tablet_id_ = tablet_id_;
     slice_info.slice_id_ = slice_id;
-    slice_info.context_id_ = param_.context_id_;
+    slice_info.context_id_ = context_id_;
     blocksstable::ObMacroDataSeq unused_seq;
     if (OB_FAIL(sstable_insert_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, unused_seq))) {
-      LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id),
-                K(param_.tablet_id_));
+      LOG_WARN("fail to close tablet direct load", KR(ret), K(slice_id), K(tablet_id_));
     }
   }
   return ret;
@@ -446,43 +597,36 @@ int ObDirectLoadInsertTabletContext::calc_range(const int64_t thread_cnt)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
-    if (OB_FAIL(sstable_insert_mgr->calc_range(param_.ls_id_, param_.tablet_id_, thread_cnt, true))) {
-      LOG_WARN("fail to calc range", KR(ret), K(param_.tablet_id_));
+    if (OB_FAIL(sstable_insert_mgr->calc_range(ls_id_, tablet_id_, thread_cnt,
+                                               !param_->is_incremental_))) {
+      LOG_WARN("fail to calc range", KR(ret), K(tablet_id_));
     } else {
-      LOG_INFO("success to calc range", K(param_.tablet_id_));
+      LOG_INFO("success to calc range", K(tablet_id_));
     }
   }
   return ret;
 }
 
-int ObDirectLoadInsertTabletContext::fill_column_group(const int64_t thread_cnt, const int64_t thread_id)
+int ObDirectLoadInsertTabletContext::fill_column_group(const int64_t thread_cnt,
+                                                       const int64_t thread_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(is_cancel_)) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is cancel", KR(ret));
   } else {
     ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
-    if (OB_FAIL(sstable_insert_mgr->fill_column_group(param_.ls_id_, param_.tablet_id_, true/*is direct load*/, thread_cnt, thread_id))) {
-      LOG_WARN("fail to fill column group", KR(ret), K(param_.tablet_id_), K(thread_cnt), K(thread_id));
-    }
-  }
-  return ret;
-}
-
-int ObDirectLoadInsertTabletContext::cancel()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObDirectLoadInsertTableContext not init", K(ret), KP(this));
-  } else {
-    LOG_INFO("start to remove slice writers", K(param_.tablet_id_));
-    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
-    if (OB_FAIL(sstable_insert_mgr->cancel(param_.ls_id_, param_.tablet_id_, true/*is direct load*/))) {
-      LOG_WARN("cancel direct load fill task failed", K(ret), K(param_.tablet_id_));
+    if (OB_FAIL(sstable_insert_mgr->fill_column_group(ls_id_, tablet_id_, !param_->is_incremental_,
+                                                      thread_cnt, thread_id))) {
+      LOG_WARN("fail to fill column group", KR(ret), K(tablet_id_), K(thread_cnt), K(thread_id));
     }
   }
   return ret;
@@ -493,7 +637,7 @@ int ObDirectLoadInsertTabletContext::cancel()
  */
 
 ObDirectLoadInsertTableContext::ObDirectLoadInsertTableContext()
-  : allocator_("TLD_InsertTbl"), is_inited_(false)
+  : allocator_("TLD_InsTblCtx"), safe_allocator_(allocator_), is_inited_(false)
 {
   allocator_.set_tenant_id(MTL_ID());
 }
@@ -502,95 +646,80 @@ ObDirectLoadInsertTableContext::~ObDirectLoadInsertTableContext() { destory(); }
 
 void ObDirectLoadInsertTableContext::destory()
 {
-  int ret = OB_SUCCESS;
-  for (TABLET_CTX_MAP::iterator iter = tablet_ctx_map_.begin(); iter != tablet_ctx_map_.end();
-       ++iter) {
+  FOREACH(iter, tablet_ctx_map_)
+  {
     ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
     tablet_ctx->~ObDirectLoadInsertTabletContext();
     allocator_.free(tablet_ctx);
   }
   tablet_ctx_map_.destroy();
+  FOREACH(iter, sql_stat_map_)
+  {
+    ObTableLoadSqlStatistics *sql_statistics = iter->second;
+    sql_statistics->~ObTableLoadSqlStatistics();
+    allocator_.free(sql_statistics);
+  }
+  sql_stat_map_.destroy();
   allocator_.reset();
   is_inited_ = false;
 }
 
-int ObDirectLoadInsertTableContext::init(const ObDirectLoadInsertTableParam &param)
+int ObDirectLoadInsertTableContext::init(
+  const ObDirectLoadInsertTableParam &param,
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadInsertTableContext init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || ls_partition_ids.empty() ||
+                         target_ls_partition_ids.empty() ||
+                         ls_partition_ids.count() != target_ls_partition_ids.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param));
-  } else if (OB_FAIL(param_.assign(param))) {
-    LOG_WARN("fail to assign param", KR(ret));
-  } else if (OB_FAIL(tablet_ctx_map_.create(1024, "TLD_InsTabCtx",
-                                     "TLD_InsTabCtx", MTL_ID()))) {
-    LOG_WARN("fail to create tablet ctx map", KR(ret));
-  } else if (OB_FAIL(MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
-    LOG_WARN("alloc execution context id failed", K(ret));
-  } else if (OB_FAIL(create_all_tablet_contexts())) {
-    LOG_WARN("fail to create all tablet contexts", KR(ret));
+    LOG_WARN("invalid args", KR(ret), K(param), K(ls_partition_ids), K(target_ls_partition_ids));
   } else {
-    is_inited_ = true;
+    param_ = param;
+    if (OB_FAIL(tablet_ctx_map_.create(1024, "TLD_InsTabCtx", "TLD_InsTabCtx", MTL_ID()))) {
+      LOG_WARN("fail to create tablet ctx map", KR(ret));
+    } else if (OB_FAIL(
+                 MTL(ObTenantDirectLoadMgr *)->alloc_execution_context_id(ddl_ctrl_.context_id_))) {
+      LOG_WARN("alloc execution context id failed", K(ret));
+    } else if (OB_FAIL(create_all_tablet_contexts(ls_partition_ids, target_ls_partition_ids))) {
+      LOG_WARN("fail to create all tablet contexts", KR(ret));
+    } else if (param_.online_opt_stat_gather_ &&
+               sql_stat_map_.create(1024, "TLD_SqlStatMap", "TLD_SqlStatMap", MTL_ID())) {
+      LOG_WARN("fail to create sql stat map", KR(ret));
+    } else {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
 
-int ObDirectLoadInsertTableContext::create_all_tablet_contexts()
+int ObDirectLoadInsertTableContext::create_all_tablet_contexts(
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &ls_partition_ids,
+  const ObIArray<ObTableLoadLSIdAndPartitionId> &target_ls_partition_ids)
 {
   int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  for (int64_t i = 0; OB_SUCC(ret) && i < param_.ls_partition_ids_.count(); ++i) {
-    const ObLSID &target_ls_id = param_.target_ls_partition_ids_.at(i).ls_id_;
-    const ObTabletID &tablet_id = param_.ls_partition_ids_.at(i).part_tablet_id_.tablet_id_;
-    const ObTabletID &target_tablet_id =
-      param_.target_ls_partition_ids_.at(i).part_tablet_id_.tablet_id_;
+  for (int64_t i = 0; OB_SUCC(ret) && i < ls_partition_ids.count(); ++i) {
+    const ObTabletID &origin_tablet_id = ls_partition_ids.at(i).part_tablet_id_.tablet_id_;
+    const ObLSID &ls_id = target_ls_partition_ids.at(i).ls_id_;
+    const ObTabletID &tablet_id = target_ls_partition_ids.at(i).part_tablet_id_.tablet_id_;
     ObDirectLoadInsertTabletContext *tablet_ctx = nullptr;
-    ObLSService *ls_service = nullptr;
-    ObLSHandle ls_handle;
-    ObTabletHandle tablet_handle;
-    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-    } else if (OB_FAIL(ls_service->get_ls(target_ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
-      LOG_WARN("failed to get log stream", K(ret));
-    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, target_tablet_id, tablet_handle,
-                                                  ObMDSGetTabletMode::READ_ALL_COMMITED))) {
-      LOG_WARN("get tablet handle failed", K(ret));
-    } else {
-      ObTabletBindingMdsUserData ddl_data;
-      ObDirectLoadInsertTabletParam insert_tablet_param;
-      insert_tablet_param.tenant_id_ = tenant_id;
-      insert_tablet_param.ls_id_ = target_ls_id;
-      insert_tablet_param.table_id_ = param_.table_id_;
-      insert_tablet_param.tablet_id_ = target_tablet_id;
-      insert_tablet_param.origin_tablet_id_ = tablet_id;
-      insert_tablet_param.schema_version_ = param_.schema_version_;
-      insert_tablet_param.snapshot_version_ = param_.snapshot_version_;
-      insert_tablet_param.execution_id_ = param_.execution_id_;
-      insert_tablet_param.ddl_task_id_ = param_.ddl_task_id_;
-      insert_tablet_param.data_version_ = param_.data_version_;
-      insert_tablet_param.reserved_parallel_ = param_.reserved_parallel_;
-      insert_tablet_param.context_id_ = ddl_ctrl_.context_id_;
-      if (OB_FAIL(tablet_handle.get_obj()->get_ddl_data(SCN::max_scn(), ddl_data))) {
-        LOG_WARN("get ddl data failed", K(ret));
-      } else if (OB_ISNULL(tablet_ctx = OB_NEWx(ObDirectLoadInsertTabletContext, (&allocator_)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to new ObDirectLoadInsertTabletContext", KR(ret));
-      } else if (OB_FALSE_IT(insert_tablet_param.lob_tablet_id_ = ddl_data.lob_meta_tablet_id_)) {
-      } else if (OB_FAIL(tablet_ctx->init(insert_tablet_param))) {
-        LOG_WARN("fail to init fast heap table tablet ctx", KR(ret));
-      } else if (OB_FAIL(tablet_ctx_map_.set_refactored(tablet_id, tablet_ctx))) {
-        LOG_WARN("fail to set tablet ctx map", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (nullptr != tablet_ctx) {
-          tablet_ctx->~ObDirectLoadInsertTabletContext();
-          allocator_.free(tablet_ctx);
-          tablet_ctx = nullptr;
-        }
+    if (OB_ISNULL(tablet_ctx = OB_NEWx(ObDirectLoadInsertTabletContext, (&allocator_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to new ObDirectLoadInsertTabletContext", KR(ret));
+    } else if (OB_FAIL(tablet_ctx->init(this, ls_id, origin_tablet_id, tablet_id))) {
+      LOG_WARN("fail to init fast heap table tablet ctx", KR(ret));
+    } else if (OB_FAIL(tablet_ctx_map_.set_refactored(origin_tablet_id, tablet_ctx))) {
+      LOG_WARN("fail to set tablet ctx map", KR(ret));
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != tablet_ctx) {
+        tablet_ctx->~ObDirectLoadInsertTabletContext();
+        allocator_.free(tablet_ctx);
+        tablet_ctx = nullptr;
       }
     }
   }
@@ -617,6 +746,23 @@ int ObDirectLoadInsertTableContext::get_tablet_context(
   return ret;
 }
 
+int ObDirectLoadInsertTableContext::commit(ObTableLoadDmlStat &dml_stats,
+                                           ObTableLoadSqlStatistics &sql_statistics)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else {
+    if (OB_FAIL(collect_dml_stat(dml_stats))) {
+      LOG_WARN("fail to collect dml stat", KR(ret));
+    } else if (param_.online_opt_stat_gather_ && collect_sql_statistics(sql_statistics)) {
+      LOG_WARN("fail to collect sql statistics", KR(ret));
+    }
+  }
+  return ret;
+}
+
 void ObDirectLoadInsertTableContext::cancel()
 {
   int ret = OB_SUCCESS;
@@ -624,7 +770,8 @@ void ObDirectLoadInsertTableContext::cancel()
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
   } else {
-    FOREACH(iter, tablet_ctx_map_) {
+    FOREACH(iter, tablet_ctx_map_)
+    {
       const ObTabletID &tablet_id = iter->first;
       ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
       if (OB_ISNULL(tablet_ctx)) {
@@ -635,6 +782,193 @@ void ObDirectLoadInsertTableContext::cancel()
       }
     }
   }
+}
+
+int64_t ObDirectLoadInsertTableContext::get_sql_stat_column_count() const
+{
+  int64_t column_count = 0;
+  if (!param_.is_heap_table_) {
+    column_count = param_.column_count_;
+  } else {
+    column_count = param_.column_count_ - param_.rowkey_column_count_;
+  }
+  return column_count;
+}
+
+int ObDirectLoadInsertTableContext::get_sql_statistics(ObTableLoadSqlStatistics *&sql_statistics)
+{
+  int ret = OB_SUCCESS;
+  sql_statistics = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected no gather sql stat", KR(ret), K(param_));
+  } else {
+    const int64_t part_id = get_tid_cache();
+    if (OB_FAIL(sql_stat_map_.get_refactored(part_id, sql_statistics))) {
+      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
+        LOG_WARN("fail to get sql stat", KR(ret), K(part_id));
+      } else {
+        ret = OB_SUCCESS;
+        const int64_t column_count = get_sql_stat_column_count();
+        ObTableLoadSqlStatistics *new_sql_statistics = nullptr;
+        if (OB_ISNULL(new_sql_statistics = OB_NEWx(ObTableLoadSqlStatistics, (&safe_allocator_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to new ObTableLoadSqlStatistics", KR(ret));
+        } else if (OB_FAIL(new_sql_statistics->create(column_count))) {
+          LOG_WARN("fail to create sql stat", KR(ret), K(column_count));
+        } else if (OB_FAIL(sql_stat_map_.set_refactored(part_id, new_sql_statistics))) {
+          LOG_WARN("fail to set sql stat back", KR(ret), K(part_id));
+        } else {
+          sql_statistics = new_sql_statistics;
+        }
+        if (OB_FAIL(ret)) {
+          if (nullptr != new_sql_statistics) {
+            new_sql_statistics->~ObTableLoadSqlStatistics();
+            safe_allocator_.free(new_sql_statistics);
+            new_sql_statistics = nullptr;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatistics &sql_statistics,
+                                                          const ObDatumRow &datum_row)
+{
+  int ret = OB_SUCCESS;
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not gather sql stat", KR(ret), K(param_));
+  } else if (OB_UNLIKELY(datum_row.get_column_count() != param_.column_count_ + extra_rowkey_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid datum row", KR(ret), K(param_), K(datum_row));
+  } else {
+    ObOptOSGColumnStat *col_stat = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
+      if (i < param_.rowkey_column_count_ && param_.is_heap_table_) {
+        // ignore heap table hidden pk
+      } else {
+        const int64_t datum_idx = i < param_.rowkey_column_count_ ? i : i + extra_rowkey_cnt;
+        const int64_t col_stat_idx = param_.is_heap_table_ ? i - 1 : i;
+        const ObStorageDatum &datum = datum_row.storage_datums_[datum_idx];
+        const ObCmpFunc &cmp_func = param_.cmp_funcs_->at(i).get_cmp_func();
+        const ObColDesc &col_desc = param_.col_descs_->at(i);
+        const bool is_valid = ObColumnStatParam::is_valid_opt_col_type(col_desc.col_type_.get_type());
+        if (is_valid) {
+          if (OB_FAIL(sql_statistics.get_col_stat(col_stat_idx, col_stat))) {
+            LOG_WARN("fail to get col stat", KR(ret), K(col_stat_idx));
+          } else if (OB_ISNULL(col_stat)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected col stat is null", KR(ret), K(col_stat_idx));
+          } else if (OB_FAIL(col_stat->update_column_stat_info(&datum,
+                                                               col_desc.col_type_,
+                                                               cmp_func.cmp_func_))) {
+            LOG_WARN("fail to merge obj", KR(ret), KP(col_stat));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::collect_dml_stat(ObTableLoadDmlStat &dml_stats)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  dml_stats.reset();
+  FOREACH_X(iter, tablet_ctx_map_, OB_SUCC(ret)) {
+    ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
+    ObOptDmlStat *dml_stat = nullptr;
+    if (OB_FAIL(dml_stats.allocate_dml_stat(dml_stat))) {
+      LOG_WARN("fail to allocate table stat", KR(ret));
+    } else {
+      dml_stat->tenant_id_ = tenant_id;
+      dml_stat->table_id_ = param_.table_id_;
+      dml_stat->tablet_id_ = tablet_ctx->get_tablet_id().id();
+      dml_stat->insert_row_count_ = tablet_ctx->get_row_count();
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatistics &sql_statistics)
+{
+  int ret = OB_SUCCESS;
+  const int64_t column_count = get_sql_stat_column_count();
+  sql_statistics.reset();
+  if (OB_UNLIKELY(!param_.online_opt_stat_gather_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected no gather sql stat", KR(ret), K(param_));
+  } else if (OB_FAIL(sql_statistics.create(column_count))) {
+    LOG_WARN("fail to create sql stat", KR(ret), K(column_count));
+  } else {
+    const StatLevel stat_level = TABLE_LEVEL;
+    const int64_t partition_id = !param_.is_partitioned_table_ ? param_.table_id_ : -1;
+    int64_t table_avg_len = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+      ObOptOSGColumnStat *osg_col_stat = nullptr;
+      const ObColDesc &col_desc = param_.col_descs_->at(!param_.is_heap_table_ ? i : i + 1);
+      if (OB_FAIL(sql_statistics.get_col_stat(i, osg_col_stat))) {
+        LOG_WARN("fail to get col stat", KR(ret), K(i));
+      }
+      FOREACH_X(iter, sql_stat_map_, OB_SUCC(ret)) {
+        const int64_t part_id = iter->first;
+        ObTableLoadSqlStatistics *part_sql_statistics = iter->second;
+        ObOptOSGColumnStat *part_osg_col_stat = nullptr;
+        if (OB_ISNULL(part_sql_statistics)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected sql stat is null", KR(ret), K(part_id));
+        } else if (OB_FAIL(part_sql_statistics->get_col_stat(i, part_osg_col_stat))) {
+          LOG_WARN("fail to get col stat", KR(ret), K(i));
+        } else if (OB_FAIL(osg_col_stat->merge_column_stat(*part_osg_col_stat))) {
+          LOG_WARN("fail to merge column stat", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        osg_col_stat->col_stat_->calc_avg_len();
+        osg_col_stat->col_stat_->set_table_id(param_.table_id_);
+        osg_col_stat->col_stat_->set_partition_id(partition_id);
+        osg_col_stat->col_stat_->set_stat_level(stat_level);
+        osg_col_stat->col_stat_->set_column_id(col_desc.col_id_);
+        osg_col_stat->col_stat_->set_num_distinct(
+          ObGlobalNdvEval::get_ndv_from_llc(osg_col_stat->col_stat_->get_llc_bitmap()));
+        if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+          LOG_WARN("failed to set min max datum to obj", K(ret));
+        } else {
+          table_avg_len += osg_col_stat->col_stat_->get_avg_len();
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ObOptTableStat *table_stat = nullptr;
+      if (OB_FAIL(sql_statistics.get_table_stat(0, table_stat))) {
+        LOG_WARN("fail to get table stat", KR(ret));
+      } else {
+        int64_t row_count = 0;
+        FOREACH(iter, tablet_ctx_map_)
+        {
+          ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
+          row_count += tablet_ctx->get_row_count();
+        }
+        table_stat->set_table_id(param_.table_id_);
+        table_stat->set_partition_id(partition_id);
+        table_stat->set_object_type(stat_level);
+        table_stat->set_row_count(row_count);
+        table_stat->set_avg_row_size(table_avg_len);
+      }
+    }
+  }
+  return ret;
 }
 
 } // namespace storage

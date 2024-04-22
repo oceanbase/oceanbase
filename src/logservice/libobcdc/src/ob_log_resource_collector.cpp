@@ -317,7 +317,6 @@ int ObLogResourceCollector::revert_log_entry_task_(ObLogEntryTask *log_entry_tas
         }
       }
     }
-
     log_entry_task_pool->free(log_entry_task);
   }
 

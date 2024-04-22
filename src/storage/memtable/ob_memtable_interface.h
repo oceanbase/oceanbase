@@ -31,25 +31,12 @@ namespace common
 {
 class ObVersion;
 }
-namespace storage
-{
-class ObIPartitionGroup;
-}
-namespace transaction
-{
-class ObTransID;
-}
+
 namespace memtable
 {
 class ObTxFillRedoCtx;
-class ObRedoLogSubmitHelper;
 class ObMemtableCtxCbAllocator;
 
-// Interfaces of Memtable
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class ObIMemtable;
-class ObIMultiSourceDataUnit;
 class ObIMemtableCtx : public ObIMvccCtx
 {
 public:
@@ -87,57 +74,11 @@ public:
   common::ActiveResource resource_link_;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
+}  // namespace memtable
 
-struct ObMergePriorityInfo
-{
-  ObMergePriorityInfo()
-    : tenant_id_(0),
-      last_freeze_timestamp_(0),
-      handle_id_(0),
-      emergency_(false),
-      protection_clock_(0),
-      partition_(nullptr) {}
-  void set_low_priority()
-  {
-    tenant_id_ = INT64_MAX;
-  }
-  bool is_low_priority()
-  {
-    return INT64_MAX == tenant_id_;
-  }
-  bool compare(const ObMergePriorityInfo &other) const
-  {
-    int64_t cmp = 0;
-    if (emergency_ != other.emergency_) {
-      if (emergency_) {
-        cmp = -1;
-      }
-    } else if (tenant_id_ != other.tenant_id_
-               && std::min(tenant_id_, other.tenant_id_) < 1000) {
-      // sys tenant has higher priority
-      cmp = tenant_id_ - other.tenant_id_;
-    } else if (last_freeze_timestamp_ != other.last_freeze_timestamp_) {
-      cmp = last_freeze_timestamp_ - other.last_freeze_timestamp_;
-    } else if (handle_id_ != other.handle_id_){
-      cmp = handle_id_ - other.handle_id_;
-    } else {
-      cmp = protection_clock_ - other.protection_clock_;
-    }
-    return cmp < 0;
-  }
-  TO_STRING_KV(K_(tenant_id), K_(last_freeze_timestamp), K_(handle_id), K_(emergency),
-    K_(protection_clock), KP_(partition));
-  int64_t tenant_id_;
-  int64_t last_freeze_timestamp_;
-  int64_t handle_id_;
-  bool emergency_;
-  int64_t protection_clock_;
-  storage::ObIPartitionGroup *partition_;
-};
+namespace storage {
 
-class ObIMemtable: public storage::ObITable
-{
+class ObIMemtable : public storage::ObITable {
 public:
   ObIMemtable()
     : ls_id_(),
@@ -145,55 +86,67 @@ public:
       trace_id_(checkpoint::INVALID_TRACE_ID)
   {}
   virtual ~ObIMemtable() {}
-  virtual share::ObLSID &get_ls_id() { return ls_id_;}
+  void reset()
+  {
+    ObITable::reset();
+    ls_id_.reset();
+    snapshot_version_.set_max();
+    reset_trace_id();
+  }
+  int get_ls_id(share::ObLSID &ls_id);
+  share::ObLSID get_ls_id() const;
   virtual ObTabletID get_tablet_id() const = 0;
-  virtual int get(
-      const storage::ObTableIterParam &param,
-      storage::ObTableAccessContext &context,
-      const blocksstable::ObDatumRowkey &rowkey,
-      blocksstable::ObDatumRow &row) = 0;
+  virtual int get(const storage::ObTableIterParam &param,
+                  storage::ObTableAccessContext &context,
+                  const blocksstable::ObDatumRowkey &rowkey,
+                  blocksstable::ObDatumRow &row) = 0;
   virtual int64_t get_frozen_trans_version() { return 0; }
   virtual int major_freeze(const common::ObVersion &version)
-  { UNUSED(version); return common::OB_SUCCESS; }
+  {
+    UNUSED(version);
+    return common::OB_SUCCESS;
+  }
   virtual int minor_freeze(const common::ObVersion &version)
-  { UNUSED(version); return common::OB_SUCCESS; }
+  {
+    UNUSED(version);
+    return common::OB_SUCCESS;
+  }
   virtual void inc_pending_lob_count() {}
   virtual void dec_pending_lob_count() {}
   virtual int on_memtable_flushed() { return common::OB_SUCCESS; }
   virtual bool can_be_minor_merged() { return false; }
-  void set_snapshot_version(const share::SCN snapshot_version) { snapshot_version_  = snapshot_version; }
+  void set_snapshot_version(const share::SCN snapshot_version) { snapshot_version_ = snapshot_version; }
   virtual int64_t get_snapshot_version() const override { return snapshot_version_.get_val_for_tx(); }
   virtual share::SCN get_snapshot_version_scn() const { return snapshot_version_; }
-  virtual int64_t get_upper_trans_version() const override
-  { return OB_NOT_SUPPORTED; }
-  virtual int64_t get_max_merged_trans_version() const override
-  { return OB_NOT_SUPPORTED; }
+  virtual int64_t get_upper_trans_version() const override { return OB_NOT_SUPPORTED; }
+  virtual int64_t get_max_merged_trans_version() const override { return OB_NOT_SUPPORTED; }
 
-  virtual int64_t get_serialize_size() const override
-  { return OB_NOT_SUPPORTED; }
+  virtual int64_t get_serialize_size() const override { return OB_NOT_SUPPORTED; }
 
-  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override
-  { return OB_NOT_SUPPORTED; }
+  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override { return OB_NOT_SUPPORTED; }
 
-  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override
-  { return OB_NOT_SUPPORTED; }
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override { return OB_NOT_SUPPORTED; }
 
-  virtual bool can_be_minor_merged() const { return false; }
   virtual int64_t inc_write_ref() { return OB_INVALID_COUNT; }
   virtual int64_t dec_write_ref() { return OB_INVALID_COUNT; }
   virtual int64_t get_write_ref() const { return OB_INVALID_COUNT; }
   virtual uint32_t get_freeze_flag() { return 0; }
-  virtual bool get_is_tablet_freeze() { return false; }
-  virtual int64_t get_max_schema_version() const { return 0; }
+  virtual bool is_tablet_freeze() { return false; }
   virtual int64_t get_occupied_size() const { return 0; }
-  virtual int estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows)
+  virtual int estimate_phy_size(const ObStoreRowkey *start_key,
+                                const ObStoreRowkey *end_key,
+                                int64_t &total_bytes,
+                                int64_t &total_rows)
   {
     UNUSEDx(start_key, end_key);
     total_bytes = 0;
     total_rows = 0;
     return OB_SUCCESS;
   }
-  virtual int get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, const int64_t part_cnt, common::ObIArray<common::ObStoreRange> &range_array)
+  virtual int get_split_ranges(const ObStoreRowkey *start_key,
+                               const ObStoreRowkey *end_key,
+                               const int64_t part_cnt,
+                               common::ObIArray<common::ObStoreRange> &range_array)
   {
     UNUSEDx(start_key, end_key);
     int ret = OB_SUCCESS;
@@ -209,10 +162,8 @@ public:
     }
     return ret;
   }
-  virtual bool is_empty() const override
-  {
-    return false;
-  }
+
+  virtual bool is_empty() const override { return false; }
 
   virtual int64_t dec_ref()
   {
@@ -242,26 +193,9 @@ protected:
   // a round tablet freeze identifier for checkpoint diagnose
   int64_t trace_id_;
 };
+}  // namespace storage
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-class ObMemtableFactory
-{
-public:
-  ObMemtableFactory();
-  ~ObMemtableFactory();
-public:
-  static ObMemtable *alloc(const uint64_t tenant_id);
-  static void free(ObMemtable *mt);
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableFactory);
-private:
-  static int64_t alloc_count_;
-  static int64_t free_count_;
-};
-
-}
-}
+}  // namespace oceanbase
 
 #endif //OCEANBASE_MEMTABLE_OB_MEMTABLE_INTERFACE_
 

@@ -39,7 +39,11 @@ public:
   ~ObTableDirectInsertCtx();
   TO_STRING_KV(K_(is_inited));
 public:
-  int init(sql::ObExecContext *exec_ctx, const uint64_t table_id, const int64_t parallel);
+  int init(sql::ObExecContext *exec_ctx,
+           const uint64_t table_id,
+           const int64_t parallel,
+           const bool is_incremental,
+           const bool enable_inc_replace);
   int commit();
   int finish();
   void destroy();

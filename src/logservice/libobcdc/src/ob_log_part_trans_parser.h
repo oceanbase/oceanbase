@@ -82,6 +82,14 @@ private:
       PartTransTask &task,
       uint64_t &row_index,
       volatile bool &stop_flag);
+  int parse_direct_load_inc_stmts_(
+      ObLogTenant *tenant,
+      const RedoLogMetaNode &redo_log_node,
+      ObLogEntryTask &redo_log_entry_task,
+      PartTransTask &task,
+      uint64_t &row_index,
+      volatile bool &stop_flag);
+
   // try parse mutator_header to get mutator type(support if ob_version >= 320)
   // and move forward cur_pos to skip header if header is supported
   //
@@ -138,16 +146,16 @@ private:
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);
-  const transaction::ObTxSEQ &get_row_seq_(PartTransTask &task, MutatorRow &row) const;
-  int alloc_mutator_row_(
+  const transaction::ObTxSEQ get_row_seq_(PartTransTask &task, MutatorRow &row) const;
+  int alloc_memtable_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row);
-  void free_mutator_row_(
+      MemtableMutatorRow *&row);
+  void free_memtable_mutator_row_(
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row);
-  int parse_mutator_row_(
+      MemtableMutatorRow *&row);
+  int parse_memtable_mutator_row_(
       ObLogTenant *tenant,
       const ObTabletID &tablet_id,
       const char *redo_data,
@@ -156,7 +164,36 @@ private:
       int64_t &pos,
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row,
+      MemtableMutatorRow *&row,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
+  int alloc_macroblock_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      const blocksstable::ObDatumRow *datum_row,
+      const common::ObStoreRowkey *row_key,
+      transaction::ObTxSEQ &seq_no,
+      blocksstable::ObDmlRowFlag &dml_flag,
+      MacroBlockMutatorRow *&row);
+  void free_macroblock_mutator_row_(
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MacroBlockMutatorRow *&row);
+  int parse_macroblock_mutator_row_(
+      ObLogTenant *tenant,
+      const ObTabletID &tablet_id,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MacroBlockMutatorRow *&row,
+      ObCDCTableInfo &table_info,
+      bool &is_ignored);
+  int check_row_need_ignore_(
+      const bool is_build_baseline,
+      ObLogTenant *tenant,
+      PartTransTask &part_trans_task,
+      ObLogEntryTask &redo_log_entry_task,
+      MutatorRow &row,
+      const ObTabletID &tablet_id,
       ObCDCTableInfo &table_info,
       bool &is_ignored);
   int handle_mutator_ext_info_log_(
@@ -174,7 +211,7 @@ private:
       int64_t &pos,
       PartTransTask &part_trans_task,
       ObLogEntryTask &redo_log_entry_task,
-      MutatorRow *&row,
+      MemtableMutatorRow *&row,
       bool &is_ignored);
 
 private:

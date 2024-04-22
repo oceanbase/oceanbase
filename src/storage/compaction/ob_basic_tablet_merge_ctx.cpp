@@ -60,6 +60,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     schema_(nullptr),
     report_(nullptr),
     snapshot_info_(),
+    tx_id_(0),
     multi_version_column_descs_()
 {
   merge_scn_.set_max();
@@ -79,6 +80,7 @@ void ObStaticMergeParam::reset()
   co_major_merge_type_ = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
   multi_version_column_descs_.reset();
   ls_handle_.reset(); // ls_handle could release before tablet_handle
+  tx_id_ = 0;
 }
 
 bool ObStaticMergeParam::is_valid() const

@@ -56,6 +56,7 @@
 #include "share/ob_tenant_info_proxy.h"//ObAllTenantInfo
 #include "share/ob_alive_server_tracer.h"//ServerAddr
 #include "storage/blocksstable/ob_block_sstable_struct.h"
+#include "storage/ddl/ob_ddl_struct.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/unit/ob_unit_info.h" //ObUnit*
 #include "share/backup/ob_backup_clean_struct.h"
@@ -10042,16 +10043,15 @@ public:
   ~ObRpcRemoteWriteDDLRedoLogArg() = default;
   int init(const uint64_t tenant_id,
            const share::ObLSID &ls_id,
-           const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+           const storage::ObDDLMacroBlockRedoInfo &redo_info,
            const int64_t task_id);
   bool is_valid() const { return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && redo_info_.is_valid() && task_id_ != 0; }
   TO_STRING_KV(K_(tenant_id), K(ls_id_), K_(redo_info), K(task_id_));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
-  blocksstable::ObDDLMacroBlockRedoInfo redo_info_;
+  storage::ObDDLMacroBlockRedoInfo redo_info_;
   int64_t task_id_;
-
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLRedoLogArg);
 };
@@ -10084,6 +10084,47 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLCommitLogArg);
 };
 
+struct ObRpcRemoteWriteDDLIncCommitLogArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRpcRemoteWriteDDLIncCommitLogArg();
+  ~ObRpcRemoteWriteDDLIncCommitLogArg();
+  int init(const uint64_t tenant_id,
+           const share::ObLSID &ls_id,
+           const common::ObTabletID tablet_id,
+           const common::ObTabletID lob_meta_tablet_id,
+           transaction::ObTxDesc *tx_desc);
+  int release();
+  bool is_valid() const
+  {
+    return tenant_id_ != OB_INVALID_ID && ls_id_.is_valid() && tablet_id_.is_valid() &&
+           OB_NOT_NULL(tx_desc_) && tx_desc_->is_valid();
+  }
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), KP_(tx_desc));
+public:
+  uint64_t tenant_id_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  common::ObTabletID lob_meta_tablet_id_;
+  transaction::ObTxDesc *tx_desc_;
+  bool need_release_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogArg);
+};
+
+struct ObRpcRemoteWriteDDLIncCommitLogRes final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRpcRemoteWriteDDLIncCommitLogRes() : tx_result_() {}
+  ~ObRpcRemoteWriteDDLIncCommitLogRes() {}
+  TO_STRING_KV(K_(tx_result));
+public:
+  transaction::ObTxExecResult tx_result_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRpcRemoteWriteDDLIncCommitLogRes);
+};
 
 struct ObCheckLSCanOfflineArg
 {

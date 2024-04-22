@@ -135,6 +135,7 @@ public:
 
   int init(
       const bool is_loading_data_dict_baseline_data,
+      const bool enable_direct_load_inc,
       const ClientFetchingMode fetching_mode,
       const ObBackupPathString &archive_dest,
       IObLogFetcherDispatcher *dispatcher,
@@ -259,6 +260,7 @@ private:
   bool                          is_inited_;
   bool                          is_running_;
   bool                          is_loading_data_dict_baseline_data_;
+  bool                          enable_direct_load_inc_;
   ClientFetchingMode            fetching_mode_;
   ObBackupPathString            archive_dest_;
   archive::LargeBufferPool      large_buffer_pool_;

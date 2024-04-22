@@ -263,7 +263,7 @@ int ObParallelMergeCtx::init_parallel_major_merge(compaction::ObBasicTabletMerge
 int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObBasicTabletMergeCtx &merge_ctx)
 {
   int ret = OB_SUCCESS;
-  memtable::ObIMemtable *memtable = nullptr;
+  ObIMemtable *memtable = nullptr;
   int64_t total_bytes = 0;
   int64_t total_rows = 0; // placeholder
 

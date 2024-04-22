@@ -75,7 +75,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     nested_offset_(0),
     nested_size_(0),
     data_block_ids_(),
-    other_block_ids_()
+    other_block_ids_(),
+    uncommitted_tx_id_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -229,6 +230,11 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
       table_key.version_range_.snapshot_version_ = static_param.version_range_.snapshot_version_;
     } else {
       table_key.scn_range_ = static_param.scn_range_;
+    }
+    if (is_minor_merge_type(static_param.get_merge_type()) && res.contain_uncommitted_row_) {
+      uncommitted_tx_id_ = static_param.tx_id_;
+    } else {
+      uncommitted_tx_id_ = 0;
     }
     table_key_ = table_key;
 

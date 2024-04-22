@@ -27,16 +27,17 @@ namespace sql
 int ObLoadDataExecutor::check_is_direct_load(ObTableDirectInsertCtx &ctx, const ObLoadDataHint &load_hint)
 {
   int ret = OB_SUCCESS;
-  int64_t enable_direct = 0;
-  int64_t append = 0;
-  if (OB_FAIL(load_hint.get_value(ObLoadDataHint::ENABLE_DIRECT, enable_direct))) {
-    LOG_WARN("fail to get value of ENABLE_DIRECT", K(ret));
-  } else if (OB_FAIL(load_hint.get_value(ObLoadDataHint::APPEND, append))) {
-    LOG_WARN("fail to get value of APPEND", K(ret));
-  } else if ((enable_direct != 0 || append != 0) && GCONF._ob_enable_direct_load) {
-    ctx.set_is_direct(true);
-  } else {
-    ctx.set_is_direct(false);
+  ctx.set_is_direct(false);
+  if (GCONF._ob_enable_direct_load) {
+    const bool enable_direct = load_hint.get_direct_load_hint().is_enable();
+    int64_t append = 0;
+    if (enable_direct) { // direct
+      ctx.set_is_direct(true);
+    } else if (OB_FAIL(load_hint.get_value(ObLoadDataHint::APPEND, append))) {
+      LOG_WARN("fail to get APPEND", KR(ret));
+    } else if (append != 0) { // append
+      ctx.set_is_direct(true);
+    }
   }
   LOG_INFO("check load data is direct done.", K(ctx.get_is_direct()));
   return ret;

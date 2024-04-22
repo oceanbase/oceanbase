@@ -286,16 +286,22 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
   // Freezing in the restart phase may not satisfy end >= last_max_sstable,
   // so the memtable cannot be filtered by scn
   // can only take out all frozen memtable
-  ObIMemtable *memtable = nullptr;
+  ObITabletMemtable *memtable = nullptr;
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   bool has_release_memtable = false;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < memtable_handles.count(); ++i) {
-    if (OB_ISNULL(memtable = static_cast<ObIMemtable *>(memtable_handles.at(i).get_table()))) {
+    if (OB_ISNULL(memtable = static_cast<ObITabletMemtable *>(memtable_handles.at(i).get_table()))) {
       ret = OB_ERR_SYS;
       LOG_ERROR("memtable must not null", K(ret), K(tablet));
+    } else if (memtable->is_direct_load_memtable()) {
+      FLOG_INFO("mini merge only flush data memtables", K(i), K(memtable_handles), KP(memtable));
+      break;
     } else if (OB_UNLIKELY(memtable->is_active_memtable())) {
       LOG_DEBUG("skip active memtable", K(i), KPC(memtable), K(memtable_handles));
+      break;
+    } else if (OB_UNLIKELY(memtable->is_direct_load_memtable())) {
+      LOG_DEBUG("skip direct load memtable", K(i), KPC(memtable), K(memtable_handles));
       break;
     } else if (!memtable->can_be_minor_merged()) {
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));

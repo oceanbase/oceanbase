@@ -21,7 +21,7 @@ namespace observer
 using namespace common;
 using namespace table;
 
-OB_SERIALIZE_MEMBER_SIMPLE(ObTableLoadUniqueKey, table_id_, task_id_);
+OB_SERIALIZE_MEMBER(ObTableLoadUniqueKey, table_id_, task_id_);
 
 OB_SERIALIZE_MEMBER(ObTableLoadDDLParam,
                     dest_table_id_,

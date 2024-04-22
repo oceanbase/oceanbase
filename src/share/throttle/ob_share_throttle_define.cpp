@@ -88,7 +88,6 @@ void FakeAllocatorForTxShare::adaptive_update_limit(const int64_t tenant_id,
       usable_remain_memory = std::max(usable_remain_memory, remain_memory - MAX_UNUSABLE_MEMORY);
     }
 
-
     is_updated = false;
     if (holding_size + usable_remain_memory < config_specify_resource_limit) {
       resource_limit = holding_size + usable_remain_memory;

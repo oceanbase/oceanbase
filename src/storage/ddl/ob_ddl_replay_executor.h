@@ -16,6 +16,7 @@
 #include "common/ob_tablet_id.h"
 #include "logservice/replayservice/ob_tablet_replay_executor.h"
 #include "storage/ddl/ob_ddl_clog.h"
+#include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
@@ -44,6 +45,11 @@ protected:
       const share::SCN &ddl_start_scn,
       const share::SCN &scn,
       bool &need_replay);
+  static int check_need_replay_ddl_inc_log_(
+      const ObLS *ls,
+      const ObTabletHandle &tablet_handle,
+      const share::SCN &scn,
+      bool &need_replay);
 
   static int get_lob_meta_tablet_id(
       const ObTabletHandle &tablet_handle,
@@ -55,7 +61,11 @@ protected:
   {
     return false;
   }
-
+private:
+  static int check_need_replay_(
+      const ObLS *ls,
+      const ObTabletHandle &tablet_handle,
+      bool &need_replay);
 protected:
   ObLS *ls_;
   common::ObTabletID tablet_id_;
@@ -86,7 +96,6 @@ private:
   const ObDDLStartLog *log_;
 };
 
-
 class ObDDLRedoReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
@@ -104,11 +113,18 @@ protected:
   // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
-
+private:
+  int do_inc_replay_(
+      ObTabletHandle &tablet_handle,
+      blocksstable::ObMacroBlockWriteInfo &write_info,
+      storage::ObDDLMacroBlock &macro_block);
+  int do_full_replay_(
+      ObTabletHandle &tablet_handle,
+      blocksstable::ObMacroBlockWriteInfo &write_info,
+      storage::ObDDLMacroBlock &macro_block);
 private:
   const ObDDLRedoLog *log_;
 };
-
 
 class ObDDLCommitReplayExecutor final : public ObDDLReplayExecutor
 {
@@ -134,6 +150,43 @@ private:
   const ObDDLCommitLog *log_;
 };
 
+class ObDDLIncStartReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObDDLIncStartReplayExecutor();
+
+  int init(ObLS *ls, const ObDDLIncStartLog &log, const share::SCN &scn);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  const ObDDLIncStartLog *log_;
+};
+
+class ObDDLIncCommitReplayExecutor final : public ObDDLReplayExecutor
+{
+public:
+  ObDDLIncCommitReplayExecutor();
+
+  int init(ObLS *ls, const ObDDLIncCommitLog &log, const share::SCN &scn);
+
+protected:
+  // replay to the tablet
+  // @return OB_SUCCESS, replay successfully, data has written to tablet.
+  // @return OB_EAGAIN, failed to replay, need retry.
+  // @return OB_NO_NEED_UPDATE, this log needs to be ignored.
+  // @return other error codes, failed to replay.
+  int do_replay_(ObTabletHandle &handle) override;
+
+private:
+  const ObDDLIncCommitLog *log_;
+};
 
 class ObSchemaChangeReplayExecutor final : public logservice::ObTabletReplayExecutor
 {

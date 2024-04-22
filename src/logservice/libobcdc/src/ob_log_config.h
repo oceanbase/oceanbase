@@ -607,6 +607,9 @@ public:
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
 
+  // Whether to sync the incremental direct load data
+  T_DEF_BOOL(enable_direct_load_inc, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
 #undef OB_CLUSTER_PARAMETER
 
 public:

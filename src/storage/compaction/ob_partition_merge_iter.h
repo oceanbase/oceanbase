@@ -331,7 +331,7 @@ protected:
 class ObPartitionMinorMacroMergeIter : public ObPartitionMinorRowMergeIter
 {
 public:
-  ObPartitionMinorMacroMergeIter(common::ObIAllocator &allocator);
+  ObPartitionMinorMacroMergeIter(common::ObIAllocator &allocator, bool reuse_uncommit_row = false);
   virtual ~ObPartitionMinorMacroMergeIter();
   virtual void reset() override;
   virtual int next() override;
@@ -348,7 +348,7 @@ public:
 
   INHERIT_TO_STRING_KV("ObPartitionMinorMacroMergeIter", ObPartitionMinorRowMergeIter,
       K_(macro_block_opened), K_(curr_block_desc), K_(curr_block_meta), K_(macro_block_iter),
-      K_(last_macro_block_reused), K_(last_macro_block_recycled), K_(last_mvcc_row_already_output), K_(have_macro_output_row));
+      K_(last_macro_block_reused), K_(last_macro_block_recycled), K_(last_mvcc_row_already_output), K_(have_macro_output_row), K_(reuse_uncommit_row));
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) override;
   virtual bool inner_check(const ObMergeParameter &merge_param) override;
@@ -369,6 +369,7 @@ private:
   bool last_macro_block_recycled_;
   bool last_mvcc_row_already_output_;
   bool have_macro_output_row_;
+  const bool reuse_uncommit_row_;
 };
 
 static const int64_t DEFAULT_ITER_COUNT = 16;

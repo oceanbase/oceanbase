@@ -26,6 +26,7 @@
 #include "share/cache/ob_cache_name_define.h"
 #include "share/ob_share_util.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/ddl/ob_ddl_inc_redo_log_writer.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/blocksstable/ob_block_manager.h"
 #include "rootserver/ob_root_service.h"
@@ -2305,7 +2306,7 @@ int ObRpcRemoteWriteDDLRedoLogP::process()
         LOG_WARN("fail to wait macro block io finish", K(ret));
       } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.redo_info_.table_key_.tablet_id_))) {
         LOG_WARN("init sstable redo writer", K(ret), K_(arg));
-      } else if (OB_FAIL(sstable_redo_writer.write_macro_block_log(arg_.redo_info_, macro_handle.get_macro_id(), false, arg_.task_id_))) {
+      } else if (OB_FAIL(sstable_redo_writer.write_macro_block_log(arg_.redo_info_, macro_handle.get_macro_id(), false/*allow_remote_write*/, arg_.task_id_))) {
         LOG_WARN("fail to write macro redo", K(ret), K_(arg));
       } else if (OB_FAIL(sstable_redo_writer.wait_macro_block_log_finish(arg_.redo_info_,
                                                                   macro_handle.get_macro_id()))) {
@@ -2399,6 +2400,45 @@ int ObRpcRemoteWriteDDLCommitLogP::process()
       }
     }
   }
+  return ret;
+}
+
+int ObRpcRemoteWriteDDLIncCommitLogP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_) {
+      ObRole role = INVALID_ROLE;
+      ObDDLIncRedoLogWriter sstable_redo_writer;
+      ObLSService *ls_service = MTL(ObLSService*);
+      ObTransService *trans_service = MTL(ObTransService *);
+      ObLSHandle ls_handle;
+      ObLS *ls = nullptr;
+      if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::OBSERVER_MOD))) {
+        LOG_WARN("get ls failed", K(ret), K(arg_));
+      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(ls->get_ls_role(role))) {
+        LOG_WARN("get role failed", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (ObRole::LEADER != role) {
+        ret = OB_NOT_MASTER;
+        LOG_INFO("leader may not have finished replaying clog, caller retry", K(ret), K(MTL_ID()), K(arg_.ls_id_));
+      } else if (OB_FAIL(sstable_redo_writer.init(arg_.ls_id_, arg_.tablet_id_))) {
+        LOG_WARN("init sstable redo writer", K(ret), K(arg_.tablet_id_));
+      } else if (OB_FAIL(sstable_redo_writer.write_inc_commit_log_with_retry(false/*allow_remote_write*/,
+                                                                             arg_.lob_meta_tablet_id_,
+                                                                             arg_.tx_desc_))) {
+        LOG_WARN("fail to write inc commit log", K(ret), K(arg_));
+      } else if (OB_FAIL(trans_service->get_tx_exec_result(*arg_.tx_desc_, result_.tx_result_))) {
+        LOG_WARN("fail to get_tx_exec_result", K(ret), K(arg_));
+      }
+    }
+  }
+
   return ret;
 }
 

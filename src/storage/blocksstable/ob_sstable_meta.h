@@ -154,6 +154,8 @@ public:
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
   OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
+  OB_INLINE int64_t get_tx_id_count() const { return tx_ids_.count(); }
+  OB_INLINE int64_t get_tx_ids(int64_t idx) const { return tx_ids_.at(idx); }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
@@ -243,7 +245,7 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
-  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables));
+  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ids), K_(is_inited));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
@@ -263,6 +265,7 @@ private:
 private:
   friend class ObSSTable;
   static const int64_t SSTABLE_META_VERSION = 1;
+    static const int64_t MAX_TX_IDS_COUNT = 16;
 private:
   ObSSTableBasicMeta basic_meta_;
   ObRootBlockInfo data_root_info_;
@@ -270,6 +273,7 @@ private:
   ObSSTableArray cg_sstables_;
   int64_t *column_checksums_;
   int64_t column_checksum_count_;
+  ObSEArray<int64_t, MAX_TX_IDS_COUNT> tx_ids_;
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);

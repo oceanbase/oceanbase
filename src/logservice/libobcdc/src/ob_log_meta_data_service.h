@@ -56,7 +56,8 @@ public:
       IObLogPartTransParser &part_trans_parser,
       const int64_t cluster_id,
       const ObLogConfig &cfg,
-      const int64_t start_seq);
+      const int64_t start_seq,
+      const bool enable_direct_load_inc);
   void destroy();
 
   static ObLogMetaDataService &get_instance();

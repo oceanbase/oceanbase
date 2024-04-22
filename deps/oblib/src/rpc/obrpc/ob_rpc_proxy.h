@@ -166,7 +166,7 @@ public:
             || pcode == OB_CLEAN_SEQUENCE_CACHE || pcode == OB_FETCH_TABLET_AUTOINC_SEQ_CACHE
             || pcode == OB_BATCH_GET_TABLET_AUTOINC_SEQ || pcode == OB_BATCH_SET_TABLET_AUTOINC_SEQ
             || pcode == OB_CALC_COLUMN_CHECKSUM_REQUEST || pcode == OB_REMOTE_WRITE_DDL_REDO_LOG
-            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG);
+            || pcode == OB_REMOTE_WRITE_DDL_COMMIT_LOG || pcode == OB_REMOTE_WRITE_DDL_INC_COMMIT_LOG);
   }
 
   // when active is set as false, all RPC calls will simply return OB_INACTIVE_RPC_PROXY.

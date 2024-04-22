@@ -278,6 +278,7 @@ void ObTenantMetaMemMgr::init_pool_arr()
   pool_arr_[static_cast<int>(ObITable::TableType::TX_DATA_MEMTABLE)] = &tx_data_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::TX_CTX_MEMTABLE)] = &tx_ctx_memtable_pool_;
   pool_arr_[static_cast<int>(ObITable::TableType::LOCK_MEMTABLE)] = &lock_memtable_pool_;
+  pool_arr_[static_cast<int>(ObITable::TableType::DIRECT_LOAD_MEMTABLE)] = &ddl_kv_pool_;
 }
 
 int ObTenantMetaMemMgr::start()
@@ -429,7 +430,7 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
       } else {
         if (ObITable::TableType::DATA_MEMTABLE == table_type) {
           ObMemtable *memtable = static_cast<ObMemtable *>(table);
-          memtable::ObMtStat& mt_stat = memtable->get_mt_stat();
+          ObMtStat& mt_stat = memtable->get_mt_stat();
           if (0 == mt_stat.push_table_into_gc_queue_time_) {
             mt_stat.push_table_into_gc_queue_time_ = ObTimeUtility::current_time();
             if (0 != mt_stat.release_time_
@@ -616,8 +617,7 @@ void ObTenantMetaMemMgr::batch_gc_memtable_()
           for (common::hash::ObHashSet<uint64_t>::iterator set_iter = memtable_set->begin();
                set_iter != memtable_set->end();
                ++set_iter) {
-            if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first),
-                                                     ObITable::TableType::DATA_MEMTABLE))) {
+            if (OB_TMP_FAIL(push_table_into_gc_queue((ObITable *)(set_iter->first), ObITable::TableType::DATA_MEMTABLE))) {
               LOG_ERROR("push table into gc queue failed, maybe there will be leak",
                         K(tmp_ret), KPC(memtable_set));
             }
@@ -1051,7 +1051,31 @@ void ObTenantMetaMemMgr::release_ddl_kv(ObDDLKV *ddl_kv)
   }
 }
 
-int ObTenantMetaMemMgr::acquire_memtable(ObTableHandleV2 &handle)
+int ObTenantMetaMemMgr::acquire_direct_load_memtable(ObTableHandleV2 &handle)
+{
+  int ret = OB_SUCCESS;
+  ObDDLKV *ddl_kv = nullptr;
+  handle.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_FAIL(ddl_kv_pool_.acquire(ddl_kv))) {
+    STORAGE_LOG(WARN, "fail to acquire ddl kv object", K(ret));
+  } else {
+    handle.set_table(ddl_kv, this, ObITable::TableType::DIRECT_LOAD_MEMTABLE);
+    ddl_kv = nullptr;
+  }
+
+  if (OB_FAIL(ret)) {
+    handle.reset();
+    if (OB_NOT_NULL(ddl_kv)) {
+      release_ddl_kv(ddl_kv);
+    }
+  }
+  return ret;
+
+}
+int ObTenantMetaMemMgr::acquire_data_memtable(ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
   ObMemtable *memtable = nullptr;
@@ -1063,7 +1087,7 @@ int ObTenantMetaMemMgr::acquire_memtable(ObTableHandleV2 &handle)
   } else if (OB_FAIL(memtable_pool_.acquire(memtable))) {
     LOG_WARN("fail to acquire memtable object", K(ret));
   } else {
-    handle.set_table(memtable, this,  ObITable::TableType::DATA_MEMTABLE);
+    handle.set_table(memtable, this, ObITable::TableType::DATA_MEMTABLE);
     memtable = nullptr;
   }
 
@@ -1086,7 +1110,7 @@ int ObTenantMetaMemMgr::acquire_tx_data_memtable(ObTableHandleV2 &handle)
   } else if (OB_FAIL(tx_data_memtable_pool_.acquire(tx_data_memtable))) {
     LOG_WARN("fail to acquire tx data memtable object", K(ret));
   } else {
-    handle.set_table(tx_data_memtable, this,  ObITable::TableType::TX_DATA_MEMTABLE);
+    handle.set_table(tx_data_memtable, this, ObITable::TableType::TX_DATA_MEMTABLE);
     tx_data_memtable = nullptr;
   }
 
@@ -1110,7 +1134,7 @@ int ObTenantMetaMemMgr::acquire_tx_ctx_memtable(ObTableHandleV2 &handle)
   } else if (OB_FAIL(tx_ctx_memtable_pool_.acquire(tx_ctx_memtable))) {
     LOG_WARN("fail to acquire tx ctx memtable object", K(ret));
   } else {
-    handle.set_table(tx_ctx_memtable, this,  ObITable::TableType::TX_CTX_MEMTABLE);
+    handle.set_table(tx_ctx_memtable, this, ObITable::TableType::TX_CTX_MEMTABLE);
     tx_ctx_memtable = nullptr;
   }
 

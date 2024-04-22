@@ -47,6 +47,9 @@ public:
                              common::ObIArray<int64_t> &column_idxs);
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
+  static int get_lob_meta_tid(const uint64_t tenant_id,
+                              const uint64_t data_table_id,
+                              uint64_t &lob_meta_table_id);
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();
@@ -78,6 +81,7 @@ public:
   int64_t store_column_count_;
   int64_t lob_column_cnt_;
   common::ObCollationType collation_type_;
+  share::schema::ObPartitionLevel part_level_;
   int64_t schema_version_;
   // if it is a heap table, it contains hidden primary key column
   // does not contain virtual generated columns

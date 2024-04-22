@@ -40,7 +40,6 @@
 #include "share/ob_tablet_replica_checksum_operator.h" // ObTabletReplicaChecksumItem
 #include "share/rc/ob_tenant_base.h"
 
-#include "storage/ob_partition_component_factory.h"
 #include "storage/ob_i_table.h"
 #include "storage/tx/ob_trans_service.h"
 #include "sql/optimizer/ob_storage_estimator.h"

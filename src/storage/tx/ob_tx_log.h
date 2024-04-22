@@ -15,6 +15,7 @@
 
 #include <type_traits>
 #include "share/ob_ls_id.h"
+#include "storage/ddl/ob_ddl_clog.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx/ob_tx_serialization.h"
@@ -58,10 +59,15 @@ namespace common
 class ObDataBuffer;
 } // namespace common
 
+namespace storage
+{
+class ObLSDDLLogHandler;
+}
+
 namespace transaction
 {
 
-// class ObTxLogCb;
+class ObTxLogCb;
 class ObPartTransCtx;
 
 typedef int64_t TxID;
@@ -75,8 +81,7 @@ enum class ObTxLogType : int64_t
   TX_REDO_LOG = 0x1,
   TX_ROLLBACK_TO_LOG = 0x2,
   TX_MULTI_DATA_SOURCE_LOG = 0x4,
-  // reserve for other data log
-  TX_RESERVE_FOR_DATA_LOG = 0x8,
+  TX_DIRECT_LOAD_INC_LOG = 0x8,
   TX_ACTIVE_INFO_LOG = 0x10,
   TX_RECORD_LOG = 0x20,
   TX_COMMIT_INFO_LOG = 0x40,
@@ -136,7 +141,7 @@ static inline ObTxLogType operator|(const ObTxLogType left, const ObTxLogType ri
 static const ObTxLogType TX_LOG_TYPE_MASK = (ObTxLogType::TX_REDO_LOG |
                                              ObTxLogType::TX_ROLLBACK_TO_LOG |
                                              ObTxLogType::TX_MULTI_DATA_SOURCE_LOG |
-                                             ObTxLogType::TX_RESERVE_FOR_DATA_LOG |
+                                             ObTxLogType::TX_DIRECT_LOAD_INC_LOG |
                                              ObTxLogType::TX_ACTIVE_INFO_LOG |
                                              ObTxLogType::TX_RECORD_LOG |
                                              ObTxLogType::TX_COMMIT_INFO_LOG |
@@ -148,6 +153,13 @@ static const ObTxLogType TX_LOG_TYPE_MASK = (ObTxLogType::TX_REDO_LOG |
 
 class ObTxLogTypeChecker {
 public:
+  static bool is_data_log(const ObTxLogType log_type)
+  {
+    return ObTxLogType::TX_REDO_LOG == log_type || ObTxLogType::TX_RECORD_LOG == log_type
+           || ObTxLogType::TX_ROLLBACK_TO_LOG == log_type
+           || ObTxLogType::TX_MULTI_DATA_SOURCE_LOG == log_type
+           || ObTxLogType::TX_DIRECT_LOAD_INC_LOG == log_type;
+  }
   static bool is_state_log(const ObTxLogType log_type)
   {
     return ObTxLogType::TX_PREPARE_LOG == log_type ||
@@ -375,6 +387,257 @@ public:
 private:
   ObTxSerCompatByte compat_bytes_;
   ObTxBufferNodeArray data_;
+};
+
+class ObTxDLIncLogBuf
+{
+public:
+  NEED_SERIALIZE_AND_DESERIALIZE;
+
+  ObTxDLIncLogBuf() : submit_buf_(nullptr), replay_buf_(nullptr), dli_buf_size_(0), is_alloc_(false)
+  {}
+  // ObTxDLIncLogBuf(void *buf, const int64_t buf_size)
+  //     : dli_buf_(buf), dli_buf_size_(buf_size), is_alloc_(false)
+  // {}
+
+  template <typename DDL_LOG>
+  int serialize_log_object(const DDL_LOG *ddl_log)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(submit_buf_) || dli_buf_size_ > 0 || is_alloc_ || OB_ISNULL(ddl_log)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid arguments", K(ret), KPC(this), KPC(ddl_log));
+    } else {
+      is_alloc_ = true;
+      dli_buf_size_ = ddl_log->get_serialize_size();
+      submit_buf_ = static_cast<char *>(share::mtl_malloc(dli_buf_size_, "DLI_TMP_BUF"));
+      memset(submit_buf_, 0, dli_buf_size_);
+      int64_t pos = 0;
+      if (OB_ISNULL(submit_buf_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        TRANS_LOG(WARN, "alloc memory failed", K(ret), KPC(this), KPC(ddl_log));
+      } else if (ddl_log->serialize(static_cast<char *>(submit_buf_), dli_buf_size_, pos)) {
+        TRANS_LOG(WARN, "serialize ddl log buf failed", K(ret), KPC(this), KPC(ddl_log));
+      }
+
+      // TRANS_LOG(INFO, "serialize ddl log object", K(ret), KPC(ddl_log), K(pos),
+      // K(dli_buf_size_)); int tmp_ret = OB_SUCCESS; int64_t tmp_pos = 0; DDL_LOG tmp_ddl_log; if
+      // (OB_TMP_FAIL(tmp_ddl_log.deserialize(submit_buf_, dli_buf_size_, tmp_pos))) {
+      //   TRANS_LOG(WARN, "deserialize ddl log buf failed", K(ret), K(tmp_ret), KPC(this),
+      //             K(tmp_ddl_log), KPC(ddl_log));
+      // }
+
+#ifdef ENABLE_DEBUG_LOG
+      TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> serialize ddl log object", K(ret), KP(submit_buf_),
+                K(pos), K(dli_buf_size_), KPC(ddl_log));
+#endif
+    }
+    return ret;
+  }
+
+  template <typename DDL_LOG>
+  int deserialize_log_object(DDL_LOG *ddl_log) const
+  {
+    int ret = OB_SUCCESS;
+    int64_t pos = 0;
+    if (OB_ISNULL(replay_buf_) || dli_buf_size_ <= 0 || OB_ISNULL(ddl_log)) {
+      ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid arguments", K(ret), KPC(this), KPC(ddl_log));
+    } else if (OB_FAIL(ddl_log->deserialize(replay_buf_, dli_buf_size_, pos))) {
+      TRANS_LOG(WARN, "deserialize ddl log buf failed", K(ret), KPC(this), KPC(ddl_log));
+    }
+
+#ifdef ENABLE_DEBUG_LOG
+    TRANS_LOG(INFO, "<ObTxDirectLoadIncLog> deserialize ddl log object", K(ret), KP(replay_buf_),
+              K(pos), K(dli_buf_size_), KPC(ddl_log));
+#endif
+    return ret;
+  }
+
+  const char *get_buf() { return replay_buf_; }
+  int64_t get_buf_size() { return dli_buf_size_; }
+
+  void reset()
+  {
+    if (is_alloc_) {
+      if (OB_NOT_NULL(submit_buf_)) {
+        share::mtl_free(submit_buf_);
+      }
+      is_alloc_ = false;
+    }
+    submit_buf_ = nullptr;
+    dli_buf_size_ = 0;
+  }
+
+  ~ObTxDLIncLogBuf() { reset(); }
+  TO_STRING_KV(KP(submit_buf_), KP(replay_buf_), K(dli_buf_size_), K(is_alloc_));
+
+private:
+  char *submit_buf_;
+  const char *replay_buf_;
+  int64_t dli_buf_size_;
+
+  bool is_alloc_;
+};
+
+class TxSubmitBaseArg
+{
+public:
+  ObTxLogCb *log_cb_;
+  share::SCN base_scn_;
+  int64_t replay_hint_;
+  logservice::ObReplayBarrierType replay_barrier_type_;
+  int64_t suggested_buf_size_;
+  bool hold_tx_ctx_ref_;
+
+  TxSubmitBaseArg() { reset(); }
+  // ~TxSubmitBaseArg() = default;
+  void reset()
+  {
+    log_cb_ = nullptr;
+    base_scn_.set_invalid();
+    replay_hint_ = 0;
+    replay_barrier_type_ = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
+    suggested_buf_size_ = 0;
+    hold_tx_ctx_ref_ = 0;
+  }
+  bool is_valid()
+  {
+    return log_cb_ != nullptr && base_scn_.is_valid() && replay_hint_ >= 0
+           && replay_barrier_type_ != logservice::ObReplayBarrierType::INVALID_BARRIER
+           && hold_tx_ctx_ref_ >= 0;
+  }
+  TO_STRING_KV(KP(log_cb_),
+               K(base_scn_),
+               K(replay_hint_),
+               K(replay_barrier_type_),
+               K(suggested_buf_size_),
+               K(hold_tx_ctx_ref_));
+};
+
+class TxReplayBaseArg
+{
+public:
+  int64_t part_log_no_;
+  TxReplayBaseArg() { reset(); }
+  // ~TxReplayBaseArg() = default;
+  void reset() { part_log_no_ = -1; }
+  bool is_valid() { return part_log_no_ > 0; }
+  TO_STRING_KV(K(part_log_no_));
+};
+
+class ObTxDirectLoadIncLog
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  enum class DirectLoadIncLogType
+  {
+    UNKNOWN = 0,
+    DLI_REDO = 1,
+    DLI_START = 2,
+    DLI_END = 3
+  };
+
+  class TempRef
+  {
+  public:
+    // empty class, only for template
+    ObTxDLIncLogBuf dli_log_buf_;
+  };
+  class ConstructArg
+  {
+  public:
+    DirectLoadIncLogType ddl_log_type_;
+    ObDDLIncLogBasic batch_key_;
+    ObTxDLIncLogBuf &dli_buf_;
+
+    TO_STRING_KV(K(ddl_log_type_), K(batch_key_), K(dli_buf_));
+
+    ConstructArg(DirectLoadIncLogType ddl_log_type,
+                 const ObDDLIncLogBasic &batch_key,
+                 ObTxDLIncLogBuf &dli_buf_ref)
+        : ddl_log_type_(ddl_log_type), batch_key_(batch_key), dli_buf_(dli_buf_ref)
+    {}
+    ConstructArg(ObTxDirectLoadIncLog::TempRef &temp_ref)
+        : ddl_log_type_(DirectLoadIncLogType::UNKNOWN), batch_key_(),
+          dli_buf_(temp_ref.dli_log_buf_)
+    {}
+  };
+  class ReplayArg : public oceanbase::transaction::TxReplayBaseArg
+  {
+  public:
+    ObLSDDLLogHandler *ddl_log_handler_ptr_;
+    DirectLoadIncLogType ddl_log_type_;
+    ObDDLIncLogBasic batch_key_;
+
+    ReplayArg() { reset(); }
+    void reset()
+    {
+      oceanbase::transaction::TxReplayBaseArg::reset();
+      ddl_log_handler_ptr_ = nullptr;
+      ddl_log_type_ = DirectLoadIncLogType::UNKNOWN;
+      batch_key_.reset();
+    }
+    INHERIT_TO_STRING_KV("base_replay_arg_",
+                         oceanbase::transaction::TxReplayBaseArg,
+                         KP(ddl_log_handler_ptr_),
+                         K(ddl_log_type_),
+                         K(batch_key_));
+  };
+  class SubmitArg : public oceanbase::transaction::TxSubmitBaseArg
+  {
+  public:
+    logservice::AppendCb *extra_cb_;
+    bool need_free_extra_cb_;
+
+    SubmitArg() { reset(); }
+    void reset()
+    {
+      oceanbase::transaction::TxSubmitBaseArg::reset();
+      extra_cb_ = nullptr;
+      need_free_extra_cb_ = false;
+    }
+    INHERIT_TO_STRING_KV("base_submit_arg_",
+                         oceanbase::transaction::TxSubmitBaseArg,
+                         KPC(extra_cb_), K(need_free_extra_cb_));
+  };
+
+  ObTxDirectLoadIncLog(const ObTxDirectLoadIncLog::ConstructArg &arg)
+      : ddl_log_type_(arg.ddl_log_type_), log_buf_(arg.dli_buf_)
+  {
+    before_serialize();
+  }
+
+  // const ObDDLRedoLog &get_ddl_redo_log() { return ddl_redo_log_; }
+
+  DirectLoadIncLogType get_ddl_log_type() { return ddl_log_type_; }
+  const ObTxDLIncLogBuf &get_dli_buf() { return log_buf_; }
+
+  int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
+
+  static const ObTxLogType LOG_TYPE;
+  TO_STRING_KV(K(LOG_TYPE), K(ddl_log_type_), K(log_buf_));
+
+public:
+  int before_serialize();
+
+#ifdef ENABLE_DEBUG_LOG
+  // only for unittest
+  static int64_t direct_load_inc_submit_log_cnt_;
+  static int64_t direct_load_inc_apply_log_cnt_;
+  static int64_t direct_load_inc_submit_log_size_;
+  static int64_t direct_load_inc_apply_log_size_;
+
+#endif
+
+private:
+  ObTxSerCompatByte compat_bytes_;
+
+  DirectLoadIncLogType ddl_log_type_;
+
+  ObTxDLIncLogBuf &log_buf_;
+  // ObDDLRedoLog &ddl_redo_log_;
 };
 
 class ObTxActiveInfoLogTempRef {

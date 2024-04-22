@@ -61,6 +61,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/ob_tx_log_adapter.h"
 #include "storage/tx_table/ob_tx_table.h"
+#include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/meta_mem/ob_meta_obj_struct.h"
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
@@ -1836,7 +1837,7 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_offline())) {
-      ret = OB_MINOR_FREEZE_NOT_ALLOW;
+      ret = OB_LS_OFFLINE;
       LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
     } else if (OB_FAIL(ls_freezer_.logstream_freeze(trace_id, &result))) {
       LOG_WARN("logstream freeze failed", K(ret), K_(ls_meta));
@@ -1870,7 +1871,7 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id,
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_offline())) {
-      ret = OB_MINOR_FREEZE_NOT_ALLOW;
+      ret = OB_LS_OFFLINE;
       LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
     } else if (OB_FAIL(ls_freezer_.tablet_freeze(tablet_id, &result))) {
       LOG_WARN("tablet freeze failed", K(ret), K(tablet_id));
@@ -1886,7 +1887,9 @@ int ObLS::tablet_freeze(const ObTabletID &tablet_id,
   return ret;
 }
 
-int ObLS::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id, const int64_t abs_timeout_ts)
+int ObLS::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id,
+                                          ObFuture<int> *result,
+                                          const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -1899,14 +1902,86 @@ int ObLS::tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id, const int
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
   } else if (OB_UNLIKELY(is_offline())) {
-    ret = OB_MINOR_FREEZE_NOT_ALLOW;
+    ret = OB_LS_OFFLINE;
     LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(ls_freezer_.tablet_freeze_with_rewrite_meta(tablet_id))) {
+  } else if (OB_FAIL(ls_freezer_.tablet_freeze_with_rewrite_meta(tablet_id, result))) {
     LOG_WARN("tablet force freeze failed", K(ret), K(tablet_id));
   } else {
     // do nothing
   }
   return ret;
+}
+
+/**
+ * @brief Used for async freeze task
+ *
+ * @param tablet_id tablet to be freezed
+ * @param epoch to check if logstream has offlined
+ */
+int ObLS::tablet_freeze_task_for_direct_load(const ObTabletID &tablet_id, const uint64_t epoch, ObFuture<int> *result)
+{
+  int ret = OB_SUCCESS;
+  int64_t read_lock = LSLOCKALL;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+  if (!lock_myself.locked()) {
+    ret = OB_TIMEOUT;
+    STORAGE_LOG(WARN, "lock failed, please retry later", K(ret), K(ls_meta_));
+  } else if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "ls is not inited", K(ret));
+  } else if (OB_UNLIKELY(is_offline()) || ATOMIC_LOAD(&switch_epoch_) != epoch) {
+    ret = OB_LS_OFFLINE;
+    LOG_WARN("ls has offlined", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(ls_freezer_.tablet_freeze_task_for_direct_load(tablet_id, result))) {
+    LOG_WARN("tablet force freeze failed", K(ret), K(tablet_id));
+  } else {
+    // freeze success
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_INIT == ret || OB_NOT_RUNNING == ret || OB_LS_OFFLINE == ret) {
+      STORAGE_LOG(INFO, "reset ret code to stop retry", KR(ret));
+      ret = OB_SUCCESS;
+    } else {
+      // reset ret to EAGAIN to retry freeze
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
+
+int ObLS::sync_tablet_freeze_for_direct_load(const ObTabletID &tablet_id, const int64_t max_retry_time)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t epoch = ATOMIC_LOAD(&switch_epoch_);
+  const int64_t start_time = ObClockGenerator::getClock();
+  const int64_t RETRY_INTERVAL = 100 * 1000;  // 100 ms
+
+  do {
+    ret = OB_SUCCESS;
+    ObFuture<int> result;
+    if (OB_FAIL(tablet_freeze_task_for_direct_load(tablet_id, epoch, &result))) {
+      if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+        LOG_INFO("fail to start tablet freeze. need retry", K(ret), K(tablet_id));
+      }
+      usleep(RETRY_INTERVAL);
+    } else if (OB_FAIL(ls_freezer_.wait_freeze_finished(result))) {
+      STORAGE_LOG(WARN, "freeze task failed", KR(ret));
+    }
+  } while (OB_FAIL(ret) && ObClockGenerator::getClock() - start_time < max_retry_time);
+  return ret;
+}
+
+/**
+ * @brief Record switch_epoch when commit the root freeze task. Async tablet freeze task will check if epoch is the
+ * same.
+ */
+void ObLS::async_tablet_freeze_for_direct_load(const ObTabletID &tablet_id)
+{
+  const uint64_t epoch = ATOMIC_LOAD(&switch_epoch_);
+  FLOG_INFO("commit root freeze task", K(tablet_id), K(epoch));
+  (void)ls_freezer_.commit_async_tablet_freeze_task_once(tablet_id, epoch);
 }
 
 int ObLS::batch_tablet_freeze(const int64_t trace_id,
@@ -1928,7 +2003,7 @@ int ObLS::batch_tablet_freeze(const int64_t trace_id,
       ret = OB_NOT_INIT;
       LOG_WARN("ls is not inited", K(ret));
     } else if (OB_UNLIKELY(is_offline())) {
-      ret = OB_MINOR_FREEZE_NOT_ALLOW;
+      ret = OB_LS_OFFLINE;
       LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
     } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(trace_id, tablet_ids, &result))) {
       LOG_WARN("batch tablet freeze failed", K(ret));
@@ -2167,7 +2242,6 @@ int ObLS::disable_replay_without_lock()
   }
   return ret;
 }
-
 
 int ObLS::try_update_upper_trans_version_and_gc_sstable(
     compaction::ObCompactionScheduleIterator &iter)

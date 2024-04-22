@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX CLIENT
 
 #include "ob_table_load_sql_statistics.h"
+#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {
@@ -36,6 +37,31 @@ void ObTableLoadSqlStatistics::reset()
   }
   table_stat_array_.reset();
   allocator_.reset();
+}
+
+int ObTableLoadSqlStatistics::create(int64_t column_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(column_count <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invald args", KR(ret), K(column_count));
+  } else if (OB_UNLIKELY(!is_empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not empty", KR(ret));
+  } else {
+    ObOptTableStat *table_stat = nullptr;
+    ObOptOSGColumnStat *osg_col_stat = nullptr;
+    if (OB_FAIL(allocate_table_stat(table_stat))) {
+      LOG_WARN("fail to allocate table stat", KR(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_count; ++i) {
+      ObOptOSGColumnStat *osg_col_stat = nullptr;
+      if (OB_FAIL(allocate_col_stat(osg_col_stat))) {
+        LOG_WARN("fail to allocate col stat", KR(ret));
+      }
+    }
+  }
+  return ret;
 }
 
 int ObTableLoadSqlStatistics::allocate_table_stat(ObOptTableStat *&table_stat)
@@ -82,98 +108,189 @@ int ObTableLoadSqlStatistics::allocate_col_stat(ObOptOSGColumnStat *&col_stat)
   return ret;
 }
 
-int ObTableLoadSqlStatistics::add(const ObTableLoadSqlStatistics& other)
+int ObTableLoadSqlStatistics::merge(const ObTableLoadSqlStatistics &other)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret)&& i < other.table_stat_array_.count(); ++i) {
-    ObOptTableStat *table_stat = other.table_stat_array_.at(i);
-    if (table_stat != nullptr) {
+  if (is_empty()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.table_stat_array_.count(); ++i) {
+      ObOptTableStat *table_stat = other.table_stat_array_.at(i);
       ObOptTableStat *copied_table_stat = nullptr;
-      int64_t size = table_stat->size();
-      char *new_buf = nullptr;
-      if (OB_ISNULL(new_buf = static_cast<char *>(allocator_.alloc(size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to allocate buffer", KR(ret), K(size));
-      } else if (OB_FAIL(table_stat->deep_copy(new_buf, size, copied_table_stat))) {
-        OB_LOG(WARN, "fail to copy table stat", KR(ret));
-      } else if (OB_FAIL(table_stat_array_.push_back(copied_table_stat))) {
-        OB_LOG(WARN, "fail to add table stat", KR(ret));
-      }
-      if (OB_FAIL(ret)) {
-        if (copied_table_stat != nullptr) {
-          copied_table_stat->~ObOptTableStat();
-          copied_table_stat = nullptr;
+      if (OB_ISNULL(table_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table stat is null", KR(ret), K(i), K(other.table_stat_array_));
+      } else {
+        int64_t size = table_stat->size();
+        char *buf = nullptr;
+        if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate buffer", KR(ret), K(size));
+        } else if (OB_FAIL(table_stat->deep_copy(buf, size, copied_table_stat))) {
+          LOG_WARN("fail to copy table stat", KR(ret));
+        } else if (OB_FAIL(table_stat_array_.push_back(copied_table_stat))) {
+          LOG_WARN("fail to add table stat", KR(ret));
         }
-        if(new_buf != nullptr) {
-          allocator_.free(new_buf);
-          new_buf = nullptr;
+        if (OB_FAIL(ret)) {
+          if (copied_table_stat != nullptr) {
+            copied_table_stat->~ObOptTableStat();
+            copied_table_stat = nullptr;
+          }
+          if (buf != nullptr) {
+            allocator_.free(buf);
+            buf = nullptr;
+          }
         }
       }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
-    ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
-    ObOptOSGColumnStat *copied_col_stat = nullptr;
-    if (OB_ISNULL(col_stat)) {
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "get unexpected null");
-    } else if (OB_ISNULL(copied_col_stat = ObOptOSGColumnStat::create_new_osg_col_stat(allocator_))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      OB_LOG(WARN, "failed to create new col stat");
-    } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
-      OB_LOG(WARN, "fail to copy col stat", KR(ret));
-    } else if (OB_FAIL(col_stat_array_.push_back(copied_col_stat))) {
-      OB_LOG(WARN, "fail to add col stat", KR(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.col_stat_array_.count(); ++i) {
+      ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
+      ObOptOSGColumnStat *copied_col_stat = nullptr;
+      if (OB_ISNULL(col_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col stat is null", KR(ret), K(i), K(other.col_stat_array_));
+      } else if (OB_FAIL(allocate_col_stat(copied_col_stat))) {
+        LOG_WARN("fail to allocate col stat", KR(ret));
+      } else if (OB_FAIL(copied_col_stat->deep_copy(*col_stat))) {
+        LOG_WARN("fail to copy col stat", KR(ret));
+      }
     }
-    if (OB_FAIL(ret)) {
-      if (copied_col_stat != nullptr) {
-        copied_col_stat->~ObOptOSGColumnStat();
-        copied_col_stat = nullptr;
+  } else {
+    if (OB_UNLIKELY(other.table_stat_array_.count() != table_stat_array_.count() ||
+                    other.col_stat_array_.count() != col_stat_array_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid args", KR(ret), KPC(this), K(other));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.table_stat_array_.count(); ++i) {
+      ObOptTableStat *table_stat = other.table_stat_array_.at(i);
+      if (OB_ISNULL(table_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table stat is null", KR(ret), K(i), K(other.table_stat_array_));
+      } else if (OB_FAIL(table_stat_array_.at(i)->merge_table_stat(*table_stat))) {
+        LOG_WARN("fail to merge table stat", KR(ret));
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < other.col_stat_array_.count(); ++i) {
+      ObOptOSGColumnStat *osg_col_stat = other.col_stat_array_.at(i);
+      if (OB_ISNULL(osg_col_stat)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected col stat is null", KR(ret), K(i), K(other.col_stat_array_));
+      }
+      // ObOptOSGColumnStat的序列化结果只序列化里面的ObOptColumnStat,
+      // 需要调用ObOptColumnStat的merge函数
+      else if (OB_FAIL(
+                 col_stat_array_.at(i)->col_stat_->merge_column_stat(*osg_col_stat->col_stat_))) {
+        LOG_WARN("fail to merge col stat", KR(ret));
       }
     }
   }
   return ret;
 }
 
-int ObTableLoadSqlStatistics::get_table_stat_array(ObIArray<ObOptTableStat*> &table_stat_array) const
+int ObTableLoadSqlStatistics::get_table_stat(int64_t idx, ObOptTableStat *&table_stat)
+{
+  int ret = OB_SUCCESS;
+  table_stat = nullptr;
+  if (OB_UNLIKELY(idx >= table_stat_array_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(idx), K(table_stat_array_.count()));
+  } else {
+    table_stat = table_stat_array_.at(idx);
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::get_col_stat(int64_t idx, ObOptOSGColumnStat *&osg_col_stat)
+{
+  int ret = OB_SUCCESS;
+  osg_col_stat = nullptr;
+  if (OB_UNLIKELY(idx >= col_stat_array_.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(idx), K(col_stat_array_.count()));
+  } else {
+    osg_col_stat = col_stat_array_.at(idx);
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::get_table_stat_array(ObIArray<ObOptTableStat *> &table_stat_array) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < table_stat_array_.count(); ++i) {
-    if (OB_ISNULL(table_stat_array_.at(i))) {
+    ObOptTableStat *table_stat = nullptr;
+    if (OB_ISNULL(table_stat = table_stat_array_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "get unexpected null");
-    } else if (OB_FAIL(table_stat_array.push_back(table_stat_array_.at(i)))) {
-      OB_LOG(WARN, "failed to push back col stat");
+      LOG_WARN("unexpected table stat is null", KR(ret), K(i), K(table_stat_array_));
+    } else if (OB_FAIL(table_stat_array.push_back(table_stat))) {
+      LOG_WARN("fail to push back table stat", KR(ret));
     }
   }
   return ret;
 }
 
-int ObTableLoadSqlStatistics::get_col_stat_array(ObIArray<ObOptColumnStat*> &col_stat_array) const
+int ObTableLoadSqlStatistics::get_col_stat_array(ObIArray<ObOptColumnStat *> &col_stat_array) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {
-    if (OB_ISNULL(col_stat_array_.at(i))) {
+    ObOptOSGColumnStat *osg_col_stat = nullptr;
+    if (OB_ISNULL(osg_col_stat = col_stat_array_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "get unexpected null");
-    } else if (OB_FAIL(col_stat_array_.at(i)->set_min_max_datum_to_obj())) {
-      OB_LOG(WARN, "failed to persistence min max");
-    } else if (OB_FAIL(col_stat_array.push_back(col_stat_array_.at(i)->col_stat_))) {
-      OB_LOG(WARN, "failed to push back col stat");
+      LOG_WARN("unexpected col stat is null", KR(ret), K(i), K(col_stat_array_));
+    } else if (OB_FAIL(osg_col_stat->set_min_max_datum_to_obj())) {
+      LOG_WARN("fail to persistence min max", KR(ret));
+    } else if (OB_FAIL(col_stat_array.push_back(osg_col_stat->col_stat_))) {
+      LOG_WARN("fail to push back col stat", KR(ret));
     }
   }
   return ret;
 }
 
-int ObTableLoadSqlStatistics::persistence_col_stats()
+int ObTableLoadSqlStatistics::get_table_stats(TabStatIndMap &table_stats) const
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {
-    if (OB_ISNULL(col_stat_array_.at(i))) {
+  const uint64_t tenant_id = MTL_ID();
+  ObOptTableStat *table_stat = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_stat_array_.count(); ++i) {
+    if (OB_ISNULL(table_stat = table_stat_array_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "get unexpected null");
-    } else if (OB_FAIL(col_stat_array_.at(i)->set_min_max_datum_to_obj())) {
-      OB_LOG(WARN, "failed to persistence min max");
+      LOG_WARN("unexpected table stat is null", KR(ret));
+    } else {
+      ObOptTableStat::Key key(tenant_id,
+                              table_stat->get_table_id(),
+                              table_stat->get_partition_id());
+      if (OB_FAIL(table_stats.set_refactored(key, table_stat))) {
+        LOG_WARN("fail to set table stat", KR(ret), K(key), KPC(table_stat));
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_ENTRY_EXIST;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSqlStatistics::get_col_stats(ColStatIndMap &col_stats) const
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObOptOSGColumnStat *osg_col_stat = nullptr;
+  ObOptColumnStat *col_stat = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < col_stat_array_.count(); ++i) {
+    if (OB_ISNULL(osg_col_stat = col_stat_array_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected osg col stat is null", KR(ret));
+    } else if (OB_ISNULL(col_stat = osg_col_stat->col_stat_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected col stat is null", KR(ret));
+    } else {
+      ObOptColumnStat::Key key(tenant_id,
+                               col_stat->get_table_id(),
+                               col_stat->get_partition_id(),
+                               col_stat->get_column_id());
+      if (OB_FAIL(col_stats.set_refactored(key, col_stat))) {
+        LOG_WARN("fail to set col stat", KR(ret), K(key), KPC(col_stat));
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_ENTRY_EXIST;
+        }
+      }
     }
   }
   return ret;
@@ -275,5 +392,5 @@ OB_DEF_SERIALIZE_SIZE(ObTableLoadSqlStatistics)
   return len;
 }
 
-}  // namespace table
-}  // namespace oceanbase
+} // namespace table
+} // namespace oceanbase

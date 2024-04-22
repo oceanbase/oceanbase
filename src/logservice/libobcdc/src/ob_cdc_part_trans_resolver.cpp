@@ -17,6 +17,7 @@
 #include "ob_cdc_part_trans_resolver.h"
 #include "ob_log_cluster_id_filter.h"     // ClusterIdFilter
 #include "logservice/logfetcher/ob_log_part_serve_info.h"       // PartServeInfo
+#include "ob_log_config.h"                // TCONF
 
 namespace oceanbase
 {
@@ -141,7 +142,8 @@ ObCDCPartTransResolver::ObCDCPartTransResolver(
     offlined_(false),
     tls_id_(),
     part_trans_dispatcher_(tls_id_str, task_pool, task_map, dispatcher),
-    cluster_id_filter_(cluster_id_filter)
+    cluster_id_filter_(cluster_id_filter),
+    enable_direct_load_inc_(false)
 {}
 
 ObCDCPartTransResolver::~ObCDCPartTransResolver()
@@ -150,9 +152,11 @@ ObCDCPartTransResolver::~ObCDCPartTransResolver()
 
 int ObCDCPartTransResolver::init(
     const logservice::TenantLSID &tls_id,
-    const int64_t start_commit_version)
+    const int64_t start_commit_version,
+    const bool enable_direct_load_inc)
 {
   tls_id_ = tls_id;
+  enable_direct_load_inc_ = enable_direct_load_inc;
   return part_trans_dispatcher_.init(tls_id, start_commit_version);
 }
 
@@ -429,6 +433,16 @@ int ObCDCPartTransResolver::read_trans_log_(
       }
       break;
     }
+    case transaction::ObTxLogType::TX_DIRECT_LOAD_INC_LOG:
+    {
+      if (OB_FAIL(handle_direct_load_inc_log_(tx_id, lsn, submit_ts, handling_miss_log, tx_log_block))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("handle_direct_load_inc_log_ fail", KR(ret), K_(tls_id), K(tx_id), K(tx_id), K(lsn), K(tx_log_header),
+              K(missing_info));
+        }
+      }
+      break;
+    }
     case transaction::ObTxLogType::TX_RECORD_LOG:
     {
       if (OB_FAIL(handle_record_(tx_id, lsn, missing_info, tx_log_block))) {
@@ -583,6 +597,60 @@ int ObCDCPartTransResolver::handle_multi_data_source_log_(
     LOG_ERROR("push_multi_data_source_data failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(multi_data_source_log));
   } else {
     LOG_DEBUG("handle_multi_data_source_log_ succ", K_(tls_id), K(tx_id), K(lsn), K(multi_data_source_log), KPC(task));
+  }
+
+  return ret;
+}
+
+int ObCDCPartTransResolver::handle_direct_load_inc_log_(
+    const transaction::ObTransID &tx_id,
+    const palf::LSN &lsn,
+    const int64_t submit_ts,
+    const bool handling_miss_log,
+    transaction::ObTxLogBlock &tx_log_block)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTxDirectLoadIncLog::TempRef tmp_ref;
+  transaction::ObTxDirectLoadIncLog direct_load_inc_log(tmp_ref);
+  PartTransTask *task = NULL;
+
+  if (OB_FAIL(obtain_task_(tx_id, task, handling_miss_log))) {
+    LOG_ERROR("obtain_task_ fail", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(handling_miss_log));
+  } else if (OB_FAIL(push_fetched_log_entry_(lsn, *task))) {
+    if (OB_ENTRY_EXIST == ret) {
+      LOG_WARN("redo already fetched, ignore", KR(ret), K_(tls_id), K(tx_id), K(lsn),
+          "task_sorted_log_entry_info", task->get_sorted_log_entry_info());
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("push_fetched_log_entry failed", KR(ret), K_(tls_id), K(tx_id), K(lsn), KPC(task));
+    }
+  } else if (!enable_direct_load_inc_) {
+    // ignore all direct load inc log
+  } else if (OB_FAIL(tx_log_block.deserialize_log_body(direct_load_inc_log))) {
+    LOG_ERROR("deserialize_direct_load_inc_log failed", KR(ret), K_(tls_id), K(tx_id), K(lsn));
+  } else if (transaction::ObTxDirectLoadIncLog::DirectLoadIncLogType::DLI_REDO != direct_load_inc_log.get_ddl_log_type()) {
+    LOG_DEBUG("ignore DLI_START and DLI_END log", K_(tls_id), K(tx_id), K(lsn), K(direct_load_inc_log));
+  } else {
+    transaction::ObTxDLIncLogBuf &log_buf = const_cast<transaction::ObTxDLIncLogBuf &>(direct_load_inc_log.get_dli_buf());
+
+    if (OB_FAIL(task->push_direct_load_inc_log(
+        tx_id,
+        lsn,
+        submit_ts,
+        log_buf.get_buf(),
+        log_buf.get_buf_size()))) {
+      if (OB_ENTRY_EXIST == ret) {
+        LOG_DEBUG("direct_load_inc_log duplication", KR(ret), K_(tls_id), K(tx_id), K(lsn), K(submit_ts),
+            K(direct_load_inc_log), K(handling_miss_log), K(task));
+        ret = OB_SUCCESS;
+      } else if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("push_direct_load_inc_log into PartTransTask fail", KR(ret), K_(tls_id), K(tx_id), K(lsn),
+            K(handling_miss_log), K(task), K(direct_load_inc_log));
+      }
+    } else {
+      LOG_DEBUG("handle_direct_load_inc_log", K_(tls_id), K(tx_id), K(lsn), K(submit_ts), K(direct_load_inc_log),
+          K(handling_miss_log), KPC(task));
+    }
   }
 
   return ret;

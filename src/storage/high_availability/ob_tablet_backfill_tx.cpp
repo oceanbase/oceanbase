@@ -582,7 +582,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
         for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
           ObITable *table = memtables.at(i).get_table();
           memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-          if (OB_ISNULL(table) || !table->is_memtable()) {
+          if (OB_ISNULL(table) || !table->is_data_memtable()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
           } else if (table->get_start_scn() >= backfill_tx_ctx_->log_sync_scn_
@@ -935,7 +935,7 @@ int ObTabletTableBackfillTXTask::prepare_merge_ctx_()
     tablet_merge_ctx_.tablet_handle_ = tablet_handle_;
     static_param.version_range_.multi_version_start_ = tablet_handle_.get_obj()->get_multi_version_start();
     static_param.version_range_.snapshot_version_ = table_handle_.get_table()->is_memtable() ?
-        static_cast<memtable::ObIMemtable*>(table_handle_.get_table())->get_snapshot_version() : tablet_handle_.get_obj()->get_snapshot_version();
+        static_cast<ObIMemtable*>(table_handle_.get_table())->get_snapshot_version() : tablet_handle_.get_obj()->get_snapshot_version();
     static_param.scn_range_ = table_handle_.get_table()->get_key().scn_range_;
     static_param.merge_scn_ = table_handle_.get_table()->is_memtable() ? table_handle_.get_table()->get_key().scn_range_.end_scn_ : backfill_tx_ctx_->log_sync_scn_;
     static_param.create_snapshot_version_ = 0;

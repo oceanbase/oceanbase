@@ -354,6 +354,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_trans_stat.cpp
   tx/ob_tx_stat.cpp
   tx/ob_tx_retain_ctx_mgr.cpp
+  tx/ob_direct_load_tx_ctx_define.cpp
   tx/ob_ls_tx_ctx_mgr_stat.cpp
   tx/ob_trans_submit_log_cb.cpp
   tx/ob_trans_timer.cpp
@@ -531,6 +532,7 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_struct.cpp
   ddl/ob_direct_load_struct.cpp
   ddl/ob_direct_insert_sstable_ctx_new.cpp
+  ddl/ob_ddl_redo_log_row_iterator.cpp
   ddl/ob_tablet_barrier_log.cpp
   ddl/ob_tablet_ddl_kv.cpp
   ddl/ob_tablet_ddl_kv_mgr.cpp
@@ -538,6 +540,9 @@ ob_set_subtarget(ob_storage ddl
   ddl/ob_ddl_replay_executor.cpp
   ddl/ob_ddl_heart_beat_task.cpp
   ddl/ob_ddl_server_client.cpp
+  ddl/ob_ddl_inc_clog.cpp
+  ddl/ob_ddl_inc_clog_callback.cpp
+  ddl/ob_ddl_inc_redo_log_writer.cpp
 )
 
 ob_set_subtarget(ob_storage common
@@ -550,8 +555,8 @@ ob_set_subtarget(ob_storage common
   ob_i_memtable_mgr.cpp
   ob_i_store.cpp
   ob_i_table.cpp
+  ob_i_tablet_memtable.cpp
   ob_locality_manager.cpp
-  ob_partition_component_factory.cpp
   ob_partition_range_spliter.cpp
   ob_query_iterator_factory.cpp
   ob_relative_table.cpp
@@ -574,6 +579,7 @@ ob_set_subtarget(ob_storage common
   ob_tablet_autoinc_seq_rpc_handler.cpp
   ob_value_row_iterator.cpp
   ob_common_id_utils.cpp
+  ob_direct_load_table_guard.cpp
   ob_tenant_tablet_stat_mgr.cpp
   ob_protected_memtable_mgr_handle.cpp
 )

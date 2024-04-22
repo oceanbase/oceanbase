@@ -85,7 +85,6 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     t3m_ = t3m;
-    table_type_ = ObITable::TableType::TX_DATA_MEMTABLE;
     freezer_ = freezer;
     tx_data_table_ = tx_table->get_tx_data_table();
     ls_tablet_svr_ = ls_handle.get_ls()->get_tablet_svr();
@@ -124,7 +123,7 @@ int ObTxDataMemtableMgr::offline()
   return ret;
 }
 
-int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
+int ObTxDataMemtableMgr::release_head_memtable_(ObIMemtable *imemtable,
                                                 const bool force)
 {
   int ret = OB_SUCCESS;
@@ -152,23 +151,19 @@ int ObTxDataMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
   return ret;
 }
 
-int ObTxDataMemtableMgr::create_memtable(const SCN clog_checkpoint_scn,
-                                         const int64_t schema_version,
-                                         const SCN newest_clog_checkpoint_scn,
-                                         const bool for_replay)
+int ObTxDataMemtableMgr::create_memtable(const CreateMemtableArg &arg)
 {
-  UNUSED(newest_clog_checkpoint_scn);
-  UNUSED(for_replay);
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObTxDataMemtableMgr has not initialized", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(schema_version < 0)) {
+  } else if (OB_UNLIKELY(arg.schema_version_ < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(schema_version));
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(arg.schema_version_));
   } else {
     MemMgrWLockGuard lock_guard(lock_);
-    if (OB_FAIL(create_memtable_(clog_checkpoint_scn, schema_version, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
+    if (OB_FAIL(
+            create_memtable_(arg.clog_checkpoint_scn_, arg.schema_version_, ObTxDataHashMap::DEFAULT_BUCKETS_CNT))) {
       STORAGE_LOG(WARN, "create memtable fail.", KR(ret));
     } else {
       // create memtable success
@@ -209,7 +204,6 @@ int ObTxDataMemtableMgr::create_memtable_(const SCN clog_checkpoint_scn,
     // create memtable success
     STORAGE_LOG(INFO, "create tx data memtable done", KR(ret), KPC(tx_data_memtable), KPC(this));
   }
-
   return ret;
 }
 
@@ -428,7 +422,7 @@ int ObTxDataMemtableMgr::get_all_memtables_for_write(ObTxDataMemtableWriteGuard 
   write_guard.reset();
   MemMgrRLockGuard lock_guard(lock_);
   for (int64_t i = memtable_head_; OB_SUCC(ret) && i < memtable_tail_; ++i) {
-    if (OB_FAIL(write_guard.push_back_table(tables_[get_memtable_idx(i)], t3m_, table_type_))) {
+    if (OB_FAIL(write_guard.push_back_table(tables_[get_memtable_idx(i)], t3m_))) {
       STORAGE_LOG(WARN, "push back table to write guard failed", KR(ret), K(ls_id_));
     }
   }

@@ -63,10 +63,10 @@ void MdsAllocator::free(void *ptr) {
 }
 }
 }
-namespace memtable
+namespace storage
 {
 
-  bool ObMemtable::can_be_minor_merged()
+  bool ObITabletMemtable::can_be_minor_merged()
   {
     return is_tablet_freeze_;
   }
@@ -346,7 +346,7 @@ int TestCompactionPolicy::mock_memtable(
   }
   ObTabletMemtableMgr *mt_mgr = static_cast<ObTabletMemtableMgr *>(protected_handle->memtable_mgr_handle_.get_memtable_mgr());
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(t3m->acquire_memtable(table_handle))) {
+  } else if (OB_FAIL(t3m->acquire_data_memtable(table_handle))) {
     LOG_WARN("failed to acquire memtable", K(ret));
   } else if (OB_ISNULL(memtable = static_cast<ObMemtable*>(table_handle.get_table()))) {
     ret = OB_ERR_UNEXPECTED;

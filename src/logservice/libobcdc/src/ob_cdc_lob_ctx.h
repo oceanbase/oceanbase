@@ -13,12 +13,12 @@
 #ifndef OCEANBASE_LIBOBCDC_LOB_CTX_H_
 #define OCEANBASE_LIBOBCDC_LOB_CTX_H_
 
-#include "common/object/ob_object.h"        // ObLobData, ObLobDataOutRowCtx
-#include "storage/blocksstable/ob_datum_row.h" // ObDmlFlag
-#include "lib/atomic/ob_atomic.h"           // ATOMIC_**
+#include "common/object/ob_object.h"           // ObLobData, ObLobDataOutRowCtx
+#include "storage/blocksstable/ob_datum_row.h" // ObDmlRowFlag
+#include "lib/atomic/ob_atomic.h"              // ATOMIC_**
 #include "lib/allocator/ob_allocator.h"
 #include "lib/ob_define.h"
-#include "ob_log_lighty_list.h"             // LightyList
+#include "ob_log_lighty_list.h"                // LightyList
 
 namespace oceanbase
 {
@@ -75,13 +75,13 @@ struct ObLobDataGetCtx
   void reset(
       void *host,
       const uint64_t column_id,
-      const blocksstable::ObDmlFlag &dml_flag,
+      const blocksstable::ObDmlRowFlag &dml_flag,
       const common::ObLobData *new_lob_data);
   void set_old_lob_data(const common::ObLobData *old_lob_data) { old_lob_data_ = old_lob_data; }
 
-  bool is_insert() const { return blocksstable::ObDmlFlag::DF_INSERT == dml_flag_; }
-  bool is_update() const { return blocksstable::ObDmlFlag::DF_UPDATE == dml_flag_; }
-  bool is_delete() const { return blocksstable::ObDmlFlag::DF_DELETE == dml_flag_; }
+  bool is_insert() const { return dml_flag_.is_insert(); }
+  bool is_update() const { return dml_flag_.is_update(); }
+  bool is_delete() const { return dml_flag_.is_delete(); }
   bool is_ext_info_log() const { return ObLobDataGetTaskType::EXT_INFO_LOG == type_; }
 
   const common::ObLobData *get_lob_data(const bool is_new_col) const
@@ -143,7 +143,7 @@ struct ObLobDataGetCtx
   ObLobDataGetTaskType type_;
   void *host_;    // ObLobDataOutRowCtxList
   uint64_t column_id_;
-  blocksstable::ObDmlFlag dml_flag_;
+  blocksstable::ObDmlRowFlag dml_flag_;
   const common::ObLobData *new_lob_data_;
   const common::ObLobData *old_lob_data_;
   int8_t lob_col_value_handle_done_count_;

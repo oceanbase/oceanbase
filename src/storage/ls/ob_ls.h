@@ -15,7 +15,6 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_member_list.h"
-#include "share/ob_rpc_struct.h"
 #include "share/ob_delegate.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "lib/worker.h"
@@ -869,7 +868,16 @@ public:
   // tablet_freeze_with_rewrite_meta
   // @param [in] abs_timeout_ts, wait until timeout if lock conflict
   int tablet_freeze_with_rewrite_meta(const ObTabletID &tablet_id,
+                                      ObFuture<int> *result = nullptr,
                                       const int64_t abs_timeout_ts = INT64_MAX);
+  int tablet_freeze_task_for_direct_load(const ObTabletID &tablet_id,
+                                         const uint64_t epoch,
+                                         ObFuture<int> *result = nullptr);
+  int sync_tablet_freeze_for_direct_load(const ObTabletID &tablet_id,
+                                         const int64_t max_retry_time = 3600LL * 1000LL * 1000LL /*1 hour*/);
+  void async_tablet_freeze_for_direct_load(const ObTabletID &tablet_id);
+
+  DELEGATE_WITH_RET(ls_freezer_, wait_freeze_finished, int);
   // batch tablet freeze
   // @param [in] tablet_ids
   // @param [in] is_sync
@@ -928,6 +936,7 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
   int set_ls_migration_gc(bool &allow_gc);
+
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.

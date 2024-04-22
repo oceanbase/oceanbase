@@ -178,7 +178,7 @@ int ObAllVirtualMemstoreInfo::get_next_memtable(memtable::ObMemtable *&mt)
   return ret;
 }
 
-void ObAllVirtualMemstoreInfo::get_freeze_time_dist(const memtable::ObMtStat& mt_stat)
+void ObAllVirtualMemstoreInfo::get_freeze_time_dist(const ObMtStat& mt_stat)
 {
   memset(freeze_time_dist_, 0, 128);
   int64_t ready_for_flush_cost_time = (mt_stat.ready_for_flush_time_ - mt_stat.frozen_time_) / 1000;
@@ -212,7 +212,7 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "mt shouldn't NULL here", K(ret), K(mt));
   } else {
-    memtable::ObMtStat& mt_stat = mt->get_mt_stat();
+    ObMtStat& mt_stat = mt->get_mt_stat();
     const int64_t col_count = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
@@ -315,27 +315,7 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 22:
           // freeze_state
-          switch (mt->get_freeze_state()) {
-            case ObMemtableFreezeState::INVALID:
-              cur_row_.cells_[i].set_varchar("INVALID");
-              break;
-            case ObMemtableFreezeState::NOT_READY_FOR_FLUSH:
-              cur_row_.cells_[i].set_varchar("NOT_READY_FOR_FLUSH");
-              break;
-            case ObMemtableFreezeState::READY_FOR_FLUSH:
-              cur_row_.cells_[i].set_varchar("READY_FOR_FLUSH");
-              break;
-            case ObMemtableFreezeState::FLUSHED:
-              cur_row_.cells_[i].set_varchar("FLUSHED");
-              break;
-            case ObMemtableFreezeState::RELEASED:
-              cur_row_.cells_[i].set_varchar("RELEASED");
-              break;
-            default:
-              ret = OB_ERR_UNEXPECTED;
-              SERVER_LOG(WARN, "invalid freeze state", K(ret), K(col_id));
-              break;
-          }
+          cur_row_.cells_[i].set_varchar(storage::TABLET_MEMTABLE_FREEZE_STATE_TO_STR(mt->get_freeze_state()));
           cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         case OB_APP_MIN_COLUMN_ID + 23:

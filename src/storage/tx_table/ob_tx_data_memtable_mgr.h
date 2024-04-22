@@ -39,12 +39,13 @@ public:
   }
   ~ObTxDataMemtableWriteGuard() { reset(); }
 
-  int push_back_table(memtable::ObIMemtable *i_memtable, ObTenantMetaMemMgr *t3m, const ObITable::TableType table_type)
+  int push_back_table(ObIMemtable *i_memtable, ObTenantMetaMemMgr *t3m)
   {
     int ret = OB_SUCCESS;
     ObTxDataMemtable *tx_data_memtable = nullptr;
-    if (OB_FAIL(handles_[size_].set_table(static_cast<ObITable *const>(i_memtable), t3m, table_type))) {
-      STORAGE_LOG(WARN, "set i memtable to handle failed", KR(ret), KP(i_memtable), KP(t3m), K(table_type));
+    if (OB_FAIL(handles_[size_].set_table(
+            static_cast<ObITable *const>(i_memtable), t3m, ObITable::TableType::TX_DATA_MEMTABLE))) {
+      STORAGE_LOG(WARN, "set i memtable to handle failed", KR(ret), KP(i_memtable), KP(t3m));
     } else if (OB_FAIL(handles_[size_].get_tx_data_memtable(tx_data_memtable))) {
       STORAGE_LOG(ERROR, "get tx data memtable from memtable handle failed", KR(ret), K(handles_[size_]));
     } else if (OB_ISNULL(tx_data_memtable)) {
@@ -112,15 +113,12 @@ public:  // ObTxDataMemtableMgr
   /**
    * @brief Using to create a new active tx data memtable
    *
+   * @param[in] schema_version  schema_version, not used
    * @param[in] clog_checkpoint_ts clog_checkpoint_ts, using to init multiversion_start,
    * base_version and start_scn. The start_scn will be modified if this function is called by
    * freeze().
-   * @param[in] schema_version  schema_version, not used
    */
-  virtual int create_memtable(const share::SCN clog_checkpoint_scn,
-                              const int64_t schema_version,
-                              const share::SCN newest_clog_checkpoint_scn,
-                              const bool for_replay=false) override;
+  virtual int create_memtable(const CreateMemtableArg &arg) override;
   /**
    * @brief Get the last tx data memtable in memtable list.
    *
@@ -164,7 +162,7 @@ public: // getter and setter
   int64_t get_mini_merge_recycle_commit_versions_ts() { return mini_merge_recycle_commit_versions_ts_; }
 
 protected:
-  virtual int release_head_memtable_(memtable::ObIMemtable *imemtable,
+  virtual int release_head_memtable_(ObIMemtable *imemtable,
                                      const bool force);
 
 private:  // ObTxDataMemtableMgr

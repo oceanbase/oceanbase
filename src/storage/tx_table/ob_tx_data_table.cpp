@@ -228,7 +228,8 @@ int ObTxDataTable::online()
                                                handle))) {
     LOG_WARN("get tablet failed", K(ret));
   } else if (FALSE_IT(tablet = handle.get_obj())) {
-  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_DATA_TABLET, 0 /* schema_version */))) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(
+                 LS_TX_DATA_TABLET, 0 /* schema_version */, false /* for_inc_direct_load */, false /*for_replay*/))) {
     LOG_WARN("failed to create memtable", K(ret));
   } else {
     // load tx data table succeed

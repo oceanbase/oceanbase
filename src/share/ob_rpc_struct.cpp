@@ -9872,7 +9872,7 @@ ObRpcRemoteWriteDDLRedoLogArg::ObRpcRemoteWriteDDLRedoLogArg()
 
 int ObRpcRemoteWriteDDLRedoLogArg::init(const uint64_t tenant_id,
                                         const share::ObLSID &ls_id,
-                                        const blocksstable::ObDDLMacroBlockRedoInfo &redo_info,
+                                        const storage::ObDDLMacroBlockRedoInfo &redo_info,
                                         const int64_t task_id)
 {
   int ret = OB_SUCCESS;
@@ -9916,6 +9916,106 @@ int ObRpcRemoteWriteDDLCommitLogArg::init(const uint64_t tenant_id,
 OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLCommitLogArg, tenant_id_, ls_id_, table_key_, start_scn_,
                     table_id_, execution_id_, ddl_task_id_);
 
+ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
+  : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(), lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false)
+{}
+
+ObRpcRemoteWriteDDLIncCommitLogArg::~ObRpcRemoteWriteDDLIncCommitLogArg()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(release())) {
+    LOG_WARN("fail to release tx_desc", K(ret));
+  }
+}
+
+int ObRpcRemoteWriteDDLIncCommitLogArg::init(const uint64_t tenant_id,
+                                             const share::ObLSID &ls_id,
+                                             const common::ObTabletID tablet_id,
+                                             const common::ObTabletID lob_meta_tablet_id,
+                                             transaction::ObTxDesc *tx_desc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(tenant_id_ = OB_INVALID_ID && !ls_id.is_valid() || !tablet_id.is_valid() ||
+                  OB_ISNULL(tx_desc) || !tx_desc->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet id is not valid", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(lob_meta_tablet_id), KPC(tx_desc));
+  } else if (OB_FAIL(release())) {
+    LOG_WARN("fail to release tx_desc", K(ret));
+  } else {
+    tenant_id_ = tenant_id;
+    ls_id_ = ls_id;
+    tablet_id_ = tablet_id;
+    lob_meta_tablet_id_ = lob_meta_tablet_id;
+    tx_desc_ = tx_desc;
+  }
+  return ret;
+}
+
+int ObRpcRemoteWriteDDLIncCommitLogArg::release()
+{
+  int ret = OB_SUCCESS;
+  if (tx_desc_ != nullptr && need_release_) {
+    ObTransService *tx_svc = MTL_WITH_CHECK_TENANT(ObTransService *, tenant_id_);
+    if (OB_ISNULL(tx_svc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null tx service ptr", K(ret));
+    } else if (OB_FAIL(tx_svc->release_tx(*tx_desc_))) {
+      LOG_WARN("release tx fail", K(ret));
+    } else {
+      need_release_ = false;
+      tx_desc_ = nullptr;
+    }
+  }
+
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, ls_id_, tablet_id_, lob_meta_tablet_id_);
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(tx_desc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tx_desc_ is nullptr", K(ret));
+    } else {
+      LST_DO_CODE(OB_UNIS_ENCODE, *tx_desc_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, ls_id_, tablet_id_, lob_meta_tablet_id_);
+  if (OB_SUCC(ret)) {
+    ObTransService *tx_svc = nullptr;
+    if (OB_FAIL(release())) {
+      LOG_WARN("fail to release tx_desc", K(ret));
+    } else if (OB_ISNULL(tx_svc = MTL_WITH_CHECK_TENANT(ObTransService *, tenant_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null tx service ptr", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(tx_svc->acquire_tx(buf, data_len, pos, tx_desc_))) {
+      LOG_WARN("acquire tx by deserialize fail", K(data_len), K(pos), KR(ret));
+    } else {
+      need_release_ = true;
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRpcRemoteWriteDDLIncCommitLogArg)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, ls_id_, tablet_id_, lob_meta_tablet_id_);
+  if (tx_desc_ != nullptr) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, *tx_desc_);
+  }
+  return len;
+}
+
+OB_SERIALIZE_MEMBER(ObRpcRemoteWriteDDLIncCommitLogRes, tx_result_);
 
 bool ObCheckLSCanOfflineArg::is_valid() const
 {

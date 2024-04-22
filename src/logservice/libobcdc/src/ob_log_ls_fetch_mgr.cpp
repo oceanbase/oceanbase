@@ -117,6 +117,7 @@ int ObLogLSFetchMgr::add_ls(
     const logservice::TenantLSID &tls_id,
     const logfetcher::ObLogFetcherStartParameters &start_parameters,
     const bool is_loading_data_dict_baseline_data,
+    const bool enable_direct_load_inc,
     const ClientFetchingMode fetching_mode,
     const ObBackupPathString &archive_dest_str)
 {
@@ -149,7 +150,7 @@ int ObLogLSFetchMgr::add_ls(
   } else if (OB_ISNULL(part_trans_resolver)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid part_trans_resolver", K(part_trans_resolver));
-  } else if (OB_FAIL(part_trans_resolver->init(tls_id, start_tstamp_ns))) {
+  } else if (OB_FAIL(part_trans_resolver->init(tls_id, start_tstamp_ns, enable_direct_load_inc))) {
     LOG_ERROR("init part trans resolver fail", KR(ret), K(tls_id), K(start_tstamp_ns));
   }
   // alloc a LSFetchCtx

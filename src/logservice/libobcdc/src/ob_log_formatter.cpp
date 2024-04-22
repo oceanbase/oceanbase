@@ -453,7 +453,7 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
     } else {
       // select ... for update to record DF_LOCK log to prevent loss of row lock information on the
       // standby machine in the event of a master/standby switchover, no synchronization required
-      if (ObDmlFlag::DF_LOCK == stmt_task->get_dml_flag()) {
+      if (stmt_task->get_dml_flag().is_lock()) {
         is_ignore = true;
       } else {
         RecordType record_type = get_record_type(stmt_task->get_dml_flag());
@@ -702,8 +702,13 @@ int ObLogFormatter::check_table_need_ignore_(
         "table_id", table_schema->get_table_id(),
         "table_type", ob_table_type_str(table_schema->get_table_type()));
 
-    if (OB_FAIL(parse_aux_lob_meta_table_(dml_stmt_task))) {
-      LOG_ERROR("parse_aux_lob_meta_table_ failed", KR(ret), K(dml_stmt_task));
+    // Incremental direct load doesn't support lob with outrow in phase1 and Observer will
+    // disallow the behavior which loads lob data with outrow.
+    bool need_parse_aux_lob_meta_table = true;
+    // need_parse_aux_lob_meta_table = !dml_stmt_task.get_redo_log_entry_task().get_redo_log_node()->is_direct_load_inc_log();
+    if (need_parse_aux_lob_meta_table && OB_FAIL(parse_aux_lob_meta_table_(dml_stmt_task))) {
+      LOG_ERROR("parse_aux_lob_meta_table_ failed", KR(ret), K(need_parse_aux_lob_meta_table),
+          K(dml_stmt_task));
     }
   // Filter sys tables that are not user tables and are not in backup mode
   } else if (! table_schema->is_user_table()
@@ -805,7 +810,7 @@ void ObLogFormatter::handle_non_full_columns_(
         "commit_log_lsn", task.get_commit_log_lsn(),
         "commit_version", task.get_trans_commit_version(),
         "dml_type", dml_stmt_task.get_dml_flag(),
-        "dml_type_str", get_dml_str(dml_stmt_task.get_dml_flag()),
+        "dml_type_str", dml_stmt_task.get_dml_flag().getFlagStr(),
         "table_name", table_schema.get_table_name(),
         "table_id", table_schema.get_table_id(),
         K(dml_stmt_task));
@@ -1572,7 +1577,7 @@ int ObLogFormatter::fill_orig_default_value_(
 
 int ObLogFormatter::set_src_category_(IBinlogRecord *br_data,
     RowValue *rv,
-    const ObDmlFlag &dml_flag,
+    const ObDmlRowFlag &dml_flag,
     const bool is_hbase_mode_put)
 {
   int ret = OB_SUCCESS;
@@ -1586,7 +1591,7 @@ int ObLogFormatter::set_src_category_(IBinlogRecord *br_data,
     // 1. INSERT statements are always set to full column log format
     // 2. DELETE and UPDATE must be populated with old values in full column logging mode, so if they are populated with old values, they are in full column logging format
     // 3. OB-HBase mode put special handling
-    if (ObDmlFlag::DF_INSERT == dml_flag || rv->contain_old_column_ || is_hbase_mode_put) {
+    if (dml_flag.is_insert() || rv->contain_old_column_ || is_hbase_mode_put) {
       src_category = SRC_FULL_RECORDED;
     } else {
       src_category = SRC_FULL_FAKED;
@@ -1603,7 +1608,7 @@ int ObLogFormatter::build_binlog_record_(
     ObLogBR *br,
     RowValue *rv,
     const int64_t new_column_cnt,
-    const ObDmlFlag &dml_flag,
+    const ObDmlRowFlag &dml_flag,
     const TABLE_SCHEMA *simple_table_schema)
 {
   int ret = OB_SUCCESS;
@@ -1646,17 +1651,16 @@ int ObLogFormatter::build_binlog_record_(
       br_data->setNewColumn(rv->new_column_array_, static_cast<int>(rv->column_num_));
       br_data->setOldColumn(rv->old_column_array_, static_cast<int>(rv->column_num_));
 
-      ObDmlFlag current_dml_flag = dml_flag;
+      ObDmlRowFlag current_dml_flag = dml_flag;
       if (is_hbase_mode_put) {
-        current_dml_flag = ObDmlFlag::DF_INSERT;
-
+        current_dml_flag.set_flag(DF_INSERT);
         // modify record type
         RecordType type = get_record_type(current_dml_flag);
         if (OB_FAIL(br->setInsertRecordTypeForHBasePut(type))) {
           LOG_ERROR("br setInsertRecordTypeForHBasePut fail", KR(ret), K(br),
               "type", print_record_type(type),
-              "dml_flag", get_dml_str(dml_flag),
-              "current_dml_flag", get_dml_str(current_dml_flag),
+              K(dml_flag),
+              K(current_dml_flag),
               "table_name", simple_table_schema->get_table_name(),
               "table_id", simple_table_schema->get_table_id());
         } else {
@@ -1664,25 +1668,19 @@ int ObLogFormatter::build_binlog_record_(
         }
       }
 
-      switch (current_dml_flag) {
-      case ObDmlFlag::DF_DELETE: {
+      if (current_dml_flag.is_delete()) {
         ret = format_dml_delete_(br_data, rv);
-        break;
-      }
-      case ObDmlFlag::DF_INSERT: {
+      } else if (current_dml_flag.is_delete_insert()) {
+        ret = format_dml_put_(br_data, rv);
+      } else if (current_dml_flag.is_insert()) {
         ret = format_dml_insert_(br_data, rv);
-        break;
-      }
-      case ObDmlFlag::DF_UPDATE: {
+      } else if (current_dml_flag.is_update()) {
         ret = format_dml_update_(br_data, rv);
-        break;
-      }
-      default: {
+      }  else {
         ret = OB_NOT_SUPPORTED;
         LOG_ERROR("unknown DML type, not supported", K(current_dml_flag));
-        break;
       }
-      }
+
       if (OB_FAIL(ret)) {
         LOG_ERROR("format dml failed", KR(ret), K(table_id), K(current_dml_flag), KPC(simple_table_schema));
       }
@@ -1693,7 +1691,7 @@ int ObLogFormatter::build_binlog_record_(
 }
 
 int ObLogFormatter::is_hbase_mode_put_(const uint64_t table_id,
-    const ObDmlFlag &dml_flag,
+    const ObDmlRowFlag &dml_flag,
     const int64_t column_number,
     const int64_t new_column_cnt,
     const bool contain_old_column,
@@ -1709,26 +1707,21 @@ int ObLogFormatter::is_hbase_mode_put_(const uint64_t table_id,
       LOG_ERROR("hbase_util_ is null", KR(ret), K(hbase_util_));
     } else if (OB_FAIL(hbase_util_->is_hbase_table(table_id, is_hbase_table))) {
       LOG_ERROR("ObLogHbaseUtil is_hbase_table fail", KR(ret), K(table_id), K(is_hbase_table));
-    } else if (is_hbase_table && ObDmlFlag::DF_UPDATE == dml_flag && false == contain_old_column) {
+    } else if (is_hbase_table && dml_flag.is_update() && false == contain_old_column) {
       if (column_number == new_column_cnt) {
         is_hbase_mode_put = true;
       } else if (skip_hbase_mode_put_column_count_not_consistency_) {
         is_hbase_mode_put = true;
 
-        LOG_INFO("skip hbase mode put column count not consistency", K(table_id),
-            "dml_flag", get_dml_str(dml_flag),
-            "hbase_mode_put_column_cnt", new_column_cnt,
-            K(column_number));
+        LOG_INFO("skip hbase mode put column count not consistency", K(table_id), K(dml_flag),
+            "hbase_mode_put_column_cnt", new_column_cnt, K(column_number));
       } else {
-        LOG_ERROR("hbase mode put column cnt is not consistency", K(table_id),
-            "dml_flag", get_dml_str(dml_flag),
-            "hbase_mode_put_column_cnt", new_column_cnt,
-            K(column_number));
+        LOG_ERROR("hbase mode put column cnt is not consistency", K(table_id), K(dml_flag),
+            "hbase_mode_put_column_cnt", new_column_cnt, K(column_number));
         ret = OB_ERR_UNEXPECTED;
       }
 
-      LOG_DEBUG("[HBASE] [PUT]", K(is_hbase_mode_put), K(table_id),
-          "dml_flag", get_dml_str(dml_flag),
+      LOG_DEBUG("[HBASE] [PUT]", K(is_hbase_mode_put), K(table_id), K(dml_flag),
           K(column_number), K(new_column_cnt), K(contain_old_column));
     } else {
       // do nothing
@@ -1928,6 +1921,44 @@ int ObLogFormatter::format_dml_update_(IBinlogRecord *br_data, const RowValue *r
         }
       }
     } // end of for
+  }
+
+  return ret;
+}
+
+int ObLogFormatter::format_dml_put_(IBinlogRecord *br_data, const RowValue *row_value)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(br_data) || OB_ISNULL(row_value)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KR(ret), K(br_data), K(row_value));
+  } else {
+    for (int64_t i = 0; OB_SUCCESS == ret && i < row_value->column_num_; i++) {
+      if (!row_value->is_changed_[i]) {
+        ObString *str_val = row_value->orig_default_value_[i];
+
+        if (OB_ISNULL(str_val)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("column original default value is NULL", KR(ret), K(i),
+              "column_num", row_value->column_num_);
+        } else {
+          br_data->putNew(str_val->ptr(), str_val->length());
+        }
+      } else {
+        ObString *str_val = row_value->new_columns_[i];
+
+        if (OB_ISNULL(str_val)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("changed column new value is NULL", KR(ret), K(i),
+              "column_num", row_value->column_num_);
+        } else {
+          br_data->putNew(str_val->ptr(), str_val->length());
+        }
+      }
+
+      // FIXME: No old values are populated, regardless of whether it is a full column log
+    }
   }
 
   return ret;

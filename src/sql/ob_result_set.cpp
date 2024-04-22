@@ -577,14 +577,6 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
     }
   }
 
-  // for insert /*+ append */ into select clause
-  if (OB_SUCC(ret)
-      && (stmt::T_INSERT == get_stmt_type())
-      && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
-    if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
-      LOG_WARN("fail to start direct insert", KR(ret));
-    }
-  }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(start_stmt())) {
@@ -598,12 +590,20 @@ OB_INLINE int ObResultSet::do_open_plan(ObExecContext &ctx)
                                                                     ctx.get_physical_plan_ctx()->get_last_refresh_scns()))) {
     LOG_WARN("fail to set last_refresh_scns", K(ret), K(physical_plan_->get_mview_ids()));
   } else {
+    // for insert /*+ append */ into select clause
+    if ((stmt::T_INSERT == get_stmt_type())
+        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+      if (OB_FAIL(ObTableDirectInsertService::start_direct_insert(ctx, *physical_plan_))) {
+        LOG_WARN("fail to start direct insert", KR(ret));
+      }
+    }
     /* 将exec_result_设置到executor的运行时环境中，用于返回数据 */
     /* 执行plan,
      * 无论是本地、远程、还是分布式plan，除RootJob外，其余都会在execute_plan函数返回之前执行完毕
      * exec_result_负责执行最后一个Job: RootJob
      **/
-    if (OB_FAIL(executor_.init(physical_plan_))) {
+    if OB_FAIL(ret) {
+    } else if (OB_FAIL(executor_.init(physical_plan_))) {
       SQL_LOG(WARN, "fail to init executor", K(ret), K(physical_plan_));
     } else if (OB_FAIL(executor_.execute_plan(ctx))) {
       SQL_LOG(WARN, "fail execute plan", K(ret));
@@ -838,13 +838,14 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
 
     ObPxAdmission::exit_query_admission(my_session_, get_exec_context(), get_stmt_type(), *get_physical_plan());
     // Finishing direct-insert must be executed after ObPxTargetMgr::release_target()
-    if ((OB_SUCCESS == close_ret)
-        && (OB_SUCCESS == errcode || OB_ITER_END == errcode)
-        && (stmt::T_INSERT == get_stmt_type())
-        && (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
+    if ((stmt::T_INSERT == get_stmt_type()) &&
+        (ObTableDirectInsertService::is_direct_insert(*physical_plan_))) {
       // for insert /*+ append */ into select clause
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(ctx, *physical_plan_))) {
+      if (OB_TMP_FAIL(ObTableDirectInsertService::finish_direct_insert(
+            ctx,
+            *physical_plan_,
+            (OB_SUCCESS == close_ret) && (OB_SUCCESS == errcode || OB_ITER_END == errcode)))) {
         errcode_ = tmp_ret; // record error code
         errcode = tmp_ret;
         LOG_WARN("fail to finish direct insert", KR(tmp_ret));

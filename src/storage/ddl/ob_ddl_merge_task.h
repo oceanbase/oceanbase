@@ -60,6 +60,10 @@ public:
   { return consumer_group_id_; }
   virtual bool is_ha_dag() const override { return false; }
 private:
+  int prepare_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
+  int prepare_full_direct_load_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
+  int prepare_incremental_direct_load_ddl_kvs(ObTablet &tablet, ObIArray<ObDDLKVHandle> &ddl_kvs_handle);
+private:
   bool is_inited_;
   ObDDLTableMergeDagParam ddl_param_;
   DISALLOW_COPY_AND_ASSIGN(ObDDLTableMergeDag);
@@ -77,6 +81,10 @@ public:
   int init(const ObDDLTableMergeDagParam &ddl_dag_param, const ObIArray<ObDDLKVHandle> &frozen_ddl_kvs);
   virtual int process() override;
   TO_STRING_KV(K_(is_inited), K_(merge_param));
+private:
+  int merge_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
+  int merge_incremental_direct_load_ddl_kvs(ObLSHandle &ls_handle, ObTablet &tablet);
 private:
   bool is_inited_;
   ObDDLTableMergeDagParam merge_param_;
@@ -106,11 +114,10 @@ class ObTabletDDLUtil
 public:
   static int prepare_index_data_desc(
       ObTablet &tablet,
-      const int64_t cg_idx, // negative means row store
+      const ObITable::TableKey &table_key,
       const int64_t snapshot_version,
       const uint64_t data_format_version,
       const blocksstable::ObSSTable *first_ddl_sstable,
-      const share::SCN &end_scn,
       const ObStorageSchema *storage_schema,
       blocksstable::ObWholeDataStoreDesc &data_desc);
 
