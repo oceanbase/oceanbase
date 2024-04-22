@@ -333,6 +333,7 @@ int ObAggregatedStore::fill_index_info(const blocksstable::ObMicroIndexInfo &ind
     ret = OB_NOT_INIT;
     LOG_WARN("ObAggregatedStore is not inited", K(ret), K(*this));
   } else {
+    set_aggregated_in_prefetch();
     for (int64_t i = 0; OB_SUCC(ret) && i < agg_row_.get_agg_count(); ++i) {
        ObAggCell *cell = agg_row_.at(i);
        if (OB_FAIL(cell->eval_index_info(index_info))) {

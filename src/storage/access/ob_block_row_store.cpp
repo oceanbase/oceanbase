@@ -36,7 +36,8 @@ ObBlockRowStore::ObBlockRowStore(ObTableAccessContext &context)
       iter_param_(nullptr),
       can_blockscan_(false),
       filter_applied_(false),
-      disabled_(false)
+      disabled_(false),
+      is_aggregated_in_prefetch_(false)
 {}
 
 ObBlockRowStore::~ObBlockRowStore()
@@ -50,6 +51,7 @@ void ObBlockRowStore::reset()
   filter_applied_ = false;
   pd_filter_info_.reset();
   disabled_ = false;
+  is_aggregated_in_prefetch_ = false;
   iter_param_ = nullptr;
 }
 
@@ -58,6 +60,7 @@ void ObBlockRowStore::reuse()
   can_blockscan_ = false;
   filter_applied_ = false;
   disabled_ = false;
+  is_aggregated_in_prefetch_ = false;
 }
 
 int ObBlockRowStore::init(const ObTableAccessParam &param)

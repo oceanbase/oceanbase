@@ -1273,7 +1273,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_FAIL(agg_row_store_->fill_index_info(block_info))) {
               LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC(this));
             } else {
-              LOG_DEBUG("Success to agg index info", K(ret), KPC(agg_row_store_));
+              LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC(agg_row_store_));
               continue;
             }
           } else if (OB_FAIL(check_row_lock(block_info, is_row_lock_checked_))) {
@@ -1735,7 +1735,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         if (OB_FAIL(prefetcher.agg_row_store_->fill_index_info(index_info))) {
           LOG_WARN("Fail to agg index info", K(ret), KPC(this));
         } else {
-          LOG_DEBUG("Success to agg index info", K(ret), K(index_info));
+          LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC(prefetcher.agg_row_store_));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {

@@ -123,6 +123,7 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
     }
     if (OB_SUCC(ret)) {
       if (iter_param_->enable_pd_aggregate() &&
+          !iter_param_->is_use_column_store() &&
           nullptr != block_row_store_ &&
           iter_param_->enable_skip_index() &&
           !sstable_->is_multi_version_table()) {

@@ -126,7 +126,7 @@ public:
   OB_INLINE void set_end() { iter_end_flag_ = IterEndState::ITER_END; }
   int check_agg_in_row_mode(const ObTableIterParam &iter_param);
   bool has_data();
-  TO_STRING_KV(K_(agg_row), K_(agg_flat_row_mode));
+  INHERIT_TO_STRING_KV("ObBlockBatchedRowStore", ObBlockBatchedRowStore, K_(agg_row), K_(agg_flat_row_mode));
 
 private:
   ObAggRow agg_row_;
