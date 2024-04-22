@@ -308,6 +308,7 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
 int ObDupTableLSHandler::init(bool is_dup_table)
 {
   int ret = OB_SUCCESS;
+  bool is_constructed_ = false;
   if (is_dup_table) {
     if (is_inited()) {
       ret = OB_INIT_TWICE;
@@ -338,6 +339,7 @@ int ObDupTableLSHandler::init(bool is_dup_table)
         new (tmp_log_operator)
             ObDupTableLogOperator(ls_id_, log_handler_, &dup_ls_ckpt_, tmp_lease_mgr_ptr,
                                   tmp_tablets_mgr_ptr, &interface_stat_);
+        is_constructed_ = true;
 
         if (OB_FAIL(tmp_lease_mgr_ptr->init(this))) {
           DUP_TABLE_LOG(WARN, "init lease_mgr failed", K(ret));
@@ -365,19 +367,27 @@ int ObDupTableLSHandler::init(bool is_dup_table)
         tablets_mgr_ptr_ = nullptr;
         log_operator_ = nullptr;
         if (OB_NOT_NULL(tmp_lease_mgr_ptr)) {
-          tmp_lease_mgr_ptr->destroy();
+          if (is_constructed_) {
+            tmp_lease_mgr_ptr->~ObDupTableLSLeaseMgr();
+          }
           ob_free(tmp_lease_mgr_ptr);
         }
         if (OB_NOT_NULL(tmp_ts_sync_mgr_ptr)) {
-          tmp_ts_sync_mgr_ptr->destroy();
+          if (is_constructed_) {
+            tmp_ts_sync_mgr_ptr->~ObDupTableLSTsSyncMgr();
+          }
           ob_free(tmp_ts_sync_mgr_ptr);
         }
         if (OB_NOT_NULL(tmp_tablets_mgr_ptr)) {
-          tmp_tablets_mgr_ptr->destroy();
+          if (is_constructed_) {
+            tmp_tablets_mgr_ptr->~ObLSDupTabletsMgr();
+          }
           ob_free(tmp_tablets_mgr_ptr);
         }
         if (OB_NOT_NULL(tmp_log_operator)) {
-          tmp_log_operator->reset();
+          if (is_constructed_) {
+            tmp_log_operator->~ObDupTableLogOperator();
+          }
           ob_free(tmp_log_operator);
         }
       }
@@ -520,27 +530,30 @@ void ObDupTableLSHandler::reset()
 {
   // ATOMIC_STORE(&is_inited_, false);
   SpinWLockGuard w_init_guard(init_rw_lock_);
-  is_inited_ = false;
   ls_state_helper_.reset();
 
   dup_ls_ckpt_.reset();
 
-  if (OB_NOT_NULL(lease_mgr_ptr_)) {
-    lease_mgr_ptr_->destroy();
-    ob_free(lease_mgr_ptr_);
+  if (is_inited_) {
+    if (OB_NOT_NULL(lease_mgr_ptr_)) {
+      lease_mgr_ptr_->~ObDupTableLSLeaseMgr();
+      ob_free(lease_mgr_ptr_);
+    }
+    if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
+      ts_sync_mgr_ptr_->~ObDupTableLSTsSyncMgr();
+      ob_free(ts_sync_mgr_ptr_);
+    }
+    if (OB_NOT_NULL(tablets_mgr_ptr_)) {
+      tablets_mgr_ptr_->~ObLSDupTabletsMgr();
+      ob_free(tablets_mgr_ptr_);
+    }
+    if (OB_NOT_NULL(log_operator_)) {
+      log_operator_->~ObDupTableLogOperator();
+      share::mtl_free(log_operator_);
+    }
   }
-  if (OB_NOT_NULL(ts_sync_mgr_ptr_)) {
-    ts_sync_mgr_ptr_->destroy();
-    ob_free(ts_sync_mgr_ptr_);
-  }
-  if (OB_NOT_NULL(tablets_mgr_ptr_)) {
-    tablets_mgr_ptr_->destroy();
-    ob_free(tablets_mgr_ptr_);
-  }
-  if (OB_NOT_NULL(log_operator_)) {
-    log_operator_->reset();
-    share::mtl_free(log_operator_);
-  }
+
+  is_inited_ = false;
 
   lease_mgr_ptr_ = nullptr;
   ts_sync_mgr_ptr_ = nullptr;

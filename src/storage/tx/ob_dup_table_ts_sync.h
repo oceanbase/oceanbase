@@ -60,6 +60,7 @@ public:
   const int64_t TS_INFO_CACHE_REFRESH_INTERVAL = 1 * 1000 * 1000; // 1s
 public:
   ObDupTableLSTsSyncMgr() : ts_sync_diag_info_log_buf_(nullptr) {}
+  ~ObDupTableLSTsSyncMgr() { destroy(); }
   int init(ObDupTableLSHandler *dup_ls_handle);
   int offline();
 
