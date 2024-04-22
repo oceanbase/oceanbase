@@ -1569,7 +1569,8 @@ struct ObResolveContext
     is_for_dbms_sql_(false),
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
-    is_variable_allowed_(true)
+    is_variable_allowed_(true),
+    is_from_show_resolver_(false)
   {
   }
 
@@ -1615,6 +1616,7 @@ struct ObResolveContext
   TgTimingEvent tg_timing_event_; // for mysql trigger
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
+  bool is_from_show_resolver_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

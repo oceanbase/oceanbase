@@ -647,6 +647,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_xmlcast.cpp
   engine/expr/ob_expr_update_xml.cpp
   engine/expr/ob_expr_temp_table_ssid.cpp
+  engine/expr/ob_expr_inner_table_option_printer.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

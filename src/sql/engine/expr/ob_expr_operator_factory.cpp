@@ -403,6 +403,7 @@
 #include "sql/engine/expr/ob_expr_update_xml.h"
 #include "sql/engine/expr/ob_expr_temp_table_ssid.h"
 #include "sql/engine/expr/ob_expr_align_date4cmp.h"
+#include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -999,6 +1000,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRandstr);
     REG_OP(ObExprPrefixPattern);
     REG_OP(ObExprAlignDate4Cmp);
+    REG_OP(ObExprInnerTableOptionPrinter);
+    REG_OP(ObExprInnerTableSequenceGetter);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1310,6 +1313,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprUpdateXml);
   REG_OP_ORCL(ObExprTempTableSSID);
   REG_OP_ORCL(ObExprJsonObjectStar);
+  REG_OP_ORCL(ObExprInnerTableOptionPrinter);
+  REG_OP_ORCL(ObExprInnerTableSequenceGetter);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

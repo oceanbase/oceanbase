@@ -1070,4 +1070,6 @@
 #define N_NLS_INITCAP                       "nls_initcap"
 #define N_TEMP_TABLE_SSID                   "temp_table_ssid"
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
+#define N_INNER_TABLE_OPTION_PRINTER        "inner_table_option_printer"
+#define N_INNER_TABLE_SEQUENCE_GETTER       "inner_table_sequence_getter"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

@@ -1,0 +1,8 @@
+- name: sysbench_prepare
+  scope:
+    branch:
+    - 4_2_1_release
+    dept:
+    - OceanBase-OceanBase-产品技术部-技术部-底层引擎部-存储-索引与DDL
+  must_success:
+    true

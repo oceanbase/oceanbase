@@ -334,6 +334,7 @@
 #include "ob_expr_initcap.h"
 #include "ob_expr_temp_table_ssid.h"
 #include "ob_expr_align_date4cmp.h"
+#include "ob_expr_inner_table_option_printer.h"
 
 namespace oceanbase
 {
@@ -1039,6 +1040,69 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTempTableSSID::calc_temp_table_ssid,                          /* 607 */
   ObExprAlignDate4Cmp::eval_align_date4cmp,                            /* 608 */
   ObExprJsonObjectStar::eval_ora_json_object_star,                    /* 609 */
+  NULL, //calc_bool_expr_for_decint_type,                             /* 610 */
+  NULL, //ObExprIs::decimal_int_is_true,                              /* 611 */
+  NULL, //ObExprIs::decimal_int_is_false,                             /* 612 */
+  NULL, //ObExprIsNot::decimal_int_is_not_true,                       /* 613 */
+  NULL, //ObExprIsNot::decimal_int_is_not_false,                      /* 614 */
+  NULL, //ObExprInnerIsTrue::int_is_true_start,                       /* 615 */
+  NULL, //ObExprInnerIsTrue::int_is_true_end,                         /* 616 */
+  NULL, //ObExprInnerIsTrue::float_is_true_start,                     /* 617 */
+  NULL, //ObExprInnerIsTrue::float_is_true_end,                       /* 618 */
+  NULL, //ObExprInnerIsTrue::double_is_true_start,                    /* 619 */
+  NULL, //ObExprInnerIsTrue::double_is_true_end,                      /* 620 */
+  NULL, //ObExprInnerIsTrue::number_is_true_start,                    /* 621 */
+  NULL, //ObExprInnerIsTrue::number_is_true_end,                      /* 622 */
+  NULL, //ObExprInnerDecodeLike::eval_inner_decode_like,              /* 623 */
+  NULL, //ObExprJsonSchemaValid::eval_json_schema_valid,              /* 624 */
+  NULL, //ObExprJsonSchemaValidationReport::eval_json_schema_validation_report,/* 625 */
+  NULL, //ObExprInsertChildXml::eval_insert_child_xml,                /* 626 */
+  NULL, //ObExprDeleteXml::eval_delete_xml,                           /* 627 */
+  NULL, //ObExprExtractValue::eval_mysql_extract_value,               /* 628 */
+  NULL, //ObExprUpdateXml::eval_mysql_update_xml,                     /* 629 */
+  NULL, //ObExprXmlSequence::eval_xml_sequence,                       /* 630 */
+  NULL, //ObExprJsonAppend::eval_json_array_append,                   /* 631 */
+  NULL, // unused                                                     /* 632 */
+  NULL, //ObExprUdtConstruct::eval_udt_construct,                     /* 633 */
+  NULL, //ObExprUDTAttributeAccess::eval_attr_access,                 /* 634 */
+  NULL, //ObExprPrivSTNumInteriorRings::eval_priv_st_numinteriorrings,/* 635 */
+  NULL, //ObExprPrivSTIsCollection::eval_priv_st_iscollection,        /* 636 */
+  NULL, //ObExprPrivSTEquals::eval_priv_st_equals,                    /* 637 */
+  NULL, //ObExprPrivSTTouches::eval_priv_st_touches,                  /* 638 */
+  NULL, //ObExprPrivSTMakeEnvelope::eval_priv_st_makeenvelope,        /* 639 */
+  NULL, //ObExprPrivSTClipByBox2D::eval_priv_st_clipbybox2d,          /* 640 */
+  NULL, //ObExprPrivSTPointOnSurface::eval_priv_st_pointonsurface,    /* 641 */
+  NULL, //ObExprPrivSTGeometryType::eval_priv_st_geometrytype,        /* 642 */
+  NULL, //ObExprSTCrosses::eval_st_crosses,                           /* 643 */
+  NULL, //ObExprSTOverlaps::eval_st_overlaps,                         /* 644 */
+  NULL, //ObExprSTUnion::eval_st_union,                               /* 645 */
+  NULL, //ObExprSTLength::eval_st_length,                             /* 646 */
+  NULL, //ObExprSTDifference::eval_st_difference,                     /* 647 */
+  NULL, //ObExprSTAsGeoJson::eval_st_asgeojson,                       /* 648 */
+  NULL, //ObExprSTCentroid::eval_st_centroid,                         /* 649 */
+  NULL, //ObExprSTSymDifference::eval_st_symdifference,               /* 650 */
+  NULL, //ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,              /* 651 */
+  NULL, //ObExprPrivSTMakeValid::eval_priv_st_makevalid,              /* 652 */
+  NULL, //ObExprAuditLogSetFilter::eval_set_filter,                   /* 653 */
+  NULL, //ObExprAuditLogRemoveFilter::eval_remove_filter,             /* 654 */
+  NULL, //ObExprAuditLogSetUser::eval_set_user,                       /* 655 */
+  NULL, //ObExprAuditLogRemoveUser::eval_remove_user,                 /* 656 */
+  NULL, //eval_questionmark_decint2nmb,                               /* 657 */
+  NULL, //eval_questionmark_nmb2decint_eqcast,                        /* 658 */
+  NULL, //eval_questionmark_decint2decint_eqcast,                     /* 659 */
+  NULL, //eval_questionmark_decint2decint_normalcast,                 /* 660 */
+  NULL, //ObExprExtractExpiredTime::eval_extract_cert_expired_time,   /* 661 */
+  NULL, //ObExprXmlConcat::eval_xml_concat,                           /* 662 */
+  NULL, //ObExprXmlForest::eval_xml_forest,                           /* 663 */
+  NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 664 */
+  NULL, //ObExprPassword::eval_password,                              /* 665 */
+  NULL, //ObExprDocID::generate_doc_id,                               /* 666 */
+  NULL, //ObExprWordSegment::generate_fulltext_column,                /* 667 */
+  NULL, //ObExprWordCount::generate_word_count,                       /* 668 */
+  NULL, //ObExprBM25::eval_bm25_relevance_expr,                       /* 669 */
+  NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
+  ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
+  ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

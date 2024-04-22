@@ -32,7 +32,7 @@ namespace oceanbase
 {
 namespace observer
 {
-
+/*ObTenantAllTables is deprecated, please modify NEW_TABLE_STATUS_SQL or NEW_TABLE_STATUS_SQL_ORA directly*/
 #define TABLE_STATUS_SQL  "select /*+ leading(a) no_use_nl(ts)*/" \
                     "cast( coalesce(ts.row_cnt,0) as unsigned) as table_rows," \
                     "cast( coalesce(ts.data_size,0) as unsigned) as data_length," \
