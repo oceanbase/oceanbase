@@ -139,7 +139,11 @@ int ObLobWriteBuffer::move_data_for_write(
     } else {
       LOG_DEBUG("no data move", K(total_move_byte_len), K(real_move_byte_len), K(write_byte_offset), K(write_old_byte_len), K(write_new_byte_len), K(byte_length()));
     }
-    inner_buffer_.set_length(move_dst_byte_offset + real_move_byte_len);
+    if (OB_FAIL(ret)) {
+    } else if (inner_buffer_.set_length(move_dst_byte_offset + real_move_byte_len) != move_dst_byte_offset + real_move_byte_len) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("set_length fail", K(ret), K(inner_buffer_.size()), K(inner_buffer_.length()), K(move_dst_byte_offset), K(real_move_byte_len));
+    }
   }
   return ret;
 }
@@ -166,7 +170,10 @@ int ObLobWriteBuffer::do_write(
   } else {
     MEMCPY(buffer_ptr() + write_byte_offset, write_data.ptr(), write_data.length());
     if (write_byte_offset + write_data.length() > inner_buffer_.length()) {
-      inner_buffer_.set_length(write_byte_offset + write_data.length());
+      if (inner_buffer_.set_length(write_byte_offset + write_data.length()) != write_byte_offset + write_data.length()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("set_length fail", K(ret), K(inner_buffer_.size()), K(inner_buffer_.length()), K(write_byte_offset), K(write_data.length()));
+      }
     }
   }
   return ret;
@@ -302,22 +309,26 @@ int ObLobWriteBuffer::padding(int64_t char_len, int64_t &real_write_byte_len)
   ObString space = ObCharsetUtils::get_const_str(coll_type_, ' ');
   int64_t space_len = space.length();
   int64_t byte_len = OB_MIN(space_len * char_len, remain());
+  int64_t inner_buffer_length = inner_buffer_.length();
   if (! use_buffer()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should be use_buffer mode when padding", K(ret));
   } else if (is_char()) {
     if (space.length() == 1) {
-      MEMSET(inner_buffer_.ptr() + inner_buffer_.length(), space.ptr()[0], byte_len);
+      MEMSET(inner_buffer_.ptr() + inner_buffer_length, space.ptr()[0], byte_len);
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support", K(ret), K(coll_type_), K(space));
     }
   } else {
-    MEMSET(inner_buffer_.ptr() + inner_buffer_.length(), 0x00, byte_len);
+    MEMSET(inner_buffer_.ptr() + inner_buffer_length, 0x00, byte_len);
   }
 
-  if (OB_SUCC(ret)) {
-    inner_buffer_.set_length(inner_buffer_.length() + byte_len);
+  if (OB_FAIL(ret)) {
+  } else if (inner_buffer_.set_length(inner_buffer_length + byte_len) != inner_buffer_length + byte_len) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set_length fail", K(ret), K(inner_buffer_.size()), K(inner_buffer_.length()), K(inner_buffer_length), K(byte_len));
+  } else {
     real_write_byte_len = byte_len;
     is_full_ = (is_char() && inner_buffer_.remain() < max_bytes_in_char_);
   }
