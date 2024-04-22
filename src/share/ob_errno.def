@@ -131,7 +131,7 @@ DEFINE_ERROR_DEP(OB_CONFLICT_VALUE, -4021, -1, "HY000", "Conflict value");
 DEFINE_ERROR_DEP(OB_ITEM_NOT_SETTED, -4022, -1, "HY000", "Item not set");
 DEFINE_ERROR_DEP(OB_EAGAIN, -4023, -1, "HY000", "Try again");
 DEFINE_ERROR_DEP(OB_BUF_NOT_ENOUGH, -4024, -1, "HY000", "Buffer not enough");
-DEFINE_ERROR(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed");
+DEFINE_ERROR_EXT_DEP(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed", "%s");
 DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, ER_SP_FETCH_NO_DATA, "02000", "No data - zero rows fetched, selected, or processed", 1403, "no data found");
 DEFINE_ERROR_DEP(OB_FILE_NOT_EXIST, -4027, ER_FILE_NOT_FOUND, "HY000", "File not exist");
 DEFINE_ERROR_DEP(OB_DISCONTINUOUS_LOG, -4028, -1, "HY000", "Log entry not continuous");

@@ -519,7 +519,7 @@ TEST_F(TestBalanceOperator, merge_task)
   LOG_INFO("testtest7: start set part list");
   common::ObMySQLTransaction trans;
   ASSERT_EQ(OB_SUCCESS, trans.start(&sql_proxy, tenant_id));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_merge_ls_part_list(tenant_id, task_id, part_list, trans));
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans));
   ASSERT_EQ(OB_SUCCESS, trans.end(true));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ObTransferPartList to_do_part_list;
@@ -530,7 +530,7 @@ TEST_F(TestBalanceOperator, merge_task)
   LOG_INFO("testtest8: start set part list");
   common::ObMySQLTransaction trans1;
   ASSERT_EQ(OB_SUCCESS, trans1.start(&sql_proxy, tenant_id));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_merge_ls_part_list(tenant_id, task_id, part_list, trans1));
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans1));
   ASSERT_EQ(OB_SUCCESS, trans1.end(true));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::finish_transfer_task(task, transfer_task_id, part_list, sql_proxy, to_do_part_list, all_part_transferred));
@@ -539,7 +539,7 @@ TEST_F(TestBalanceOperator, merge_task)
   LOG_INFO("testtest9: start set part list");
   common::ObMySQLTransaction trans2;
   ASSERT_EQ(OB_SUCCESS, trans2.start(&sql_proxy, tenant_id));
-  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_merge_ls_part_list(tenant_id, task_id, part_list, trans2));
+  ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::update_task_part_list(tenant_id, task_id, part_list, trans2));
   ASSERT_EQ(OB_SUCCESS, trans2.end(true));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::start_transfer_task(tenant_id, task_id, transfer_task_id, sql_proxy));
   ASSERT_EQ(OB_SUCCESS, ObBalanceTaskTableOperator::finish_transfer_task(task, transfer_task_id, part_list, sql_proxy, to_do_part_list, all_part_transferred));

@@ -1918,7 +1918,7 @@ int ObAdminRefreshIOCalibration::execute(const obrpc::ObAdminRefreshIOCalibratio
       }
       if (server_list.count() != succ_count) {
         ret = OB_PARTIAL_FAILED;
-        LOG_USER_ERROR(OB_PARTIAL_FAILED);
+        LOG_USER_ERROR(OB_PARTIAL_FAILED, "Partial failed");
       }
     }
   }

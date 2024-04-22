@@ -3638,6 +3638,88 @@ question_mask_size: 0
 				|--[2],[T_VARCHAR], str_value_=["10.101.74.122":41425], value=[9223372036854775807]
 
 **************   Case 196   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+
+**************   Case 197   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 198   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+
+**************   Case 199   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 200   ***************
+alter system cancel transfer partition ALL;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+
+**************   Case 201   ***************
+alter system cancel transfer partition ALL tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 202   ***************
+alter system cancel balance job;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+
+**************   Case 203   ***************
+alter system cancel balance job tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+		|--[0],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 204   ***************
 alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3652,7 +3734,7 @@ question_mask_size: 0
 		|--[5],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 197   ***************
+**************   Case 205   ***************
 alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
 question_mask_size: 0
 
@@ -3665,7 +3747,7 @@ question_mask_size: 0
 		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
 		|--[4],[T_INT], str_value_=[3], value=[3]
 
-**************   Case 198   ***************
+**************   Case 206   ***************
 alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
 question_mask_size: 0
 
@@ -3677,7 +3759,7 @@ question_mask_size: 0
 		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
 		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
 
-**************   Case 199   ***************
+**************   Case 207   ***************
 alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
 question_mask_size: 0
 
@@ -3688,7 +3770,7 @@ question_mask_size: 0
 		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
 
-**************   Case 200   ***************
+**************   Case 208   ***************
 alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3701,7 +3783,7 @@ question_mask_size: 0
 		|--[3],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 201   ***************
+**************   Case 209   ***************
 alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
 question_mask_size: 0
 
@@ -3712,7 +3794,7 @@ question_mask_size: 0
 		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 		|--[2],[T_INT], str_value_=[3], value=[3]
 
-**************   Case 202   ***************
+**************   Case 210   ***************
 alter system remove replica ls=100 server='100.88.107.212:5000';
 question_mask_size: 0
 
@@ -3722,7 +3804,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[100], value=[100]
 		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 
-**************   Case 203   ***************
+**************   Case 211   ***************
 alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3736,7 +3818,7 @@ question_mask_size: 0
 		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 204   ***************
+**************   Case 212   ***************
 alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
 question_mask_size: 0
 
@@ -3748,7 +3830,7 @@ question_mask_size: 0
 		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
 		|--[3],[T_INT], str_value_=[3], value=[3]
 
-**************   Case 205   ***************
+**************   Case 213   ***************
 alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
 question_mask_size: 0
 
@@ -3759,7 +3841,7 @@ question_mask_size: 0
 		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
 
-**************   Case 206   ***************
+**************   Case 214   ***************
 alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3771,7 +3853,7 @@ question_mask_size: 0
 		|--[2],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 207   ***************
+**************   Case 215   ***************
 alter system modify ls=100 paxos_replica_num=3;
 question_mask_size: 0
 
@@ -3781,7 +3863,7 @@ question_mask_size: 0
 			|--[0],[T_INT], str_value_=[100], value=[100]
 		|--[1],[T_INT], str_value_=[3], value=[3]
 
-**************   Case 208   ***************
+**************   Case 216   ***************
 alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3795,7 +3877,7 @@ question_mask_size: 0
 		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 209   ***************
+**************   Case 217   ***************
 alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
 question_mask_size: 0
 
@@ -3807,7 +3889,7 @@ question_mask_size: 0
 		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
 
-**************   Case 210   ***************
+**************   Case 218   ***************
 alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
 question_mask_size: 0
 
@@ -3818,7 +3900,7 @@ question_mask_size: 0
 		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
 
-**************   Case 211   ***************
+**************   Case 219   ***************
 alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
 question_mask_size: 0
 
@@ -3828,7 +3910,7 @@ question_mask_size: 0
 		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
 
-**************   Case 212   ***************
+**************   Case 220   ***************
 alter system cancel replica task task_id = 'xxx';
 question_mask_size: 0
 

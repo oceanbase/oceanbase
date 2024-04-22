@@ -527,7 +527,7 @@ END_P SET_VAR DELIMITER
 %type <node> json_table_ordinality_column_def json_table_exists_column_def json_table_value_column_def json_table_nested_column_def
 %type <node> opt_value_on_empty_or_error_or_mismatch opt_on_mismatch
 %type <node> table_values_clause table_values_clause_with_order_by_and_limit values_row_list row_value
-%type <node> transfer_partition_stmt transfer_partition_clause part_info
+%type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> geometry_collection
 %type <node> mock_stmt
 
@@ -18892,6 +18892,16 @@ alter_with_opt_hint SYSTEM transfer_partition_clause opt_tenant_name
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_TRANSFER_PARTITION, 2, $3, $4);
 }
+| alter_with_opt_hint SYSTEM CANCEL TRANSFER PARTITION cancel_transfer_partition_clause opt_tenant_name
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_TRANSFER_PARTITION, 2, $6, $7);
+}
+| alter_with_opt_hint SYSTEM CANCEL BALANCE JOB opt_tenant_name
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_BALANCE_JOB, 1, $6)
+}
 ;
 transfer_partition_clause:
 TRANSFER PARTITION part_info TO LS INTNUM
@@ -18906,6 +18916,15 @@ TABLE_ID opt_equal_mark INTNUM ',' OBJECT_ID opt_equal_mark INTNUM
   (void) ($2);
   (void) ($6);
    malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_INFO, 2, $3, $7);
+};
+cancel_transfer_partition_clause:
+part_info
+{
+  $$ = $1;
+}
+| ALL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_ALL);
 }
 ;
 /*===========================================================
