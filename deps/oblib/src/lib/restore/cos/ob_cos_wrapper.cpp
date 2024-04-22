@@ -328,6 +328,15 @@ int ObCosWrapper::create_cos_handle(
       custom_mem.customFree(custom_mem.opaque, ctx);
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to create cos http controller, ret=%d\n", ret);
+      // A separate instance of ctl->options is now allocated for each request,
+      // ensuring that disabling CRC checks is a request-specific action
+      // and does not impact the global setting for COS request options.
+    } else if (NULL ==
+        (ctx->options->ctl->options = cos_http_request_options_create(ctx->options->pool))) {
+      cos_pool_destroy(ctx->mem_pool);
+      custom_mem.customFree(custom_mem.opaque, ctx);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to create cos http request options, ret=%d\n", ret);
     } else {
       *h = reinterpret_cast<Handle *>(ctx);
 
@@ -922,7 +931,6 @@ int ObCosWrapper::pread(
       } else {
         apr_table_set(headers, COS_RANGE_KEY, range_size);
       }
-      ctx->options->ctl->options->enable_crc = false;
 
       if (OB_SUCCESS != ret) {
       } else if (NULL == (cos_ret = cos_get_object_to_buffer(ctx->options, &bucket, &object, headers, nullptr, &buffer, &resp_headers)) ||

@@ -398,7 +398,6 @@ int ObStorageOssBase::init_with_storage_info(common::ObObjectStorageInfo *storag
       OB_LOG(WARN, "that checksum algorithm is not supported for oss", K(ret), K_(checksum_type));
     } else {
       is_inited_ = true;
-      oss_option_->ctl->options->enable_crc = false;
     }
   }
   return ret;
@@ -517,12 +516,20 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     OB_LOG(WARN, "fail to create oss config", K(ret));
   } else if (OB_FAIL(init_oss_endpoint())) {
     OB_LOG(WARN, "fail to init oss endpoind", K(ret));
+  } else if (OB_ISNULL(oss_option->ctl = aos_http_controller_create(oss_option->pool, 0))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create aos http controller", K(ret));
+    // A separate instance of ctl->options is now allocated for each request,
+    // ensuring that disabling CRC checks is a request-specific action
+    // and does not impact the global setting for OSS request options.
+  } else if (OB_ISNULL(oss_option->ctl->options = aos_http_request_options_create(oss_option->pool))) {
+    ret = OB_OSS_ERROR;
+    OB_LOG(WARN, "fail to create aos http request options", K(ret));
   } else {
     aos_str_set(&oss_option->config->endpoint, oss_endpoint_);
     aos_str_set(&oss_option->config->access_key_id, oss_account_.oss_id_);
     aos_str_set(&oss_option->config->access_key_secret, oss_account_.oss_key_);
     oss_option->config->is_cname = 0;
-    oss_option->ctl = aos_http_controller_create(oss_option->pool, 0);
 
     // Set connection timeout, the default value is 10s
     oss_option->ctl->options->connect_timeout = 60;
@@ -535,6 +542,8 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
     // The maximum time that the control can tolerate, the default is 15 seconds
     oss_option->ctl->options->speed_limit = 16000;
     oss_option->ctl->options->speed_time = 60;
+
+    oss_option->ctl->options->enable_crc = false;
   }
   return ret;
 }
@@ -1166,7 +1175,6 @@ int ObStorageOssReader::pread(
         } else {
           apr_table_set(headers, OSS_RANGE_KEY, range_size);
         }
-        oss_option->ctl->options->enable_crc = false;
 
         if (OB_FAIL(ret)) {
         } else if (NULL == (aos_ret = oss_get_object_to_buffer(oss_option, &bucket, &object, headers, params,
