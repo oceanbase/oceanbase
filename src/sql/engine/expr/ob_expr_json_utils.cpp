@@ -2818,8 +2818,14 @@ int ObJsonUtil::get_query_item_method_null_option(ObJsonPath* j_path,
 {
   size_t item_method = static_cast<uint8_t>(j_path->get_last_node_type());
   size_t json_type = static_cast<uint8_t>(j_base->json_type());
+  int is_null_res = 0;
   // first item method pos is JPN_ABS
-  return OB_JSON_QUERY_ITEM_METHOD_NULL_OPTION[item_method - ObJsonPathNodeType::JPN_ABS][json_type];
+  if (!j_path->is_last_func()) {
+    // do nothing
+  } else {
+    is_null_res = OB_JSON_QUERY_ITEM_METHOD_NULL_OPTION[item_method - ObJsonPathNodeType::JPN_ABS][json_type];
+  }
+  return is_null_res;
 }
 
 ObJsonUtil::ObItemMethodValid ObJsonUtil::get_item_method_cast_res_func(ObJsonPath* j_path,
