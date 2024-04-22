@@ -367,47 +367,56 @@ int ObXMLExprHelper::parse_namespace_str(ObString &ns_str, ObString &prefix, ObS
       str[idx+3] == 'n' &&
       str[idx+4] == 's') {
     idx += 5;
-    if (str[idx] == ':') {
-      // parse prefix name
-      int64_t start = idx + 1;
-      while (idx < str_len && str[idx] != '=') ++idx;
-      if (idx < str_len && str[idx] == '=') {
-        prefix_start = str + start;
-        prefix_len = idx - start;
-      }
-    }
-    if (idx < str_len && str[idx] == '=') {
-      // parse uri value
-      idx += 1;
-      if (idx < str_len && str[idx] == '"') {
-        // "xxx"
-        int start = ++idx;
-        while(idx < str_len && str[idx] != '"') ++idx;
-        if (idx < str_len && str[idx] == '"') {
-          uri_start = str + start;
-          uri_len = idx - start;
-          idx += 1;
-        } else {
-          ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-          LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
-        }
-      } else {
-        uri_start = str + idx;
-        uri_len = str_len - idx;
-      }
-    } else {
-      ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-      LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
-    }
   } else {
     ret = OB_ERR_INVALID_XPATH_EXPRESSION;
-    LOG_WARN("not invalid xml namespace string", K(ret), K(ns_str), K(idx));
+    LOG_WARN("not invalid xmlns string", K(ret), K(ns_str));
+  }
+  // parse prefix name
+  if (OB_FAIL(ret)) {
+  } else if (idx < str_len && str[idx] == ':') {
+    idx += 1;
+    int64_t start = idx;
+    // find prefix name end
+    while (idx < str_len && str[idx] != '=') {
+      idx += 1;
+    }
+    prefix_start = str + start;
+    prefix_len = idx - start;
+  }
+  // parse uri value
+  if (OB_FAIL(ret)) {
+  } else if (idx < str_len && str[idx] == '=') {
+    idx += 1;
+    // skip the " in the front
+    while (idx < str_len && str[idx] == '"') {
+      idx += 1;
+    }
+    int64_t start = idx;
+    // find the value end
+    while (idx < str_len && str[idx] != '"') {
+      idx += 1;
+    }
+    uri_start = str + start;
+    uri_len = idx - start;
+    // skip the " in the end
+    while (idx < str_len && str[idx] == '"') {
+      idx += 1;
+    }
+  } else if (idx != str_len) {
+    ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+    LOG_WARN("no \"=\" after xmlns or prefix name", K(ret), K(ns_str));
   }
 
-  if (OB_SUCC(ret)) {
-    if (prefix_len > 0) {
+  if (OB_FAIL(ret)) {
+  } else if (prefix_len > 0) {
+    if (uri_len > 0) {
+      uri.assign_ptr(uri_start, uri_len);
       prefix.assign_ptr(prefix_start, prefix_len);
+    } else {
+      ret = OB_ERR_INVALID_XPATH_EXPRESSION;
+      LOG_WARN("empty value after prefix name", K(ret), K(ns_str));
     }
+  } else if (uri_len > 0) {
     uri.assign_ptr(uri_start, uri_len);
   }
   return ret;
