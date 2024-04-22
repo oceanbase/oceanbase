@@ -398,7 +398,9 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
     bool ls_can_retry = true;
     int64_t next_retry_id = ls_attr_->retry_id_ + 1;
     switch(ls_attr_->task_type_.type_) {
-      case ObBackupDataTaskType::BACKUP_META: {
+      case ObBackupDataTaskType::BACKUP_META:
+      case ObBackupDataTaskType::BACKUP_META_FINISH:
+      case ObBackupDataTaskType::BEFORE_PLUS_ARCHIVE_LOG: {
         int64_t max_retry_times = OB_MAX_RETRY_TIMES;
 #ifdef ERRSIM
         if (0 != GCONF.errsim_max_backup_retry_count) {
