@@ -1265,18 +1265,18 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
   calc_sqrt_expr_oracle_number_in_batch,                              /* 116 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 117 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 118 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 119 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 120 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 121 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 122 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 123 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 124 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 125 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 126 */
-  NULL, //ObBatchCast::explicit_batch_cast                            /* 127 */
-  NULL, //ObBatchCast::implicit_batch_cast                            /* 128 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObDecimalIntTC>,   /* 117 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObDecimalIntTC>,   /* 118 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObIntTC, ObDecimalIntTC>,          /* 119 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObIntTC, ObDecimalIntTC>,          /* 120 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObUIntTC, ObDecimalIntTC>,         /* 121 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObUIntTC, ObDecimalIntTC>,         /* 122 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObIntTC>,          /* 123 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObIntTC>,          /* 124 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 125 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 126 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
 };
 
