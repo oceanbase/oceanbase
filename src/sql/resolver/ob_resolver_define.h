@@ -346,7 +346,8 @@ struct ObResolverParams
        is_execute_call_stmt_(false),
        enable_res_map_(false),
        need_check_col_dup_(true),
-       is_specified_col_name_(false)
+       is_specified_col_name_(false),
+       is_in_sys_view_(false)
   {}
   bool is_force_trace_log() { return force_trace_log_; }
 

@@ -421,6 +421,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                 } else {
                   coll_type = ObCharset::get_default_collation(charset_type);
                 }
+              } else if (ctx_.is_in_system_view_) {
+                //for mysql system view, cast char type always has default collation
+                coll_type = ObCharset::get_system_collation();
               } else {
                 // use connection_collation. for cast('a' as char)
                 if (OB_ISNULL(ctx_.session_info_)) {
