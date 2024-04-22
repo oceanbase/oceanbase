@@ -22,6 +22,7 @@
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/ob_fts_plugin_mgr.h"
 #include "storage/fts/ob_whitespace_ft_parser.h"
+#include "storage/fts/ob_fts_stop_word.h"
 #include "sql/das/ob_das_utils.h"
 
 namespace oceanbase
@@ -184,6 +185,23 @@ TEST_F(TestDefaultFTParser, test_space_ft_parser_segment)
   LOG_INFO("before space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
   ASSERT_EQ(OB_SUCCESS, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, ft_len));
   LOG_INFO("after space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
+}
+
+TEST_F(TestDefaultFTParser, test_space_ft_parser_segment_bug_56324268)
+{
+  common::ObArray<ObFTWord> words;
+  ObNoStopWordAddWord add_word(ObCollationType::CS_TYPE_LATIN1_SWEDISH_CI, allocator_, words);
+  const char *fulltext = "\201 想 将 数据 添加 到 数据库\f\026 ";
+  const int64_t ft_len = strlen(fulltext);
+
+  ft_parser_param_.fulltext_ = fulltext;
+  ft_parser_param_.ft_length_ = ft_len;
+  ft_parser_param_.add_word_ = &add_word;
+  ft_parser_param_.cs_ = common::ObCharset::get_charset(ObCollationType::CS_TYPE_LATIN1_SWEDISH_CI);
+
+  LOG_INFO("before space segment", KCSTRING(fulltext), K(ft_len), K(ft_parser_param_));
+  ASSERT_EQ(OB_SUCCESS, ObSpaceFTParser::segment(&ft_parser_param_, fulltext, ft_len));
+  LOG_INFO("after space segment", KCSTRING(fulltext), K(words), K(ft_len), K(ft_parser_param_));
 }
 
 TEST_F(TestDefaultFTParser, test_default_ft_parser_desc)

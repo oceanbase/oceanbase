@@ -275,7 +275,7 @@ int ObBasicEnglishNormalizer::get_next(ObDatum &next_token, int64_t &token_freq)
           }
         }
 
-        for (uint32_t i = raw_token_len - 1; i >= first_alnum_pos; --i) {
+        for (int32_t i = raw_token_len - 1; 0 <= i && i < raw_token_len && i >= first_alnum_pos; --i) {
           const char *character = token + i;
           if (ob_isalnum(cs_, *character)) {
             last_alnum_pos = i;
