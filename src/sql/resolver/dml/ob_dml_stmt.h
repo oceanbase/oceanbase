@@ -1106,6 +1106,7 @@ public:
   int get_udf_exprs(common::ObIArray<ObRawExpr *> &exprs) const;
   int has_rand(bool &has_rand) const { return has_special_expr(CNT_RAND_FUNC, has_rand); }
   virtual int has_special_expr(const ObExprInfoFlag, bool &has) const;
+  int has_special_exprs(const ObSqlBitSet<> &flags, bool &has) const;
   const TransposeItem *get_transpose_item() const { return transpose_item_; }
   void set_transpose_item(const TransposeItem *transpose_item) { transpose_item_ = transpose_item; }
   const ObUnpivotInfo get_unpivot_info() const

@@ -80,6 +80,7 @@ private:
   int check_mv_join_type(const ObSelectStmt &stmt, bool &join_type_valid);
   bool is_mv_join_type_valid(const TableItem *table);
   int check_select_contains_all_tables_primary_key(const ObSelectStmt &stmt, bool &contain_all_rowkey);
+  int check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr);
   int check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_dup_exprs);
   bool check_mlog_table_valid(const share::schema::ObTableSchema *table_schema,
