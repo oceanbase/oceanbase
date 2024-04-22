@@ -5325,6 +5325,7 @@ TEST_F(TestGeoBin, sdo_point_3d) {
     geo_3d.set_data(wkb2);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5392,6 +5393,7 @@ TEST_F(TestGeoBin, sdo_linestring_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5487,6 +5489,7 @@ TEST_F(TestGeoBin, sdo_polygon_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5554,6 +5557,7 @@ TEST_F(TestGeoBin, sdo_multipoint_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5637,6 +5641,7 @@ TEST_F(TestGeoBin, sdo_multilinestring_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5742,6 +5747,7 @@ TEST_F(TestGeoBin, sdo_multipolygon_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5860,6 +5866,7 @@ TEST_F(TestGeoBin, sdo_collection_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -6087,28 +6094,28 @@ TEST_F(TestGeoBin, elevation_visitor) {
     ObArenaAllocator allocator(ObModIds::TEST);
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(-1 11, 11 11, 0 10, 5 10, 10 10, 0 5, 5 5, 10 5, 0 0, 5 0, 10 0, -1 -1, 5 -1, 11 -1)",
-        "MULTIPOINT Z (-1 11 5,11 11 10,0 10 5,5 10 5,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 5,10 0 5,-1 -1 0,5 -1 5,11 -1 5)");
+        "MULTIPOINT Z ((-1 11 5),(11 11 10),(0 10 5),(5 10 5),(10 10 10),(0 5 5),(5 5 5),(10 5 5),(0 0 0),(5 0 5),(10 0 5),(-1 -1 0),(5 -1 5),(11 -1 5))");
     elevation_visitor_checker(allocator, "POLYGON Z ((1 6 50, 9 6 60, 9 4 50, 1 4 40, 1 6 50))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 4,5 4,10 4,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 50,5 10 50,10 10 60,0 5 50,5 5 50,10 5 50,0 4 40,5 4 50,10 4 50,0 0 40,5 0 50,10 0 50)");
+        "MULTIPOINT Z ((0 10 50),(5 10 50),(10 10 60),(0 5 50),(5 5 50),(10 5 50),(0 4 40),(5 4 50),(10 4 50),(0 0 40),(5 0 50),(10 0 50))");
     elevation_visitor_checker(allocator, "MULTILINESTRING Z ((0 0 0, 10 10 8), (1 2 2, 9 8 6))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
-        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+        "MULTIPOINT Z ((-1 11 4),(11 11 7),(0 10 4),(5 10 4),(10 10 7),(0 5 4),(5 5 4),(10 5 4),(0 0 1),(5 0 4),(10 0 4),(-1 -1 1),(5 -1 4),(11 -1 4))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 8)", "LINESTRING Z (1 2 2, 9 8 6)",
         "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
-        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+        "MULTIPOINT Z ((-1 11 4),(11 11 7),(0 10 4),(5 10 4),(10 10 7),(0 5 4),(5 5 4),(10 5 4),(0 0 1),(5 0 4),(10 0 4),(-1 -1 1),(5 -1 4),(11 -1 4))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 5 0, 10 5 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 0,5 10 5,10 10 10,0 5 0,5 5 5,10 5 10,0 0 0,5 0 5,10 0 10)");
+        "MULTIPOINT Z ((0 10 0),(5 10 5),(10 10 10),(0 5 0),(5 5 5),(10 5 10),(0 0 0),(5 0 5),(10 0 10))");
     elevation_visitor_checker(allocator, "LINESTRING Z (5 0 0, 5 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 10,5 10 10,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 0,10 0 0)");
+        "MULTIPOINT Z ((0 10 10),(5 10 10),(10 10 10),(0 5 5),(5 5 5),(10 5 5),(0 0 0),(5 0 0),(10 0 0))");
     elevation_visitor_checker(allocator, "POINT Z (5 5 5)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
-        "MULTIPOINT Z (0 9 5,5 9 5,9 9 5,0 5 5,5 5 5,9 5 5,0 0 5,5 0 5,9 0 5)");
+        "MULTIPOINT Z ((0 9 5),(5 9 5),(9 9 5),(0 5 5),(5 5 5),(9 5 5),(0 0 5),(5 0 5),(9 0 5))");
     elevation_visitor_checker(allocator, "MULTIPOINT Z ((5 5 5), (5 5 9))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
-        "MULTIPOINT Z (0 9 7,5 9 7,9 9 7,0 5 7,5 5 7,9 5 7,0 0 7,5 0 7,9 0 7)");
+        "MULTIPOINT Z ((0 9 7),(5 9 7),(9 9 7),(0 5 7),(5 5 7),(9 5 7),(0 0 7),(5 0 7),(9 0 7))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "LINESTRING (1 1, 9 9)",
         "LINESTRING Z (1 1 0,9 9 10)");
