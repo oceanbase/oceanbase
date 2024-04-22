@@ -1128,7 +1128,7 @@ int ObRecordType::add_record_member(const ObRecordMember &record)
     LOG_ERROR("record member count is too many", K(record_members_.count()));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-      if (common::ObCharset::case_insensitive_equal(
+      if (common::ObCharset::case_compat_mode_equal(
         record_members_.at(i).member_name_, record.member_name_)) {
         ret = OB_ENTRY_EXIST;
         LOG_WARN("dup record member found", K(ret), K(record.member_name_), K(i));
@@ -1154,7 +1154,7 @@ int ObRecordType::add_record_member(const ObString &record_name,
     LOG_WARN("record member with not null modifier must hava default value", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < record_members_.count(); ++i) {
-      if (common::ObCharset::case_insensitive_equal(
+      if (common::ObCharset::case_compat_mode_equal(
         record_members_.at(i).member_name_, record_name)) {
         ret = OB_ENTRY_EXIST;
         LOG_WARN("dup record member found", K(ret), K(record_name), K(i));
@@ -1192,7 +1192,7 @@ int64_t ObRecordType::get_record_member_index(const ObString &record_name) const
 {
   int64_t index = OB_INVALID_INDEX;
   for (int64_t i = 0; i < record_members_.count(); ++i) {
-    if (common::ObCharset::case_insensitive_equal(
+    if (common::ObCharset::case_compat_mode_equal(
         record_members_.at(i).member_name_, record_name)) {
       index = i;
       break;
