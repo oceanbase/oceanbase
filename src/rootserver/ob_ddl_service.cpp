@@ -31476,12 +31476,12 @@ int ObDDLService::grant_revoke_user(
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-    } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version) && !is_ora_mode
+    } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version) && !is_ora_mode
               && (0 != (priv_set & OB_PRIV_EXECUTE) ||
                   0 != (priv_set & OB_PRIV_ALTER_ROUTINE) ||
                   0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_3_0", K(ret), K(priv_set));
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
@@ -31966,12 +31966,12 @@ int ObDDLService::revoke_database(
     LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-  } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version) && !is_ora_mode
+  } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version) && !is_ora_mode
             && (0 != (priv_set & OB_PRIV_EXECUTE) ||
                 0 != (priv_set & OB_PRIV_ALTER_ROUTINE) ||
                 0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_3_0", K(ret), K(priv_set));
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {
@@ -32465,9 +32465,9 @@ int ObDDLService::revoke_routine(
     LOG_WARN("variable is not init");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-  } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3.1 or 4.2.3 does not support this operation", K(ret));
+    LOG_WARN("version lower than 4.3.1 or 4.2.2 does not support this operation", K(ret));
   } else if (!routine_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("routine_key is invalid", K(routine_key), K(ret));
@@ -32525,9 +32525,9 @@ int ObDDLService::grant_routine(
     LOG_WARN("variable is not init", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-  } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("version lower than 4.3.1 or 4.2.3 does not support this operation", K(ret));
+    LOG_WARN("version lower than 4.3.1 or 4.2.2 does not support this operation", K(ret));
   } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
     LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
   } else if (!routine_key.is_valid()) {
@@ -32981,7 +32981,7 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
       LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("fail to get data version", K(tenant_id));
-    } else if (ObSQLUtils::is_data_version_ge_423_or_431(data_version) && lib::Worker::CompatMode::MYSQL == compat_mode) {
+    } else if (ObSQLUtils::is_data_version_ge_422_or_431(data_version) && lib::Worker::CompatMode::MYSQL == compat_mode) {
       const ObSysVarSchema *sys_var = NULL;
       ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
       ObObj val;
@@ -33105,7 +33105,7 @@ int ObDDLService::drop_routine(const ObRoutineInfo &routine_info,
           LOG_WARN("failed to get compat mode", K(ret), K(tenant_id));
       } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
         LOG_WARN("fail to get data version", K(tenant_id));
-      } else if (ObSQLUtils::is_data_version_ge_423_or_431(data_version) && lib::Worker::CompatMode::MYSQL == compat_mode) {
+      } else if (ObSQLUtils::is_data_version_ge_422_or_431(data_version) && lib::Worker::CompatMode::MYSQL == compat_mode) {
         const ObSysVarSchema *sys_var = NULL;
         ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
         ObObj val;

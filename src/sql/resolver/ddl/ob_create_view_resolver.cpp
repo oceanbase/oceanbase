@@ -1678,8 +1678,6 @@ int ObCreateViewResolver::add_column_infos(const uint64_t tenant_id,
                  OB_FAIL(resolve_column_default_value(&select_stmt, select_item, column, alloc, session_info))) {
         // oracle mode has default expr value, not support now
         LOG_WARN("add column to table_schema failed", K(ret), K(column));
-      } else if (OB_FAIL(resolve_columns_nullable_value(&select_stmt, table_schema, select_item, column, alloc, session_info, &schema_guard))){
-        LOG_WARN("failed to add column nullable info", K(ret));
       } else if (OB_FAIL(table_schema.add_column(column))) {
         LOG_WARN("add column to table_schema failed", K(ret), K(column));
       } else {

@@ -3154,7 +3154,7 @@ bool ObSchemaChecker::enable_mysql_pl_priv_check(int64_t tenant_id, ObSchemaGett
   int ret = OB_SUCCESS;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(tenant_id));
-  } else if (lib::is_mysql_mode() && sql::ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (lib::is_mysql_mode() && sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     const ObSysVarSchema *sys_var = NULL;
     ObMalloc alloc(ObModIds::OB_TEMP_VARIABLES);
     ObObj val;

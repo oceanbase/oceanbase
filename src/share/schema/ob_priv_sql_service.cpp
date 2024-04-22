@@ -301,9 +301,9 @@ int ObPrivSqlService::grant_routine(
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("grant/revoke routine priv is not suppported when tenant's data version is below 4.3.1.0 or 4.2.3.0", KR(ret));
+    LOG_WARN("grant/revoke routine priv is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
   } else if (!routine_priv_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(routine_priv_key), K(ret));
@@ -918,9 +918,9 @@ int ObPrivSqlService::gen_routine_priv_dml(
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(exec_tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(exec_tenant_id));
-  } else if (!ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (!ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("all routine priv is not suppported when tenant's data version is below 4.3.1.0 or 4.2.3.0", KR(ret));
+    LOG_WARN("all routine priv is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
   } else {
     if ((priv_set & OB_PRIV_EXECUTE) != 0) { all_priv |= 1; }
     if ((priv_set & OB_PRIV_ALTER_ROUTINE) != 0) { all_priv |= 2; }
@@ -969,10 +969,10 @@ int ObPrivSqlService::gen_db_priv_dml(
       || OB_FAIL(dml.add_column("PRIV_SHOW_VIEW", priv_set & OB_PRIV_SHOW_VIEW ? 1 : 0))
       || OB_FAIL(dml.add_gmt_modified())) {
     LOG_WARN("add column failed", K(ret));
-  } else if (!sql::ObSQLUtils::is_data_version_ge_423_or_431(compat_version)) {
+  } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
     if (priv_others != 0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("priv others is not suppported when tenant's data version is below 4.3.1.0 or 4.2.3.0", KR(ret));
+      LOG_WARN("priv others is not suppported when tenant's data version is below 4.3.1.0 or 4.2.2.0", KR(ret));
     }
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add column failed", K(ret));
