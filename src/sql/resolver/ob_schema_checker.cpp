@@ -294,7 +294,8 @@ int ObSchemaChecker::check_table_or_index_exists(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const ObString &table_name,
-    const bool is_hidden,
+    const bool with_hidden_flag,
+    const bool is_built_in_index,
     bool &is_exist)
 {
   int ret = OB_SUCCESS;
@@ -307,13 +308,13 @@ int ObSchemaChecker::check_table_or_index_exists(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                        is_index_table, is_hidden, is_exist))) {
+                                        is_index_table, with_hidden_flag, is_exist))) {
     LOG_WARN("check table exist failed", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else if(!is_exist) {
     is_index_table = true;
     if (OB_FAIL(check_table_exists(tenant_id, database_id, table_name,
-                                   is_index_table, is_hidden, is_exist))) {
-      LOG_WARN("check index exist failed", K(tenant_id), K(database_id), K(table_name), K(ret));
+                                   is_index_table, with_hidden_flag, is_exist, is_built_in_index))) {
+      LOG_WARN("check index exist failed", K(tenant_id), K(database_id), K(table_name), K(ret), K(is_built_in_index));
     }
   }
   return ret;
@@ -323,8 +324,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
                                         const uint64_t database_id,
                                         const ObString &table_name,
                                         const bool is_index_table,
-                                        const bool is_hidden,
-                                        bool &is_exist)
+                                        const bool with_hidden_flag,
+                                        bool &is_exist,
+                                        const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
 
@@ -338,9 +340,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_id, table_name,
-                                          is_index_table, is_hidden ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id))) {
-
+    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_id, table_name, is_index_table,
+            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+            table_id, is_built_in_index))) {
       LOG_WARN("get table id failed", K(ret), K(tenant_id), K(database_id),
                K(table_name), K(is_index_table));
     } else {
@@ -374,8 +376,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
                                         const ObString &database_name,
                                         const ObString &table_name,
                                         const bool is_index_table,
-                                        const bool is_hidden,
-                                        bool &is_exist)
+                                        const bool with_hidden_flag,
+                                        bool &is_exist,
+                                        const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
 
@@ -388,8 +391,9 @@ int ObSchemaChecker::check_table_exists(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(tenant_id), K(database_name), K(table_name), K(ret));
   } else {
-    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_name, table_name,
-                                          is_index_table, is_hidden ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES, table_id))) {
+    if (OB_FAIL(schema_mgr_->get_table_id(tenant_id, database_name, table_name, is_index_table,
+            with_hidden_flag ? ObSchemaGetterGuard::USER_HIDDEN_TABLE_TYPE : ObSchemaGetterGuard::ALL_NON_HIDDEN_TYPES,
+            table_id, is_built_in_index))) {
       LOG_WARN("fail to check table exist", K(tenant_id), K(database_name), K(table_name),
                K(is_index_table), K(ret));
     } else {
@@ -774,8 +778,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
                                       const ObString &table_name,
                                       const bool is_index_table,
                                       const bool cte_table_fisrt,
-                                      const bool is_hidden,
-                                      const ObTableSchema *&table_schema)
+                                      const bool with_hidden_flag,
+                                      const ObTableSchema *&table_schema,
+                                      const bool is_built_in_index/*= false*/)
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
@@ -790,9 +795,9 @@ int ObSchemaChecker::get_table_schema(const uint64_t tenant_id,
     LOG_WARN("invalid arguments", K(tenant_id), K(database_id), K(table_name), K(ret));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(schema_mgr_->get_table_schema(tenant_id, database_id, table_name,
-        is_index_table, table, is_hidden))) {
+        is_index_table, table, with_hidden_flag, is_built_in_index))) {
     LOG_WARN("get table schema failed", K(tenant_id), K(database_id), K(table_name),
-             K(is_index_table), K(ret));
+             K(with_hidden_flag), K(is_built_in_index), K(is_index_table), K(ret));
   } else {
     // 也有可能是临时cte递归表schema与已有表重名，
     // 这个时候必须由cte递归表schema优先(same with oracle)

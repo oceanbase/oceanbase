@@ -35,7 +35,8 @@ public:
               common::ObIArray<ObWinFunRawExpr*> &win_exprs,
               common::ObIArray<ObUDFInfo> &udf_exprs,
               common::ObIArray<ObOpRawExpr*> &op_exprs,
-              common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs);
+              common::ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+              common::ObIArray<ObMatchFunRawExpr*> &match_exprs);
 
   bool is_contains_assignment() {return is_contains_assignment_;}
   void set_contains_assignment(bool v) {is_contains_assignment_ = v;}
@@ -139,6 +140,7 @@ private:
                               ObSysFunRawExpr *&expr);
   int resolve_udf_param_expr(const ParseNode *node,
                              common::ObIArray<ObRawExpr*> &param_exprs);
+  int process_match_against(const ParseNode *node, ObRawExpr *&expr);
   int process_window_function_node(const ParseNode *node, ObRawExpr *&expr);
   int process_sort_list_node(const ParseNode *node, common::ObIArray<OrderItem> &order_items);
   int process_frame_node(const ParseNode *node,

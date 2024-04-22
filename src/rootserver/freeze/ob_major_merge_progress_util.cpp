@@ -28,6 +28,7 @@ ObTableCompactionInfo &ObTableCompactionInfo::operator=(const ObTableCompactionI
   tablet_cnt_ = other.tablet_cnt_;
   status_ = other.status_;
   unfinish_index_cnt_ = other.unfinish_index_cnt_;
+  need_check_fts_ = other.need_check_fts_;
   return *this;
 }
 
@@ -55,7 +56,8 @@ ObTableCompactionInfo::ObTableCompactionInfo()
   : table_id_(OB_INVALID_ID),
     tablet_cnt_(0),
     unfinish_index_cnt_(INVALID_INDEX_CNT),
-    status_(Status::INITIAL)
+    status_(Status::INITIAL),
+    need_check_fts_(false)
 {
 }
 /**

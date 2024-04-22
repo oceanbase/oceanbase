@@ -2518,7 +2518,7 @@ struct ObIndexOption : public ObTableOption
 public:
   ObIndexOption() :
     ObTableOption(),
-    parser_name_(common::OB_DEFAULT_FULLTEXT_PARSER_NAME),
+    parser_name_(),
     index_attributes_set_(common::OB_DEFAULT_INDEX_ATTRIBUTES_SET)
   { }
 
@@ -2526,7 +2526,7 @@ public:
   void reset()
   {
     ObTableOption::reset();
-    parser_name_ = common::ObString::make_string(common::OB_DEFAULT_FULLTEXT_PARSER_NAME);
+    parser_name_.reset();
   }
   DECLARE_TO_STRING;
 
@@ -2633,15 +2633,12 @@ public:
   }
   inline bool is_unique_primary_index() const
   {
-    return share::schema::INDEX_TYPE_UNIQUE_LOCAL == index_type_
-        || share::schema::INDEX_TYPE_UNIQUE_GLOBAL == index_type_
-        || share::schema::INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type_
-        || share::schema::INDEX_TYPE_PRIMARY == index_type_;
+    return ObSimpleTableSchemaV2::is_unique_index(index_type_)
+            || share::schema::INDEX_TYPE_PRIMARY == index_type_;
   }
   DECLARE_VIRTUAL_TO_STRING;
-  inline bool is_spatial_index() const { return share::schema::INDEX_TYPE_SPATIAL_LOCAL == index_type_
-                                                || share::schema::INDEX_TYPE_SPATIAL_GLOBAL == index_type_
-                                                || share::schema::INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type_; }
+  inline bool is_spatial_index() const { return ObSimpleTableSchemaV2::is_spatial_index(index_type_); }
+  inline bool is_multivalue_index() const { return is_multivalue_index_aux(index_type_); }
 
 //todo @qilu:only for each_cg now, when support customized cg ,refine this
   typedef common::ObSEArray<uint64_t, common::DEFAULT_CUSTOMIZED_CG_NUM> ObCGColumnList;

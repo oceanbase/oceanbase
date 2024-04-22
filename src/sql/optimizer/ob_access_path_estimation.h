@@ -43,7 +43,11 @@ public:
                                const bool is_inner_path,
                                const ObIArray<ObRawExpr*> &filter_exprs,
                                ObBaseTableEstMethod &method);
-
+  static int inner_estimate_rowcount(ObOptimizerContext &ctx,
+                                      common::ObIArray<AccessPath *> &paths,
+                                      const bool is_inner_path,
+                                      const ObIArray<ObRawExpr*> &filter_exprs,
+                                      bool &is_use_ds);
   static int estimate_full_table_rowcount(ObOptimizerContext &ctx,
                                           const ObTablePartitionInfo &table_part_info,
                                           ObTableMetaInfo &meta);

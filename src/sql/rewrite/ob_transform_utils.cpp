@@ -3062,6 +3062,14 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                                                           col_exprs)))) {
             LOG_WARN("failed to get spatial filter column", K(ret));
           }
+        } else if (expr->is_json_domain_expr()) {
+          ObRawExpr *json_expr = ObRawExprUtils::skip_inner_added_expr(expr);
+          if (OB_FAIL(SMART_CALL(get_simple_filter_column(stmt,
+                                                          json_expr,
+                                                          table_id,
+                                                          col_exprs)))) {
+            LOG_WARN("failed to get spatial filter column", K(ret));
+          }
         }
         break;
       }
@@ -15034,6 +15042,54 @@ int ObTransformUtils::check_child_projection_validity(const ObSelectStmt *child_
   return ret;
 }
 
+int ObTransformUtils::check_fulltext_index_match_column(const ColumnReferenceSet &match_column_set,
+                                                        const ObTableSchema *table_schema,
+                                                        const ObTableSchema *inv_idx_schema,
+                                                        bool &found_matched_index)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *main_tbl_word_seg_col_schema = nullptr;
+  const ObColumnSchemaV2 *idx_tbl_word_seg_col_schema = nullptr;
+
+  if (OB_ISNULL(inv_idx_schema) || OB_ISNULL(table_schema) || OB_UNLIKELY(!inv_idx_schema->is_fts_index())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table / index schema", K(ret), KPC(table_schema), KPC(inv_idx_schema));
+  }
+
+  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < inv_idx_schema->get_column_count(); ++col_idx) {
+    const ObColumnSchemaV2 *trav_col_schema = nullptr;
+    if (OB_ISNULL(trav_col_schema = inv_idx_schema->get_column_schema_by_idx(col_idx))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null col schema", K(ret), K(col_idx), KPC(inv_idx_schema));
+    } else if (trav_col_schema->is_word_segment_column()) {
+      idx_tbl_word_seg_col_schema = trav_col_schema;
+      break;
+    }
+  }
+
+  ObSEArray<uint64_t, 4> indexed_column_ids;
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(idx_tbl_word_seg_col_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected word segment column not found", K(ret), KPC(inv_idx_schema));
+  } else if (OB_ISNULL(main_tbl_word_seg_col_schema =
+      table_schema->get_column_schema(idx_tbl_word_seg_col_schema->get_column_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected word segment column on main table not found", K(ret));
+  } else if (OB_FAIL(main_tbl_word_seg_col_schema->get_cascaded_column_ids(indexed_column_ids))) {
+    LOG_WARN("failed to get cascaded column ids", K(ret));
+  } else if (indexed_column_ids.count() == match_column_set.num_members()) {
+    bool col_id_mismatch = false;
+    for (int64_t i = 0; !col_id_mismatch && i < indexed_column_ids.count(); ++i) {
+      if (!match_column_set.has_member(indexed_column_ids.at(i))) {
+        col_id_mismatch = true;
+      }
+    }
+    found_matched_index = !col_id_mismatch;
+  }
+  return ret;
+}
+
 int ObTransformUtils::add_aggr_winfun_expr(ObSelectStmt *stmt,
                                            ObRawExpr *expr)
 {
@@ -15273,6 +15329,59 @@ bool ObTransformUtils::is_const_null(ObRawExpr &expr)
            (lib::is_oracle_mode() && expr.get_result_type().get_param().is_null_oracle());
   }
   return bret;
+}
+
+int ObTransformUtils::check_table_with_fulltext_recursively(TableItem *table,
+                                                            ObSchemaChecker *schema_checker,
+                                                            ObSQLSessionInfo *session_info,
+                                                            bool &has_fulltext_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(table) || OB_ISNULL(schema_checker) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (table->is_generated_table() || table->is_temp_table()) {
+    if (OB_ISNULL(table->ref_query_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else {
+      ObIArray<TableItem*> &tables = table->ref_query_->get_table_items();
+      for (int64_t i = 0; OB_SUCC(ret) && !has_fulltext_index && i < tables.count(); ++i) {
+        if (SMART_CALL(check_table_with_fulltext_recursively(tables.at(i),
+                                                             schema_checker,
+                                                             session_info,
+                                                             has_fulltext_index))) {
+          LOG_WARN("failed to check table with fulltext recursively", K(ret));
+        }
+      }
+    }
+  } else if (table->is_basic_table()) {
+    const ObTableSchema* table_schema = NULL;
+    if (OB_FAIL(schema_checker->get_table_schema(session_info->get_effective_tenant_id(),
+                                                 table->ref_id_,
+                                                 table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret));
+    } else if (OB_FAIL(table_schema->check_has_fts_index(*schema_checker->get_schema_guard(),
+                                                         has_fulltext_index))) {
+      LOG_WARN("failed to check has fts index", K(ret));
+    }
+  } else if (table->is_joined_table()) {
+    JoinedTable *joined_table = static_cast<JoinedTable*>(table);
+    if (OB_FAIL(SMART_CALL(check_table_with_fulltext_recursively(joined_table->left_table_,
+                                                                 schema_checker,
+                                                                 session_info,
+                                                                 has_fulltext_index)))) {
+      LOG_WARN("failed to check left table", K(ret));
+    } else if (has_fulltext_index) {
+      // do nothing
+    } else if (OB_FAIL(SMART_CALL(check_table_with_fulltext_recursively(joined_table->right_table_,
+                                                                        schema_checker,
+                                                                        session_info,
+                                                                        has_fulltext_index)))) {
+      LOG_WARN("failed to check right table", K(ret));
+    }
+  }
+  return ret;
 }
 
 // if sql is only one row, is_full_group_by skipped checking orderby in resolver.

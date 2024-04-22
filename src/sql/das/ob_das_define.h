@@ -20,8 +20,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
 #define DAS_SCAN_OP(_task_op) \
-    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() && \
-        ::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
+    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() ? \
         nullptr : static_cast<::oceanbase::sql::ObDASScanOp*>(_task_op))
 #define DAS_GROUP_SCAN_OP(_task_op) \
     (::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
@@ -45,7 +44,6 @@ class ObExecContext;
 class ObPhysicalPlan;
 class ObChunkDatumStore;
 class ObEvalCtx;
-class ObPhyTableLocation;
 
 namespace das
 {
@@ -80,6 +78,10 @@ enum ObDASOpType
   DAS_OP_TABLE_BATCH_SCAN,
   DAS_OP_SPLIT_MULTI_RANGES,
   DAS_OP_GET_RANGES_COST,
+  DAS_OP_TABLE_LOOKUP,
+  DAS_OP_IR_SCAN,
+  DAS_OP_IR_AUX_LOOKUP,
+  DAS_OP_SORT,
   //append OpType before me
   DAS_OP_MAX
 };
@@ -338,15 +340,21 @@ struct ObDASBaseCtDef
   OB_UNIS_VERSION_PV();
 public:
   ObDASOpType op_type_;
+  ObDASBaseCtDef **children_;
+  uint32_t children_cnt_;
 
   virtual ~ObDASBaseCtDef() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_type));
+  VIRTUAL_TO_STRING_KV(K_(op_type), K_(children_cnt));
+
   virtual bool has_expr() const { return false; }
   virtual bool has_pdfilter_or_calc_expr() const { return false; }
   virtual bool has_pl_udf() const { return false; }
+
 protected:
   ObDASBaseCtDef(ObDASOpType op_type)
-    : op_type_(op_type)
+    : op_type_(op_type),
+      children_(nullptr),
+      children_cnt_(0)
   { }
 };
 
@@ -357,16 +365,22 @@ struct ObDASBaseRtDef
   OB_UNIS_VERSION_PV();
 public:
   ObDASOpType op_type_;
+  const ObDASBaseCtDef *ctdef_;
   ObEvalCtx *eval_ctx_; //nullptr in DML DAS Op
   ObDASTableLoc *table_loc_;
+  ObDASBaseRtDef **children_;
+  uint32_t children_cnt_;
 
   virtual ~ObDASBaseRtDef() = default;
-  VIRTUAL_TO_STRING_KV(K_(op_type));
+  VIRTUAL_TO_STRING_KV(K_(op_type), K_(children_cnt));
 protected:
   ObDASBaseRtDef(ObDASOpType op_type)
     : op_type_(op_type),
+      ctdef_(nullptr),
       eval_ctx_(NULL),
-      table_loc_(nullptr)
+      table_loc_(nullptr),
+      children_(nullptr),
+      children_cnt_(0)
   { }
 };
 typedef common::ObFixedArray<const ObDASBaseCtDef*, common::ObIAllocator> DASCtDefFixedArray;

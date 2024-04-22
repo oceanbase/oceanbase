@@ -50,10 +50,16 @@ public:
   OB_INLINE ObIndexStatus get_index_status() const { return index_status_; }
   OB_INLINE int64_t get_rowkey_column_num() const { return read_info_.get_schema_rowkey_count(); }
   OB_INLINE int64_t get_shadow_rowkey_column_num() const { return shadow_rowkey_column_num_; }
+  OB_INLINE int64_t get_data_table_rowkey_column_num() const { return data_table_rowkey_column_num_; }
+  OB_INLINE void set_data_table_rowkey_column_num(int64_t cnt) { data_table_rowkey_column_num_ = cnt; }
+  OB_INLINE int64_t get_doc_id_col_id() const { return doc_id_col_id_; }
   OB_INLINE int64_t get_fulltext_col_id() const { return fulltext_col_id_; }
+  OB_INLINE const common::ObString &get_fts_parser_name() const { return fts_parser_name_; }
   OB_INLINE uint64_t get_spatial_geo_col_id() const { return spatial_geo_col_id_; }
   OB_INLINE uint64_t get_spatial_cellid_col_id() const { return spatial_cellid_col_id_; }
   OB_INLINE uint64_t get_spatial_mbr_col_id() const { return spatial_mbr_col_id_; }
+  OB_INLINE int64_t get_multivalue_col_id() const { return multivalue_col_id_; }
+  OB_INLINE int64_t get_multivalue_array_col_id() const { return multivalue_arr_col_id_; }
   OB_INLINE int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
   OB_INLINE int64_t get_column_count() const { return columns_.count(); }
   OB_INLINE const Columns &get_columns() const { return columns_; }
@@ -70,12 +76,18 @@ public:
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
   OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
+  OB_INLINE bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
+  OB_INLINE bool is_doc_rowkey() const { return share::schema::is_doc_rowkey_aux(index_type_); }
+  OB_INLINE bool is_fts_index_aux() const { return share::schema::is_fts_index_aux(index_type_); }
+  OB_INLINE bool is_multivalue_index() const { return share::schema::is_multivalue_index(index_type_); }
+  OB_INLINE bool is_multivalue_index_aux() const { return share::schema::is_multivalue_index_aux(index_type_); }
   OB_INLINE bool is_index_local_storage() const { return share::schema::is_index_local_storage(index_type_); }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
 
   const ObColumnParam * get_column(const uint64_t column_id) const;
   const ObColumnParam * get_column_by_idx(const int64_t idx) const;
+  ObColumnParam * get_column_by_idx(const int64_t idx);
   const ObColumnParam * get_rowkey_column_by_idx(const int64_t idx) const;
   int get_rowkey_column_ids(common::ObIArray<ObColDesc> &column_ids) const;
   int get_rowkey_column_ids(common::ObIArray<uint64_t> &column_ids) const;
@@ -101,11 +113,13 @@ private:
   ObIndexType index_type_;
   ObIndexStatus index_status_;
   int64_t shadow_rowkey_column_num_;
+  uint64_t doc_id_col_id_;
   uint64_t fulltext_col_id_;
   uint64_t spatial_geo_col_id_; // geometry column id in data table_schema.
   uint64_t spatial_cellid_col_id_; // cellid column id in index table_schema.
   uint64_t spatial_mbr_col_id_; // mbr column id in index table_schema.
   common::ObString index_name_;
+  common::ObString fts_parser_name_;
   //generated storage param from columns_ids_ in ObTableModify, for performance improvement
   Columns columns_;
   ColumnMap col_map_;
@@ -138,6 +152,7 @@ public:
   int prepare_storage_param(const common::ObIArray<uint64_t> &column_ids);
   OB_INLINE bool is_valid() const { return data_table_.is_valid(); }
   OB_INLINE const ObTableSchemaParam & get_data_table() const { return data_table_; }
+  OB_INLINE ObTableSchemaParam& get_data_table_ref() { return data_table_; }
   OB_INLINE const ObColDescArray & get_col_descs() const { return col_descs_; }
   OB_INLINE const ColumnMap &get_col_map() const { return col_map_; }
   DECLARE_TO_STRING;

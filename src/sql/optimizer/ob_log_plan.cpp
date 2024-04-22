@@ -4329,6 +4329,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_is_index_global(ap->is_global_index_);
     scan->set_index_back(ap->est_cost_info_.index_meta_info_.is_index_back_);
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
+    scan->set_is_multivalue_index(ap->est_cost_info_.index_meta_info_.is_multivalue_index_);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -4361,10 +4362,29 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(scan->set_table_scan_filters(ap->filter_))) {
+      ObSEArray<ObRawExpr *, 8> non_match_filters;
+      ObSEArray<ObRawExpr *, 2> match_filters;
+      if (OB_FAIL(ObRawExprUtils::extract_match_against_filters(ap->filter_,
+                                                                non_match_filters,
+                                                                match_filters))) {
+        LOG_WARN("failed to extract ir fitler from filters", K(ret), K(ap->filter_));
+      } else if (match_filters.count() > 0) {
+        if (OB_FAIL(prepare_text_retrieval_scan(match_filters, scan))) {
+          LOG_WARN("failed to allocate text ir scan", K(ret));
+        } else if (OB_FAIL(scan->set_table_scan_filters(non_match_filters))) {
+          LOG_WARN("failed to set filters", K(ret));
+        } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
+          LOG_WARN("failed to append pushdown filters", K(ret));
+        } else {
+          LOG_DEBUG("handle text ir expr in plan", K(ret), K(non_match_filters), K(match_filters));
+        }
+      } else if (OB_FAIL(scan->set_table_scan_filters(ap->filter_))) {
         LOG_WARN("failed to set filters", K(ret));
       } else if (OB_FAIL(append(scan->get_pushdown_filter_exprs(), ap->pushdown_filters_))) {
         LOG_WARN("failed to append pushdown filters", K(ret));
+      } else if (ap->est_cost_info_.index_meta_info_.is_multivalue_index_ &&
+                 OB_FAIL(prepare_multivalue_retrieval_scan(scan))) {
+        LOG_WARN("failed to prepare multivalue doc_rowkey ", K(ret));
       }
     }
 
@@ -8443,7 +8463,7 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
   bool has_select_into = false;
   bool is_single = true;
   bool has_order_by = false;
-  if (OB_ISNULL(top)) {
+  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by))) {
@@ -8481,8 +8501,22 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     }
 
     // allocate push down sort if necessary
-    if (OB_SUCC(ret) &&
-        (exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
+    bool need_further_sort = true;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_SUCC(ret) && NULL != topn_expr && need_sort &&
+               OB_FAIL(try_push_topn_into_text_retrieval_scan(top,
+                                                              topn_expr,
+                                                              get_stmt()->get_limit_expr(),
+                                                              get_stmt()->get_offset_expr(),
+                                                              is_fetch_with_ties,
+                                                              exch_info.need_exchange(),
+                                                              sort_keys,
+                                                              need_further_sort))) {
+      LOG_WARN("failed to push topn into text retrieval scan", K(ret));
+    } else if (!need_further_sort) {
+      // do nothing
+    } else if ((exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
         (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;
@@ -8903,7 +8937,8 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
         !get_stmt()->is_calc_found_rows() && !table_scan->is_sample_scan() &&
         !(table_scan->get_is_index_global() && table_scan->get_index_back() && table_scan->has_index_lookup_filter()) &&
         (NULL == table_scan->get_limit_expr() ||
-         ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr()))) {
+         ObOptimizerUtil::is_point_based_sub_expr(limit_expr, table_scan->get_limit_expr())) &&
+         table_scan->get_text_retrieval_info().topk_limit_expr_ == NULL) {
       if (!top->is_distributed()) {
         new_limit_expr = limit_expr;
         new_offset_expr = offset_expr;
@@ -8918,6 +8953,8 @@ int ObLogPlan::try_push_limit_into_table_scan(ObLogicalOperator *top,
       } else {
         is_pushed = true;
       }
+    } else if (OB_NOT_NULL(table_scan->get_text_retrieval_info().topk_limit_expr_)) {
+      is_pushed = true;
     }
   } else { /*do nothing*/ }
   return ret;
@@ -12619,8 +12656,15 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       } else if (tsc_op.get_index_back()) {
         if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_ref_table_id()))) {
           LOG_WARN("store the related table id failed", K(ret));
+        } else if (tsc_op.need_doc_id_index_back() &&
+            OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_doc_id_index_table_id()))) {
+          LOG_WARN("store doc id index back aux tid failed", K(ret));
+        } else if (tsc_op.is_text_retrieval_scan() &&
+            OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_text_retrieval_info().fwd_idx_tid_))) {
+          LOG_WARN("store forward index id for text retrieval failed", K(ret));
         }
       }
+
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));
       }
@@ -13003,7 +13047,6 @@ bool ObLogPlan::has_depend_table(const ObRelIds& table_ids)
   }
   return b_ret;
 }
-
 
 int ObLogPlan::allocate_output_expr_for_values_op(ObLogicalOperator &values_op)
 {
@@ -15044,6 +15087,197 @@ int ObLogPlan::compute_duplicate_table_replicas(ObLogicalOperator *op)
       } else {
         phy_part_loc.set_selected_replica_idx(dup_table_pos);
       }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, ObLogicalOperator *scan)
+{
+  // TODO: only support one match against expr as filter for now
+  int ret = OB_SUCCESS;
+  ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(scan);
+  ObRawExpr *match_pred = NULL;
+  ObMatchFunRawExpr *match_against = NULL;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session = NULL;
+  const ObTableSchema *table_schema = NULL;
+  const ObTableSchema *inv_idx_schema = NULL;
+  const ObTableSchema *fwd_idx_schema = NULL;
+  uint64_t doc_id_rowkey_tid = OB_INVALID_ID;
+  uint64_t fwd_idx_tid = OB_INVALID_ID;
+  uint64_t inv_idx_tid = OB_INVALID_ID;
+  ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+
+  if (OB_UNLIKELY(1 != exprs.count()) || OB_ISNULL(match_pred = exprs.at(0)) || OB_ISNULL(scan) ||
+      OB_ISNULL(get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumsnts", K(ret), KPC(match_pred), KP(scan));
+  } else if (OB_ISNULL(get_stmt())
+    || OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+    || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointers", K(ret), KP(get_stmt()), KP(schema_guard), KP(session));
+  } else if (OB_UNLIKELY(!match_pred->has_flag(CNT_MATCH_EXPR)
+      || LOG_TABLE_SCAN != scan->get_type()
+      || 0 == match_pred->get_param_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node or expr passed in", KPC(match_pred), K(scan->get_type()), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_pred->get_param_count(); ++i) {
+      ObRawExpr *curr_expr = match_pred->get_param_expr(i);
+      if (OB_ISNULL(curr_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (curr_expr->get_expr_type() == T_FUN_MATCH_AGAINST) {
+        if (OB_NOT_NULL(match_against)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported match filter with more than one match against expr",
+              K(ret), KPC(match_pred), KPC(match_against));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one distinct match against expr");
+        } else {
+          match_against = static_cast<ObMatchFunRawExpr *>(curr_expr);
+        }
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(match_against)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null match against expr", K(ret), KPC(match_pred), KPC(match_against));
+  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                    table_scan->get_real_ref_table_id(),
+                                                    table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema", K(ret));
+  } else if (OB_FAIL(table_schema->get_simple_index_infos(index_infos))) {
+    LOG_WARN("failed to get index infos", K(ret));
+  } else if (OB_FAIL(table_schema->get_doc_id_rowkey_tid(doc_id_rowkey_tid))) {
+    LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
+  } else if (OB_FALSE_IT(inv_idx_tid = table_scan->get_index_table_id())) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                    inv_idx_tid,
+                                                    inv_idx_schema))) {
+    LOG_WARN("failed to get inverted index id", K(ret));
+  } else if (OB_ISNULL(inv_idx_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null index schema", K(ret));
+  } else {
+    bool found_fwd_idx = false;
+    const ObString &inv_idx_name = inv_idx_schema->get_table_name_str();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+      const ObAuxTableMetaInfo &index_info = index_infos.at(i);
+      if (!share::schema::is_fts_doc_word_aux(index_info.index_type_)) {
+        // skip
+      } else if (OB_FAIL(schema_guard->get_table_schema(
+          session->get_effective_tenant_id(), index_info.table_id_, fwd_idx_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (OB_ISNULL(fwd_idx_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpecter nullptr to fwd idx schema", K(ret));
+      } else {
+        const ObString &fwd_idx_name = fwd_idx_schema->get_table_name_str();
+        // 依赖正排索引表名的后缀长度
+        int64_t fwd_idx_suffix_len = strlen("_fts_doc_word");
+        ObString fwd_idx_prefix_name;
+        if (OB_UNLIKELY(fwd_idx_name.length() <= fwd_idx_suffix_len)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret), K(fwd_idx_name), K(fwd_idx_suffix_len));
+        } else if (OB_FALSE_IT(fwd_idx_prefix_name.assign_ptr(fwd_idx_name.ptr(),
+                                                              fwd_idx_name.length() - fwd_idx_suffix_len))) {
+        } else if (fwd_idx_prefix_name.compare(inv_idx_name) == 0) {
+          found_fwd_idx = true;
+          fwd_idx_tid = fwd_idx_schema->get_table_id();
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObTextRetrievalInfo &tr_info = table_scan->get_text_retrieval_info();
+    tr_info.match_expr_ = match_against;
+    tr_info.inv_idx_tid_ = inv_idx_tid;
+    tr_info.fwd_idx_tid_ = fwd_idx_tid;
+    tr_info.doc_id_idx_tid_ = doc_id_rowkey_tid;
+    tr_info.pushdown_match_filter_ = match_pred;
+    table_scan->set_doc_id_index_table_id(doc_id_rowkey_tid);
+    table_scan->set_index_back(true);
+  }
+  return ret;
+}
+
+int ObLogPlan::prepare_multivalue_retrieval_scan(ObLogicalOperator *scan)
+{
+  int ret = OB_SUCCESS;
+  ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(scan);
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  ObSQLSessionInfo *session = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  uint64_t doc_id_rowkey_tid = OB_INVALID_ID;
+
+  if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
+      || OB_ISNULL(session = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointers", K(ret), KP(get_stmt()), KP(schema_guard), KP(session));
+  } else if (OB_FAIL(schema_guard->get_table_schema(
+      session->get_effective_tenant_id(), table_scan->get_real_ref_table_id(), table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null table schema", K(ret));
+  } else if (OB_FAIL(table_schema->get_doc_id_rowkey_tid(doc_id_rowkey_tid))) {
+    LOG_WARN("failed to get doc_id_rowkey table id", K(ret));
+  } else {
+    table_scan->set_doc_id_index_table_id(doc_id_rowkey_tid);
+    table_scan->set_index_back(true);
+  }
+  return ret;
+}
+
+int ObLogPlan::try_push_topn_into_text_retrieval_scan(ObLogicalOperator *&top,
+                                                      ObRawExpr *topn_expr,
+                                                      ObRawExpr *limit_expr,
+                                                      ObRawExpr *offset_expr,
+                                                      bool is_fetch_with_ties,
+                                                      bool need_exchange,
+                                                      const ObIArray<OrderItem> &sort_keys,
+                                                      bool &need_further_sort)
+{
+  int ret = OB_SUCCESS;
+  need_further_sort = true;
+  ObLogTableScan *table_scan = NULL;
+  bool has_multi_sort_keys = false;
+  ObRawExpr *pushed_limit_expr = NULL;
+  ObRawExpr *pushed_offset_expr = NULL;
+  if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(top), K(limit_expr), K(get_stmt()), K(ret));
+  } else if (log_op_def::LOG_TABLE_SCAN != top->get_type()) {
+    // do nothing
+  } else if (OB_FALSE_IT(table_scan = static_cast<ObLogTableScan*>(top))) {
+  } else if (!table_scan->is_text_retrieval_scan()) {
+    // do nothing
+  } else if (table_scan->get_filter_exprs().count() != 0 ||
+             table_scan->get_pushdown_filter_exprs().count() != 0) {
+    // do nothing, topn pushdown requires that only match filter exists on the base table.
+  } else if (sort_keys.count() >= 1 && OB_NOT_NULL(sort_keys.at(0).expr_) &&
+             sort_keys.at(0).expr_ == table_scan->get_text_retrieval_info().match_expr_) {
+    // only accept match expr as prefix sort key.
+    has_multi_sort_keys = sort_keys.count() == 1 ? false : true;
+    need_further_sort = has_multi_sort_keys || table_scan->use_das() || need_exchange;
+    pushed_limit_expr = need_further_sort ? topn_expr : limit_expr;
+    pushed_offset_expr = need_further_sort ? NULL : offset_expr;
+    ObSEArray<OrderItem, 1> tmp_sort_keys;
+    table_scan->get_text_retrieval_info().topk_limit_expr_ = pushed_limit_expr;
+    table_scan->get_text_retrieval_info().topk_offset_expr_ = pushed_offset_expr;
+    table_scan->get_text_retrieval_info().sort_key_.expr_ = sort_keys.at(0).expr_;
+    table_scan->get_text_retrieval_info().sort_key_.order_type_ = sort_keys.at(0).order_type_;
+    table_scan->get_text_retrieval_info().with_ties_ = (has_multi_sort_keys || is_fetch_with_ties);
+    if (OB_FAIL(tmp_sort_keys.push_back(sort_keys.at(0)))) {
+      LOG_WARN("failed to push back order item", K(ret));
+    } else if (OB_FAIL(table_scan->set_op_ordering(tmp_sort_keys))) {
+      LOG_WARN("failed to set op ordering", K(ret));
     }
   }
   return ret;

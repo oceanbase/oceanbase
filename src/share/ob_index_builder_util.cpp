@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SHARE
 #include "ob_index_builder_util.h"
+#include "ob_fts_index_builder_util.h"
 
 #include "share/ob_define.h"
 #include "lib/container/ob_array_iterator.h"
@@ -34,8 +35,12 @@ namespace share
 {
 void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &column)
 {
-  if ((column.is_generated_column() && !column.is_fulltext_column() &&
-      !column.is_spatial_generated_column()) || column.is_identity_column()) {
+  if ((column.is_generated_column() &&
+       !column.is_fulltext_column() &&
+       !column.is_spatial_generated_column() &&
+       !column.is_multivalue_generated_column() &&
+       !column.is_multivalue_generated_array_column())
+      || column.is_identity_column()) {
     if (column.is_virtual_generated_column()) {
       column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
     } else if (column.is_stored_generated_column()) {
@@ -133,7 +138,20 @@ int ObIndexBuilderUtil::add_column(
       if (column.is_spatial_generated_column()) {
         column.set_geo_col_id(data_column->get_geo_col_id());
       }
-
+      if (column.is_fulltext_column()) {
+        ObObj default_value;
+        column.del_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
+        if (column.is_word_segment_column()) {
+          const int64_t data_length = MIN(column.get_data_length(), MIN(OB_MAX_ROW_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH));
+          column.set_data_length(data_length);
+        }
+        column.set_is_hidden(false);
+        if (FAILEDx(column.set_orig_default_value(default_value))) {
+          LOG_WARN("set orig default value failed", K(ret));
+        } else if (OB_FAIL(column.set_cur_default_value(default_value))) {
+          LOG_WARN("set current default value failed", K(ret));
+        }
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(table_schema.add_column(column))) {
         LOG_WARN("add_column failed", K(column), K(ret));
@@ -345,7 +363,45 @@ int ObIndexBuilderUtil::set_index_table_columns(
       use_mysql_errno = !is_oracle_mode;
     }
   }
-  if (OB_SUCC(ret)) {
+  // no matter what index col of data table is, columns of 4 aux fts table is fixed
+  if (OB_FAIL(ret)) {
+  } else if (is_fts_index(arg.index_type_) ||
+             is_multivalue_index(arg.index_type_)) {
+    if (is_doc_rowkey_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_doc_rowkey_table_columns(arg,
+                                                                          data_schema,
+                                                                          index_schema))) {
+        LOG_WARN("failed to set fts doc rowkey table", K(ret));
+      }
+    } else if (is_rowkey_doc_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_rowkey_doc_table_columns(arg,
+                                                                          data_schema,
+                                                                          index_schema))) {
+        LOG_WARN("failed to set fts rowkey doc table", K(ret));
+      }
+    } else if (is_fts_index_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_index_table_columns(arg,
+                                                                     data_schema,
+                                                                     index_schema))) {
+        LOG_WARN("failed to set fts index table", K(ret));
+      }
+    } else if (is_fts_doc_word_aux(arg.index_type_)) {
+      if (OB_FAIL(ObFtsIndexBuilderUtil::set_fts_index_table_columns(arg,
+                                                                     data_schema,
+                                                                     index_schema))) {
+      LOG_WARN("failed to set fts doc word table", K(ret));
+      }
+    } else if (is_multivalue_index(arg.index_type_)) {
+      if (OB_FAIL(ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(arg,
+                                                                                 data_schema,
+                                                                                 index_schema))) {
+        LOG_WARN("failed to set multivalue index table", K(ret));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fts arg index type not expected", K(ret));
+    }
+  } else { // not fts index
     HEAP_VAR(ObRowDesc, row_desc) {
       bool is_index_column = false;
       // index columns
@@ -582,7 +638,10 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     ObIArray<ObColumnSchemaV2*> &gen_columns)
 {
   int ret = OB_SUCCESS;
-  if (ObSimpleTableSchemaV2::is_spatial_index(arg.index_type_)) {
+  if (arg.fulltext_columns_.count() > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fulltext_columns_ is deprecated!", K(ret));
+  } else if (ObSimpleTableSchemaV2::is_spatial_index(arg.index_type_)) {
     ObSEArray<ObColumnSchemaV2*, 2>  spatial_cols;
     uint64_t tenant_id = data_schema.get_tenant_id();
     uint64_t tenant_data_version = 0;
@@ -590,7 +649,8 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
       LOG_WARN("get tenant data version failed", K(ret));
     } else if (tenant_data_version < DATA_VERSION_4_1_0_0) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("tenant version is less than 4.1, spatial index not supported", K(ret), K(tenant_data_version));
+      LOG_WARN("tenant version is less than 4.1, spatial index not supported",
+          K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.1, spatial index");
     } else if (OB_FAIL(adjust_spatial_args(arg, data_schema, allocator, spatial_cols))) {
       LOG_WARN("adjust spatial args failed", K(ret));
@@ -599,123 +659,16 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
     } else if (OB_FAIL(gen_columns.push_back(spatial_cols.at(1)))) {
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
     }
-  } else if (arg.fulltext_columns_.count() > 0) {
-    ObColumnSchemaV2 *ft_col = NULL;
-    if (OB_FAIL(adjust_fulltext_args(arg, data_schema, allocator, ft_col))) {
-      LOG_WARN("adjust fulltext args failed", K(ret));
-    } else if (ft_col != NULL) {
-      if (OB_FAIL(gen_columns.push_back(ft_col))) {
-        LOG_WARN("store fulltext column failed", K(ret));
-      }
+  } else if (is_fts_index(arg.index_type_)) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, gen_columns))) {
+      LOG_WARN("failed to adjust fts args", K(ret));
+    }
+  } else if (is_multivalue_index(arg.index_type_)) {
+    if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, gen_columns))) {
+      LOG_WARN("failed to adjust multivalue args", K(ret));
     }
   } else if (OB_FAIL(adjust_ordinary_index_column_args(arg, data_schema, allocator, gen_columns))) {
     LOG_WARN("adjust ordinary index column args failed", K(ret));
-  }
-  return ret;
-}
-
-int ObIndexBuilderUtil::adjust_fulltext_columns(
-    ObCreateIndexArg &arg,
-    OrderFTColumns &ft_columns)
-{
-  int ret = OB_SUCCESS;
-  ObIArray<ObString> &fulltext_columns = arg.fulltext_columns_;
-  ObIArray<ObColumnSortItem> &sort_items = arg.index_columns_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < fulltext_columns.count(); ++i) {
-    const ObString &ft_name = fulltext_columns.at(i);
-    bool found_ft = false;
-    for (int64_t j = 0; OB_SUCC(ret) && !found_ft && j < sort_items.count(); ++j) {
-      const ObColumnSortItem &sort_item = sort_items.at(j);
-      if (ObCharset::case_insensitive_equal(sort_item.column_name_, ft_name)) {
-        found_ft = true;
-        ret = ft_columns.push_back(std::pair<int64_t, ObString>(j, ft_name));
-      }
-    }
-    if (!found_ft) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fulltext column not exists in index", K(ft_name));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    std::sort(ft_columns.begin(), ft_columns.end(), FulltextColumnOrder());
-  }
-  for (int64_t i = 1; OB_SUCC(ret) && i < ft_columns.count(); ++i) {
-    if (ft_columns.at(i).first - ft_columns.at(i - 1).first != 1) {
-      ret = OB_ERR_BAD_CTXCAT_COLUMN;
-      LOG_USER_ERROR(OB_ERR_BAD_CTXCAT_COLUMN);
-    }
-  }
-  return ret;
-}
-
-int ObIndexBuilderUtil::adjust_fulltext_args(
-    ObCreateIndexArg &arg,
-    ObTableSchema &data_schema,
-    ObIAllocator &allocator,
-    ObColumnSchemaV2 *&ft_col)
-{
-  ft_col = NULL;
-  int ret = OB_SUCCESS;
-  //如果是ctxcat index，那么需要在表中创建一个generated column的分词列，并且在该分词列上创建索引
-  ObIArray<ObString> &fulltext_columns = arg.fulltext_columns_;
-  ObIArray<ObColumnSortItem> &sort_items = arg.index_columns_;
-  ObArray<ObColumnSortItem> new_sort_items;
-  uint64_t virtual_column_id = OB_INVALID_ID;
-  if (fulltext_columns.count() > 0) {
-    OrderFTColumns order_ft_columns;
-    int64_t ft_begin_index = 0; //全文列第一列在索引列中的index
-    int64_t ft_end_index = 0; //全文列最后一列在索引中的index
-    if (sort_items.count() <= 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sort items is empty", K(ret));
-    } else if (OB_INVALID_ID != sort_items.at(0).column_id_) {
-      // for restore purpose
-      virtual_column_id = sort_items.at(0).column_id_;
-      sort_items.at(0).column_id_ = OB_INVALID_ID;
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(adjust_fulltext_columns(arg, order_ft_columns))) {
-        LOG_WARN("adjust fulltext columns to order fulltext columns failed", K(ret));
-      } else if (order_ft_columns.empty()) {
-        ret  = OB_ERR_UNEXPECTED;
-        LOG_WARN("order fulltext columns is empty");
-      } else {
-        ft_begin_index = order_ft_columns.at(0).first;
-        ft_end_index = order_ft_columns.at(order_ft_columns.count() - 1).first;
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ft_begin_index; ++i) {
-      ret = new_sort_items.push_back(sort_items.at(i));
-    }
-    if (OB_SUCC(ret)) {
-      ObColumnSortItem ft_sort_item;
-      int64_t old_cnt = data_schema.get_column_count();
-      ObColumnSchemaV2 *tmp_ft_col = NULL;
-      if (OB_FAIL(generate_fulltext_column(order_ft_columns,
-                                           data_schema,
-                                           virtual_column_id,
-                                           tmp_ft_col))) {
-        LOG_WARN("generate fulltext column failed", K(ret));
-      } else if (OB_ISNULL(tmp_ft_col)) {
-        LOG_WARN("fulltext column schema is null", K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, tmp_ft_col->get_column_name_str(),
-                                         ft_sort_item.column_name_))) {
-        //to keep the memory lifetime of column_name consistent with index_arg
-        LOG_WARN("deep copy column name failed", K(ret));
-      } else if (OB_FAIL(new_sort_items.push_back(ft_sort_item))) {
-        LOG_WARN("store new sort items failed", K(ret));
-      } else if (data_schema.get_column_count() > old_cnt) {
-        ft_col = tmp_ft_col; //新生成的全文列，需要传递出去，让rs进行创建
-      }
-    }
-    for (int64_t i = ft_end_index + 1; OB_SUCC(ret) && i < sort_items.count(); ++i) {
-      ret = new_sort_items.push_back(sort_items.at(i));
-    }
-    if (OB_SUCC(ret)) {
-      sort_items.reset();
-      fulltext_columns.reset();
-      ret = sort_items.assign(new_sort_items);
-    }
   }
   return ret;
 }
@@ -888,130 +841,6 @@ int ObIndexBuilderUtil::adjust_ordinary_index_column_args(
     sort_items.reset();
     if (OB_FAIL(sort_items.assign(new_sort_items))) {
       LOG_WARN("assign sort items failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObIndexBuilderUtil::generate_fulltext_column(
-    OrderFTColumns &ft_cols,
-    ObTableSchema &data_schema,
-    uint64_t specified_virtual_cid,
-    ObColumnSchemaV2 *&ft_col)
-{
-  ft_col = NULL;
-  int ret = OB_SUCCESS;
-  ObColumnSchemaV2 *col_schema = NULL;
-  ObColumnSchemaV2 column_schema;
-  char col_name_buf[OB_MAX_COLUMN_NAMES_LENGTH] = {'\0'};
-  SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], ft_expr_def) {
-    MEMSET(ft_expr_def, 0, sizeof(ft_expr_def));
-    int64_t name_pos = 0;
-    int64_t def_pos = 0;
-    int32_t max_data_length = 0;
-    ObCollationType collation_type = CS_TYPE_INVALID;
-    if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, name_pos, "__word_segment"))) {
-      LOG_WARN("print generate column prefix name failed", K(ret));
-    } else if (OB_FAIL(databuff_printf(ft_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "WORD_SEGMENT("))) {
-      LOG_WARN("print generate expr definition prefix failed", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < ft_cols.count(); ++i) {
-      const ObString &column_name = ft_cols.at(i).second;
-      if (OB_ISNULL(col_schema = data_schema.get_column_schema(column_name))) {
-        ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
-        LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, column_name.length(), column_name.ptr());
-      } else if (!col_schema->is_string_type() || col_schema->get_meta_type().is_blob()) {
-        ret = OB_ERR_BAD_FT_COLUMN;
-        LOG_USER_ERROR(OB_ERR_BAD_FT_COLUMN, column_name.length(), column_name.ptr());
-      } else if (col_schema->is_generated_column()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "CTXCAT on generated column");
-      } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, name_pos, "_%ld", col_schema->get_column_id()))) {
-        LOG_WARN("print column id to buffer failed", K(ret), K(col_schema->get_column_id()));
-      } else if (OB_FAIL(databuff_printf(ft_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, "`%s`, ", col_schema->get_column_name()))) {
-        LOG_WARN("print column name to buffer failed", K(ret));
-      } else if (OB_FAIL(column_schema.add_cascaded_column_id(col_schema->get_column_id()))) {
-        LOG_WARN("add cascaded column to generated column failed", K(ret));
-      } else {
-        col_schema->add_column_flag(GENERATED_DEPS_CASCADE_FLAG);
-        if (max_data_length < col_schema->get_data_length()) {
-          max_data_length = col_schema->get_data_length();
-        }
-        if (CS_TYPE_INVALID == collation_type) {
-          collation_type = col_schema->get_collation_type();
-        } else if (collation_type != col_schema->get_collation_type()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "create fulltext index on columns with different collation");
-        } else { /*do nothing*/ }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      def_pos -= 2; //去掉最后一个", "
-      if (OB_FAIL(databuff_printf(ft_expr_def, OB_MAX_DEFAULT_VALUE_LENGTH, def_pos, ")"))) {
-        LOG_WARN("print generate expr definition suffix failed", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // another fulltext index could have created the generated column
-      ft_col = data_schema.get_column_schema(col_name_buf);
-      if (OB_INVALID_ID != specified_virtual_cid) {
-        if (OB_NOT_NULL(ft_col)) {
-          // check the specified column id is consistent with the existed column schema
-          if (specified_virtual_cid != ft_col->get_column_id()) {
-            ret = OB_ERR_INVALID_COLUMN_ID;
-            LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_ID, static_cast<int>(name_pos), col_name_buf);
-            LOG_WARN("Column id specified by create fulltext index mismatch with column schema id",
-                     K(ret), K(specified_virtual_cid), K(*ft_col));
-          }
-        } else if (OB_NOT_NULL(data_schema.get_column_schema(specified_virtual_cid))) {
-          // check the specified column id is not used by others
-          ret = OB_ERR_INVALID_COLUMN_ID;
-          LOG_USER_ERROR(OB_ERR_INVALID_COLUMN_ID, static_cast<int>(name_pos), col_name_buf);
-          LOG_WARN("Column id specified by create fulltext index has been used",
-                   K(ret), K(specified_virtual_cid));
-        }
-      }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (OB_NOT_NULL(ft_col)) {
-        // the generated colum is created
-        if (OB_UNLIKELY(!ft_col->has_column_flag(GENERATED_CTXCAT_CASCADE_FLAG))) {
-          ret = OB_ERR_COLUMN_DUPLICATE;
-          LOG_USER_ERROR(OB_ERR_COLUMN_DUPLICATE, static_cast<int>(name_pos), col_name_buf);
-          LOG_WARN("Generate column name has been used", K(ret), K(*ft_col));
-        }
-      } else {
-        // the generated column is not created
-        ObObj default_value;
-        default_value.set_varchar(ft_expr_def, static_cast<int32_t>(def_pos));
-        column_schema.set_rowkey_position(0); //非主键列
-        column_schema.set_index_position(0); //非索引列
-        column_schema.set_tbl_part_key_pos(0); //非partition key
-        column_schema.set_tenant_id(data_schema.get_tenant_id());
-        column_schema.set_table_id(data_schema.get_table_id());
-        column_schema.set_column_id(OB_INVALID_ID == specified_virtual_cid ?
-                                      data_schema.get_max_used_column_id() + 1 :
-                                      specified_virtual_cid);
-        column_schema.add_column_flag(GENERATED_CTXCAT_CASCADE_FLAG);
-        column_schema.add_column_flag(VIRTUAL_GENERATED_COLUMN_FLAG);
-        column_schema.set_is_hidden(true);
-        column_schema.set_data_type(ObVarcharType);
-        column_schema.set_data_length(max_data_length); //生成列的长度和被分词列的最大长度保持一致
-        column_schema.set_collation_type(collation_type); //生成列的collation和被分词列的collation保持一致
-        column_schema.set_prev_column_id(UINT64_MAX);
-        column_schema.set_next_column_id(UINT64_MAX);
-        if (OB_FAIL(column_schema.set_column_name(col_name_buf))) {
-          LOG_WARN("set column name failed", K(ret));
-        } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
-          LOG_WARN("set orig default value failed", K(ret));
-        } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
-          LOG_WARN("set current default value failed", K(ret));
-        } else if (OB_FAIL(data_schema.add_column(column_schema))) {
-          LOG_WARN("add column schema to data table failed", K(ret));
-        } else {
-          ft_col = data_schema.get_column_schema(column_schema.get_column_id());
-        }
-      }
     }
   }
   return ret;

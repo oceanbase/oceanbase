@@ -2145,7 +2145,8 @@ int ObLogicalOperator::extract_shared_exprs(ObRawExpr *raw_expr,
     LOG_WARN("failed to add var to array", K(ret));
   }
 
-  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr)) {
+  if (!ObOptimizerUtil::find_item(ctx.inseparable_exprs_, raw_expr) &&
+      !raw_expr->is_match_against_expr()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count(); ++i) {
       ret = SMART_CALL(extract_shared_exprs(raw_expr->get_param_expr(i),
                                             ctx,
@@ -4308,18 +4309,22 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         gi_op->add_flag(GI_AFFINITIZE);
         gi_op->add_flag(GI_PARTITION_WISE);
       }
-      if (LOG_TABLE_SCAN == get_type() &&
-          static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
-        ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
-        ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
-        if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
-          LOG_WARN("fail alloc partition id expr", K(ret));
-        } else {
-          gi_op->set_tablet_id_expr(tablet_id_expr);
-          gi_op->set_join_filter_info(table_scan->get_join_filter_info());
-          ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
-          jf_create_op->set_paired_join_filter(gi_op);
-          gi_op->add_flag(GI_USE_PARTITION_FILTER);
+      if (LOG_TABLE_SCAN == get_type()) {
+        if (static_cast<ObLogTableScan*>(this)->is_text_retrieval_scan()) {
+          gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
+        }
+        if (static_cast<ObLogTableScan *>(this)->get_join_filter_info().is_inited_) {
+          ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(this);
+          ObOpPseudoColumnRawExpr *tablet_id_expr = NULL;
+          if (OB_FAIL(generate_pseudo_partition_id_expr(tablet_id_expr))) {
+            LOG_WARN("fail alloc partition id expr", K(ret));
+          } else {
+            gi_op->set_tablet_id_expr(tablet_id_expr);
+            gi_op->set_join_filter_info(table_scan->get_join_filter_info());
+            ObLogJoinFilter *jf_create_op = gi_op->get_join_filter_info().log_join_filter_create_op_;
+            jf_create_op->set_paired_join_filter(gi_op);
+            gi_op->add_flag(GI_USE_PARTITION_FILTER);
+          }
         }
       } else if (LOG_GROUP_BY == get_type()) {
         if (static_cast<ObLogGroupBy*>(this)->force_partition_gi()) {

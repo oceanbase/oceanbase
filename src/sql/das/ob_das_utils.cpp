@@ -21,8 +21,6 @@
 #include "share/location_cache/ob_location_service.h"
 #include "observer/ob_server_struct.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "lib/geo/ob_s2adapter.h"
-#include "lib/geo/ob_geo_utils.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/access/ob_dml_param.h"
 namespace oceanbase
@@ -345,100 +343,6 @@ int ObDASUtils::reshape_datum_value(const ObObjMeta &col_type,
   return ret;
 }
 
-int ObDASUtils::generate_spatial_index_rows(
-    ObIAllocator &allocator,
-    const ObDASDMLBaseCtDef &das_ctdef,
-    const ObString &wkb_str,
-    const IntFixedArray &row_projector,
-    const ObDASWriteBuffer::DmlRow &dml_row,
-    ObSpatIndexRow &spat_rows)
-{
-  int ret = OB_SUCCESS;
-  omt::ObSrsCacheGuard srs_guard;
-  const ObSrsItem *srs_item = NULL;
-  const ObSrsBoundsItem *srs_bound = NULL;
-  uint32_t srid = UINT32_MAX;
-  uint64_t rowkey_num = das_ctdef.table_param_.get_data_table().get_rowkey_column_num();
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
-
-  if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, srid))) {
-    LOG_WARN("failed to get srid", K(ret), K(wkb_str));
-  } else if (srid != 0 &&
-      OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
-    LOG_WARN("failed to get srs guard", K(ret), K(MTL_ID()), K(srid));
-  } else if (srid != 0 &&
-      OB_FAIL(srs_guard.get_srs_item(srid, srs_item))) {
-    LOG_WARN("failed to get srs item", K(ret), K(MTL_ID()), K(srid));
-  } else if (((srid == 0) || !(srs_item->is_geographical_srs())) &&
-              OB_FAIL(OTSRS_MGR->get_srs_bounds(srid, srs_item, srs_bound))) {
-    LOG_WARN("failed to get srs bound", K(ret), K(srid));
-  } else {
-    ObS2Adapter s2object(&allocator, srid != 0 ? srs_item->is_geographical_srs() : false);
-    ObSpatialMBR spa_mbr;
-    ObObj *obj_arr = NULL;
-    ObS2Cellids cellids;
-    char *mbr = NULL;
-    int64_t mbr_len = 0;
-    if (OB_FAIL(s2object.init(wkb_str, srs_bound))) {
-      LOG_WARN("Init s2object failed", K(ret));
-    } else if (OB_FAIL(s2object.get_cellids(cellids, false))) {
-      LOG_WARN("Get cellids from s2object failed", K(ret));
-    } else if (OB_FAIL(s2object.get_mbr(spa_mbr))) {
-      LOG_WARN("Get mbr from s2object failed", K(ret));
-    } else if (spa_mbr.is_empty()) {
-      if (cellids.size() == 0) {
-        LOG_DEBUG("it's might be empty geometry collection", K(wkb_str));
-      } else {
-        ret = OB_ERR_GIS_INVALID_DATA;
-        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
-      }
-    } else if (OB_ISNULL(mbr = reinterpret_cast<char *>(allocator.alloc(OB_DEFAULT_MBR_SIZE)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to alloc memory for spatial index row mbr", K(ret));
-    } else if (OB_FAIL(spa_mbr.to_char(mbr, mbr_len))) {
-      LOG_WARN("failed transform ObSpatialMBR to string", K(ret));
-    } else {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < cellids.size(); i++) {
-        if (OB_ISNULL(obj_arr = reinterpret_cast<ObObj *>(allocator.alloc(sizeof(ObObj) * rowkey_num)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to alloc memory for spatial index row cells", K(ret));
-        } else {
-          // 索引行[cellid_obj][mbr_obj][rowkey_obj]
-          for(uint64_t j = 0; OB_SUCC(ret) && j < rowkey_num; j++) {
-            obj_arr[j].set_nop_value();
-            const ObObjMeta &col_type = das_ctdef.column_types_.at(j);
-            const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
-            int64_t projector_idx = row_projector.at(j);
-            if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(obj_arr[j], col_type))) {
-              LOG_WARN("stored row to new row obj failed", K(ret),
-                  K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(j));
-            } else if (OB_FAIL(ObDASUtils::reshape_storage_value(col_type, col_accuracy, allocator, obj_arr[j]))) {
-              LOG_WARN("reshape storage value failed", K(ret), K(col_type), K(projector_idx), K(j));
-            }
-          }
-          if (OB_SUCC(ret)) {
-            int64_t cellid_col_idx = 0;
-            int64_t mbr_col_idx = 1;
-            obj_arr[cellid_col_idx].set_uint64(cellids.at(i));
-            ObString mbr_val(mbr_len, mbr);
-            obj_arr[mbr_col_idx].set_varchar(mbr_val);
-            obj_arr[mbr_col_idx].set_collation_type(CS_TYPE_BINARY);
-            obj_arr[mbr_col_idx].set_collation_level(CS_LEVEL_IMPLICIT);
-            ObNewRow row;
-            row.cells_ = obj_arr;
-            row.count_ = rowkey_num;
-            if (OB_FAIL(spat_rows.push_back(row))) {
-              LOG_WARN("failed to push back spatial index row", K(ret), K(row));
-            }
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObDASUtils::wait_das_retry(int64_t retry_cnt)
 {
   int ret = OB_SUCCESS;
@@ -454,6 +358,39 @@ int ObDASUtils::wait_das_retry(int64_t retry_cnt)
     if (THIS_WORKER.is_timeout()) {
       ret = OB_TIMEOUT;
       LOG_WARN("this worker is timeout after retry sleep. no more retry", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDASUtils::find_child_das_def(const ObDASBaseCtDef *root_ctdef,
+                                   ObDASBaseRtDef *root_rtdef,
+                                   ObDASOpType op_type,
+                                   const ObDASBaseCtDef *&target_ctdef,
+                                   ObDASBaseRtDef *&target_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_ctdef) || OB_ISNULL(root_rtdef)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root ctdef or rtdef is nullptr", K(ret), KP(root_ctdef), K(root_rtdef));
+  } else if (OB_UNLIKELY(root_ctdef->op_type_ != root_rtdef->op_type_
+      || root_ctdef->children_cnt_ != root_rtdef->children_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the op_type of ctdef and rtdef do not match", K(ret),
+             K(root_ctdef->op_type_), K(root_rtdef->op_type_),
+             K(root_ctdef->children_cnt_), K(root_rtdef->children_cnt_));
+  } else if (root_ctdef->op_type_ == op_type) {
+    target_ctdef = root_ctdef;
+    target_rtdef = root_rtdef;
+  } else {
+    for (int i = 0; OB_SUCC(ret) && i < root_ctdef->children_cnt_; ++i) {
+      if (OB_FAIL(find_child_das_def(root_ctdef->children_[i],
+                                     root_rtdef->children_[i],
+                                     op_type,
+                                     target_ctdef,
+                                     target_rtdef))) {
+        LOG_WARN("find child das def failed", K(ret));
+      }
     }
   }
   return ret;

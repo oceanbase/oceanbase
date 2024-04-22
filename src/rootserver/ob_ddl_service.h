@@ -311,7 +311,7 @@ public:
                           share::schema::ObSchemaGetterGuard &schema_guard,
                           const bool need_check_tablet_cnt,
                           const uint64_t tenant_data_version);
-  virtual int alter_table_index(const obrpc::ObAlterTableArg &alter_table_arg,
+  virtual int alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
                                 const share::schema::ObTableSchema &orgin_table_schema,
                                 share::schema::ObTableSchema &new_table_schema,
                                 share::schema::ObSchemaGetterGuard &schema_guard,
@@ -1194,11 +1194,12 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
   int rename_dropping_index_name(
       const uint64_t data_table_id,
       const uint64_t database_id,
+      const bool is_inner_and_fts_index,
       const obrpc::ObDropIndexArg &drop_index_arg,
       ObSchemaGetterGuard &schema_guard,
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
-      share::schema::ObTableSchema &new_index_schema);
+      common::ObIArray<share::schema::ObTableSchema> &new_index_schemas);
   int get_index_schema_by_name(
       const uint64_t data_table_id,
       const uint64_t database_id,
@@ -1284,6 +1285,11 @@ private:
       const ObTableSchema &table_schema,
       uint64_t &tablet_cnt);
 
+  int check_has_fts_index(
+      ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      bool &fts_exist);
   int check_has_index_operation(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t teannt_id,
@@ -1334,6 +1340,11 @@ private:
   int get_sample_table_schema(
       common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
       const share::schema::ObSimpleTableSchemaV2 *&sample_table_schema);
+  int get_valid_index_schema_by_id_for_drop_index_(
+      const uint64_t data_table_id,
+      const obrpc::ObDropIndexArg &drop_index_arg,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObTableSchema *&index_table_schema);
   int set_tablegroup_id(share::schema::ObTableSchema &table_schema);
   template<typename SCHEMA>
   int set_default_tablegroup_id(SCHEMA &schema);
@@ -2051,6 +2062,16 @@ private:
                               ObMySQLTransaction &trans);
   int lock_tables_in_recyclebin(const share::schema::ObDatabaseSchema &database_schema,
                                 ObMySQLTransaction &trans);
+  int get_dropping_domain_index_invisiable_aux_table_schema(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const uint64_t index_table_id,
+      const bool is_fts_index,
+      const ObString &index_name,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObDDLOperator &ddl_operator,
+      common::ObMySQLTransaction &trans,
+      common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
 
 public:
   int check_parallel_ddl_conflict(

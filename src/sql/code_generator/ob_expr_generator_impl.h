@@ -97,6 +97,7 @@ private:
   virtual int visit(ObWinFunRawExpr &expr);
   virtual int visit(ObPseudoColumnRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
   virtual bool skip_child(ObRawExpr &expr);
 private:
   // types and constants

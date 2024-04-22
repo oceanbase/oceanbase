@@ -52,9 +52,9 @@ void ObKeyPart::reset_key()
     like_keypart_->escape_.reset();
   } else if (is_in_key()) {
     in_keypart_->reset();
-  } else if (is_geo_key()) {
-    geo_keypart_->wkb_.reset();
-    geo_keypart_->distance_.reset();
+  } else if (is_domain_key()) {
+    domain_keypart_->const_param_.reset();
+    domain_keypart_->extra_param_.reset();
   }
 }
 
@@ -273,8 +273,8 @@ bool ObKeyPart::is_question_mark() const
     bret = normal_keypart_->start_.is_unknown() || normal_keypart_->end_.is_unknown();
   } else if (is_in_key()) {
     bret = in_keypart_->contain_questionmark_;
-  } else if (is_geo_key()) {
-    bret = geo_keypart_->wkb_.is_unknown();
+  } else if (is_domain_key()) {
+    bret = domain_keypart_->const_param_.is_unknown();
   }
   return bret;
 }
@@ -721,15 +721,15 @@ int ObKeyPart::deep_node_copy(const ObKeyPart &other)
       in_keypart_->is_strict_in_ = other.in_keypart_->is_strict_in_;
       in_keypart_->contain_questionmark_ = other.in_keypart_->contain_questionmark_;
     }
-  } else if (other.is_geo_key()) {
-    if (OB_FAIL(create_geo_key())) {
+  } else if (other.is_domain_key()) {
+    if (OB_FAIL(create_domain_key())) {
       LOG_WARN("create geo key failed", K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->wkb_, geo_keypart_->wkb_))) {
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.domain_keypart_->const_param_, domain_keypart_->const_param_))) {
       LOG_WARN("deep copy geo wkb failed", K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator_, other.geo_keypart_->distance_, geo_keypart_->distance_))) {
+    } else if (OB_FAIL(ob_write_obj(allocator_, other.domain_keypart_->extra_param_, domain_keypart_->extra_param_))) {
       LOG_WARN("deep copy geo distance failed", K(ret));
     } else {
-      geo_keypart_->geo_type_ = other.geo_keypart_->geo_type_;
+      domain_keypart_->domain_op_ = other.domain_keypart_->domain_op_;
     }
   }
   return ret;
@@ -753,8 +753,8 @@ int ObKeyPart::shallow_node_copy(const ObKeyPart &other)
   } else if (other.is_in_key()) {
     in_keypart_ = other.in_keypart_;
     key_type_ = other.key_type_;
-  } else if (other.is_geo_key()) {
-    geo_keypart_ = other.geo_keypart_;
+  } else if (other.is_domain_key()) {
+    domain_keypart_ = other.domain_keypart_;
     key_type_ = other.key_type_;
   }
   return ret;
@@ -1101,10 +1101,10 @@ OB_DEF_SERIALIZE(ObKeyPart)
           }
         }
       }
-    } else if (is_geo_key()) {
-      OB_UNIS_ENCODE(geo_keypart_->wkb_);
-      OB_UNIS_ENCODE(geo_keypart_->geo_type_);
-      OB_UNIS_ENCODE(geo_keypart_->distance_);
+    } else if (is_domain_key()) {
+      OB_UNIS_ENCODE(domain_keypart_->const_param_);
+      OB_UNIS_ENCODE(domain_keypart_->domain_op_);
+      OB_UNIS_ENCODE(domain_keypart_->extra_param_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -1178,13 +1178,13 @@ OB_DEF_DESERIALIZE(ObKeyPart)
           }
         }
       }
-    } else if (T_GEO_KEY == key_type_) {
-      if (OB_FAIL(create_geo_key())) {
-        LOG_WARN("create geo key failed", K(ret));
+    } else if (T_DOMAIN_KEY == key_type_) {
+      if (OB_FAIL(create_domain_key())) {
+        LOG_WARN("create domain key failed", K(ret));
       }
-      OB_UNIS_DECODE(geo_keypart_->wkb_);
-      OB_UNIS_DECODE(geo_keypart_->geo_type_);
-      OB_UNIS_DECODE(geo_keypart_->distance_);
+      OB_UNIS_DECODE(domain_keypart_->const_param_);
+      OB_UNIS_DECODE(domain_keypart_->domain_op_);
+      OB_UNIS_DECODE(domain_keypart_->extra_param_);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key type", K_(key_type));
@@ -1234,10 +1234,10 @@ OB_DEF_SERIALIZE_SIZE(ObKeyPart)
         }
       }
     }
-  } else if (is_geo_key()) {
-    OB_UNIS_ADD_LEN(geo_keypart_->wkb_);
-    OB_UNIS_ADD_LEN(geo_keypart_->geo_type_);
-    OB_UNIS_ADD_LEN(geo_keypart_->distance_);
+  } else if (is_domain_key()) {
+    OB_UNIS_ADD_LEN(domain_keypart_->const_param_);
+    OB_UNIS_ADD_LEN(domain_keypart_->domain_op_);
+    OB_UNIS_ADD_LEN(domain_keypart_->extra_param_);
   }
   OB_UNIS_ADD_LEN(null_safe_);
   OB_UNIS_ADD_LEN(rowid_column_idx_);
@@ -1579,16 +1579,16 @@ int ObKeyPart::create_not_in_key()
   return ret;
 }
 
-int ObKeyPart::create_geo_key()
+int ObKeyPart::create_domain_key()
 {
   int ret = OB_SUCCESS;
   void *ptr = NULL;
-  if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObGeoKeyPart))))) {
+  if (OB_UNLIKELY(NULL == (ptr = allocator_.alloc(sizeof(ObDomainKeyPart))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("alloc memory failed");
   } else {
-    key_type_ = T_GEO_KEY;
-    geo_keypart_ = new(ptr) ObGeoKeyPart();
+    key_type_ = T_DOMAIN_KEY;
+    domain_keypart_ = new(ptr) ObDomainKeyPart();
   }
   return ret;
 }
@@ -1656,11 +1656,11 @@ DEF_TO_STRING(ObKeyPart)
          N_OFFSETS, in_keypart_->offsets_,
          N_MISSING_OFFSETS, in_keypart_->missing_offsets_,
          N_IN_PARAMS, in_keypart_->in_params_);
-  } else if (is_geo_key()) {
+  } else if (is_domain_key()) {
     J_COMMA();
-    J_KV("wkb_", geo_keypart_->wkb_,
-         "geo_type_", geo_keypart_->geo_type_,
-         "distance_", geo_keypart_->distance_);
+    J_KV("const_param_", domain_keypart_->const_param_,
+         "domain_type_", domain_keypart_->domain_op_,
+         "extra_param_", domain_keypart_->extra_param_);
   }
   J_OBJ_END();
   return pos;

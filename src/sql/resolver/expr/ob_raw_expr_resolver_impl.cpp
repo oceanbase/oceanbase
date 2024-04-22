@@ -56,7 +56,8 @@ int ObRawExprResolverImpl::resolve(const ParseNode *node,
                                    ObIArray<ObWinFunRawExpr*> &win_exprs,
                                    ObIArray<ObUDFInfo> &udf_info,
                                    ObIArray<ObOpRawExpr*> &op_exprs,
-                                   ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs)
+                                   ObIArray<ObUserVarIdentRawExpr*> &user_var_exprs,
+                                   ObIArray<ObMatchFunRawExpr*> &match_exprs)
 {
   ctx_.columns_ = &columns;
   ctx_.op_exprs_ = &op_exprs;
@@ -66,6 +67,7 @@ int ObRawExprResolverImpl::resolve(const ParseNode *node,
   ctx_.win_exprs_ = &win_exprs;
   ctx_.udf_info_ = &udf_info;
   ctx_.user_var_exprs_ = &user_var_exprs;
+  ctx_.match_exprs_ = &match_exprs;
   int ret = recursive_resolve(node, expr);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(expr->extract_info())) {
@@ -1054,6 +1056,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_FUN_UDF: {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("A BUG, Never Be Here!!!", K(ret));
+        break;
+      }
+      case T_FUN_MATCH_AGAINST: {
+        if (OB_FAIL(process_match_against(node, expr))) {
+          LOG_WARN("process fun sys match against failed", K(ret));
+        }
         break;
       }
       case T_WINDOW_FUNCTION: {
@@ -6032,7 +6040,7 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
   if(OB_SUCC(ret) && T_FUN_SYS_JSON_QUERY != node->type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node->type_ error");
-  } else if (OB_SUCC(ret) && 11 != node->num_child_) {
+  } else if (OB_SUCC(ret) && 13 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("num_child_ error");
   }
@@ -6065,7 +6073,15 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
       }
     }
   }
-  if (OB_SUCC(ret) && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_VARCHAR
+
+  bool is_mvi = false;
+
+  if (OB_NOT_NULL(node->children_[8])) {
+    is_mvi = (node->children_[8]->value_ > 0 );
+  }
+
+  if (OB_SUCC(ret) && !is_mvi
+      && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_VARCHAR
       && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_LONGTEXT
       && returning_type->int16_values_[OB_NODE_CAST_TYPE_IDX] != T_JSON
       && returning_type->type_ != T_NULL) {
@@ -6077,7 +6093,8 @@ int ObRawExprResolverImpl::process_json_query_node(const ParseNode *node, ObRawE
     LOG_WARN("invalid user.table.column, table.column, or column specification", K(ret));
   }
 
-  // [json_text][json_path][returning_type][truncate][scalars][pretty][ascii][wrapper][error_type][empty_type][mismatch]
+  // [0:json_text][1:json_path][2:returning_type][3:truncate][4:scalars][5:pretty][6:ascii]
+  // [7:wrapper][8:asis][9:error_type][10:empty_type][11:mismatch][12:multivalue]
   for (int32_t i = 0; OB_SUCC(ret) && i < num; i++) {
     ObRawExpr *para_expr = NULL;
     CK(OB_NOT_NULL(node->children_[i]));
@@ -6861,6 +6878,67 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
   return ret;
 }
 
+int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObMatchFunRawExpr *match_against = NULL;
+  if (OB_ISNULL(node) || OB_ISNULL(node->children_) || node->num_child_ != 2 || OB_ISNULL(ctx_.match_exprs_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for match against", K(ret), K(node));
+  } else if (OB_ISNULL(node->children_[0]) || node->children_[0]->type_ != T_MATCH_COLUMN_LIST) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
+  } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_MATCH_AGAINST, match_against))) {
+    LOG_WARN("create match_against expr failed", K(ret));
+  } else if (OB_ISNULL(match_against)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ctx_.match_exprs_->push_back(match_against))) {
+    LOG_WARN("failed to push back expr", K(ret));
+  } else {
+    // resolve match columns
+    ParseNode *column_list_node = node->children_[0];
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_list_node->num_child_; ++i) {
+      const ParseNode *column_node = column_list_node->children_[i];
+      ObRawExpr *column_ref = NULL;
+      if (OB_FAIL(process_column_ref_node(column_node, column_ref))) {
+        LOG_WARN("resolve column node failed", K(ret));
+      } else if (OB_FAIL(match_against->get_match_columns().push_back(column_ref))) {
+        LOG_WARN("add column ref to column list failed", K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // resolve search query and mode
+    ObRawExpr *search_keywords = nullptr;
+    if (OB_ISNULL(node->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("match against search keywords is unexpected");
+    } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[1], search_keywords)))) {
+      LOG_WARN("recursive resolve search keywords failed", K(ret));
+    } else if (OB_FAIL(search_keywords->extract_info())) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else if (!search_keywords->is_static_const_expr()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query is not supported");
+      LOG_WARN("search query is not const expr", K(ret));
+    } else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE");
+      LOG_WARN("unsupported match against mode", K(ret), K(node->value_));
+    } else {
+      match_against->set_search_key(search_keywords);
+      match_against->set_mode_flag(static_cast<ObMatchAgainstMode>(node->value_));
+      expr = match_against;
+      LOG_DEBUG("resolve match against expr finish", K(ret), KPC(expr));
+    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(match_against->extract_info())) {
+    LOG_WARN("failed to extract info", K(ret));
+  }
+  return ret;
+}
 
 int ObRawExprResolverImpl::not_int_check(const ObRawExpr *expr)		
 {		

@@ -1873,6 +1873,10 @@ public:
   static int check_child_projection_validity(const ObSelectStmt *child_stmt,
                                              ObRawExpr *expr,
                                              bool &is_valid);
+  static int check_fulltext_index_match_column(const ColumnReferenceSet &match_column_set,
+                                               const ObTableSchema *table_schema,
+                                               const ObTableSchema *inv_idx_schema,
+                                               bool &found_matched_index);
   static int is_winfunc_topn_filter(const ObIArray<ObWinFunRawExpr *> &winfunc_exprs,
                                     ObRawExpr *filter,
                                     bool &is_topn_filter,
@@ -1884,6 +1888,10 @@ public:
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
+  static int check_table_with_fulltext_recursively(TableItem *table,
+                                                   ObSchemaChecker *schema_checker,
+                                                   ObSQLSessionInfo *session_info,
+                                                   bool &has_fulltext_index);
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
                                   ObRawExpr *expr);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);

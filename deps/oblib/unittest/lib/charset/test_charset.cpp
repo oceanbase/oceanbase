@@ -15,11 +15,15 @@
 #include <time.h>
 #include <sys/time.h>
 #include <codecvt>
+#include "gtest/gtest.h"
+
+#define protected public
+#define private public
+
 #include "lib/allocator/page_arena.h"
 #include "lib/charset/ob_charset.h"
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
-#include "gtest/gtest.h"
 #include "unicode_map.h"
 #include "common/data_buffer.h"
 #include "lib/oblog/ob_log_module.h"
@@ -822,6 +826,31 @@ TEST_F(TestCharset, check_gb18030_2022)
     int len_gb18030_2022 = ob_wc_mb_gb18030_2022(NULL, i, s_gb18030_2022, s_gb18030_2022 + 4);
     uint code_gb18030_2022 = (len_gb18030_2022 == 0) ? 0 : gb18030_chs_to_code(s_gb18030_2022, len_gb18030_2022);
     ASSERT_TRUE(target == code_gb18030_2022);
+  }
+}
+
+TEST_F(TestCharset, check_mbmaxlenlen)
+{
+  for (int64_t type = ObCollationType::CS_TYPE_INVALID; type < ObCollationType::CS_TYPE_MAX; ++type) {
+    if (nullptr != ObCharset::charset_arr[type]) {
+      const uint mbmaxlenlen = ob_mbmaxlenlen(ObCharset::charset_arr[type]);
+      const char *cs_name = ObCharset::charset_name(static_cast<ObCollationType>(type));
+      std::cout << "charset=" << cs_name << ", mbmaxlenlen=" << mbmaxlenlen << ", type=" << type << std::endl;
+      if (ObCharset::is_gb18030_2022(type)
+          || CS_TYPE_GB18030_CHINESE_CI == type
+          || CS_TYPE_GB18030_CHINESE_CS == type
+          || CS_TYPE_GB18030_BIN == type
+          || CS_TYPE_GB18030_ZH_0900_AS_CS == type
+          || CS_TYPE_GB18030_ZH2_0900_AS_CS == type
+          || CS_TYPE_GB18030_ZH3_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH2_0900_AS_CS == type
+          || CS_TYPE_GB18030_2022_ZH3_0900_AS_CS == type) {
+        ASSERT_EQ(2, mbmaxlenlen);
+      } else {
+        ASSERT_EQ(1, mbmaxlenlen);
+      }
+    }
   }
 }
 

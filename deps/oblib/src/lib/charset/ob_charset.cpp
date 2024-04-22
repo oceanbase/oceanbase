@@ -2485,10 +2485,20 @@ int ObCharset::tolower(const ObCollationType collation_type,
                        ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  const ObCharsetInfo *cs_info = NULL;
-  if (OB_ISNULL(cs_info = get_charset(collation_type))) {
+  if (OB_FAIL(tolower(get_charset(collation_type), src, dst, allocator))) {
+    LOG_WARN("fail to casedown string", K(ret), K(collation_type), K(src));
+  }
+  return ret;
+}
+
+int ObCharset::tolower(const ObCharsetInfo *cs_info,
+                       const ObString &src, ObString &dst,
+                       ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cs_info)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid collation type", K(ret), K(collation_type));
+    LOG_WARN("invalid collation type", K(ret), KP(cs_info));
   } else {
     int casemulti = cs_info->casedn_multiply;
     if (1 == casemulti) {

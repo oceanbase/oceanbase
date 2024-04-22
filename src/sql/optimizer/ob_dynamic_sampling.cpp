@@ -1357,6 +1357,7 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
              filter->has_flag(CNT_DYNAMIC_USER_VARIABLE) ||
              filter->has_flag(CNT_PL_UDF) ||
              filter->has_flag(CNT_SO_UDF) ||
+             filter->has_flag(CNT_MATCH_EXPR) ||
              filter->get_expr_type() == T_FUN_SET_TO_STR ||
              filter->get_expr_type() == T_FUN_ENUM_TO_STR ||
              filter->get_expr_type() == T_OP_GET_PACKAGE_VAR ||

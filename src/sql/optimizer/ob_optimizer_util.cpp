@@ -8316,6 +8316,10 @@ int ObOptimizerUtil::check_filter_before_indexback(const ObIArray<ObRawExpr*> &f
       if (OB_FAIL(filter_before_index_back.push_back(false))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else { /*do nothing*/ }
+    } else if (expr->has_flag(CNT_MATCH_EXPR)) {
+      if (OB_FAIL(filter_before_index_back.push_back(false))) {
+        LOG_WARN("failed to push back expr", K(ret));
+      }
     } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(expr, filter_ids))) {
       LOG_WARN("failed to extract column ids", K(ret));
     } else {

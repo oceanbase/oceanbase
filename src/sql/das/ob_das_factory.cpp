@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_factory.h"
 #include "sql/das/ob_das_scan_op.h"
-#include "sql/das/ob_das_group_scan_op.h"
 #include "sql/das/ob_das_insert_op.h"
 #include "sql/das/ob_das_delete_op.h"
 #include "sql/das/ob_das_update_op.h"
@@ -23,6 +22,8 @@
 #include "sql/das/ob_das_def_reg.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/das/ob_das_ref.h"
+#include "sql/das/ob_das_attach_define.h"
+#include "sql/das/ob_text_retrieval_op.h"
 #include "share/datum/ob_datum_util.h"
 
 #define STORE_DAS_OBJ(obj_store, das_obj, class_name)       \
@@ -168,9 +169,10 @@ struct DASInitAllocFunc
   static void init_array()
   {
     static constexpr int registered = das_reg::ObDASOpTypeTraits<N>::registered_;
+    static constexpr int attached = das_reg::ObDASOpTypeTraits<N>::attached_;
     G_DAS_ALLOC_FUNCTION_ARRAY[N] = ObDASTaskFactory::AllocFun {
-          (registered ? &AllocDASOpHelper<N * registered>::alloc : NULL),
-          (registered ? &AllocDASOpResultHelper<N * registered>::alloc : NULL),
+          ((registered && !attached) ? &AllocDASOpHelper<N * registered>::alloc : NULL),
+          ((registered && !attached) ? &AllocDASOpResultHelper<N * registered>::alloc : NULL),
           (registered ? &AllocDASCtDefHelper<N * registered>::alloc : NULL),
           (registered ? &AllocDASRtDefHelper<N * registered>::alloc : NULL)
     };

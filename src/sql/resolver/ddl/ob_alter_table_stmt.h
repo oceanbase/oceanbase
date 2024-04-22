@@ -98,6 +98,7 @@ public:
   { return alter_table_arg_.has_rename_action(); }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return alter_table_arg_; }
   common::ObSArray<obrpc::ObCreateIndexArg*> &get_index_arg_list() { return index_arg_list_; }
+  void set_fts_arg_allocator(common::ObIAllocator *fts_arg_allocator) { fts_arg_allocator_ = fts_arg_allocator; }
   common::ObSArray<obrpc::ObCreateForeignKeyArg> &get_foreign_key_arg_list()
     { return alter_table_arg_.foreign_key_arg_list_; }
   const common::ObSArray<obrpc::ObCreateForeignKeyArg> &get_read_only_foreign_key_arg_list() const
@@ -118,6 +119,7 @@ private:
   bool is_comment_table_;
   bool is_alter_system_;
   common::ObSArray<obrpc::ObCreateIndexArg*> index_arg_list_;
+  common::ObIAllocator *fts_arg_allocator_;
   bool is_alter_triggers_;
   obrpc::ObAlterTriggerArg tg_arg_;
   ObRawExpr *interval_expr_;

@@ -133,7 +133,7 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
-#define GENERATED_CTXCAT_CASCADE_FLAG (INT64_C(1) << 33)
+#define GENERATED_FTS_WORD_COUNT_COLUMN_FLAG (INT64_C(1) << 33) // word count column for full-text search index
 #define TABLE_PART_KEY_COLUMN_FLAG (INT64_C(1) << 34)
 #define TABLE_ALIAS_NAME_FLAG (INT64_C(1) << 35)
 /* create table t1(c1 int, c2 as (c1+1)) partition by hash(c2) partitions 2
@@ -299,7 +299,7 @@ enum ObIndexType
   INDEX_TYPE_NORMAL_GLOBAL = 3,
   INDEX_TYPE_UNIQUE_GLOBAL = 4,
   INDEX_TYPE_PRIMARY = 5,
-  INDEX_TYPE_DOMAIN_CTXCAT = 6,
+  INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED = 6,
   /* create table t1(c1 int primary key, c2 int);
    * create index i1 on t1(c2)
    * i1 is a global index.
@@ -314,18 +314,17 @@ enum ObIndexType
   INDEX_TYPE_SPATIAL_GLOBAL = 11,
   INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE = 12,
   // new index types for fts
-  INDEX_TYPE_FTS_ROWKEY_DOC_LOCAL = 13,
-  INDEX_TYPE_FTS_DOC_ROWKEY_LOCAL = 14,
+  INDEX_TYPE_ROWKEY_DOC_ID_LOCAL = 13,
+  INDEX_TYPE_DOC_ID_ROWKEY_LOCAL = 14,
   INDEX_TYPE_FTS_INDEX_LOCAL = 15,
   INDEX_TYPE_FTS_DOC_WORD_LOCAL = 16,
-  INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL = 17,
+  INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL = 17,
   INDEX_TYPE_FTS_INDEX_GLOBAL = 18,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL = 19,
-  INDEX_TYPE_FTS_DOC_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
+  INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE = 20,
   INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE = 21,
   INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE = 22,
-
-  // new index types for multivalue index
+  // new index types for json multivalue index
   INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL = 23,
   INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL = 24,
   /*
@@ -597,6 +596,101 @@ inline bool is_available_index_status(const ObIndexStatus index_status)
 
 const char *ob_index_status_str(ObIndexStatus status);
 
+inline bool is_local_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_LOCAL ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_LOCAL;
+}
+
+inline bool is_global_local_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_global_fts_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_DOC_WORD_GLOBAL;
+}
+
+inline bool is_local_multivalue_index(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ||
+         index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+}
+
+inline bool is_doc_rowkey_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_DOC_ID_ROWKEY_LOCAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL ||
+         index_type == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_rowkey_doc_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_ROWKEY_DOC_ID_LOCAL;
+}
+
+inline bool is_fts_index_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_FTS_INDEX_LOCAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL ||
+         index_type == INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+}
+
+inline bool is_fts_doc_word_aux(const ObIndexType index_type)
+{
+  return INDEX_TYPE_FTS_DOC_WORD_LOCAL == index_type
+      || INDEX_TYPE_FTS_DOC_WORD_GLOBAL == index_type
+      || INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE == index_type;
+}
+
+inline bool is_multivalue_index_aux(const ObIndexType index_type)
+{
+  return index_type == INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL ||
+         index_type == INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+}
+
+inline bool is_built_in_multivalue_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type)
+      || is_doc_rowkey_aux(index_type);
+}
+
+inline bool is_built_in_fts_index(const ObIndexType index_type)
+{
+  return is_rowkey_doc_aux(index_type)
+      || is_doc_rowkey_aux(index_type)
+      || is_fts_doc_word_aux(index_type);
+}
+
+inline bool is_multivalue_index(const ObIndexType index_type)
+{
+  return is_multivalue_index_aux(index_type) || is_built_in_multivalue_index(index_type);
+}
+
+inline bool is_fts_index(const ObIndexType index_type)
+{
+  return is_fts_index_aux(index_type) || is_built_in_fts_index(index_type);
+}
+
+inline bool is_fts_or_multivalue_index(ObIndexType index_type)
+{
+  return is_multivalue_index(index_type) || is_fts_index(index_type);
+}
+
+inline bool is_fts_or_multivalue_index_aux(ObIndexType index_type)
+{
+  return is_multivalue_index_aux(index_type) || is_fts_index_aux(index_type);
+}
+
 inline bool is_index_local_storage(ObIndexType index_type)
 {
   return INDEX_TYPE_NORMAL_LOCAL == index_type
@@ -604,9 +698,12 @@ inline bool is_index_local_storage(ObIndexType index_type)
            || INDEX_TYPE_NORMAL_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE == index_type
            || INDEX_TYPE_PRIMARY == index_type
-           || INDEX_TYPE_DOMAIN_CTXCAT == index_type
+           || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == index_type
            || INDEX_TYPE_SPATIAL_LOCAL == index_type
-           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+           || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+           || is_local_fts_index(index_type)
+           || is_global_local_fts_index(index_type)
+           || is_local_multivalue_index(index_type);
 }
 
 inline bool is_related_table(
@@ -628,7 +725,9 @@ inline bool index_has_tablet(const ObIndexType &index_type)
         || INDEX_TYPE_UNIQUE_GLOBAL == index_type
         || INDEX_TYPE_SPATIAL_LOCAL == index_type
         || INDEX_TYPE_SPATIAL_GLOBAL == index_type
-        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type;
+        || INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE == index_type
+        || is_fts_index(index_type)
+        || is_multivalue_index(index_type);
 }
 
 struct ObTenantTableId

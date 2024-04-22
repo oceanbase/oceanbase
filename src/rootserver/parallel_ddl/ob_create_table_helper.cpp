@@ -1196,6 +1196,14 @@ int ObCreateTableHelper::generate_aux_table_schemas_()
           index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
         } else if (INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
           index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
+        } else if (is_global_fts_index(index_arg.index_type_)) {
+          if (index_arg.index_type_ == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_INDEX_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+          } else if (index_arg.index_type_ == INDEX_TYPE_FTS_DOC_WORD_GLOBAL) {
+            index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+          }
         }
       }
       // the global index has generated column schema during resolve, RS no need to generate index schema,

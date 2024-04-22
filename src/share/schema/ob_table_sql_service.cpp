@@ -1965,6 +1965,15 @@ int ObTableSqlService::add_table(
   } else if (tenant_data_version < DATA_VERSION_4_3_0_0 && table.is_materialized_view()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("mview is not support before 4.3", KR(ret), K(table));
+  } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && (table.is_fts_index() || table.is_multivalue_index())) {
+    ret = OB_NOT_SUPPORTED;
+    if (table.is_multivalue_index()) {
+      LOG_WARN("tenant data version is less than 4.3.1, multivalue index is not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+    } else {
+      LOG_WARN("tenant data version is less than 4.3.1, fulltext index is not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, fulltext index");
+    }
   } else if (OB_FAIL(check_ddl_allowed(table))) {
     LOG_WARN("check ddl allowd failed", K(ret), K(table));
   } else if (OB_FAIL(gen_table_dml(exec_tenant_id, table, update_object_status_ignore_version, dml))) {

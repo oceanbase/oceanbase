@@ -3525,15 +3525,10 @@ int ObDDLOperator::alter_table_rename_index(
     schema::ObTableSchema &new_index_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObSchemaService *schema_service = schema_service_.get_schema_service();
   ObSchemaGetterGuard schema_guard;
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema_service is NULL", K(ret));
-  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+  if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
   } else {
-    int64_t new_schema_version = OB_INVALID_VERSION;
     RS_LOG(INFO, "start alter table rename index", K(rename_index_arg));
     const ObTableSchema *index_table_schema = NULL;
     ObString index_table_name;
@@ -3560,35 +3555,94 @@ int ObDDLOperator::alter_table_rename_index(
                                                 is_index,
                                                 index_table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(database_id), K(index_table_schema));
-      } else if (OB_UNLIKELY(NULL == index_table_schema)) {
-        ret = OB_ERR_UNEXPECTED;
-        RS_LOG(WARN, "get index table schema failed", K(tenant_id), K(database_id), K(index_table_name), K(ret));
-      } else if (index_table_schema->is_in_recyclebin()) {
-        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
-        LOG_WARN("index table is in recyclebin", K(ret));
-      } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
-        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-      } else {
-        if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
-          LOG_WARN("fail to assign schema", K(ret));
-        } else {
-          new_index_table_schema.set_schema_version(new_schema_version);
-          if (nullptr != new_index_status) {
-            new_index_table_schema.set_index_status(*new_index_status);
-          }
-          new_index_table_schema.set_name_generated_type(GENERATED_TYPE_USER);
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(new_index_table_schema.set_table_name(new_index_table_name))) {
-          RS_LOG(WARN, "failed to set new table name!", K(new_index_table_schema), K(ret));
-        } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
-                    trans,
-                    *index_table_schema,
-                    new_index_table_schema,
-                    index_table_schema->is_global_index_table() ? OB_DDL_RENAME_GLOBAL_INDEX: OB_DDL_RENAME_INDEX))) {
-          RS_LOG(WARN, "schema service update_table_options failed", K(*index_table_schema), K(ret));
-        }
+      } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id, index_table_schema, new_index_table_name,
+              new_index_status, trans, new_index_table_schema))) {
+        LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(index_table_schema),
+            K(new_index_table_name));
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::alter_table_rename_index_with_origin_index_name(
+    const uint64_t tenant_id,
+    const uint64_t index_table_id,
+    const ObString &new_index_name, // Attention!!! origin index name, don't use table name. For example, __idx_500005_{index_name}, please using index_name!!!
+    const ObIndexStatus &new_index_status,
+    common::ObMySQLTransaction &trans,
+    share::schema::ObTableSchema &new_index_table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator(ObModIds::OB_SCHEMA);
+  ObString new_index_table_name;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *index_table_schema = nullptr;
+  RS_LOG(INFO, "start alter table rename index", K(tenant_id), K(index_table_id), K(new_index_name));
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == index_table_id || new_index_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(index_table_id), K(new_index_name));
+  } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_table_id, index_table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(index_table_id));
+  } else if (OB_ISNULL(index_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unecpected error, index table schema is nullptr", K(ret), K(index_table_id));
+  } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                           index_table_schema->get_data_table_id(),
+                                                           new_index_name,
+                                                           new_index_table_name))) {
+    LOG_WARN("fail to build new index name", K(ret), K(new_index_name), KPC(index_table_schema));
+  } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id, index_table_schema, new_index_table_name, &new_index_status,
+          trans, new_index_table_schema))) {
+    LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(index_table_schema),
+        K(new_index_table_name), K(new_index_status));
+  }
+  return ret;
+}
+
+int ObDDLOperator::inner_alter_table_rename_index_(
+    const uint64_t tenant_id,
+    const share::schema::ObTableSchema *index_table_schema,
+    const ObString &new_index_name,
+    const ObIndexStatus *new_index_status,
+    common::ObMySQLTransaction &trans,
+    share::schema::ObTableSchema &new_index_table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObSchemaService *schema_service = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is NULL", K(ret));
+  } else if (OB_ISNULL(index_table_schema)
+          || OB_UNLIKELY(new_index_name.empty())
+          || OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(index_table_schema), KP(new_index_status), K(new_index_name),
+        K(tenant_id));
+  } else if (index_table_schema->is_in_recyclebin()) {
+    ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+    LOG_WARN("index table is in recyclebin", K(ret));
+  } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+  } else if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
+    LOG_WARN("fail to assign schema", K(ret));
+  } else {
+    new_index_table_schema.set_schema_version(new_schema_version);
+    if (nullptr != new_index_status) {
+      new_index_table_schema.set_index_status(*new_index_status);
+    }
+    new_index_table_schema.set_name_generated_type(GENERATED_TYPE_USER);
+    if (OB_FAIL(new_index_table_schema.set_table_name(new_index_name))) {
+      RS_LOG(WARN, "failed to set new table name!", K(new_index_table_schema), K(ret));
+    } else if (OB_FAIL(schema_service->get_table_sql_service().update_table_options(
+                trans,
+                *index_table_schema,
+                new_index_table_schema,
+                index_table_schema->is_global_index_table() ? OB_DDL_RENAME_GLOBAL_INDEX: OB_DDL_RENAME_INDEX))) {
+      RS_LOG(WARN, "schema service update_table_options failed", K(*index_table_schema), K(ret));
     }
   }
   return ret;
@@ -10094,7 +10148,6 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
   const ObColumnSchemaV2 *index_col = NULL;
   const uint64_t tenant_id = index_schema.get_tenant_id();
   uint64_t data_table_id = index_schema.get_data_table_id();
-  const ObIndexInfo &index_info = index_schema.get_index_info();
   if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table))) {
     LOG_WARN("get table schema failed", KR(ret), K(tenant_id), K(data_table_id));
   } else if (OB_ISNULL(data_table)) {
@@ -10112,14 +10165,22 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
   } else {
     new_data_table_schema.set_in_offline_ddl_white_list(index_schema.get_in_offline_ddl_white_list());
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+  for (ObTableSchema::const_column_iterator iter = index_schema.column_begin();
+       OB_SUCC(ret) && iter != index_schema.column_end();
+       ++iter) {
+    ObColumnSchemaV2 *column_schema = (*iter);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), KPC(column_schema), K(index_schema));
+    } else if (OB_UNLIKELY(is_shadow_column(column_schema->get_column_id()))) {
+      continue;// skip the shadow rowkeys for unique index.
     // Generated columns on index table are converted to normal column,
     // we need to get column schema from data table here.
-    if (OB_ISNULL(index_col = data_table->get_column_schema(
-        tenant_id, index_info.get_column(i)->column_id_))) {
+    } else if (OB_ISNULL(index_col = data_table->get_column_schema(
+        tenant_id, column_schema->get_column_id()))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get index column schema failed", K(ret), K(tenant_id), K(index_info));
-    } else if (index_col->is_hidden() && index_col->is_generated_column()) {
+      LOG_WARN("get index column schema failed", K(ret), K(tenant_id), KPC(column_schema));
+    } else if (index_col->is_hidden() && index_col->is_generated_column() && !index_col->is_rowkey_column()) {
       // delete the generated column generated internally when the index is created,
       // This kind of generated column is hidden.
       // delete generated column in data table for spatial index

@@ -182,14 +182,12 @@ public:
                                          int64_t& pos) const;
   int print_index_column(const ObTableSchema &table_schema,
                          const ObColumnSchemaV2 &column,
-                         common::ObIArray<common::ObString> &ctxcat_cols,
                          bool is_last,
                          char *buf,
                          int64_t buf_len,
                          int64_t &pos) const;
   int print_fulltext_index_column(const ObTableSchema &table_schema,
                                   const ObColumnSchemaV2 &column,
-                                  common::ObIArray<common::ObString> &ctxcat_cols,
                                   bool is_last,
                                   char *buf,
                                   int64_t buf_len,

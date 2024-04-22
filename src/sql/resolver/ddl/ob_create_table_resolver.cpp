@@ -21,6 +21,7 @@
 #include "common/ob_store_format.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "sql/resolver/ddl/ob_create_table_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
@@ -2287,6 +2288,40 @@ int ObCreateTableResolver::generate_index_arg()
         } else {
           type = INDEX_TYPE_SPATIAL_LOCAL;
         }
+      } else if (FTS_KEY == index_keyname_) {
+        if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.1, fulltext index not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, fulltext index");
+        } else if (global_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support global fts index now", K(ret));
+        } else {
+          // set type to fts_doc_rowkey first, append other fts arg later
+          type = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+        }
+      } else if (MULTI_KEY == index_keyname_) {
+        if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.1, multivalue index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+        } else if (global_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support global fts index now", K(ret));
+        } else {
+          type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
+        }
+      } else if (MULTI_UNIQUE_KEY == index_keyname_) {
+        if (tenant_data_version < DATA_VERSION_4_3_1_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.1, multivalue index is not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
+        } else if (global_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support global multivalue index now", K(ret));
+        } else {
+          type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+        }
       }
     }
     if(OB_SUCC(ret)) {
@@ -2538,6 +2573,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           SQL_RESV_LOG(WARN, "add session id key failed", K(ret));
         }
         bool cnt_func_index_mysql = false;
+        bool is_multi_value_index = false;
         for (int32_t i = 0; OB_SUCC(ret) && i < index_column_list_node->num_child_; ++i) {
           ObString &column_name = sort_item.column_name_;
           if (NULL == index_column_list_node->children_[i]
@@ -2565,7 +2601,11 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               column_name.assign_ptr(
                   const_cast<char *>(index_column_node->children_[0]->str_value_),
                   static_cast<int32_t>(index_column_node->children_[0]->str_len_));
-              if (NULL != index_column_node->children_[1]) {
+              if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(column_name,
+                                                                        is_multi_value_index,
+                                                                        reinterpret_cast<int*>(&index_keyname_)))) {
+                LOG_WARN("failed to resolve index type", K(ret));
+              } else if (NULL != index_column_node->children_[1]) {
                 sort_item.prefix_len_ = static_cast<int32_t>(index_column_node->children_[1]->value_);
                 if (0 == sort_item.prefix_len_) {
                   ret = OB_KEY_PART_0;
@@ -2578,8 +2618,41 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           }
           if (OB_SUCC(ret)) {
             if (sort_item.is_func_index_) {
+              bool is_mulvalue_index = (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY);
               ObRawExpr *expr = NULL;
-              if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(NULL,
+              if (is_mulvalue_index) {
+                ObColumnSchemaV2 *budy_column_schema = NULL;
+                if (OB_FAIL(ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
+                                                                                  sort_item,
+                                                                                  *params_.expr_factory_,
+                                                                                  *session_info_,
+                                                                                  tbl_schema,
+                                                                                  schema_checker_,
+                                                                                  column_schema,
+                                                                                  budy_column_schema))) {
+                  LOG_WARN("failed to build index schema failed", K(ret));
+                } else if (OB_ISNULL(column_schema) || OB_ISNULL(budy_column_schema)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("multivalue index generate column, or budy column is null.",
+                    K(ret), KP(column_schema), KP(budy_column_schema));
+                } else {
+                  ObColumnNameHashWrapper column_name_key(column_schema->get_column_name_str());
+                  if (OB_FAIL(column_name_set_.set_refactored(column_name_key))) {
+                    LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                  } else {
+                    ObColumnSortItem budy_sort_item;
+                    budy_sort_item.is_func_index_ = true;
+                    budy_sort_item.column_name_ = budy_column_schema->get_column_name_str();
+
+                    ObColumnNameHashWrapper budy_column_name_key(budy_column_schema->get_column_name_str());
+                    if (OB_FAIL(column_name_set_.set_refactored(budy_column_name_key))) {
+                      LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                    } else if (OB_FAIL(add_sort_column(budy_sort_item))) {
+                      LOG_WARN("failed to add sort item", K(ret));
+                    }
+                  }
+                }
+              } else if (OB_FAIL(ObRawExprUtils::build_generated_column_expr(NULL,
                                                                       column_name,
                                                                       *params_.expr_factory_,
                                                                       *session_info_,
@@ -2629,7 +2702,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
               }  else if (sort_item.prefix_len_ > column_schema->get_data_length()) {
                 ret = OB_WRONG_SUB_KEY;
                 SQL_RESV_LOG(WARN, "prefix length is longer than column length", K(sort_item), K(column_schema->get_data_length()), K(ret));
-              } else if (ob_is_text_tc(column_schema->get_data_type())) {
+              } else if (ob_is_text_tc(column_schema->get_data_type())
+                  && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
                 if (column_schema->is_hidden()) {
                   //functional index in mysql mode
                   ret = OB_ERR_FUNCTIONAL_INDEX_ON_LOB;
@@ -2642,7 +2716,13 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                   index_column_list_node->num_child_, node->value_, is_oracle_mode,
                   NULL != index_column_node->children_[2] && 1 != index_column_node->children_[2]->is_empty_))) {
                 SQL_RESV_LOG(WARN, "fail to resolve spatial index constraint", K(ret), K(column_name));
+              } else if (OB_FAIL(resolve_fts_index_constraint(*column_schema,
+                                                              node->value_))) {
+                SQL_RESV_LOG(WARN, "fail to resolve fts index constraint", K(ret), K(column_name));
+              } else if (OB_FAIL(resolve_multivalue_index_constraint(*column_schema, index_keyname_))) {
+                SQL_RESV_LOG(WARN, "fail to resolve multivalue index constraint", K(ret), K(column_name));
               }
+
               if (OB_SUCC(ret) && ob_is_string_type(column_schema->get_data_type())) {
                 int64_t length = 0;
                 if (OB_FAIL(column_schema->get_byte_length(length, is_oracle_mode, false))) {
@@ -2652,7 +2732,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
                 } else { /*do nothing*/ }
 
                 if (OB_SUCC(ret)) {
-                  if ((index_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH) {
+                  if ((index_data_length += length) > OB_MAX_USER_ROW_KEY_LENGTH
+                      && static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY) != node->value_) {
                     ret = OB_ERR_TOO_LONG_KEY_LENGTH;
                     LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, OB_MAX_USER_ROW_KEY_LENGTH);
                   } else if (index_data_length <= 0) {
@@ -2791,7 +2872,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
       if (OB_FAIL(resolve_index_name(
           ObItemType::T_INDEX == node->type_ ? node->children_[0] : NULL,
           first_column_name,
-          UNIQUE_KEY == index_keyname_ ? true : false,
+          (UNIQUE_KEY == index_keyname_ || MULTI_UNIQUE_KEY == index_keyname_) ? true : false,
           uk_name))) {
         SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
       } else if (ObItemType::T_INDEX == node->type_ && OB_FAIL(resolve_table_options(node->children_[2], true))) {
@@ -2869,10 +2950,30 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(resolve_results.push_back(resolve_result))) {
-            LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
-          } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
-            LOG_WARN("fail to push back index_arg", K(ret));
+          if (is_fts_index(index_arg_.index_type_)) {
+            if (OB_FAIL(ObDDLResolver::append_fts_args(resolve_result,
+                                                       create_index_arg,
+                                                       have_generate_fts_arg_,
+                                                       resolve_results,
+                                                       index_arg_list,
+                                                       allocator_))) {
+              LOG_WARN("failed to append fts args", K(ret));
+            }
+          } else if (is_multivalue_index(index_arg_.index_type_)) {
+            if (OB_FAIL(ObDDLResolver::append_multivalue_args(resolve_result,
+                                                              create_index_arg,
+                                                              have_generate_fts_arg_,
+                                                              resolve_results,
+                                                              index_arg_list,
+                                                              allocator_))) {
+              LOG_WARN("failed to append fts args", K(ret));
+            }
+          } else {
+            if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+              LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
+            } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
+              LOG_WARN("fail to push back index_arg", K(ret));
+            }
           }
         }
       }

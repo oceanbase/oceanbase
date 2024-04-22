@@ -26,6 +26,54 @@ namespace sql
 {
 class Path;
 
+struct ObTextRetrievalInfo
+{
+  ObTextRetrievalInfo()
+  : match_expr_(NULL),
+    pushdown_match_filter_(NULL),
+    sort_key_(),
+    topk_limit_expr_(NULL),
+    topk_offset_expr_(NULL),
+    with_ties_(false),
+    inv_idx_tid_(OB_INVALID_ID),
+    fwd_idx_tid_(OB_INVALID_ID),
+    doc_id_idx_tid_(OB_INVALID_ID),
+    token_column_(NULL),
+    token_cnt_column_(NULL),
+    doc_id_column_(NULL),
+    doc_length_column_(NULL),
+    related_doc_cnt_(NULL),
+    total_doc_cnt_(NULL),
+    doc_token_cnt_(NULL),
+    relevance_expr_(NULL)
+  { }
+  ~ObTextRetrievalInfo() {}
+
+  TO_STRING_KV(K_(match_expr), K_(pushdown_match_filter), K_(sort_key), K_(topk_limit_expr),
+               K_(topk_offset_expr), K_(with_ties), K_(inv_idx_tid), K_(fwd_idx_tid), K_(doc_id_idx_tid));
+
+  bool need_sort() const { return sort_key_.expr_ != nullptr; }
+
+  ObMatchFunRawExpr *match_expr_;
+  ObRawExpr *pushdown_match_filter_;
+  OrderItem sort_key_;  // for pushdown topk, only support match expr as sort expr
+  ObRawExpr *topk_limit_expr_;
+  ObRawExpr *topk_offset_expr_;
+  bool with_ties_;
+  uint64_t inv_idx_tid_;  // choosed aux inverted index table id (word-doc)
+  uint64_t fwd_idx_tid_;  // choosed aux forward index table id (doc-word)
+  uint64_t doc_id_idx_tid_; // choosed aux doc_id index table id (doc-rowkey)
+  // the following exprs are used for intermediate calculation of relevance score
+  ObColumnRefRawExpr *token_column_;
+  ObColumnRefRawExpr *token_cnt_column_;
+  ObColumnRefRawExpr *doc_id_column_;
+  ObColumnRefRawExpr *doc_length_column_;
+  ObAggFunRawExpr *related_doc_cnt_;  // count(token_cnt_column)
+  ObAggFunRawExpr *total_doc_cnt_;  // count(doc_id_column)
+  ObAggFunRawExpr *doc_token_cnt_;  // sum(token_cnt_column)
+  ObRawExpr *relevance_expr_; // BM25
+};
+
 class ObLogTableScan : public ObLogicalOperator
 {
 public:
@@ -38,6 +86,7 @@ public:
         advisor_table_id_(OB_INVALID_ID),
         is_index_global_(false),
         is_spatial_index_(false),
+        is_multivalue_index_(false),
         use_das_(false),
         index_back_(false),
         is_multi_part_table_scan_(false),
@@ -82,7 +131,9 @@ public:
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
         table_type_(share::schema::MAX_TABLE_TYPE),
-        use_column_store_(false)
+        use_column_store_(false),
+        doc_id_table_id_(common::OB_INVALID_ID),
+        text_retrieval_info_()
   {
   }
 
@@ -204,6 +255,15 @@ public:
   inline bool get_is_spatial_index() const
   { return is_spatial_index_; }
 
+  /*
+   * set is multivalue index
+   */
+  inline void set_is_multivalue_index(bool is_multivalue_index)
+  { is_multivalue_index_ = is_multivalue_index; }
+
+  inline bool get_is_multivalue_index() const
+  { return is_multivalue_index_; }
+
   /**
    *  Set scan direction
    */
@@ -292,6 +352,7 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() { return pushdown_groupby_columns_; }
 
   inline const common::ObIArray<ObRawExpr *> &get_pushdown_groupby_columns() const { return pushdown_groupby_columns_; }
+  inline const common::ObIArray<ObRawExpr *> &get_domain_exprs() const { return domain_exprs_; }
 
   /**
    * Generate the filtering expressions
@@ -474,7 +535,7 @@ public:
   int extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_filters,
                                ObIArray<ObRawExpr*> &scan_pushdown_filters,
                                ObIArray<ObRawExpr*> &lookup_pushdown_filters,
-                               bool ignore_pd_filter = false);
+                               bool ignore_pd_filter = false) const;
   int has_nonpushdown_filter(bool &has_npd_filter);
   int replace_index_back_pushdown_filters(ObRawExprReplacer &replacer);
   int extract_virtual_gen_access_exprs(ObIArray<ObRawExpr*> &access_exprs,
@@ -482,6 +543,16 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
+  inline bool is_text_retrieval_scan() const { return is_index_scan() && NULL != text_retrieval_info_.match_expr_; }
+  inline bool is_multivalue_index_scan() const { return is_multivalue_index_; }
+  inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
+  inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
+  int prepare_text_retrieval_dep_exprs();
+  // jinmao TODO: 之后要判断这个标，一期统一设置为 true
+  inline bool need_text_retrieval_calc_relevance() const { return true; }
+  inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() ; }
+  inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
+  inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   virtual int get_card_without_filter(double &card) override;
   inline ObLogSet *get_rcte_op() { return rcte_op_; }
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
@@ -501,6 +572,10 @@ private: // member functions
   int add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_exprs);
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
+  int extract_doc_id_index_back_expr(ObIArray<ObRawExpr *> &exprs);
+  int extract_text_retrieval_access_expr(ObIArray<ObRawExpr *> &exprs);
+  int get_text_retrieval_calc_exprs(ObIArray<ObRawExpr *> &all_exprs);
+  int print_text_retrieval_annotation(char *buf, int64_t buf_len, int64_t &pos, ExplainType type);
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
 protected: // memeber variables
   // basic info
@@ -511,6 +586,7 @@ protected: // memeber variables
   uint64_t advisor_table_id_; // used for duplicate table replica selection in the plan cache
   bool is_index_global_;
   bool is_spatial_index_;
+  bool is_multivalue_index_;
   // TODO yuming: tells whether the table scan uses shared data access or not
   // mainly designed for code generator
   bool use_das_;
@@ -538,6 +614,8 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
+  // columns required for accessing a domain index (fulltext and JSON multi-value index)
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> domain_exprs_;
   //for external table
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
@@ -611,6 +689,8 @@ protected: // memeber variables
 
   share::schema::ObTableType table_type_;
   bool use_column_store_;
+  uint64_t doc_id_table_id_; // used for rowkey lookup of fulltext and JSON multi-value index
+  ObTextRetrievalInfo text_retrieval_info_;
 
   ObPxRFStaticInfo px_rf_info_;
   // disallow copy and assign

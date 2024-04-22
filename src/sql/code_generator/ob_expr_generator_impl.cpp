@@ -2017,6 +2017,31 @@ int ObExprGeneratorImpl::visit(ObSetOpRawExpr &expr)
   return ret;
 }
 
+int ObExprGeneratorImpl::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  // 不为 match expr 生成 expr operator
+  ObPostExprItem item;
+  item.set_accuracy(expr.get_accuracy());
+  if (OB_ISNULL(sql_expr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("sql_expr_ is NULL");
+  } else if (expr.has_flag(IS_COLUMNLIZED)) {
+    int64_t idx = OB_INVALID_INDEX;
+    if (OB_FAIL(column_idx_provider_.get_idx(&expr, idx))) {
+      LOG_WARN("get index failed", K(ret));
+    } else if (OB_FAIL(item.set_column(idx))) {
+      LOG_WARN("failed to set column", K(ret), K(expr));
+    } else if (OB_FAIL(sql_expr_->add_expr_item(item, &expr))) {
+      LOG_WARN("failed to add expr item", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("all match expr should have been generated", K(expr), K(&expr));
+  }
+  return ret;
+}
+
 bool ObExprGeneratorImpl::skip_child(ObRawExpr &expr)
 {
   return expr.has_flag(IS_COLUMNLIZED) || expr.is_query_ref_expr();

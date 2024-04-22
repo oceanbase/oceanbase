@@ -687,6 +687,15 @@ const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
 
+// fulltext search
+const char *const OB_DOC_ID_COLUMN_NAME = "__doc_id";
+const char *const OB_WORD_SEGMENT_COLUMN_NAME_PREFIX = "__word_segment";
+const char *const OB_WORD_COUNT_COLUMN_NAME_PREFIX = "__word_count";
+const char *const OB_DOC_LENGTH_COLUMN_NAME_PREFIX = "__doc_length";
+const int64_t OB_DOC_ID_COLUMN_BYTE_LENGTH = (sizeof(uint64_t) * 2);
+constexpr int64_t OB_WORD_SEGMENT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_segment") - 1;
+constexpr int64_t OB_WORD_COUNT_COLUMN_NAME_PREFIX_LEN = sizeof("__word_count") - 1;
+const char OB_FT_COL_ID_DELIMITER = '_';
 
 // backup and restore
 const int64_t OB_MAX_CLUSTER_NAME_LENGTH = OB_MAX_APP_NAME_LENGTH;
@@ -1818,7 +1827,7 @@ const int64_t OB_MAX_CAST_CHAR_MEDIUMTEXT_LENGTH = 4194303;
 
 const char *const SYS_DATE = "$SYS_DATE";
 const char *const OB_DEFAULT_COMPRESS_FUNC_NAME = "none";
-const char *const OB_DEFAULT_FULLTEXT_PARSER_NAME = "TAOBAO_CHN";
+const char *const OB_DEFAULT_FULLTEXT_PARSER_NAME = "space";
 
 const int64_t OB_MYSQL_LOGIN_USER_NAME_MAX_LEN = 48;
 const int64_t OB_MAX_CONFIG_NAME_LEN = 128;

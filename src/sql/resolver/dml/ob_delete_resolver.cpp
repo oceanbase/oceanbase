@@ -214,6 +214,7 @@ int ObDeleteResolver::check_multi_delete_table_conflict()
 int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_multi_table_delete)
 {
   int ret = OB_SUCCESS;
+  JoinedTable *joined_table = nullptr;
   TableItem *table_item = NULL;
   is_multi_table_delete = false;
   const ParseNode *delete_list = NULL;
@@ -244,6 +245,9 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
         LOG_WARN("invalid table name", K(ret));
       } else if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
         LOG_WARN("add reference table to namespace checker failed", K(ret));
+      } else if (OB_FAIL(try_add_join_table_for_fts(table_item, joined_table))) {
+        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
+      } else if (nullptr != joined_table && FALSE_IT(table_item = static_cast<TableItem *>(joined_table))) {
       } else if (OB_FAIL(delete_stmt->add_from_item(table_item->table_id_,
                                                     table_item->is_joined_table()))) {
         LOG_WARN("failed to add from item", K(ret));
@@ -261,7 +265,9 @@ int ObDeleteResolver::resolve_table_list(const ParseNode &table_list, bool &is_m
     if (NULL == delete_list) {
       bool has_tg = false;
       //single table delete, delete list is same with from list
-      CK(delete_stmt->get_table_size() == 1);
+      if (nullptr == joined_table) { // no fulltext index
+        CK(delete_stmt->get_table_size() == 1);
+      }
       OZ(delete_tables_.push_back(delete_stmt->get_table_item(0)));
       OZ (check_need_fired_trigger(table_item));
     } else {
@@ -447,7 +453,9 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
+      if (OB_FAIL(try_update_column_expr_for_fts(table_item, table_info->column_exprs_))) {
+        LOG_WARN("fail to try update column expr for fts", K(ret), K(table_item));
+      } else if (OB_FAIL(delete_stmt->get_delete_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));
       } else if (gindex_cnt > 0) {
         delete_stmt->set_has_global_index(true);

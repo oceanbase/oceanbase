@@ -3431,6 +3431,14 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             index_arg.index_type_ = INDEX_TYPE_UNIQUE_GLOBAL_LOCAL_STORAGE;
           } else if (INDEX_TYPE_SPATIAL_GLOBAL == index_arg.index_type_) {
             index_arg.index_type_ = INDEX_TYPE_SPATIAL_GLOBAL_LOCAL_STORAGE;
+          } else if (is_global_fts_index(index_arg.index_type_)) {
+            if (index_arg.index_type_ == INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL) {
+              index_arg.index_type_ = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL_LOCAL_STORAGE;
+            } else if (index_arg.index_type_ == INDEX_TYPE_FTS_INDEX_GLOBAL) {
+              index_arg.index_type_ = INDEX_TYPE_FTS_INDEX_GLOBAL_LOCAL_STORAGE;
+            } else if (index_arg.index_type_ == INDEX_TYPE_FTS_DOC_WORD_GLOBAL) {
+              index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_GLOBAL_LOCAL_STORAGE;
+            }
           }
         }
         // the global index has generated column schema during resolve, RS no need to generate index schema,
@@ -4620,6 +4628,11 @@ int ObRootService::create_index(const ObCreateIndexArg &arg, obrpc::ObAlterTable
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
+  } else if (is_fts_index(arg.index_type_) || is_multivalue_index(arg.index_type_)) {
+    // TODO hanxuan support create fulltext index
+    // todo yunyi not dynamic create multivlaue index
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported", K(ret));
   } else {
     ObIndexBuilder index_builder(ddl_service_);
     if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(arg.tenant_id_, schema_guard))) {

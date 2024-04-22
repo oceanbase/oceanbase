@@ -123,6 +123,10 @@ public:
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
   int fill_cur_row_rescan_param();
   int calc_other_conds(bool &is_match);
+
+  int get_next_batch_from_right(const ObBatchRows *right_brs);
+  int get_next_row_from_right();
+
   int do_drain_exch_multi_lvel_bnlj();
 private:
   // state operation and transfer function type.

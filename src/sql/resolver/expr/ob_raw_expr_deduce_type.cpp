@@ -2979,6 +2979,38 @@ int ObRawExprDeduceType::visit(ObUDFRawExpr &expr)
   return ret;
 }
 
+int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  ObExprResType result_type(alloc_);
+  result_type.set_double();
+  expr.set_result_type(result_type);
+  ObExprResType col_result_type;
+  // cast search key if need
+  if (OB_ISNULL(expr.get_search_key())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(expr.get_match_column_type(col_result_type))) {
+    LOG_WARN("failed to get match column type", K(ret));
+  } else if (expr.get_search_key()->get_result_type().get_type() != ObVarcharType ||
+             col_result_type.get_collation_type() != expr.get_search_key()->get_result_type().get_collation_type()) {
+    ObExprResType search_key_type = expr.get_search_key()->get_result_type();
+    ObCastMode def_cast_mode = CM_NONE;
+    search_key_type.set_varchar();
+    search_key_type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+    search_key_type.set_collation_type(col_result_type.get_collation_type());
+    search_key_type.set_collation_level(search_key_type.get_collation_level());
+    search_key_type.set_calc_meta(search_key_type.get_obj_meta());
+    if (OB_FAIL(ObSQLUtils::get_default_cast_mode(false, 0, my_session_,
+                                                  def_cast_mode))) {
+      LOG_WARN("get_default_cast_mode failed", K(ret));
+    } else if (OB_FAIL(try_add_cast_expr(expr, expr.get_search_key_idx(), search_key_type, def_cast_mode))) {
+      LOG_WARN("add_implicit_cast failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObRawExprDeduceType::init_normal_udf_expr(ObNonTerminalRawExpr &expr, ObExprOperator *op)
 {
   int ret = OB_SUCCESS;
@@ -3393,12 +3425,15 @@ bool ObRawExprDeduceType::skip_cast_expr(const ObRawExpr &parent,
 }
 
 
-static inline bool skip_cast_json_expr(const ObRawExpr *child_ptr,
+static inline bool skip_cast_json_expr(const ObRawExpr *expr,
   const ObExprResType &input_type, ObItemType parent_expr_type)
 {
-  return (child_ptr->get_expr_type() == T_FUN_SYS_CAST && need_calc_json(parent_expr_type) &&
-             (input_type.get_calc_type() == child_ptr->get_result_meta().get_type() ||
-              input_type.get_calc_collation_type() == child_ptr->get_result_meta().get_collation_type()));
+  bool b_ret = (expr->get_expr_type() == T_FUN_SYS_CAST &&
+          need_calc_json(parent_expr_type) &&
+          (input_type.get_calc_type() == expr->get_result_meta().get_type() ||
+          input_type.get_calc_collation_type() == expr->get_result_meta().get_collation_type()));
+
+  return b_ret;
 }
 
 // 该函数会给case表达式按需增加隐式cast

@@ -483,6 +483,11 @@ bool ObRelativeTable::is_spatial_index() const
   return schema_param_->is_spatial_index();
 }
 
+bool ObRelativeTable::is_fts_index() const
+{
+  return schema_param_->is_fts_index();
+}
+
 int ObRelativeTable::check_rowkey_in_column_ids(
     const common::ObIArray<uint64_t> &column_ids,
     const bool has_other_column) const

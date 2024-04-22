@@ -76,6 +76,8 @@ ob_unittest(test_json_path)
 ob_unittest(test_json_schema)
 ob_unittest(test_json_tree)
 
+ob_unittest(test_text_analyzer text_analysis/test_text_analyzer.cpp)
+
 if(OB_BUILD_CLOSE_MODULES)
   ob_unittest(test_xml_bin)
   ob_unittest(test_xml_parser)

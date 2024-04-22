@@ -16,6 +16,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/dml/ob_dml_service.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/das/ob_das_domain_utils.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 namespace oceanbase
@@ -52,9 +53,9 @@ public:
       write_buffer_(write_buffer),
       old_row_(nullptr),
       new_row_(nullptr),
+      domain_iter_(nullptr),
       got_old_row_(false),
-      spat_rows_(nullptr),
-      spatial_row_idx_(0),
+      iter_has_built_(false),
       allocator_(alloc)
   {
   }
@@ -65,26 +66,33 @@ public:
   virtual void reset() override { }
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
+    int ret = common::OB_SUCCESS;
     old_row_ = nullptr;
     new_row_ = nullptr;
     got_old_row_ = false;
-    spatial_row_idx_ = 0;
+    iter_has_built_ = false;
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
-    return OB_SUCCESS;
+    if (OB_NOT_NULL(domain_iter_)) {
+      domain_iter_->set_ctdef(das_ctdef_, &(got_old_row_ ? das_ctdef_->new_row_projector_
+                                                         : das_ctdef_->old_row_projector_));
+      if (OB_FAIL(domain_iter_->rewind())) {
+        LOG_WARN("fail to rewind for domain iterator", K(ret));
+      }
+    }
+    return ret;
   }
 private:
-  ObSpatIndexRow *get_spatial_index_rows() { return spat_rows_; }
-  int create_spatial_index_store();
-  int get_next_spatial_index_row(ObNewRow *&row);
+  // domain index
+  int get_next_domain_index_row(ObNewRow *&row);
 private:
   const ObDASUpdCtDef *das_ctdef_;
   ObDASWriteBuffer &write_buffer_;
   ObNewRow *old_row_;
   ObNewRow *new_row_;
   ObDASWriteBuffer::Iterator result_iter_;
+  ObDomainDMLIterator *domain_iter_;
   bool got_old_row_;
-  ObSpatIndexRow *spat_rows_;
-  uint32_t spatial_row_idx_;
+  bool iter_has_built_;
   common::ObIAllocator &allocator_;
 };
 
@@ -93,10 +101,10 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = NULL;
 
-  if (OB_UNLIKELY(das_ctdef_->table_param_.get_data_table().is_spatial_index())) {
-    if (OB_FAIL(get_next_spatial_index_row(row))) {
+  if (OB_UNLIKELY(das_ctdef_->table_param_.get_data_table().is_domain_index())) {
+    if (OB_FAIL(get_next_domain_index_row(row))) {
       if (OB_ITER_END != ret) {
-        LOG_WARN("get next spatial index row failed", K(ret));
+        LOG_WARN("get next domain index row failed", K(ret), K(das_ctdef_->table_param_.get_data_table()));
       }
     }
   } else if (!got_old_row_) {
@@ -159,91 +167,40 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
 
 ObDASUpdIterator::~ObDASUpdIterator()
 {
-  if (spat_rows_ != nullptr) {
-    spat_rows_->~ObSEArray();
-    spat_rows_ = nullptr;
+  if (nullptr != domain_iter_) {
+    domain_iter_->~ObDomainDMLIterator();
+    domain_iter_ = nullptr;
   }
 }
 
-int ObDASUpdIterator::create_spatial_index_store()
+int ObDASUpdIterator::get_next_domain_index_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  void *buf = allocator_.alloc(sizeof(ObSpatIndexRow));
-  if (OB_ISNULL(buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("allocate spatial row store failed", K(ret));
-  } else {
-    spat_rows_ = new(buf) ObSpatIndexRow();
-  }
-  return ret;
-}
-
-int ObDASUpdIterator::get_next_spatial_index_row(ObNewRow *&row)
-{
-  int ret = OB_SUCCESS;
-  const ObChunkDatumStore::StoredRow *sr = NULL;
-  uint64_t rowkey_num = das_ctdef_->table_param_.get_data_table().get_rowkey_column_num();
-  uint64_t old_proj = das_ctdef_->old_row_projector_.count();
-  uint64_t new_proj = das_ctdef_->new_row_projector_.count();
-  if (rowkey_num + 1 != old_proj || rowkey_num + 1 != new_proj) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid project count", K(ret), K(rowkey_num), K(new_proj), K(old_proj));
-  } else if (OB_ISNULL(old_row_)) {
+  if (!iter_has_built_) {
     if (OB_FAIL(write_buffer_.begin(result_iter_))) {
       LOG_WARN("begin write iterator failed", K(ret));
+    } else {
+      iter_has_built_ = true;
     }
   }
-
   if (OB_SUCC(ret)) {
-    ObDASWriteBuffer &write_buffer = get_write_buffer();
-    ObSpatIndexRow *spatial_rows = get_spatial_index_rows();
-    bool got_row = false;
-    while (OB_SUCC(ret) && ! got_row) {
-      if (OB_ISNULL(spatial_rows) || spatial_row_idx_ >= spatial_rows->count()) {
-        const ObChunkDatumStore::StoredRow *sr = nullptr;
-        spatial_row_idx_ = 0;
-        if (OB_FAIL(result_iter_.get_next_row(sr))) {
-          if (OB_ITER_END != ret) {
-            LOG_WARN("get next row from result iterator failed", K(ret));
-          } else if (!got_old_row_) {
-            // ret == OB_ITER_END, old row is finished, get next new row
-            old_row_ = NULL;
-            got_old_row_ = true;
-          }
-        } else if (OB_ISNULL(spatial_rows)) {
-          if (OB_FAIL(create_spatial_index_store())) {
-            LOG_WARN("create spatial index rows store failed", K(ret));
-          } else {
-            spatial_rows = get_spatial_index_rows();
-          }
-        }
-        if (OB_NOT_NULL(spatial_rows)) {
-          spatial_rows->reuse();
-        }
-
-        if(OB_SUCC(ret)) {
-          // get full row successfully
-          const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
-          int64_t geo_idx = cur_proj.at(rowkey_num);
-          ObString geo_wkb = sr->cells()[geo_idx].get_string();
-          if (OB_FAIL(ObTextStringHelper::read_real_string_data(&allocator_, ObGeometryType,
-                      CS_TYPE_UTF8MB4_BIN, true, geo_wkb))) {
-            LOG_WARN("fail to get real string data", K(ret), K(geo_wkb));
-          } else if (OB_FAIL(ObDASUtils::generate_spatial_index_rows(allocator_, *das_ctdef_, geo_wkb,
-                                                              cur_proj, *sr, *spatial_rows))) {
-            LOG_WARN("generate spatial_index_rows failed", K(ret), K(geo_idx), K(geo_wkb), K(rowkey_num));
-          }
-        }
-      }
-
-      if (OB_SUCC(ret) && spatial_row_idx_ < spatial_rows->count()) {
-        row = &(*spatial_rows)[spatial_row_idx_];
-        old_row_ = row;
-        spatial_row_idx_++;
-        got_row = true;
+    const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
+    if (OB_ISNULL(domain_iter_) && OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(
+           allocator_, &cur_proj, result_iter_, das_ctdef_, nullptr/*main_ctdef*/, domain_iter_))) {
+      LOG_WARN("fail to create domain index dml iterator", K(ret));
+    } else if (OB_FAIL(domain_iter_->get_next_domain_row(row))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to get next domain row", K(ret), KPC(domain_iter_));
+      } else if (!got_old_row_) {
+        // ret == OB_ITER_END, old row is finished, get next new row
+        iter_has_built_ = false;
+        got_old_row_ = true;
+        domain_iter_->set_row_projector(&(das_ctdef_->new_row_projector_));
       }
     }
   }
+  LOG_DEBUG("get next domain index row", K(ret), K(iter_has_built_), K(got_old_row_),
+      KPC(domain_iter_), KPC(row));
   return ret;
 }
 
@@ -257,16 +214,16 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
 {
   int ret = OB_SUCCESS;
   ObAccessService *as = MTL(ObAccessService *);
-  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_spatial_index())) {
+  if (OB_UNLIKELY(ctdef.table_param_.get_data_table().is_domain_index())) {
     if (OB_FAIL(as->delete_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
                                 ctdef.column_ids_, &iter, affected_rows))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("delete rows to access service failed", K(ret));
+        LOG_WARN("delete rows to access service failed", K(ret), K(ls_id), K(tablet_id));
       }
     } else if (OB_FAIL(as->insert_rows(ls_id, tablet_id, *tx_desc_, dml_param_,
                                        ctdef.column_ids_, &iter, affected_rows))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("insert rows to access service failed", K(ret));
+        LOG_WARN("insert rows to access service failed", K(ret), K(ls_id), K(tablet_id));
       }
     }
   } else if (ctdef.table_param_.get_data_table().is_mlog_table()

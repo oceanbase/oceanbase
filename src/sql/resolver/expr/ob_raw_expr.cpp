@@ -603,6 +603,72 @@ bool ObRawExpr::is_spatial_expr() const
   return IS_SPATIAL_OP(expr->get_expr_type());
 }
 
+bool ObRawExpr::is_json_domain_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_JSON_DOMAIN_OP(expr->get_expr_type());
+}
+
+ObRawExpr* ObRawExpr::get_json_domain_param_expr()
+{
+  ObRawExpr* param_expr = nullptr;
+
+  if (get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) {
+    param_expr = get_param_expr(1);
+  } else if (get_expr_type() == T_FUN_SYS_JSON_CONTAINS) {
+    param_expr = get_param_expr(0);
+  } else if (get_expr_type() == T_FUN_SYS_JSON_OVERLAPS) {
+    param_expr = get_param_expr(0);
+  }
+
+  return param_expr;
+}
+
+bool ObRawExpr::is_domain_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_DOMAIN_OP(expr->get_expr_type());
+}
+
+bool ObRawExpr::is_domain_json_expr() const
+{
+  const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(this);
+  return IS_DOMAIN_JSON_OP(expr->get_expr_type());
+}
+
+bool ObRawExpr::is_multivalue_define_json_expr() const
+{
+  bool b_ret = false;
+  const ObRawExpr *sub_expr = nullptr;
+  if (type_ == T_FUN_SYS_JSON_QUERY &&
+      get_param_count() >= 13 &&
+      OB_NOT_NULL(sub_expr = get_param_expr(12)) &&
+      sub_expr->is_const_expr()) {
+    const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr*>(sub_expr);
+    b_ret = const_expr->get_value().get_int() == 0;
+  }
+
+  return b_ret;
+}
+
+bool ObRawExpr::extract_multivalue_json_expr(const ObRawExpr*& json_expr) const
+{
+  bool found = false;
+
+  for (int i = 0; i < get_param_count() && !found; ++i) {
+    const ObRawExpr *child = get_param_expr(i);
+    if (OB_ISNULL(child)) {
+    } else if (child->type_ == T_FUN_SYS_JSON_QUERY) {
+      json_expr = child;
+      found = json_expr->is_multivalue_define_json_expr();
+      break;
+    } else if (child->extract_multivalue_json_expr(json_expr)) {
+      found = (json_expr && json_expr->type_ == T_FUN_SYS_JSON_QUERY);
+    }
+  }
+  return found;
+}
+
 bool ObRawExpr::is_geo_expr() const
 {
   return IS_GEO_OP(get_expr_type());
@@ -718,6 +784,7 @@ bool ObRawExpr::same_as(const ObRawExpr &expr,
   return bret;
 }
 
+
 ////////////////////////////////////////////////////////////////
 ObRawExpr *&ObTerminalRawExpr::get_param_expr(int64_t index)
 {
@@ -804,6 +871,7 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_UUID_SHORT == type_
       || T_FUN_SYS_SEQ_NEXTVAL == type_
       || T_FUN_SYS_AUTOINC_NEXTVAL == type_
+      || T_FUN_SYS_DOC_ID == type_
       || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == type_
       || T_FUN_SYS_ROWNUM == type_
       || T_FUN_SYS_ROWKEY_TO_ROWID == type_
@@ -2765,6 +2833,10 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
         }
       }
     }
+  } else if (T_FUN_SYS_BM25 == get_expr_type()) {
+    if (OB_FAIL(BUF_PRINTF("BM25(k1=1.2, b=0.75, epsilon=0.25)"))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    }
   } else {
     if (OB_FAIL(BUF_PRINTF("(%s", get_type_name(get_expr_type())))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
@@ -3991,13 +4063,61 @@ void ObSysFunRawExpr::reset()
   dblink_id_ = OB_INVALID_ID;
 }
 
+bool ObSysFunRawExpr::inner_json_expr_same_as(
+    const ObRawExpr &expr,
+    ObExprEqualCheckContext *check_context) const
+{
+  bool bool_ret = false;
+  const ObRawExpr *l_expr = this;
+  const ObRawExpr *r_expr = &expr;
+
+  if (r_expr->is_domain_json_expr()) {
+    l_expr->extract_multivalue_json_expr(l_expr);
+  }
+
+  if (l_expr->get_expr_type() == T_FUN_SYS_JSON_QUERY
+      && r_expr->is_domain_json_expr()) {
+    const ObRawExpr *r_param_expr = nullptr;
+    const ObRawExpr *l_param_expr = l_expr->get_param_expr(1);
+    if (r_expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) {
+      r_param_expr = r_expr->get_param_expr(1);
+    } else {
+      r_param_expr = r_expr->get_param_expr(0);
+    }
+    if (OB_ISNULL(r_param_expr)) {
+    } else if (r_param_expr->is_wrappered_json_extract()) {
+      r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
+    } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
+      r_param_expr = r_param_expr->get_param_expr(1);
+    }
+
+    if (OB_NOT_NULL(r_param_expr)) {
+      bool_ret = l_param_expr->same_as(*r_param_expr, check_context);
+    }
+  } else if (l_expr->get_expr_type() == r_expr->get_expr_type()) {
+    bool_ret = l_expr->same_as(*r_expr, check_context);
+  } else if (l_expr->is_wrappered_json_extract()
+              && r_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
+    l_expr = l_expr->get_param_expr(0);
+    bool_ret = l_expr->same_as(*r_expr, check_context);
+  } else if (r_expr->is_wrappered_json_extract()
+              && l_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
+    r_expr = r_expr->get_param_expr(0);
+    bool_ret = l_expr->same_as(*r_expr, check_context);
+  }
+
+  return bool_ret;
+}
+
 bool ObSysFunRawExpr::inner_same_as(
     const ObRawExpr &expr,
     ObExprEqualCheckContext *check_context) const
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-    if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
+    if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
+      bool_ret = inner_json_expr_same_as(expr, check_context);
+    } else if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
         && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {
       bool_ret = check_context->compare_ora_numeric_consts(*this, static_cast<const ObConstRawExpr &>(expr));
     }
@@ -6703,11 +6823,259 @@ int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
     }
     break;
   }
+  case ObRawExpr::EXPR_MATCH_AGAINST: {
+    ObMatchFunRawExpr *dest_match_against_expr = NULL;
+    if (OB_FAIL(create_raw_expr(expr_type, dest_match_against_expr))
+        || OB_ISNULL(dest_match_against_expr)) {
+      LOG_WARN("failed to allocate raw expr", KPC(dest_match_against_expr), K(ret));
+    } else {
+      dest = dest_match_against_expr;
+    }
+    break;
+  }
   case ObRawExpr::EXPR_INVALID_CLASS: {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("does not implement expr type copy", K(ret), K(expr_type), K(expr_class));
     break;
   }
+  }
+  return ret;
+}
+
+int ObMatchFunRawExpr::assign(const ObRawExpr &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_LIKELY(this != &other)) {
+    if (OB_UNLIKELY(get_expr_class() != other.get_expr_class() ||
+                    get_expr_type() != other.get_expr_type())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid input expr", K(ret), K(other.get_expr_type()));
+    } else if (OB_FAIL(ObRawExpr::assign(other))) {
+      LOG_WARN("copy in Base class ObRawExpr failed", K(ret));
+    } else {
+      const ObMatchFunRawExpr &tmp = static_cast<const ObMatchFunRawExpr &>(other);
+      if (OB_FAIL(match_columns_.assign(tmp.match_columns_))) {
+        LOG_WARN("faile to assign match columns", K(ret));
+      } else {
+        mode_flag_ = tmp.mode_flag_;
+        search_key_ = tmp.search_key_;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMatchFunRawExpr::replace_expr(const common::ObIArray<ObRawExpr *> &other_exprs,
+                                    const common::ObIArray<ObRawExpr *> &new_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObRawExpr::replace_expr(other_exprs, new_exprs))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_exprs(other_exprs,
+                                                     new_exprs,
+                                                     match_columns_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    search_key_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObMatchFunRawExpr::do_visit(ObRawExprVisitor &visitor)
+{
+  return visitor.visit(*this);
+}
+
+uint64_t ObMatchFunRawExpr::hash_internal(uint64_t seed) const
+{
+  uint64_t hash_value = seed;
+  for (int64_t i = 0; i < get_param_count(); ++i) {
+    if (NULL != get_param_expr(i)) {
+      hash_value = do_hash(*get_param_expr(i), hash_value);
+    }
+  }
+  hash_value = common::do_hash(mode_flag_, hash_value);
+  return hash_value;
+}
+
+int ObMatchFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &pos, ExplainType type) const
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_mysql_mode()) {
+    if (OB_FAIL(BUF_PRINTF("MATCH("))) {
+      LOG_WARN("fail to BUF_PRINTF", K(ret));
+    } else {
+      int64_t i = 0;
+      for (; OB_SUCC(ret) && i < get_match_columns().count() - 1; ++i) {
+        if (OB_ISNULL(get_match_columns().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(get_match_columns().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to get_name", K(i), K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(", "))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else {}
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_ISNULL(get_match_columns().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(get_match_columns().at(i)->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(") AGAINST("))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(get_search_key()->get_name(buf, buf_len, pos, type))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (NATURAL_LANGUAGE_MODE == get_mode_flag() &&
+                   OB_FAIL(BUF_PRINTF(""))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (BOOLEAN_MODE == get_mode_flag() &&
+                   OB_FAIL(BUF_PRINTF(" IN BOOLEAN MODE"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION == get_mode_flag() &&
+                   OB_FAIL(BUF_PRINTF(" IN NATURAL LANGUAGE MODE WITH QUERY EXPANSION"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (WITH_QUERY_EXPANSION == get_mode_flag() &&
+                   OB_FAIL(BUF_PRINTF(" WITH QUERY EXPANSION"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("fail to BUF_PRINTF", K(ret));
+        } else if (EXPLAIN_EXTENDED == type) {
+          if (OB_FAIL(BUF_PRINTF("("))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF("%p", this))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else if (OB_FAIL(BUF_PRINTF(")"))) {
+            LOG_WARN("fail to BUF_PRINTF", K(ret));
+          } else {}
+        }
+      }
+    }
+  } else {
+    // jinmao TODO: serialize oracle contains()
+  }
+  return ret;
+}
+
+bool ObMatchFunRawExpr::inner_same_as(const ObRawExpr &expr, ObExprEqualCheckContext *check_context) const
+{
+  bool bret = true;
+  if (get_expr_type() != expr.get_expr_type()) {
+    bret = false;
+  } else {
+    const ObMatchFunRawExpr *match_expr = static_cast<const ObMatchFunRawExpr*>(&expr);
+    if (mode_flag_ != match_expr->mode_flag_ ||
+        match_columns_.count() != match_expr->match_columns_.count()) {
+      bret = false;
+    } else if (OB_ISNULL(search_key_) || OB_ISNULL(match_expr->search_key_) ||
+               !search_key_->same_as(*match_expr->search_key_, check_context)) {
+      bret = false;
+    }
+    for (int64_t i = 0; bret && i < match_columns_.count(); i++) {
+      if (OB_ISNULL(match_columns_.at(i)) || OB_ISNULL(match_expr->match_columns_.at(i)) ||
+          !match_columns_.at(i)->same_as(*match_expr->match_columns_.at(i), check_context)) {
+        bret = false;
+      }
+    }
+  }
+  return bret;
+}
+
+void ObMatchFunRawExpr::clear_child()
+{
+  match_columns_.reset();
+  search_key_ = NULL;
+  mode_flag_ = NATURAL_LANGUAGE_MODE;
+}
+
+void ObMatchFunRawExpr::reset()
+{
+  ObRawExpr::reset();
+  clear_child();
+}
+
+int64_t ObMatchFunRawExpr::get_param_count() const
+{
+  return match_columns_.count() + 1 /*search key*/;
+}
+
+const ObRawExpr *ObMatchFunRawExpr::get_param_expr(int64_t index) const
+{
+  const ObRawExpr *ptr_ret = NULL;
+  if (0 <= index && index < match_columns_.count()) {
+    ptr_ret = match_columns_.at(index);
+  } else if (index == match_columns_.count()) {
+    ptr_ret = search_key_;
+  } else { /*do nothing*/ }
+  return ptr_ret;
+}
+
+ObRawExpr *&ObMatchFunRawExpr::get_param_expr(int64_t index)
+{
+  if (0 <= index && index < match_columns_.count()) {
+    return match_columns_.at(index);
+  } else if (index == match_columns_.count()) {
+    return search_key_;
+  } else {
+    return USELESS_POINTER;
+  }
+  return USELESS_POINTER;
+}
+
+int ObMatchFunRawExpr::get_table_id(uint64_t &table_id)
+{
+  int ret = OB_SUCCESS;
+  table_id = OB_INVALID_ID;
+  if (get_match_columns().count() < 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null pointer", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_match_columns().count(); i++) {
+      ObColumnRefRawExpr *match_col = NULL;
+      if (OB_ISNULL(get_match_columns().at(i)) || !get_match_columns().at(i)->is_column_ref_expr()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else if (OB_FALSE_IT(match_col = static_cast<ObColumnRefRawExpr*>(get_match_columns().at(i)))) {
+      } else if (table_id != OB_INVALID_ID && table_id != match_col->get_table_id()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret));
+      } else {
+        table_id = match_col->get_table_id();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMatchFunRawExpr::get_match_column_type(ObExprResType &result_type)
+{
+  int ret = OB_SUCCESS;
+  if (get_match_columns().count() < 1) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected empty match column set", K(ret));
+  } else if (OB_ISNULL(get_match_columns().at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    result_type.assign(get_match_columns().at(0)->get_result_type());
+  }
+  return ret;
+}
+
+int ObMatchFunRawExpr::replace_param_expr(int64_t index, ObRawExpr *expr)
+{
+  int ret = common::OB_SUCCESS;
+  if (OB_UNLIKELY(index < 0 || index >= get_param_count())) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(index), K(get_param_count()));
+  } else if (OB_UNLIKELY(NULL == expr)) {
+    ret = common::OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else {
+    ObRawExpr *&target_expr = get_param_expr(index);
+    target_expr = expr;
   }
   return ret;
 }

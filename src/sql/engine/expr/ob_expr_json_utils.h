@@ -149,10 +149,41 @@ public:
                                 ObJsonCastParam &cast_param,
                                 uint8_t &is_type_mismatch,
                                 number::ObNumber &val);
+
+  static int cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
+                                         ObExecContext* exec_ctx,
+                                         ObIJsonBase *j_base,
+                                         ObExprResType col_res_type,
+                                         ObObj &res_obj);
+
+  static int cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
+                                         ObEvalCtx& eval_ctx,
+                                         ObIJsonBase *j_base,
+                                         ObCollationType collation,
+                                         ObAccuracy &accuracy,
+                                         ObObjType obj_type,
+                                         ObObj &res_obj);
+
   typedef int (*ObItemMethodValid)(ObIJsonBase*& in,
                                   bool &is_null_result,
                                   common::ObIAllocator *allocator,
                                   uint8_t &is_type_mismatch);
+  typedef int (*ObJsonCastSqlDatum)(common::ObIAllocator *allocator,
+                                    ObEvalCtx &ctx,
+                                    ObIJsonBase *j_base,
+                                    common::ObAccuracy &accuracy,
+                                    ObJsonCastParam &cast_param,
+                                    ObDatum &res,
+                                    uint8_t &is_type_mismatch,
+                                    const ObExpr *rt_expr);
+  typedef int (*ObJsonCastSqlObj)(common::ObIAllocator *allocator,
+                                  ObEvalCtx &ctx,
+                                  ObIJsonBase *j_base,
+                                  common::ObAccuracy &accuracy,
+                                  ObJsonCastParam &cast_param,
+                                  ObObj &res,
+                                  uint8_t &is_type_mismatch,
+                                  const ObExpr *rt_expr);
   typedef int (*ObJsonCastSqlScalar)(common::ObIAllocator *allocator,
                                     ObEvalCtx &ctx,
                                     ObIJsonBase *j_base,
@@ -179,6 +210,8 @@ public:
                                   bool strict = false);
   static ObJsonUtil::ObItemMethodValid get_item_method_cast_res_func(ObJsonPath* j_path,
                                           ObIJsonBase* j_base);
+  static ObJsonUtil::ObJsonCastSqlObj get_json_obj_cast_func(ObObjType dst_type);
+  static ObJsonUtil::ObJsonCastSqlDatum get_json_datum_cast_func(ObObjType dst_type);
   static ObJsonUtil::ObJsonCastSqlScalar get_json_cast_func(ObObjType dst_type);
   static int get_json_path(ObExpr* expr,
                           ObEvalCtx &ctx,
@@ -200,6 +233,15 @@ public:
                                    ObIAllocator &alloc,
                                    ObString &padding_res);
   static int set_mismatch_val(ObIArray<int8_t>& val, ObIArray<int8_t>& type, int64_t& opt_val, uint32_t& pos);
+  template<typename T>
+  static void wrapper_set_uint(ObObjType type, uint64_t val, T& obj);
+  template<typename T>
+  static void wrapper_set_string(ObObjType type, ObString& val, T& obj);
+  template<typename T>
+  static void wrapper_set_timestamp_tz(ObObjType type, ObOTimestampData val, T& obj);
+  template<typename T>
+  static void wrapper_set_decimal_int(const ObDecimalInt *decint, ObScale scale, int32_t int_bytes, T& obj);
+
   static int init_json_path(ObIAllocator &alloc, ObExprCGCtx &op_cg_ctx,
                             const ObRawExpr* path,
                             ObExprJsonQueryParamInfo& res);

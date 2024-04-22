@@ -93,7 +93,7 @@ int ObSpatialIndexLookupOp::filter_by_mbr(const ObObj &mbr_obj, bool &pass_throu
   ObSpatialMBR idx_spa_mbr;
   bool is_point = (WKB_POINT_DATA_SIZE == mbr_str.length());
 
-  if (OB_FAIL(ObSpatialMBR::from_string(mbr_str, ObGeoRelationType::T_INVALID, idx_spa_mbr, is_point))) {
+  if (OB_FAIL(ObSpatialMBR::from_string(mbr_str, ObDomainOpType::T_INVALID, idx_spa_mbr, is_point))) {
     LOG_WARN("fail to create index spatial mbr", K(ret), K(mbr_obj));
   } else {
     idx_spa_mbr.is_point_ = is_point;
@@ -125,9 +125,17 @@ int ObSpatialIndexLookupOp::save_rowkeys()
     } else if (last_rowkey_ != *idx_row) {
       ObNewRange lookup_range;
       uint64_t ref_table_id = lookup_ctdef_->ref_table_id_;
+      int64_t group_idx = 0;
+      for (int64_t i = 0; OB_SUCC(ret) && i < index_ctdef_->result_output_.count(); ++i) {
+        ObObj tmp_obj;
+        ObExpr *expr = index_ctdef_->result_output_.at(i);
+        if (T_PSEUDO_GROUP_ID == expr->type_) {
+          group_idx = expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_).get_int();
+        }
+      }
       if (OB_FAIL(lookup_range.build_range(ref_table_id, *idx_row))) {
         LOG_WARN("build lookup range failed", K(ret), K(ref_table_id), K(*idx_row));
-      } else if (FALSE_IT(lookup_range.group_idx_ = get_index_group_cnt() - 1)) {
+      } else if (FALSE_IT(lookup_range.group_idx_ = group_idx)) {
       } else if (OB_FAIL(scan_param_.key_ranges_.push_back(lookup_range))) {
        LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
       }
@@ -159,20 +167,6 @@ int ObSpatialIndexLookupOp::get_next_row()
         if (OB_FAIL(rowkey_iter_->get_next_row())) {
           if (OB_ITER_END != ret) {
             LOG_WARN("get next row from index scan failed", K(ret));
-          } else if (is_group_scan_) {
-            // switch to next index group
-            if (OB_FAIL(switch_rowkey_scan_group())) {
-              if (OB_ITER_END != ret) {
-                LOG_WARN("rescan index operator failed", K(ret));
-              } else {
-                LOG_DEBUG("switch group end",
-                         K(get_index_group_cnt()), K(lookup_rowkey_cnt_), KP(this));
-              }
-            } else {
-              inc_index_group_cnt();
-              LOG_DEBUG("switch to next index batch to fetch rowkey",
-                       K(get_index_group_cnt()), K(lookup_rowkey_cnt_), KP(this));
-            }
           }
         } else if (OB_FAIL(process_data_table_rowkey())) {
           LOG_WARN("process data table rowkey with das failed", K(ret));
@@ -222,7 +216,7 @@ int ObSpatialIndexLookupOp::get_next_row()
         } else if (OB_FAIL(lookup_iter_->get_next_row())) {
           if (OB_ITER_END == ret) {
             ret = OB_SUCCESS;
-            if (need_next_index_batch()) {
+            if (!index_end_) {
               // reuse lookup_iter_ only
               ObLocalIndexLookupOp::reset_lookup_state();
               index_end_ = false;

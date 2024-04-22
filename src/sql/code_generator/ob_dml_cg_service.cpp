@@ -1137,7 +1137,7 @@ int ObDmlCgService::convert_dml_column_info(ObTableID index_tid,
     for (; OB_SUCC(ret) && iter != index_schema->column_end(); ++iter) {
       const ObColumnSchemaV2 *column = *iter;
       ObObjMeta column_type;
-      if (!column->is_rowkey_column() && !column->is_virtual_generated_column()) {
+      if (!column->is_rowkey_column() && (!column->is_virtual_generated_column())) {
         //skip virtual generated column or rowkey
         column_type = column->get_meta_type();
         column_type.set_scale(column->get_accuracy().get_scale());
@@ -1798,7 +1798,7 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
   IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
   bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index()
                           && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
-  uint8_t extra_geo = is_spatial_index ? 1 : 0;
+  uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
   //generate old row projector
   if (!old_row.empty()) {
     //generate storage row projector
@@ -1833,10 +1833,11 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
         }
       }
     }
+
     if (OB_SUCC(ret) && is_spatial_index
         && OB_FAIL(add_geo_col_projector(old_row, full_row, dml_column_ids, storage_column_ids.count(),
                                          das_ctdef, old_row_projector))) {
-        LOG_WARN("add geo column projector failed", K(ret));
+      LOG_WARN("add geo column projector failed", K(ret));
     }
   }
   //generate new row projector
@@ -2274,6 +2275,41 @@ int ObDmlCgService::convert_table_dml_param(ObLogicalOperator &op, ObDASDMLBaseC
   return ret;
 }
 
+int ObDmlCgService::fill_multivalue_extra_info_on_table_param(
+    share::schema::ObSchemaGetterGuard *guard,
+    const ObTableSchema *index_schema,
+    uint64_t tenant_id,
+    ObDASDMLBaseCtDef &das_dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  int64_t t_version = OB_INVALID_VERSION;
+  const ObTableSchema *table_schema = NULL;
+
+  if (OB_ISNULL(guard) || OB_ISNULL(index_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(guard), K(index_schema->get_data_table_id()));
+  } else if (OB_FAIL(guard->get_table_schema(tenant_id, index_schema->get_data_table_id(), table_schema))) {
+    LOG_WARN("fail to get schema", K(ret), K(index_schema->get_data_table_id()));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("table schema is NULL", K(ret));
+  } else {
+    ObTableSchemaParam& table_param = das_dml_ctdef.table_param_.get_data_table_ref();
+    table_param.set_data_table_rowkey_column_num(table_schema->get_rowkey_column_num());
+    uint64_t max_idx = table_param.get_column_count();
+    for (int64_t i = max_idx - 2; i >= 0; --i) {
+      if (OB_ISNULL(table_param.get_column_by_idx(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table column is NULL", K(ret));
+      } else {
+        table_param.get_column_by_idx(i)->set_nullable_for_write(true);
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *guard,
                                          uint64_t table_id,
                                          ObDASDMLBaseCtDef &das_dml_ctdef)
@@ -2296,6 +2332,9 @@ int ObDmlCgService::fill_table_dml_param(share::schema::ObSchemaGetterGuard *gua
                                                         t_version,
                                                         das_dml_ctdef.column_ids_))) {
     LOG_WARN("fail to convert table param", K(ret), K(das_dml_ctdef));
+  } else if (table_schema->is_multivalue_index_aux() &&
+            OB_FAIL(fill_multivalue_extra_info_on_table_param(guard, table_schema, tenant_id, das_dml_ctdef))) {
+    LOG_WARN("fail to set multivalue index extra info on table param", K(ret), K(das_dml_ctdef));
   }
   return ret;
 }

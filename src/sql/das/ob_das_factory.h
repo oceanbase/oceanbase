@@ -52,7 +52,12 @@ public:
 
   static inline bool is_registered(const ObDASOpType op_type)
   {
-    return op_type >= 0 && op_type < DAS_OP_MAX && NULL != G_DAS_ALLOC_FUNS_[op_type].op_func_;
+    return op_type >= 0 && op_type < DAS_OP_MAX && NULL != G_DAS_ALLOC_FUNS_[op_type].ctdef_func_;
+  }
+
+  static inline bool is_attached(const ObDASOpType op_type)
+  {
+    return op_type >= 0 && op_type < DAS_OP_MAX && NULL == G_DAS_ALLOC_FUNS_[op_type].op_func_;
   }
 
   struct AllocFun

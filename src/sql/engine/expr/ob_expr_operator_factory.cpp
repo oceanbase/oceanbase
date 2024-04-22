@@ -36,6 +36,7 @@
 #include "sql/engine/expr/ob_expr_bit_neg.h"
 #include "sql/engine/expr/ob_expr_bit_left_shift.h"
 #include "sql/engine/expr/ob_expr_bit_right_shift.h"
+#include "sql/engine/expr/ob_expr_bm25.h"
 #include "sql/engine/expr/ob_expr_case.h"
 #include "sql/engine/expr/ob_expr_oracle_decode.h"
 #include "sql/engine/expr/ob_expr_oracle_trunc.h"
@@ -194,6 +195,10 @@
 #include "sql/engine/expr/ob_expr_part_id.h"
 #include "sql/engine/expr/ob_expr_timestamp_add.h"
 #include "sql/engine/expr/ob_expr_des_hex_str.h"
+#include "sql/engine/expr/ob_expr_doc_id.h"
+#include "sql/engine/expr/ob_expr_doc_length.h"
+#include "sql/engine/expr/ob_expr_word_segment.h"
+#include "sql/engine/expr/ob_expr_word_count.h"
 #include "sql/engine/expr/ob_expr_ascii.h"
 #include "sql/engine/expr/ob_expr_truncate.h"
 #include "sql/engine/expr/ob_expr_bit_count.h"
@@ -866,6 +871,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPartId);
     REG_OP(ObExprLastTraceId);
     REG_OP(ObExprLastExecId);
+    REG_OP(ObExprDocID);
+    REG_OP(ObExprDocLength);
+    REG_OP(ObExprWordSegment);
+    REG_OP(ObExprWordCount);
     REG_OP(ObExprObjAccess);
     REG_OP(ObExprEnumToStr);
     REG_OP(ObExprSetToStr);
@@ -1040,6 +1049,8 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTEquals);
     REG_OP(ObExprPrivSTTouches);
     REG_OP(ObExprAlignDate4Cmp);
+    REG_OP(ObExprJsonQuery);
+    REG_OP(ObExprBM25);
 
     REG_OP(ObExprGetLock);
     REG_OP(ObExprIsFreeLock);
@@ -1501,9 +1512,15 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       // don't alias "power" to "pow" in oracle mode, because oracle has no
       // "pow" function.
       alias_name = ObString::make_string(N_POW);
+    } else if (0 == origin_name.case_compare("DOC_ID")) {
+      alias_name = ObString::make_string(N_DOC_ID);
     } else if (0 == origin_name.case_compare("ws")) {
       // ws is synonym for word_segment
       alias_name = ObString::make_string(N_WORD_SEGMENT);
+    } else if (0 == origin_name.case_compare("WORD_COUNT")) {
+      alias_name = ObString::make_string(N_WORD_COUNT);
+    } else if (0 == origin_name.case_compare("DOC_LENGTH")) {
+      alias_name = ObString::make_string(N_DOC_LENGTH);
     } else if (0 == origin_name.case_compare("inet_ntoa")) {
       // inet_ntoa is synonym for int2ip
       alias_name = ObString::make_string(N_INT2IP);

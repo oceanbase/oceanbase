@@ -224,9 +224,7 @@ int ObTenantMetaMemMgr::mtl_new(ObTenantMetaMemMgr *&meta_mem_mgr)
 int ObTenantMetaMemMgr::init()
 {
   int ret = OB_SUCCESS;
-  lib::ObMemAttr mem_attr(tenant_id_, "MetaAllocator", ObCtxIds::META_OBJ_CTX_ID);
-  lib::ObMemAttr map_attr(tenant_id_, "TabletMap");
-  lib::ObMemAttr other_attr(tenant_id_, "T3MOtherMem");
+  const lib::ObMemAttr map_attr(tenant_id_, "TabletMap");
   const int64_t mem_limit = 4 * 1024 * 1024 * 1024LL;
   const int64_t bucket_num = cal_adaptive_bucket_num();
   const int64_t pin_set_bucket_num = common::hash::cal_next_prime(DEFAULT_BUCKET_NUM);

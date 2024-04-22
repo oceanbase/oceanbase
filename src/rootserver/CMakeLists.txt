@@ -121,6 +121,7 @@ ob_set_subtarget(ob_rootserver ddl_task
   ddl_task/ob_ddl_single_replica_executor.cpp
   ddl_task/ob_ddl_task.cpp
   ddl_task/ob_drop_index_task.cpp
+  ddl_task/ob_drop_fts_index_task.cpp
   ddl_task/ob_drop_primary_key_task.cpp
   ddl_task/ob_index_build_task.cpp
   ddl_task/ob_build_mview_task.cpp
@@ -154,6 +155,7 @@ ob_set_subtarget(ob_rootserver freeze
   freeze/ob_major_freeze_helper.cpp
   freeze/ob_major_freeze_util.cpp
   freeze/ob_major_merge_progress_util.cpp
+  freeze/ob_fts_checksum_validate_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver restore

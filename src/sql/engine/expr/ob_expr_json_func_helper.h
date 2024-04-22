@@ -52,6 +52,8 @@ public:
     error_type_(0),
     is_empty_default_const_(false),
     is_error_default_const_(false),
+    is_alias_(false),
+    is_multivalue_(false),
     empty_val_(),
     error_val_(),
     on_mismatch_(),
@@ -74,6 +76,8 @@ public:
   int8_t error_type_;
   bool is_empty_default_const_;
   bool is_error_default_const_;
+  bool is_alias_;
+  bool is_multivalue_;
   ObDatum *empty_val_;
   ObDatum *error_val_;
   common::ObSEArray<int8_t, 1, common::ModulePageAllocator, true> on_mismatch_;
@@ -260,9 +264,9 @@ public:
   @param[out] j_base     the pointer to JsonBase
   @return Returns OB_SUCCESS on success, error code otherwise.
   */
-  static int get_json_val(const common::ObObj &data, ObExprCtx &ctx,
+  static int get_json_val(const common::ObObj &data, ObExecContext *ctx,
                           bool is_bool, common::ObIAllocator *allocator,
-                          ObIJsonBase*& j_base, bool to_bin = false);
+                          ObIJsonBase*& j_base, bool to_bin= false);
   static int get_json_val(const common::ObDatum &data,
                           ObExecContext &ctx,
                           ObExpr* expr,

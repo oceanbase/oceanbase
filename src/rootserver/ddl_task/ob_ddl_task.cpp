@@ -164,7 +164,9 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
     consumer_group_id_(0), parent_task_id_(0), task_id_(0), type_(DDL_INVALID), src_table_schema_(nullptr),
-    dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr), tenant_data_version_(0)
+    dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr),
+    aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), aux_doc_word_schema_(nullptr),
+    tenant_data_version_(0)
 {
 }
 
@@ -182,7 +184,8 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
                                            const int64_t task_id)
   : sub_task_trace_id_(0), tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
-    ddl_arg_(ddl_arg), allocator_(allocator)
+    ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
+    aux_doc_word_schema_(nullptr)
 {
 }
 
@@ -662,6 +665,24 @@ OB_SERIALIZE_MEMBER(ObDDLTracing,
                     status_start_ts_,
                     parent_task_span_id_);
 
+int ObFTSDDLChildTaskInfo::deep_copy_from_other(
+    const ObFTSDDLChildTaskInfo &other,
+    common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(ob_write_string(allocator, other.index_name_, index_name_))) {
+      LOG_WARN("fail to copy table name", K(ret), K(other));
+    } else {
+      table_id_ = other.table_id_;
+      task_id_ = other.task_id_;
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObFTSDDLChildTaskInfo, index_name_, table_id_);
+
 int ObDDLTask::cleanup()
 {
   int ret = cleanup_impl();
@@ -937,7 +958,7 @@ int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, in
   return ret;
 }
 
-int ObDDLTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
+int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   ObDDLTaskSerializeField serialize_field;

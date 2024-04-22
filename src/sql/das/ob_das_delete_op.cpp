@@ -73,7 +73,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_DELETE, ObDASDMLIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("delete rows to access service failed", K(ret));
     }
-  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_spatial_index())
+  } else if (!(ctdef.is_ignore_ ||
+            ctdef.table_param_.get_data_table().is_spatial_index() ||
+            ctdef.table_param_.get_data_table().is_multivalue_index_aux())
       && 0 == affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows after do delete", K(affected_rows), K(ret));

@@ -607,6 +607,27 @@ int ObDASCtx::build_related_tablet_map(const ObDASTableLocMeta &loc_meta)
   return ret;
 }
 
+int ObDASCtx::find_group_param_by_param_idx(int64_t param_idx,
+                                    bool &exist, uint64_t &array_idx)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  array_idx = OB_INVALID_ID;
+  if(OB_ISNULL(group_params_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("group params set by above operator is null", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < group_params_->count() && !exist; ++i) {
+      const GroupRescanParam &group_param = group_params_->at(i);
+      if (param_idx == group_param.param_idx_) {
+        exist = true;
+        array_idx = i;
+      }
+    }
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObDASCtx)
 {
   int ret = OB_SUCCESS;

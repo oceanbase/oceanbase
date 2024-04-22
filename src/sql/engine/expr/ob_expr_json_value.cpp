@@ -25,7 +25,10 @@
 #include "lib/oblog/ob_log_module.h"
 #include "ob_expr_json_func_helper.h"
 #include "lib/charset/ob_charset.h"
-#include "ob_expr_json_utils.h"
+#include "sql/engine/expr/ob_expr_json_utils.h"
+
+// from sql_parser_base.h
+#define DEFAULT_STR_LENGTH -1
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -835,6 +838,175 @@ void ObExprJsonValue::get_error_option(int8_t error_type,
   }
 }
 
+/*
+template<>
+void ObExprJsonValue::wrapper_set_error_result(
+  const ObExpr &expr,
+  ObEvalCtx &ctx,
+  ObObj &res, int &ret, uint8_t &error_type,
+  ObDatum *&error_val, ObVector<uint8_t> &mismatch_val,
+  ObVector<uint8_t> &mismatch_type,
+  uint8_t &is_type_cast,
+  const ObAccuracy &accuracy,
+  ObObjType dst_type,
+  ObObjMeta& meta)
+{
+  bool has_lob_header = is_lob_storage(dst_type);
+  ObTextStringObObjResult text_result(dst_type, nullptr, &res, has_lob_header);
+  if (!try_set_error_val<ObObj>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type, meta)) {
+    text_result.set_result();
+  }
+}
+
+template<>
+void ObExprJsonValue::wrapper_set_error_result(
+  const ObExpr &expr,
+  ObEvalCtx &ctx,
+  ObDatum &res, int &ret, uint8_t &error_type,
+  ObDatum *&error_val, ObVector<uint8_t> &mismatch_val,
+  ObVector<uint8_t> &mismatch_type,
+  uint8_t &is_type_cast,
+  const ObAccuracy &accuracy,
+  ObObjType dst_type,
+  ObObjMeta& meta)
+{
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type, meta)) {
+    text_result.set_result();
+  }
+}
+
+template<>
+int ObExprJsonValue::wrapper_text_string_result(common::ObIAllocator *allocator,
+                                                const ObExpr &expr,
+                                                ObEvalCtx &ctx,
+                                                ObString& result_value,
+                                                uint8_t error_type,
+                                                ObDatum *error_val,
+                                                ObAccuracy &accuracy,
+                                                ObObjType dst_type,
+                                                ObDatum &res,
+                                                ObVector<uint8_t> &mismatch_val,
+                                                ObVector<uint8_t> &mismatch_type,
+                                                uint8_t &is_type_cast,
+                                                uint8_t ascii_type,
+                                                ObObjMeta& res_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+
+  if (dst_type == ObJsonType) {
+    if (OB_FAIL(text_result.init(result_value.length()))) {
+      LOG_WARN("init lob result failed");
+    } else if (OB_FAIL(text_result.append(result_value))) {
+      LOG_WARN("failed to append realdata", K(ret), K(result_value), K(text_result));
+    }
+  } else {
+    if (ascii_type == 0) {
+      if (OB_FAIL(text_result.init(result_value.length()))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(result_value))) {
+        LOG_WARN("failed to append realdata", K(ret), K(result_value), K(text_result));
+      }
+    } else {
+      char *buf = NULL;
+      int64_t buf_len = result_value.length() * ObCharset::MAX_MB_LEN * 2;
+      int64_t reserve_len = 0;
+      int32_t length = 0;
+
+      if (OB_FAIL(text_result.init(buf_len))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.get_reserved_buffer(buf, reserve_len))) {
+        LOG_WARN("fail to get reserved buffer", K(ret));
+      } else if (reserve_len != buf_len) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get reserve len is invalid", K(ret), K(reserve_len), K(buf_len));
+      } else if (OB_FAIL(ObJsonExprHelper::calc_asciistr_in_expr(result_value, expr.args_[0]->datum_meta_.cs_type_,
+                                                                  expr.datum_meta_.cs_type_,
+                                                                  buf, reserve_len, length))) {
+        LOG_WARN("fail to calc unistr", K(ret));
+      } else if (OB_FAIL(text_result.lseek(length, 0))) {
+        LOG_WARN("text_result lseek failed", K(ret), K(text_result), K(length));
+      }
+    }
+  }
+
+  if (!try_set_error_val<ObDatum>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type, res_meta)) {
+    // old engine set same alloctor for wrapper, so we can use val without copy
+    text_result.set_result();
+  }
+
+  return ret;
+}
+
+template<>
+int ObExprJsonValue::wrapper_text_string_result(common::ObIAllocator *allocator,
+                                                const ObExpr &expr,
+                                                ObEvalCtx &ctx,
+                                                ObString& result_value,
+                                                uint8_t error_type,
+                                                ObDatum *error_val,
+                                                ObAccuracy &accuracy,
+                                                ObObjType dst_type,
+                                                ObObj &res,
+                                                ObVector<uint8_t> &mismatch_val,
+                                                ObVector<uint8_t> &mismatch_type,
+                                                uint8_t &is_type_cast,
+                                                uint8_t ascii_type,
+                                                ObObjMeta& res_meta)
+{
+  int ret = OB_SUCCESS;
+  bool has_lob_header = is_lob_storage(dst_type);
+  ObTextStringObObjResult text_result(dst_type, nullptr, &res, has_lob_header);
+  if (dst_type == ObJsonType) {
+    if (OB_FAIL(text_result.init(result_value.length(), allocator))) {
+      LOG_WARN("init lob result failed");
+    } else if (OB_FAIL(text_result.append(result_value))) {
+      LOG_WARN("failed to append realdata", K(ret), K(result_value), K(text_result));
+    } else {
+      text_result.set_result();
+    }
+  } else {
+    if (ascii_type == 0) {
+      if (OB_FAIL(text_result.init(result_value.length(), allocator))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.append(result_value))) {
+        LOG_WARN("failed to append realdata", K(ret), K(result_value), K(text_result));
+      } else {
+        text_result.set_result();
+      }
+    } else {
+      char *buf = NULL;
+      int64_t buf_len = result_value.length() * ObCharset::MAX_MB_LEN * 2;
+      int64_t reserve_len = 0;
+      int32_t length = 0;
+
+      if (OB_FAIL(text_result.init(buf_len, allocator))) {
+        LOG_WARN("init lob result failed");
+      } else if (OB_FAIL(text_result.get_reserved_buffer(buf, reserve_len))) {
+        LOG_WARN("fail to get reserved buffer", K(ret));
+      } else if (reserve_len != buf_len) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get reserve len is invalid", K(ret), K(reserve_len), K(buf_len));
+      } else if (OB_FAIL(ObJsonExprHelper::calc_asciistr_in_expr(result_value, expr.args_[0]->datum_meta_.cs_type_,
+                                                                  expr.datum_meta_.cs_type_,
+                                                                  buf, reserve_len, length))) {
+        LOG_WARN("fail to calc unistr", K(ret));
+      } else if (OB_FAIL(text_result.lseek(length, 0))) {
+        LOG_WARN("text_result lseek failed", K(ret), K(text_result), K(length));
+      }
+    }
+  }
+
+  if (!try_set_error_val<ObObj>(expr, ctx, res, ret, error_type, error_val, mismatch_val, mismatch_type, is_type_cast, accuracy, dst_type, res_meta)) {
+    // old engine set same alloctor for wrapper, so we can use val without copy
+    text_result.set_result();
+  }
+
+  return ret;
+}
+*/
+
 bool ObExprJsonValue::try_set_error_val(const ObExpr &expr,
                                         ObEvalCtx &ctx,
                                         ObDatum &res, int &ret,
@@ -874,7 +1046,7 @@ bool ObExprJsonValue::try_set_error_val(const ObExpr &expr,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get error val", K(ret));
       } else {
-        set_val(res, json_param->error_val_);
+        res.set_datum(*json_param->error_val_);
         ret = OB_SUCCESS;
       }
     }

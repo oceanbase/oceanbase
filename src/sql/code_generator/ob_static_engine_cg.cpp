@@ -399,10 +399,10 @@ int ObStaticEngineCG::check_expr_columnlized(const ObRawExpr *expr)
              || (expr->is_column_ref_expr() && static_cast<const ObColumnRefRawExpr*>(expr)->is_virtual_generated_column())
              || (expr->is_column_ref_expr() && is_shadow_column(static_cast<const ObColumnRefRawExpr*>(expr)->get_column_id()))) {
     // skip
-  } else if ((expr->is_aggr_expr() || (expr->is_win_func_expr()))
+  } else if ((expr->is_aggr_expr() || (expr->is_win_func_expr()) || expr->is_match_against_expr())
              && !expr->has_flag(IS_COLUMNLIZED)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr_expr or win_func_expr should be columnlized", K(ret), KPC(expr));
+    LOG_WARN("aggr, win_func, match_against exprs should be columnlized", K(ret), KPC(expr));
   } else if (!expr->has_flag(IS_COLUMNLIZED)) {
     if (0 == expr->get_param_count()) {
       ret = OB_ERR_UNEXPECTED;
@@ -1016,6 +1016,8 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     } else if (lookup_ctdef != nullptr &&
         OB_FAIL(lookup_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
+    } else if (OB_FAIL(tsc_spec.tsc_ctdef_.attach_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
+      LOG_WARN("set max batch size to attach spec failed", K(ret));
     }
   }
 
@@ -9003,5 +9005,6 @@ int ObStaticEngineCG::check_window_functions_order(const ObIArray<ObWinFunRawExp
   }
   return ret;
 }
+
 } // end namespace sql
 } // end namespace oceanbase

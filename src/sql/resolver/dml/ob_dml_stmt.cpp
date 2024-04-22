@@ -406,7 +406,8 @@ ObDMLStmt::ObDMLStmt(stmt::StmtType type)
       user_var_exprs_(),
       check_constraint_items_(),
       dblink_id_(OB_INVALID_ID),
-      is_reverse_link_(false)
+      is_reverse_link_(false),
+      match_exprs_()
 {
 }
 
@@ -502,6 +503,8 @@ int ObDMLStmt::assign(const ObDMLStmt &other)
     LOG_WARN("assign user var exprs fail", K(ret));
   } else if (OB_FAIL(check_constraint_items_.assign(other.check_constraint_items_))) {
     LOG_WARN("faield to assign check constraint items", K(ret));
+  } else if (OB_FAIL(match_exprs_.assign(other.match_exprs_))) {
+    LOG_WARN("faield to assign fulltext search exprs", K(ret));
   } else {
     limit_count_expr_ = other.limit_count_expr_;
     limit_offset_expr_ = other.limit_offset_expr_;
@@ -653,6 +656,9 @@ int ObDMLStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     LOG_WARN("deep copy limit percent expr failed", K(ret));
   } else if (OB_FAIL(expr_copier.copy(other.user_var_exprs_,
                                       user_var_exprs_))) {
+    LOG_WARN("deep copy user var exprs failed", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(other.match_exprs_,
+                                      match_exprs_))) {
     LOG_WARN("deep copy user var exprs failed", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<CheckConstraintItem>(expr_copier,
                                                                  other.check_constraint_items_,
@@ -929,6 +935,8 @@ int ObDMLStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
     } else if (NULL != limit_percent_expr_ &&
                OB_FAIL(visitor.visit(limit_percent_expr_, SCOPE_LIMIT))) {
       LOG_WARN("failed to visit limit percent exprs", K(ret));
+    } else if (OB_FAIL(visitor.visit(match_exprs_, SCOPE_DICT_FIELDS))) {
+      LOG_WARN("failed to visit fts exprs", K(ret));
     } else {}
   }
 
@@ -1802,7 +1810,8 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
       if (OB_ISNULL(column_expr = column_items_.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret));
-      } else if (column_expr->is_virtual_generated_column()) {
+      } else if (column_expr->is_virtual_generated_column() &&
+                 (!column_expr->is_fulltext_column() && !column_expr->is_multivalue_generated_column())) {
         ObRawExpr *dependant_expr = static_cast<ObColumnRefRawExpr *>(
                                     column_expr)->get_dependant_expr();
         if (OB_FAIL(dependant_expr->formalize(session_info))) {
@@ -1875,7 +1884,7 @@ int ObDMLStmt::formalize_stmt_expr_reference(ObRawExprFactory *expr_factory,
       if (OB_ISNULL(column_item.expr_) ||
           OB_ISNULL(table_item = get_table_item_by_id(column_item.table_id_))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(column_item.expr_), K(table_item), K(ret));
+        LOG_WARN("get unexpected null", K(column_item.table_id_), K(column_item.expr_), K(table_item), K(ret));
       } else if (table_item->is_function_table() ||
                  table_item->is_json_table() ||
                  table_item->for_update_ ||
@@ -2019,6 +2028,10 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
       // SQL DEFENSIVE CODE
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ref expr does not exist in the stmt", K(ret), K(expr));
+    } else if (expr.is_match_against_expr() &&
+              !ObRawExprUtils::find_expr(get_match_exprs(), &expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fulltext search expr does not exist in the stmt", K(ret), K(expr));
     } else if (is_select_stmt() &&
                OB_FAIL(static_cast<ObSelectStmt *>(this)->check_aggr_and_winfunc(expr))) {
       // SQL DEFENSIVE CODE
@@ -2040,7 +2053,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
        expr.has_flag(CNT_WINDOW_FUNC) || expr.has_flag(CNT_SUB_QUERY) ||
        expr.has_flag(CNT_ROWNUM) || expr.has_flag(CNT_SEQ_EXPR) ||
        expr.has_flag(CNT_PSEUDO_COLUMN) || expr.has_flag(CNT_ONETIME) ||
-       expr.has_flag(CNT_DYNAMIC_PARAM))) {
+       expr.has_flag(CNT_DYNAMIC_PARAM) || expr.has_flag(CNT_MATCH_EXPR))) {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
       if (OB_ISNULL(expr.get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -5046,5 +5059,26 @@ int ObJsonTableDef::assign(const ObJsonTableDef& src)
     }
   }
 
+  return ret;
+}
+
+int ObDMLStmt::get_match_expr_on_table(uint64_t table_id, ObMatchFunRawExpr *&match_expr) const
+{
+  int ret = OB_SUCCESS;
+  match_expr = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_match_exprs().count(); i++) {
+    uint64_t cur_tid = OB_INVALID_ID;
+    if (OB_ISNULL(get_match_exprs().at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(get_match_exprs().at(i)->get_table_id(cur_tid))) {
+      LOG_WARN("failed to get fulltext search exprs", K(ret));
+    } else if (OB_NOT_NULL(match_expr) && cur_tid == table_id) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, find more than one match expr on current table", K(ret), K(table_id));
+    } else if (cur_tid == table_id) {
+      match_expr = get_match_exprs().at(i);
+    } else { /*do nothing*/ }
+  }
   return ret;
 }

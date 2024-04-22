@@ -774,6 +774,12 @@ int ObRawExprWrapEnumSet::visit(ObAggFunRawExpr &expr)
   return ret;
 }
 
+int ObRawExprWrapEnumSet::visit(ObMatchFunRawExpr &expr)
+{
+  UNUSED(expr);
+  return OB_SUCCESS;
+}
+
 bool ObRawExprWrapEnumSet::can_wrap_type_to_str(const ObRawExpr &expr) const
 {
   bool bret = false;

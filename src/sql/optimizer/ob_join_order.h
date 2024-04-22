@@ -1394,6 +1394,10 @@ struct NullAwareAntiJoinInfo {
                               bool &is_index_back,
                               bool &is_global_index);
 
+    int get_matched_inv_index_tid(ObMatchFunRawExpr *match_expr,
+                                  uint64_t ref_table_id,
+                                  uint64_t &inv_idx_tid);
+
     inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
 
     int param_funct_table_expr(ObRawExpr* &function_table_expr,
@@ -1662,6 +1666,10 @@ struct NullAwareAntiJoinInfo {
                                               const ColumnIdInfoMap &column_schema_info,
                                               ObQueryRange *&query_range);
 
+    int extract_multivalue_preliminary_query_range(const ObIArray<ColumnItem> &range_columns,
+                                                  const ObIArray<ObRawExpr*> &predicates,
+                                                  ObQueryRange *&query_range);
+
     int extract_geo_schema_info(const uint64_t table_id,
                                 const uint64_t index_id,
                                 ObWrapperAllocator &wrap_allocator,
@@ -1687,6 +1695,12 @@ struct NullAwareAntiJoinInfo {
     int check_exprs_overlap_gis_index(const ObIArray<ObRawExpr*>& quals,
                                       const ObIArray<ObRawExpr*>& keys,
                                       bool &match);
+
+    int check_exprs_overlap_multivalue_index(const uint64_t table_id,
+                                             const uint64_t index_table_id,
+                                             const ObIArray<ObRawExpr*>& quals,
+                                             const ObIArray<ObRawExpr*>& keys,
+                                             bool &match);
 
     /**
      * 判断连接条件是否匹配索引前缀

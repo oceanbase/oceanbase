@@ -81,6 +81,12 @@ int ObRawExprModifyColumnName::visit(ObAggFunRawExpr &expr) {
   return common::OB_SUCCESS;
 }
 
+int ObRawExprModifyColumnName::visit(ObMatchFunRawExpr &expr)
+{
+  UNUSED (expr);
+  return common::OB_SUCCESS;
+}
+
 int ObRawExprModifyColumnName::visit(ObSysFunRawExpr &expr) {
   UNUSED (expr);
   return common::OB_SUCCESS;

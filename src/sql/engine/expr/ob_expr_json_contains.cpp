@@ -48,13 +48,6 @@ int ObExprJsonContains::calc_result_typeN(ObExprResType& type,
     type.set_int32();
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
-    
-    // set type for json_doc and json_candidate
-    for (int64_t i = 0; OB_SUCC(ret) && i < 2; i++) {
-      if (OB_FAIL(ObJsonExprHelper::is_valid_for_json(types_stack, i, N_JSON_CONTAINS))) {
-        LOG_WARN("wrong type for json doc.", K(ret), K(types_stack[i].get_type()));
-      }
-    }
 
     // set type for json_path
     if (OB_SUCC(ret) && param_num == 3) {

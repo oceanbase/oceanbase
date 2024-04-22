@@ -278,7 +278,7 @@ int ObSchemaGetterGuard::get_can_read_index_array(
           // skip
         } else if (!with_global_index && index_schema->is_global_index_table()) {
           // skip
-        } else if (!with_domain_index && index_schema->is_domain_index()) {
+        } else if (!with_domain_index && index_schema->is_fts_index()) {
           // does not need domain index, skip it
         } else if (!with_spatial_index && index_schema->is_spatial_index() && is_geo_default_srid) {
           // skip spatial index when geometry column has not specific srid.
@@ -1693,7 +1693,8 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id,
                                       const ObString &table_name,
                                       const bool is_index,
                                       const CheckTableType check_type, // check if temporary table is visable
-                                      uint64_t &table_id)
+                                      uint64_t &table_id,
+                                      const bool is_built_in_index/* = false*/)
 {
   int ret = OB_SUCCESS;
   uint64_t session_id = session_id_;
@@ -1724,9 +1725,10 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id,
                        table_name,
                        is_index,
                        simple_table,
-                       USER_HIDDEN_TABLE_TYPE == check_type ? true : false))) {
+                       USER_HIDDEN_TABLE_TYPE == check_type ? true : false,
+                       is_built_in_index))) {
       LOG_WARN("get simple table failed", KR(ret), K(tenant_id),
-               K(tenant_id), K(database_id), K(session_id), K(table_name), K(is_index));
+               K(tenant_id), K(database_id), K(session_id), K(table_name), K(is_index), K(is_built_in_index));
     } else if (NULL == simple_table) {
       if (OB_CORE_SCHEMA_VERSION != mgr->get_schema_version()) {
         // this log is useless when observer restarts.
@@ -1754,7 +1756,8 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id,
                                      const ObString &table_name,
                                      const bool is_index,
                                      const CheckTableType check_type,  // check if temporary table is visable
-                                     uint64_t &table_id)
+                                     uint64_t &table_id,
+                                     const bool is_built_in_index/* = false*/)
 {
   int ret = OB_SUCCESS;
   table_id = OB_INVALID_ID;
@@ -1776,9 +1779,9 @@ int ObSchemaGetterGuard::get_table_id(uint64_t tenant_id,
     } else if (OB_INVALID_ID == database_id) {
       // do-nothing
     } else if (OB_FAIL(get_table_id(tenant_id, database_id, table_name, is_index,
-                                    check_type, table_id))){
+                                    check_type, table_id, is_built_in_index))){
       LOG_WARN("get table id failed", KR(ret), K(tenant_id), K(database_id),
-               K(table_name), K(is_index));
+               K(table_name), K(is_index), K(is_built_in_index));
     }
   }
 
@@ -2282,7 +2285,8 @@ int ObSchemaGetterGuard::get_simple_table_schema(
     const ObString &table_name,
     const bool is_index,
     const ObSimpleTableSchemaV2 *&simple_table_schema,
-    bool is_hidden/*false*/)
+    const bool with_hidden_flag/*false*/,
+    const bool is_built_in_index/*false*/)
 {
   int ret = OB_SUCCESS;
   const ObSchemaMgr *mgr = NULL;
@@ -2304,8 +2308,9 @@ int ObSchemaGetterGuard::get_simple_table_schema(
                                            table_name,
                                            is_index,
                                            simple_table_schema,
-                                           is_hidden))) {
-    LOG_WARN("get simple table failed", KR(ret), K(tenant_id),
+                                           with_hidden_flag,
+                                           is_built_in_index))) {
+    LOG_WARN("get simple table failed", KR(ret), K(tenant_id), K(with_hidden_flag), K(is_built_in_index),
             K(tenant_id), K(database_id), K(table_name), K(is_index));
   }
   return ret;
@@ -2317,7 +2322,8 @@ int ObSchemaGetterGuard::get_table_schema(
     const ObString &table_name,
     const bool is_index,
     const ObTableSchema *&table_schema,
-    bool is_hidden/*false*/)
+    const bool with_hidden_flag/*false*/,
+    const bool is_built_in_index/*false*/)
 {
   int ret = OB_SUCCESS;
   const ObSimpleTableSchemaV2 *simple_table = NULL;
@@ -2327,9 +2333,10 @@ int ObSchemaGetterGuard::get_table_schema(
                                       table_name,
                                       is_index,
                                       simple_table,
-                                      is_hidden))) {
+                                      with_hidden_flag,
+                                      is_built_in_index))) {
     LOG_WARN("fail to get simple table schema", KR(ret), K(tenant_id),
-             K(database_id), K(table_name), K(is_index), K(is_hidden));
+             K(database_id), K(table_name), K(is_index), K(with_hidden_flag), K(is_built_in_index));
   } else if (NULL == simple_table) {
     LOG_INFO("table not exist", K(tenant_id),
              K(database_id), K(table_name), K(is_index));
@@ -2355,7 +2362,8 @@ int ObSchemaGetterGuard::get_table_schema(
     const ObString &table_name,
     const bool is_index,
     const ObTableSchema *&table_schema,
-    bool is_hidden/*false*/)
+    const bool with_hidden_flag/*false*/,
+    const bool is_built_in_index/*false*/)
 {
   int ret = OB_SUCCESS;
   uint64_t database_id = OB_INVALID_ID;
@@ -2373,7 +2381,7 @@ int ObSchemaGetterGuard::get_table_schema(
   } else if (OB_INVALID_ID == database_id) {
     // do-nothing
   } else {
-    ret = get_table_schema(tenant_id, database_id, table_name, is_index, table_schema, is_hidden);
+    ret = get_table_schema(tenant_id, database_id, table_name, is_index, table_schema, with_hidden_flag, is_built_in_index);
   }
 
   return ret;

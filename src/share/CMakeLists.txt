@@ -107,6 +107,7 @@ ob_set_subtarget(ob_share common
   ob_gts_info.cpp
   ob_i_tablet_scan.cpp
   ob_index_builder_util.cpp
+  ob_fts_index_builder_util.cpp
   ob_inner_config_root_addr.cpp
   ob_io_device_helper.cpp
   ob_kv_parser.cpp
@@ -130,6 +131,7 @@ ob_set_subtarget(ob_share common
   ob_primary_zone_util.cpp
   ob_priv_common.cpp
   ob_proposal_id.cpp
+  ob_plugin_helper.cpp
   ob_replica_info.cpp
   ob_resource_limit.cpp
   ob_root_addr_agent.cpp
@@ -529,6 +531,15 @@ if (OB_ERRSIM)
    errsim_module/ob_errsim_module_interface_imp.cpp
  )
 endif()
+
+ob_set_subtarget(ob_share text_analysis
+  text_analysis/ob_text_analyzer.cpp
+  text_analysis/ob_token_stream.cpp
+)
+
+ob_set_subtarget(ob_share throttle
+  throttle/ob_throttle_common.cpp
+)
 
 ob_set_subtarget(ob_share wr
   wr/ob_wr_service.cpp

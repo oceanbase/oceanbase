@@ -61,6 +61,67 @@ private:
                         ObEvalCtx &ctx,
                         const ObExpr &expr,
                         ObDatum &res);
+  static int get_dest_type(const ObExpr &expr,
+                          int32_t &dst_len,
+                          ObEvalCtx& ctx,
+                          ObObjType &dest_type,
+                          bool &is_cover_by_error);
+  static int set_multivalue_result(ObEvalCtx& ctx,
+                                   ObIAllocator& allocator,
+                                   ObIJsonBase* json_base,
+                                   const ObExpr &expr,
+                                   uint8_t opt_error,
+                                   ObCollationType in_coll_type,
+                                   ObCollationType dst_coll_type,
+                                   ObDatum *on_error,
+                                   ObAccuracy &accuracy,
+                                   ObJsonCastParam &cast_param,
+                                   ObDatum &res);
+  static int get_clause_opt(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            uint8_t index,
+                            bool &is_cover_by_error,
+                            uint8_t &type,
+                            uint8_t size_para);
+  /*
+  oracle mode get json path to JsonBase in static_typing_engine
+  @param[in]  expr       the input arguments
+  @param[in]  ctx        the eval context
+  @param[in]  allocator  the Allocator in context
+  @param[in]  index      the input arguments index
+  @param[out] j_path     the pointer to JsonPath
+  @param[out] is_null    the flag for null situation
+  @param[out] is_cover_by_error    the flag for whether need cover by error clause
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_ora_json_path(const ObExpr &expr, ObEvalCtx &ctx,
+                          common::ObArenaAllocator &allocator, ObJsonPath*& j_path,
+                          uint16_t index, bool &is_null, bool &is_cover_by_error,
+                          ObDatum*& json_datum);
+
+    /*
+  oracle mode get json doc to JsonBase in static_typing_engine
+  @param[in]  expr       the input arguments
+  @param[in]  ctx        the eval context
+  @param[in]  allocator  the Allocator in context
+  @param[in]  index      the input arguments index
+  @param[out] j_base     the pointer to JsonBase
+  @param[out] j_in_type     the pointer to input type
+  @param[out] is_null    the flag for null situation
+  @param[out] is_cover_by_error    the flag for whether need cover by error clause
+  @return Returns OB_SUCCESS on success, error code otherwise.
+  */
+  static int get_ora_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
+                          common::ObArenaAllocator &allocator,
+                          uint16_t index, ObIJsonBase*& j_base,
+                           ObObjType dst_type,
+                          bool &is_null, bool &is_cover_by_error);
+
+  static int get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &ctx,
+                                        bool &is_cover_by_error, uint8_t &pretty_type,
+                                        uint8_t &ascii_type, uint8_t &scalars_type);
+  static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container);
+
 public:
   static int get_empty_option(bool &is_cover_by_error,
                             int8_t empty_type, bool &is_null_result,
@@ -92,10 +153,8 @@ public:
                                             bool use_wrapper);
   static int get_error_option(int8_t &error_type, ObIJsonBase *&error_val, ObIJsonBase *jb_arr, ObIJsonBase *jb_obj, bool &is_null);
   static int get_mismatch_option(int8_t &mismatch_type, int &ret);
-  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);
-
-  static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
-/* code from ob_expr_cast for cal_result_type */
+  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);  static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
+ /* code from ob_expr_cast for cal_result_type */
   const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
 
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonQuery);

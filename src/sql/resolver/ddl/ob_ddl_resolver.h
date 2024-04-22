@@ -164,6 +164,42 @@ public:
   static const int64_t DEFAULT_TABLE_DOP = 1;
   explicit ObDDLResolver(ObResolverParams &params);
   virtual ~ObDDLResolver();
+  static int append_fts_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
+  static int append_fts_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+    static int append_multivalue_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
+  static int append_multivalue_args(
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg &index_arg,
+      bool &fts_common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg> &index_arg_list,
+      ObIAllocator *allocator);
+  static int append_domain_index_args(
+      const ObTableSchema &table_schema,
+      const ObPartitionResolveResult &resolve_result,
+      const obrpc::ObCreateIndexArg *index_arg,
+      bool &common_aux_table_exist,
+      ObIArray<ObPartitionResolveResult> &resolve_results,
+      ObIArray<obrpc::ObCreateIndexArg *> &index_arg_list,
+      ObIAllocator *arg_allocator);
   static int check_text_length(ObCharsetType cs_type, ObCollationType co_type,
                                const char *name, ObObjType &type,
                                int32_t &length,
@@ -467,6 +503,20 @@ public:
       const int64_t index_keyname_value,
       bool is_oracle_mode,
       bool is_explicit_order);
+  int resolve_fts_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      const int64_t index_keyname_value);
+  int resolve_fts_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      const int64_t index_keyname_value);
+  int resolve_multivalue_index_constraint(
+      const share::schema::ObTableSchema &table_schema,
+      const common::ObString &column_name,
+      const int64_t index_keyname_value);
+  int resolve_multivalue_index_constraint(
+      const share::schema::ObColumnSchemaV2 &column_schema,
+      const int64_t index_keyname_value);
 protected:
   static int get_part_str_with_type(
       const bool is_oracle_mode,
@@ -974,6 +1024,7 @@ protected:
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;
   ObNameGeneratedType name_generated_type_;
+  bool have_generate_fts_arg_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
 private:

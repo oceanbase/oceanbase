@@ -960,6 +960,11 @@ public:
   { return pseudo_column_like_exprs_; }
   const common::ObIArray<ObRawExpr *> &get_pseudo_column_like_exprs() const
   { return pseudo_column_like_exprs_; }
+  const common::ObIArray<ObMatchFunRawExpr *> &get_match_exprs() const
+  { return match_exprs_; }
+  common::ObIArray<ObMatchFunRawExpr *> &get_match_exprs()
+  { return match_exprs_; }
+  int get_match_expr_on_table(uint64_t table_id, ObMatchFunRawExpr *&match_expr) const;
   int get_table_pseudo_column_like_exprs(uint64_t table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int get_table_pseudo_column_like_exprs(ObIArray<uint64_t> &table_id, ObIArray<ObRawExpr *> &pseudo_columns);
   int rebuild_tables_hash();
@@ -1270,6 +1275,8 @@ protected:
    */
   int64_t dblink_id_;
   bool is_reverse_link_;
+  // fulltext search exprs
+  common::ObSEArray<ObMatchFunRawExpr*, 2, common::ModulePageAllocator, true> match_exprs_;
 };
 
 template <typename T>

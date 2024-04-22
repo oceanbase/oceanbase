@@ -575,25 +575,24 @@ int ObTableIndex::add_normal_indexes(const ObTableSchema &table_schema,
                      "index_table_id",
                      simple_index_infos_.at(index_tid_array_idx_).table_id_);
         } else {
-          bool is_ctxcat_fulltext = false;
-          ObArray<uint64_t> ft_gen_column_ids;
-          ObArray<uint64_t> dep_column_ids;
-          if ((INDEX_TYPE_DOMAIN_CTXCAT == index_schema->get_index_type())) {
-            if (OB_FAIL(index_schema->get_generated_column_ids(ft_gen_column_ids))) {
-              LOG_WARN("get generated column ids failed", K(ret));
-            } else if (1 == ft_gen_column_ids.count()) {
-              // 对于全文索引表，只有一列生成列, 可以有多个依赖列
-              is_ctxcat_fulltext = true;
-            }
-          }
-
-          if (OB_FAIL(ret)) {
-          } else if (is_ctxcat_fulltext) {
+          const bool is_fts_index = index_schema->is_fts_index();
+          uint64_t doc_id_col_id = OB_INVALID_ID;
+          uint64_t ft_col_id = OB_INVALID_ID;
+          if (index_schema->is_built_in_fts_index()) {
+            is_sub_end = true;
+          } else if (is_fts_index && OB_FAIL(index_schema->get_fulltext_column_ids(doc_id_col_id, ft_col_id))) {
+            LOG_WARN("get generated column ids failed", K(ret));
+          } else if (is_fts_index) {
+            ObArray<uint64_t> dep_column_ids;
             const ObColumnSchemaV2 *gen_column_schema = NULL;
             if (OB_INVALID_ID == static_cast<uint64_t>(ft_dep_col_idx_)) {
               ft_dep_col_idx_ = 0;
             }
-            if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_gen_column_ids[0]))) {
+            if (OB_UNLIKELY(doc_id_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id
+                             || ft_col_id <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == ft_col_id)) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id), K(ft_col_id));
+            } else if (OB_ISNULL(gen_column_schema = table_schema.get_column_schema(ft_col_id))) {
               ret = OB_SCHEMA_ERROR;
               SERVER_LOG(WARN, "fail to get data table column schema", K(ret));
             } else if (OB_FAIL(gen_column_schema->get_cascaded_column_ids(dep_column_ids))) {
@@ -1045,15 +1044,7 @@ int ObTableIndex::add_fulltext_index_column(const ObString &database_name,
           }
             // non_unique
           case OB_APP_MIN_COLUMN_ID + 5: {
-            int64_t non_unique = 0;
-            if (INDEX_TYPE_UNIQUE_GLOBAL == index_schema->get_index_type()
-                || INDEX_TYPE_UNIQUE_LOCAL == index_schema->get_index_type()
-                || index_schema->is_spatial_index()) {
-              non_unique = 0;
-            } else {
-              non_unique = 1;
-            }
-            cells[cell_idx].set_int(non_unique);
+            cells[cell_idx].set_int(1/*non_unique*/);
             break;
           }
             //index_schema

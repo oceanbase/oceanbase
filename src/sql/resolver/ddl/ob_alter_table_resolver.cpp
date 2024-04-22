@@ -24,6 +24,7 @@
 #include "sql/resolver/dml/ob_delete_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/xml/ob_xml_parser.h"
@@ -843,6 +844,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         // bug:
         // index_tid_array: 包含index和mv, 这里只需要处理索引即可
         // so do-nothing for mv
+      } else if (index_table_schema->is_built_in_fts_index()) {
+        // skip built-in fts index
       } else if (OB_FAIL(index_table_schema->get_index_name(index_name))) {
         LOG_WARN("failed to get index name", K(ret));
       } else {
@@ -1502,6 +1505,12 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           }
           sort_item.column_name_.assign_ptr(sort_column_node->children_[0]->str_value_,
               static_cast<int32_t>(sort_column_node->children_[0]->str_len_));
+          bool is_multi_value_index = false;
+          if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_index_type(sort_item.column_name_,
+                                                                    is_multi_value_index,
+                                                                    reinterpret_cast<int*>(&index_keyname_)))) {
+            LOG_WARN("failed to resolve index type", K(ret));
+          }
         }
         if (OB_FAIL(ret)) {
           //do nothing
@@ -1517,10 +1526,20 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
           sort_item.prefix_len_ = 0;
         }
 
-        // spatial index constraint
         if (OB_FAIL(ret)) {
           // do nothing
-        } else {
+        } else if (index_keyname_ == FTS_KEY) {
+          if (!GCONF._enable_add_fulltext_index_to_existing_table) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("experimental feature: build fulltext index afterward is experimental feature", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "build fulltext index afterward");
+          } else if (OB_FAIL(resolve_fts_index_constraint(*table_schema_,
+                                                   sort_item.column_name_,
+                                                   index_name_value))) {
+            SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
+                K(sort_item.column_name_));
+          }
+        } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
           ObSEArray<ObColumnSchemaV2 *, 8> resolved_cols;
           ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
           bool is_explicit_order = (NULL != sort_column_node->children_[2]
@@ -1634,6 +1653,7 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
     SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
   } else {
     bool is_unique_key = 1 == node.value_;
+    bool is_fulltext_index = 3 == node.value_;
     ParseNode *index_name_node = nullptr;
     ParseNode *column_list_node = nullptr;
     ParseNode *table_option_node = nullptr;
@@ -1659,7 +1679,9 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
         index_name_node = node.children_[0];
         column_list_node = node.children_[1];
         table_option_node = node.children_[2];
-        index_partition_option = node.children_[4];
+        if (!is_fulltext_index) {
+          index_partition_option = node.children_[4];
+        }
         colulmn_group_node = node.children_[5];
       }
     }
@@ -1905,10 +1927,30 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
               if (OB_SUCC(ret)) {
                 if (OB_FAIL(create_index_arg->assign(index_arg))) {
                   LOG_WARN("fail to assign create index arg", K(ret));
-                } else if (OB_FAIL(resolve_results.push_back(resolve_result))) {
-                  LOG_WARN("fail to push back index_stmt_list", K(ret), K(resolve_result));
-                } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
-                  LOG_WARN("fail to push back index_arg", K(ret));
+                } else if (share::schema::is_fts_index(index_arg.index_type_)) {
+                  if (OB_FAIL(ObDDLResolver::append_domain_index_args(*table_schema_,
+                                                                      resolve_result,
+                                                                      create_index_arg,
+                                                                      have_generate_fts_arg_,
+                                                                      resolve_results,
+                                                                      index_arg_list,
+                                                                      allocator_))) {
+                    LOG_WARN("failed to append domain index args", K(ret), K(index_arg));
+                  } else {
+                    // record allocator to free fts arg in desctructor
+                    alter_table_stmt->set_fts_arg_allocator(allocator_);
+                  }
+                } else if (is_multivalue_index(index_arg.index_type_)) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("dynamic add multivalue index not supported yet", K(ret));
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "dynamic add multivalue index not supported yet");
+                } else {
+                  if (OB_FAIL(resolve_results.push_back(resolve_result))) {
+                    LOG_WARN("fail to push back index_stmt_list", K(ret),
+                        K(resolve_result));
+                  } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
+                    LOG_WARN("fail to push back index_arg", K(ret));
+                  }
                 }
               }
             }
@@ -2385,20 +2427,47 @@ int ObAlterTableResolver::generate_index_arg(obrpc::ObCreateIndexArg &index_arg,
         } else {
           type = INDEX_TYPE_UNIQUE_LOCAL;
         }
+
+        if (index_keyname_ == MULTI_KEY) {
+          type = INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL;
+          if (global_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global index, multivalue index not supported", K(ret), K(tenant_data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global multivalue index");
+          }
+        }
       } else {
         if (tenant_data_version < DATA_VERSION_4_1_0_0 && index_keyname_ == SPATIAL_KEY) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.1, spatial index is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.1, spatial index");
+        } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && index_keyname_ == FTS_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.1, fulltext index not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, fulltext index");
+        } else if (tenant_data_version < DATA_VERSION_4_3_1_0 && index_keyname_ == MULTI_KEY) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.3.1, multivalue index not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
         } else if (global_) {
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_GLOBAL;
+          } else if (index_keyname_ == FTS_KEY) {
+            type = INDEX_TYPE_DOC_ID_ROWKEY_GLOBAL;
+          } else if (index_keyname_ == MULTI_KEY) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global multivalue index not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.1, multivalue index");
           } else {
             type = INDEX_TYPE_NORMAL_GLOBAL;
           }
         } else {
           if (index_keyname_ == SPATIAL_KEY) {
             type = INDEX_TYPE_SPATIAL_LOCAL;
+          } else if (index_keyname_ == FTS_KEY) {
+            type = INDEX_TYPE_DOC_ID_ROWKEY_LOCAL;
+          } else if (index_keyname_ == MULTI_KEY) {
+            type = INDEX_TYPE_NORMAL_MULTIVALUE_LOCAL;
           } else {
             type = INDEX_TYPE_NORMAL_LOCAL;
           }

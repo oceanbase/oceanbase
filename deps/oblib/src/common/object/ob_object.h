@@ -1150,6 +1150,29 @@ public:
   bool has_lob_header_; // for observer 4.0 compatibility
 };
 
+class ObDocId final
+{
+public:
+  ObDocId();
+  ObDocId(const uint64_t tablet_id, const uint64_t seq_id);
+  ~ObDocId() = default;
+
+  void reset();
+  bool is_valid() const;
+  ObString get_string() const;
+  int from_string(const ObString &doc_id);
+
+  bool operator ==(const ObDocId &other) const;
+  bool operator !=(const ObDocId &other) const;
+  bool operator <(const ObDocId &other) const;
+  bool operator >(const ObDocId &other) const;
+
+  TO_STRING_KV(K_(tablet_id), K_(seq_id));
+public:
+  uint64_t tablet_id_;
+  uint64_t seq_id_;
+};
+
 struct ObObjPrintParams
 {
   ObObjPrintParams (const ObTimeZoneInfo *tz_info, ObCollationType cs_type):

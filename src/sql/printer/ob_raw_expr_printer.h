@@ -131,6 +131,7 @@ private:
   int print(ObUDFRawExpr *expr);
   int print(ObWinFunRawExpr *expr);
   int print(ObPseudoColumnRawExpr *expr);
+  int print(ObMatchFunRawExpr *expr);
 
   int print_date_unit(ObRawExpr *expr);
   int print_get_format_unit(ObRawExpr *expr);

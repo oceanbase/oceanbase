@@ -271,6 +271,12 @@ protected:
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
+  int build_autoinc_param(
+      const uint64_t table_id,
+      const ObTableSchema *table_schema,
+      const ObColumnSchemaV2 *column_schema,
+      const int64_t auto_increment_cache_size,
+      AutoincParam &param);
   int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
   int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);

@@ -453,7 +453,17 @@ private:
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
-  
+  int create_drop_fts_index_task(
+      common::ObISQLClient &proxy,
+      const share::schema::ObTableSchema *index_schema,
+      const int64_t schema_version,
+      const int64_t consumer_group_id,
+      const share::schema::ObTableSchema *rowkey_doc_schema,
+      const share::schema::ObTableSchema *doc_rowkey_schema,
+      const share::schema::ObTableSchema *doc_word_schema,
+      ObIAllocator &allocator,
+      ObDDLTaskRecord &task_record);
+
   int create_ddl_retry_task(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
@@ -489,6 +499,7 @@ private:
   int schedule_column_redefinition_task(const ObDDLTaskRecord &task_record);
   int schedule_modify_autoinc_task(const ObDDLTaskRecord &task_record);
   int schedule_drop_index_task(const ObDDLTaskRecord &task_record);
+  int schedule_drop_fts_index_task(const ObDDLTaskRecord &task_record);
   int schedule_ddl_retry_task(const ObDDLTaskRecord &task_record);
   int schedule_recover_restore_table_task(const ObDDLTaskRecord &task_record);
   int add_sys_task(ObDDLTask *task);

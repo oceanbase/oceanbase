@@ -74,6 +74,7 @@ class ObTenantMdsService;
   class ObAccessService;
   class ObTenantFreezer;
   class ObTenantMetaMemMgr;
+  class ObTenantFTPluginMgr;
   class ObStorageLogger;
   class ObTenantCheckpointSlogHandler;
   class ObTenantFreezeInfoMgr;
@@ -250,6 +251,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       blocksstable::ObDecodeResourcePool*,           \
       omt::ObSharedTimer*,                           \
       storage::ObTenantMetaMemMgr*,                  \
+      storage::ObTenantFTPluginMgr*,                 \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \

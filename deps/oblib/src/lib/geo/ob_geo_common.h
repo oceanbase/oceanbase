@@ -68,6 +68,21 @@ enum class ObGeoRelationType
   T_DFULLYWITHIN = 5
 };
 
+// will define in other file, later
+enum class ObDomainOpType
+{
+  T_INVALID = 0,
+  T_JSON_MEMBER_OF = 1,
+  T_JSON_CONTAINS = 2,
+  T_JSON_OVERLAPS = 3,
+  T_GEO_COVERS,
+  T_GEO_INTERSECTS,
+  T_GEO_DWITHIN,
+  T_GEO_DFULLYWITHIN,
+  T_GEO_COVEREDBY,
+  T_DOMAIN_OP_END,
+};
+
 class ObGeoWkbByteOrderUtil
 {
 public:

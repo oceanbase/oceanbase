@@ -42,6 +42,7 @@ public:
   virtual int visit(ObSetOpRawExpr &expr);
   virtual int visit(ObAliasRefRawExpr &expr);
   virtual int visit(ObPlQueryRefRawExpr &expr);
+  virtual int visit(ObMatchFunRawExpr &expr);
 private:
   // types and constants
   const ObPartitionFuncType func_type_;

@@ -246,6 +246,7 @@ public:
   static const int64_t INMEMORY_MERGE_SORT_WARN_WAYS = 10000;
 
   explicit ObSortOpImpl(ObMonitorNode &op_monitor_info);
+  ObSortOpImpl();
   virtual ~ObSortOpImpl();
 
   // if rewind id not needed, we will release the resource after iterate end.
@@ -402,16 +403,16 @@ public:
   void set_operator_id(uint64_t op_id) { op_id_ = op_id; }
   void collect_memory_dump_info(ObMonitorNode &info)
   {
-    info.otherstat_1_id_ = op_monitor_info_.otherstat_1_id_;
-    info.otherstat_1_value_ = op_monitor_info_.otherstat_1_value_;
-    info.otherstat_2_id_ = op_monitor_info_.otherstat_2_id_;
-    info.otherstat_2_value_ = op_monitor_info_.otherstat_2_value_;
-    info.otherstat_3_id_ = op_monitor_info_.otherstat_3_id_;
-    info.otherstat_3_value_ = op_monitor_info_.otherstat_3_value_;
-    info.otherstat_4_id_ = op_monitor_info_.otherstat_4_id_;
-    info.otherstat_4_value_ = op_monitor_info_.otherstat_4_value_;
-    info.otherstat_6_id_ = op_monitor_info_.otherstat_6_id_;
-    info.otherstat_6_value_ = op_monitor_info_.otherstat_6_value_;
+    info.otherstat_1_id_ = op_monitor_info_->otherstat_1_id_;
+    info.otherstat_1_value_ = op_monitor_info_->otherstat_1_value_;
+    info.otherstat_2_id_ = op_monitor_info_->otherstat_2_id_;
+    info.otherstat_2_value_ = op_monitor_info_->otherstat_2_value_;
+    info.otherstat_3_id_ = op_monitor_info_->otherstat_3_id_;
+    info.otherstat_3_value_ = op_monitor_info_->otherstat_3_value_;
+    info.otherstat_4_id_ = op_monitor_info_->otherstat_4_id_;
+    info.otherstat_4_value_ = op_monitor_info_->otherstat_4_value_;
+    info.otherstat_6_id_ = op_monitor_info_->otherstat_6_id_;
+    info.otherstat_6_value_ = op_monitor_info_->otherstat_6_value_;
   }
   inline void set_io_event_observer(ObIOEventObserver *observer)
   {
@@ -833,7 +834,8 @@ protected:
   int64_t input_rows_;
   int64_t input_width_;
   ObSqlWorkAreaProfile profile_;
-  ObMonitorNode &op_monitor_info_;
+  ObMonitorNode self_monitor_info_;
+  ObMonitorNode *op_monitor_info_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   ObPhyOperatorType op_type_;
   uint64_t op_id_;

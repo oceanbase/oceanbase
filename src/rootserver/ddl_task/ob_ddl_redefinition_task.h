@@ -143,9 +143,9 @@ public:
       const int64_t execution_id,
       const int ret_code,
       const ObDDLTaskInfo &addition_info) = 0;
-  int on_child_task_finish(
+  virtual int on_child_task_finish(
       const uint64_t child_task_key,
-      const int ret_code);
+      const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
   virtual void flt_set_task_span_tag() const = 0;
   virtual void flt_set_status_span_tag() const = 0;

@@ -1343,6 +1343,9 @@ DEF_INT(_max_schema_slot_num, OB_TENANT_PARAMETER, "128", "[2,256]",
         "the max schema slot number for multi-version schema memory management, "
         "Range: [2, 256] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_add_fulltext_index_to_existing_table, OB_CLUSTER_PARAMETER, "False",
+         "enable create fulltext index after table is created",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT_WITH_CHECKER(_ob_query_rate_limit, OB_TENANT_PARAMETER, "-1",
         common::ObConfigQueryRateLimitChecker,
         "the maximun throughput allowed for a tenant per observer instance",

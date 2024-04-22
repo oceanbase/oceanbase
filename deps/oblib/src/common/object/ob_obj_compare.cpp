@@ -1406,6 +1406,32 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetTC, ObUIntTC>(const ObObj &obj1, \
     return result;                                                                              \
   }
 
+
+#define DEFINE_CMP_FUNC_JSON_EXTEND()                                                           \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_func<ObJsonTC, ObExtendTC>(const ObObj &obj1,                          \
+                                                   const ObObj &/*obj2*/,                       \
+                                                   const ObCompareCtx &/*cmp_ctx*/)             \
+  {                                                                                             \
+    int result = INT_TO_CR(-1);                                                                 \
+                                                                                                \
+    return result;                                                                              \
+  }
+
+#define DEFINE_CMP_OP_FUNC_JSON_EXTEND(op, op_str)                                              \
+  template <> inline                                                                            \
+  int ObObjCmpFuncs::cmp_op_func<ObJsonTC, ObExtendTC, op>(const ObObj &obj1,                     \
+                                                         const ObObj &obj2,                     \
+                                                         const ObCompareCtx &cmp_ctx)           \
+  {                                                                                             \
+    OBJ_TYPE_CLASS_CHECK(obj1, ObJsonTC);                                                       \
+    OBJ_TYPE_CLASS_CHECK(obj2, ObExtendTC);                                                     \
+    UNUSED(cmp_ctx);                                                                            \
+    int result = INT_TO_CR(-1);                                                                 \
+                                                                                                \
+    return result;                                                                              \
+  }
+
 // geometrytc vs geometrytc
 #define DEFINE_CMP_OP_FUNC_GEOMETRY_GEOMETRY(op, op_str)                                        \
   template <> inline                                                                            \
@@ -2715,6 +2741,15 @@ int ObObjCmpFuncs::cmp_func<ObEnumSetInnerTC, real_tc>(const ObObj &obj1, \
   DEFINE_CMP_OP_FUNC_EXT_XXX(CO_NE, CO_NE); \
   DEFINE_CMP_FUNC_EXT_XXX()
 
+#define DEFINE_CMP_FUNCS_JSON_EXTEND() \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_EQ, ==); \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_LE, <=); \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_LT, < ); \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_GE, >=); \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_GT, > ); \
+  DEFINE_CMP_OP_FUNC_JSON_EXTEND(CO_NE, !=); \
+  DEFINE_CMP_FUNC_JSON_EXTEND()
+
 #define DEFINE_CMP_FUNCS_UNKNOWN_UNKNOWN() \
   DEFINE_CMP_FUNCS(ObUnknownTC, unknown);
 
@@ -2813,6 +2848,7 @@ DEFINE_CMP_FUNCS_NULL_XXX();
 DEFINE_CMP_FUNCS_XXX_NULL();
 DEFINE_CMP_FUNCS_XXX_EXT();
 DEFINE_CMP_FUNCS_EXT_XXX();
+DEFINE_CMP_FUNCS_JSON_EXTEND();
 
 #define DEFINE_CMP_FUNCS_ENTRY(tc1, tc2) \
 { \
@@ -4429,7 +4465,7 @@ const obj_cmp_func ObObjCmpFuncs::cmp_funcs[ObMaxTC][ObMaxTC][CO_MAX] =
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // time
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // year
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // string
-    DEFINE_CMP_FUNCS_ENTRY_NULL,  //extend
+    DEFINE_CMP_FUNCS_ENTRY(ObJsonTC, ObExtendTC), //extend
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // unknown
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // text
     DEFINE_CMP_FUNCS_ENTRY_NULL,  // bit

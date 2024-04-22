@@ -1587,7 +1587,7 @@ int ObDDLUtil::get_data_information(
         task_status = static_cast<share::ObDDLTaskStatus>(cur_task_status);
         if (ObDDLType::DDL_CREATE_INDEX == ddl_type) {
           SMART_VAR(rootserver::ObIndexBuildTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserialize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
               data_format_version = task.get_data_format_version();
@@ -1595,7 +1595,7 @@ int ObDDLUtil::get_data_information(
           }
         } else {
           SMART_VAR(rootserver::ObTableRedefinitionTask, task) {
-            if (OB_FAIL(task.deserlize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
+            if (OB_FAIL(task.deserialize_params_from_message(tenant_id, task_message.ptr(), task_message.length(), pos))) {
               LOG_WARN("deserialize from msg failed", K(ret));
             } else {
               data_format_version = task.get_data_format_version();

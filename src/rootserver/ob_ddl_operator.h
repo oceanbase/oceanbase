@@ -362,6 +362,14 @@ public:
                                        const ObIndexStatus *new_index_status,
                                        common::ObMySQLTransaction &trans,
                                        share::schema::ObTableSchema &new_index_table_schema);
+  int alter_table_rename_index_with_origin_index_name(
+      const uint64_t tenant_id,
+      const uint64_t index_table_id,
+      const ObString &new_index_name, // Attention!!! origin index name, don't use table name. For example, __idx_500005_{index_name}, please using index_name!!!
+      const ObIndexStatus &new_index_status,
+      common::ObMySQLTransaction &trans,
+      share::schema::ObTableSchema &new_index_table_schema);
+
   virtual int alter_index_table_parallel(const uint64_t tenant_id,
                                          const uint64_t data_table_id,
                                          const uint64_t database_id,
@@ -1145,6 +1153,14 @@ private:
                            int64_t routine_id);
 
 private:
+  int inner_alter_table_rename_index_(
+      const uint64_t tenant_id,
+      const share::schema::ObTableSchema *index_table_schema,
+      const ObString &new_index_table_name,
+      const ObIndexStatus *new_index_status,
+      common::ObMySQLTransaction &trans,
+      share::schema::ObTableSchema &new_index_table_schema);
+
   int drop_fk_cascade(
       uint64_t tenant_id,
       share::schema::ObSchemaGetterGuard &schema_guard,

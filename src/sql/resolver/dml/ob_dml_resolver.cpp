@@ -908,20 +908,26 @@ int ObDMLResolver::transform_geo_dot_notation_attr(ParseNode &node, const ObStri
   return ret;
 }
 
-/*
-JSON_QUERY '(' js_doc_expr ',' js_literal opt_js_query_returning_type opt_scalars opt_pretty opt_ascii opt_wrapper opt_query_on_error_or_empty_or_mismatch ')'
-*/
+/*********************************************************
+*  JSON_QUERY '('
+*  js_doc_expr ',' js_literal opt_js_query_returning_type
+*  opt_scalars opt_pretty opt_ascii
+*  opt_wrapper opt_asis opt_query_on_error_or_empty_or_mismatch
+*  opt_multivalue ')'
+**********************************************************/
 int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObString &sql_str)
 {
   INIT_SUCC(ret);
-  int64_t alloc_vec_size = sizeof(ParseNode *) * 11;
-  ParseNode **param_vec = NULL;     // children_
-  ParseNode *opt_node = NULL;       // clause node
-  ParseNode *ret_node = NULL;       // returning node
-  ParseNode *truncate_node = NULL;       // truncate node
-  ParseNode *path_node = NULL;      // path node
-  ParseNode *table_node = NULL;     // table node
-  ParseNode *tmp_node = NULL;       // json doc node
+  const int64_t alloc_vec_size = sizeof(ParseNode *) * 13;
+  ParseNode **param_vec = NULL;       // children_
+  ParseNode *opt_node = NULL;         // clause node
+  ParseNode *ret_node = NULL;         // returning node
+  ParseNode *truncate_node = NULL;    // truncate node
+  ParseNode *path_node = NULL;        // path node
+  ParseNode *table_node = NULL;       // table node
+  ParseNode *tmp_node = NULL;         // json doc node
+  ParseNode *asis_node = NULL;        // asis flag
+  ParseNode *multivalue_node = NULL;  // multivalue flag
   ObColumnRefRawExpr *col_expr = NULL;
   bool is_json_cst = false;
   bool is_json_type = false;
@@ -1019,7 +1025,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
       param_vec[2] = ret_node;       // return type pos is 2 in json value clause
     }
     // opt_scalars opt_pretty opt_ascii opt_wrapper opt_query_on_error_or_empty_or_mismatch 7
-    for (int8_t i = 3; OB_SUCC(ret) && i < 11; i++) {
+    for (int8_t i = 3; OB_SUCC(ret) && i < 13; i++) {
       opt_node = NULL;
       if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1031,15 +1037,15 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
           LOG_WARN("create path node failed", K(ret));
         } else {
           int8_t val = 0;
-          if (i == 3) {
+          if (i == 3 || i == 12 || i == 8) {
             val = 0;
           } else if (i == 4) {
             val = 2;
-          } else if (i == 8) {
+          } else if (i == 9) {
             val = 1;
-          } else if (i == 9 || i == 7) {
+          } else if (i == 10 || i == 7) {
             val = 5;
-          } else if (i == 10) {
+          } else if (i == 11) {
             val = 3; // mismatch default is 3 from dot notation
           }
           opt_node->value_ = val;
@@ -1051,7 +1057,7 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
     }
     // create json query node
     if (OB_SUCC(ret)) {
-      node.num_child_ = 11;
+      node.num_child_ = 13;
       node.type_ = T_FUN_SYS_JSON_QUERY;
       node.children_ = param_vec;
     }
@@ -1664,6 +1670,7 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
   ObArray<ObOpRawExpr*> op_exprs;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
+  ObSEArray<ObMatchFunRawExpr*, 1> match_exprs;
   CK( OB_NOT_NULL(params_.expr_factory_),
       OB_NOT_NULL(stmt_),
       OB_NOT_NULL(get_stmt()),
@@ -1719,7 +1726,8 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
                                 win_exprs,
                                 udf_info,
                                 op_exprs,
-                                user_var_exprs));
+                                user_var_exprs,
+                                match_exprs));
     }
 
     if (OB_SUCC(ret)) {
@@ -1788,6 +1796,12 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     if (OB_SUCC(ret) && win_exprs.count() > 0) {
       if (OB_FAIL(resolve_win_func_exprs(expr, win_exprs))) {
         LOG_WARN("resolve aggr exprs failed", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && match_exprs.count() > 0) {
+      if (OB_FAIL(resolve_match_against_exprs(expr, match_exprs, current_scope_))) {
+        LOG_WARN("failed to resolve match against expr", K(ret));
       }
     }
 
@@ -5489,8 +5503,22 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
                                                       true /* for index table */,
                                                       cte_table_fisrt,
                                                       is_hidden,
-                                                      tschema))) {
-          LOG_WARN("table or index doesn't exist", K(tenant_id), K(database_id), K(tbl_name), K(ret));
+                                                      tschema,
+                                                      false/*is_built_in_index*/))) {
+          if (OB_TABLE_NOT_EXIST == ret && stmt->is_select_stmt() && select_index_enabled) {
+            if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
+                                                          database_id,
+                                                          tbl_name,
+                                                          true /* for index table */,
+                                                          cte_table_fisrt,
+                                                          is_hidden,
+                                                          tschema,
+                                                          true/*is_built_in_index*/))) {
+              LOG_WARN("table or index doesn't exist", K(tenant_id), K(database_id), K(tbl_name), K(ret));
+            }
+          } else {
+            LOG_WARN("table or index doesn't exist", K(tenant_id), K(database_id), K(tbl_name), K(ret));
+          }
         }
       } else {
         LOG_WARN("table or index get schema failed", K(ret));
@@ -6377,7 +6405,8 @@ int ObDMLResolver::resolve_partition_expr(
       } else if (OB_FAIL(resolve_columns_for_fk_partition_expr(expr, columns, table_item, table_schema, fk_info))) {
         LOG_WARN("resolve columns for parent table partition expr failed", K(ret));
       }
-    } else if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item, table_schema.is_oracle_tmp_table()))) {
+    } else if (OB_FAIL(resolve_columns_for_partition_expr(expr, columns, table_item,
+            table_schema.is_oracle_tmp_table() || table_schema.is_fts_index()))) {
       LOG_WARN("resolve columns for partition expr failed", K(ret));
     }
   }
@@ -6399,6 +6428,7 @@ int ObDMLResolver::resolve_partition_expr(const ParseNode &part_expr_node, ObRaw
   ObArray<ObUDFInfo> udf_info;
   ObArray<ObOpRawExpr*> op_exprs;
   ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
+  ObSEArray<ObMatchFunRawExpr*, 1> match_exprs;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
@@ -6422,7 +6452,7 @@ int ObDMLResolver::resolve_partition_expr(const ParseNode &part_expr_node, ObRaw
       LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(expr_resolver.resolve(&part_expr_node, expr, columns, sys_vars,
                                              sub_query_info, aggr_exprs, win_exprs, udf_info,
-                                             op_exprs, user_var_exprs))) {
+                                             op_exprs, user_var_exprs, match_exprs))) {
       LOG_WARN("resolve expr failed", K(ret));
     } else if (sub_query_info.count() > 0 || sys_vars.count() > 0 || aggr_exprs.count() > 0 ||
                columns.count() <= 0 || udf_info.count() > 0 || op_exprs.count() > 0) {
@@ -8132,6 +8162,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
   ObSQLSessionInfo *session_info = NULL;
   const ObTableSchema *table_schema = NULL;
   const bool allow_sequence = !used_for_generated_column;
+  bool include_hidden = false;
   ObSQLMode sql_mode = 0;
   ObCollationType cs_type = CS_TYPE_INVALID;
   if (OB_ISNULL(expr_factory = params_.expr_factory_)
@@ -8168,6 +8199,9 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
                                                                  this,
                                                                  schema_checker_))) {
     LOG_WARN("build generated column expr failed", K(ret));
+  } else if (OB_NOT_NULL(column_schema) && column_schema->is_doc_id_column()
+      && OB_FAIL(fill_doc_id_expr_param(table_item.table_id_, table_item.ref_id_, table_schema, ref_expr))) {
+    LOG_WARN("fail to fill doc id expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
   }
 
   bool is_default_udt_constructor = false;
@@ -8263,7 +8297,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       LOG_TRACE("add external file column", KPC(real_ref_expr), K(columns.at(i).col_name_), K(table_item));
     } else {
       if (OB_FAIL(resolve_basic_column_item(table_item, columns.at(i).col_name_,
-                                             false, col_item, stmt))) {
+                                            include_hidden, col_item, stmt))) {
         LOG_WARN("resolve basic column item failed", K(ret));
       } else if (OB_ISNULL(col_item) || OB_ISNULL(col_item->expr_)) {
         ret = OB_ERR_UNEXPECTED;
@@ -9289,9 +9323,14 @@ int ObDMLResolver::check_table_exist_or_not(uint64_t tenant_id,
       LOG_WARN("fail to get select_index_enabled", K(ret));
     } else if ((select_index_enabled && is_select_resolver()) || session_info_->get_ddl_info().is_ddl()) {
       if (OB_FAIL(schema_checker_->check_table_or_index_exists(
-                  tenant_id, database_id, table_name, is_hidden, is_exist))) {
+                  tenant_id, database_id, table_name, is_hidden, false/*is_built_in_index*/, is_exist))) {
         LOG_WARN("fail to check table or index exist", K(tenant_id), K(database_id),
                      K(table_name), K(ret));
+      } else if (select_index_enabled && is_select_resolver() && !is_exist) {
+        if (OB_FAIL(schema_checker_->check_table_or_index_exists(tenant_id, database_id, table_name,
+                is_hidden, true/*is_built_in_index*/, is_exist))) {
+          LOG_WARN("fail to check table or hidden index exist", K(ret), K(tenant_id), K(database_id), K(table_name));
+        }
       }
     } else {
       const bool is_index = false;
@@ -17237,6 +17276,556 @@ int ObDMLResolver::adjust_values_desc_position(ObInsertTableInfo& table_info,
     table_info.values_desc_.reuse();
     if (OB_FAIL(append(table_info.values_desc_, tmp_values_desc))) {
       LOG_WARN("fail to append new values_desc");
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::fill_doc_id_expr_param(
+    const uint64_t table_id,
+    const uint64_t index_tid,
+    const ObTableSchema *table_schema,
+    ObRawExpr *&doc_id_expr)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  if (OB_ISNULL(table_schema) || OB_ISNULL(doc_id_expr)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), KP(table_schema), KP(doc_id_expr));
+  } else if (OB_UNLIKELY(index_tid != table_schema->get_table_id())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid index table id", K(ret), K(index_tid), K(table_schema->get_table_id()));
+  } else if (OB_UNLIKELY(T_FUN_SYS_DOC_ID != doc_id_expr->get_expr_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not doc id expr", K(ret), "expr type", doc_id_expr->get_expr_type());
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(params_.expr_factory_) || OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", KP_(session_info), KP_(params_.expr_factory), KP(stmt));
+  } else {
+    ObSysFunRawExpr *expr = static_cast<ObSysFunRawExpr *>(doc_id_expr);
+    ObRawExpr *part_expr = stmt->get_part_expr(table_id, index_tid);
+    ObRawExpr *subpart_expr = stmt->get_subpart_expr(table_id, index_tid);
+    schema::ObPartitionLevel part_level = table_schema->get_part_level();
+    ObRawExpr *calc_tablet_id_expr = nullptr;
+    if (OB_FAIL(ObRawExprUtils::build_calc_tablet_id_expr(*params_.expr_factory_, *session_info_, index_tid,
+            part_level, part_expr, subpart_expr, calc_tablet_id_expr))) {
+      LOG_WARN("fail to build calculate tablet id expr", K(ret), K(index_tid), KPC(table_schema));
+    } else if (OB_ISNULL(calc_tablet_id_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret), KP(calc_tablet_id_expr));
+    } else if (OB_FAIL(expr->add_param_expr(calc_tablet_id_expr))) {
+      LOG_WARN("fail to add param expr", K(ret), KP(calc_tablet_id_expr));
+    } else if (OB_FAIL(expr->formalize(session_info_))) {
+      LOG_WARN("fail to formalize", K(ret), KP(session_info_));
+    }
+  }
+  STORAGE_FTS_LOG(DEBUG, "The dml resolver fills doc id expr parameter", K(ret), K(table_id), K(index_tid),
+      KPC(doc_id_expr), KPC(table_schema));
+  return ret;
+}
+
+int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, JoinedTable *&joined_table)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  const ObTableSchema *table_schema = nullptr;
+  TableItem *right_table = nullptr;
+  uint64_t rowkey_doc_tid = OB_INVALID_ID;
+  uint64_t table_id = OB_INVALID_ID;
+  ObArray<ObColumnRefRawExpr *> left_column_exprs;
+  ObArray<ObColumnRefRawExpr *> right_column_exprs;
+  bool has_table_with_fulltext_index = false;
+  if (OB_ISNULL(left_table) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_) ||
+      OB_ISNULL(params_.query_ctx_) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_FTS_LOG(WARN, "unexpected null", K(ret));
+  } else if (!left_table->is_basic_table()) {
+    if (OB_FAIL(ObTransformUtils::check_table_with_fulltext_recursively(const_cast<TableItem*>(left_table),
+                                                                        schema_checker_,
+                                                                        session_info_,
+                                                                        has_table_with_fulltext_index))) {
+      STORAGE_FTS_LOG(WARN, "fail to check table with fulltext recursively", K(ret));
+    } else if (has_table_with_fulltext_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext index");
+      STORAGE_FTS_LOG(WARN, "not support complex dml operations on table with fulltext index", K(ret));
+    } else {
+      // no fulltext index, nothing to do
+    }
+  } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(OB_INVALID_ID == (table_id = left_table->ref_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_FTS_LOG(WARN, "invalid argument", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, table_id, table_schema))) {
+    STORAGE_FTS_LOG(WARN, "fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema) || OB_ISNULL(get_stmt()) || OB_ISNULL(params_.expr_factory_)
+      || OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_FTS_LOG(WARN, "unexpected error, rowkey doc table schema, stmt or expr factory is nullptr", K(ret),
+        K(tenant_id), K(rowkey_doc_tid), K(table_id), KP(get_stmt()), KP(params_.expr_factory_), KP(allocator_));
+  } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_tid)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
+    STORAGE_FTS_LOG(WARN, "fail to get rowkey doc table id", K(ret), KPC(table_schema));
+  } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+    // no fulltext index, nothing to do
+    ret = OB_SUCCESS;
+  } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, rowkey_doc_tid, table_schema))) {
+    STORAGE_FTS_LOG(WARN, "fail to get index table schema", K(ret), K(tenant_id), K(rowkey_doc_tid));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_FTS_LOG(WARN, "unexpected error, rowkey doc table schema is nullptr", K(ret), K(tenant_id),
+        K(rowkey_doc_tid), K(table_id));
+  } else if (OB_ISNULL(right_table = get_stmt()->create_table_item(*allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_FTS_LOG(WARN, "fail to allocate right table item", K(ret));
+  } else {
+    right_table->type_ = TableItem::BASE_TABLE;
+    right_table->ref_id_ = table_schema->get_table_id();
+    right_table->table_id_ = table_schema->get_table_id();
+    right_table->is_system_table_ = table_schema->is_sys_table();
+    right_table->is_view_table_ = table_schema->is_view_table();
+    right_table->table_name_ = table_schema->get_table_name_str();
+    right_table->alias_name_ = table_schema->get_table_name_str();
+    right_table->table_type_ = table_schema->get_table_type();
+    if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
+      STORAGE_FTS_LOG(WARN, "fail to add right table item", K(ret), K(right_table));
+    } else if (OB_FAIL(resolve_table_partition_expr(*right_table, *table_schema))) {
+      STORAGE_FTS_LOG(WARN, "fail to resolve table partition expr", K(ret), KPC(right_table), KPC(table_schema));
+    } else if (OB_FAIL(create_joined_table_item(ObJoinType::INNER_JOIN, left_table, right_table, joined_table))) {
+      STORAGE_FTS_LOG(WARN, "fail to create joined table item", K(ret), KPC(left_table), KPC(right_table));
+    } else if (OB_FAIL(add_all_rowkey_columns_to_stmt(*left_table, left_column_exprs))) {
+      STORAGE_FTS_LOG(WARN, "fail to add all rowkey columns to stmt", K(ret));
+    } else if (OB_FAIL(add_all_rowkey_columns_to_stmt(*right_table, right_column_exprs))) {
+      STORAGE_FTS_LOG(WARN, "fail to add all rowkey columns to stmt", K(ret));
+    } else if (OB_UNLIKELY(left_column_exprs.count() != right_column_exprs.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_FTS_LOG(WARN, "unexpected error, left column isn't equal to right", K(ret), K(left_column_exprs), K(right_column_exprs));
+    } else {
+      for (int64_t i = 0; i < left_column_exprs.count() && OB_SUCC(ret); ++i) {
+        ObOpRawExpr *b_expr = nullptr;
+        if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_OP_EQ, b_expr))) { // make equal expr: t_left_N.ck = t_right.ck
+          STORAGE_FTS_LOG(WARN, "fail to create join condition raw expr", K(ret));
+        } else if (OB_ISNULL(b_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_FTS_LOG(WARN, "unexpected error, b_expr is null", K(ret));
+        } else if (OB_FAIL(b_expr->set_param_exprs(left_column_exprs.at(i), right_column_exprs.at(i)))) {
+          STORAGE_FTS_LOG(WARN, "fail to set b_expr param exprs", K(ret));
+        } else if (OB_FAIL(b_expr->formalize(session_info_))) {
+          STORAGE_FTS_LOG(WARN, "fail to resolve formalize expression", K(ret));
+        } else if (OB_FAIL(joined_table->join_conditions_.push_back(b_expr))) {
+          STORAGE_FTS_LOG(WARN, "fail to add expression", K(ret));
+        }
+      }
+    }
+    OZ((get_stmt()->add_joined_table)(joined_table));
+    OZ(join_infos_.push_back(ResolverJoinInfo(joined_table->table_id_)));
+    // add hint to forcibly use nested loop join
+    ObQueryHint &query_hint = params_.query_ctx_->get_query_hint_for_update();
+    bool filter_embedded_hint = query_hint.has_outline_data() || query_hint.has_user_def_outline();
+    if (OB_SUCC(ret) && !filter_embedded_hint) {
+      ObSEArray<ObHint*, 8> hints;
+      ObJoinHint *main_join_hint = NULL;
+      ObJoinHint *rowkey_join_hint = NULL;
+      ObJoinOrderHint *ordered_hint = NULL;
+      ObSEArray<ObTableInHint, 4> main_hint_tables;
+      ObSEArray<ObTableInHint, 4> rowkey_hint_tables;
+      ObTableInHint main_table;
+      ObTableInHint rowkey_doc;
+      main_table.qb_name_ = left_table->qb_name_;
+      main_table.db_name_ = left_table->database_name_;
+      main_table.table_name_ = left_table->table_name_;
+      rowkey_doc.qb_name_ = right_table->qb_name_;
+      rowkey_doc.db_name_ = right_table->database_name_;
+      rowkey_doc.table_name_ = right_table->table_name_;
+      if (OB_FAIL(main_hint_tables.push_back(main_table))) {
+        STORAGE_FTS_LOG(WARN, "fail to push back main table into hint tables", K(ret));
+      } else if (OB_FAIL(rowkey_hint_tables.push_back(rowkey_doc))) {
+        STORAGE_FTS_LOG(WARN, "fail to push back rowkey doc table into hint tables", K(ret));
+      } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, T_USE_NL, main_join_hint))) {
+        STORAGE_FTS_LOG(WARN, "failed to create hint", K(ret));
+      } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, T_USE_NL, rowkey_join_hint))) {
+        STORAGE_FTS_LOG(WARN, "failed to create hint", K(ret));
+      } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, T_ORDERED, ordered_hint))) {
+        LOG_WARN("failed to create hint", K(ret));
+      } else if (OB_FAIL(main_join_hint->get_tables().assign(main_hint_tables))) {
+        STORAGE_FTS_LOG(WARN, "fail to assign hint tables", K(ret));
+      } else if (OB_FAIL(rowkey_join_hint->get_tables().assign(rowkey_hint_tables))) {
+        STORAGE_FTS_LOG(WARN, "fail to assign hint tables", K(ret));
+      } else if (OB_FAIL(hints.push_back(main_join_hint))) {
+        STORAGE_FTS_LOG(WARN, "fail to push back hint", K(ret));
+      } else if (OB_FAIL(hints.push_back(rowkey_join_hint))) {
+        STORAGE_FTS_LOG(WARN, "fail to push back hint", K(ret));
+      } else if (OB_FAIL(hints.push_back(ordered_hint))) {
+        STORAGE_FTS_LOG(WARN, "fail to push back hint", K(ret));
+      } else if (OB_FAIL(query_hint.append_hints(get_stmt()->get_stmt_id(), hints))) {
+        STORAGE_FTS_LOG(WARN, "fail to append hints", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::try_update_column_expr_for_fts(
+    const TableItem &table_item,
+    common::ObIArray<ObColumnRefRawExpr *> &column_exprs)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  const ObTableSchema *table_schema = nullptr;
+  const uint64_t table_id = table_item.ref_id_;
+  uint64_t rowkey_doc_tid = OB_INVALID_ID;
+  if (OB_UNLIKELY(TableItem::BASE_TABLE != table_item.type_)) {
+    // There is a fulltext index in only base table. So, not base table, just skip.
+  } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_FTS_LOG(WARN, "invalid arguments", K(ret), K(table_id));
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_) || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_FTS_LOG(WARN, "unexpected error, session info, schema checker or get_stmt() is nullptr", KP(session_info_),
+        KP(schema_checker_), KP(get_stmt()));
+  } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id, table_id, table_schema))) {
+    STORAGE_FTS_LOG(WARN, "fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_FTS_LOG(WARN, "unexpected error, table schema is nullptr", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(table_schema->get_rowkey_doc_tid(rowkey_doc_tid)) && OB_ERR_INDEX_KEY_NOT_FOUND != ret) {
+    STORAGE_FTS_LOG(WARN, "fail to get rowkey doc table id", K(ret), KPC(table_schema));
+  } else if (OB_ERR_INDEX_KEY_NOT_FOUND == ret) {
+    // no fulltext index, nothing to do
+    ret = OB_SUCCESS;
+  } else {
+    ObString doc_id_col_name;
+    uint64_t col_id = OB_INVALID_ID;
+    for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+         OB_SUCC(ret) && iter != table_schema->column_end();
+         ++iter) {
+      const ObColumnSchemaV2 *column = *iter;
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_FTS_LOG(WARN, "invalid column schema", K(ret), KP(column));
+      } else if (!column->is_doc_id_column()) {
+        continue; // nothing to do, just skip this column and continue.
+      } else {
+        col_id = column->get_column_id();
+        doc_id_col_name = column->get_column_name_str();
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(OB_INVALID_ID == col_id)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_FTS_LOG(WARN, "Don't found doc id column id", K(ret), K(col_id));
+    } else {
+      const TableItem *index_item = get_stmt()->get_table_item_by_id(rowkey_doc_tid);
+      ColumnItem *column_item = get_stmt()->get_column_item_by_id(rowkey_doc_tid, col_id);
+      if (OB_ISNULL(index_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, index item is nullptr", K(ret), KP(index_item));
+      } else if (NULL == column_item) {
+        if (OB_FAIL(resolve_basic_column_item(*index_item, doc_id_col_name, true, column_item, get_stmt()))) {
+          STORAGE_FTS_LOG(WARN, "fail to add column doc id item to array", K(ret));
+        } else if (OB_ISNULL(column_item) || OB_ISNULL(column_item->expr_)) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          STORAGE_FTS_LOG(WARN, "failed to add column item", K(ret), KPC(column_item));
+        }
+        STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(column_item), K(column_exprs));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
+        if (OB_ISNULL(column_exprs.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_FTS_LOG(WARN, "unexpected error, column_expr is nullptr", K(ret), K(i));
+        } else if (column_exprs.at(i)->get_column_id() == col_id) {
+          column_exprs.at(i) = column_item->expr_;
+          STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(column_item));
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
+                                               ObIArray<ObMatchFunRawExpr*> &match_exprs,
+                                               const ObStmtScope scope)
+{
+  int ret = OB_SUCCESS;
+  ObDMLStmt *stmt = get_stmt();
+  ObQuestionmarkEqualCtx check_ctx;
+  ObRawExprReplacer replacer;
+  if (OB_ISNULL(stmt) || OB_ISNULL(expr) || OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(stmt), K(expr));
+  } else if (match_exprs.count() > 1) {
+    // jinmao TODO: 之后存储层支持返回未匹配行，并且 SQL 层支持计算之后可以删掉这里的一系列限制
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "match expr can only be used in simple filter for now");
+    LOG_WARN("match expr can only be used in simple filter for now", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < match_exprs.count(); i++) {
+      uint64_t table_id = OB_INVALID_ID;
+      ObMatchFunRawExpr *cur_match_expr = NULL;
+      ObMatchFunRawExpr *match_expr_on_table = NULL;
+      bool table_on_null_side = false;
+      bool is_simple_filter = false;
+      ObSEArray<ObExprConstraint, 1> constraints;
+      if (OB_ISNULL(cur_match_expr = match_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(cur_match_expr->get_table_id(table_id))) {
+        LOG_WARN("failed to get table id", K(ret));
+      } else if (OB_FAIL(stmt->get_match_expr_on_table(table_id, match_expr_on_table))) {
+        LOG_WARN("failed to get fulltext search expr on table", K(ret), K(table_id));
+      } else if (OB_FAIL(resolve_match_against_expr(*cur_match_expr))) {
+        LOG_WARN("failed to resolve match index", K(ret));
+      } else if (OB_ISNULL(match_expr_on_table)) {
+        if (scope != T_WHERE_SCOPE) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search expr defined beyond where clause");
+          LOG_WARN("fulltext search expr not found in condition expr", K(ret));
+        } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(stmt, table_id, table_on_null_side))) {
+          LOG_WARN("failed to check table on null side", K(ret));
+        } else if (table_on_null_side) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search on null side of joined table");
+          LOG_WARN("fulltext search on null side of joined table is not supported", K(ret));
+        } else if (OB_FAIL(check_fulltext_search_simple_filter(expr, cur_match_expr, is_simple_filter, constraints))) {
+          LOG_WARN("failed to check fulltext search simple filter", K(ret));
+        } else if (is_simple_filter) {
+          if (OB_FAIL(stmt->get_match_exprs().push_back(cur_match_expr))) {
+            LOG_WARN("failed to push back expr", K(ret));
+          } else if (OB_FAIL(append(params_.query_ctx_->all_expr_constraints_, constraints))) {
+            LOG_WARN("failed to append constraints", K(ret));
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "filter that can't imply match_score not equal to 0");
+          LOG_WARN("filter that can't imply match_score not equal to 0 is not supported", K(ret), KPC(expr));
+        }
+      } else if (!cur_match_expr->same_as(*match_expr_on_table, &check_ctx)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-shareable match exprs on same base table");
+        LOG_WARN("non-shareable match exprs on same base table are not supported", K(ret), KPC(cur_match_expr), KPC(match_expr_on_table));
+      } else if (OB_FAIL(replacer.add_replace_expr(cur_match_expr, match_expr_on_table))) {
+        LOG_WARN("failed to add replace expr", K(ret));
+      } else if (OB_FAIL(replacer.replace(expr))) {
+        LOG_WARN("failed to replace expr", K(ret));
+      } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_, check_ctx.equal_pairs_))) {
+        LOG_WARN("failed to append equal param info", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_match_against_expr(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr.get_param_expr(0)) || OB_ISNULL(schema_checker_) || OB_ISNULL(session_info_)
+      || OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column list is invalid", K(expr.get_param_expr(0)), K(get_stmt()));
+  } else {
+    const TableItem *table_item = NULL;
+    const ObTableSchema *table_schema = nullptr;
+    ObIArray<ObRawExpr*> &column_list = expr.get_match_columns();
+    uint64_t table_id = OB_INVALID_ID;
+    ColumnReferenceSet column_set;
+    const ObColumnSchemaV2 *fulltext_col = NULL;
+
+    // get matched fulltext index
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_list.count(); ++i) {
+      ObColumnRefRawExpr *col_ref = nullptr;
+      if (OB_UNLIKELY(OB_ISNULL(column_list.at(i)) || !column_list.at(i)->is_column_ref_expr())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
+      } else if (FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr*>(column_list.at(i)))) {
+      } else if (OB_FAIL(column_set.add_member(col_ref->get_column_id()))) {
+        LOG_WARN("add to column set failed", K(ret));
+      } else if (0 == i) {
+        table_id = col_ref->get_table_id();
+      } else if (OB_UNLIKELY(col_ref->get_table_id() != table_id)) {
+        //check all table id
+        ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against columns on different tables");
+      }
+    }
+    if (OB_FAIL(ret)) {
+      //do nothing
+    } else if (OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(table_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item don't exist", K(table_id));
+    } else if (!table_item->is_basic_table()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column on non-base table");
+    } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                         table_item->ref_id_,
+                                                         table_schema))) {
+      LOG_WARN("failed to get main table schema", K(ret));
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to table schema", K(ret));
+    } else if (OB_FAIL(resolve_match_index(column_set, *table_schema, expr))) {
+      LOG_WARN("failed to resolve fulltext index access exprs", K(ret));
+    } else if (OB_FAIL(expr.formalize(session_info_))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_match_index(
+    const ColumnReferenceSet &match_column_set,
+    const ObTableSchema &table_schema,
+    ObMatchFunRawExpr &match_against)
+{
+  int ret = OB_SUCCESS;
+  int64_t inv_idx_tid = OB_INVALID_ID;
+  int64_t fwd_idx_tid = OB_INVALID_ID;
+  int64_t doc_rowkey_tid = OB_INVALID_ID;
+  uint64_t column_id = OB_INVALID_ID;
+  uint64_t database_id = OB_INVALID_ID;
+  ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  const ObTableSchema *inv_idx_schema = nullptr;
+  const ObTableSchema *fwd_idx_schema = nullptr;
+
+  if (OB_FAIL(table_schema.get_simple_index_infos(index_infos))) {
+    LOG_WARN("failed to get index infos", K(ret));
+  } else {
+    database_id = table_schema.get_database_id();
+    for (int64_t i = 0; i < index_infos.count(); ++i) {
+      if (share::schema::is_doc_rowkey_aux(index_infos.at(i).index_type_)) {
+        doc_rowkey_tid = index_infos.at(i).table_id_;
+        break;
+      }
+    }
+    if (OB_UNLIKELY(OB_INVALID_ID == doc_rowkey_tid)) {
+      ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+      LOG_WARN("No matched fulltext index exists", K(ret));
+    }
+  }
+  bool found_matched_index = false;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count() && !found_matched_index; ++i) {
+    inv_idx_schema = nullptr;
+    const ObAuxTableMetaInfo &index_info = index_infos.at(i);
+    if (!share::schema::is_fts_index_aux(index_info.index_type_)) {
+      // skip
+    } else if (OB_FAIL(schema_checker_->get_table_schema(
+        session_info_->get_effective_tenant_id(), index_info.table_id_, inv_idx_schema))) {
+      LOG_WARN("failed to get index schema", K(ret));
+    } else if (OB_ISNULL(inv_idx_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected index schema", K(ret), KPC(inv_idx_schema));
+    } else if (OB_FAIL(ObTransformUtils::check_fulltext_index_match_column(match_column_set,
+                                                                           &table_schema,
+                                                                           inv_idx_schema,
+                                                                           found_matched_index))) {
+      LOG_WARN("failed to check fulltext index match column", K(ret));
+    } else if (found_matched_index) {
+        inv_idx_tid = index_info.table_id_;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(!found_matched_index)) {
+    ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
+    LOG_WARN("No matched fulltext index exists", K(ret));
+  } else {
+    // find matched inverted index and forward index
+    bool found_fwd_idx = false;
+    const ObString &inv_idx_name = inv_idx_schema->get_table_name_str();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+      const ObAuxTableMetaInfo &index_info = index_infos.at(i);
+      if (!share::schema::is_fts_doc_word_aux(index_info.index_type_)) {
+        // skip
+      } else if (OB_FAIL(schema_checker_->get_table_schema(
+          session_info_->get_effective_tenant_id(), index_info.table_id_, fwd_idx_schema))) {
+        LOG_WARN("failed to get table schema", K(ret));
+      } else if (OB_ISNULL(fwd_idx_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpecter nullptr to fwd idx schema", K(ret));
+      } else if (fwd_idx_schema->get_table_name_str().prefix_match(inv_idx_name)) {
+        found_fwd_idx = true;
+        fwd_idx_tid = fwd_idx_schema->get_table_id();
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_UNLIKELY(!found_fwd_idx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("found matched inverted index table, but corresponding forward index table not found",
+            K(ret), K(inv_idx_tid), K(index_infos));
+      }
+    }
+    LOG_DEBUG("fulltext retrieval matched fulltex index id", K(ret),
+        K(inv_idx_tid), K(fwd_idx_tid), K(doc_rowkey_tid));
+  }
+  return ret;
+}
+
+// check that the fulltext search filter can imply a condition where match_score is not equal to zero.
+int ObDMLResolver::check_fulltext_search_simple_filter(ObRawExpr *expr,
+                                                       ObRawExpr *match_expr,
+                                                       bool &is_simple_filter,
+                                                       ObIArray<ObExprConstraint> &constraints)
+{
+  int ret = OB_SUCCESS;
+  is_simple_filter = false;
+  if (expr->get_expr_type() == T_FUN_MATCH_AGAINST) {
+    // bool expr will be added above in where scope
+    is_simple_filter = true;
+  } else {
+    ObRawExprCopier copier(*params_.expr_factory_);
+    ObSEArray<ObRawExpr*, 1> match_exprs;
+    ObSEArray<ObRawExpr*, 1> zero_exprs;
+    ObConstRawExpr *zero_expr = NULL;
+    ObObj obj_zero;
+    obj_zero.set_double(ObDoubleType, 0);
+    ObRawExpr *false_null_expr = NULL;
+    ObRawExpr *lnnvl_expr = NULL;
+    bool got_result = false;
+    ObObj result;
+    if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_) || OB_ISNULL(allocator_) ||
+        OB_ISNULL(params_.session_info_->get_cur_exec_ctx())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(params_.expr_factory_->create_raw_expr(T_DOUBLE, zero_expr))) {
+      LOG_WARN("create raw expr fail", K(ret));
+    } else if (OB_ISNULL(zero_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr", K(ret));
+    } else if (OB_FALSE_IT(zero_expr->set_value(obj_zero))) {
+    } else if (OB_FAIL(match_exprs.push_back(match_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(zero_exprs.push_back(zero_expr))) {
+      LOG_WARN("failed to push back expr", K(ret));
+    } else if (OB_FAIL(copier.add_replaced_expr(match_exprs, zero_exprs))) {
+      LOG_WARN("failed to add replace pair", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(expr, false_null_expr))) {
+      LOG_WARN("failed to do expr copy on replace", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_lnnvl_expr(*params_.expr_factory_, false_null_expr, lnnvl_expr))) {
+      LOG_WARN("failed to build lnnvl expr", K(ret));
+    } else if (OB_ISNULL(lnnvl_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(lnnvl_expr->formalize(params_.session_info_))) {
+      LOG_WARN("failed to formalize lnnvl expr", K(ret));
+    } else if (!lnnvl_expr->is_static_const_expr()) {
+      is_simple_filter = false;
+    } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(params_.session_info_->get_cur_exec_ctx(),
+                                                                lnnvl_expr,
+                                                                result,
+                                                                got_result,
+                                                                *allocator_))) {
+      LOG_WARN("failed to calc cosnt or calculable expr", K(ret));
+    } else if (!got_result || result.is_false() || result.is_null()) {
+      is_simple_filter = false;
+    } else {
+      is_simple_filter = true;
+      ObExprConstraint true_constraint(lnnvl_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE);
+      if (OB_FAIL(constraints.push_back(true_constraint))) {
+        LOG_WARN("failed to push back true constraint", K(ret));
+      }
     }
   }
   return ret;

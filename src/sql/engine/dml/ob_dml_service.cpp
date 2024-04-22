@@ -1232,6 +1232,7 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
   ObDASCtx &das_ctx = dml_rtctx.get_exec_ctx().get_das_ctx();
   uint64_t table_loc_id = das_ctdef.table_id_;
   uint64_t ref_table_id = das_ctdef.index_tid_;
+  das_rtdef.ctdef_ = &das_ctdef;
   das_rtdef.timeout_ts_ = plan_ctx->get_ps_timeout_timestamp();
   das_rtdef.prelock_ = my_session->get_prelock();
   das_rtdef.tenant_schema_version_ = plan_ctx->get_tenant_schema_version();
@@ -2023,7 +2024,7 @@ int ObDMLService::check_local_index_affected_rows(int64_t table_affected_rows,
   int ret = OB_SUCCESS;
   if (GCONF.enable_defensive_check()) {
     if (table_affected_rows != index_affected_rows
-        && !related_ctdef.table_param_.get_data_table().is_spatial_index()
+        && !related_ctdef.table_param_.get_data_table().is_domain_index()
         && !related_ctdef.table_param_.get_data_table().is_mlog_table()) {
       ret = OB_ERR_DEFENSIVE_CHECK;
       ObString func_name = ObString::make_string("check_local_index_affected_rows");

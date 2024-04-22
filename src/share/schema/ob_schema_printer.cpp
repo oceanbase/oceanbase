@@ -602,6 +602,14 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         // !is_alter_table_add for show create table
         // is_alter_table_add for dbms_metadata.get_ddl getting uk cst info
         SHARE_SCHEMA_LOG(WARN, "fail to print comma", K(ret));
+      } else if (index_schema->is_multivalue_index()) {
+        if (!index_schema->is_unique_index() &&
+            OB_FAIL(databuff_printf(buf, buf_len, pos, " MULTIVALUE KEY "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
+        } else if (index_schema->is_unique_index() &&
+          OB_FAIL(databuff_printf(buf, buf_len, pos, " UNIQUE MULTIVALUE KEY "))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
+        }
       } else if (index_schema->is_unique_index()) {
         if (is_oracle_mode) {
           if (index_schema->is_sys_generated_name(false/*check_unknown*/)) {
@@ -619,7 +627,7 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             SHARE_SCHEMA_LOG(WARN, "fail to print UNIQUE KEY", K(ret));
           }
         }
-      } else if (index_schema->is_domain_index()) {
+      } else if (index_schema->is_fts_index()) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, " FULLTEXT KEY "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
         }
@@ -649,7 +657,6 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         int64_t rowkey_count = index_rowkey_info.get_size();
         ObColumnSchemaV2 last_col;
         bool is_valid_col = false;
-        ObArray<ObString> ctxcat_cols;
         for (int64_t k = 0; OB_SUCC(ret) && k < index_column_num; k++) {
           const ObRowkeyColumn *rowkey_column = index_rowkey_info.get_column(k);
           const ObColumnSchemaV2 *col = NULL;
@@ -661,9 +668,11 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
                                                                     rowkey_column->column_id_))) {
             ret = OB_SCHEMA_ERROR;
             SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
+          } else if (index_schema->is_fts_index() && col->is_doc_id_column()) {
+            // skip doc id for fts index.
           } else if (!col->is_shadow_column()) {
             if (OB_SUCC(ret) && is_valid_col) {
-              if (OB_FAIL(print_index_column(table_schema, last_col, ctxcat_cols, false /* not last one */, buf, buf_len, pos))) {
+              if (OB_FAIL(print_index_column(table_schema, last_col, false /* not last one */, buf, buf_len, pos))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print index column", K(last_col), K(ret));
               }
             }
@@ -683,14 +692,12 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
           }
         }
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(print_index_column(table_schema, last_col, ctxcat_cols, true /* last column */, buf, buf_len, pos))) {
+          if (OB_FAIL(print_index_column(table_schema, last_col, true /* last column */, buf, buf_len, pos))) {
             SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(last_col));
-          } else if (!strict_compat_ && OB_FAIL(print_table_definition_fulltext_indexs(is_oracle_mode, ctxcat_cols, buf, buf_len, pos))) {
-            LOG_WARN("print table definition fulltext indexs failed", K(ret));
           } else { /*do nothing*/ }
         }
         // show storing columns in index
-        if (OB_SUCC(ret) && !strict_compat_ && !is_no_key_options(sql_mode)) {
+        if (OB_SUCC(ret) && !strict_compat_ && !is_no_key_options(sql_mode) && !index_schema->is_fts_index()) {
           int64_t column_count = index_schema->get_column_count();
           if (column_count >= rowkey_count) {
             bool first_storing_column = true;
@@ -796,6 +803,8 @@ int ObSchemaPrinter::print_table_definition_indexes(const ObTableSchema &table_s
                                   index_schema->is_global_local_index_table())) {
       // For strictly compatible with MySQL,
       // Do not print global index.
+    } else if (index_schema->is_built_in_fts_index()) {
+      // For full-text search index, only inverted table can be printed, and others table will not be printed.
     } else if (OB_FAIL(print_single_index_definition(index_schema, table_schema, arena_allocator,
                        buf, buf_len, pos, is_unique_index, is_oracle_mode, false, sql_mode, tz_info))) {
       LOG_WARN("print single index definition failed", K(ret));
@@ -916,7 +925,6 @@ int ObSchemaPrinter::print_table_definition_constraints(const ObTableSchema &tab
 
 int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_schema,
                                                  const ObColumnSchemaV2 &column,
-                                                 ObIArray<ObString> &ctxcat_cols,
                                                  bool is_last,
                                                  char *buf,
                                                  int64_t buf_len,
@@ -952,8 +960,6 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                          is_last && j == ctxcat_ids.count() - 1 ? ")" : ", "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print column name", K(ret), K(column));
-      } else if (OB_FAIL(ctxcat_cols.push_back(ctxcat_column->get_column_name_str()))) {
-        LOG_WARN("get fulltext index column failed", K(ret));
       } else { /*do nothing*/ }
     }
   }
@@ -1091,7 +1097,6 @@ int ObSchemaPrinter::print_ordinary_index_column_expr(const ObColumnSchemaV2 &co
 
 int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
                                         const ObColumnSchemaV2 &column,
-                                        ObIArray<ObString> &ctxcat_cols,
                                         bool is_last,
                                         char *buf,
                                         int64_t buf_len,
@@ -1107,7 +1112,6 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
     if (column.is_fulltext_column()) {
       if (OB_FAIL(print_fulltext_index_column(table_schema,
                                               column,
-                                              ctxcat_cols,
                                               is_last,
                                               buf,
                                               buf_len,
@@ -1674,10 +1678,14 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print collate", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCC(ret) && table_schema.is_domain_index()
+  if (OB_SUCC(ret) && table_schema.is_fts_index()
       && !is_no_key_options(sql_mode) && !table_schema.get_parser_name_str().empty()) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH PARSER '%s' ", table_schema.get_parser_name()))) {
-      SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret));
+    storage::ObFTParser parser;
+    if (OB_FAIL(parser.parse_from_str(table_schema.get_parser_name_str().ptr(), table_schema.get_parser_name_str().length()))) {
+      LOG_WARN("fail to parse name from cstring", K(ret), K(table_schema.get_parser_name_str()));
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "WITH PARSER %.*s ", parser.get_parser_name().len(),
+            parser.get_parser_name().str()))) {
+      SHARE_SCHEMA_LOG(WARN, "print parser name failed", K(ret), K(parser));
     }
   }
   if (OB_SUCCESS == ret && !is_index_tbl && !is_no_table_options(sql_mode) && !table_schema.is_external_table()) {
@@ -1718,8 +1726,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
       SHARE_SCHEMA_LOG(WARN, "fail to print block size", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCCESS == ret && !strict_compat_ && is_index_tbl && !table_schema.is_domain_index()
-      && !is_no_key_options(sql_mode)) {
+  if (OB_SUCCESS == ret && !strict_compat_ && is_index_tbl && !table_schema.is_fts_index()
+      && !table_schema.is_multivalue_index() && !is_no_key_options(sql_mode)) {
     const char* local_flag = table_schema.is_global_index_table()
                              || table_schema.is_global_local_index_table()
                              ? "GLOBAL " : "LOCAL ";
@@ -2184,7 +2192,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print collate", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCC(ret) && table_schema.is_domain_index()) {
+  if (OB_SUCC(ret) && table_schema.is_fts_index()) {
     if (full_text_columns.count() <= 0 || OB_UNLIKELY(virtual_column_id == OB_INVALID_ID)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid domain index infos", K(full_text_columns), K(virtual_column_id));
@@ -2231,7 +2239,7 @@ int ObSchemaPrinter::print_table_definition_table_options(
       OB_LOG(WARN, "fail to print block size", K(ret), K(table_schema));
     }
   }
-  if (OB_SUCC(ret) && !strict_compat_ && is_index_tbl && !table_schema.is_domain_index()) {
+  if (OB_SUCC(ret) && !strict_compat_ && is_index_tbl && !table_schema.is_fts_index() && !table_schema.is_multivalue_index()) {
     const char* local_flag = table_schema.is_global_index_table()
                              || table_schema.is_global_local_index_table()
                              ? "GLOBAL " : "LOCAL ";
@@ -2687,7 +2695,7 @@ int ObSchemaPrinter::print_index_table_definition(
                                                     : "CREATE UNIQUE INDEX "))) {
         OB_LOG(WARN, "fail to print create table prefix", K(ret), K(table_schema->get_table_name()));
       }
-    } else if (index_table_schema->is_domain_index()) {
+    } else if (index_table_schema->is_fts_index()) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   !is_oracle_mode ? "CREATE FULLTEXT INDEX if not exists "
                                                     : "CREATE FULLTEXT INDEX "))) {

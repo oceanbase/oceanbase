@@ -17,6 +17,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/schema/ob_schema_struct.h"
+#include "share/schema/ob_schema_utils.h"
 #include "common/rowkey/ob_rowkey_info.h"
 
 namespace oceanbase
@@ -262,9 +263,15 @@ int assign(const ObColumnSchemaV2 &src_schema);
     del_column_flag(DEFAULT_IDENTITY_COLUMN_FLAG);
     del_column_flag(DEFAULT_ON_NULL_IDENTITY_COLUMN_FLAG);
   }
-  inline bool is_fulltext_column() const { return column_flags_ & GENERATED_CTXCAT_CASCADE_FLAG; }
+  inline bool is_fulltext_column() const { return ObSchemaUtils::is_fulltext_column(column_flags_); }
+  inline bool is_doc_id_column() const { return ObSchemaUtils::is_doc_id_column(column_flags_); }
+  inline bool is_word_segment_column() const { return ObSchemaUtils::is_word_segment_column(column_flags_); }
+  inline bool is_word_count_column() const { return ObSchemaUtils::is_word_count_column(column_flags_); }
+  inline bool is_doc_length_column() const { return ObSchemaUtils::is_doc_length_column(column_flags_); }
   inline bool is_spatial_generated_column() const { return column_flags_ & SPATIAL_INDEX_GENERATED_COLUMN_FLAG; }
   inline bool is_spatial_cellid_column() const { return is_spatial_generated_column() && get_data_type() == common::ObUInt64Type; }
+  inline bool is_multivalue_generated_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG; }
+  inline bool is_multivalue_generated_array_column() const { return column_flags_ & MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG; }
   inline bool has_generated_column_deps() const { return column_flags_ & GENERATED_DEPS_CASCADE_FLAG; }
   inline bool is_primary_vp_column() const { return column_flags_ & PRIMARY_VP_COLUMN_FLAG; }
   inline bool is_aux_vp_column() const { return column_flags_ & AUX_VP_COLUMN_FLAG; }

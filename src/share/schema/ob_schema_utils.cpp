@@ -123,16 +123,26 @@ int ObSchemaUtils::cascaded_generated_column(ObTableSchema &table_schema,
           root_expr_type, columns_names))) {
         LOG_WARN("get generated column expr failed", K(ret));
       } else if (T_FUN_SYS_WORD_SEGMENT == root_expr_type) {
-        column.add_column_flag(GENERATED_CTXCAT_CASCADE_FLAG);
+        column.add_column_flag(GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG);
+      } else if (T_FUN_SYS_WORD_COUNT == root_expr_type) {
+        column.add_column_flag(GENERATED_FTS_WORD_COUNT_COLUMN_FLAG);
+      } else if (T_FUN_SYS_DOC_LENGTH == root_expr_type) {
+        column.add_column_flag(GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG);
       } else if (T_FUN_SYS_SPATIAL_CELLID == root_expr_type || T_FUN_SYS_SPATIAL_MBR == root_expr_type) {
         column.add_column_flag(SPATIAL_INDEX_GENERATED_COLUMN_FLAG);
+      } else if (T_FUN_SYS_JSON_QUERY == root_expr_type) {
+        if (strstr(col_def.ptr(), "multivalue)")) {
+          column.add_column_flag(MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG);
+        } else {
+          column.add_column_flag(MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG);
+        }
       } else {
         LOG_DEBUG("succ to resolve_generated_column_info", K(col_def), K(root_expr_type), K(columns_names), K(table_schema));
       }
     }
 
     // TODO: materialized view
-    if (OB_SUCC(ret) && resolve_dependencies && (table_schema.is_table()
+    if (OB_SUCC(ret) && resolve_dependencies && !column.is_doc_id_column() && (table_schema.is_table()
                                                 || table_schema.is_tmp_table())) {
       for (int64_t i = 0; OB_SUCC(ret) && i < columns_names.count(); ++i) {
         if (OB_ISNULL(col_schema = table_schema.get_column_schema(columns_names.at(i)))) {
@@ -170,6 +180,16 @@ bool ObSchemaUtils::is_virtual_generated_column(uint64_t flag)
   return flag & VIRTUAL_GENERATED_COLUMN_FLAG;
 }
 
+bool ObSchemaUtils::is_multivalue_generated_column(uint64_t flag)
+{
+  return flag & MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_multivalue_generated_array_column(uint64_t flag)
+{
+  return flag & MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG;
+}
+
 bool ObSchemaUtils::is_stored_generated_column(uint64_t flag)
 {
   return flag & STORED_GENERATED_COLUMN_FLAG;
@@ -205,9 +225,32 @@ bool ObSchemaUtils::is_default_expr_v2_column(uint64_t flag)
   return flag & DEFAULT_EXPR_V2_COLUMN_FLAG;
 }
 
-bool ObSchemaUtils::is_fulltext_column(uint64_t flag)
+bool ObSchemaUtils::is_fulltext_column(const uint64_t flag)
 {
-  return flag & GENERATED_CTXCAT_CASCADE_FLAG;
+  return is_doc_id_column(flag)
+      || is_word_segment_column(flag)
+      || is_word_count_column(flag)
+      || is_doc_length_column(flag);
+}
+
+bool ObSchemaUtils::is_doc_id_column(const uint64_t flag)
+{
+  return flag & GENERATED_DOC_ID_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_word_segment_column(const uint64_t flag)
+{
+  return flag & GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_word_count_column(const uint64_t flag)
+{
+  return flag & GENERATED_FTS_WORD_COUNT_COLUMN_FLAG;
+}
+
+bool ObSchemaUtils::is_doc_length_column(const uint64_t flag)
+{
+  return flag & GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG;
 }
 
 bool ObSchemaUtils::is_spatial_generated_column(uint64_t flag)

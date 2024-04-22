@@ -1261,6 +1261,8 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
                                                     rowid_projector_,
                                                     enable_lob_locator_v2_))) {
     LOG_WARN("fail to construct rowid dep column projector", K(ret));
+  } else if (table_schema.is_fts_index() && OB_FAIL(convert_fulltext_index_info(table_schema))) {
+    LOG_WARN("fail to convert fulltext index info", K(ret));
   } else {
     LOG_DEBUG("construct columns", K(table_id_), K(access_column_ids), K_(main_read_info));
   }
@@ -1334,6 +1336,12 @@ int ObTableParam::convert_group_by(const ObTableSchema &table_schema,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected group by column id", K(ret), K(i), K(output_column_ids), K(group_by_column_ids));
       }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (table_schema.is_fts_index() && OB_FAIL(convert_fulltext_index_info(table_schema))) {
+      LOG_WARN("fail to convert fulltext index info", K(ret));
     }
   }
   LOG_DEBUG("[GROUP BY PUSHDOWN]", K(ret), K(output_column_ids), K(aggregate_column_ids), K(group_by_column_ids),
@@ -1494,6 +1502,16 @@ int ObTableParam::convert_column_schema_to_param(const ObColumnSchemaV2 &column_
     if (OB_SUCC(ret)) {
       ret = column_param.set_cur_default_value(column_schema.get_cur_default_value());
     }
+  }
+  return ret;
+}
+
+
+int ObTableParam::convert_fulltext_index_info(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ob_write_string(allocator_, table_schema.get_parser_name_str(), parser_name_))) {
+    LOG_WARN("failed to set parser name from table schema", K(ret));
   }
   return ret;
 }

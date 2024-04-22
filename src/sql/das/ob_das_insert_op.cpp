@@ -89,7 +89,7 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_INSERT, ObDASDMLIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("insert rows to access service failed", K(ret));
     }
-  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_spatial_index())
+  } else if (!(ctdef.is_ignore_ || ctdef.table_param_.get_data_table().is_domain_index())
       && 0 == affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows after do insert", K(affected_rows), K(ret));

@@ -6,6 +6,10 @@ add_library(mock_access_service SHARED
   mock_access_service.cpp)
 target_link_libraries(mock_access_service PUBLIC oceanbase)
 
+add_library(mock_ft_parser SHARED
+  mock_ft_parser.cpp)
+target_link_libraries(mock_ft_parser PUBLIC oceanbase)
+
 function(storage_unittest case)
   ob_unittest(${ARGV})
   target_link_libraries(${case} PRIVATE mockcontainer)
@@ -14,6 +18,11 @@ endfunction()
 function(storage_dml_unittest case)
   ob_unittest(${ARGV})
   target_link_libraries(${case} PRIVATE mockcontainer mock_ls_tablet_service mock_access_service)
+endfunction()
+
+function(storage_fts_unittest case)
+  ob_unittest(${ARGV})
+  target_link_libraries(${case} PRIVATE mockcontainer mock_ft_parser)
 endfunction()
 
 add_subdirectory(mockcontainer)
@@ -69,6 +78,7 @@ storage_unittest(test_checkpoint_diagnose checkpoint/test_checkpoint_diagnose.cp
 #storage_unittest(test_create_tablet_memtable test_create_tablet_memtable.cpp)
 storage_unittest(test_tenant_meta_obj_pool test_tenant_meta_obj_pool.cpp)
 storage_unittest(test_tablet_pointer_map test_tablet_pointer_map.cpp)
+storage_fts_unittest(test_fts_plugin test_fts_plugin.cpp)
 storage_unittest(test_storage_logger_manager slog/test_storage_logger_manager.cpp)
 storage_unittest(test_storage_log_read_write slog/test_storage_log_read_write.cpp)
 storage_unittest(test_storage_log_replay slog/test_storage_log_replay.cpp)

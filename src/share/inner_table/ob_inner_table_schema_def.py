@@ -14984,8 +14984,10 @@ def_table_schema(
                  CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
                  CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
                  CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
-                 CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
-                 i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END      AS INDEX_TYPE,
+                 CASE WHEN i.index_type in (15, 18, 21) THEN 'FULLTEXT'
+                      WHEN i.index_using_type = 0 THEN 'BTREE'
+                      WHEN i.index_using_type = 1 THEN 'HASH'
+                      ELSE 'UNKOWN' END      AS INDEX_TYPE,
                  CASE i.index_status
                  WHEN 2 THEN 'VALID'
                  WHEN 3 THEN 'CHECKING'
@@ -15001,6 +15003,7 @@ def_table_schema(
           AND    i.tenant_id = t.tenant_id
           AND    i.database_id = t.database_id
           AND    i.table_type = 5
+          AND    i.index_type NOT IN (13, 14, 16, 17, 19, 20, 22)
           AND    i.table_mode >> 12 & 15 in (0,1)
           AND    t.table_type in (0,3)
           JOIN   oceanbase.__all_column c
@@ -15063,8 +15066,10 @@ def_table_schema(
               CASE WHEN d_col.column_name IS NOT NULL THEN d_col.column_name ELSE c.column_name END AS COLUMN_NAME,
               CASE WHEN d_col.column_name IS NOT NULL THEN c.data_length ELSE NULL END AS SUB_PART,
               CASE WHEN c.nullable = 1 THEN 'YES' ELSE '' END               AS NULLABLE,
-              CASE WHEN i.index_using_type = 0 THEN 'BTREE' ELSE (CASE WHEN
-                i.index_using_type = 1 THEN 'HASH' ELSE 'UNKOWN' END)END    AS INDEX_TYPE,
+              CASE WHEN i.index_type in (15, 18, 21) THEN 'FULLTEXT'
+                   WHEN i.index_using_type = 0 THEN 'BTREE'
+                   WHEN i.index_using_type = 1 THEN 'HASH'
+                   ELSE 'UNKOWN' END      AS INDEX_TYPE,
               CASE i.index_status
               WHEN 2 THEN 'VALID'
               WHEN 3 THEN 'CHECKING'
@@ -15080,6 +15085,7 @@ def_table_schema(
           AND    i.tenant_id = t.tenant_id
           AND    i.database_id = t.database_id
           AND    i.table_type = 5
+          AND    i.index_type NOT IN (13, 14, 16, 17, 19, 20, 22)
           AND    t.table_type in (0,3)
           AND    t.tenant_id = EFFECTIVE_TENANT_ID()
           JOIN   oceanbase.__ALL_VIRTUAL_CORE_COLUMN_TABLE c
@@ -20877,6 +20883,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM OCEANBASE.__ALL_VIRTUAL_COLUMN T_COL_INDEX,
@@ -20943,7 +20950,7 @@ def_table_schema(
              AND CONS_TAB.TENANT_ID = A.TENANT_ID
              AND CONS_TAB.CONSTRAINT_TYPE = 1
         WHERE
-          (A.TABLE_TYPE = 3 AND A.TABLE_MODE & 66048 = 0) OR (A.TABLE_TYPE = 5)
+          (A.TABLE_TYPE = 3 AND A.TABLE_MODE & 66048 = 0) OR (A.TABLE_TYPE = 5 AND A.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22))
         ) C
       JOIN OCEANBASE.__ALL_VIRTUAL_TABLE D
         ON C.TABLE_ID = D.TABLE_ID
@@ -21472,6 +21479,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
     UNION
     SELECT  CAST(D.TENANT_ID AS SIGNED) AS CON_ID,
@@ -21488,7 +21496,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
 """.replace("\n", " ")
 )
@@ -21533,6 +21541,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
     UNION
     SELECT  CAST(D.TENANT_ID AS SIGNED) AS CON_ID,
@@ -21549,7 +21558,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
 """.replace("\n", " ")
 )
@@ -21649,18 +21658,24 @@ FROM
          WHEN 1 THEN 1
          WHEN 2 THEN 1
          WHEN 10 THEN 1
+         WHEN 15 THEN 1
+         WHEN 23 THEN 1
+         WHEN 24 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
          WHEN 10 THEN T.TABLE_ID
+         WHEN 15 THEN T.TABLE_ID
+         WHEN 23 THEN T.TABLE_ID
+         WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
  JOIN OCEANBASE.__ALL_VIRTUAL_TABLE T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID
  JOIN OCEANBASE.__ALL_VIRTUAL_DATABASE D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
- WHERE I.TABLE_TYPE = 5 AND I.PART_LEVEL != 0
+ WHERE I.TABLE_TYPE = 5 AND I.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND I.PART_LEVEL != 0
  AND T.TABLE_MODE >> 12 & 15 in (0,1)
 ) I_T
 
@@ -21674,7 +21689,7 @@ LEFT JOIN
                 1 AS IS_PREFIXED
  FROM OCEANBASE.__ALL_VIRTUAL_TABLE I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2, 10)
+   AND I.INDEX_TYPE IN (1, 2, 10, 15, 23, 24)
    AND I.PART_LEVEL != 0
  AND NOT EXISTS
  (SELECT /*+NO_USE_NL(PART_COLUMNS INDEX_COLUMNS)*/ *
@@ -22453,6 +22468,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
           AND C.TENANT_ID = 0
     UNION
@@ -22469,7 +22485,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND (C.PARTITION_KEY_POSITION & 255) > 0
           AND C.TENANT_ID = 0
 """.replace("\n", " ")
@@ -22515,6 +22531,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
           AND C.TENANT_ID = 0
     UNION
@@ -22531,7 +22548,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND (C.PARTITION_KEY_POSITION & 65280) > 0
           AND C.TENANT_ID = 0
 """.replace("\n", " ")
@@ -22922,18 +22939,24 @@ FROM
          WHEN 1 THEN 1
          WHEN 2 THEN 1
          WHEN 10 THEN 1
+         WHEN 15 THEN 1
+         WHEN 23 THEN 1
+         WHEN 24 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
          WHEN 10 THEN T.TABLE_ID
+         WHEN 15 THEN T.TABLE_ID
+         WHEN 23 THEN T.TABLE_ID
+         WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM OCEANBASE.__ALL_TABLE I
  JOIN OCEANBASE.__ALL_TABLE T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID
  JOIN OCEANBASE.__ALL_DATABASE D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
- WHERE I.TABLE_TYPE = 5 AND I.PART_LEVEL != 0
+ WHERE I.TABLE_TYPE = 5 AND I.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND I.PART_LEVEL != 0
  AND I.TABLE_MODE >> 12 & 15 in (0,1)
 ) I_T
 
@@ -22954,7 +22977,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM OCEANBASE.__ALL_TABLE I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2, 10)
+   AND I.INDEX_TYPE IN (1, 2, 10, 15, 23, 24)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = 0
  AND NOT EXISTS
@@ -24948,7 +24971,7 @@ def_table_schema(
                 'INDEX' AS OBJECT_TYPE
           FROM
             OCEANBASE.__ALL_VIRTUAL_CORE_ALL_TABLE T
-          WHERE T.TABLE_TYPE = 5 AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
+          WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
         UNION ALL
          SELECT TENANT_ID,
                 DATABASE_ID,
@@ -24963,7 +24986,7 @@ def_table_schema(
                 'INDEX' AS OBJECT_TYPE
         FROM
             oceanbase.__all_table T
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
         AND T.TABLE_MODE >> 12 & 15 in (0,1))
     UNION ALL
         SELECT T.TENANT_ID,
@@ -24983,7 +25006,7 @@ def_table_schema(
             oceanbase.__all_part P
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -25007,7 +25030,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN oceanbase.__all_table T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -38623,6 +38646,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -38681,6 +38705,7 @@ def_table_schema(
           JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
           ON A.DATABASE_ID = B.DATABASE_ID
              AND TABLE_TYPE IN (5, 3, 15)
+             AND A.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
              AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
              AND bitand((A.TABLE_MODE / 4096), 15) IN (0,1)
              AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -38789,6 +38814,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -38847,6 +38873,7 @@ def_table_schema(
           JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
           ON A.DATABASE_ID = B.DATABASE_ID
              AND TABLE_TYPE IN (5, 3, 15)
+             AND A.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
              AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
              AND bitand((A.TABLE_MODE / 4096), 15) IN (0,1)
              AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -38958,6 +38985,7 @@ def_table_schema(
              ELSE (CONS_TAB.CONSTRAINT_NAME) END AS INDEX_NAME,
 
         CASE
+          WHEN A.TABLE_TYPE = 5 AND A.INDEX_TYPE IN (15, 18, 21) THEN 'DOMAIN'
           WHEN A.TABLE_TYPE = 5 AND EXISTS (
             SELECT 1
             FROM SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT T_COL_INDEX,
@@ -39016,6 +39044,7 @@ def_table_schema(
           JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
           ON A.DATABASE_ID = B.DATABASE_ID
              AND TABLE_TYPE IN (5, 3, 15)
+             AND A.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
              AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
              AND bitand((A.TABLE_MODE / 4096), 15) IN (0,1)
              AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41553,6 +41582,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41571,7 +41601,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41625,6 +41655,7 @@ def_table_schema(
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41646,7 +41677,7 @@ def_table_schema(
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41697,6 +41728,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41716,7 +41748,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND BITAND(C.PARTITION_KEY_POSITION, 255) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41772,6 +41804,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41791,7 +41824,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
           AND T.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41844,6 +41877,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41865,7 +41899,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41917,6 +41951,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.TABLE_ID
           AND T.TABLE_TYPE = 5
+          AND T.INDEX_TYPE NOT IN (17,19,20,22)
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -41936,7 +41971,7 @@ def_table_schema(
           AND T.DATABASE_ID = D.DATABASE_ID
           AND C.TABLE_ID = T.DATA_TABLE_ID
           AND T.TABLE_TYPE = 5
-          AND T.INDEX_TYPE IN (1,2,10)
+          AND T.INDEX_TYPE IN (1,2,10,15,23,24)
           AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
           AND BITAND(C.PARTITION_KEY_POSITION, 65280) > 0
           AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
@@ -43411,11 +43446,17 @@ FROM
          WHEN 1 THEN 1
          WHEN 2 THEN 1
          WHEN 10 THEN 1
+         WHEN 15 THEN 1
+         WHEN 23 THEN 1
+         WHEN 24 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
          WHEN 10 THEN T.TABLE_ID
+         WHEN 15 THEN T.TABLE_ID
+         WHEN 23 THEN T.TABLE_ID
+         WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
@@ -43423,7 +43464,7 @@ FROM
  AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
  JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
- WHERE I.TABLE_TYPE = 5 AND I.PART_LEVEL != 0 AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
+ WHERE I.TABLE_TYPE = 5 AND I.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND I.PART_LEVEL != 0 AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
 ) I_T
 
 JOIN
@@ -43443,7 +43484,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2, 10)
+   AND I.INDEX_TYPE IN (1, 2, 10, 15, 23, 24)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
    AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
@@ -43582,18 +43623,24 @@ FROM
          WHEN 1 THEN 1
          WHEN 2 THEN 1
          WHEN 10 THEN 1
+         WHEN 15 THEN 1
+         WHEN 23 THEN 1
+         WHEN 24 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
          WHEN 10 THEN T.TABLE_ID
+         WHEN 15 THEN T.TABLE_ID
+         WHEN 23 THEN T.TABLE_ID
+         WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
  JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
- WHERE I.TABLE_TYPE = 5 AND I.PART_LEVEL != 0
+ WHERE I.TABLE_TYPE = 5 AND I.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND I.PART_LEVEL != 0
        AND (T.DATABASE_ID = USERENV('SCHEMAID')
             OR USER_CAN_ACCESS_OBJ(1, T.TABLE_ID, T.DATABASE_ID) = 1)
        AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
@@ -43616,7 +43663,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2, 10)
+   AND I.INDEX_TYPE IN (1, 2, 10, 15, 23, 24)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
    AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
@@ -43754,18 +43801,24 @@ FROM
          WHEN 1 THEN 1
          WHEN 2 THEN 1
          WHEN 10 THEN 1
+         WHEN 15 THEN 1
+         WHEN 23 THEN 1
+         WHEN 24 THEN 1
          ELSE 0 END) AS IS_LOCAL,
         (CASE I.INDEX_TYPE
          WHEN 1 THEN T.TABLE_ID
          WHEN 2 THEN T.TABLE_ID
          WHEN 10 THEN T.TABLE_ID
+         WHEN 15 THEN T.TABLE_ID
+         WHEN 23 THEN T.TABLE_ID
+         WHEN 24 THEN T.TABLE_ID
          ELSE I.TABLE_ID END) AS JOIN_TABLE_ID
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
  ON I.TENANT_ID = T.TENANT_ID AND I.DATA_TABLE_ID = T.TABLE_ID AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
  JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
  ON T.TENANT_ID = D.TENANT_ID AND T.DATABASE_ID = D.DATABASE_ID
- WHERE I.TABLE_TYPE = 5 AND I.PART_LEVEL != 0
+ WHERE I.TABLE_TYPE = 5 AND I.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND I.PART_LEVEL != 0
        AND T.DATABASE_ID = USERENV('SCHEMAID')
        AND T.TABLE_TYPE != 12 AND T.TABLE_TYPE != 13
 ) I_T
@@ -43787,7 +43840,7 @@ LEFT JOIN
         1 AS IS_PREFIXED
  FROM SYS.ALL_VIRTUAL_TABLE_REAL_AGENT I
  WHERE I.TABLE_TYPE = 5
-   AND I.INDEX_TYPE IN (1, 2, 10)
+   AND I.INDEX_TYPE IN (1, 2, 10, 15, 23, 24)
    AND I.PART_LEVEL != 0
    AND I.TENANT_ID = EFFECTIVE_TENANT_ID()
    AND bitand((I.TABLE_MODE / 4096), 15) IN (0,1)
@@ -49019,7 +49072,7 @@ def_table_schema(
               'INDEX' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE T
-          WHERE T.TABLE_TYPE = 5
+          WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
       UNION ALL
        SELECT TENANT_ID,
               DATABASE_ID,
@@ -49034,7 +49087,7 @@ def_table_schema(
               'INDEX' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
         AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1))
     UNION ALL
         SELECT T.TENANT_ID,
@@ -49055,7 +49108,7 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -49080,7 +49133,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -49157,7 +49210,7 @@ def_table_schema(
               'INDEX' AS OBJECT_TYPE
           FROM
              SYS.ALL_VIRTUAL_CORE_ALL_TABLE T
-          WHERE T.TABLE_TYPE = 5
+          WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
       UNION ALL
        SELECT TENANT_ID,
               DATABASE_ID,
@@ -49172,7 +49225,7 @@ def_table_schema(
               'INDEX' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
         AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1))
     UNION ALL
         SELECT T.TENANT_ID,
@@ -49193,7 +49246,7 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -49218,7 +49271,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22)
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID
@@ -49290,7 +49343,7 @@ def_table_schema(
                 'INDEX' AS OBJECT_TYPE
         FROM
             SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
-        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
         AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
     UNION ALL
         SELECT T.TENANT_ID,
@@ -49311,7 +49364,7 @@ def_table_schema(
             ON T.TENANT_ID = P.TENANT_ID
             AND T.TABLE_ID = P.TABLE_ID
             AND bitand((T.TABLE_MODE / 4096), 15) IN (0,1)
-        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
     UNION ALL
         SELECT T.TENANT_ID,
                T.DATABASE_ID,
@@ -49336,7 +49389,7 @@ def_table_schema(
             ON T.TENANT_ID = SP.TENANT_ID
             AND T.TABLE_ID = SP.TABLE_ID
             AND P.PART_ID = SP.PART_ID
-        WHERE T.TABLE_TYPE = 5 AND T.DATABASE_ID = USERENV('SCHEMAID')
+        WHERE T.TABLE_TYPE = 5 AND T.INDEX_TYPE NOT IN (13, 14, 16, 17, 19, 20, 22) AND T.DATABASE_ID = USERENV('SCHEMAID')
     ) V
     JOIN SYS.ALL_VIRTUAL_TABLE_REAL_AGENT T
          ON T.TABLE_ID = V.DATA_TABLE_ID

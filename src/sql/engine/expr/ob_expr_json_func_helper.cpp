@@ -381,7 +381,8 @@ int ObJsonExprHelper::get_json_for_partial_update(
   return ret;
 }
 
-int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
+// ToDo: refine
+int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExecContext *ctx,
                                    bool is_bool, common::ObIAllocator *allocator,
                                    ObIJsonBase*& j_base, bool to_bin)
 {
@@ -425,7 +426,7 @@ int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   } else {
-    ObBasicSessionInfo *session = ctx.exec_ctx_->get_my_session();
+    ObBasicSessionInfo *session = ctx->get_my_session();
     if (OB_ISNULL(session)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session is NULL", K(ret));
@@ -674,6 +675,7 @@ int ObJsonExprHelper::get_json_val(const ObExpr &expr, ObEvalCtx &ctx,
   }
   return ret;
 }
+
 int ObJsonExprHelper::eval_oracle_json_val(ObExpr *expr,
                                            ObEvalCtx &ctx,
                                            common::ObIAllocator *allocator,

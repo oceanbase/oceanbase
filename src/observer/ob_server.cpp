@@ -105,6 +105,7 @@
 #include "logservice/palf/election/interface/election.h"
 #include "share/ob_ddl_sim_point.h"
 #include "storage/ddl/ob_ddl_redo_log_writer.h"
+#include "storage/fts/ob_fts_plugin_mgr.h"
 #include "observer/ob_server_utils.h"
 #include "observer/table_load/ob_table_load_partition_calc.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
@@ -404,6 +405,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init bandwidth_throttle failed", KR(ret));
     } else if (OB_FAIL(ObClockGenerator::init())) {
       LOG_ERROR("init create clock generator failed", KR(ret));
+    } else if (OB_FAIL(ObTenantFTPluginMgr::register_plugins())) {
+      LOG_ERROR("init fulltext plugins failed", K(ret));
     } else if (OB_FAIL(init_storage())) {
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
@@ -753,6 +756,10 @@ void ObServer::destroy()
     FLOG_INFO("begin to wait destroy multi tenant");
     multi_tenant_.destroy();
     FLOG_INFO("wait destroy multi tenant success");
+
+    FLOG_INFO("begin to unregister fulltext plugins");
+    ObTenantFTPluginMgr::unregister_plugins();
+    FLOG_INFO("fulltext plugins unregistered");
 
     FLOG_INFO("begin to destroy query retry ctrl");
     ObQueryRetryCtrl::destroy();

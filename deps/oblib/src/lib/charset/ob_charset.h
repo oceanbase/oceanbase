@@ -475,6 +475,9 @@ public:
   static int tolower(const ObCollationType collation_type,
                      const ObString &src, ObString &dst,
                      ObIAllocator &allocator);
+  static int tolower(const ObCharsetInfo *cs,
+                     const ObString &src, ObString &dst,
+                     ObIAllocator &allocator);
 
   static bool case_insensitive_equal(const ObString &one,
                                      const ObString &another,

@@ -135,7 +135,10 @@ enum ObNameTypeClass
 
 enum ObMatchAgainstMode {
   NATURAL_LANGUAGE_MODE = 0,
-  BOOLEAN_MODE = 1
+  NATURAL_LANGUAGE_MODE_WITH_QUERY_EXPANSION = 1,
+  BOOLEAN_MODE = 2,
+  WITH_QUERY_EXPANSION = 3,
+  MAX_MATCH_AGAINST_MODE = 4,
 };
 
 #define IS_JOIN(type) \
@@ -650,6 +653,25 @@ ObTMSegmentArray<T, max_block_size, BlockAllocatorT, auto_free,
           BlockPointerArrayT>(alloc)
 {
   this->set_tenant_id(MTL_ID());
+}
+
+inline const ObString &ob_match_against_mode_str(const ObMatchAgainstMode mode)
+{
+  static const ObString ma_mode_str[] =
+  {
+    "NATURAL LANGUAGE MODE",
+    "NATURAL LANGUAGE MODE WITH QUERY EXPANSION",
+    "BOOLEAN MODE",
+    "WITH QUERY EXPANSION",
+    "UNKNOWN MATCH MODE"
+  };
+
+  if (OB_LIKELY(mode >= ObMatchAgainstMode::NATURAL_LANGUAGE_MODE)
+      && OB_LIKELY(mode < ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE)) {
+    return ma_mode_str[mode];
+  } else {
+    return ma_mode_str[ObMatchAgainstMode::MAX_MATCH_AGAINST_MODE];
+  }
 }
 
 static bool is_fixed_length(ObObjType type) {

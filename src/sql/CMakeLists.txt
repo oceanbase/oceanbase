@@ -37,12 +37,11 @@ ob_set_subtarget(ob_sql common_mixed
 )
 
 ob_set_subtarget(ob_sql das
-  das/ob_group_scan_iter.cpp
-  das/ob_das_group_scan_op.cpp
   das/ob_das_context.cpp
   das/ob_das_define.cpp
   das/ob_das_delete_op.cpp
   das/ob_das_dml_ctx_define.cpp
+  das/ob_domain_index_lookup_op.cpp
   das/ob_das_extra_data.cpp
   das/ob_das_factory.cpp
   das/ob_das_insert_op.cpp
@@ -62,8 +61,14 @@ ob_set_subtarget(ob_sql das
   das/ob_das_spatial_index_lookup_op.cpp
   das/ob_das_retry_ctrl.cpp
   das/ob_das_simple_op.cpp
+  das/ob_das_domain_utils.cpp
   das/ob_text_retrieval_op.cpp
   das/ob_das_attach_define.cpp
+  das/iter/ob_das_iter.cpp
+  das/iter/ob_das_merge_iter.cpp
+  das/iter/ob_das_lookup_iter.cpp
+  das/iter/ob_das_group_fold_iter.cpp
+  das/iter/ob_das_iter_utils.cpp
 )
 
 ob_set_subtarget(ob_sql dtl
@@ -303,6 +308,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_bit_or.cpp
   engine/expr/ob_expr_bit_right_shift.cpp
   engine/expr/ob_expr_bit_xor.cpp
+  engine/expr/ob_expr_bm25.cpp
   engine/expr/ob_expr_bool.cpp
   engine/expr/ob_expr_calc_partition_id.cpp
   engine/expr/ob_expr_calc_urowid.cpp
@@ -346,6 +352,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_div.cpp
   engine/expr/ob_expr_dll_udf.cpp
   engine/expr/ob_expr_dml_event.cpp
+  engine/expr/ob_expr_doc_id.cpp
+  engine/expr/ob_expr_doc_length.cpp
   engine/expr/ob_expr_effective_tenant.cpp
   engine/expr/ob_expr_effective_tenant_id.cpp
   engine/expr/ob_expr_elt.cpp
@@ -430,6 +438,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_json_unquote.cpp
   engine/expr/ob_expr_json_valid.cpp
   engine/expr/ob_expr_json_value.cpp
+  engine/expr/ob_expr_json_utils.cpp
   engine/expr/ob_expr_json_query.cpp
   engine/expr/ob_expr_json_exists.cpp
   engine/expr/ob_expr_json_type.cpp
@@ -625,6 +634,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_week_of_func.cpp
   engine/expr/ob_expr_weight_string.cpp
   engine/expr/ob_expr_width_bucket.cpp
+  engine/expr/ob_expr_word_count.cpp
+  engine/expr/ob_expr_word_segment.cpp
   engine/expr/ob_expr_wrapper_inner.cpp
   engine/expr/ob_expr_xor.cpp
   engine/expr/ob_infix_expression.cpp

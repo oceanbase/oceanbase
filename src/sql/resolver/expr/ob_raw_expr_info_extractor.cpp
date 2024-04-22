@@ -471,6 +471,7 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
   } else {
     // these functions should not be calculated first
     if (T_FUN_SYS_AUTOINC_NEXTVAL == expr.get_expr_type()
+        || T_FUN_SYS_DOC_ID == expr.get_expr_type()
         || T_FUN_SYS_TABLET_AUTOINC_NEXTVAL == expr.get_expr_type()
         || T_FUN_SYS_SLEEP == expr.get_expr_type()
         || (T_FUN_SYS_LAST_INSERT_ID == expr.get_expr_type() && expr.get_param_count() > 0)
@@ -647,6 +648,19 @@ int ObRawExprInfoExtractor::visit(ObPseudoColumnRawExpr &expr)
     if (OB_FAIL(expr.add_flag(IS_ORA_ROWSCN_EXPR))) {
         LOG_WARN("failed to add flag IS_ORA_ROWSCN_EXPR", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObRawExprInfoExtractor::visit(ObMatchFunRawExpr &expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(clear_info(expr))) {
+    LOG_WARN("failed to clear info", K(ret));
+  } else if (OB_FAIL(pull_info(expr))) {
+    LOG_WARN("pull match against info failed", K(ret));
+  } else if (OB_FAIL(expr.add_flag(IS_MATCH_EXPR))) {
+    LOG_WARN("add flag to match against failed", K(ret));
   }
   return ret;
 }

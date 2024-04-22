@@ -139,6 +139,8 @@ public:
   void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
   const share::ObLSID &get_ls_id() const { return ls_id_; }
   void set_tablet_loc(const ObDASTabletLoc *tablet_loc) { tablet_loc_ = tablet_loc; }
+  // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
+  // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
   const ObDASTabletLoc *get_tablet_loc() const { return tablet_loc_; }
   inline int64_t get_ref_table_id() const { return tablet_loc_->loc_meta_->ref_table_id_; }
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
@@ -168,6 +170,9 @@ public:
   DasTaskNode &get_node() { return das_task_node_; }
   int get_errcode() const { return errcode_; }
   void set_errcode(int errcode) { errcode_ = errcode; }
+  void set_attach_ctdef(const ObDASBaseCtDef *attach_ctdef) { attach_ctdef_ = attach_ctdef; }
+  void set_attach_rtdef(ObDASBaseRtDef *attach_rtdef) { attach_rtdef_ = attach_rtdef; }
+  ObDASBaseRtDef *get_attach_rtdef() { return attach_rtdef_; }
   VIRTUAL_TO_STRING_KV(K_(tenant_id),
                        K_(task_id),
                        K_(op_type),
@@ -254,17 +259,26 @@ protected:
   int16_t write_branch_id_;  // branch id for parallel write, required for partially rollback
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  const ObDASTabletLoc *tablet_loc_; //does not need serialize it
+  // tablet_loc_ will not be serialized, therefore it cannot be accessed during the execution phase
+  // of DASTaskOp. It can only be touched through das_ref and data_access_service layer.
+  const ObDASTabletLoc *tablet_loc_;
   common::ObIAllocator &op_alloc_;
-  //in DML DAS Task,related_ctdefs_ means related local index ctdefs
-  //in Scan DAS Task, related_ctdefs_ have only one element, means the lookup ctdef
+  //In DML DAS Task,related_ctdefs_ means related local index ctdefs
+  //In Scan DAS Task for normal secondary index, related_ctdefs_ have only one element, means the lookup ctdef
+  //In Scan DAS TASK for domain index, related_ctdefs_ means related local index scan ctdefs,
+  //For detailed arrangement information, please refer to the description in ObDASScanOp.
+  //The related_ctdef is used solely to retain the fundamental computational information executed with the data table and its index table,
+  //such as insert_ctdef, scan_ctdef, etc.
+  //It does not include other pushed-down operations bound and executed with the task,
+  //such as aux lookup ctdef, etc.
   DASCtDefFixedArray related_ctdefs_;
   DASRtDefFixedArray related_rtdefs_;
+  //The related_tablet_ids_ usually correspond to the related_ctdefs information.
   ObTabletIDFixedArray related_tablet_ids_;
   ObDasTaskStatus task_status_;  // do not serialize
   DasTaskNode das_task_node_;  // tasks's linked list node, do not serialize
-  ObDasAggregatedTasks *agg_tasks_;  // task's agg task, do not serialize
-  DasTaskLinkedList *cur_agg_list_;  // task's agg_list, do not serialize
+  ObDasAggregatedTasks *agg_tasks_;  //task's agg task, do not serialize
+  DasTaskLinkedList *cur_agg_list_;  //task's agg_list, do not serialize
   ObIDASTaskResult *op_result_;
   //The attach_ctdef describes the computations that are pushed down and executed as an attachment to the ObDASTaskOp,
   //such as the back table operation for full-text indexes,

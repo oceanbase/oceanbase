@@ -219,6 +219,7 @@ public:
   }
   inline bool is_materialized_view() const { return share::schema::ObTableSchema::is_materialized_view(table_type_); }
   inline bool is_mlog_table() const { return share::schema::ObTableSchema::is_mlog_table(table_type_); }
+  inline bool is_fts_index() const { return share::schema::is_fts_index(index_type_); }
   virtual inline bool is_global_index_table() const override { return share::schema::ObSimpleTableSchemaV2::is_global_index_table(index_type_); }
   virtual inline int64_t get_block_size() const override { return block_size_; }
 

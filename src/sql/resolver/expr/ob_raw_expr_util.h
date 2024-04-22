@@ -576,6 +576,26 @@ public:
                              ObRawExpr *&expr,
                              const ObLocalSessionVar *local_vars = NULL,
                              int64_t local_var_id = OB_INVALID_INDEX_INT64);
+
+  static bool is_domain_expr_need_special_replace(ObRawExpr* qual_expr,
+                                                  ObRawExpr *depend_expr);
+  static int replace_domain_wrapper_expr(ObRawExpr *depend_expr,
+                                         ObColumnRefRawExpr *col_expr,
+                                         ObRawExprCopier& copier,
+                                         ObRawExprFactory& factory,
+                                         ObSQLSessionInfo *session_info,
+                                         ObRawExpr *&qual,
+                                         int64_t qual_idx,
+                                         ObRawExpr *&new_qual);
+  static int replace_json_wrapper_expr_if_need(ObRawExpr* qual,
+                                         int64_t qual_idx,
+                                         ObRawExpr *depend_expr,
+                                         ObRawExprFactory &expr_factory,
+                                         ObSQLSessionInfo *session_info,
+                                         bool& is_done_replace);
+
+  static int replace_qual_param_if_need(ObRawExpr* qual, ObColumnRefRawExpr *col_expr);
+
   static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
@@ -1200,6 +1220,21 @@ public:
   static int check_is_valid_generated_col(ObRawExpr *expr, ObIAllocator &allocator);
 
   static bool is_column_ref_skip_implicit_cast(const ObRawExpr *expr);
+  static int build_default_match_filter(ObRawExprFactory &expr_factory,
+                                ObRawExpr *relevance_expr,
+                                ObRawExpr *threshold,
+                                ObOpRawExpr *&match_filter,
+                                const ObSQLSessionInfo *session);
+  static int build_bm25_expr(ObRawExprFactory &expr_factory,
+                             ObRawExpr *related_doc_cnt,
+                             ObRawExpr *related_token_cnt,
+                             ObRawExpr *total_doc_cnt,
+                             ObRawExpr *doc_token_cnt,
+                             ObOpRawExpr *&bm25,
+                             const ObSQLSessionInfo *session);
+  static int extract_match_against_filters(const ObIArray<ObRawExpr *> &filters,
+                                           ObIArray<ObRawExpr *> &other_filters,
+                                           ObIArray<ObRawExpr *> &match_filters);
   static int build_dummy_count_expr(ObRawExprFactory &expr_factory,
                                     const ObSQLSessionInfo *session_info,
                                     ObAggFunRawExpr *&expr);

@@ -307,6 +307,10 @@ public:
   inline uint64_t get_table_id() const { return table_id_; }
   inline int64_t is_spatial_index() const { return is_spatial_index_; }
   inline void set_is_spatial_index(bool is_spatial_index) { is_spatial_index_ = is_spatial_index; }
+  inline bool is_fts_index() const { return is_fts_index_; }
+  inline void set_is_fts_index(const bool is_fts_index) { is_fts_index_ = is_fts_index; }
+  inline int64_t is_multivalue_index() const { return is_multivalue_index_; }
+  inline void set_is_multivalue_index(bool is_multivalue_index) { is_multivalue_index_ = is_multivalue_index; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
   inline bool enable_lob_locator_v2() const { return enable_lob_locator_v2_; }
   inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
@@ -320,6 +324,7 @@ public:
   inline const common::ObIArray<int32_t> &get_pad_col_projector() const { return pad_col_projector_; }
   inline void disable_padding() { pad_col_projector_.reset(); }
   inline const storage::ObTableReadInfo &get_read_info() const { return main_read_info_; }
+  inline const ObString &get_parser_name() const { return parser_name_; }
   inline const common::ObIArray<storage::ObTableReadInfo *> *get_cg_read_infos() const
   { return cg_read_infos_.empty() ? nullptr : &cg_read_infos_; }
 
@@ -362,6 +367,7 @@ private:
                                   int64_t &rowid_version,
                                   Projector &rowid_projector,
                                   bool is_use_lob_locator_v2);
+  int convert_fulltext_index_info(const ObTableSchema &table_schema);
 
 private:
   const static int64_t DEFAULT_COLUMN_MAP_BUCKET_NUM = 4;

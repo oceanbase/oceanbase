@@ -118,6 +118,12 @@ int ObAnyValueChecker::visit(ObPseudoColumnRawExpr &expr)
   return OB_SUCCESS;
 }
 
+int ObAnyValueChecker::visit(ObMatchFunRawExpr &expr)
+{
+  UNUSED(expr);
+  return OB_SUCCESS;
+}
+
 int ObAnyValueChecker::check_any_value(const ObRawExpr *expr, const ObColumnRefRawExpr * undefined_column)
 {
   int ret = OB_SUCCESS;

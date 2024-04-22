@@ -275,7 +275,8 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
       EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
       forward_user_msg_len = str_user_message.length();
       const int64_t buf_size = str_user_message.length() + 1;
-      if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
@@ -287,6 +288,71 @@ int ObDDLErrorMessageTableOperator::get_ddl_error_message(
     }
   }
   return ret;
+}
+
+int ObDDLErrorMessageTableOperator::get_ddl_error_message(
+    const uint64_t tenant_id,
+    const int64_t task_id,
+    const int64_t target_object_id,
+    const int64_t object_id,
+    common::ObMySQLProxy &sql_proxy,
+    ObBuildDDLErrorMessage &error_message,
+    int64_t &forward_user_msg_len)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  forward_user_msg_len = 0;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    sqlclient::ObMySQLResult *result = NULL;
+    char ip[common::OB_MAX_SERVER_ADDR_SIZE] = "";
+    if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || object_id < -1)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(task_id), K(object_id));
+    } else if (OB_FAIL(sql.assign_fmt(
+        "SELECT ret_code, ddl_type, affected_rows, dba_message, user_message from %s "
+        "WHERE tenant_id = %ld AND task_id = %ld AND target_object_id = %ld AND object_id = %ld ",
+        OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), task_id, target_object_id, object_id))) {
+      LOG_WARN("fail to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, query result must not be NULL", K(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_LIKELY(OB_ITER_END == ret)) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else {
+        LOG_WARN("fail to get next row", K(ret));
+      }
+    } else {
+      char *buf = nullptr;
+      int ddl_type = 0;
+      ObString str_dba_message;
+      ObString str_user_message;
+      EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, int);
+      EXTRACT_INT_FIELD_MYSQL(*result, "affected_rows", error_message.affected_rows_, int);
+      error_message.ddl_type_ = static_cast<ObDDLType>(ddl_type);
+      EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", error_message.ret_code_, int);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "dba_message", str_dba_message);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
+      forward_user_msg_len = str_user_message.length();
+      const int64_t buf_size = str_user_message.length() + 1;
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(error_message.user_message_ = static_cast<char *>(error_message.allocator_.alloc(buf_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
+        LOG_WARN("print to buffer failed", K(ret), K(str_dba_message));
+      } else {
+        error_message.user_message_[buf_size - 1] = '\0';
+        MEMCPY(error_message.user_message_, str_user_message.ptr(), str_user_message.length());
+      }
+    }
+  }
+  return ret;
+
 }
 
 int ObDDLErrorMessageTableOperator::report_ddl_error_message(const ObBuildDDLErrorMessage &error_message,

@@ -377,6 +377,9 @@ int ObDefaultValueUtils::build_default_expr_strict(const ColumnItem *column, ObR
     if (OB_FAIL(resolver_->build_heap_table_hidden_pk_expr(expr, column->get_expr()))) {
       LOG_WARN("failed to build next_val expr", K(ret), KPC(column->get_expr()));
     }
+  } else if (OB_ISNULL(column->get_expr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error, column expr is nullptr", K(ret), KPC(column));
   } else if (column->is_auto_increment()) {
     if (OB_FAIL(resolver_->build_autoinc_nextval_expr(expr,
                                                       column->base_tid_,

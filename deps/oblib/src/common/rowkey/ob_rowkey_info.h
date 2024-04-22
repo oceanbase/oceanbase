@@ -48,6 +48,7 @@ struct ObRowkeyColumn
   ObOrderType order_;
   bool fulltext_flag_;
   bool spatial_flag_;
+  bool multivalue_flag_;
   NEED_SERIALIZE_AND_DESERIALIZE;
 };
 
@@ -92,7 +93,6 @@ public:
   int get_index(const uint64_t column_id, int64_t &index, ObRowkeyColumn &column) const;
   int get_index(const uint64_t column_id, int64_t &index) const;
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
-  int get_fulltext_column(uint64_t &column_id) const;
   int get_spatial_cellid_col_id(uint64_t &column_id) const;
   int get_spatial_mbr_col_id(uint64_t &column_id) const;
   int set_column(const int64_t idx, const ObRowkeyColumn &column);
@@ -108,6 +108,7 @@ public:
   NEED_SERIALIZE_AND_DESERIALIZE;
 private:
   int expand(const int64_t size);
+  int get_fulltext_col_id_by_type(const ObObjType type, uint64_t &column_id) const;
   int get_spatial_col_id_by_type(uint64_t &column_id, ObObjType type) const;
   static const int64_t DEFAULT_ROWKEY_COLUMN_ARRAY_CAPACITY = 8;
   ObRowkeyColumn *columns_;

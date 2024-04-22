@@ -410,6 +410,8 @@ int ObTableLoadService::check_support_direct_load(
     const ObTableSchema *table_schema = nullptr;
     bool trigger_enabled = false;
     bool has_udt_column = false;
+    bool has_fts_index = false;
+    bool has_multivalue_index = false;
     if (OB_FAIL(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
@@ -430,6 +432,22 @@ int ObTableLoadService::check_support_direct_load(
         LOG_WARN("direct-load does not support non-user table", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "direct-load does not support non-user table");
       }
+    }
+    // check if exists full-text search index
+    else if (OB_FAIL(table_schema->check_has_fts_index(schema_guard, has_fts_index))) {
+      LOG_WARN("fail to check has full-text search index", K(ret));
+    } else if (has_fts_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has full-text search index", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has full-text search index");
+    }
+    // check if exists multi-value index
+    else if (OB_FAIL(table_schema->check_has_multivalue_index(schema_guard, has_multivalue_index))) {
+      LOG_WARN("fail to check has multivalue index", K(ret));
+    } else if (has_multivalue_index) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has multi-value index", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has multi-value index");
     }
     // check if exists generated column
     else if (OB_UNLIKELY(table_schema->has_generated_column())) {

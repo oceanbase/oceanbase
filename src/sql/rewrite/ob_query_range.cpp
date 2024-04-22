@@ -24,6 +24,8 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "sql/engine//expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/expr/ob_expr_json_utils.h"
 
 //if cnd is true get full range key part which is always true
 //else, get empty key part which is always false
@@ -425,7 +427,7 @@ int ObQueryRange::check_cur_expr(const ObRawExpr *cur_expr, ObIArray<int64_t> &o
           LOG_WARN("failed to check and or", K(ret));
         }
       }
-    } else if (cur_expr->is_spatial_expr()) {
+    } else if (cur_expr->is_domain_expr()) {
       is_valid_expr = true;
     } else if (IS_BASIC_CMP_OP(cmp_type) || T_OP_NE == cmp_type ||
                T_OP_IS == cmp_type || T_OP_IN == cmp_type || T_OP_NOT_IN == cmp_type) {
@@ -771,7 +773,7 @@ int ObQueryRange::preliminary_extract_query_range(const ColumnIArray &range_colu
       if (OB_ISNULL(cur_expr)) {
         // continue
       } else if (OB_FAIL(preliminary_extract(cur_expr, temp_result, dtc_params,
-                                             T_OP_IN == cur_expr->get_expr_type()))) {
+        T_OP_IN == cur_expr->get_expr_type() || is_single_domain_op(cur_expr)))) {
         LOG_WARN("Generate table range failed", K(ret));
       } else if (NULL == temp_result) {
         // ignore the condition from which we can not extract query range
@@ -1249,7 +1251,7 @@ bool ObQueryRange::is_precise_get(const ObKeyPart &key_part_head,
       is_terminated = true;
     } else if (NULL != cur->or_next_ || NULL != cur->item_next_) {
       is_precise_get = false;
-    } else if (cur->is_like_key() || cur->is_geo_key()) {
+    } else if (cur->is_like_key() || cur->is_domain_key()) {
       is_precise_get = false;
     } else if (!cur->is_equal_condition()) {
       is_precise_get = false;
@@ -1949,7 +1951,7 @@ int ObQueryRange::get_normal_cmp_keypart(ObItemType cmp_type,
   return ret;
 }
 
-int ObQueryRange::get_geo_single_keypart(const ObObj &val_start, const ObObj &val_end, ObKeyPart &out_keypart) const
+int ObQueryRange::get_domain_equal_keypart(const ObObj &val_start, const ObObj &val_end, ObKeyPart &out_keypart) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(out_keypart.create_normal_key())) {
@@ -3611,7 +3613,7 @@ int ObQueryRange::pre_extract_const_op(const ObRawExpr *c_expr,
   return ret;
 }
 
-int ObQueryRange::get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *&extra_item)
+int ObQueryRange::get_extra_param(const ObRawExpr *expr, const ObConstRawExpr *&extra_item)
 {
   int ret = OB_SUCCESS;
   if (expr->get_param_count() != 3) {
@@ -3626,7 +3628,6 @@ int ObQueryRange::get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *
   }
   return ret;
 }
-
 int ObQueryRange::set_geo_keypart_whole_range(ObKeyPart &out_key_part)
 {
   int ret = OB_SUCCESS;
@@ -3665,7 +3666,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
     const ObConstRawExpr *extra_item = NULL;
     const ObRawExpr *const_item = NULL;
     const ObColumnRefRawExpr *column_item = NULL;
-    common::ObGeoRelationType op_type;
+    common::ObDomainOpType op_type;
     if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
       GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (l_expr->has_flag(CNT_COLUMN) && r_expr->has_flag(CNT_COLUMN)) {
@@ -3680,8 +3681,8 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
       } else if (l_expr->has_flag(CNT_COLUMN)) {
         column_item = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
         const_item = r_expr;
-        op_type = (ObGeoRelationType::T_COVERS == op_type ? ObGeoRelationType::T_COVEREDBY :
-                  (ObGeoRelationType::T_COVEREDBY == op_type ? ObGeoRelationType::T_COVERS : op_type));
+        op_type = (ObDomainOpType::T_GEO_COVERS == op_type ? ObDomainOpType::T_GEO_COVEREDBY :
+                  (ObDomainOpType::T_GEO_COVEREDBY == op_type ? ObDomainOpType::T_GEO_COVERS : op_type));
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to find column item", K(ret), KPC(r_expr), KPC(l_expr));
@@ -3695,7 +3696,7 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
       if (OB_SUCC(ret)) {
         bool is_cellid_col = false;
         uint64_t column_id = column_item->get_column_id();
-        ObGeoColumnInfo column_info;
+         ObGeoColumnInfo column_info;
         if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
           if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
             ret = OB_SUCCESS;
@@ -3727,8 +3728,8 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
             contain_geo_filters_ = true;
             out_key_part->id_ = key_part_id;
             out_key_part->pos_ = *key_part_pos;
-            if (op_type == ObGeoRelationType::T_DWITHIN) {
-              if (OB_FAIL(get_dwithin_item(expr, extra_item))) {
+            if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+              if (OB_FAIL(get_extra_param(expr, extra_item))) {
                 LOG_WARN("failed to get dwithin item", K(ret));
               }
             }
@@ -3741,11 +3742,11 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
               LOG_WARN("failed to get calculable expr val", K(ret));
             } else if (!is_valid) {
               GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
-            } else if (OB_FAIL(out_key_part->create_geo_key())) {
-              LOG_WARN("create like geo part failed", K(ret));
+            } else if (OB_FAIL(out_key_part->create_domain_key())) {
+              LOG_WARN("create domain part failed", K(ret));
             } else if (extra_item != NULL &&
                       OB_FAIL(get_calculable_expr_val(extra_item,
-                                                      out_key_part->geo_keypart_->distance_,
+                                                      out_key_part->domain_keypart_->extra_param_,
                                                       is_valid))) {
               LOG_WARN("failed to get calculable expr val", K(ret));
             } else if (!is_valid) {
@@ -3753,11 +3754,11 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
             } else {
               if (!const_item->is_immutable_const_expr()) {
                 ObObj val;
-                out_key_part->geo_keypart_->geo_type_ = op_type;
-                if (OB_FAIL(get_final_expr_val(const_item, out_key_part->geo_keypart_->wkb_))) {
+                out_key_part->domain_keypart_->domain_op_ = op_type;
+                if (OB_FAIL(get_final_expr_val(const_item, out_key_part->domain_keypart_->const_param_))) {
                   LOG_WARN("failed to get final expr idx", K(ret));
                 } else if (extra_item != NULL &&
-                          OB_FAIL(get_final_expr_val(extra_item, out_key_part->geo_keypart_->distance_))) {
+                          OB_FAIL(get_final_expr_val(extra_item, out_key_part->domain_keypart_->extra_param_))) {
                     LOG_WARN("failed to get final distance expr idx", K(ret));
                 }
               } else {
@@ -3769,6 +3770,588 @@ int ObQueryRange::pre_extract_geo_op(const ObOpRawExpr *geo_expr,
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::need_extract_domain_range(const ObOpRawExpr *domain_expr,
+                                            ObKeyPart *&out_key_part,
+                                            bool& need_extract)
+{
+  int ret = OB_SUCCESS;
+  need_extract = false;
+  if (OB_ISNULL(domain_expr) || OB_ISNULL(query_range_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null.", KP(domain_expr), K_(query_range_ctx));
+  } else {
+    const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(domain_expr);
+    const ObRawExpr *l_expr = expr->get_param_expr(0);
+    const ObRawExpr *r_expr = expr->get_param_expr(1);
+    if (OB_ISNULL(l_expr) || OB_ISNULL(r_expr)) {
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (l_expr->has_flag(IS_COLUMN) && r_expr->has_flag(IS_COLUMN)) {
+      need_extract = false;
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (l_expr->has_flag(IS_DYNAMIC_PARAM) && r_expr->has_flag(IS_DYNAMIC_PARAM)) {
+      need_extract = false;
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else {
+      need_extract = true;
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::reset_domain_op_by_param_pos(const bool is_left_column, ObDomainOpType & op_type)
+{
+  int ret = OB_SUCCESS;
+  if (is_left_column) {
+    op_type = (ObDomainOpType::T_GEO_COVERS == op_type ? ObDomainOpType::T_GEO_COVEREDBY :
+              (ObDomainOpType::T_GEO_COVEREDBY == op_type ? ObDomainOpType::T_GEO_COVERS : op_type));
+  }
+  return ret;
+}
+
+bool ObQueryRange::need_extra_param(ObDomainOpType& op_type)
+{
+  bool ret_bool = false;
+  if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
+// is single in or single domain op
+bool ObQueryRange::is_single_op(const ObRawExpr *expr_root)
+{
+  bool ret_bool = false;
+  if (T_OP_IN == expr_root->get_expr_type()) {
+    ret_bool = true;
+  } else if (expr_root->is_domain_expr()) {
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
+// op that be rewritten as normal key-part, need to check if can cast
+bool ObQueryRange::can_domain_be_extract_range(const ObDomainOpType &op_type, const ObExprResType &col_type,
+                                              const ObExprCalcType &res_type, common::ObObjType data_type,
+                                              bool &always_true)
+{
+  bool bret = true;
+  if (op_type == ObDomainOpType::T_JSON_MEMBER_OF ||
+      op_type == ObDomainOpType::T_JSON_CONTAINS ||
+      op_type == ObDomainOpType::T_JSON_OVERLAPS) {
+    if (res_type.is_json() && col_type.is_json()) {
+      bret = true;
+      always_true = true;
+    } else {
+      bret = can_be_extract_range(ObItemType::T_OP_EQ, col_type, res_type, data_type, always_true);
+    }
+  }
+  return bret;
+}
+
+// is single domain op
+bool ObQueryRange::is_single_domain_op(const ObRawExpr *expr_root)
+{
+  bool ret_bool = false;
+  if (expr_root->is_domain_expr()) {
+    ret_bool = true;
+  }
+  return ret_bool;
+}
+
+int ObQueryRange::init_domain_key_part(const ObRawExpr *expr,  ObKeyPart *&out_key_part,
+                                      ObDomainOpType &op_type, bool& need_extract)
+{
+  int ret = OB_SUCCESS;
+  need_extract = false;
+  if (OB_ISNULL(expr) || OB_ISNULL(query_range_ctx_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null.", KP(expr));
+  } else {
+    const ObRawExpr *l_expr = expr->get_param_expr(0);
+    const ObRawExpr *r_expr = expr->get_param_expr(1);
+    // only expr with three param need to init extra_param, most only have domain_param and const param
+    const ObConstRawExpr *extra_param = nullptr;
+    const ObRawExpr *const_param = nullptr;
+    const ObColumnRefRawExpr *column_param = nullptr;
+    bool is_left_column = false;
+    if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(l_expr, l_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(r_expr, r_expr))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (OB_UNLIKELY(r_expr->has_flag(CNT_COLUMN))) {
+      column_param = ObRawExprUtils::get_column_ref_expr_recursively(r_expr);
+      const_param = l_expr;
+    } else if (l_expr->has_flag(CNT_COLUMN)) {
+      column_param = ObRawExprUtils::get_column_ref_expr_recursively(l_expr);
+      const_param = r_expr;
+      is_left_column = true;
+    } else {
+      // there must be domain column
+      query_range_ctx_->cur_expr_is_precise_ = false;
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(const_param)) {
+    } else if (OB_FAIL(reset_domain_op_by_param_pos(is_left_column, op_type))) {
+      LOG_WARN("failed to reset domain op by param pos", K(is_left_column), K(op_type), K(ret));
+    } else if (need_extra_param(op_type) && OB_FAIL(get_extra_param(expr, extra_param))) {
+      LOG_WARN("failed to find extra param", K(ret), KPC(r_expr), KPC(l_expr));
+    } else {
+      bool is_domain_col = false;
+      uint64_t column_id = column_param->get_column_id();
+      ObGeoColumnInfo column_info;
+      if (OB_FAIL(columnId_map_.get_refactored(column_id, column_info))) {
+        if (OB_NOT_INIT == ret || OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get from columnId_map_", K(ret));
+        }
+      } else {
+        is_domain_col = true;
+      }
+      if (OB_SUCC(ret)) {
+        if (!const_param->is_immutable_const_expr()) {
+          query_range_ctx_->need_final_extract_ = true;
+        }
+        ObKeyPartId key_part_id(column_param->get_table_id(),
+                                is_domain_col ? column_info.cellid_columnId_ : column_id);
+        ObKeyPartPos *key_part_pos = nullptr;
+        bool b_is_key_part = false;
+        if (OB_FAIL(is_key_part(key_part_id, key_part_pos, b_is_key_part))) {
+          LOG_WARN("is_key_part failed", K(ret));
+        } else if (!b_is_key_part || OB_UNLIKELY(!const_param->is_const_expr())) {
+          need_extract = false;
+          GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        } else if (OB_ISNULL(key_part_pos)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null key part pos");
+        } else if (OB_ISNULL((out_key_part = create_new_key_part()))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc memory failed", K(ret));
+        } else {
+          // for gis, need to set contain_geo_filters_ = true;
+          out_key_part->id_ = key_part_id;
+          out_key_part->pos_ = *key_part_pos;
+          ObObj const_val;
+          bool is_valid = true;
+          bool always_true = true;
+          query_range_ctx_->cur_expr_is_precise_ = false;
+          if (OB_FAIL(ret)) {
+            // do nothing
+          } else if (!can_domain_be_extract_range(op_type, key_part_pos->column_type_, column_param->get_result_type().get_obj_meta(),
+                                                  const_param->get_result_type().get_type(), always_true)) {
+            need_extract = false;
+            GET_ALWAYS_TRUE_OR_FALSE(always_true, out_key_part);
+          } else if (OB_FAIL(get_calculable_expr_val(const_param, const_val, is_valid))) {
+            LOG_WARN("failed to get calculable expr val", K(ret));
+          } else if (!is_valid) {
+            // not const, can't extract query range
+            need_extract = false;
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else if (OB_FAIL(out_key_part->create_domain_key())) {
+            LOG_WARN("create domain part failed", K(ret));
+          } else if (OB_FALSE_IT(out_key_part->domain_keypart_->const_param_ = const_val)
+                  || OB_FALSE_IT(out_key_part->domain_keypart_->domain_op_ = op_type)) {
+          } else if (extra_param != NULL &&
+                    OB_FAIL(get_calculable_expr_val(extra_param,
+                                                    out_key_part->domain_keypart_->extra_param_,
+                                                    is_valid))) {
+            LOG_WARN("failed to get calculable expr val", K(ret));
+          } else if (!is_valid) {
+            // not const, can't extract query range
+            need_extract = false;
+            GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+          } else if (!const_param->is_immutable_const_expr()) {
+            // need final extract, just record const value in key part
+            need_extract = false;
+            ObObj val;
+            if (OB_FAIL(get_final_expr_val(const_param, out_key_part->domain_keypart_->const_param_))) {
+              LOG_WARN("failed to get final expr idx", K(ret));
+            } else if (extra_param != NULL &&
+              OB_FAIL(get_final_expr_val(extra_param, out_key_part->domain_keypart_->extra_param_))) {
+              LOG_WARN("failed to get final distance expr idx", K(ret));
+            }
+          } else {
+            need_extract = true;
+          }
+        }
+      } // if ob_fail
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(out_key_part)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid argument", K(ret));
+  } else {
+    int64_t cmp = 0;
+    ObObj cast_obj = const_param;
+    if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, out_key_part->pos_, cast_obj, cmp))) {
+      LOG_WARN("failed to try cast value type", K(ret));
+    } else if (cmp != 0) {
+      if (OB_NOT_NULL(query_range_ctx_)) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    } else if (OB_FAIL(get_domain_equal_keypart(cast_obj, cast_obj, *out_key_part))) {
+      LOG_WARN("get normal cmp keypart failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&out_key_part,
+                                            ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  ObKeyPartPos *key_pos = nullptr;
+  bool b_key_part = false;
+  InParamMeta *new_param_meta = NULL;
+  ObExprResType col_res_type;
+  uint64_t table_id;
+  if (OB_ISNULL(out_key_part) || OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("should not be null", K(ret));
+  } else if (OB_FALSE_IT(key_pos = &out_key_part->pos_) || OB_FALSE_IT(table_id = out_key_part->id_.table_id_)
+            || OB_FALSE_IT(col_res_type = out_key_part->pos_.column_type_)) {
+  } else if (OB_FAIL(out_key_part->create_in_key())) {
+    LOG_WARN("failed to create in key part", K(ret));
+  } else if (OB_ISNULL(out_key_part->in_keypart_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(out_key_part->in_keypart_->offsets_.push_back(key_pos->offset_))) {
+    LOG_WARN("failed to push back key offset", K(ret));
+  } else if (OB_ISNULL(new_param_meta = out_key_part->in_keypart_->create_param_meta(allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create new param meta", K(ret));
+  } else {
+    out_key_part->in_keypart_->table_id_ = table_id;
+    out_key_part->in_keypart_->is_strict_in_ = true;
+    new_param_meta->pos_ = *key_pos;
+    bool always_true = false;
+    contain_in_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && !always_true && i < j_base->element_count(); ++i) {
+      ObIJsonBase* tmp_j_base = nullptr;
+      int64_t cmp = 0;
+      ObObj val;
+      if (OB_FAIL(j_base->get_array_element(i, tmp_j_base))) {
+        LOG_WARN("fail to get json array element", K(i), K(ret));
+      } else if (OB_ISNULL(tmp_j_base)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get json array element result is null.", K(i), K(ret));
+      } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
+                                                                  col_res_type, val))) {
+        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        always_true = true;
+      } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, *key_pos, val, cmp))) {
+        LOG_WARN("failed to try cast value type", K(ret));
+      } else if (cmp != 0) {
+        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        always_true = true;
+      } else {
+        val.set_collation_type(col_res_type.get_collation_type());
+      }
+      if (OB_SUCC(ret) && OB_FAIL(new_param_meta->vals_.push_back(val))) {
+        LOG_WARN("failed to push back val", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !always_true) {
+      if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
+        // all always false
+        GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
+      } else if (OB_FAIL(out_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
+        LOG_WARN("failed to push back param meta", K(ret));
+      } else if (OB_FAIL(out_key_part->formalize_keypart(contain_row_))) {
+        LOG_WARN("failed to formalize in key", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPart*> &key_parts,
+                                          ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+                                          const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(j_base) || OB_ISNULL(out_key_part) || OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid argument", K(ret));
+  } else if (j_base->json_type() != common::ObJsonNodeType::J_ARRAY) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get wrong json_type", K(ret));
+  } else {
+    for (int i = 0; i < j_base->element_count(); ++i) {
+      ObKeyPart *tmp_key_part = nullptr;
+      ObIJsonBase* tmp_j_base = nullptr;
+      if (OB_FAIL(j_base->get_array_element(i, tmp_j_base))) {
+        LOG_WARN("fail to get json array element", K(i), K(ret));
+      } else if (OB_ISNULL(tmp_j_base)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get json array element result is null", K(i), K(ret));
+      } else if (OB_ISNULL(tmp_key_part = create_new_key_part())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      } else {
+        ObObj val;
+        tmp_key_part->id_ = out_key_part->id_;
+        tmp_key_part->pos_ = out_key_part->pos_;
+        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
+                                                            tmp_key_part->pos_.column_type_, val))) {
+          if (OB_NOT_NULL(query_range_ctx_)) {
+            query_range_ctx_->cur_expr_is_precise_ = false;
+          }
+        } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params))) {
+          LOG_WARN("fail to get member of keyparts", K(ret));
+        } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
+          LOG_WARN("fail to push keypart", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+                                                  ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
+                                                  ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+                                                  bool is_single_op)
+{
+  int ret = OB_SUCCESS;
+  ObIJsonBase* j_base = nullptr;
+  ObEvalCtx ctx(*exec_ctx);
+  if (OB_ISNULL(out_key_part)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid argument", K(ret));
+  } else if (OB_FAIL(ObJsonExprHelper::get_json_val(const_param, exec_ctx,  false, &allocator_, j_base))) {
+    LOG_WARN("fail to get json val", K(ret));
+  } else if (OB_ISNULL(j_base)) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("fail to get json base", K(ret));
+  } else if (j_base->is_json_scalar(j_base->json_type())) {
+    // if is scalar, equal to member of
+    if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
+      LOG_WARN("fail to get member of keyparts", K(ret));
+    }
+  } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
+    int size = j_base->element_count();
+    if (size > MAX_JSON_ARRAY_CHANGE_TO_OR_SIZE && is_single_op
+        && (OB_NOT_NULL(query_range_ctx_) && query_range_ctx_->use_in_optimization_)) {
+      if (OB_FAIL(get_json_array_in_keyparts(j_base, out_key_part, exec_ctx, dtc_params))) {
+        LOG_WARN("fail to get json_array in keyparts", K(ret));
+      }
+    } else if (OB_FAIL(get_json_array_keyparts(j_base, key_parts, out_key_part, exec_ctx, dtc_params))) {
+      LOG_WARN("fail to get json_array keyparts", K(ret));
+    }
+  } else {
+    // must be object, can't extract query range
+    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+  }
+  return ret;
+}
+
+int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+                                            ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
+                                            ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+                                            bool is_single_op)
+{
+  int ret = OB_SUCCESS;
+  switch(op_type) {
+    case ObDomainOpType::T_JSON_MEMBER_OF: {
+      if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
+        LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_) && !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
+        query_range_ctx_->cur_expr_is_precise_ = true;
+      }
+      break;
+    }
+    case ObDomainOpType::T_JSON_CONTAINS:
+    case ObDomainOpType::T_JSON_OVERLAPS: {
+      if (OB_FAIL(get_contain_or_overlaps_keyparts(const_param, op_type, key_parts, out_key_part, exec_ctx, dtc_params, is_single_op))) {
+        LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::connect_domain_keyparts(const common::ObDomainOpType op_type, ObIArray<ObKeyPart*> &key_parts,
+                                          ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+                                          const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  switch(op_type) {
+    // connect by or
+    case ObDomainOpType::T_JSON_CONTAINS:
+    case ObDomainOpType::T_JSON_OVERLAPS: {
+      if (OB_FAIL(connect_and_or_domain_keyparts(key_parts, out_key_part, exec_ctx, dtc_params, false))) {
+        LOG_WARN("fail to get connect keyparts.", K(op_type), K(ret));
+      }
+      break;
+    }
+    // connect by and
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::connect_and_or_domain_keyparts(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
+                                                ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
+                                                bool is_and_op)
+{
+  int ret = OB_SUCCESS;
+  bool cur_expr_is_precise = false;
+  ObKeyPartList key_part_list;
+  for (int64_t i = 0; OB_SUCC(ret) && i < key_parts.count(); ++i) {
+    ObKeyPart *tmp = key_parts.at(i);
+    if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+      cur_expr_is_precise = true;
+    }
+    if (is_and_op) {
+      if (OB_FAIL(add_and_item(key_part_list, tmp))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    } else { //T_OP_OR
+      if (OB_FAIL(add_or_item(key_part_list, tmp))) {
+        LOG_WARN("push back failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && cur_expr_is_precise) {
+      cur_expr_is_precise = (cur_expr_is_precise && query_range_ctx_->cur_expr_is_precise_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = cur_expr_is_precise;
+    }
+    ObSqlBitSet<> key_offsets;
+    ObKeyPart *tmp_key_part = nullptr;
+    if (is_and_op) {
+      if (OB_FAIL(and_range_graph(key_part_list, tmp_key_part))) {
+        LOG_WARN("and range graph failed", K(ret));
+      }
+    } else if (OB_FAIL(or_range_graph(key_part_list, exec_ctx, tmp_key_part, dtc_params))) {
+      LOG_WARN("or range graph failed", K(ret));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(refine_large_range_graph(tmp_key_part))) {
+      LOG_WARN("failed to refine large range graph", K(ret));
+    } else if (OB_FAIL(remove_useless_range_graph(tmp_key_part, key_offsets))) {
+      LOG_WARN("failed to remove useless range", K(ret));
+    } else if (OB_FAIL(overwrite_keypart(out_key_part, tmp_key_part))) {
+      LOG_WARN("fail to copy keypart node", K(ret));
+    }
+  }
+  return ret;
+}
+
+// int ObQueryRange::replace_unknown_value(ObKeyPart *root)
+// final 阶段传入的keypart是指针，而非指针的引用，因此只能把最终的结果覆盖到root上，而非直接修改root的指针。
+int ObQueryRange::overwrite_keypart(ObKeyPart* out_key_part, ObKeyPart* other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(other) || OB_ISNULL(out_key_part)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid argument", K(ret), KP(other), KP(out_key_part));
+  } else if (OB_FAIL(out_key_part->deep_node_copy(*other))) {
+    LOG_WARN("get invalid argument", K(ret));
+  } else {
+    out_key_part->item_next_ = other->item_next_;
+    out_key_part->or_next_ =  other->or_next_;
+    out_key_part->and_next_ = other->and_next_;
+  }
+  return ret;
+}
+
+int ObQueryRange::get_simple_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+                                          ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+                                          const ObDataTypeCastParams &dtc_params, bool is_single_op)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObKeyPart*, 8> key_parts;
+  if (OB_FAIL(get_simple_domain_keyparts(const_param, op_type, key_parts, out_key_part, exec_ctx, dtc_params, is_single_op))) {
+    LOG_WARN("fail to get simple domain keyparts.", K(op_type), K(ret));
+  } else if (key_parts.count() == 0) {
+    // do nothing, already set result in out_key_part
+  } else if (key_parts.count() == 1 && OB_FAIL(overwrite_keypart(out_key_part, key_parts.at(0)))) {
+    LOG_WARN("fail to overwrite keypart node", K(ret));
+  } else if (OB_FAIL(connect_domain_keyparts(op_type, key_parts, out_key_part, exec_ctx, dtc_params))) {
+    LOG_WARN("fail to connect domain keyparts", K(ret));
+  }
+  return ret;
+}
+
+int ObQueryRange::get_complex_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+                                          ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params)
+{
+  int ret = OB_SUCCESS;
+  // todo
+  GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+  return ret;
+}
+
+int ObQueryRange::get_domain_range(const common::ObObj &const_param, const common::ObDomainOpType op_type,
+                                  ObKeyPart *&out_key_part, ObExecContext *exec_ctx,
+                                  const ObDataTypeCastParams &dtc_params, bool is_single_op)
+{
+  int ret = OB_SUCCESS;
+  if (is_simple_domain_op(op_type)) {
+    //ObSEArray<ObKeyPart*, 8> pre_key_parts;
+    if (OB_FAIL(get_simple_domain_range(const_param, op_type, out_key_part, exec_ctx, dtc_params, is_single_op))) {
+      LOG_WARN("fail to get simple domain range.", K(op_type), K(ret));
+    }
+  } else {
+    // get_range_by_type
+    // 会用不同的连接方式，然后对于每一部分相同的连接方式可以调用
+    if (OB_FAIL(get_complex_domain_range(const_param, op_type, out_key_part, dtc_params))) {
+      LOG_WARN("fail to get simple complex range.", K(op_type), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObQueryRange::pre_extract_domain_op(const ObOpRawExpr *domain_expr,
+                                        ObKeyPart *&out_key_part,
+                                        const ObDataTypeCastParams &dtc_params,
+                                        const bool is_single_op)
+{
+  UNUSED(dtc_params);
+  int ret = OB_SUCCESS;
+  bool need_extract = false;
+  if (OB_FAIL(need_extract_domain_range(domain_expr, out_key_part, need_extract))) {
+    LOG_WARN("fail to check domain expr type.", KP(domain_expr), K_(query_range_ctx));
+  } else if (need_extract) {
+    const ObRawExpr *expr = ObRawExprUtils::skip_inner_added_expr(domain_expr);
+    ObDomainOpType op_type = get_domain_op_type(expr->get_expr_type());
+    if (OB_FAIL(init_domain_key_part(expr, out_key_part, op_type, need_extract))) {
+      LOG_WARN("fail to init domain_key_part.", K(op_type));
+    } else if (!need_extract) {
+    } else if (OB_ISNULL(out_key_part) || !out_key_part->is_domain_key() || OB_ISNULL(query_range_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(get_domain_range(out_key_part->domain_keypart_->const_param_,
+                                        out_key_part->domain_keypart_->domain_op_,
+                                        out_key_part, query_range_ctx_->exec_ctx_,
+                                        dtc_params, is_single_op))) {
+      LOG_WARN("create domain range failed", K(ret));
     }
   }
   return ret;
@@ -3835,6 +4418,10 @@ int ObQueryRange::preliminary_extract(const ObRawExpr *node,
       }
     } else if (node->is_spatial_expr()) {
       if (OB_FAIL(pre_extract_geo_op(b_expr, out_key_part, dtc_params))) {
+        LOG_WARN("extract and_or failed", K(ret));
+      }
+    } else if (node->is_domain_expr()) {
+      if (OB_FAIL(pre_extract_domain_op(b_expr, out_key_part, dtc_params, is_single_in))) {
         LOG_WARN("extract and_or failed", K(ret));
       }
     } else {
@@ -7473,13 +8060,23 @@ int ObQueryRange::replace_unknown_value(ObKeyPart *root, ObExecContext &exec_ctx
       root->normal_keypart_->include_end_ = false;
     }
   } else if (root->is_geo_key()) {
-    if (OB_FAIL(get_result_value_with_rowid(*root, root->geo_keypart_->wkb_, exec_ctx, is_inconsistent_rowid))) {
+    if (OB_FAIL(get_result_value_with_rowid(*root, root->domain_keypart_->const_param_, exec_ctx, is_inconsistent_rowid))) {
       LOG_WARN("get param wkb value failed", K(ret));
-    } else if (OB_FAIL(get_result_value_with_rowid(*root, root->geo_keypart_->distance_, exec_ctx, is_inconsistent_rowid))) {
+    } else if (OB_FAIL(get_result_value_with_rowid(*root, root->domain_keypart_->extra_param_, exec_ctx, is_inconsistent_rowid))) {
       LOG_WARN("get param distance value failed", K(ret));
-    } else if (OB_FAIL(get_geo_range(root->geo_keypart_->wkb_,
-                                     root->geo_keypart_->geo_type_,
+    } else if (OB_FAIL(get_geo_range(root->domain_keypart_->const_param_,
+                                     root->domain_keypart_->domain_op_,
                                      root))) {
+      LOG_WARN("get geo range failed", K(ret));
+    }
+  } else if (root->is_domain_key()) {
+    if (OB_FAIL(get_result_value_with_rowid(*root, root->domain_keypart_->const_param_, exec_ctx, is_inconsistent_rowid))) {
+      LOG_WARN("get param wkb value failed", K(ret));
+    } else if (OB_FAIL(get_result_value_with_rowid(*root, root->domain_keypart_->extra_param_, exec_ctx, is_inconsistent_rowid))) {
+      LOG_WARN("get param distance value failed", K(ret));
+    } else if (OB_FAIL(get_domain_range(root->domain_keypart_->const_param_,
+                                        root->domain_keypart_->domain_op_,
+                                        root, &exec_ctx, dtc_params))) {
       LOG_WARN("get geo range failed", K(ret));
     }
   } else if (root->is_like_key()) {
@@ -8425,13 +9022,13 @@ inline bool ObQueryRange::is_standard_graph(const ObKeyPart *root) const
     bret = false;
   } else {
     for (const ObKeyPart *cur = root; bret && NULL != cur; cur = cur->and_next_) {
-      if (NULL != cur->or_next_ || cur->is_like_key() || cur->is_in_key() || cur->is_geo_key()) {
+      if (NULL != cur->or_next_ || cur->is_like_key() || cur->is_in_key() || cur->is_domain_key()) {
         bret = false;
       } else {
         for (const ObKeyPart *item_next = cur->item_next_;
              bret && NULL != item_next;
              item_next = item_next->item_next_) {
-          if (item_next->is_like_key() || item_next->is_in_key() || item_next->is_geo_key()) {
+          if (item_next->is_like_key() || item_next->is_in_key() || item_next->is_domain_key()) {
             bret = false;
           }
         }
@@ -8929,35 +9526,74 @@ DEF_TO_STRING(ObQueryRange::ObRangeExprItem)
   return pos;
 }
 
-common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
+common::ObDomainOpType ObQueryRange::get_geo_relation(ObItemType type) const
 {
-  common::ObGeoRelationType rel_type = common::ObGeoRelationType::T_INVALID;
+  common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
   switch (type) {
     case T_FUN_SYS_PRIV_ST_EQUALS :
     case T_FUN_SYS_PRIV_ST_TOUCHES :
     case T_FUN_SYS_ST_INTERSECTS : {
-      rel_type = common::ObGeoRelationType::T_INTERSECTS;
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
       break;
     }
     case T_FUN_SYS_ST_CONTAINS :
     case T_FUN_SYS_ST_COVERS : {
-      rel_type = common::ObGeoRelationType::T_COVERS;
+      rel_type = common::ObDomainOpType::T_GEO_COVERS;
       break;
     }
     case T_FUN_SYS_ST_DWITHIN : {
-      rel_type = common::ObGeoRelationType::T_DWITHIN;
+      rel_type = common::ObDomainOpType::T_GEO_DWITHIN;
       break;
     }
     case T_FUN_SYS_ST_WITHIN : {
-      rel_type = common::ObGeoRelationType::T_COVEREDBY;
+      rel_type = common::ObDomainOpType::T_GEO_COVEREDBY;
+      break;
+    }
+    default:
+      break;
+  }
+  return rel_type;
+}
+
+common::ObDomainOpType ObQueryRange::get_domain_op_type(ObItemType type) const
+{
+  common::ObDomainOpType rel_type = common::ObDomainOpType::T_INVALID;
+  switch (type) {
+    case T_FUN_SYS_JSON_MEMBER_OF : {
+      rel_type = common::ObDomainOpType::T_JSON_MEMBER_OF;
+      break;
+    }
+    case T_FUN_SYS_JSON_CONTAINS : {
+      rel_type = common::ObDomainOpType::T_JSON_CONTAINS;
+      break;
+    }
+    case T_FUN_SYS_JSON_OVERLAPS : {
+      rel_type = common::ObDomainOpType::T_JSON_OVERLAPS;
+      break;
+    }
+    case T_FUN_SYS_ST_INTERSECTS : {
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
+      break;
+    }
+    case T_FUN_SYS_ST_CONTAINS :
+    case T_FUN_SYS_ST_COVERS : {
+      rel_type = common::ObDomainOpType::T_GEO_COVERS;
+      break;
+    }
+    case T_FUN_SYS_ST_DWITHIN : {
+      rel_type = common::ObDomainOpType::T_GEO_DWITHIN;
+      break;
+    }
+    case T_FUN_SYS_ST_WITHIN : {
+      rel_type = common::ObDomainOpType::T_GEO_COVEREDBY;
       break;
     }
     case T_FUN_SYS_ST_CROSSES : {
-      rel_type = common::ObGeoRelationType::T_INTERSECTS;
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
       break;
     }
     case T_FUN_SYS_ST_OVERLAPS : {
-      rel_type = common::ObGeoRelationType::T_INTERSECTS;
+      rel_type = common::ObDomainOpType::T_GEO_INTERSECTS;
       break;
     }
     default:
@@ -8968,7 +9604,7 @@ common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
 
 int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
                                              const common::ObString &wkb_str,
-                                             const common::ObGeoRelationType op_type,
+                                             const common::ObDomainOpType op_type,
                                              ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
@@ -8992,9 +9628,9 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
   } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
              OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
     LOG_WARN("failed to get srs item", K(ret));
-  } else if (op_type == ObGeoRelationType::T_DWITHIN) {
-    distance = out_key_part->geo_keypart_->distance_.get_double();
-    if (out_key_part->geo_keypart_->distance_.is_unknown() || std::isnan(distance)) {
+  } else if (op_type == ObDomainOpType::T_GEO_DWITHIN) {
+    distance = out_key_part->domain_keypart_->extra_param_.get_double();
+    if (out_key_part->domain_keypart_->extra_param_.is_unknown() || std::isnan(distance)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid distance para", K(ret));
     } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
@@ -9060,7 +9696,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
         ObObj val;
         val.set_uint64(cells_with_ancestors[i]);
         if (i == 0) {
-          if (OB_FAIL(get_geo_single_keypart(val, val, *out_key_part))) {
+          if (OB_FAIL(get_domain_equal_keypart(val, val, *out_key_part))) {
             LOG_WARN("get normal cmp keypart failed", K(ret));
           }
         } else {
@@ -9071,7 +9707,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
           } else {
             tmp->id_ = out_key_part->id_;
             tmp->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+            if (OB_FAIL(get_domain_equal_keypart(val, val, *tmp))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
             } else {
               last->or_next_ = tmp;
@@ -9098,7 +9734,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
             ObObj val_start, val_end;
             val_start.set_uint64(start_id);
             val_end.set_uint64(end_id);
-            if (OB_FAIL(get_geo_single_keypart(val_start, val_end, *tmp))) {
+            if (OB_FAIL(get_domain_equal_keypart(val_start, val_end, *tmp))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
             } else {
               last->or_next_ = tmp;
@@ -9118,7 +9754,7 @@ int ObQueryRange::get_geo_intersects_keypart(uint32_t input_srid,
 
 int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
                                             const common::ObString &wkb_str,
-                                            const common::ObGeoRelationType op_type,
+                                            const common::ObDomainOpType op_type,
                                             ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
@@ -9198,7 +9834,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
             val.set_uint64(cells[i]);
             cell_head->id_ = out_key_part->id_;
             cell_head->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_geo_single_keypart(val, val, *cell_head))) {
+            if (OB_FAIL(get_domain_equal_keypart(val, val, *cell_head))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
             } else {
               cell_last = cell_head;
@@ -9225,7 +9861,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
                 val.set_uint64(ancestors[i]);
                 tmp->id_ = out_key_part->id_;
                 tmp->pos_ = out_key_part->pos_;
-                if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+                if (OB_FAIL(get_domain_equal_keypart(val, val, *tmp))) {
                   LOG_WARN("get normal cmp keypart failed", K(ret));
                 } else {
                   cell_last->or_next_ = tmp;
@@ -9276,7 +9912,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
             val.set_uint64(cells_cover_geo[i]);
             tmp->id_ = out_key_part->id_;
             tmp->pos_ = out_key_part->pos_;
-            if (OB_FAIL(get_geo_single_keypart(val, val, *tmp))) {
+            if (OB_FAIL(get_domain_equal_keypart(val, val, *tmp))) {
               LOG_WARN("get normal cmp keypart failed", K(ret));
             } else {
               last->or_next_ = tmp;
@@ -9323,7 +9959,7 @@ int ObQueryRange::get_geo_coveredby_keypart(uint32_t input_srid,
   return ret;
 }
 
-int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObGeoRelationType op_type,
+int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObDomainOpType op_type,
                                 ObKeyPart *out_key_part)
 {
   INIT_SUCC(ret);
@@ -9352,14 +9988,14 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObGeoRel
         static_cast<uint64_t>(column_info.srid_));
     } else {
       switch (op_type) {
-        case ObGeoRelationType::T_INTERSECTS:
-        case ObGeoRelationType::T_COVERS:
-        case ObGeoRelationType::T_DWITHIN:
+        case ObDomainOpType::T_GEO_INTERSECTS:
+        case ObDomainOpType::T_GEO_COVERS:
+        case ObDomainOpType::T_GEO_DWITHIN:
           if (OB_FAIL(get_geo_intersects_keypart(input_srid, wkb_str, op_type, out_key_part))) {
             LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
           }
           break;
-        case ObGeoRelationType::T_COVEREDBY:
+        case ObDomainOpType::T_GEO_COVEREDBY:
           if (OB_FAIL(get_geo_coveredby_keypart(input_srid, wkb_str, op_type, out_key_part))) {
             LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
           }

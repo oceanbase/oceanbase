@@ -790,7 +790,10 @@
 #define N_PART_ID "part_id"
 #define N_INNER_GET "inner_get"
 #define N_MATCH_AGAINST "match_against"
+#define N_DOC_ID "doc_id"
 #define N_WORD_SEGMENT "word_segment"
+#define N_WORD_COUNT "word_count"
+#define N_DOC_LENGTH "doc_length"
 #define N_SELF_JOIN "self_join"
 #define N_DES_HEX_STR "DES_HEX_STR"
 #define N_YEAR "year"
@@ -1096,6 +1099,7 @@
 
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
+#define N_BM25                              "bm25"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"
 #define N_SYS_LAST_REFRESH_SCN              "last_refresh_scn"

@@ -853,8 +853,11 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         } else if (OB_ISNULL(create_index_arg = static_cast<obrpc::ObCreateIndexArg *>(index_arg))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("create index arg is null", KR(ret), K(i));
-        } else if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_) {
-          // do nothing
+        } else if (INDEX_TYPE_PRIMARY == create_index_arg->index_type_ ||
+            is_fts_index(create_index_arg->index_type_) ||
+            is_multivalue_index(create_index_arg->index_type_)) {
+          // TODO hanxuan temporary bypass, since res.res_arg_array_ is empty
+          // TODO yunyi temporary bypass, since res.res_arg_array_ is empty
         } else if (!is_sync_ddl_user) {
           // 只考虑非备份恢复时的索引同步检查
           create_index_arg->index_schema_.set_table_id(res.res_arg_array_.at(i).schema_id_);

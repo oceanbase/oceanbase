@@ -343,6 +343,11 @@
 #include "ob_expr_temp_table_ssid.h"
 #include "ob_expr_between.h"
 #include "ob_expr_align_date4cmp.h"
+#include "ob_expr_word_count.h"
+#include "ob_expr_word_segment.h"
+#include "ob_expr_doc_id.h"
+#include "ob_expr_doc_length.h"
+#include "ob_expr_bm25.h"
 #include "ob_expr_lock_func.h"
 #include "ob_expr_extract_cert_expired_time.h"
 #include "ob_expr_transaction_id.h"
@@ -1137,10 +1142,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprXmlForest::eval_xml_forest,                           /* 663 */
   NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 664 */
   NULL, //ObExprPassword::eval_password,                              /* 665 */
-  NULL, // ObExprDocID::generate_doc_id,                              /* 666 */
-  NULL, // ObExprWordSegment::generate_fulltext_column,               /* 667 */
-  NULL, // ObExprWordCount::generate_word_count,                      /* 668 */
-  NULL, // ObExprBM25::eval_bm25_relevance_expr,                      /* 669 */
+  ObExprDocID::generate_doc_id,                                       /* 666 */
+  ObExprWordSegment::generate_fulltext_column,                        /* 667 */
+  ObExprWordCount::generate_word_count,                               /* 668 */
+  ObExprBM25::eval_bm25_relevance_expr,                               /* 669 */
   ObExprTransactionId::eval_transaction_id,                           /* 670 */
   NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 671 */
   NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 672 */
@@ -1162,7 +1167,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
   ObExprLastRefreshScn::eval_last_refresh_scn,                        /* 690 */
-  NULL, // ObExprDocLength::generate_doc_length,                      /*691*/
+  ObExprDocLength::generate_doc_length,                               /* 691 */
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
   NULL, // ObExprIsEnabledRole::eval_is_enabled_role,                 /* 693 */
   NULL, // ObExprCanAccessTrigger::can_access_trigger,                /* 694 */

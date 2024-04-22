@@ -130,12 +130,12 @@ int ObTableApiScanExecutor::prepare_das_task()
       if (OB_ISNULL(lookup_tablet_loc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("lookup tablet loc is nullptr", K(ret), KPC(lookup_table_loc->loc_meta_));
-      } else if (OB_FAIL(scan_op->set_lookup_ctdef(scan_spec_.get_ctdef().lookup_ctdef_))) {
-        LOG_WARN("set lookup ctdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_rtdef(tsc_rtdef_.lookup_rtdef_))) {
-        LOG_WARN("set lookup rtdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_tablet_id(lookup_tablet_loc->tablet_id_))) {
-        LOG_WARN("set lookup tablet id failed", K(ret), KPC(lookup_tablet_loc));
+      } else if (OB_FAIL(scan_op->reserve_related_buffer(1))) {
+        LOG_WARN("failed to set related scan cnt", K(ret));
+      } else if (OB_FAIL(scan_op->set_related_task_info(scan_spec_.get_ctdef().lookup_ctdef_,
+                                                        tsc_rtdef_.lookup_rtdef_,
+                                                        lookup_tablet_loc->tablet_id_))) {
+        LOG_WARN("set related task info failed", K(ret));
       } else {
         lookup_table_loc->is_reading_ = true;
       }

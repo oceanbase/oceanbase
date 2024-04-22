@@ -188,7 +188,8 @@ public:
 			const ObString &table_name,
 			const bool is_index,
 			const ObSimpleTableSchemaV2 *&simple_table_schema,
-      bool is_hidden = false);
+      const bool with_hidden_flag = false,
+      const bool is_built_in_index = false);
 	int get_table_schemas_in_tenant(const uint64_t tenant_id,
 			common::ObIArray<const ObSimpleTableSchemaV2 *> &table_schemas);
   int get_database_schemas_in_tenant(const uint64_t tenant_id,
@@ -354,13 +355,15 @@ public:
                    const common::ObString &table_name,
                    const bool is_index,
                    const CheckTableType check_type,  // if temporary table is visable
-                   uint64_t &table_id);
+                   uint64_t &table_id,
+                   const bool is_built_in_index = false);
   int get_table_id(uint64_t tenant_id,
                    const common::ObString &database_name,
                    const common::ObString &table_name,
                    const bool is_index,
                    const CheckTableType check_type,  // if temporary table is visable
-                   uint64_t &table_id);
+                   uint64_t &table_id,
+                   const bool is_built_in_index = false);
   int get_foreign_key_id(const uint64_t tenant_id,
                          const uint64_t database_id,
                          const common::ObString &foreign_key_name,
@@ -411,13 +414,15 @@ public:
                        const common::ObString &table_name,
                        const bool is_index,
                        const ObTableSchema *&table_schema,
-                       bool is_hidden = false);
+                       const bool with_hidden_flag = false,
+                       const bool is_built_in_index = false);
   int get_table_schema(const uint64_t tenant_id,
                        const common::ObString &database_name,
                        const common::ObString &table_name,
                        const bool is_index,
                        const ObTableSchema *&table_schema,
-                       bool is_hidden = false);
+                       const bool with_hidden_flag = false,
+                       const bool is_built_in_index = false);
   int get_index_schemas_with_data_table_id(const uint64_t tenant_id,
                                            const uint64_t data_table_id,
                                            ObIArray<const ObSimpleTableSchemaV2 *> &aux_schemas);

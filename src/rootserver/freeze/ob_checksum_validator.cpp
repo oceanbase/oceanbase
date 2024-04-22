@@ -27,6 +27,7 @@
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_freeze_info_manager.h"
+#include "rootserver/freeze/ob_fts_checksum_validate_util.h"
 
 namespace oceanbase
 {
@@ -735,6 +736,8 @@ int ObChecksumValidator::validate_index_checksum() {
     if (OB_FAIL(handle_index_table(*simple_schema_))) {
       LOG_WARN("fail to handle index table", KR(ret), KPC_(simple_schema));
     }
+  } else if (table_compaction_info_.need_check_fts_) {
+    LOG_INFO("check fts for data table", KR(ret), K_(table_compaction_info));
   } else if (table_compaction_info_.is_compacted()) { // for data table, check status
     if (0 == table_compaction_info_.unfinish_index_cnt_) { // no unfinish index
       table_compaction_info_.set_index_ckm_verified();
@@ -771,6 +774,8 @@ int ObChecksumValidator::handle_index_table(
     if (index_compaction_info.finish_compaction()) {
       index_compaction_info.set_index_ckm_verified();
     }
+  } else if (fts_group_array_.need_check_fts() && index_simple_schema.is_fts_or_multivalue_index()) {
+    LOG_INFO("skip fts or multivalue index", KR(ret), K(index_simple_schema), K(index_compaction_info));
   } else {
       if (index_compaction_info.is_compacted() && data_compaction_info.is_compacted()) {
 #ifdef ERRSIM
@@ -812,7 +817,7 @@ int ObChecksumValidator::handle_index_table(
   }
   // deal with data table
   if (OB_SUCC(ret) && index_compaction_info.finish_idx_verified() && !data_compaction_info.finish_idx_verified()) {
-    if (0 == (--data_compaction_info.unfinish_index_cnt_)) {
+    if ((0 == (--data_compaction_info.unfinish_index_cnt_)) && !data_compaction_info.need_check_fts_) {
       data_compaction_info.set_index_ckm_verified();
     }
     if (OB_FAIL(table_compaction_map_.set_refactored(
@@ -821,7 +826,7 @@ int ObChecksumValidator::handle_index_table(
       LOG_WARN("failed to set", K(ret), K(data_compaction_info));
     }
   }
-  LOG_TRACE("handle index table", KR(ret), K_(table_id), K_(table_compaction_info), K(data_compaction_info));
+  LOG_TRACE("handle index table", KR(ret), K_(table_id), K(index_compaction_info), K(data_compaction_info));
   return ret;
 }
 
@@ -896,6 +901,134 @@ int ObChecksumValidator::get_replica_ckm(const bool include_larger_than/* = fals
       *sql_proxy_, replica_ckm_items_.array_, replica_ckm_items_.tablet_cnt_, include_larger_than,
       share::OBCG_DEFAULT, true/*with_order_by_field*/);
 }
+
+/***************************************** FTS Checksum Section ******************************************/
+
+int ObChecksumValidator::build_ckm_item_for_fts(const int64_t table_id,
+                                                ObTableCkmItems &ckm_item,
+                                                ObIArray<int64_t> &finish_table_ids)
+{
+  int ret = OB_SUCCESS;
+  bool skip_verify = false;
+  ObTableCompactionInfo table_compaction_info;
+  if (OB_FAIL(get_table_compaction_info(table_id, table_compaction_info))) {
+    LOG_WARN("failed to get table compaction info", KR(ret));
+  } else if (OB_UNLIKELY(!table_compaction_info.is_compacted())) {
+    LOG_WARN("exist special status table", KR(ret), K(table_compaction_info));
+    skip_verify = true;
+  } else if (OB_FAIL(ckm_item.build(table_id, compaction_scn_, *sql_proxy_,
+                                    *schema_guard_, tablet_ls_pair_cache_))) {
+    if (OB_TABLE_NOT_EXIST == ret || OB_STATE_NOT_MATCH == ret) {
+      skip_verify = true;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to prepare schema checksum items", KR(ret), K_(tenant_id), K(table_id));
+    }
+  } else if (OB_FAIL(finish_table_ids.push_back(table_id))) {
+    LOG_WARN("failed to push index id", KR(ret), K(table_id));
+  } else {
+    ckm_item.set_is_fts_index(true);
+  }
+  if (OB_FAIL(ret) || !skip_verify) {
+  } else if (OB_FAIL(finish_verify_fts_ckm(table_id))) {
+    LOG_WARN("failed to skip verify fts ckm", KR(ret), K(table_id));
+  } else {
+    LOG_INFO("skip verify fts ckm", KR(ret), K(table_id));
+  }
+  return ret;
+}
+
+int ObChecksumValidator::finish_verify_fts_ckm(const int64_t table_id)
+{
+  int ret = OB_SUCCESS;
+  ObTableCompactionInfo table_compaction_info;
+  if (OB_FAIL(get_table_compaction_info(table_id, table_compaction_info))) {
+    LOG_WARN("fail to get table compaction info", KR(ret), K(table_id), K(table_compaction_info));
+  } else if (FALSE_IT(table_compaction_info.need_check_fts_ = false)) {
+  } else if (table_compaction_info.unfinish_index_cnt_ <= 0) {
+    // for data table, may exist other index
+    table_compaction_info.set_index_ckm_verified();
+  }
+  if (FAILEDx(table_compaction_map_.set_refactored(table_id, table_compaction_info, true /*overwrite*/))) {
+    LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
+  }
+  return ret;
+}
+
+#define VALIDATE_CKM(data_ckm, index_ckm)                                      \
+  if (OB_FAIL(ret) || !data_ckm.is_inited() || !index_ckm.is_inited()) {       \
+  } else if (OB_FAIL(ObTableCkmItems::validate_ckm_func[0](                    \
+                 compaction_scn_, *sql_proxy_, data_ckm, index_ckm))) {        \
+    LOG_ERROR("failed to validate ckm func", KR(ret), K(data_ckm),             \
+              K(index_ckm));                                                   \
+  }
+
+int ObChecksumValidator::handle_fts_checksum(
+  share::schema::ObSchemaGetterGuard &schema_guard,
+  const ObFTSGroupArray &fts_group_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(fts_group_array.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(fts_group_array));
+  } else {
+    schema_guard_ = &schema_guard;
+    ObSEArray<int64_t, 16> finish_table_ids;
+    finish_table_ids.set_attr(ObMemAttr(tenant_id_, "FTS_CKM_VER"));
+    for (int64_t arr_idx = 0; OB_SUCC(ret) && arr_idx < fts_group_array.count(); ++arr_idx) {
+      const ObFTSGroup &fts_group = fts_group_array.at(arr_idx);
+      if (OB_FAIL(validate_rowkey_doc_indexs(fts_group, finish_table_ids))) {
+        LOG_WARN("failed to validate rowkey doc indexs", KR(ret), K(fts_group));
+      }
+      for (int64_t idx = 0; OB_SUCC(ret) && idx < fts_group.count(); ++idx) {
+        if (OB_FAIL(validate_fts_indexs(fts_group.at(idx), finish_table_ids))) {
+          LOG_WARN("failed to validate doc rowkey index", KR(ret), K(idx), K(fts_group));
+        } else {
+          LOG_INFO("validate index info", K(ret), K(fts_group), K(idx), K(fts_group.at(idx)));
+        }
+      } // for of fts_group
+    } // for of fts_group_array
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < finish_table_ids.count(); ++idx) {
+      if (OB_FAIL(finish_verify_fts_ckm(finish_table_ids.at(idx)))) {
+        LOG_WARN("fail to skip or finish verify fts", KR(ret), K(idx), K(finish_table_ids));
+      }
+    } // for
+    schema_guard_ = NULL;
+  }
+
+  return ret;
+}
+
+int ObChecksumValidator::validate_rowkey_doc_indexs(const ObFTSGroup &fts_group, ObIArray<int64_t> &finish_table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTableCkmItems ckm_item[3];
+  if (OB_FAIL(build_ckm_item_for_fts(fts_group.data_table_id_, ckm_item[0], finish_table_ids))) {
+    LOG_WARN_RET(ret, "failed to build ckm", K(fts_group.data_table_id_));
+  } else if (OB_FAIL(build_ckm_item_for_fts(fts_group.rowkey_doc_index_id_, ckm_item[1], finish_table_ids))) {
+    LOG_WARN_RET(ret, "failed to build ckm", K(fts_group.rowkey_doc_index_id_));
+  } else if (OB_FAIL(build_ckm_item_for_fts(fts_group.doc_rowkey_index_id_, ckm_item[2], finish_table_ids))) {
+    LOG_WARN_RET(ret, "failed to build ckm", K(fts_group.doc_rowkey_index_id_));
+  }
+  // all fts index is local index now
+  VALIDATE_CKM(ckm_item[0], ckm_item[1]);
+  VALIDATE_CKM(ckm_item[1], ckm_item[2]);
+  return ret;
+}
+
+int ObChecksumValidator::validate_fts_indexs(const ObFTSIndexInfo &index_info, ObIArray<int64_t> &finish_table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObTableCkmItems ckm_item[2];
+  if (OB_FAIL(build_ckm_item_for_fts(index_info.fts_index_id_, ckm_item[0], finish_table_ids))) {
+    LOG_WARN_RET(ret, "failed to build ckm", K(index_info.fts_index_id_));
+  } else if (OB_FAIL(build_ckm_item_for_fts(index_info.doc_word_index_id_, ckm_item[1], finish_table_ids))) {
+    LOG_WARN_RET(ret, "failed to build ckm", K(index_info.doc_word_index_id_));
+  }
+  VALIDATE_CKM(ckm_item[0], ckm_item[1]);
+  return ret;
+}
+#undef VALIDATE_CKM
 
 } // end namespace rootserver
 } // end namespace oceanbase

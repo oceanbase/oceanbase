@@ -4218,7 +4218,7 @@ int ObLSTabletService::insert_lob_tablet_row(
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
   } else if (row.row_val_.count_ != col_cnt) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[STORAGE_LOB]column count invalid", K(ret), K(col_cnt), K(row.row_val_.count_));
+    LOG_WARN("[STORAGE_LOB]column count invalid", K(ret), K(col_cnt), K(row.row_val_.count_), KPC(run_ctx.col_descs_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; ++i) {
       const ObColDesc &column = run_ctx.col_descs_->at(i);

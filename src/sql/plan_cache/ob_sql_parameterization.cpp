@@ -1903,13 +1903,13 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
       }
     }
   } else if(T_FUN_SYS_JSON_QUERY == tree->type_) {
-    if (11 != tree->num_child_) {
+    if (13 != tree->num_child_) {
       ret = OB_INVALID_ARGUMENT;
       SQL_PC_LOG(WARN, "invalid json query expr argument", K(ret), K(tree->num_child_));
     } else {
-      const int64_t ARGS_NUMBER_ELEVEN = 11;
-      bool mark_arr[ARGS_NUMBER_ELEVEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
-      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_ELEVEN, sql_info))) {
+      const int64_t ARGS_NUMBER_THIRTEEN = 13;
+      bool mark_arr[ARGS_NUMBER_THIRTEEN] = {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};   // json doc type will affect returning type,
+      if (OB_FAIL(mark_args(tree, mark_arr, ARGS_NUMBER_THIRTEEN, sql_info))) {
         SQL_PC_LOG(WARN, "fail to mark substr arg", K(ret));
       }
     }

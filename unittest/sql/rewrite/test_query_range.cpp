@@ -1215,7 +1215,7 @@ TEST_F(ObQueryRangeTest, serialize_geo_queryrange)
   pre_mbr.x_max_ = 60;
   pre_mbr.y_min_ = 60;
   pre_mbr.y_max_ = 90;
-  pre_mbr.mbr_type_ = ObGeoRelationType::T_INTERSECTS;
+  pre_mbr.mbr_type_ = ObDomainOpType::T_GEO_INTERSECTS;
   OK(mbr_array.push_back(pre_mbr));
   ObGeoColumnInfo info1;
   info1.srid_ = 0;
@@ -1277,7 +1277,7 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
 {
   // build geo keypart
   ObKeyPart pre_key_part(allocator_);
-  OK(pre_key_part.create_geo_key());
+  OK(pre_key_part.create_domain_key());
   ObObj wkb;
   // ST_GeomFromText('POINT(5 5)')
   char hexstring[25] ={'\x01', '\x01', '\x00', '\x00', '\x00', '\x00', '\x00', '\x00',
@@ -1285,8 +1285,8 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
                        '\x00', '\x00', '\x00', '\x14', '\x40', '\x00', '\x00', '\x00',
                        '\x00'};
   wkb.set_string(ObGeometryType ,hexstring, 25);
-  OK(ob_write_obj(allocator_, wkb, pre_key_part.geo_keypart_->wkb_));
-  pre_key_part.geo_keypart_->geo_type_ = ObGeoRelationType::T_DWITHIN;
+  OK(ob_write_obj(allocator_, wkb, pre_key_part.domain_keypart_->const_param_));
+  pre_key_part.domain_keypart_->domain_op_ = ObDomainOpType::T_GEO_DWITHIN;
   char buf[512 * 1024] = {'\0'};
   int64_t pos = 0;
   int64_t data_len = 0;
@@ -1296,8 +1296,8 @@ TEST_F(ObQueryRangeTest, serialize_geo_keypart)
   pos = 0;
   ObKeyPart dec_key_part(allocator_);
   OK(dec_key_part.deserialize(buf, data_len, pos));
-  EXPECT_EQ(dec_key_part.geo_keypart_->wkb_, pre_key_part.geo_keypart_->wkb_);
-  EXPECT_EQ(dec_key_part.geo_keypart_->geo_type_, pre_key_part.geo_keypart_->geo_type_);
+  EXPECT_EQ(dec_key_part.domain_keypart_->const_param_, pre_key_part.domain_keypart_->const_param_);
+  EXPECT_EQ(dec_key_part.domain_keypart_->domain_op_, pre_key_part.domain_keypart_->domain_op_);
 }
 
 int main(int argc, char **argv)

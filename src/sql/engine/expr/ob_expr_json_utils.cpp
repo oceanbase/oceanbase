@@ -16,6 +16,7 @@
 #include "sql/engine/expr/ob_expr_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 #include "ob_expr_json_func_helper.h"
 #include "lib/encode/ob_base64_encode.h" // for ObBase64Encoder
 #include "lib/utility/ob_fast_convert.h" // ObFastFormatInt::format_unsigned
@@ -712,6 +713,62 @@ int cast_to_int(common::ObIAllocator *allocator,
   return ret;
 }
 
+template<>
+void ObJsonUtil::wrapper_set_uint(ObObjType type, uint64_t val, ObObj& obj)
+{
+  obj.set_uint(type, val);
+}
+
+template<>
+void ObJsonUtil::wrapper_set_uint(ObObjType type, uint64_t val, ObDatum& obj)
+{
+  obj.set_uint(val);
+}
+
+template<>
+void ObJsonUtil::wrapper_set_timestamp_tz(ObObjType type, ObOTimestampData val, ObObj& res)
+{
+  if (type == ObTimestampTZType) {
+    res.set_timestamp_tz(val);
+  } else {
+    res.set_timestamp_ltz(val);
+  }
+}
+
+template<>
+void ObJsonUtil::wrapper_set_timestamp_tz(ObObjType type, ObOTimestampData val, ObDatum& res)
+{
+  if (type == ObTimestampTZType) {
+    res.set_otimestamp_tz(val);
+  } else {
+    res.set_otimestamp_tiny(val);
+  }
+}
+
+template<>
+void ObJsonUtil::wrapper_set_decimal_int(const common::ObDecimalInt *decint, ObScale scale, int32_t int_bytes, ObDatum& res)
+{
+  res.set_decimal_int(decint, int_bytes);
+}
+
+template<>
+void ObJsonUtil::wrapper_set_decimal_int(const common::ObDecimalInt *decint, ObScale scale, int32_t int_bytes, ObObj& res)
+{
+  res.set_decimal_int(int_bytes, scale, const_cast<common::ObDecimalInt *>(decint));
+}
+
+template<>
+void ObJsonUtil::wrapper_set_string(ObObjType type, ObString& val, ObObj& obj)
+{
+  obj.set_string(type, val);
+}
+
+template<>
+void ObJsonUtil::wrapper_set_string(ObObjType type, ObString& val, ObDatum& obj)
+{
+  obj.set_string(val);
+}
+
 int cast_to_uint(common::ObIAllocator *allocator,
                  ObEvalCtx &ctx,
                  ObIJsonBase *j_base,
@@ -739,6 +796,7 @@ int cast_to_uint(common::ObIAllocator *allocator,
     LOG_WARN("uint_upper_check failed", K(ret));
   } else if (!cast_param.is_only_check_) {
     if (cast_param.dst_type_ == ObUInt64Type) {
+      ObJsonUtil::wrapper_set_uint(cast_param.dst_type_, val, res);
       res.set_uint(val);
     } else {
       res.set_uint32(static_cast<uint32_t>(val));
@@ -903,6 +961,7 @@ int cast_to_string(common::ObIAllocator *allocator,
         }
       }
       if (OB_SUCC(ret) && !cast_param.is_only_check_) {
+        ObJsonUtil::wrapper_set_string(cast_param.dst_type_, val, res);
         res.set_string(val);
       }
     }
@@ -1342,6 +1401,7 @@ int cast_to_bit(common::ObIAllocator *allocator,
     if (OB_FAIL(ObJsonUtil::bit_length_check(accuracy, val))) {
       LOG_WARN("fail to check bit range", K(ret));
     } else if (!cast_param.is_only_check_) {
+      ObJsonUtil::wrapper_set_uint(cast_param.dst_type_, val, res);
       res.set_uint(val);
     }
   }
@@ -1376,6 +1436,7 @@ int cast_to_json(common::ObIAllocator *allocator,
       MEMCPY(buf, val.ptr(), val.length());
       val.assign_ptr(buf, val.length());
       if (!cast_param.is_only_check_) {
+        ObJsonUtil::wrapper_set_string(cast_param.dst_type_, val, res);
         res.set_string(val);
       }
     }
@@ -1413,7 +1474,8 @@ int ObJsonUtil::cast_to_res(common::ObIAllocator *allocator,
 {
   INIT_SUCC(ret);
   ObJsonUtil::ObJsonCastSqlScalar cast_func_ = get_json_cast_func(cast_param.dst_type_);
-  if (OB_ISNULL(j_base)) {
+  if (OB_ISNULL(j_base)
+      || (lib::is_mysql_mode() && j_base->json_type() == common::ObJsonNodeType::J_NULL)) {
     res.set_null();
   } else if (OB_ISNULL(cast_func_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1428,6 +1490,166 @@ int ObJsonUtil::cast_to_res(common::ObIAllocator *allocator,
 
   return ret;
 }
+
+int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
+                                            ObEvalCtx& ctx,
+                                            ObIJsonBase *j_base,
+                                            ObCollationType collation,
+                                            ObAccuracy &accuracy,
+                                            ObObjType obj_type,
+                                            ObObj &res_obj)
+{
+  INIT_SUCC(ret);
+  if (OB_ISNULL(allocator) || OB_ISNULL(j_base)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null.", K(ret));
+  } else {
+
+    ObDatum res_datum;
+    char datum_buffer[OBJ_DATUM_STRING_RES_SIZE] = {0};
+    res_datum.ptr_ = datum_buffer;
+    ObJsonCastParam cast_param(obj_type, ObCollationType::CS_TYPE_UTF8MB4_BIN, collation, false);
+    uint8_t is_type_mismatch = false;
+    if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
+      LOG_WARN("fail to cast.", K(ret));
+    }
+    res_datum.to_obj(res_obj, res_obj.meta_);
+    res_obj.set_collation_type(collation);
+  }
+  return ret;
+}
+
+int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
+                                            ObExecContext* exec_ctx,
+                                            ObIJsonBase *j_base,
+                                            ObExprResType col_res_type,
+                                            ObObj &res_obj) {
+  // ToDo: refine
+  INIT_SUCC(ret);
+  if (OB_ISNULL(allocator) || OB_ISNULL(j_base)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expr is null.", K(ret));
+  } else {
+    ObEvalCtx ctx(*exec_ctx);
+    ObAccuracy temp_accuracy = col_res_type.get_accuracy();
+    ret =  cast_json_scalar_to_sql_obj(allocator, ctx, j_base,
+                                      col_res_type.get_collation_type(),
+                                      temp_accuracy,
+                                      col_res_type.get_type(),
+                                      res_obj);
+  }
+  return ret;
+}
+
+/*
+ObJsonUtil::ObJsonCastSqlDatum OB_JSON_CAST_DATUM_EXPLICIT[ObMaxTC] =
+{
+  // ObNullTC      = 0,    // null
+  cast_to_null<ObDatum>,
+  // ObIntTC       = 1,    // int8, int16, int24, int32, int64.
+  cast_to_int<ObDatum>,
+  // ObUIntTC      = 2,    // uint8, uint16, uint24, uint32, uint64.
+  cast_to_uint<ObDatum>,
+  // ObFloatTC     = 3,    // float, ufloat.
+  cast_to_float<ObDatum>,
+  // ObDoubleTC    = 4,    // double, udouble.
+  cast_to_double<ObDatum>,
+  // ObNumberTC    = 5,    // number, unumber.
+  cast_to_number<ObDatum>,
+  // ObDateTimeTC  = 6,    // datetime, timestamp.
+  cast_to_date_time<ObDatum>,
+  // ObDateTC      = 7,    // date
+  cast_to_date<ObDatum>,
+  // ObTimeTC      = 8,    // time
+  cast_to_time<ObDatum>,
+  // ObYearTC      = 9,    // year
+  cast_to_year<ObDatum>,
+  // ObStringTC    = 10,   // varchar, char, varbinary, binary.
+  cast_to_string<ObDatum>,
+  // ObExtendTC    = 11,   // extend
+  cast_not_expected<ObDatum>,
+  // ObUnknownTC   = 12,   // unknown
+  cast_not_expected<ObDatum>,
+  // ObTextTC      = 13,   // TinyText,MediumText, Text ,LongText, TinyBLOB,MediumBLOB, // BLOB ,LongBLOB
+  cast_to_string<ObDatum>,
+  // ObBitTC       = 14,   // bit
+  cast_to_bit<ObDatum>,
+  // ObEnumSetTC   = 15,   // enum, set
+  cast_not_expected<ObDatum>,
+  // ObEnumSetInnerTC  = 16,
+  cast_not_expected<ObDatum>,
+  // ObOTimestampTC    = 17, //timestamp with time zone
+  cast_to_timstamp<ObDatum>,
+  // ObRawTC       = 18,   // raw
+  cast_to_string<ObDatum>,
+  // ObIntervalTC      = 19, //oracle interval type class include interval year to month and interval day to second
+  cast_not_expected<ObDatum>,
+  // ObRowIDTC         = 20, // oracle rowid typeclass, includes urowid and rowid
+  cast_not_expected<ObDatum>,
+  // ObLobTC           = 21, //oracle lob typeclass ObLobType not use
+  cast_not_expected<ObDatum>,
+  // ObJsonTC          = 22, // json type class
+  cast_to_json<ObDatum>,
+  // ObGeometryTC      = 23, // geometry type class
+  cast_not_expected<ObDatum>,
+  // ObUserDefinedSQLTC = 24, // user defined type class in SQL
+  cast_not_expected<ObDatum>,
+};
+
+ObJsonUtil::ObJsonCastSqlObj OB_JSON_CAST_OBJ_EXPLICIT[ObMaxTC] =
+{
+  // ObNullTC      = 0,    // null
+  cast_to_null<ObObj>,
+  // ObIntTC       = 1,    // int8, int16, int24, int32, int64.
+  cast_to_int<ObObj>,
+  // ObUIntTC      = 2,    // uint8, uint16, uint24, uint32, uint64.
+  cast_to_uint<ObObj>,
+  // ObFloatTC     = 3,    // float, ufloat.
+  cast_to_float<ObObj>,
+  // ObDoubleTC    = 4,    // double, udouble.
+  cast_to_double<ObObj>,
+  // ObNumberTC    = 5,    // number, unumber.
+  cast_to_number<ObObj>,
+  // ObDateTimeTC  = 6,    // datetime, timestamp.
+  cast_to_date_time<ObObj>,
+  // ObDateTC      = 7,    // date
+  cast_to_date<ObObj>,
+  // ObTimeTC      = 8,    // time
+  cast_to_time<ObObj>,
+  // ObYearTC      = 9,    // year
+  cast_to_year<ObObj>,
+  // ObStringTC    = 10,   // varchar, char, varbinary, binary.
+  cast_to_string<ObObj>,
+  // ObExtendTC    = 11,   // extend
+  cast_not_expected<ObObj>,
+  // ObUnknownTC   = 12,   // unknown
+  cast_not_expected<ObObj>,
+  // ObTextTC      = 13,   // TinyText,MediumText, Text ,LongText, TinyBLOB,MediumBLOB, // BLOB ,LongBLOB
+  cast_to_string<ObObj>,
+  // ObBitTC       = 14,   // bit
+  cast_to_bit<ObObj>,
+  // ObEnumSetTC   = 15,   // enum, set
+  cast_not_expected<ObObj>,
+  // ObEnumSetInnerTC  = 16,
+  cast_not_expected<ObObj>,
+  // ObOTimestampTC    = 17, //timestamp with time zone
+  cast_to_timstamp<ObObj>,
+  // ObRawTC       = 18,   // raw
+  cast_to_string<ObObj>,
+  // ObIntervalTC      = 19, //oracle interval type class include interval year to month and interval day to second
+  cast_not_expected<ObObj>,
+  // ObRowIDTC         = 20, // oracle rowid typeclass, includes urowid and rowid
+  cast_not_expected<ObObj>,
+  // ObLobTC           = 21, //oracle lob typeclass ObLobType not use
+  cast_not_expected<ObObj>,
+  // ObJsonTC          = 22, // json type class
+  cast_to_json<ObObj>,
+  // ObGeometryTC      = 23, // geometry type class
+  cast_not_expected<ObObj>,
+  // ObUserDefinedSQLTC = 24, // user defined type class in SQL
+  cast_not_expected<ObObj>,
+};
+*/
 
 ObJsonUtil::ObJsonCastSqlScalar OB_JSON_CAST_SQL_EXPLICIT[ObMaxTC] =
 {
@@ -2896,6 +3118,18 @@ ObJsonUtil::ObItemMethodValid ObJsonUtil::get_item_method_cast_res_func(ObJsonPa
   // first item method pos is 13
   return OB_JSON_VALUE_ITEM_METHOD_CAST_FUNC[item_method - ObJsonPathNodeType::JPN_ABS][json_type];
 }
+
+/*
+ObJsonUtil::ObJsonCastSqlObj ObJsonUtil::get_json_obj_cast_func(ObObjType dst_type)
+{
+  return OB_JSON_CAST_OBJ_EXPLICIT[OBJ_TYPE_TO_CLASS[dst_type]];
+}
+
+ObJsonUtil::ObJsonCastSqlDatum ObJsonUtil::get_json_datum_cast_func(ObObjType dst_type)
+{
+  return OB_JSON_CAST_DATUM_EXPLICIT[OBJ_TYPE_TO_CLASS[dst_type]];
+}
+*/
 
 ObJsonUtil::ObJsonCastSqlScalar ObJsonUtil::get_json_cast_func(ObObjType dst_type)
 {

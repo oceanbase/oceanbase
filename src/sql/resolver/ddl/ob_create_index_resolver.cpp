@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/ddl/ob_create_index_resolver.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/schema/ob_table_schema.h"
 #include "sql/resolver/ddl/ob_create_index_stmt.h"
 #include "sql/session/ob_sql_session_info.h"
@@ -172,6 +173,17 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
         sort_item.column_name_.assign_ptr(const_cast<char *>(col_node->children_[0]->str_value_),
                                           static_cast<int32_t>(col_node->children_[0]->str_len_));
+        bool is_multivalue_index = false;
+        if (OB_FAIL(ObMulValueIndexBuilderUtil::is_multivalue_index_type(sort_item.column_name_,
+                                                                         is_multivalue_index))) {
+          LOG_WARN("failed to resolve index type", K(ret));
+        } else if (is_multivalue_index) {
+          // not support dynamic create multi-value index
+          // todo: weiyouchao.wyc
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support dynaimic create multivlaue index", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support dynaimic create multivlaue index");
+        }
       }
       // 前缀索引的前缀长度
       if (OB_FAIL(ret)) {
@@ -186,10 +198,20 @@ int ObCreateIndexResolver::resolve_index_column_node(
         sort_item.prefix_len_ = 0;
       }
 
-      // spatial index constraint
       if (OB_FAIL(ret)) {
         // do nothing
-      } else {
+      } else if (index_keyname_ == FTS_KEY) {
+        if (!GCONF._enable_add_fulltext_index_to_existing_table) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("build fulltext index afterward is experimental feature", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "experimental feature: build fulltext index afterward");
+        } else if (OB_FAIL(resolve_fts_index_constraint(*tbl_schema,
+                                                 sort_item.column_name_,
+                                                 index_keyname_value))) {
+          SQL_RESV_LOG(WARN, "check fts index constraint fail",K(ret),
+              K(sort_item.column_name_));
+        }
+      } else { // spatial index, NOTE resolve_spatial_index_constraint() will set index_keyname
         bool is_explicit_order = (NULL != col_node->children_[2]
             && 1 != col_node->children_[2]->is_empty_);
         if (OB_FAIL(resolve_spatial_index_constraint(*tbl_schema, sort_item.column_name_,
@@ -728,6 +750,9 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
       } else {
         index_arg.index_type_ = INDEX_TYPE_SPATIAL_LOCAL;
       }
+    } else if (FTS_KEY == index_keyname_) {
+      // TODO hanxuan
+      ret = OB_NOT_SUPPORTED;
     }
     index_arg.data_table_id_ = data_table_id_;
     index_arg.index_table_id_ = index_table_id_;
@@ -742,7 +767,8 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
     index_arg.sql_mode_ = session_info_->get_sql_mode();
     create_index_stmt->set_comment(comment_);
     create_index_stmt->set_tablespace_id(tablespace_id_);
-    if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(create_index_stmt->set_encryption_str(encryption_))) {
       LOG_WARN("fail to set encryption str", K(ret));
     }
   }

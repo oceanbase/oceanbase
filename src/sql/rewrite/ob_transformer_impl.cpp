@@ -424,7 +424,8 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
     LOG_WARN("failed to check stmt functions", K(ret));
   } else {
     //TODO::unpivot open @xifeng
-    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_) {
+    if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
+        func.contain_fulltext_search_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_sequence_) {
@@ -516,6 +517,7 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
     func.contain_sequence_ = func.contain_sequence_ || stmt->has_sequence();
     func.contain_for_update_ = func.contain_for_update_ || stmt->has_for_update();
     func.contain_unpivot_query_ = func.contain_unpivot_query_ || stmt->is_unpivot_select();
+    func.contain_fulltext_search_ = func.contain_fulltext_search_ || (stmt->get_match_exprs().count() != 0);
   }
   for (int64_t i = 0; OB_SUCC(ret)
                       && (!func.contain_enum_set_values_ || !func.contain_geometry_values_)
@@ -726,8 +728,9 @@ int ObTransformerImpl::add_param_and_expr_constraints(ObExecContext &exec_ctx,
   } else if (OB_FAIL(append(query_ctx->all_equal_param_constraints_,
                             trans_ctx.equal_param_constraints_))) {
     LOG_WARN("fail to append equal param constraints. ", K(ret));
-  } else if (OB_FAIL(query_ctx->all_expr_constraints_.assign(trans_ctx.expr_constraints_))) {
-    LOG_WARN("fail to assign expr constraints", K(ret));
+  } else if (OB_FAIL(append(query_ctx->all_expr_constraints_,
+                            trans_ctx.expr_constraints_))) {
+    LOG_WARN("fail to append expr constraints", K(ret));
   }
   return ret;
 }

@@ -28,14 +28,16 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     table_id_(OB_INVALID_ID),
     schema_version_(OB_INVALID_VERSION),
     table_type_(MAX_TABLE_TYPE),
-    index_type_(INDEX_TYPE_MAX),
-    index_status_(INDEX_STATUS_MAX),
+    index_type_(INDEX_TYPE_IS_NOT),
+    index_status_(INDEX_STATUS_NOT_FOUND),
     shadow_rowkey_column_num_(0),
+    doc_id_col_id_(OB_INVALID_ID),
     fulltext_col_id_(OB_INVALID_ID),
     spatial_geo_col_id_(OB_INVALID_ID),
     spatial_cellid_col_id_(OB_INVALID_ID),
     spatial_mbr_col_id_(OB_INVALID_ID),
     index_name_(),
+    fts_parser_name_(),
     columns_(allocator),
     col_map_(allocator),
     pk_name_(),
@@ -59,14 +61,16 @@ void ObTableSchemaParam::reset()
   table_id_ = OB_INVALID_ID;
   schema_version_ = OB_INVALID_VERSION;
   table_type_ = MAX_TABLE_TYPE;
-  index_type_ = INDEX_TYPE_MAX;
-  index_status_ = INDEX_STATUS_MAX;
+  index_type_ = INDEX_TYPE_IS_NOT;
+  index_status_ = INDEX_STATUS_NOT_FOUND;
   shadow_rowkey_column_num_ = 0;
+  doc_id_col_id_ = OB_INVALID_ID;
   fulltext_col_id_ = OB_INVALID_ID;
   spatial_geo_col_id_ = OB_INVALID_ID;
   spatial_cellid_col_id_ = OB_INVALID_ID;
   spatial_mbr_col_id_ = OB_INVALID_ID;
   index_name_.reset();
+  fts_parser_name_.reset();
   columns_.reset();
   col_map_.clear();
   pk_name_.reset();
@@ -129,12 +133,34 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
       } else if (OB_FAIL(schema->get_index_info().get_spatial_mbr_col_id(spatial_mbr_col_id_))) {
         LOG_WARN("fail to get spatial mbr column id", K(ret), K(schema->get_index_info()));
       }
+    } else if (schema->is_fts_index_aux() || schema->is_fts_doc_word_aux()) {
+      if (OB_FAIL(schema->get_fulltext_column_ids(doc_id_col_id_, fulltext_col_id_))) {
+        LOG_WARN("fail to get fulltext column ids", K(ret));
+      } else if (OB_UNLIKELY(doc_id_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == doc_id_col_id_
+                        || fulltext_col_id_ <= OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == fulltext_col_id_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid doc id or fulltext column id", K(ret), K(doc_id_col_id_), K(fulltext_col_id_));
+      } else if (OB_FAIL(ob_write_string(allocator_, schema->get_parser_name_str(), fts_parser_name_))) {
+        LOG_WARN("fail to copy fts parser name", K(ret), K(schema->get_parser_name_str()));
+      }
+    } else if (schema->is_multivalue_index_aux()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < schema->get_column_count(); ++i) {
+        const ObColumnSchemaV2 *column_schema = schema->get_column_schema_by_idx(i);
+        if (OB_ISNULL(column_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(schema));
+        } else if (column_schema->is_doc_id_column()) {
+          doc_id_col_id_ = column_schema->get_column_id();
+        } else if (column_schema->is_multivalue_generated_column()) {
+          multivalue_col_id_ = column_schema->get_column_id();
+        } else if (column_schema->is_multivalue_generated_array_column()) {
+          multivalue_arr_col_id_ = column_schema->get_column_id();
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
-      LOG_WARN("fail to get fulltext column id", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(schema->get_index_name(tmp_name))) {
       LOG_WARN("fail to get index name", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, index_name_))) {
@@ -304,6 +330,17 @@ const ObColumnParam * ObTableSchemaParam::get_column_by_idx(const int64_t idx) c
   return ptr;
 }
 
+ObColumnParam * ObTableSchemaParam::get_column_by_idx(const int64_t idx)
+{
+  ObColumnParam * ptr = NULL;
+  if (idx < 0 || idx >= columns_.count()) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "idx out of range", K(idx), K(columns_.count()), K(lbt()));
+  } else {
+    ptr = columns_.at(idx);
+  }
+  return ptr;
+}
+
 const ObColumnParam * ObTableSchemaParam::get_rowkey_column_by_idx(const int64_t idx) const
 {
   const ObColumnParam * ptr = NULL;
@@ -402,8 +439,10 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(index_type),
        K_(index_status),
        K_(shadow_rowkey_column_num),
+       K_(doc_id_col_id),
        K_(fulltext_col_id),
        K_(index_name),
+       K_(fts_parser_name),
        K_(pk_name),
        K_(columns),
        K_(read_info),
@@ -455,6 +494,12 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(multivalue_col_id_);
   OB_UNIS_ENCODE(multivalue_arr_col_id_);
   OB_UNIS_ENCODE(data_table_rowkey_column_num_);
+  OB_UNIS_ENCODE(doc_id_col_id_);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(fts_parser_name_.serialize(buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize fts parser name", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -537,9 +582,44 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
     }
   }
 
+  if (OB_SUCC(ret) && pos == data_len) {
+    // Here is to solve the compatibility problem and correct the `index_type_` and `index_status_`.
+    //
+    // Before version 4.3.1.0, the default value of `index_type_` and `index_sattus_` was max. In
+    // version 4.3.1.0, the full-text search and json multi-value indexes were introduced. If the
+    // RPC request from older version observer is received, the `index_type_` will be mistaken for
+    // a valid json multi-valued index.
+    //
+    // Therefore, if there are still unresolved fields here, it means that it is a new version
+    // observer. It is necessary to re-assign the initial values to the `index_type_` and
+    // `index_status_` to avoid misjudgment as a valid index.
+
+
+    // ATTENTION!!!
+    // The front-end version is currently only 4.3.0.x, and its value of max index type is 23.
+    if (23 == index_type_) {
+      index_type_ = INDEX_TYPE_IS_NOT;
+    }
+    // ATTENTION!!!
+    // The front-end version is currently only 4.3.0.x, and its value of max index status is 8.
+    if (8 == index_status_) {
+      index_status_ = INDEX_STATUS_NOT_FOUND;
+    }
+  }
+
   OB_UNIS_DECODE(multivalue_col_id_);
   OB_UNIS_DECODE(multivalue_arr_col_id_);
   OB_UNIS_DECODE(data_table_rowkey_column_num_);
+  OB_UNIS_DECODE(doc_id_col_id_)
+
+  if (OB_SUCC(ret) && pos < data_len) {
+    ObString tmp_name;
+    if (OB_FAIL(tmp_name.deserialize(buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize fts parser name", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator_, tmp_name, fts_parser_name_))) {
+      LOG_WARN("fail to copy fts parser name", K(ret), K(tmp_name));
+    }
+  }
   return ret;
 }
 
@@ -585,6 +665,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(multivalue_col_id_);
   OB_UNIS_ADD_LEN(multivalue_arr_col_id_);
   OB_UNIS_ADD_LEN(data_table_rowkey_column_num_);
+  OB_UNIS_ADD_LEN(doc_id_col_id_);
+  len += fts_parser_name_.get_serialize_size();
   return len;
 }
 

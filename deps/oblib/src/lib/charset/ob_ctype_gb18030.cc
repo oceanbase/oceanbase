@@ -1015,6 +1015,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     2,                                               /* casedn_multiply  */
     1,                                               /* mbminlen      */
     4,                                               /* mbmaxlen      */
+    2,                                               /* mbmaxlenlen   */
     0,                                               /* min_sort_char */
     0xFE39FE39,                                      /* max_sort_char */
     ' ',                                             /* pad char      */
@@ -1050,6 +1051,7 @@ ObCharsetInfo ob_charset_gb18030_chinese_cs = {
     2,                                               /* casedn_multiply  */
     1,                                               /* mbminlen      */
     4,                                               /* mbmaxlen      */
+    2,                                               /* mbmaxlenlen   */
     0,                                               /* min_sort_char */
     0xFE39FE39,                                      /* max_sort_char */
     ' ',                                             /* pad char      */
@@ -1085,6 +1087,7 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     2,
     1,
     4,
+    2,                                               /* mbmaxlenlen   */
     0,
     0xFEFEFEFE,
     ' ',
@@ -1642,6 +1645,7 @@ ObCharsetInfo ob_charset_gb18030_2022_bin =
   2,                              /* casedn_multiply  */
   1,                              /* mbminlen      */
   4,                              /* mbmaxlen      */
+  2,                              /* mbmaxlenlen   */
   0,                              /* min_sort_char */
   0xFEFEFEFE,                     /* max_sort_char */
   ' ',                            /* pad char      */
@@ -1677,6 +1681,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1712,6 +1717,7 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1747,6 +1753,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1782,6 +1789,7 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1817,6 +1825,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */
@@ -1852,6 +1861,7 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_cs =
   2,                                               /* casedn_multiply  */
   1,                                               /* mbminlen      */
   4,                                               /* mbmaxlen      */
+  2,                                               /* mbmaxlenlen   */
   0,                                               /* min_sort_char */
   0xFE39FE39,                                      /* max_sort_char */
   ' ',                                             /* pad char      */

@@ -63,7 +63,7 @@ void *oceanbase::common::ob_malloc_align(const int64_t align, const int64_t nbyt
 {
   const int min_align = 16;
   const int64_t alignment =
-    align <= min_align ? min_align : align_up2(align, 16);
+    align <= min_align ? min_align : lib::align_up2(align, 16);
   char *ptr = static_cast<char *>(oceanbase::common::ob_malloc(nbyte + alignment, attr));
   char *align_ptr = NULL;
   if (NULL != ptr) {

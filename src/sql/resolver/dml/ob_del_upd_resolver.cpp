@@ -3110,47 +3110,70 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
       if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid column schema", K(column_schema));
-      } else {
-        uint64_t column_id = column_schema->get_column_id();
-        if (column_schema->is_autoincrement()) {
-          del_upd_stmt->set_affected_last_insert_id(true);
-          AutoincParam param;
-          param.tenant_id_ = params_.session_info_->get_effective_tenant_id();
-          param.autoinc_table_id_ = table_info.ref_table_id_;
-          param.autoinc_first_part_num_ = table_schema->get_first_part_num();
-          param.autoinc_table_part_num_ = table_schema->get_all_part_num();
-          param.autoinc_col_id_ = column_id;
-          param.auto_increment_cache_size_ = auto_increment_cache_size;
-          param.part_level_ = table_schema->get_part_level();
-          ObObjType column_type = table_schema->get_column_schema(column_id)->get_data_type();
-          param.autoinc_col_type_ = column_type;
-          param.autoinc_desired_count_ = 0;
-          param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
-          param.autoinc_version_ = table_schema->get_truncate_version();
-          param.autoinc_auto_increment_ = table_schema->get_auto_increment();
-
-          // hidden pk auto-increment variables' default value is 1
-          // auto-increment variables for other columns are set in ob_sql.cpp
-          // because physical plan may come from plan cache; it need be reset every time
-          if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
-            param.autoinc_increment_ = 1;
-            param.autoinc_offset_ = 1;
-            param.part_value_no_order_ = true;
-          } else if (column_schema->is_tbl_part_key_column()) {
-            // don't keep intra-partition value asc order when partkey column is auto inc
-            param.part_value_no_order_ = true;
-          }
-
-          if (OB_FAIL(get_value_row_size(param.total_value_count_))) {
-            LOG_WARN("fail to get value row size", K(ret));
-          } else if (OB_FAIL(del_upd_stmt->get_autoinc_params().push_back(param))) {
-            LOG_WARN("failed to push autoinc_param", K(param), K(ret));
-          }
+      } else if (column_schema->is_autoincrement()) {
+        const ObTableSchema *t_schema = table_schema;
+        uint64_t table_id = table_info.ref_table_id_;
+        AutoincParam param;
+        del_upd_stmt->set_affected_last_insert_id(true);
+        if (FAILEDx(build_autoinc_param(table_id, t_schema, column_schema, auto_increment_cache_size, param))) {
+          LOG_WARN("fail to build auto param", K(ret), K(table_id), K(table_info), KPC(column_schema));
+        } else if (OB_FAIL(del_upd_stmt->get_autoinc_params().push_back(param))) {
+          LOG_WARN("failed to push autoinc_param", K(param), K(ret));
         }
       }
     }//end for
   }
-  LOG_DEBUG("generate autoinc_params", "autoin_params", del_upd_stmt->get_autoinc_params());
+  LOG_DEBUG("generate autoinc_params", "autoinc_params", del_upd_stmt->get_autoinc_params());
+  return ret;
+}
+
+int ObDelUpdResolver::build_autoinc_param(
+    const uint64_t table_id,
+    const ObTableSchema *table_schema,
+    const ObColumnSchemaV2 *column_schema,
+    const int64_t auto_increment_cache_size,
+    AutoincParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_ID == table_id || auto_increment_cache_size < 0)
+      || OB_ISNULL(table_schema)
+      || OB_ISNULL(column_schema)
+      || OB_ISNULL(params_.session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(table_id), KP(table_schema), KP(column_schema),
+        K(auto_increment_cache_size), KP(params_.session_info_));
+  } else {
+    const uint64_t column_id = column_schema->get_column_id();
+    const ObObjType column_type = column_schema->get_data_type();
+    param.tenant_id_ = params_.session_info_->get_effective_tenant_id();
+    param.autoinc_table_id_ = table_id;
+    param.autoinc_first_part_num_ = table_schema->get_first_part_num();
+    param.autoinc_table_part_num_ = table_schema->get_all_part_num();
+    param.autoinc_col_id_ = column_id;
+    param.auto_increment_cache_size_ = auto_increment_cache_size;
+    param.part_level_ = table_schema->get_part_level();
+    param.autoinc_col_type_ = column_type;
+    param.autoinc_desired_count_ = 0;
+    param.autoinc_mode_is_order_ = table_schema->is_order_auto_increment_mode();
+    param.autoinc_version_ = table_schema->get_truncate_version();
+    param.autoinc_auto_increment_ = table_schema->get_auto_increment();
+
+    // hidden pk auto-increment variables' default value is 1
+    // auto-increment variables for other columns are set in ob_sql.cpp
+    // because physical plan may come from plan cache; it need be reset every time
+    if (OB_HIDDEN_PK_INCREMENT_COLUMN_ID == column_id) {
+      param.autoinc_increment_ = 1;
+      param.autoinc_offset_ = 1;
+      param.part_value_no_order_ = true;
+    } else if (column_schema->is_tbl_part_key_column()) {
+      // don't keep intra-partition value asc order when partkey column is auto inc
+      param.part_value_no_order_ = true;
+    }
+
+    if (OB_FAIL(get_value_row_size(param.total_value_count_))) {
+      LOG_WARN("fail to get value row size", K(ret));
+    }
+  }
   return ret;
 }
 

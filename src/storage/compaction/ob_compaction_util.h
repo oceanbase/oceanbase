@@ -104,6 +104,9 @@ inline bool is_valid_merge_level(const ObMergeLevel &merge_level)
 }
 const char *merge_level_to_str(const ObMergeLevel &merge_level);
 
+// open or close FTS index checksum verify
+#define VERIFY_FTS_CHECKSUM true
+
 } // namespace storage
 } // namespace oceanbase
 

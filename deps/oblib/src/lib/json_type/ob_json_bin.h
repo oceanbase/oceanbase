@@ -449,7 +449,7 @@ public:
     cursor_ = &local_cursor_;
   }
 
-  explicit ObJsonBin(const char *data, const int64_t length, ObIAllocator *allocator)
+  explicit ObJsonBin(const char *data, const int64_t length, ObIAllocator *allocator = nullptr)
       : ObIJsonBase(allocator),
         allocator_(allocator),
         meta_(),
@@ -488,6 +488,38 @@ public:
   virtual ~ObJsonBin() {
     destroy();
   }
+
+  ObJsonBin(const ObJsonBin& other)
+      : ObJsonBin()
+  {
+    assign(other);
+  }
+
+  void assign(const ObJsonBin& other) {
+    meta_ = other.meta_;
+    cursor_ = other.cursor_;
+    local_cursor_ = other.local_cursor_;
+    pos_ = other.pos_;
+    // ToDo: check again, why need assign ?
+    // node_stack_ = other.node_stack_;
+    data_ = other.data_;
+    int_val_ = other.int_val_;
+    number_ = other.number_;
+    prec_ = other.prec_;
+    scale_ = other.scale_;
+    ctx_ = other.ctx_;
+    is_alloc_ctx_ = other.is_alloc_ctx_;
+    is_seek_only_ = other.is_seek_only_;
+    is_schema_ = other.is_schema_;
+  }
+
+  ObJsonBin& operator=(const ObJsonBin& other)
+  {
+    new (this) ObJsonBin();
+    assign(other);
+    return *this;
+  }
+
   OB_INLINE bool get_boolean() const override { return static_cast<bool>(uint_val_); }
   OB_INLINE double get_double() const override { return double_val_; }
   OB_INLINE float get_float() const override { return float_val_; };
@@ -1053,8 +1085,8 @@ private:
   bool is_seek_only_;
 
   bool is_schema_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObJsonBin);
+  // ToDo:refine
+  // DISALLOW_COPY_AND_ASSIGN(ObJsonBin);
 };
 
 class ObJsonVar {
@@ -1098,6 +1130,15 @@ private:
   ObIAllocator *allocator_;
   ObJsonBinCtx bin_ctx_;
 
+};
+
+struct ObJsonBinCompare {
+  int operator()(const ObJsonBin& left, const ObJsonBin& right)
+  {
+    int result = 0;
+    left.compare(right, result);
+    return result > 0 ? 1 : 0;
+  }
 };
 
 } // namespace common

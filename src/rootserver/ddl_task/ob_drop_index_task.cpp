@@ -27,7 +27,10 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDropIndexTask::ObDropIndexTask()
-  : ObDDLTask(DDL_DROP_INDEX), wait_trans_ctx_(), drop_index_arg_()
+  : ObDDLTask(DDL_DROP_INDEX),
+    wait_trans_ctx_(),
+    root_service_(nullptr),
+    drop_index_arg_()
 {
 }
 
@@ -72,7 +75,6 @@ int ObDropIndexTask::init(
     dst_tenant_id_ = tenant_id_;
     dst_schema_version_ = schema_version_;
     is_inited_ = true;
-    ddl_tracing_.open();
   }
   return ret;
 }
@@ -102,7 +104,7 @@ int ObDropIndexTask::init(
     task_type_ = task_record.ddl_type_; // could be drop index / mlog
     if (nullptr != task_record.message_.ptr()) {
       int64_t pos = 0;
-      if (OB_FAIL(deserlize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
+      if (OB_FAIL(deserialize_params_from_message(task_record.tenant_id_, task_record.message_.ptr(), task_record.message_.length(), pos))) {
         LOG_WARN("deserialize params from message failed", K(ret));
       }
     }
@@ -457,14 +459,14 @@ int ObDropIndexTask::serialize_params_to_message(char *buf, const int64_t buf_si
   return ret;
 }
 
-int ObDropIndexTask::deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
+int ObDropIndexTask::deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
   obrpc::ObDropIndexArg tmp_drop_index_arg;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(tenant_id), KP(buf), K(buf_size));
-  } else if (OB_FAIL(ObDDLTask::deserlize_params_from_message(tenant_id, buf, buf_size, pos))) {
+  } else if (OB_FAIL(ObDDLTask::deserialize_params_from_message(tenant_id, buf, buf_size, pos))) {
     LOG_WARN("ObDDLTask deserlize failed", K(ret));
   } else if (OB_FAIL(tmp_drop_index_arg.deserialize(buf, buf_size, pos))) {
     LOG_WARN("deserialize failed", K(ret));

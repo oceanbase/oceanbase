@@ -49,6 +49,7 @@ namespace sql {
     virtual int visit(ObWinFunRawExpr &expr);
     virtual int visit(ObPseudoColumnRawExpr &expr);
     virtual int visit(ObPlQueryRefRawExpr &expr);
+    virtual int visit(ObMatchFunRawExpr &expr);
   private:
     int add_expr(ObRawExpr &expr);
     // types and constants

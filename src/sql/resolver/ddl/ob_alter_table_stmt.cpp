@@ -20,7 +20,7 @@ namespace sql
 
 ObAlterTableStmt::ObAlterTableStmt(common::ObIAllocator *name_pool)
     : ObTableStmt(name_pool, stmt::T_ALTER_TABLE), is_comment_table_(false), 
-      is_alter_system_(false), is_alter_triggers_(false), 
+      is_alter_system_(false), fts_arg_allocator_(nullptr), is_alter_triggers_(false),
       interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
       alter_external_table_type_(0)
 {
@@ -28,13 +28,23 @@ ObAlterTableStmt::ObAlterTableStmt(common::ObIAllocator *name_pool)
 
 ObAlterTableStmt::ObAlterTableStmt()
     : ObTableStmt(stmt::T_ALTER_TABLE), is_comment_table_(false), is_alter_system_(false),
-      is_alter_triggers_(false), interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
+      fts_arg_allocator_(nullptr), is_alter_triggers_(false), interval_expr_(NULL), transition_expr_(NULL), alter_table_action_count_(0),
       alter_external_table_type_(0)
 {
 }
 
 ObAlterTableStmt::~ObAlterTableStmt()
 {
+  for (int64_t i = 0; i < index_arg_list_.count(); ++i) {
+    obrpc::ObCreateIndexArg *index_arg = index_arg_list_.at(i);
+    if (is_fts_index(index_arg->index_type_)
+        || is_multivalue_index(index_arg->index_type_)) {
+      index_arg->~ObCreateIndexArg();
+      fts_arg_allocator_->free(index_arg);
+    }
+  }
+  index_arg_list_.reuse();
+  fts_arg_allocator_ = nullptr;
 }
 
 int ObAlterTableStmt::add_column(const share::schema::AlterColumnSchema &column_schema)

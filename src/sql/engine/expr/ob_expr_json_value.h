@@ -46,6 +46,73 @@ public:
   static int eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   static int eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
 
+  static int calc_input_type(ObExprResType& types_stack, bool &is_json_input);
+
+  static int deal_item_method_in_seek(ObIJsonBase*& in,
+                                      bool &is_null_result,
+                                      ObJsonPath *j_path,
+                                      ObIAllocator *allocator,
+                                      uint8_t &is_type_mismatch);
+
+  /* code for cast accuracy check */
+  template<typename Obj>
+  static int check_default_val_accuracy(const ObAccuracy &accuracy,
+                                        const ObObjType &type,
+                                        const Obj *obj);
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
+private:
+  /* cast wrapper to dst type with accuracy check*/
+  static int get_cast_ret(int ret);
+  static int cast_to_int(ObIJsonBase *j_base, ObObjType dst_type, int64_t &val);
+  static int cast_to_uint(ObIJsonBase *j_base, ObObjType dst_type, uint64_t &val);
+  static int cast_to_datetime(ObIJsonBase *j_base,
+                              common::ObIAllocator *allocator,
+                              const ObBasicSessionInfo *session,
+                              ObEvalCtx &ctx,
+                              const ObExpr *expr,
+                              common::ObAccuracy &accuracy,
+                              int64_t &val,
+                              uint8_t &is_type_cast);
+  static bool type_cast_to_string(ObString &json_string,
+                                  common::ObIAllocator *allocator,
+                                  ObIJsonBase *j_base,
+                                  ObAccuracy &accuracy);
+  static int cast_to_otimstamp(ObIJsonBase *j_base,
+                               const ObBasicSessionInfo *session,
+                               ObEvalCtx &ctx,
+                               const ObExpr *expr,
+                               common::ObAccuracy &accuracy,
+                               ObObjType dst_type,
+                               ObOTimestampData &out_val,
+                               uint8_t &is_type_cast);
+  static int cast_to_date(ObIJsonBase *j_base, int32_t &val, uint8_t &is_type_cast);
+  static int cast_to_time(ObIJsonBase *j_base,
+                          common::ObAccuracy &accuracy,
+                          int64_t &val);
+  static int cast_to_year(ObIJsonBase *j_base, uint8_t &val);
+  static int cast_to_float(ObIJsonBase *j_base, ObObjType dst_type, float &val);
+  static int cast_to_double(ObIJsonBase *j_base, ObObjType dst_type, double &val);
+  static int cast_to_number(common::ObIAllocator *allocator,
+                            ObIJsonBase *j_base,
+                            common::ObAccuracy &accuracy,
+                            ObObjType dst_type,
+                            number::ObNumber &val,
+                            uint8_t &is_type_cast);
+  static int cast_to_string(common::ObIAllocator *allocator,
+                            ObIJsonBase *j_base,
+                            ObCollationType in_cs_type,
+                            ObCollationType dst_cs_type,
+                            common::ObAccuracy &accuracy,
+                            ObObjType dst_type,
+                            ObString &val,
+                            uint8_t &is_type_cast,
+                            uint8_t is_truncate);
+  static int cast_to_bit(ObIJsonBase *j_base, uint64_t &val);
+  static int cast_to_json(common::ObIAllocator *allocator, ObIJsonBase *j_base,
+                          ObString &val, uint8_t &is_type_cast);
+
   static int get_empty_or_error_type(const ObExpr &expr,
                                       ObEvalCtx &ctx,
                                       uint8_t index,
@@ -53,23 +120,12 @@ public:
                                       const ObAccuracy &accuracy,
                                       uint8_t &type,
                                       ObObjType dst_type);
-  static int deal_item_method_in_seek(ObIJsonBase*& in,
-                                      bool &is_null_result,
-                                      ObJsonPath *j_path,
-                                      ObIAllocator *allocator,
-                                      uint8_t &is_type_mismatch);
-  /* code for cast accuracy check */
-  template<typename Obj>
-  static int check_default_val_accuracy(const ObAccuracy &accuracy,
-                                        const ObObjType &type,
-                                        const Obj *obj);
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
   virtual common::ObCastMode get_cast_mode() const { return CM_ERROR_ON_SCALE_OVER;}
   static int calc_empty_error_type(ObExprResType* types_stack, uint8_t pos, ObExprResType &dst_type, ObExprTypeCtx& type_ctx);
-  static int calc_input_type(ObExprResType& types_stack, bool &is_json_input);
-  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   static bool try_set_error_val(const ObExpr &expr,
                                 ObEvalCtx &ctx,
@@ -77,9 +133,10 @@ private:
                                 ObJsonExprParam* json_param,
                                 uint8_t &is_type_mismatch);
   static int doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, ObJsonExprParam* json_param,
-                                ObIJsonBase *j_base, const ObExpr &expr, ObEvalCtx &ctx, bool &is_cover_by_error,
-                                ObDatum *&return_val,
-                                uint8_t &is_type_mismatch);
+                         ObIJsonBase *j_base, const ObExpr &expr, ObEvalCtx &ctx, bool &is_cover_by_error,
+                         ObDatum *&return_val,
+                         uint8_t &is_type_mismatch);
+
   // new sql engine
   static inline void set_val(ObDatum &res, ObDatum *val)
   { res.set_datum(*val); }
@@ -87,7 +144,6 @@ private:
   // old sql engine
   static inline void set_val(ObObj &res, ObObj *val)
   { res = *val; }
-
   static int get_default_value(ObExpr *expr,
                                   ObEvalCtx &ctx,
                                   const ObAccuracy &accuracy,

@@ -111,6 +111,30 @@ public:
   int64_t row_inserted_;
 };
 
+struct ObFTSDDLChildTaskInfo final
+{
+public:
+  ObFTSDDLChildTaskInfo() : index_name_(), table_id_(OB_INVALID_ID), task_id_(0) {}
+  ObFTSDDLChildTaskInfo(
+      common::ObString &index_name,
+      const uint64_t table_id,
+      const int64_t task_id)
+    : index_name_(index_name),
+      table_id_(table_id),
+      task_id_(task_id)
+  {}
+  ~ObFTSDDLChildTaskInfo() = default;
+  bool is_valid() const { return OB_INVALID_ID != table_id_ && !index_name_.empty(); }
+  int deep_copy_from_other(const ObFTSDDLChildTaskInfo &other, common::ObIAllocator &allocator);
+  TO_STRING_KV(K_(table_id), K_(task_id), K_(index_name));
+  OB_UNIS_VERSION(1);
+public:
+  common::ObString index_name_;
+  uint64_t table_id_;
+  // The following fields are not persisted to the `__all_ddl_task_status` system table.
+  int64_t task_id_;
+};
+
 struct ObDDLTaskSerializeField final
 {
   OB_UNIS_VERSION(1);
@@ -154,7 +178,9 @@ public:
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
-               K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version), K_(sub_task_trace_id));
+               K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
+               K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(aux_doc_word_schema));
+
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -169,6 +195,9 @@ public:
   const ObTableSchema *dest_table_schema_;
   const obrpc::ObDDLArg *ddl_arg_;
   common::ObIAllocator *allocator_;
+  const ObTableSchema *aux_rowkey_doc_schema_;
+  const ObTableSchema *aux_doc_rowkey_schema_;
+  const ObTableSchema *aux_doc_word_schema_;
   uint64_t tenant_data_version_;
 };
 
@@ -491,6 +520,7 @@ public:
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
+  virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) { return common::OB_NOT_SUPPORTED; }
   virtual bool is_valid() const { return is_inited_; }
   typedef common::ObCurTraceId::TraceId TraceId;
   virtual const TraceId &get_trace_id() const { return trace_id_; }
@@ -530,7 +560,7 @@ public:
   uint64_t get_data_format_version() const { return data_format_version_; }
   static int fetch_new_task_id(ObMySQLProxy &sql_proxy, const uint64_t tenant_id, int64_t &new_task_id);
   virtual int serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const;
-  virtual int deserlize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos);
+  virtual int deserialize_params_from_message(const uint64_t tenant_id, const char *buf, const int64_t buf_size, int64_t &pos);
   virtual int64_t get_serialize_param_size() const;
   const ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
   int set_ddl_stmt_str(const ObString &ddl_stmt_str);

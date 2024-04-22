@@ -50,10 +50,10 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker(
       loop_cnt_(0), last_errno_(OB_SUCCESS), tenant_id_(tenant_id),
       compaction_scn_(), expected_epoch_(OB_INVALID_ID), sql_proxy_(nullptr),
       schema_service_(nullptr), server_trace_(nullptr), progress_(),
-      tablet_status_map_(), table_compaction_map_(),
+      tablet_status_map_(), table_compaction_map_(), fts_group_array_(),
       ckm_validator_(tenant_id, stop_, tablet_ls_pair_cache_, tablet_status_map_,
                      table_compaction_map_, idx_ckm_validate_array_, validator_statistics_,
-                     finish_tablet_ls_pair_array_, finish_tablet_ckm_array_, uncompact_info_),
+                     finish_tablet_ls_pair_array_, finish_tablet_ckm_array_, uncompact_info_, fts_group_array_),
       uncompact_info_(), ls_locality_cache_(), total_time_guard_(), validator_statistics_(), batch_size_mgr_() {}
 
 int ObMajorMergeProgressChecker::init(
@@ -277,6 +277,7 @@ int ObMajorMergeProgressChecker::check_schema_version()
 int ObMajorMergeProgressChecker::prepare_unfinish_table_ids()
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   ObArray<uint64_t> table_id_array;
   if (OB_FAIL(check_schema_version())) {
     LOG_WARN("fail to check schema version", KR(ret), K_(tenant_id));
@@ -314,11 +315,13 @@ int ObMajorMergeProgressChecker::prepare_unfinish_table_ids()
         LOG_WARN("failed to get table & index schemas", KR(ret), K(table_id));
       } else if (is_table_valid) {
         int64_t index_cnt = 0;
+        bool need_check_fts = false;
         for (int64_t j = 0; OB_SUCC(ret) && j < index_schemas.count(); ++j) { // loop index info
           index_simple_schema = index_schemas.at(j);
           if (should_ignore_cur_table(index_simple_schema)) {
             // should ignore cur table
             continue;
+          } else if (FALSE_IT(need_check_fts |= index_simple_schema->is_fts_or_multivalue_index())) {
           } else if (index_simple_schema->should_not_validate_data_index_ckm()) {
             if (OB_FAIL(not_validate_index_ids.push_back(index_simple_schema->get_table_id()))) {
               LOG_WARN("failed to push back index id", KR(ret), KPC(index_simple_schema));
@@ -331,8 +334,15 @@ int ObMajorMergeProgressChecker::prepare_unfinish_table_ids()
           }
         } // end of for
         if (OB_SUCC(ret)) { // add table_compaction_info
+          if (need_check_fts
+              && (!VERIFY_FTS_CHECKSUM || OB_TMP_FAIL(prepare_fts_group(table_id, index_schemas)))) {
+            need_check_fts = false;
+            LOG_WARN_RET(tmp_ret, "close fts verify or fail to prepare fts group",
+              K(table_id), K(need_check_fts), K(table_compaction_info));
+          }
           table_compaction_info.table_id_ = table_id;
           table_compaction_info.unfinish_index_cnt_ = index_cnt;
+          table_compaction_info.need_check_fts_ = need_check_fts;
           if (OB_FAIL(table_compaction_map_.set_refactored(
                   table_id, table_compaction_info, true /*overwrite*/))) {
             LOG_WARN("fail to set refactored", KR(ret), K(table_id), K(table_compaction_info));
@@ -473,6 +483,10 @@ int ObMajorMergeProgressChecker::check_index_and_rest_table()
     LOG_WARN("failed to validate index checksum", KR(ret), K_(compaction_scn));
   } else if (OB_FAIL(deal_with_rest_data_table())) {
     LOG_WARN("deal with rest data table", KR(ret), K_(compaction_scn));
+  } else if (0 == progress_.table_cnt_[INITIAL]
+      && fts_group_array_.need_check_fts()
+      && OB_FAIL(handle_fts_checksum())) {
+    LOG_WARN("failed to handle fts checksum", KR(ret), K_(compaction_scn), K_(progress));
   } else if (progress_.is_merge_finished()) {
     LOG_INFO("progress is check finished", KR(ret), K_(progress));
   } else if (progress_.only_remain_special_table_to_verified() || table_ids_.empty()) {
@@ -963,6 +977,105 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
       }
     }
   } // end of while
+  return ret;
+}
+
+int inner_find_doc_word_index(
+  const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas,
+  const ObSimpleTableSchemaV2 &input_index_schema,
+  const ObSimpleTableSchemaV2 *&doc_word_schema)
+{
+  int ret = OB_SUCCESS;
+  doc_word_schema = NULL;
+  const int64_t buf_size = OB_MAX_TABLE_NAME_BUF_LENGTH;
+  char buf[buf_size] = {0};
+  const ObString &input_index_name = input_index_schema.get_table_name_str();
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < index_schemas.count(); ++idx) {
+    const ObSimpleTableSchemaV2 *index_schema = index_schemas.at(idx);
+    if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema is unexpected null", KR(ret), K(idx), KP(index_schema));
+    } else if (is_fts_doc_word_aux(index_schema->get_index_type())) {
+      if (OB_FAIL(databuff_printf(buf, buf_size, "%.*s_fts_doc_word", input_index_name.length(), input_index_name.ptr()))) {
+        LOG_WARN("fail to printf fts doc word name str", K(ret), K(input_index_name));
+      } else if (0 == index_schema->get_table_name_str().case_compare(buf)) {
+        doc_word_schema = index_schema;
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(doc_word_schema)) {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::prepare_fts_group(
+  const int64_t table_id,
+  const ObIArray<const ObSimpleTableSchemaV2 *> &index_schemas)
+{
+  int ret = OB_SUCCESS;
+  ObFTSGroup fts_group;
+  fts_group.data_table_id_ = table_id;
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < index_schemas.count(); ++idx) {
+    const ObSimpleTableSchemaV2 *index_schema = index_schemas.at(idx);
+    if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema is unexpected null", KR(ret), K(idx), KP(index_schema));
+    } else if (is_rowkey_doc_aux(index_schema->get_index_type())) {
+      if (OB_UNLIKELY(0 != fts_group.rowkey_doc_index_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("can't have two rowkey_doc_index_id", KR(ret), K(fts_group));
+      } else {
+        fts_group.rowkey_doc_index_id_ = index_schema->get_table_id();
+      }
+    } else if (is_doc_rowkey_aux(index_schema->get_index_type())) {
+      if (OB_UNLIKELY(0 != fts_group.doc_rowkey_index_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("can't have two doc_rowkey_index_id", KR(ret), K(fts_group));
+      } else {
+        fts_group.doc_rowkey_index_id_ = index_schema->get_table_id();
+      }
+    } else if (is_fts_index_aux(index_schema->get_index_type())) {
+      const ObSimpleTableSchemaV2 *doc_word_schema = NULL;
+      if (OB_FAIL(inner_find_doc_word_index(index_schemas, *index_schema, doc_word_schema))) {
+        if (OB_ENTRY_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+          LOG_INFO("doc word schema of fts index is not found, skip verify", KR(ret), KPC(index_schema));
+        } else {
+          LOG_WARN("failed to find doc word index", KR(ret), K(idx), KPC(index_schema));
+        }
+      } else if (OB_FAIL(fts_group.push_back(ObFTSIndexInfo(index_schema->get_table_id(), doc_word_schema->get_table_id())))) {
+        LOG_WARN("failed to push doc word index", KR(ret), K(idx), KPC(index_schema), KPC(doc_word_schema));
+      }
+    }
+  }
+  if (OB_FAIL(ret) || !fts_group.is_valid()) {
+  } else if (OB_FAIL(fts_group_array_.push_back(fts_group))) {
+    LOG_WARN("failed to prepare push fts group", KR(ret), K(fts_group));
+  } else {
+    LOG_INFO("success to prepare fts group", KR(ret), K(fts_group));
+  }
+  return ret;
+}
+
+int ObMajorMergeProgressChecker::handle_fts_checksum()
+{
+  int ret = OB_SUCCESS;
+  int64_t tenant_schema_version = 0;
+  ObSchemaGetterGuard schema_guard(ObSchemaMgrItem::MOD_RS_MAJOR_CHECK);
+  if (OB_FAIL(schema_service_->get_tenant_refreshed_schema_version(tenant_id_, tenant_schema_version))) {
+    LOG_WARN("failed to get schema version", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(
+          tenant_id_, schema_guard, tenant_schema_version, OB_INVALID_VERSION,
+          ObMultiVersionSchemaService::RefreshSchemaMode::FORCE_LAZY))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ckm_validator_.handle_fts_checksum(schema_guard, fts_group_array_))) {
+    LOG_WARN("failed to handle fts checksum", KR(ret));
+  } else {
+    LOG_INFO("success to handle fts checksum", KR(ret), K_(compaction_scn), K_(progress), K_(fts_group_array));
+    fts_group_array_.reuse();
+  }
   return ret;
 }
 

@@ -572,7 +572,7 @@ bool ObSimpleTableSchemaV2::is_valid() const
         ret = false;
         LOG_WARN("invalid data table_id", K(ret), K(data_table_id_));
       } else if (is_index_table() && !is_normal_index() && !is_unique_index()
-          && !is_domain_index() && !is_spatial_index()) {
+          && !is_domain_index() && !is_fts_index() && !is_multivalue_index()) {
         ret = false;
         LOG_WARN("table_type is not consistent with index_type",
             "table_type", static_cast<int64_t>(table_type_),
@@ -6377,6 +6377,7 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     "constraints", ObArrayWrap<ObConstraint* >(cst_array_, cst_cnt_),
     "column_array", ObArrayWrap<ObColumnSchemaV2* >(column_array_, column_cnt_),
     "aux_vp_tid_array", aux_vp_tid_array_,
+    K_(index_info),
     K_(define_user_id),
     K_(aux_lob_meta_tid),
     K_(aux_lob_piece_tid),
@@ -8220,6 +8221,44 @@ int ObTableSchema::get_spatial_geo_column_id(uint64_t &geo_column_id) const
   return ret;
 }
 
+int ObTableSchema::get_fulltext_column_ids(uint64_t &doc_id_col_id, uint64_t &ft_col_id) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < get_column_count(); ++i) {
+    const ObColumnSchemaV2 *column_schema = get_column_schema_by_idx(i);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error, column schema is nullptr", K(ret), K(i), KPC(this));
+    } else if (column_schema->is_doc_id_column()) {
+      doc_id_col_id = column_schema->get_column_id();
+    } else if (column_schema->is_word_segment_column()) {
+      ft_col_id = column_schema->get_column_id();
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_rowkey_doc_tid(uint64_t &index_table_id) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  index_table_id = OB_INVALID_ID;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (is_rowkey_doc_aux(simple_index_infos.at(i).index_type_)) {
+      index_table_id = simple_index_infos.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(OB_INVALID_ID == index_table_id)) {
+    ret = OB_ERR_INDEX_KEY_NOT_FOUND;
+    LOG_DEBUG("not found rowkey doc index", K(ret), K(simple_index_infos));
+  }
+  return ret;
+}
+
 int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool &has_local_index) const
 {
   int ret = OB_SUCCESS;
@@ -8240,6 +8279,54 @@ int ObTableSchema::check_has_local_index(ObSchemaGetterGuard &schema_guard, bool
       LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
     } else if (index_schema->is_index_local_storage()) {
       has_local_index = true;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_has_fts_index(ObSchemaGetterGuard &schema_guard, bool &has_fts_index) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const ObSimpleTableSchemaV2 *index_schema = NULL;
+  const uint64_t tenant_id = get_tenant_id();
+  has_fts_index = false;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
+    } else if (index_schema->is_fts_index_aux() || index_schema->is_fts_doc_word_aux()) {
+      has_fts_index = true;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::check_has_multivalue_index(ObSchemaGetterGuard &schema_guard, bool &has_multivalue_index) const
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  const ObSimpleTableSchemaV2 *index_schema = NULL;
+  const uint64_t tenant_id = get_tenant_id();
+  has_multivalue_index = false;
+  if (OB_FAIL(get_simple_index_infos(simple_index_infos))) {
+    LOG_WARN("get simple_index_infos failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+    if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
+    } else if (OB_ISNULL(index_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cannot get index table schema for table ", K(simple_index_infos.at(i).table_id_));
+    } else if (index_schema->is_multivalue_index_aux()) {
+      has_multivalue_index = true;
       break;
     }
   }
@@ -8919,6 +9006,22 @@ int ObTableSchema::check_is_stored_generated_column_base_column(uint64_t column_
                && column_schema->has_cascaded_column_id(column_id)) {
       is_stored_base_col = true;
     }
+  }
+  return ret;
+}
+
+int ObTableSchema::get_doc_id_rowkey_tid(uint64_t &doc_id_rowkey_tid) const
+{
+  int ret = OB_SUCCESS;
+  doc_id_rowkey_tid = OB_INVALID_ID;
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos_.count(); ++i) {
+    if (is_doc_rowkey_aux(simple_index_infos_.at(i).index_type_)) {
+      doc_id_rowkey_tid = simple_index_infos_.at(i).table_id_;
+      break;
+    }
+  }
+  if (OB_INVALID_ID == doc_id_rowkey_tid) {
+    ret = OB_ERR_FT_COLUMN_NOT_INDEXED;
   }
   return ret;
 }

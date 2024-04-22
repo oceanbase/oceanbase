@@ -252,6 +252,7 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
   ObArray<ObVarInfo> sys_vars;
   ObArray<ObOpRawExpr*> op_exprs;
   ObSEArray<ObUserVarIdentRawExpr*, 1> user_var_exprs;
+  ObSEArray<ObMatchFunRawExpr*, 1> match_exprs;
   ObCollationType collation_connection = CS_TYPE_INVALID;
   ObCharsetType character_set_connection = CHARSET_INVALID;
   if (OB_ISNULL(params_.expr_factory_) || OB_ISNULL(params_.session_info_)) {
@@ -277,11 +278,14 @@ int ObVariableSetResolver::resolve_value_expr(ParseNode &val_node, ObRawExpr *&v
       LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(expr_resolver.resolve(&val_node, value_expr, columns, sys_vars,
                                              sub_query_info, aggr_exprs, win_exprs,
-                                             udf_info, op_exprs, user_var_exprs))) {
+                                             udf_info, op_exprs, user_var_exprs, match_exprs))) {
       LOG_WARN("resolve expr failed", K(ret));
     } else if (udf_info.count() > 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("UDFInfo should not found be here!!!", K(ret));
+    } else if (OB_UNLIKELY(match_exprs.count() > 0)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "fulltext search func");
     } else if (value_expr->get_expr_type() == T_SP_CPARAM) {
       ObCallParamRawExpr *call_expr = static_cast<ObCallParamRawExpr *>(value_expr);
       if (OB_ISNULL(call_expr->get_expr())) {

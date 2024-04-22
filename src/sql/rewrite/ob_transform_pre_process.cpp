@@ -36,6 +36,7 @@
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/dml/ob_select_resolver.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
+#include "sql/resolver/dml/ob_delete_stmt.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"
 #include "sql/resolver/dml/ob_update_stmt.h"
 #include "sql/rewrite/ob_expand_aggregate_utils.h"
@@ -316,6 +317,19 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
         trans_happened |= is_happened;
         LOG_TRACE("succeed to transform for last_insert_id.",K(is_happened), K(ret));
       }
+    }
+    if (OB_SUCC(ret)) {
+      if (lib::is_mysql_mode() && stmt->get_match_exprs().count() > 0 &&
+          OB_FAIL(preserve_order_for_fulltext_search(stmt, is_happened))) {
+        LOG_WARN("failed to preserve order for fulltext search", K(ret));
+      } else {
+        trans_happened |= is_happened;
+        LOG_TRACE("succeed to transform for preserve order for fulltext search",K(is_happened), K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(disable_complex_dml_for_fulltext_index(stmt))) {
+      LOG_WARN("disable complex dml for fulltext index", K(ret));
+      // jinmao TODO: table scan 能吐出正确的 doc_id 后，可删除此限制
     }
     if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
@@ -9829,6 +9843,38 @@ int ObTransformPreProcess::check_can_transform_insert_only_merge_into(const ObMe
   return ret;
 }
 
+// full-text index queries on a single base table are processed with order preservation.
+// (Order is not preserved in multi-table join scenarios.)
+int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, bool& trans_happened)
+{
+  int ret = OB_SUCCESS;
+  trans_happened = false;
+  TableItem *table_item = NULL;
+  ObMatchFunRawExpr *match_expr = NULL;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->get_table_items().count() != 1 || stmt->get_order_item_size() != 0) {
+    // do nothing
+  } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!table_item->is_basic_table()) {
+    // do nothing
+  } else if (OB_FAIL(stmt->get_match_expr_on_table(table_item->table_id_, match_expr))) {
+    LOG_WARN("failed to get fulltext search expr on table", K(table_item->table_id_), K(ret));
+  } else if (OB_ISNULL(match_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    OrderItem item(match_expr, default_desc_direction());
+    if (OB_FAIL(stmt->add_order_item(item))) {
+      LOG_WARN("failed to add order item", K(ret), K(item));
+    }
+  }
+  return ret;
+}
+
 int ObTransformPreProcess::preserve_order_for_pagination(ObDMLStmt *stmt,
                                                          bool &trans_happened)
 {
@@ -10067,6 +10113,75 @@ int ObTransformPreProcess::get_rowkey_for_single_table(ObSelectStmt* stmt,
     LOG_WARN("failed to generate unique key", K(ret));
   } else {
     is_valid = true;
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::disable_complex_dml_for_fulltext_index(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<TableItem*, 4> tables_to_check;
+  bool has_table_with_fulltext_index = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->schema_checker_) ||
+      OB_ISNULL(ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (stmt->is_insert_stmt()) {
+    ObInsertStmt *insert_stmt = static_cast<ObInsertStmt*>(stmt);
+    ObInsertTableInfo table_info = insert_stmt->get_insert_table_info();
+    if (table_info.is_replace_ || table_info.assignments_.count() != 0) {
+      TableItem* table = stmt->get_table_item_by_id(table_info.table_id_);
+      if (OB_FAIL(tables_to_check.push_back(table))) {
+        LOG_WARN("failed to push back table", K(ret));
+      }
+    }
+  } else if (stmt->is_delete_stmt() || stmt->is_update_stmt()) {
+    ObDelUpdStmt *del_upd_stmt = static_cast<ObDelUpdStmt*>(stmt);
+    ObSEArray<ObDmlTableInfo*, 4> table_infos;
+    TableItem* table = NULL;
+    if (OB_FAIL(del_upd_stmt->get_dml_table_infos(table_infos))) {
+      LOG_WARN("failed to get dml table infos", K(ret));
+    } else if (table_infos.count() == 1) {
+      if (OB_ISNULL(table_infos.at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(table = stmt->get_table_item_by_id(table_infos.at(0)->table_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (!table->is_generated_table() && !table->is_temp_table()) {
+        // do nothing
+      } else if (OB_FAIL(tables_to_check.push_back(table))) {
+        LOG_WARN("failed to push back table", K(ret));
+      }
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_infos.count(); ++i) {
+        if (OB_ISNULL(table_infos.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_ISNULL(table = stmt->get_table_item_by_id(table_infos.at(i)->table_id_))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(tables_to_check.push_back(table))) {
+          LOG_WARN("failed to push back table", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_table_with_fulltext_index && i < tables_to_check.count(); ++i) {
+      if (OB_FAIL(ObTransformUtils::check_table_with_fulltext_recursively(tables_to_check.at(i),
+                                                                          ctx_->schema_checker_,
+                                                                          ctx_->session_info_,
+                                                                          has_table_with_fulltext_index))) {
+        LOG_WARN("failed to check table with fulltext recursively", K(ret));
+      } else if (has_table_with_fulltext_index) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext index");
+        LOG_WARN("not supported complex dml operations on table with fulltext index", K(ret));
+      }
+    }
   }
   return ret;
 }

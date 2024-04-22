@@ -544,6 +544,7 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {
     ObLogicalOperator *child = get_child(i);
     bool contains_invalid_startup = false;
+    bool contains_limit = false;
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));

@@ -108,21 +108,24 @@ public:
   int check_table_or_index_exists(const uint64_t tenant_id,
                                   const uint64_t database_id,
                                   const common::ObString &table_name,
-                                  const bool is_hidden,
+                                  const bool with_hidden_flag,
+                                  const bool is_built_in_index,
                                   bool &is_exist);
   int check_table_exists(const uint64_t tenant_id,
                          const uint64_t database_id,
                          const common::ObString &table_name,
                          const bool is_index,
-                         const bool is_hidden,
-                         bool &is_exist);
+                         const bool with_hidden_flag,
+                         bool &is_exist,
+                         const bool is_built_in_index = false);
   //int check_table_exists(uint64_t table_id, bool &is_exist) const;
   int check_table_exists(const uint64_t tenant_id,
                         const common::ObString &database_name,
                         const common::ObString &table_name,
                         const bool is_index_table,
-                        const bool is_hidden,
-                        bool &is_exist);
+                        const bool with_hidden_flag,
+                        bool &is_exist,
+                        const bool is_built_in_index = false);
 
   // mock_fk_parent_table begin
   int get_mock_fk_parent_table_with_name(
@@ -187,8 +190,9 @@ public:
                        const common::ObString &table_name,
                        const bool is_index_table,
                        const bool cte_table_fisrt,
-                       const bool is_hidden,
-                       const share::schema::ObTableSchema *&table_schema);
+                       const bool with_hidden_flag,
+                       const share::schema::ObTableSchema *&table_schema,
+                       const bool is_built_in_index = false);
   int get_table_schema(const uint64_t tenant_id, const uint64_t table_id, const share::schema::ObTableSchema *&table_schema, bool is_link = false) const;
   int get_link_table_schema(const uint64_t dblink_id,
                             const common::ObString &database_name,

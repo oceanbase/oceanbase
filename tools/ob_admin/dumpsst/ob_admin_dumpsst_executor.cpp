@@ -345,7 +345,7 @@ int ObAdminDumpsstExecutor::dump_macro_block(const ObDumpMacroBlockContext &macr
   }
 
   macro_handle.reset();
-  STORAGE_LOG(INFO, "finish dump macro block", K(macro_block_context));
+  STORAGE_LOG(INFO, "finish dump macro block", K(common_header), K(macro_block_context));
   return ret;
 }
 

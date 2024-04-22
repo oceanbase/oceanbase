@@ -547,10 +547,11 @@ int ObDelUpdStmt::update_base_tid_cid()
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(col), K(ret));
           } else {
+            const bool is_rowkey_doc = col->get_table_name().suffix_match("rowkey_doc");
             col_item->base_tid_ = col->get_table_id();
             col_item->base_cid_ = col->get_column_id();
             if (OB_UNLIKELY(col_item->base_tid_ == OB_INVALID_ID) ||
-            OB_UNLIKELY(j != 0 && col_item->base_tid_ != base_tid)) {
+            OB_UNLIKELY(j != 0 && col_item->base_tid_ != base_tid && !is_rowkey_doc)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("base table id is invalid", K(ret), K(col_item->base_tid_), K(base_tid));
             } else if (j == 0) {

@@ -1564,6 +1564,37 @@ int ObOptEstCostModel::cost_row_store_index_scan(const ObCostTableScanInfo &est_
     double spatial_cost = row_count *  cost_params_.get_spatial_per_row_cost(sys_stat_);
     index_scan_cost += spatial_cost;
     LOG_TRACE("OPT::[COST SPATIAL INDEX SCAN]", K(spatial_cost), K(ret));
+  } else if (est_cost_info.index_meta_info_.is_fulltext_index_) {
+    // 全文索引一期：对于每一个 token，都需要:
+    // 1. 以 [token, token] 为 range 扫描 inv_index 两次，计算一个聚合函数；
+    // 2. 全表扫描 doc_id_rowkey_index, 计算一个聚合函数；
+    // 3. 用过滤后的 doc_id 对 doc_id_rowkey_index 做回表
+    int token_count = 1;  // 此处先假设 search query 只有一个 token，后续要调整
+    double token_sel = DEFAULT_SEL;
+    double inv_index_range_scan_cost = 0;
+    double doc_id_full_scan_cost = 0;
+    double doc_id_index_back_cost = 0;
+    if (OB_FAIL(cost_range_scan(est_cost_info,
+                                true,
+                                row_count * token_sel,
+                                inv_index_range_scan_cost))) {
+      LOG_WARN("Failed to estimate scan cost", K(ret));
+    } else if (OB_FAIL(cost_range_scan(est_cost_info,
+                                       true,
+                                       row_count,
+                                       doc_id_full_scan_cost))) {
+      LOG_WARN("Failed to estimate scan cost", K(ret));
+    } else if (OB_FAIL(cost_range_get(est_cost_info,
+                                      true,
+                                      row_count * token_sel,
+                                      doc_id_index_back_cost))) {
+      LOG_WARN("Failed to estimate get cost", K(ret));
+    }
+    double aggregation_cost = (row_count * token_sel + row_count) * cost_params_.get_per_aggr_func_cost(sys_stat_);
+    double fulltext_scan_cost = 2 * inv_index_range_scan_cost + doc_id_full_scan_cost +
+                                aggregation_cost + doc_id_index_back_cost;
+    index_scan_cost = token_count * fulltext_scan_cost;
+    LOG_TRACE("OPT::[COST FULLTEXT INDEX SCAN]", K(fulltext_scan_cost), K(ret));
   }
   //add index skip scan cost
   if (OB_FAIL(ret)) {

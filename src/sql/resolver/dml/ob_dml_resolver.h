@@ -450,6 +450,11 @@ protected:
                                  const uint64_t autoinc_col_id,
                                  const ObString autoinc_table_name,
                                  const ObString autoinc_column_name);
+  int fill_doc_id_expr_param(
+      const uint64_t table_id,
+      const uint64_t index_tid,
+      const ObTableSchema *table_schema,
+      ObRawExpr *&doc_id_expr);
   int build_partid_expr(ObRawExpr *&expr, const uint64_t table_id);
   virtual int resolve_subquery_info(const common::ObIArray<ObSubQueryInfo> &subquery_info);
   virtual int resolve_aggr_exprs(ObRawExpr *&expr, common::ObIArray<ObAggFunRawExpr*> &aggr_exprs,
@@ -838,6 +843,7 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
+  int resolve_match_against_expr(ObMatchFunRawExpr &expr);
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -987,7 +993,20 @@ private:
                          ObIArray<ObColumnRefRawExpr*> &values_desc,
                          ObRawExpr *&expr);
   int build_row_for_empty_values(ObIArray<ObRawExpr*> &values_vector);
-
+  int resolve_match_against_exprs(ObRawExpr *&expr,
+                                  ObIArray<ObMatchFunRawExpr*> &match_exprs,
+                                  const ObStmtScope scope);
+  int resolve_match_index(const ColumnReferenceSet &match_column_set,
+                          const ObTableSchema &table_schema,
+                          ObMatchFunRawExpr &match_against);
+  int check_fulltext_search_simple_filter(ObRawExpr *expr,
+                                          ObRawExpr *match_expr,
+                                          bool &is_simple_filter,
+                                          ObIArray<ObExprConstraint> &constraints);
+  int build_and_check_true_expr(ObRawExpr *const_expr,
+                                ObItemType compare_op,
+                                bool &is_true,
+                                ObIArray<ObExprConstraint> &constraints);
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
 protected:
   struct GenColumnExprInfo {
@@ -1008,6 +1027,13 @@ protected:
     common::ObString column_name_;  //生成列的名称
   };
   int add_parent_gen_col_exprs(const ObArray<GenColumnExprInfo> &gen_col_exprs);
+
+  int try_add_join_table_for_fts(
+      const TableItem *left_table,
+      JoinedTable *&joined_table);
+  int try_update_column_expr_for_fts(
+      const TableItem &table_item,
+      common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
 protected:
   ObStmtScope current_scope_;
   int32_t current_level_;
@@ -1018,7 +1044,7 @@ protected:
   //these generated column exprs are not the reference by query expression,
   //just some expr template in schema,
   //only the generated column expr referenced by query can be deposited to stmt
-  common::ObArray<GenColumnExprInfo > gen_col_exprs_;
+  common::ObArray<GenColumnExprInfo > gen_col_exprs_ ;
   common::ObArray<TableItem*> from_items_order_;
 
   ObIArray<ObExecParamRawExpr *> *query_ref_exec_params_;

@@ -1016,6 +1016,95 @@ OB_DEF_SERIALIZE_SIZE(ObLobLocatorV2)
   return size_ + sizeof(size_) + sizeof(has_lob_header_);
 }
 
+ObDocId::ObDocId()
+  : tablet_id_(ObTabletID::INVALID_TABLET_ID),
+    seq_id_(0)
+{
+  static_assert(sizeof(ObDocId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObDocId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+ObDocId::ObDocId(const uint64_t tablet_id, const uint64_t seq_id)
+  : tablet_id_(tablet_id),
+    seq_id_(seq_id)
+{
+  static_assert(sizeof(ObDocId) == OB_DOC_ID_COLUMN_BYTE_LENGTH, "size of ObDocId isn't equal to OB_DOC_ID_COLUMN_BYTE_LENGTH");
+}
+
+bool ObDocId::operator==(const ObDocId &other) const
+{
+  return tablet_id_ == other.tablet_id_ && seq_id_ == other.seq_id_;
+}
+
+bool ObDocId::operator!=(const ObDocId &other) const
+{
+  return !(operator==(other));
+}
+
+bool ObDocId::operator <(const ObDocId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret= true;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret = false;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret= true;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret = false;
+  }
+
+  return bool_ret;
+}
+
+bool ObDocId::operator >(const ObDocId &other) const
+{
+  bool bool_ret = false;
+
+  if (tablet_id_ < other.tablet_id_) {
+    bool_ret = false;
+  } else if (tablet_id_ > other.tablet_id_) {
+    bool_ret= true;
+  } else if (seq_id_ < other.seq_id_) {
+    bool_ret = false;
+  } else if (seq_id_ > other.seq_id_) {
+    bool_ret= true;
+  }
+
+  return bool_ret;
+
+}
+
+void ObDocId::reset()
+{
+  tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+  seq_id_ = 0;
+}
+
+bool ObDocId::is_valid() const
+{
+  return ObTabletID(tablet_id_).is_valid() && seq_id_ > 0;
+}
+
+ObString ObDocId::get_string() const
+{
+  return ObString(OB_DOC_ID_COLUMN_BYTE_LENGTH, reinterpret_cast<const char *>(this));
+}
+
+int ObDocId::from_string(const ObString &doc_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(doc_id.ptr()) || OB_UNLIKELY(doc_id.length() < OB_DOC_ID_COLUMN_BYTE_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid document id", K(ret));
+  } else {
+    const ObDocId *doc_id_ptr = reinterpret_cast<const ObDocId *>(doc_id.ptr());
+    tablet_id_ = doc_id_ptr->tablet_id_;
+    seq_id_ = doc_id_ptr->seq_id_;
+  }
+  return ret;
+}
+
 #define PRINT_META()
 //#define PRINT_META() BUF_PRINTO(obj.get_meta()); J_COLON();
 
