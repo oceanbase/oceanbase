@@ -1987,9 +1987,23 @@ bool ObStaticEngineExprCG::is_vectorized_expr(const ObRawExpr *raw_expr) const
 
 int ObStaticEngineExprCG::compute_max_batch_size(const ObRawExpr *raw_expr)
 {
+  // expr_datums_header_size
+  int64_t irrelevant = sizeof(ObEvalInfo) + 1 + 1;
+  // 1 refer to three bitmap (2 in expr_datums_header_size, 1 in rich_format_size)
+  int64_t relevant = sizeof(ObDatum) + 1;
+  // reserve_datums_buf_len
   const ObExprResType &result_type = raw_expr->get_result_type();
-  return (MAX_FRAME_SIZE - sizeof(ObEvalInfo)) /
-           (1 + sizeof(ObDatum) + reserve_data_consume(result_type.get_type(), result_type.get_precision()));
+  relevant += reserve_data_consume(result_type.get_type(), result_type.get_precision());
+  // rich_format_size
+  if (use_rich_format()) {
+    ObExpr *rt_expr = get_rt_expr(*raw_expr);
+    if (OB_ISNULL(rt_expr) || !rt_expr->is_fixed_length_data_) {
+      irrelevant += sizeof(uint32_t) + sizeof(ObDynReserveBuf);
+      relevant += sizeof(uint32_t) + sizeof(char *);
+    }
+    irrelevant += sizeof(VectorHeader) + 1;
+  }
+  return (MAX_FRAME_SIZE - irrelevant) / relevant;
 }
 
 // this is used for dynamic evaluated questionmark exprs
