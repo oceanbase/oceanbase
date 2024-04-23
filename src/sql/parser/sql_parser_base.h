@@ -74,7 +74,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_NO_MEMORY;           \
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
@@ -84,7 +84,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                               \
     if (OB_UNLIKELY(NULL == result)) {                                    \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED;          \
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
@@ -94,7 +94,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                               \
     if (OB_UNLIKELY(NULL == result)) {                                    \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_TOO_BIG_DISPLAYWIDTH;          \
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
@@ -104,7 +104,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_STR_LITERAL_TOO_LONG;\
     } else {/*do nothing*/}                                     \
     yyerror(yylloc, yyextra, "string literal is too long\n", yytext); \
@@ -115,7 +115,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_UNDECLARED_VAR;\
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
@@ -125,7 +125,7 @@ int add_alias_name(ParseNode *node, ParseResult *result, int end);
   do {                                                          \
     if (OB_UNLIKELY(NULL == result)) {                          \
       (void)fprintf(stderr, "ERROR : result is NULL\n");        \
-    } else if (0 == result->extra_errno_) {                     \
+    } else if (OB_PARSER_SUCCESS == result->extra_errno_) {                     \
       result->extra_errno_ = OB_PARSER_ERR_NOT_VALID_ROUTINE_NAME;\
     } else {/*do nothing*/}                                     \
     YYABORT;                                                    \
@@ -1218,5 +1218,68 @@ do {\
       }\
      }\
   } while(0);\
+
+#define push_back_list(malloc_pool, result, ret_node, left_node, right_node) \
+  do { \
+    ret_node = push_back_child(malloc_pool, &result->extra_errno_, left_node, right_node); \
+    if (OB_UNLIKELY(NULL == ret_node)) { \
+      if (OB_PARSER_SUCCESS == result->extra_errno_) { \
+        result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      } \
+      yyerror(NULL, result, "error happened\n"); \
+      YYABORT; \
+    } \
+  } while(0); \
+
+#define push_front_list(malloc_pool, result, ret_node, left_node, right_node) \
+  do { \
+    ret_node = push_front_child(malloc_pool, &result->extra_errno_, left_node, right_node); \
+    if (OB_UNLIKELY(NULL == ret_node)) { \
+      if (OB_PARSER_SUCCESS == result->extra_errno_) { \
+        result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      } \
+      yyerror(NULL, result, "error happened\n"); \
+      YYABORT; \
+    } \
+  } while(0); \
+
+#define append_list(malloc_pool, result, ret_node, left_node, right_node) \
+  do { \
+    ret_node = append_child(malloc_pool, &result->extra_errno_, left_node, right_node); \
+    if (OB_UNLIKELY(NULL == ret_node)) { \
+      if (OB_PARSER_SUCCESS == result->extra_errno_) { \
+        result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      } \
+      yyerror(NULL, result, "error happened\n"); \
+      YYABORT; \
+    } \
+  } while(0); \
+
+#define flatten_and_or(malloc_pool, result, ret_node, left_node, right_node, type) \
+  do { \
+    ret_node = NULL; \
+    if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type)) { \
+      result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      yyerror(NULL, result, "unexpected param\n"); \
+      YYABORT; \
+    } else if (left_node->type_ == type && right_node->type_ == type) { \
+      /* (A OR B) OR (C OR D) */ \
+      append_list(malloc_pool, result, ret_node, left_node, right_node); \
+    } else if (left_node->type_ == type && right_node->type_ != type) { \
+      /* (A OR B) OR C */ \
+      push_back_list(malloc_pool, result, ret_node, left_node, right_node); \
+    } else if (left_node->type_ != type && right_node->type_ == type) { \
+      /* A OR (B OR C) */ \
+      push_front_list(malloc_pool, result, ret_node, right_node, left_node); \
+    } else { \
+      ret_node = new_list_node(malloc_pool, type, 2, 2, left_node, right_node); \
+      if (OB_UNLIKELY(NULL == ret_node)) \
+      { \
+        result->extra_errno_ = OB_PARSER_ERR_NO_MEMORY; \
+        yyerror(NULL, result, "No more space for malloc\n"); \
+        YYABORT; \
+      } \
+    } \
+  } while(0); \
 
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */

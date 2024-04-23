@@ -415,7 +415,6 @@ extern int64_t get_need_reserve_capacity(int64_t n);
 extern ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *node);
 extern ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node);
 extern ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node);
-extern ParseNode *flatten_and_or(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node, ObItemType type);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

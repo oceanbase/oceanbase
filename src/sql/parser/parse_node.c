@@ -951,25 +951,3 @@ ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node
   }
   return ret_node;
 }
-
-ParseNode *flatten_and_or(void *malloc_pool,  int *error_code, ParseNode *left_node, ParseNode *right_node, ObItemType type)
-{
-  ParseNode *ret_node = NULL;
-  if (NULL == left_node || NULL == right_node || (T_OP_OR != type && T_OP_AND != type)) {
-    if (error_code) {
-      *error_code = OB_PARSER_ERR_UNEXPECTED;
-    }
-  } else if (left_node->type_ == type && right_node->type_ == type) {
-    /* (A OR B) OR (C OR D) */
-    ret_node = append_child(malloc_pool, error_code, left_node, right_node);
-  } else if (left_node->type_ == type && right_node->type_ != type) {
-    /* (A OR B) OR C */
-    ret_node = push_back_child(malloc_pool, error_code, left_node, right_node);
-  } else if (left_node->type_ != type && right_node->type_ == type) {
-    /* A OR (B OR C) */
-    ret_node = push_front_child(malloc_pool, error_code, right_node, left_node);
-  } else {
-    ret_node = new_list_node(malloc_pool, type, 2, 2, left_node, right_node);
-  }
-  return ret_node;
-}

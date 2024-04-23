@@ -740,7 +740,7 @@ expr %prec LOWER_COMMA
 }
 | expr_list ',' expr
 {
-  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $1, $3);
+  push_back_list(result->malloc_pool_, result, $$, $1, $3);
 }
 ;
 
@@ -1635,11 +1635,11 @@ simple_expr collation %prec NEG
 { $$ = $2; $$->is_assigned_from_child_ = 1; }
 | '(' expr_list ',' expr ')'
 {
-  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $2, $4);
+  push_back_list(result->malloc_pool_, result, $$, $2, $4);
 }
 | ROW '(' expr_list ',' expr ')'
 {
-  $$ = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, $5);
+  push_back_list(result->malloc_pool_, result, $$, $3, $5);
 }
 | EXISTS select_with_parens
 {
@@ -1739,28 +1739,28 @@ simple_expr collation %prec NEG
 expr:
 expr AND expr %prec AND
 {
-  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_AND);
+  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr AND_OP expr %prec AND
 {
-  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_AND);
+  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_AND);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR expr %prec OR
 {
-  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_OR);
+  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
 }
 | expr OR_OP expr %prec OR
 {
-  $$ = flatten_and_or(result->malloc_pool_, &result->extra_errno_, $1, $3, T_OP_OR);
+  flatten_and_or(result->malloc_pool_, result, $$, $1, $3, T_OP_OR);
   if (result->pl_parse_info_.is_pl_parse_) {
     dup_expr_string($$, result, @1.first_column, @3.last_column);
   }
@@ -2149,7 +2149,8 @@ win_fun_lead_lag_params:
 |
 '(' expr respect_or_ignore NULLS ',' expr_list ')'
 {
-  ParseNode *params_node = push_front_child(result->malloc_pool_, &(result->extra_errno_), $6, $2);
+  ParseNode *params_node = NULL;
+  push_front_list(result->malloc_pool_, result, params_node, $6, $2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_INVALID, 2, params_node, $3);
 }
 | '(' expr_list ')' opt_respect_or_ignore_nulls
@@ -2795,14 +2796,16 @@ MOD '(' expr ',' expr ')'
     yyerror(NULL, result, "No more space for mallocing string\n");
     YYABORT_NO_MEMORY;
   }
-  ParseNode *params_node = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, charset_node);
+  ParseNode *params_node = NULL;
+  push_back_list(result->malloc_pool_, result, params_node, $3, charset_node);
   make_name_node($$, result->malloc_pool_, "char");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params_node);
 
 }
 | CHARACTER '(' expr_list USING charset_name')'
 {
-  ParseNode *params_node = push_back_child(result->malloc_pool_, &(result->extra_errno_), $3, $5);
+  ParseNode *params_node = NULL;
+  push_back_list(result->malloc_pool_, result, params_node, $3, $5);
   make_name_node($$, result->malloc_pool_, "char");
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS, 2, $$, params_node);
 }
@@ -3057,7 +3060,8 @@ INTERVAL '(' expr ',' expr ')'
 | INTERVAL '(' expr ',' expr ',' expr_list ')'
 {
   make_name_node($$, result->malloc_pool_, "interval");
-  ParseNode *params_node = push_front_child(result->malloc_pool_, &(result->extra_errno_), $7, $5);
+  ParseNode *params_node = NULL;
+  push_front_list(result->malloc_pool_, result, params_node, $7, $5);
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_INTERVAL, 2, $3, params_node);
 }
 | CHECK '(' expr ')'
