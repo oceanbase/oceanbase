@@ -2253,14 +2253,12 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
 {
   int ret = OB_SUCCESS;
   SCN frozen_scn;
-  share::schema::ObTableSchema *first_table = nullptr;
   uint64_t tenant_id = OB_INVALID_ID;
-  if (table_schemas.count() != 2) {
+  if (table_schemas.count() < 2) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table_schemas must be 2", KR(ret), K(table_schemas.count()));
+    LOG_WARN("table_schemas count should not be smaller than 2", KR(ret), K(table_schemas.count()));
   } else {
-    first_table = &table_schemas.at(0);
-    tenant_id = first_table->get_tenant_id();
+    tenant_id = table_schemas.at(0).get_tenant_id();
   }
 
   if (OB_FAIL(ret)) {
@@ -2285,31 +2283,42 @@ int ObDDLService::create_tablets_in_trans_for_mv_(ObIArray<ObTableSchema> &table
       LOG_WARN("fail to init new table tablet allocator", KR(ret));
     }
 
-    const share::schema::ObTableSchema &this_table = table_schemas.at(1);
-    const int64_t table_id = this_table.get_table_id();
+    ObArray<const ObTableSchema*> tablet_schemas;
+    ObArray<bool> need_create_empty_majors;
     int64_t last_schema_version = OB_INVALID_VERSION;
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, this_table))) {
-        LOG_WARN("fail to prepare ls for index schema tablets");
-      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
-          ls_id_array))) {
-        LOG_WARN("fail to get ls id array", KR(ret));
-      } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
-          this_table,
-          ls_id_array,
-          tenant_data_version,
-          true /*need_create_empty_major_sstable*/))) {
-        LOG_WARN("create table partitions failed", KR(ret), K(this_table));
-      } else if (OB_FAIL(get_last_schema_version(last_schema_version))) {
+    // create tablets for container table and lob tables
+    for (int64_t i = 0; OB_SUCC(ret) && (i < table_schemas.count()); ++i) {
+      const ObTableSchema &this_table = table_schemas.at(i);
+      const int64_t table_id = this_table.get_table_id();
+      if (OB_INVALID_VERSION == last_schema_version
+          && OB_FAIL(get_last_schema_version(last_schema_version))) {
         LOG_WARN("get last schema version failed", KR(ret));
       } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(
           trans, tenant_id, table_id, last_schema_version))) {
         LOG_WARN("failed to insert_ori_schema_version!",
-                 KR(ret), K(tenant_id), K(table_id), K(last_schema_version));
-      } else if (OB_FAIL(ddl_operator.insert_ori_schema_version(
-          trans, tenant_id, first_table->get_table_id(), last_schema_version))) { // insert ori schema_version for mv
-        LOG_WARN("failed to insert_ori_schema_version!",
-                 KR(ret), K(tenant_id), K(first_table->get_table_id()), K(last_schema_version));
+                KR(ret), K(tenant_id), K(table_id), K(last_schema_version));
+      } else if (!this_table.is_materialized_view()) {
+        // no need to create tablets for mv because its data is stored in container table
+        if (OB_FAIL(tablet_schemas.push_back(&this_table))) {
+          LOG_WARN("failed to push back", KR(ret), K(this_table));
+        } else if (OB_FAIL(need_create_empty_majors.push_back(true))) {
+          LOG_WARN("failed to push_back", KR(ret), K(this_table));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const ObTableSchema &container_table = table_schemas.at(1);
+      if (OB_FAIL(new_table_tablet_allocator.prepare(trans, container_table))) {
+        LOG_WARN("fail to prepare ls for index schema tablets");
+      } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
+          ls_id_array))) {
+        LOG_WARN("fail to get ls id array", KR(ret));
+      } else if (OB_FAIL(table_creator.add_create_tablets_of_tables_arg(
+          tablet_schemas,
+          ls_id_array,
+          tenant_data_version,
+          need_create_empty_majors/*need_create_empty_major_sstable*/))) {
+        LOG_WARN("create table partitions failed", KR(ret), K(tablet_schemas));
       } else if (OB_FAIL(table_creator.execute())) {
         LOG_WARN("execute create partition failed", KR(ret));
       }
@@ -2666,7 +2675,7 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
         }
         if (OB_SUCC(ret)
             && first_table->is_materialized_view()
-            && table_schemas.count() == 2) {
+            && table_schemas.count() >= 2) {
           ObTableSchema &mview_schema = table_schemas.at(0);
           ObTableSchema &container_table_schema = table_schemas.at(1);
           if (OB_FAIL(start_mview_complete_refresh_task(trans,

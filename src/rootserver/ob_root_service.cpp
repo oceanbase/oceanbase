@@ -3201,8 +3201,17 @@ int ObRootService::gen_container_table_schema_(const ObCreateTableArg &arg,
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(table_schemas.push_back(container_table_schema))) {
+        ObArray<ObTableSchema> lob_schemas;
+        if (OB_FAIL(ddl_service_.build_aux_lob_table_schema_if_need(container_table_schema, lob_schemas))) {
+          LOG_WARN("fail to build_aux_lob_table_schema_if_need", K(ret), K(table_schemas));
+        } else if (OB_FAIL(table_schemas.push_back(container_table_schema))) {
           LOG_WARN("push_back failed", KR(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && (i < lob_schemas.count()); ++i) {
+            if (OB_FAIL(table_schemas.push_back(lob_schemas.at(i)))) {
+              LOG_WARN("failed to push back", KR(ret));
+            }
+          }
         }
       }
     }
