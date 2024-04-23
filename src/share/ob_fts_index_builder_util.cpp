@@ -2161,6 +2161,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
       } else if (old_gen_col != NULL) {
         //got it
         gen_col = old_gen_col;
+        gen_budy_col = data_schema.get_column_schema(gen_col->get_column_id());
       } else {
         //need to add new generated column
         ObObj default_value;
@@ -2387,6 +2388,7 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
             "database_id", data_schema.get_database_id(),
             "table_name", data_schema.get_table_name(),
             "column name", mvi_col_item.column_name_, K(ret));
+      } else if (mvi_column->is_rowkey_column()) {
       } else if (!mvi_column->is_multivalue_generated_array_column()) {
         if (OB_FAIL(ObIndexBuilderUtil::add_column(mvi_column,
                                                    true/*is_index_column*/,

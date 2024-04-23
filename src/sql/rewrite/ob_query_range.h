@@ -885,6 +885,7 @@ private:
   int connect_and_or_domain_keyparts(ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,
                                     ObExecContext *exec_ctx, const ObDataTypeCastParams &dtc_params,
                                     bool is_and_op);
+  int set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is_always_true);
   int get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params);
   int get_contain_or_overlaps_keyparts(const common::ObObj &const_param, const common::ObDomainOpType op_type,
                                       ObIArray<ObKeyPart*> &key_parts, ObKeyPart *&out_key_part,

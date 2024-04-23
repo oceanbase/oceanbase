@@ -261,6 +261,14 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   } else if (is_null_result) {
     // ToDo: need check is_multivalue?
     res.set_null();
+    if (is_multivalue &&
+        OB_FAIL(set_multivalue_result(ctx, temp_allocator, nullptr, expr,
+                                      param_ctx->json_param_.error_type_,
+                                      in_coll_type, dst_coll_type,
+                                      param_ctx->json_param_.error_val_,
+                                      param_ctx->json_param_.accuracy_, cast_param, res))) {
+      LOG_WARN("multi value result set fail", K(ret));
+    }
   } else if (param_ctx->json_param_.on_mismatch_[0] == JSN_QUERY_MISMATCH_DOT
               && hits.size() == 1
               && param_ctx->json_param_.dst_type_ != ObJsonType) { // dot notation
@@ -274,7 +282,6 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else if (OB_FAIL(ObJsonUtil::set_lob_datum(&temp_allocator, expr, ctx, param_ctx->json_param_.dst_type_, 0, res))) {
       LOG_WARN("fail to set lob datum from string val", K(ret));
     }
-    // ToDo: need set_multivalue_result?
   } else if (use_wrapper == 1) {
     size_t hit_size = hits.size();
     ObJsonArray j_arr_res(&temp_allocator);
@@ -477,6 +484,7 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
       ObObj tmp_obj;
       int64_t pos = str_buff.length();
       tmp_obj.set_collation_type(dst_collation);
+      tmp_obj.set_type(dest_type);
       if (ob_is_numeric_type(dest_type) || ob_is_temporal_type(dest_type)) {
         tmp_obj.set_collation_level(CS_LEVEL_NUMERIC);
       } else {
@@ -523,6 +531,7 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     ObObj tmp_obj;
     int64_t pos = str_buff.length();
     tmp_obj.set_collation_type(dst_collation);
+    tmp_obj.set_type(dest_type);
     if (ob_is_numeric_type(dest_type) || ob_is_temporal_type(dest_type)) {
       tmp_obj.set_collation_level(CS_LEVEL_NUMERIC);
     } else {

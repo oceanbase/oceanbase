@@ -3992,6 +3992,37 @@ int ObQueryRange::init_domain_key_part(const ObRawExpr *expr,  ObKeyPart *&out_k
   return ret;
 }
 
+
+int ObQueryRange::set_normal_key_true_or_false(ObKeyPart *&out_key_part, bool is_always_true)
+{
+  int ret = OB_SUCCESS;
+  bool is_create_key_part = out_key_part == nullptr;
+  if (is_create_key_part && OB_FAIL(alloc_full_key_part(out_key_part))) {
+    LOG_WARN("create full key part failed", K(ret));
+  } else if (!is_create_key_part && OB_FAIL(out_key_part->create_normal_key())) {
+    LOG_WARN("create normal key failed", K(ret));
+  } else {
+    out_key_part->normal_keypart_->include_start_ = false;
+    out_key_part->normal_keypart_->include_end_ = false;
+
+    out_key_part->normal_keypart_->always_true_ = is_always_true;
+    out_key_part->normal_keypart_->always_false_ = !is_always_true;
+
+    if (is_always_true) {
+      out_key_part->normal_keypart_->start_.set_min_value();
+      out_key_part->normal_keypart_->end_.set_max_value();
+    } else {
+      out_key_part->normal_keypart_->start_.set_max_value();
+      out_key_part->normal_keypart_->end_.set_min_value();
+    }
+
+    out_key_part->id_ = table_graph_.key_part_head_->id_;
+    out_key_part->pos_ = table_graph_.key_part_head_->pos_;
+  }
+  return ret;
+}
+
+
 int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKeyPart *&out_key_part, const ObDataTypeCastParams &dtc_params)
 {
   int ret = OB_SUCCESS;
@@ -4004,10 +4035,11 @@ int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKey
     if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, out_key_part->pos_, cast_obj, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
     } else if (cmp != 0) {
-      if (OB_NOT_NULL(query_range_ctx_)) {
+      if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+        LOG_WARN("failed set normal key", K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_)) {
         query_range_ctx_->cur_expr_is_precise_ = false;
       }
-      GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
     } else if (OB_FAIL(get_domain_equal_keypart(cast_obj, cast_obj, *out_key_part))) {
       LOG_WARN("get normal cmp keypart failed", K(ret));
     }

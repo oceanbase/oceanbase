@@ -1512,9 +1512,13 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     uint8_t is_type_mismatch = false;
     if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
       LOG_WARN("fail to cast.", K(ret));
+    } else {
+      res_obj.set_type(obj_type);
+      res_obj.set_collation_type(collation);
+
+      res_datum.to_obj(res_obj, res_obj.meta_);
+      res_obj.set_collation_type(collation);
     }
-    res_datum.to_obj(res_obj, res_obj.meta_);
-    res_obj.set_collation_type(collation);
   }
   return ret;
 }

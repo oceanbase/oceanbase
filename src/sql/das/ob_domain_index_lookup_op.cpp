@@ -831,6 +831,8 @@ int ObMulValueIndexLookupOp::save_rowkeys()
 
   if (OB_FAIL(sorter_.do_sort(true))) {
     LOG_WARN("do rowkey sort failed", K(ret));
+  } else {
+    lookup_rowkey_cnt_ = 0;
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < default_row_batch_cnt; ++i) {
@@ -859,6 +861,7 @@ int ObMulValueIndexLookupOp::save_rowkeys()
         LOG_WARN("store lookup key range failed", K(ret), K(scan_param_));
       }
       last_rowkey_ = *idx_row;
+      ++lookup_rowkey_cnt_;
       LOG_DEBUG("build data table range", K(ret), K(*idx_row), K(lookup_range), K(scan_param_.key_ranges_.count()));
     }
   }
