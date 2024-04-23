@@ -40,30 +40,34 @@ if (OB_BUILD_OPENSOURCE)
   set(CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS "oceanbase-ce-libs (= ${CPACK_PACKAGE_VERSION}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
   set(CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS "${CPACK_DEBIAN_SERVER_PACKAGE_DEPENDS}, jq, systemd")
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/postinst
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/preinst
                 @ONLY)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/prerm
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postinst
                 @ONLY)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/postrm
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/prerm
+                @ONLY)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postrm
                 @ONLY)
 
   set(CPACK_DEBIAN_SERVER_PACKAGE_CONTROL_EXTRA
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/postinst
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/prerm
-    ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/postrm)
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postinst
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/prerm
+    ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/postrm)
 endif()
 
 # add the deb post and pre script
 if (OB_BUILD_OPENSOURCE)
 install(FILES
-  tools/rpm/systemd/profile/postinst
-  tools/rpm/systemd/profile/prerm
-  tools/rpm/systemd/profile/postrm
+  tools/systemd/profile/postinst
+  tools/systemd/profile/prerm
+  tools/systemd/profile/postrm
   DESTINATION profile
   COMPONENT server)
 endif()

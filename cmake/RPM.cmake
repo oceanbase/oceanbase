@@ -56,20 +56,25 @@ set(CPACK_RPM_SPEC_MORE_DEFINE
 if (OB_BUILD_OPENSOURCE)
   set(CPACK_RPM_SERVER_PACKAGE_REQUIRES "oceanbase-ce-libs = ${CPACK_PACKAGE_VERSION}, jq, systemd")
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh
                 @ONLY)
-  set(CPACK_RPM_SERVER_POST_INSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_install.sh)
+  set(CPACK_RPM_SERVER_PRE_INSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_install.sh)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_install.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_install.sh
                 @ONLY)
-  set(CPACK_RPM_SERVER_PRE_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/pre_uninstall.sh)
+  set(CPACK_RPM_SERVER_POST_INSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_install.sh)
 
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_uninstall.sh
                 @ONLY)
-  set(CPACK_RPM_SERVER_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/post_uninstall.sh)
+  set(CPACK_RPM_SERVER_PRE_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/pre_uninstall.sh)
+
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_uninstall.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_uninstall.sh
+                @ONLY)
+  set(CPACK_RPM_SERVER_POST_UNINSTALL_SCRIPT_FILE ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/post_uninstall.sh)
 endif()
 
 ## server
@@ -83,9 +88,10 @@ endif()
 # add the rpm post and pre script
 if (OB_BUILD_OPENSOURCE)
 install(FILES
-  tools/rpm/systemd/profile/post_install.sh
-  tools/rpm/systemd/profile/post_uninstall.sh
-  tools/rpm/systemd/profile/pre_uninstall.sh
+  tools/systemd/profile/pre_install.sh
+  tools/systemd/profile/post_install.sh
+  tools/systemd/profile/post_uninstall.sh
+  tools/systemd/profile/pre_uninstall.sh
   DESTINATION profile
   COMPONENT server)
 endif()
