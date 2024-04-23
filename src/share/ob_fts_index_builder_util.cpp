@@ -744,12 +744,12 @@ int ObFtsIndexBuilderUtil::adjust_fts_arg(
         }
         // 2. add doc id column to arg->store_columns
         const ObColumnSchemaV2 *doc_id_col = fts_cols.at(0);
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(index_arg->store_columns_.push_back(
-                           doc_id_col->get_column_name_str()))) {
+        ObString doc_id_col_name;
+        if (FAILEDx(ob_write_string(*allocator, doc_id_col->get_column_name_str(), doc_id_col_name))) {
+          LOG_WARN("fail to deep copy doc id column name", K(ret));
+        } else if (OB_FAIL(index_arg->store_columns_.push_back( doc_id_col_name))) {
           LOG_WARN("failed to push back doc id column", K(ret));
         }
-
       } else if (is_doc_rowkey) {
         // add doc id column to arg->index_columns
         ObColumnSortItem doc_id_column;
@@ -796,7 +796,6 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
     ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  // 1. add doc id column, word column to arg->index_columns
   if (OB_ISNULL(fts_arg) ||
       (!share::schema::is_fts_index_aux(fts_arg->index_type_) &&
        !share::schema::is_fts_doc_word_aux(fts_arg->index_type_)) ||
@@ -805,31 +804,39 @@ int ObFtsIndexBuilderUtil::inner_adjust_fts_arg(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), KPC(fts_arg), KP(allocator),
         K(fts_cols.count()), K(index_column_cnt));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt; ++i) {
-    ObColumnSortItem fts_column;
-    const ObColumnSchemaV2 *fts_col = fts_cols.at(i);
-    if (OB_ISNULL(fts_col)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fts_col is null", K(ret), K(i));
-    } else if (OB_FAIL(ob_write_string(*allocator,
-            fts_col->get_column_name_str(),
-            fts_column.column_name_))) {
-      //to keep the memory lifetime of column_name consistent with index_arg
-      LOG_WARN("deep copy column name failed", K(ret));
-    } else if (OB_FAIL(fts_arg->index_columns_.push_back(fts_column))) {
-      LOG_WARN("failed to push back index column", K(ret));
+  } else {
+    // 1. add doc id column, word column to arg->index_columns
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt; ++i) {
+      ObColumnSortItem fts_column;
+      const ObColumnSchemaV2 *fts_col = fts_cols.at(i);
+      if (OB_ISNULL(fts_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fts_col is null", K(ret), K(i));
+      } else if (OB_FAIL(ob_write_string(*allocator,
+              fts_col->get_column_name_str(),
+              fts_column.column_name_))) {
+        //to keep the memory lifetime of column_name consistent with index_arg
+        LOG_WARN("deep copy column name failed", K(ret));
+      } else if (OB_FAIL(fts_arg->index_columns_.push_back(fts_column))) {
+        LOG_WARN("failed to push back index column", K(ret));
+      }
     }
-  }
-  // 2. add word count column to arg->store_columns
-  const ObColumnSchemaV2 *word_count_col = fts_cols.at(index_column_cnt);
-  if (FAILEDx(fts_arg->store_columns_.push_back(word_count_col->get_column_name_str()))) {
-    LOG_WARN("failed to push back word count column", K(ret));
-  }
-  // 3. add document length column to arg->store_columns
-  const ObColumnSchemaV2 *doc_length_col = fts_cols.at(index_column_cnt + 1);
-  if (FAILEDx(fts_arg->store_columns_.push_back(doc_length_col->get_column_name_str()))) {
-    LOG_WARN("fail to push document length column", K(ret));
+    // 2. add word count column to arg->store_columns
+    const ObColumnSchemaV2 *word_count_col = fts_cols.at(index_column_cnt);
+    ObString word_count_col_name;
+    if (FAILEDx(ob_write_string(*allocator, word_count_col->get_column_name_str(), word_count_col_name))) {
+      LOG_WARN("fail to deep copy word count column name", K(ret));
+    } else if (OB_FAIL(fts_arg->store_columns_.push_back(word_count_col_name))) {
+      LOG_WARN("failed to push back word count column", K(ret));
+    }
+    // 3. add document length column to arg->store_columns
+    const ObColumnSchemaV2 *doc_length_col = fts_cols.at(index_column_cnt + 1);
+    ObString doc_length_col_name;
+    if (FAILEDx(ob_write_string(*allocator, doc_length_col->get_column_name_str(), doc_length_col_name))) {
+      LOG_WARN("fail to deep copy doc length column", K(ret));
+    } else if (OB_FAIL(fts_arg->store_columns_.push_back(doc_length_col_name))) {
+      LOG_WARN("fail to push document length column", K(ret));
+    }
   }
   return ret;
 }
