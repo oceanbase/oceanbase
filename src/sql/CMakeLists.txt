@@ -697,6 +697,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_priv_st_geohash.cpp
   engine/expr/ob_expr_priv_st_makepoint.cpp
   engine/expr/ob_expr_inner_table_option_printer.cpp
+  engine/expr/ob_expr_transaction_id.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

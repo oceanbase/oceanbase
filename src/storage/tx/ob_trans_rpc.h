@@ -285,7 +285,7 @@ int ObTxRPCCB<PC>::process()
       }
     }
   }
-  if (OB_SUCCESS != ret || (OB_SUCCESS != status && status != -1)) {
+  if (OB_SUCCESS != ret || (OB_SUCCESS != status && status != -1 && status != OB_NEED_RETRY && status != OB_EAGAIN)) {
     TRANS_LOG(WARN, "trx rpc callback", K(ret), K(status), K(dst), K(result));
   }
   return ret;

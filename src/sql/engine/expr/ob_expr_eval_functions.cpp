@@ -369,6 +369,7 @@
 #include "ob_expr_priv_st_makepoint.h"
 #include "ob_expr_password.h"
 #include "ob_expr_inner_table_option_printer.h"
+#include "ob_expr_transaction_id.h"
 
 namespace oceanbase
 {
@@ -1134,7 +1135,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprWordSegment::generate_fulltext_column,                /* 667 */
   NULL, //ObExprWordCount::generate_word_count,                       /* 668 */
   NULL, //ObExprBM25::eval_bm25_relevance_expr,                       /* 669 */
-  NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
+  ObExprTransactionId::eval_transaction_id,                           /* 670 */
   ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
   ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
   ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 673 */

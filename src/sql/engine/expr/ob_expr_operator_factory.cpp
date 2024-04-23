@@ -438,6 +438,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
+#include "sql/engine/expr/ob_expr_transaction_id.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1066,6 +1067,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprCurrentRole);
     REG_OP(ObExprDecodeTraceId);
+    REG_OP(ObExprTransactionId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1390,6 +1392,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerTableOptionPrinter);
   REG_OP_ORCL(ObExprInnerTableSequenceGetter);
   REG_OP_ORCL(ObExprDecodeTraceId);
+  REG_OP_ORCL(ObExprTransactionId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)
