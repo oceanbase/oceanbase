@@ -680,7 +680,7 @@ int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time, cons
     LOG_WARN("get cpuacct.usage failed", K(ret), K(group_path), K(tenant_id));
   } else {
     cpuacct_usage_value[VALUE_BUFSIZE] = '\0';
-    cpu_time = std::stoull(cpuacct_usage_value) / 1000;
+    cpu_time = strtoull(cpuacct_usage_value, NULL, 10) / 1000;
   }
   return ret;
 }
@@ -705,7 +705,7 @@ int ObCgroupCtrl::get_throttled_time(const uint64_t tenant_id, int64_t &throttle
       LOG_WARN("get throttled_time failed", K(ret), K(group_path), K(tenant_id), K(group_id), K(cpu_stat_value));
     } else {
       found_ptr += strlen(LABEL_STR);
-      throttled_time = std::stoull(found_ptr) / 1000;
+      throttled_time = strtoull(found_ptr, NULL, 10) / 1000;
     }
   }
   return ret;
