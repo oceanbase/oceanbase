@@ -234,7 +234,16 @@ void ObDASDMLIterator::set_ctdef(const ObDASDMLBaseCtDef *das_ctdef)
                    &das_ctdef_->old_row_projector_ :
                    &das_ctdef_->new_row_projector_;
   if (OB_NOT_NULL(domain_iter_)) {
-    domain_iter_->set_ctdef(das_ctdef, row_projector_);
+    if (!das_ctdef->table_param_.get_data_table().is_domain_index()) {
+      // This table isn't domain index, nothing to do.
+    } else if (domain_iter_->is_same_domain_type(das_ctdef)) {
+      // The das_ctdef and das_ctdef_ are either full-text search or multi-value index.
+      domain_iter_->set_ctdef(das_ctdef, row_projector_);
+    } else {
+      // need to reset domain iter
+      domain_iter_->~ObDomainDMLIterator();
+      domain_iter_ = nullptr;
+    }
   }
 }
 

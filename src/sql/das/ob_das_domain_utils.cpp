@@ -490,6 +490,20 @@ void ObDomainDMLIterator::set_ctdef(
   row_projector_ = row_projector;
 }
 
+bool ObDomainDMLIterator::is_same_domain_type(const ObDASDMLBaseCtDef *das_ctdef) const
+{
+  bool is_same_domain_type = false;
+  if (OB_NOT_NULL(das_ctdef) && OB_NOT_NULL(das_ctdef_)) {
+    const ObTableSchemaParam &table_param = das_ctdef->table_param_.get_data_table();
+    const ObTableSchemaParam &my_table_param = das_ctdef_->table_param_.get_data_table();
+    if ((table_param.is_fts_index() && my_table_param.is_fts_index())
+        || (table_param.is_multivalue_index() && my_table_param.is_multivalue_index())) {
+      is_same_domain_type = true;
+    }
+  }
+  return is_same_domain_type;
+}
+
 int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;

@@ -73,10 +73,19 @@ public:
     iter_has_built_ = false;
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
     if (OB_NOT_NULL(domain_iter_)) {
-      domain_iter_->set_ctdef(das_ctdef_, &(got_old_row_ ? das_ctdef_->new_row_projector_
-                                                         : das_ctdef_->old_row_projector_));
-      if (OB_FAIL(domain_iter_->rewind())) {
-        LOG_WARN("fail to rewind for domain iterator", K(ret));
+      if (!das_ctdef->table_param_.get_data_table().is_domain_index()) {
+        // This table isn't domain index, nothing to do.
+      } else if (domain_iter_->is_same_domain_type(das_ctdef)) {
+        // The das_ctdef and das_ctdef_ are either full-text search or multi-value index.
+        domain_iter_->set_ctdef(das_ctdef_, &(got_old_row_ ? das_ctdef_->new_row_projector_
+                                                           : das_ctdef_->old_row_projector_));
+        if (OB_FAIL(domain_iter_->rewind())) {
+          LOG_WARN("fail to rewind for domain iterator", K(ret));
+        }
+      } else {
+        // need to reset domain iter
+        domain_iter_->~ObDomainDMLIterator();
+        domain_iter_ = nullptr;
       }
     }
     return ret;
