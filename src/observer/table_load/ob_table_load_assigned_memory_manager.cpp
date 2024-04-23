@@ -12,10 +12,11 @@
 
 #define USING_LOG_PREFIX SERVER
 
+#include "share/rc/ob_tenant_base.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 #include "observer/omt/ob_multi_tenant.h"
-#include "share/rc/ob_tenant_base.h"
 #include "observer/omt/ob_tenant.h"
+#include "storage/direct_load/ob_direct_load_mem_define.h"
 
 namespace oceanbase
 {
@@ -36,7 +37,7 @@ using namespace omt;
 ObTableLoadAssignedMemoryManager::ObTableLoadAssignedMemoryManager()
   : avail_sort_memory_(0),
     avail_memory_(0),
-    sort_task_count_(0),
+    chunk_count_(0),
     is_inited_(false)
 {
 }
@@ -66,9 +67,9 @@ int ObTableLoadAssignedMemoryManager::assign_memory(bool is_sort, int64_t assign
     LOG_WARN("ObTableLoadAssignedMemoryManager not init", KR(ret), KP(this));
   } else {
     ObMutexGuard guard(mutex_);
-    sort_task_count_ += (is_sort ? 1 : 0);
+    chunk_count_ += (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ -= (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory", K(MTL_ID()), K(is_sort), K(assign_memory), K(sort_task_count_), K(avail_sort_memory_));
+    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory", K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_));
   }
 
   return ret;
@@ -82,9 +83,9 @@ int ObTableLoadAssignedMemoryManager::recycle_memory(bool is_sort, int64_t assig
     LOG_WARN("ObTableLoadAssignedMemoryManager not init", KR(ret), KP(this));
   } else {
     ObMutexGuard guard(mutex_);
-    sort_task_count_ -= (is_sort ? 1 : 0);
+    chunk_count_ -= (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ += (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory", K(MTL_ID()), K(is_sort), K(assign_memory), K(sort_task_count_), K(avail_sort_memory_));
+    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory", K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_));
   }
 
   return ret;
@@ -123,11 +124,11 @@ int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
     LOG_WARN("ObTableLoadAssignedMemoryManager not init", KR(ret), KP(this));
   } else {
     ObMutexGuard guard(mutex_);
-    if (OB_UNLIKELY(sort_task_count_ == 0)) {
+    if (OB_UNLIKELY(chunk_count_ == 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected sort_task_count_ equal to zero", KR(ret));
+      LOG_WARN("unexpected chunk_count_ equal to zero", KR(ret));
     } else {
-      sort_memory = avail_sort_memory_ / sort_task_count_;
+      sort_memory = avail_sort_memory_ / chunk_count_;
     }
   }
 

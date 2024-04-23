@@ -207,8 +207,6 @@ int ObDirectLoadMultipleHeapTableSorter::work()
             sort_memory = mem_ctx_->table_data_desc_.heap_table_mem_chunk_size_;
           } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
             LOG_WARN("fail to get sort memory", KR(ret));
-          } else {
-            sort_memory /= mem_ctx_->table_data_desc_.session_count_;
           }
           if (OB_SUCC(ret)) {
             chunk = OB_NEW(ChunkType, ObMemAttr(MTL_ID(), "TLD_MemChunkVal"), sort_memory);

@@ -109,8 +109,6 @@ int ObDirectLoadMemLoader::work()
               sort_memory = mem_ctx_->table_data_desc_.mem_chunk_size_;
             } else if (OB_FAIL(ObTableLoadService::get_sort_memory(sort_memory))) {
               LOG_WARN("fail to get sort memory", KR(ret));
-            } else {
-              sort_memory /= mem_ctx_->table_data_desc_.max_mem_chunk_count_;
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(chunk->init(MTL_ID(), sort_memory))) {
