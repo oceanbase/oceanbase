@@ -652,7 +652,6 @@ int ObSkylineDimRecorder::add_index_dim(const ObIndexSkylineDim &dim, bool &has_
     OPT_TRACE("Index can not be pruning");
   } else {
     if (OB_FAIL(has_dominate_dim(dim, remove_idxs, need_add))) {
-      ret = OB_ERR_UNEXPECTED;
       LOG_WARN("check has dominate index failed", K(dim));
     } else if (need_add) {
       //remove from back, idx id is in ascending order

@@ -321,7 +321,7 @@ int ObAllocExprContext::add(const ExprProducer &producer)
   if (OB_FAIL(expr_producers_.push_back(producer))) {
     LOG_WARN("failed to push back producer", K(ret));
   } else if (expr_producers_.count() == 1 &&
-             expr_map_.create(128, "ExprAlloc")) {
+             OB_FAIL(expr_map_.create(128, "ExprAlloc"))) {
     LOG_WARN("failed to init hash map", K(ret));
   } else if (OB_FAIL(expr_map_.set_refactored(reinterpret_cast<uint64_t>(producer.expr_),
                                               expr_producers_.count() - 1))) {
