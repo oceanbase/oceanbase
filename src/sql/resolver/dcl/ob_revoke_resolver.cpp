@@ -418,6 +418,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
               grant_level = OB_PRIV_ROUTINE_LEVEL;
               revoke_stmt->set_object_type(ObObjectType::FUNCTION);
             }
+            revoke_stmt->set_grant_level(grant_level);
           }
 
         } else if (T_REVOKE_ALL == node->type_ && REVOKE_ALL_NUM_CHILD == node->num_child_) {
