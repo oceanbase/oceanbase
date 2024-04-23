@@ -107,7 +107,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           TRANSFER_TASK)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletAbortTransferHelper,\
                                           ::oceanbase::storage::mds::ObAbortTransferInMdsCtx,\
-                                          25,\
+                                          32,\
                                           TRANSFER_IN_ABORTED)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletUnbindLobMdsHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
