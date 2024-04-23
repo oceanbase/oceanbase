@@ -193,9 +193,18 @@ int ObExprGetLock::get_lock(const ObExpr &expr,
     LOG_WARN("obproxy is not support mysql lock function", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, lock_name, lock_timeout))) {
     LOG_WARN("calc param failed", K(ret));
+  } else if (lock_name->is_null()) {
+    // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, lock name should not be null", K(ret));
   } else {
     ObString lock_name_str = lock_name->get_string();
-    int64_t timeout_us = lock_timeout->get_int() * 1000 * 1000;
+    int64_t timeout_us = lock_timeout->is_null() ? 0 : lock_timeout->get_int() * 1000 * 1000;
+    if (lock_name_str.empty()) {
+      // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, lock name should not be null", K(ret));
+    }
     if (timeout_us < 0) {
       timeout_us = MAX_LOCK_TIME;
     }
@@ -203,7 +212,7 @@ int ObExprGetLock::get_lock(const ObExpr &expr,
     ObTimeOutCheckGuard guard(ret, timeout_us,
                               ctx.exec_ctx_.get_my_session()->get_query_timeout_ts());
     ObGetLockExecutor executor;
-    if (OB_FAIL(guard.get_timeout_us(timeout_us))) {
+    if (FAILEDx(guard.get_timeout_us(timeout_us))) {
       LOG_WARN("get timeout us failed", K(ret));
     } else if (OB_FAIL(executor.execute(ctx.exec_ctx_,
                                         lock_name_str,
@@ -264,10 +273,20 @@ int ObExprIsFreeLock::is_free_lock(const ObExpr &expr,
     LOG_WARN("obproxy is not support mysql lock function", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, lock_name))) {
     LOG_WARN("calc param failed", K(ret));
+  } else if (lock_name->is_null()) {
+    // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, lock name should not be null", K(ret));
   } else {
     ObString lock_name_str = lock_name->get_string();
     ObISFreeLockExecutor executor;
-    ret = executor.execute(ctx.exec_ctx_, lock_name_str);
+    if (lock_name_str.empty()) {
+      // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, lock name should not be null", K(ret));
+    } else {
+      ret = executor.execute(ctx.exec_ctx_, lock_name_str);
+    }
   }
   // 1 the lock name may has been locked.
   if (OB_SUCC(ret)) {
@@ -323,12 +342,22 @@ int ObExprIsUsedLock::is_used_lock(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     LOG_WARN("obproxy is not support mysql lock function", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, lock_name))) {
     LOG_WARN("calc param failed", K(ret));
+  } else if (lock_name->is_null()) {
+    // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, lock name should not be null", K(ret));
   } else {
     ObString lock_name_str = lock_name->get_string();
     ObISUsedLockExecutor executor;
-    ret = executor.execute(ctx.exec_ctx_,
-                           lock_name_str,
-                           sess_id);
+    if (lock_name_str.empty()) {
+      // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, lock name should not be null", K(ret));
+    } else {
+      ret = executor.execute(ctx.exec_ctx_,
+                             lock_name_str,
+                             sess_id);
+    }
   }
 
   // 1. get the lock session id
@@ -381,11 +410,19 @@ int ObExprReleaseLock::release_lock(const ObExpr &expr, ObEvalCtx &ctx, ObDatum 
     LOG_WARN("obproxy is not support mysql lock function", K(ret));
   } else if (OB_FAIL(expr.eval_param_value(ctx, lock_name))) {
     LOG_WARN("calc param failed", K(ret));
+  } else if (lock_name->is_null()) {
+    // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, lock name should not be null", K(ret));
   } else {
     ObString lock_name_str = lock_name->get_string();
     ObReleaseLockExecutor executor;
-    if (OB_FAIL(executor.execute(ctx.exec_ctx_,
-                                 lock_name_str))) {
+    if (lock_name_str.empty()) {
+      // TODO: yichang.yyf use the error code of mysql ER_USER_LOCK_WRONG_NAME or ER_USER_LOCK_OVERLONG_NAME;
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument, lock name should not be null", K(ret));
+    } else if (OB_FAIL(executor.execute(ctx.exec_ctx_,
+                                        lock_name_str))) {
       LOG_WARN("release lock failed", K(ret), K(lock_name_str));
     }
   }
