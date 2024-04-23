@@ -96,7 +96,7 @@ int64_t ObTenantSQLSessionMgr::SessionPool::count() const
 }
 
 ObTenantSQLSessionMgr::ObTenantSQLSessionMgr(const int64_t tenant_id)
-  : tenant_id_(tenant_id),
+  : tenant_id_(tenant_id), count_(0),
     session_allocator_(lib::ObMemAttr(tenant_id, "SQLSessionInfo"), MTL_CPU_COUNT(), 4)
 {}
 
@@ -137,6 +137,16 @@ int ObTenantSQLSessionMgr::mtl_init(ObTenantSQLSessionMgr *&t_session_mgr)
   return ret;
 }
 
+void ObTenantSQLSessionMgr::mtl_wait(ObTenantSQLSessionMgr *&t_session_mgr)
+{
+  while (t_session_mgr->count() != 0) {
+    LOG_WARN_RET(OB_NEED_RETRY, "tenant session mgr should be empty",
+                 K(t_session_mgr->count()));
+    usleep(1000 * 1000);
+  }
+  LOG_INFO("success to wait tenant session mgr");
+}
+
 void ObTenantSQLSessionMgr::mtl_destroy(ObTenantSQLSessionMgr *&t_session_mgr)
 {
   if (nullptr != t_session_mgr) {
@@ -155,6 +165,7 @@ ObSQLSessionInfo *ObTenantSQLSessionMgr::alloc_session()
     OX (session = op_instance_alloc_args(&session_allocator_,
                                          ObSQLSessionInfo,
                                          tenant_id_));
+    OX (ATOMIC_FAA(&count_, 1));
   }
   OV (OB_NOT_NULL(session));
   OX (session->set_tenant_session_mgr(this));
@@ -183,6 +194,7 @@ void ObTenantSQLSessionMgr::free_session(ObSQLSessionInfo *session)
   }
   if (OB_NOT_NULL(session)) {
     OX (op_free(session));
+    OX (ATOMIC_FAA(&count_, -1));
     OX (session = NULL);
   }
 }
@@ -201,6 +213,7 @@ void ObTenantSQLSessionMgr::clean_session_pool()
     OX (session_pool_.pop_session(session));
     if (OB_NOT_NULL(session)) {
       OX (op_free(session));
+      OX (ATOMIC_FAA(&count_, -1));
       OX (session = NULL);
     }
   }
