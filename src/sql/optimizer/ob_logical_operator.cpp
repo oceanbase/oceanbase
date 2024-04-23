@@ -2551,9 +2551,9 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
   bool is_union_all_set_pw = false;
   bool is_setop_ext_pw = false;
   bool is_join_ext_pw = false;
-  if (OB_ISNULL(ctx) || OB_ISNULL(get_stmt())) {
+  if (OB_ISNULL(ctx) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx is unexpected null", K(ret));
+    LOG_WARN("ctx is unexpected null", K(ret), K(ctx), K(get_stmt()), K(get_plan()));
   } else {
     ObLocationConstraintContext *loc_cons_ctx = reinterpret_cast<ObLocationConstraintContext *>(ctx);
 
@@ -2646,8 +2646,24 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           } else {
             ++add_count;
           }
-        } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
-          LOG_WARN("failed to push back location constraint", K(ret));
+        } else {
+          bool find = false;
+          ObIArray<ObTablePartitionInfo *> & partition_infos =
+              get_plan()->get_optimizer_context().get_table_partition_info();
+          for (int64_t i = 0; !find && i < partition_infos.count(); ++i) {
+            const ObTablePartitionInfo *cur_info = partition_infos.at(i);
+            if (OB_NOT_NULL(cur_info) &&
+                cur_info->get_table_id() == loc_cons.key_.table_id_ &&
+                cur_info->get_ref_table_id() == loc_cons.key_.ref_table_id_) {
+              find = true;
+            }
+          }
+          if (!find) {
+            // local multi part insert, remove location constraint of insert table because
+            // we didn't add it's table location.
+          } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
+            LOG_WARN("failed to push back location constraint", K(ret));
+          }
         }
       }
 
