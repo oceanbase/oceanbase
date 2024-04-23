@@ -449,6 +449,7 @@ int ObHashGroupByOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   reset();
+  llc_est_.reset();
   if (OB_FAIL(ObGroupByOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   } else {

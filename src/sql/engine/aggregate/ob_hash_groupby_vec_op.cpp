@@ -377,6 +377,7 @@ int ObHashGroupByVecOp::inner_rescan()
 {
   int ret = OB_SUCCESS;
   reset(true);
+  llc_est_.reset();
   if (OB_FAIL(ObGroupByVecOp::inner_rescan())) {
     LOG_WARN("failed to rescan", K(ret));
   } else {
@@ -977,6 +978,10 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
         bypass_ctrl_.reset_state();
         by_pass_vec_holder_.restore();
         calc_avg_group_mem();
+        if (llc_est_.enabled_ && llc_est_.est_cnt_ != agged_group_cnt_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected est_cnt number", K(ret), K(agged_group_cnt_), K(agged_row_cnt_), K(llc_est_.est_cnt_));
+        }
       }
       if (!bypass_ctrl_.by_passing()) {
         if (OB_FAIL(by_pass_restart_round())) {
@@ -1226,18 +1231,8 @@ int ObHashGroupByVecOp::load_data_batch(int64_t max_row_cnt)
   } // while end
 
   row_store_iter.reset();
-  if (OB_SUCC(ret) && llc_est_.enabled_) {
-    if (local_group_rows_.is_sstr_aggr_valid()) {
-      llc_est_.enabled_ = false;// do not need llc, ndv must less then 65535
-    } else {
-      AddLlcCallback cb_func(&llc_est_);
-      if (OB_FAIL(local_group_rows_.foreach_bucket_hash(cb_func))) {
-        LOG_WARN("add hash val from local_group_rows_ to llc_est_ failed", K(ret));
-      } else {
-        llc_est_.est_cnt_ += agged_row_cnt_;
-        LOG_TRACE("llc map succ to add hash val from insert state", K(ret), K(llc_est_.est_cnt_), K(agged_row_cnt_), K(agged_group_cnt_));
-      }
-    }
+  if (OB_SUCC(ret) && llc_est_.enabled_ && local_group_rows_.is_sstr_aggr_valid()) {
+    llc_est_.enabled_ = false;// do not need llc, ndv must less then 65535
   }
   if (OB_FAIL(ret)) {
   } else if (NULL == cur_part && !use_distinct_data_ && OB_FAIL(finish_insert_distinct_data())) {
@@ -1591,6 +1586,13 @@ int ObHashGroupByVecOp::batch_process_duplicate_data(
       }
       force_check_dump = false;
       new_group_cnt = agged_group_cnt_ - orign_agged_group_cnt;
+      if (OB_SUCC(ret) && llc_est_.enabled_) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
+          if (batch_new_rows_[i]) {
+            llc_add_value(hash_vals_[i]);
+          }
+        }
+      }
       if (OB_SUCC(ret) && 0 < new_group_cnt) {
         int64_t curr_cnt = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
@@ -1866,6 +1868,13 @@ int ObHashGroupByVecOp::group_child_batch_rows(const ObCompactRow **store_rows,
     }
     force_check_dump = false;
     new_groups = agged_group_cnt_ - orign_agged_group_cnt;
+    if (OB_SUCC(ret) && llc_est_.enabled_) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; i++) {
+        if (batch_new_rows_[i]) {
+          llc_add_value(hash_vals_[i]);
+        }
+      }
+    }
     if (OB_SUCC(ret) && new_groups > 0) {
       int64_t curr_cnt = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; ++i) {

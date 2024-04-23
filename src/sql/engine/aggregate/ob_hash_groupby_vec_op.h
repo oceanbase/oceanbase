@@ -47,21 +47,6 @@ public:
   static constexpr const double GLOBAL_BOUND_RATIO_ = 0.8;
 };
 
-class AddLlcCallback
-{
-public:
-  explicit AddLlcCallback(LlcEstimate *llc_est_ptr) { llc_est_ptr_ = llc_est_ptr; }
-  AddLlcCallback() = delete;
-  virtual ~AddLlcCallback() = default;
-  int operator()(uint64_t hash_val) {
-    // for performance, do not check if llc_est_ptr_ is NULL ptr or not
-    ObAggregateProcessor::llc_add_value(hash_val, llc_est_ptr_->llc_map_);
-    return OB_SUCCESS;
-  }
-private:
-  LlcEstimate *llc_est_ptr_;
-};
-
 struct ObGroupByDupColumnPairVec
 {
   OB_UNIS_VERSION_V(1);

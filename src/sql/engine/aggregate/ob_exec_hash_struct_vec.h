@@ -816,7 +816,7 @@ public:
       SQL_ENG_LOG(WARN, "invalid null buckets", K(ret), K(buckets_));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
-      if (OB_FAIL(cb(buckets_->at(i).get_hash()))) {
+      if (buckets_->at(i).is_valid() && OB_FAIL(cb(buckets_->at(i).get_hash()))) {
         SQL_ENG_LOG(WARN, "call back failed", K(ret));
       }
     }
