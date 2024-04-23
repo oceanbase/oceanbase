@@ -121,9 +121,12 @@ inline int ObRawExprPartExprChecker::has_time_or_datetime_args(const ObRawExpr &
     if (OB_ISNULL(sub_expr)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN,"sub_expr should not be null", K(ret));
+    } else if (OB_ISNULL(sub_expr = ObRawExprUtils::skip_implicit_cast(sub_expr))) {
+      ret = common::OB_INVALID_ARGUMENT;
+      SQL_RESV_LOG(WARN,"sub_expr should not be null", K(ret));
     } else if (!is_time_expr(*sub_expr) && !is_datetime_expr(*sub_expr)) {
       ret = common::OB_ERR_WRONG_EXPR_IN_PARTITION_FUNC_ERROR;
-      SQL_RESV_LOG(WARN,"expect time or datetime type", K(ret),
+      SQL_RESV_LOG(WARN,"expect time or datetime type", K(ret), KPC(sub_expr),
                    "type", sub_expr->get_result_type().get_type());
     }
   }
@@ -140,6 +143,9 @@ inline int ObRawExprPartExprChecker::has_timestamp_args(const ObRawExpr &expr)
     const ObRawExpr *sub_expr = expr.get_param_expr(i);
     if (OB_ISNULL(sub_expr)) {
       ret = common::OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN,"sub_expr should not be null", K(ret));
+    } else if (OB_ISNULL(sub_expr = ObRawExprUtils::skip_implicit_cast(sub_expr))) {
+      ret = common::OB_INVALID_ARGUMENT;
       SQL_RESV_LOG(WARN,"sub_expr should not be null", K(ret));
     } else if (!is_timestamp_expr(*sub_expr)) {
       ret = common::OB_ERR_WRONG_EXPR_IN_PARTITION_FUNC_ERROR;
