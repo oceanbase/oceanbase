@@ -473,7 +473,7 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_deleted_or_transfer_out(
     if (read_snapshot.is_max()) {
       ret = OB_TABLET_NOT_EXIST;
       LOG_WARN("read snapshot is MAX, maybe this is a write request, should retry on dst ls",
-          K(ret), K(read_snapshot), K(user_data));
+          K(ret), K(ls_id), K(tablet_id), K(read_snapshot), K(user_data));
     }
   } else if (trans_state >= mds::TwoPhaseCommitState::ON_PREPARE && trans_state < mds::TwoPhaseCommitState::ON_COMMIT) {
     if (read_snapshot < trans_version) {
@@ -539,8 +539,6 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out_deleted(
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   const ObTabletStatus &tablet_status = user_data.tablet_status_;
-  const share::SCN &transfer_scn = user_data.transfer_scn_;
-  share::SCN read_snapshot;
 
   if (OB_UNLIKELY(ObTabletStatus::TRANSFER_OUT_DELETED != tablet_status)) {
     ret = OB_INVALID_ARGUMENT;
@@ -549,12 +547,10 @@ int ObTabletCreateDeleteHelper::check_read_snapshot_for_transfer_out_deleted(
     ret = OB_SNAPSHOT_DISCARDED;
     LOG_WARN("read snapshot smaller than create commit version",
         K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
-  } else if (OB_FAIL(read_snapshot.convert_for_tx(snapshot_version))) {
-    LOG_WARN("failed to convert from int64_t to SCN", K(ret), K(snapshot_version));
-  } else if (read_snapshot >= transfer_scn) {
+  } else if (snapshot_version >= user_data.start_transfer_commit_version_) {
     ret = OB_TABLET_NOT_EXIST;
-    LOG_WARN("read snapshot is no smaller than transfer scn under transfer out deleted status, should retry on dst ls",
-        K(ret), K(read_snapshot), K(transfer_scn), K(tablet_status));
+    LOG_WARN("read snapshot is no smaller than start transfer commit version, should retry on dst ls",
+        K(ret), K(ls_id), K(tablet_id), K(snapshot_version), K(user_data));
   }
 
   return ret;
