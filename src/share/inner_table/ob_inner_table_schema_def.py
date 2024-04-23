@@ -34093,25 +34093,6 @@ AND
 
 def_table_schema(
   owner = 'gengfu.zpc',
-  table_name      = 'GV$OB_NIC_INFO',
-  table_id        = '21580',
-  table_type      = 'SYSTEM_VIEW',
-  rowkey_columns  = [],
-  normal_columns  = [],
-  gm_columns      = [],
-  in_tenant_space = True,
-  view_definition = """
-  SELECT
-    SVR_IP,
-    SVR_PORT,
-    DEVNAME,
-    SPEED_MBPS
-  FROM oceanbase.__all_virtual_nic_info
-  """.replace("\n", " ")
-)
-
-def_table_schema(
-  owner = 'gengfu.zpc',
   table_name      = 'V$OB_NIC_INFO',
   table_id        = '21581',
   table_type      = 'SYSTEM_VIEW',
@@ -34134,6 +34115,25 @@ def_table_schema(
 # 21583: ROLE_COLUMN_GRANTS
 # 21584: ROLE_ROUTINE_GRANTS
 # 21585: func
+
+def_table_schema(
+  owner = 'gengfu.zpc',
+  table_name      = 'GV$OB_NIC_INFO',
+  table_id        = '21586',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    DEVNAME,
+    SPEED_MBPS
+  FROM oceanbase.__all_virtual_nic_info
+  """.replace("\n", " ")
+)
 
 #
 

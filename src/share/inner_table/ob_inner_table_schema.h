@@ -1714,8 +1714,8 @@ public:
   static int v_ob_tenant_resource_limit_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
-  static int gv_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4495,8 +4495,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_resource_limit_schema,
   ObInnerTableSchema::gv_ob_tenant_resource_limit_detail_schema,
   ObInnerTableSchema::v_ob_tenant_resource_limit_detail_schema,
-  ObInnerTableSchema::gv_ob_nic_info_schema,
   ObInnerTableSchema::v_ob_nic_info_schema,
+  ObInnerTableSchema::gv_ob_nic_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6151,8 +6151,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TID,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
-  OB_GV_OB_NIC_INFO_TID,
   OB_V_OB_NIC_INFO_TID,
+  OB_GV_OB_NIC_INFO_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8705,8 +8705,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TNAME,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
-  OB_GV_OB_NIC_INFO_TNAME,
   OB_V_OB_NIC_INFO_TNAME,
+  OB_GV_OB_NIC_INFO_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
