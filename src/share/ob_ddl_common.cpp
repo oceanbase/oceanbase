@@ -2018,7 +2018,8 @@ int ObDDLUtil::batch_check_tablet_checksum(
 
 bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
 {
-  return data_format_version >= DATA_VERSION_4_3_0_1;
+  UNUSED(data_format_version);
+  return false;
 }
 
 /******************           ObCheckTabletDataComplementOp         *************/
