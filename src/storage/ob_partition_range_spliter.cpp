@@ -400,7 +400,7 @@ int ObPartitionParallelRanger::init_macro_iters(ObRangeSplitInfo &range_info)
       } else if (OB_UNLIKELY(!table->is_sstable())) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "Unexpected table type", K(ret), KPC(table));
-      } else if (is_micro_level_ && !table->is_ddl_mem_sstable()) { // ddl kv not support endkey iterator of micro block
+      } else if (is_micro_level_ && !table->is_ddl_kv_sstable()) { // ddl kv not support endkey iterator of micro block
         if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObMicroEndkeyIterator)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           STORAGE_LOG(WARN, "Failed to alloc memory for endkey iter", K(ret));

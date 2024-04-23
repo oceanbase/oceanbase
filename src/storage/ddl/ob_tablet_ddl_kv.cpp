@@ -164,7 +164,11 @@ int ObDDLMemtable::init_sstable_param(
           }
         }
       } else {
-        sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
+        if (table_key.table_type_ == ObITable::TableType::MINI_SSTABLE) {
+          sstable_param.table_key_.table_type_ = ObITable::TableType::DIRECT_LOAD_MEMTABLE;
+        } else {
+          sstable_param.table_key_.table_type_ = ObITable::TableType::DDL_MEM_SSTABLE;
+        }
         sstable_param.rowkey_column_cnt_ = storage_schema.get_rowkey_column_num() + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
         sstable_param.column_cnt_ = column_count;
       }
