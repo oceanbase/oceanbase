@@ -1,0 +1,24 @@
+#!/bin/bash
+echo "execute post uninstall script"
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+json_file=$prefix/profile/oceanbase.json
+GREEN='\033[32m'
+NC="\033[0m"
+
+if [ $1 -eq 0 ]; then
+    rm -rf $prefix/.meta $prefix/log_obshell
+
+    # prepare clean script
+    echo "find $prefix/ -mindepth 1 -maxdepth 1 ! -name lib -exec rm -rf {} +" > $prefix/oceanbase_clean.sh
+
+    if [ -f "$json_file" ] && [ -s "$json_file" ]; then
+        redo_dir=$(cat "$json_file" | jq -r '.oceanbase_ce.server.observerConfig.redo_dir')
+        echo "rm -rf $redo_dir" >> $prefix/oceanbase_clean.sh
+        data_dir=$(cat "$json_file" | jq -r '.oceanbase_ce.server.observerConfig.data_dir')
+        echo "rm -rf $data_dir" >> $prefix/oceanbase_clean.sh
+        echo "echo OK" >> $prefix/oceanbase_clean.sh
+    fi
+
+    echo "Clean oceanbase script can clean ob all configuration files and all data files."
+    echo -e "${GREEN}To clean OceanBase${NC} : bash $prefix/oceanbase_clean.sh"
+fi

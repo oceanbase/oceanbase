@@ -1,5 +1,4 @@
 #!/bin/bash
-
 echo "execute pre uninstall script"
 prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
 
