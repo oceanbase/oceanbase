@@ -254,7 +254,7 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
           }
         }
       }
-    } else if(is_user_tenant(cur_tenant_id)) {
+    } else {
       ObDTLIntermResultMonitorInfoGetter monitor_getter(scanner_, *allocator_, output_column_ids_,
                                   cur_row_, *addr_, ipstr, cur_tenant_id);
       MTL_SWITCH(cur_tenant_id) {
@@ -262,9 +262,6 @@ int ObAllDtlIntermResultMonitor::fill_scanner()
           SERVER_LOG(WARN, "generate monitor info array failed", K(ret));
         }
       }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      SERVER_LOG(WARN, "Non-system non-user tenants try generate_monitor_info_rows", K(ret));
     }
     if(OB_SUCC(ret)) {
       scanner_it_ = scanner_.begin();
