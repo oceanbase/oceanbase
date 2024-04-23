@@ -1092,8 +1092,20 @@ static OB_INLINE int common_double_float(const ObExpr &expr,
   ObObjType out_type = expr.datum_meta_.type_;
   // oracle support float/double infiniy, no need to verify data overflow.
   // C language would cast value to infinity, which is correct behavor in oracle mode
-  if (lib::is_mysql_mode() && CAST_FAIL(real_range_check(out_type, in_val, out_val))) {
-    LOG_WARN("real_range_check failed", K(ret), K(in_val));
+  if (lib::is_mysql_mode()) {
+    double truncated_val = in_val;
+    if (ob_is_float_tc(out_type) && CM_IS_COLUMN_CONVERT(expr.extra_)) {
+      // truncate float value if its ps information is fixed.
+      ObAccuracy accuracy(expr.datum_meta_.precision_, expr.datum_meta_.scale_);
+      if (CAST_FAIL(real_range_check(accuracy, truncated_val))) {
+        LOG_WARN("fail to real range check", K(ret));
+      } else {
+        out_val = static_cast<float>(truncated_val);
+      }
+    }
+    if (OB_SUCC(ret) && CAST_FAIL(real_range_check(out_type, truncated_val, out_val))) {
+      LOG_WARN("real_range_check failed", K(ret), K(in_val));
+    }
   }
   return ret;
 }
