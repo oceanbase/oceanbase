@@ -364,7 +364,8 @@ int ObPartTransCtx::do_clear()
 
   if (is_root()) {
     // response scheduler after all participant commit log sycned
-    check_and_response_scheduler_(ObTxState::CLEAR, OB_SUCCESS);
+    const int result = ctx_tx_data_.get_state() == ObTxCommitData::COMMIT ? OB_SUCCESS : OB_TRANS_ROLLBACKED;
+    check_and_response_scheduler_(ObTxState::CLEAR, result);
   }
   // currently do nothing
 
