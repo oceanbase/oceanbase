@@ -15,19 +15,12 @@
 
 #include "mds_ctx.h"
 #include "lib/container/ob_array.h"
-#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "lib/container/ob_array_serialization.h"
+#include "share/ob_ls_id.h"
+#include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 
 namespace oceanbase
 {
-namespace share
-{
-class ObLSID;
-}
-namespace common
-{
-class ObTabletID;
-}
 namespace storage
 {
 namespace mds
@@ -40,9 +33,10 @@ struct ObStartTransferInMdsCtxVersion
   enum VERSION {
     START_TRANSFER_IN_MDS_CTX_VERSION_V1 = 1,
     START_TRANSFER_IN_MDS_CTX_VERSION_V2 = 2,
+    START_TRANSFER_IN_MDS_CTX_VERSION_V3 = 3,
     MAX
   };
-  static const VERSION CURRENT_CTX_VERSION = START_TRANSFER_IN_MDS_CTX_VERSION_V2;
+  static const VERSION CURRENT_CTX_VERSION = START_TRANSFER_IN_MDS_CTX_VERSION_V3;
   static bool is_valid(const ObStartTransferInMdsCtxVersion::VERSION &version) {
     return version >= START_TRANSFER_IN_MDS_CTX_VERSION_V1
         && version < MAX;
@@ -53,14 +47,20 @@ class ObStartTransferInMdsCtx : public MdsCtx
 {
 public:
   ObStartTransferInMdsCtx();
-  ObStartTransferInMdsCtx(const MdsWriter &writer);
+  explicit ObStartTransferInMdsCtx(const MdsWriter &writer);
   virtual ~ObStartTransferInMdsCtx();
+public:
   virtual void on_prepare(const share::SCN &prepare_version) override;
-  virtual int serialize(char *buf, const int64_t len, int64_t &pos) const;
-  virtual int deserialize(const char *buf, const int64_t len, int64_t &pos);
-  virtual int64_t get_serialize_size(void) const;
+  virtual void on_abort(const share::SCN &abort_scn) override;
+
+  virtual int serialize(char *buf, const int64_t len, int64_t &pos) const override;
+  virtual int deserialize(const char *buf, const int64_t len, int64_t &pos) override;
+  virtual int64_t get_serialize_size(void) const override;
+public:
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
 private:
   ObStartTransferInMdsCtxVersion::VERSION version_;
+  share::ObLSID ls_id_;
   DISALLOW_COPY_AND_ASSIGN(ObStartTransferInMdsCtx);
 };
 

@@ -806,9 +806,6 @@ int ObTabletStartTransferInHelper::on_register_success_(
 {
   MDS_TG(1_s);
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLSService *ls_service = nullptr;
-  ObLS *ls = nullptr;
   const share::SCN scn;
   const bool for_replay = false;
   const int64_t start_ts = ObTimeUtil::current_time();
@@ -831,6 +828,8 @@ int ObTabletStartTransferInHelper::on_register_success_(
   if (OB_FAIL(ret)) {
     LOG_WARN("tx start transfer in on register success failed", K(ret), K(tx_start_transfer_in_info));
   } else {
+    mds::ObStartTransferInMdsCtx &mds_ctx = static_cast<mds::ObStartTransferInMdsCtx&>(ctx);
+    mds_ctx.set_ls_id(tx_start_transfer_in_info.dest_ls_id_);
     LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_", K(tx_start_transfer_in_info),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
 #ifdef ERRSIM
@@ -1390,6 +1389,9 @@ int ObTabletStartTransferInHelper::on_replay(
       LOG_WARN("failed to set_tablet_gc_trigger", K(ret), K(tx_start_transfer_in_info));
     } else {
       transfer_service->wakeup();
+
+      mds::ObStartTransferInMdsCtx &mds_ctx = static_cast<mds::ObStartTransferInMdsCtx&>(ctx);
+      mds_ctx.set_ls_id(tx_start_transfer_in_info.dest_ls_id_);
     }
   }
 #ifdef ERRSIM
