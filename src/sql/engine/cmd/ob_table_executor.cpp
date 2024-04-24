@@ -1396,6 +1396,7 @@ int ObAlterTableExecutor::calc_range_part_high_bound(
 {
   int ret = OB_SUCCESS;
   ObExprCtx expr_ctx;
+  ObAccuracy accuracy(dst_res_type.get_accuracy());
   const ObObjType fun_expr_type = dst_res_type.get_type();
   const ObCollationType fun_collation_type = dst_res_type.get_collation_type();
   ObObjType expected_obj_type = fun_expr_type;
@@ -1421,6 +1422,7 @@ int ObAlterTableExecutor::calc_range_part_high_bound(
         const ObObj *dst_obj = NULL;
         EXPR_DEFINE_CAST_CTX(expr_ctx, CM_NONE);
         cast_ctx.dest_collation_ = fun_collation_type;
+        cast_ctx.res_accuracy_ = &accuracy;
         EXPR_CAST_OBJ_V2(expected_obj_type, src_obj, dst_obj);
         if (OB_SUCC(ret)) {
           if (OB_ISNULL(dst_obj)) {
