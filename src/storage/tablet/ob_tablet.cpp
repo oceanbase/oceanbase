@@ -5321,21 +5321,12 @@ int ObTablet::get_tablet_report_info(
       LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
     } else if (table->is_co_sstable()) {
       const ObCOSSTableV2 *co_sstable = static_cast<ObCOSSTableV2 *>(table);
-      if (0 == i) {
-        required_size += (co_sstable->get_cs_meta().get_total_macro_block_count()) * macro_block_size;
-      } else {
-        required_size +=
-            (co_sstable->get_cs_meta().get_total_macro_block_count()
-                - co_sstable->get_cs_meta().get_total_use_old_macro_block_count())
-            * macro_block_size;
-      }
+      required_size += co_sstable->get_cs_meta().occupy_size_;
+    } else if (table->is_small_sstable()) {
+      // small sstable, get nested size.
+      required_size += table->get_macro_read_size();
     } else {
-      if (0 == i) {
-        required_size += (table->get_total_macro_block_count()) * macro_block_size;
-      } else {
-        required_size += macro_block_size *
-            (table->get_total_macro_block_count() - table->get_total_use_old_macro_block_count());
-      }
+      required_size += table->get_occupy_size();
     }
   }
   return ret;
