@@ -232,8 +232,8 @@ int ObGroupJoinBufffer::init_above_group_params()
     }
   }
   if (is_multi_level_) {
-    LOG_TRACE("multi level group rescan", KR(ret),
-              K(spec_->get_id()), K(spec_->get_type()), K(is_multi_level_));
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("multi-level nlj das group-rescan is not supported", K(ret));
   }
   return ret;
 }
