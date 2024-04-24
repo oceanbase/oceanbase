@@ -3231,7 +3231,7 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
             param.snapshot_.valid_ = true;
             param.snapshot_.source_ = transaction::ObTxReadSnapshot::SRC::LS;
             param.snapshot_.snapshot_lsid_ = share::ObLSID(location_info->ls_id_);
-            param.read_latest_ = retry_info->read_latest_;
+            if (OB_NOT_NULL(retry_info)) param.read_latest_ = retry_info->read_latest_;
             if (param.read_latest_ && OB_NOT_NULL(param.tx_desc_)) {
               // tx_info->snapshot_seq_ is seq_abs when read_latest is true
               param.snapshot_.core_.scn_ = param.tx_desc_->get_tx_seq(tx_info->snapshot_seq_);
