@@ -919,25 +919,38 @@ int ObSchemaUtils::build_add_each_column_group(const share::schema::ObTableSchem
                                                  share::schema::ObTableSchema &dst_table_schema)
 {
   int ret = OB_SUCCESS;
-  ObColumnGroupSchema column_group_schema;
-  ObTableSchema::const_column_iterator iter_begin = table_schema.column_begin();
-  ObTableSchema::const_column_iterator iter_end = table_schema.column_end();
-  for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
-    column_group_schema.reset();
-    ObColumnSchemaV2 *column = (*iter_begin);
-    uint64_t cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
-    if (OB_ISNULL(column)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column schema should not be null", K(ret));
-    } else if (column->is_virtual_generated_column()) {
-        /* skip virtual column*/
-    } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
-                                   table_schema, column, dst_table_schema.get_tenant_id(),
-                                   cg_id, column_group_schema))) {
-        LOG_WARN("fail to build single column group", K(ret));
-    } else if (column_group_schema.is_valid()) {
-      if (OB_FAIL(dst_table_schema.add_column_group(column_group_schema))) {
-        LOG_WARN("fail to add single column group to table schema", K(ret), K(column_group_schema));
+  uint64_t compat_version = 0;
+  HEAP_VAR(share::schema::ObTableSchema, tmp_table_schema) {
+    if (OB_FAIL(tmp_table_schema.assign(table_schema))) {
+      LOG_WARN("failed to assign table schema", K(ret), K(table_schema));
+    } else if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
+      LOG_WARN("fail to get data version", K(ret), K(table_schema.get_tenant_id()));
+    } else if (compat_version < DATA_VERSION_4_3_1_0) {
+    } else if (OB_FAIL(tmp_table_schema.sort_column_array_by_column_id())) {
+      LOG_WARN("failed to sort column", K(ret), K(tmp_table_schema));
+    }
+    if (OB_SUCC(ret)) {
+      ObColumnGroupSchema column_group_schema;
+      ObTableSchema::const_column_iterator iter_begin = tmp_table_schema.column_begin();
+      ObTableSchema::const_column_iterator iter_end = tmp_table_schema.column_end();
+      for (;OB_SUCC(ret) && iter_begin != iter_end; ++iter_begin) {
+        column_group_schema.reset();
+        ObColumnSchemaV2 *column = (*iter_begin);
+        uint64_t cg_id = dst_table_schema.get_max_used_column_group_id() + 1;
+        if (OB_ISNULL(column)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column schema should not be null", K(ret));
+        } else if (column->is_virtual_generated_column()) {
+            /* skip virtual column*/
+        } else if (OB_FAIL(ObSchemaUtils::build_single_column_group(
+                                      table_schema, column, dst_table_schema.get_tenant_id(),
+                                      cg_id, column_group_schema))) {
+            LOG_WARN("fail to build single column group", K(ret));
+        } else if (column_group_schema.is_valid()) {
+          if (OB_FAIL(dst_table_schema.add_column_group(column_group_schema))) {
+            LOG_WARN("fail to add single column group to table schema", K(ret), K(column_group_schema));
+          }
+        }
       }
     }
   }
