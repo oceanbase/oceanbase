@@ -146,7 +146,7 @@ function do_clean
 function build_package
 {
    STATIC_LINK_LGPL_DEPS_OPTION=OFF
-    do_build "$@" -DOB_BUILD_PACKAGE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
+    do_build "$@" -DOB_BUILD_PACKAGE=ON -DCMAKE_BUILD_TYPE=RelWithDebInfo -DOB_USE_LLD=$LLD_OPTION -DENABLE_FATAL_ERROR_HANG=OFF -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DENABLE_HOTFUNC=ON -DOB_STATIC_LINK_LGPL_DEPS=$STATIC_LINK_LGPL_DEPS_OPTION
 }
 
 # build - configurate project and prepare to compile, by calling make
@@ -184,7 +184,7 @@ function build
         ln -sf ${TOPDIR}/build_clangd/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
       xperf)
-        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION
+        do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION -DENABLE_HOTFUNC=ON
         ;;
       xdebug_asan)
         do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_USE_ASAN=$ASAN_OPTION
