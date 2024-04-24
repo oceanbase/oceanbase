@@ -35,11 +35,12 @@ public:
       const common::ObCurTraceId::TraceId &trace_id,
       const int64_t parallelism,
       ObRootService *root_service,
-      const common::ObAddr &inner_sql_exec_addr)
+      const common::ObAddr &inner_sql_exec_addr,
+      const bool is_vector_index)
       : task_id_(task_id), tenant_id_(tenant_id), data_table_id_(data_table_id), dest_table_id_(dest_table_id),
         schema_version_(schema_version), snapshot_version_(snapshot_version), execution_id_(execution_id),
         consumer_group_id_(consumer_group_id), trace_id_(trace_id), parallelism_(parallelism), allocator_("IdxSSTBuildTask"),
-        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr)
+        root_service_(root_service), inner_sql_exec_addr_(inner_sql_exec_addr), is_vector_index_(is_vector_index)
   {
     set_retry_times(0);
   }
@@ -53,9 +54,30 @@ public:
   virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
   virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
   void add_event_info(const int ret, const ObString &ddl_event_stmt);
+  bool is_vector_index() const { return is_vector_index_; }
+  void set_vector_index_using_type(share::schema::ObIndexUsingType vector_index_using_type) { vector_index_using_type_ = vector_index_using_type; }
+  void set_vd_type(common::ObVectorDistanceType vd_type) { vd_type_ = vd_type; }
+  common::ObVectorDistanceType get_vd_type() const { return vd_type_; }
+  void set_container_table_id(const int64_t container_table_id) { container_table_id_ = container_table_id; }
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
-               K_(nls_timestamp_format), K_(nls_timestamp_tz_format));
+               K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_vector_index), K_(container_table_id),
+               K_(vector_index_using_type), K_(vd_type));
+
+private:
+  int inner_normal_process(
+      const ObTableSchema &data_schema,
+      const ObTableSchema &index_schema,
+      const bool is_oracle_mode,
+      const ObSqlString &sql_string);
+  int inner_hnsw_process(
+      ObSchemaGetterGuard &schema_guard,
+      const ObTableSchema &data_schema,
+      const ObTableSchema &index_schema);
+  int inner_ivfflat_process(
+      const ObTableSchema &data_schema,
+      const ObTableSchema &index_schema,
+      const bool is_oracle_mode);
 
 private:
   int64_t task_id_;
@@ -74,6 +96,11 @@ private:
   ObString nls_timestamp_tz_format_;
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
+  bool is_vector_index_;
+  int64_t container_table_id_; // for ivfflat indexs
+  share::schema::ObIndexUsingType vector_index_using_type_;
+  common::ObVectorDistanceType vd_type_;
+
   DISALLOW_COPY_AND_ASSIGN(ObIndexSSTableBuildTask);
 };
 class ObIndexBuildTask : public ObDDLTask
@@ -95,6 +122,7 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const int64_t parent_task_id /* = 0 */,
       const uint64_t tenant_data_version,
+      const ObTableSchema *container_schema = nullptr,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);

@@ -245,6 +245,12 @@ user_block_cache_priority
 user_row_cache_priority
 use_ipv6
 use_large_pages
+vector_hnsw_ef_construction
+vector_hnsw_ef_search
+vector_hnsw_m
+vector_ivfflat_elkan
+vector_ivfflat_iters_count
+vector_ivfflat_sample_count
 virtual_table_location_cache_expire_time
 weak_read_version_refresh_interval
 workarea_size_policy

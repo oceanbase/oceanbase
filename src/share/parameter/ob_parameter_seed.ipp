@@ -1894,3 +1894,24 @@ DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_global_enable_rich_vector_format, OB_CLUSTER_PARAMETER, "True",
          "Control whether use rich vector format in vectorization engine",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+
+// vector
+DEF_BOOL(vector_ivfflat_elkan, OB_TENANT_PARAMETER, "True",
+        "whether to use elkan kmeans. default value is True",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_ivfflat_iters_count, OB_TENANT_PARAMETER, "200", "[1,200000]",
+        "ivfflat iters max count for KMeans. Range: [1,200000] in integer. default value is 200",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_ivfflat_sample_count, OB_TENANT_PARAMETER, "10000", "[0,18446744073709551615]",
+        "reservoir sampling count for ivfflat build. 0 means use all data rows. Range: [0,18446744073709551615] in integer. default value is 10000",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_hnsw_m, OB_TENANT_PARAMETER, "16", "[1,200000]",
+        "hnsw index m. Range: [1,200000] in integer. default value is 16",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_hnsw_ef_construction, OB_TENANT_PARAMETER, "200", "[1,200000]",
+        "hnsw index ef_construction. Range: [1,200000] in integer. default value is 300",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(vector_hnsw_ef_search, OB_TENANT_PARAMETER, "20", "[1,200000]",
+        "hnsw index ef_search. Range: [1,200000] in integer. default value is 20",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

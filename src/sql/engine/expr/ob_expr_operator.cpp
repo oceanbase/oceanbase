@@ -188,7 +188,13 @@ int ObExprOperator::set_input_types(const ObIExprResTypes &expr_types)
 ObObjType ObExprOperator::get_calc_cast_type(ObObjType param_type, ObObjType calc_type)
 {
   ObObjType cast_type = param_type;
-  if (ObNullType == param_type || ObNullType == calc_type) {
+  if (ObVectorType == calc_type || ObVectorType == param_type) {
+    if (ObVectorType != param_type) {
+      cast_type = ObDoubleType;
+    } else {
+      cast_type = param_type;
+    }
+  } else if (ObNullType == param_type || ObNullType == calc_type) {
     cast_type = param_type;
   } else if (ObMaxType == param_type || ObMaxType == calc_type) {
     cast_type = param_type;
@@ -4132,6 +4138,33 @@ int ObLogicalExprOperator::is_true(const ObObj &obj, ObCastMode cast_mode, bool 
     if (OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD == ret) {
       //slow path. need twice calls for is_true_. not efficient but we will not reach here too frequently
       ret = ObObjEvaluator::is_true(obj, CM_WARN_ON_FAIL | CM_NO_RANGE_CHECK, result);
+    }
+  }
+  return ret;
+}
+
+int ObVectorTypeExprOperator::calc_result_type2(ObExprResType &type,
+                                                ObExprResType &type1,
+                                                ObExprResType &type2,
+                                                common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObVarcharType != type1.get_type() && ObVectorType != type1.get_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("type1 is not varchar or vector", K(ret), K(type1.get_type()));
+  } else if (OB_UNLIKELY(ObVarcharType != type2.get_type() && ObVectorType != type2.get_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("type1 is not varchar or vector", K(ret), K(type2.get_type()));
+  } else {
+    type.set_type(ObDoubleType);
+    type.set_calc_type(ObDoubleType);
+  }
+  if (OB_SUCC(ret)) {
+    if (ObVarcharType == type1.get_type()) {
+      type1.set_calc_type(ObVectorType);
+    }
+    if (ObVarcharType == type2.get_type()) {
+      type2.set_calc_type(ObVectorType);
     }
   }
   return ret;

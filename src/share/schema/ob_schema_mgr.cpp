@@ -2582,7 +2582,7 @@ int ObSchemaMgr::add_table(
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(new_table_schema->set_name_case_mode(mode))) {
     // will not reach here
-  } else if (OB_FAIL(table_infos_.replace(new_table_schema,
+  } else if (OB_FAIL(table_infos_.replace(new_table_schema,    // 所有表都在table_infos_
                                           iter,
                                           compare_table,
                                           equal_table,
@@ -3718,7 +3718,10 @@ int ObSchemaMgr::get_table_schema(
              }
            }
          } else {
-           // not system table
+            // not system table
+            if (OB_FAIL(get_index_schema(tenant_id, database_id, table_name, table_schema))) {
+              LOG_WARN("fail to get index", K(ret));
+            }
          }
       }
     }
@@ -3940,8 +3943,14 @@ int ObSchemaMgr::get_table_schema(const uint64_t tenant_id,
   } else {
     if (!is_index) {
       ret = get_table_schema(tenant_id, database_id, session_id, table_name, table_schema);
+      if (OB_FAIL(ret) || OB_ISNULL(table_schema)) { // TODO(@jingshui) error code is overwrited
+        ret = get_index_schema(tenant_id, database_id, table_name, table_schema);
+      }
     } else {
       ret = get_index_schema(tenant_id, database_id, table_name, table_schema);
+      if (OB_FAIL(ret) || OB_ISNULL(table_schema)) {
+        ret = get_table_schema(tenant_id, database_id, session_id, table_name, table_schema);
+      }
     }
   }
   return ret;

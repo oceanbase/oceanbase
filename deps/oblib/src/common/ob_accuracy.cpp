@@ -127,6 +127,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
+    ObAccuracy()               // vector
   },
   {
     ObAccuracy(),         // null.
@@ -180,6 +181,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
     ObAccuracy(),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
+    ObAccuracy()               // vector
   }
 };
 

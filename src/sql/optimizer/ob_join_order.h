@@ -1607,15 +1607,21 @@ struct NullAwareAntiJoinInfo {
     int get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                  const ObDMLStmt *stmt,
                                  const EqualSets &equal_sets,
-                                 ObOrderDirection &index_direction);
-
+                                 ObOrderDirection &index_direction,
+                                 bool is_using_vector_index);
+    int get_column_ref_raw_expr_in_order_expr(ObRawExpr* &order_expr,
+                                              bool is_using_vector_index,
+                                              bool is_single_order_expr,
+                                              const EqualSets &equal_sets,
+                                              const ObIArray<ObRawExpr *> &const_exprs);
     int get_direction_in_order_by(const ObIArray<OrderItem> &order_by,
                                   const ObIArray<ObRawExpr *> &index_keys,
                                   const int64_t index_start_offset,
                                   const EqualSets &equal_sets,
                                   const ObIArray<ObRawExpr *> &const_exprs,
                                   ObOrderDirection &direction,
-                                  int64_t &order_match_count);
+                                  int64_t &order_match_count,
+                                  bool is_using_vector_index);
 
     /**
      * Extract query range for a certain table(index) given a list of predicates
@@ -2365,6 +2371,7 @@ struct NullAwareAntiJoinInfo {
                            int64_t &common_prefix_idx);
 
   private:
+    int get_order_by_vector_distance_type(const ObDMLStmt *stmt, ObVectorDistanceType &vd_type);
     int compute_cost_and_prune_access_path(PathHelper &helper,
                                            ObIArray<AccessPath *> &access_paths);
     int revise_output_rows_after_creating_path(PathHelper &helper,

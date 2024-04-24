@@ -403,7 +403,8 @@ public:
                                bool with_mv,
                                bool with_global_index = true,
                                bool with_domain_index = true,
-                               bool with_spatial_index = true);
+                               bool with_spatial_index = true,
+                               ObVectorDistanceType vd_type = ObVectorDistanceType::INVALID_DISTANCE_TYPE);
   int get_table_mlog_schema(const uint64_t table_id, const ObTableSchema *&mlog_schema);
   int get_link_table_schema(uint64_t table_id,
                             const share::schema::ObTableSchema *&table_schema) const;

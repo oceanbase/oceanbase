@@ -25,6 +25,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "share/schema/ob_table_dml_param.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "sql/engine/table/ob_table_scan_op.h"
 namespace oceanbase
 {
 using namespace common;
@@ -292,6 +293,9 @@ int ObAccessService::table_rescan(
   } else if (OB_ISNULL(result) || OB_UNLIKELY(!vparam.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(result), K(vparam), K(lbt()));
+  } else if (OB_UNLIKELY(ObNewRowIterator::ObIvfflatBuildIndex == result->get_type())) {
+    ObBuildVectorIndexDummyResult *build_vidx_iter = static_cast<ObBuildVectorIndexDummyResult*>(result);
+    build_vidx_iter->reuse();
   } else if (OB_UNLIKELY(ObNewRowIterator::ObTableScanIterator != result->get_type())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only table scan iter can be rescan", K(ret), K(result->get_type()));
@@ -1193,6 +1197,12 @@ int ObAccessService::reuse_scan_iter(const bool switch_param, ObNewRowIterator *
     } else {
       scan_iter->reset_for_switch();
     }
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfflatBuildIndex) {
+    ObBuildVectorIndexDummyResult *build_vidx_iter = static_cast<ObBuildVectorIndexDummyResult*>(iter);
+    build_vidx_iter->reuse();
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfflatAnnOp) {
+    ObIvfflatAnnScanOp *ivfflat_ann_op = static_cast<ObIvfflatAnnScanOp*>(iter);
+    ivfflat_ann_op->reuse();
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only local das scan task can be reuse", K(ret), K(iter->get_type()));
@@ -1217,6 +1227,11 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
       LOG_WARN("discover ls offline after table scan", K(ret), KPC(table_scan_iter));
     }
     mtl_sop_return(ObTableScanIterator, table_scan_iter);
+  } else if (iter->get_type() == ObNewRowIterator::ObIvfflatAnnOp) {
+    ObIvfflatAnnScanOp *ivfflat_ann_op = static_cast<ObIvfflatAnnScanOp*>(iter);
+    if (OB_FAIL(ivfflat_ann_op->revert_iter())) {
+      LOG_WARN("failed to revert iter", K(ret));
+    }
   } else {
     iter->~ObNewRowIterator();
   }

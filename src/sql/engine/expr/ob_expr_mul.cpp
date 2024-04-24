@@ -68,6 +68,13 @@ int ObExprMul::calc_result_type2(ObExprResType &type,
       ObObjType err_type = !type1.is_number() && !type1.is_varchar_or_char() ? type1.get_type() : type2.get_type();
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(ObNumberType), ob_obj_type_str(err_type));
     }
+  } else if (type.is_vector()) {
+    if (type1.is_vector()) {
+      type.set_accuracy(type1.get_accuracy());
+    } else {
+      OB_ASSERT(type2.is_vector());
+      type.set_accuracy(type2.get_accuracy());
+    }
   } else {
     ObScale scale1 = static_cast<ObScale>(MAX(type1.get_scale(), 0));
     ObScale scale2 = static_cast<ObScale>(MAX(type2.get_scale(), 0));
@@ -513,6 +520,88 @@ int ObExprMul::mul_interval(ObObj &res,
   res.set_scale(ObAccuracy::MAX_ACCURACY2[ORACLE_MODE][res.get_type()].get_scale());
   UNUSED(scale);
   return ret;
+}
+
+struct ObVectorNumBatchMulRaw : public ObArithOpRawType<ObDatum, ObDatum, ObDatum>
+{
+  static int raw_op(ObDatum &res, const ObDatum &l, const ObDatum &r, ObEvalCtx& ctx, const ObExpr& expr) {
+    int ret = OB_SUCCESS;
+    char *res_vals = nullptr;
+    ObTypeVector lvec = l.get_vector();
+    int64_t idx = &res - &expr.locate_expr_datum(ctx, 0);
+    if (OB_ISNULL(res_vals = expr.get_str_res_mem(ctx, lvec.dims() * sizeof(float), idx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret), K(lvec.dims() * sizeof(float)));
+    } else if (OB_FALSE_IT(res.set_vector(res_vals, lvec.dims() * sizeof(float)))) {
+    } else {
+      ObTypeVector res_vec = res.get_vector();
+      double rdouble = *(reinterpret_cast<const double *>(r.ptr_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < lvec.dims(); ++i) {
+        res_vec.at(i) = lvec.at(i) * rdouble;
+        if (OB_UNLIKELY(ObArithExprOperator::is_double_out_of_range(res_vec.at(i)))) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("'*' overflow", K(ret), K(lvec.at(i)), K(rdouble));
+        }
+      }
+    }
+    return ret;
+  }
+
+  static int raw_check(const ObDatum&, const ObDatum&, const ObDatum&)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+int ObExprMul::mul_vector_num(EVAL_FUNC_ARG_DECL)
+{
+  return def_arith_eval_func<ObVectorTypeArithOpWrap<ObVectorNumBatchMulRaw>>(EVAL_FUNC_ARG_LIST, ctx, expr);
+}
+
+int ObExprMul::mul_vector_num_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  return def_batch_arith_op<ObVectorTypeArithOpWrap<ObVectorNumBatchMulRaw>>(BATCH_EVAL_FUNC_ARG_LIST, ctx, expr);
+}
+
+struct ObNumVectorBatchMulRaw : public ObArithOpRawType<ObDatum, ObDatum, ObDatum>
+{
+  static int raw_op(ObDatum &res, const ObDatum &l, const ObDatum &r, ObEvalCtx& ctx, const ObExpr& expr) {
+    int ret = OB_SUCCESS;
+    char *res_vals = nullptr;
+    ObTypeVector rvec = r.get_vector();
+    int64_t idx = &res - &expr.locate_expr_datum(ctx, 0);
+    if (OB_ISNULL(res_vals = expr.get_str_res_mem(ctx, rvec.dims() * sizeof(float), idx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory", K(ret), K(rvec.dims() * sizeof(float)));
+    } else if (OB_FALSE_IT(res.set_vector(res_vals, rvec.dims() * sizeof(float)))) {
+    } else {
+      ObTypeVector res_vec = res.get_vector();
+      double ldouble = *(reinterpret_cast<const double *>(l.ptr_));
+      for (int64_t i = 0; OB_SUCC(ret) && i < rvec.dims(); ++i) {
+        res_vec.at(i) = rvec.at(i) * ldouble;
+        if (OB_UNLIKELY(ObArithExprOperator::is_double_out_of_range(res_vec.at(i)))) {
+          ret = OB_OPERATE_OVERFLOW;
+          LOG_WARN("'*' overflow", K(ret), K(ldouble), K(rvec.at(i)));
+        }
+      }
+    }
+    return ret;
+  }
+
+  static int raw_check(const ObDatum&, const ObDatum&, const ObDatum&)
+  {
+    return OB_SUCCESS;
+  }
+};
+
+int ObExprMul::mul_num_vector(EVAL_FUNC_ARG_DECL)
+{
+  return def_arith_eval_func<ObVectorTypeArithOpWrap<ObNumVectorBatchMulRaw>>(EVAL_FUNC_ARG_LIST, ctx, expr);
+}
+
+int ObExprMul::mul_num_vector_batch(BATCH_EVAL_FUNC_ARG_DECL)
+{
+  return def_batch_arith_op<ObVectorTypeArithOpWrap<ObNumVectorBatchMulRaw>>(BATCH_EVAL_FUNC_ARG_LIST, ctx, expr);
 }
 
 struct ObIntIntBatchMulRaw : public ObArithOpRawType<int64_t, int64_t, int64_t>
@@ -1558,6 +1647,14 @@ int ObExprMul::cg_expr(ObExprCGCtx &op_cg_ctx,
     }
     case ObDecimalIntType: {
       set_decimal_int_eval_func(rt_expr, false /*is_oracle*/);
+      break;
+    }
+    case ObVectorType: {
+      if (ObVectorType == left) {
+        SET_MUL_FUNC_PTR(mul_vector_num);
+      } else {
+        SET_MUL_FUNC_PTR(mul_num_vector);
+      }
       break;
     }
     default: {

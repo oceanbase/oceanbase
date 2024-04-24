@@ -81,6 +81,7 @@ typedef enum ObItemType
   T_JSON        = 47,
   T_GEOMETRY    = 48,
   T_UDT_SQL     = 49,
+  T_VECTOR      = 51,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
@@ -213,6 +214,15 @@ typedef enum ObItemType
   T_OP_AGG_DIV = 185,
   T_OP_OUTPUT_PACK = 186,
   T_FUN_GET_TEMP_TABLE_SESSID = 187,
+
+  // vector operations
+  T_OP_VECTOR_L2_DISTANCE = 188,
+  T_OP_VECTOR_INNER_PRODUCT = 189,
+  T_OP_VECTOR_COSINE_DISTANCE = 190,
+
+  // vector parameter
+  T_VECTOR_IVFFLAT_LISTS = 191,
+  T_VECTOR_IVFFLAT_PROBES = 192,
   ///< @note add new operator before this line
 
   // system functions
@@ -1000,6 +1010,9 @@ typedef enum ObItemType
   T_SORT_KEY,
   T_SORT_ASC,
   T_SORT_DESC,
+  T_DISTANCE_L2,
+  T_DISTANCE_INNER_PRODUCT,
+  T_DISTANCE_COSINE,
   T_ROLLUP_KEY,
   T_ROLLUP_DELIMIT,
   T_ALL,
@@ -1117,6 +1130,8 @@ typedef enum ObItemType
   T_ENABLE_EXTENDED_ROWID,
   T_USING_HASH,
   T_USING_BTREE,
+  T_USING_HNSW,
+  T_USING_IVFFLAT,
   T_WITH_CLAUSE_AS,
   T_WITH_CLAUSE_LIST,
   T_CYCLE_NODE,

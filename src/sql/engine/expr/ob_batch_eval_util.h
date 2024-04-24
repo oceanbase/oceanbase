@@ -830,6 +830,29 @@ struct ObVectorArithOpWrap : public Base
   }
 };
 
+template <typename Base>
+struct ObVectorTypeArithOpWrap : public Base
+{
+  constexpr static bool is_raw_op_supported() { return true; }
+  template <typename... Args>
+  int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, Args &...args) const
+  {
+    return Base::raw_op(res, l, r, args...);
+  }
+
+  template <typename... Args>
+  static int datum_op(ObDatum &res, const ObDatum &l, const ObDatum &r, Args &...args)
+  {
+    int ret = OB_SUCCESS;
+    if (l.is_null() || r.is_null()) {
+      res.set_null();
+    } else {
+      ret = ObVectorTypeArithOpWrap()(res, l, r, args...);
+    }
+    return ret;
+  }
+};
+
 } // end namespace sql
 } // end namespace oceanbase
 

@@ -193,6 +193,7 @@ public:
   static bool is_prepare_mode(SQL_EXECUTION_MODE mode);
   static bool is_execute_mode(SQL_EXECUTION_MODE mode);
   static bool is_ignore_scale_check(TransformTreeCtx &ctx, const ParseNode *parent);
+  static bool is_vector_sort(const ParseNode *root, const ParseNode *tree);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSqlParameterization);
   static int is_fast_parse_const(TransformTreeCtx &ctx);

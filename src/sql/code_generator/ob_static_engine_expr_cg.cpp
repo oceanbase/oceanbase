@@ -273,7 +273,9 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       rt_expr->datum_meta_ = ObDatumMeta(result_meta.get_type(),
                                         result_meta.get_collation_type(),
                                         raw_expr->get_result_type().get_scale(),
-                                        raw_expr->get_result_type().get_precision());
+                                        raw_expr->get_result_type().get_precision(),
+                                        raw_expr->get_result_type().is_vector() ?
+                                        raw_expr->get_result_type().get_length() : -1);
       // init obj_meta_
       rt_expr->obj_meta_ = result_meta;
       // pl extend type has its own explanation for scale
@@ -872,6 +874,8 @@ int ObStaticEngineExprCG::cg_frame_layout(const ObIArray<ObRawExpr *> &exprs,
         // 负数的情况下，对于string的res_buf_len_依然使用def_res_len
         if (rt_expr->max_length_ > 0) {
           rt_expr->res_buf_len_ = min(def_res_len,
+                                      rt_expr->datum_meta_.type_ == ObVectorType ?
+                                      static_cast<uint32_t>(rt_expr->max_length_ * sizeof(double)) :
                                       static_cast<uint32_t>(rt_expr->max_length_));
         } else {
           rt_expr->res_buf_len_ = def_res_len;
@@ -1522,6 +1526,8 @@ int ObStaticEngineExprCG::calc_exprs_res_buf_len(const ObIArray<ObRawExpr *> &ra
     if (ObDynReserveBuf::supported(rt_expr->datum_meta_.type_)) {
       if (rt_expr->max_length_ > 0) {
         rt_expr->res_buf_len_ = min(def_res_len,
+                                    rt_expr->datum_meta_.type_ == ObVectorType ?
+                                    static_cast<uint32_t>(rt_expr->max_length_ * sizeof(double)) :
                                     static_cast<uint32_t>(rt_expr->max_length_));
       } else {
         // max_length may equal -1

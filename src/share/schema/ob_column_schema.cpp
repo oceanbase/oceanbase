@@ -52,6 +52,8 @@ const char *ObColumnSchemaV2::convert_column_type_to_str(ColumnType type)
     type_str = STR_COLUMN_TYPE_UDOUBLE;
   } else if (ObRawType == type) {
     type_str = STR_COLUMN_TYPE_RAW;
+  } else if (ObVectorType) {
+    type_str = STR_COLUMN_TYPE_VECTOR;
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Not supported column type, ", K(type));
   }
@@ -85,6 +87,8 @@ ColumnType ObColumnSchemaV2::convert_str_to_column_type(const char *str)
     return ObRawType;
   } else if (STRCMP(str, STR_COLUMN_TYPE_UNKNOWN) == 0) {
     type = ObUnknownType;
+  } else if (STRCMP(str, STR_COLUMN_TYPE_VECTOR) == 0) {
+    type = ObVectorType;
   } else {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "Not supported column type, ", K(str));
   }

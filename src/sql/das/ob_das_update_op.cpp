@@ -55,7 +55,8 @@ public:
       got_old_row_(false),
       spat_rows_(nullptr),
       spatial_row_idx_(0),
-      allocator_(alloc)
+      allocator_(alloc),
+      tablet_id_(0)
   {
   }
   virtual ~ObDASUpdIterator();
@@ -72,6 +73,8 @@ public:
     das_ctdef_ = static_cast<const ObDASUpdCtDef*>(das_ctdef);
     return OB_SUCCESS;
   }
+  void set_tablet_id(const ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+
 private:
   ObSpatIndexRow *get_spatial_index_rows() { return spat_rows_; }
   int create_spatial_index_store();
@@ -86,6 +89,7 @@ private:
   ObSpatIndexRow *spat_rows_;
   uint32_t spatial_row_idx_;
   common::ObIAllocator &allocator_;
+  ObTabletID tablet_id_;
 };
 
 int ObDASUpdIterator::get_next_row(ObNewRow *&row)
@@ -124,13 +128,15 @@ int ObDASUpdIterator::get_next_row(ObNewRow *&row)
                                                          *sr,
                                                          das_ctdef_->old_row_projector_,
                                                          allocator_,
-                                                         *old_row_))) {
+                                                         *old_row_,
+                                                         &tablet_id_))) {
         LOG_WARN("project old storage row failed", K(ret));
       } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
                                                          *sr,
                                                          das_ctdef_->new_row_projector_,
                                                          allocator_,
-                                                         *new_row_))) {
+                                                         *new_row_,
+                                                         &tablet_id_))) {
         LOG_WARN("project new storage row failed", K(ret));
       } else {
         row = old_row_;

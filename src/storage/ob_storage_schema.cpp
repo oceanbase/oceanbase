@@ -1616,7 +1616,8 @@ int ObCreateTabletSchema::serialize(char *buf, const int64_t buf_len, int64_t &p
   LST_DO_CODE(OB_UNIS_ENCODE,
               table_id_,
               index_status_,
-              truncate_version_);
+              truncate_version_,
+              index_using_type_);
   return ret;
 }
 
@@ -1629,7 +1630,8 @@ int ObCreateTabletSchema::deserialize(common::ObIAllocator &allocator, const cha
     LST_DO_CODE(OB_UNIS_DECODE,
                 table_id_,
                 index_status_,
-                truncate_version_);
+                truncate_version_,
+                index_using_type_);
   }
   return ret;
 }
@@ -1640,7 +1642,8 @@ int64_t ObCreateTabletSchema::get_serialize_size() const
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               table_id_,
               index_status_,
-              truncate_version_);
+              truncate_version_,
+              index_using_type_);
   return len;
 }
 
@@ -1658,6 +1661,7 @@ int ObCreateTabletSchema::init(
     table_id_ = input_schema.get_table_id();
     index_status_ = input_schema.get_index_status();
     truncate_version_ = input_schema.get_truncate_version();
+    index_using_type_ = input_schema.get_index_using_type();
   }
   return ret;
 }
@@ -1673,6 +1677,7 @@ int ObCreateTabletSchema::init(
     table_id_ = old_schema.get_table_id();
     index_status_ = old_schema.get_index_status();
     truncate_version_ = old_schema.get_truncate_version();
+    index_using_type_ = old_schema.get_index_using_type();
   }
   return ret;
 }

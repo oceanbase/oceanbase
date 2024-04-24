@@ -105,6 +105,19 @@ if (${ARCHITECTURE} STREQUAL "x86_64")
     )
 endif()
 
+ob_set_subtarget(oblib_lib_distance common_mixed
+  vector/ob_vector_l2_distance.cpp
+  vector/ob_vector_ip_distance.cpp
+  vector/ob_vector_cosine_distance.cpp
+)
+
+ob_lib_add_target(oblib_lib_distance)
+if (${ARCHITECTURE} STREQUAL "x86_64")
+  target_compile_options(oblib_lib_distance
+    PRIVATE -mavx2 -mssse3 -mavx512vl -mavx512bw
+  )
+endif()
+
 ob_set_subtarget(oblib_lib common_mixed
   atomic/ob_atomic_reference.cpp
   checksum/ob_crc64.cpp
@@ -180,6 +193,7 @@ ob_set_subtarget(oblib_lib common_mixed
   wide_integer/ob_wide_integer_cmp_funcs.cpp
   wide_integer/ob_wide_integer_str_funcs.cpp
   udt/ob_udt_type.cpp
+  vector/ob_vector.cpp
 )
 
 ob_set_subtarget(oblib_lib lock

@@ -312,7 +312,9 @@ all_table_def = dict(
       ('lob_inrow_threshold', 'int', 'false', 'OB_DEFAULT_LOB_INROW_THRESHOLD'),
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
-      ('auto_increment_cache_size', 'int', 'false', '0')
+      ('auto_increment_cache_size', 'int', 'false', '0'),
+      ('vector_ivfflat_lists', 'int', 'false', '128'),
+      ('vector_distance_func', 'int', 'false', '0'),
     ],
 )
 
@@ -6925,11 +6927,34 @@ def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 # 516 : __all_service
 # 517 : __all_storage_io_usage
 
+def_table_schema(
+  owner = 'shanhaikang.shk',
+  table_name    = '__all_vector_hnsw_index',
+  table_id      = '518',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('vector_index_table_id', 'int'),
+    ('rowkey_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('vector_distance_type', 'int'),
+    ######### HNSW meta #############
+    ('hnsw_dim', 'int'),
+    ('hnsw_m', 'int'),
+    ('hnsw_ef_construction', 'int'),
+    ('hnsw_entry_level', 'int'),
+    ('rowkey_value', 'varchar:OB_OLD_MAX_VARCHAR_LENGTH'),
+  ],
+)
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of System Table(0,10000]
 ################################################################################
+
 
 ################################### 占位须知 ###################################
 # 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么

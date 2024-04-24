@@ -307,6 +307,17 @@ public:
   inline uint64_t get_table_id() const { return table_id_; }
   inline int64_t is_spatial_index() const { return is_spatial_index_; }
   inline void set_is_spatial_index(bool is_spatial_index) { is_spatial_index_ = is_spatial_index; }
+  inline void set_index_using_type(const ObIndexUsingType index_using_type) { index_using_type_ = index_using_type; }
+  inline bool is_vector_index() const { return USING_IVFFLAT == index_using_type_ || USING_HNSW == index_using_type_; }
+  inline bool is_vector_ivfflat_index() const { return USING_IVFFLAT == index_using_type_; }
+  inline void set_is_build_vector_index() { is_build_vector_index_ = true; }
+  inline bool get_is_build_vector_index() const { return is_build_vector_index_; }
+  inline void set_build_vector_index_table_id(uint64_t table_id) { build_vector_index_table_id_ = table_id; }
+  inline uint64_t get_build_vector_index_table_id() const { return build_vector_index_table_id_; }
+  inline void set_build_vector_index_container_table_id(uint64_t table_id) { build_vector_index_container_table_id_ = table_id; }
+  inline uint64_t get_build_vector_index_container_table_id() const { return build_vector_index_container_table_id_; }
+  inline void set_rowkey_cnt(int64_t rowkey_cnt) { rowkey_cnt_ = rowkey_cnt; }
+  inline int64_t get_rowkey_cnt() const { return rowkey_cnt_; }
   inline bool use_lob_locator() const { return use_lob_locator_; }
   inline bool enable_lob_locator_v2() const { return enable_lob_locator_v2_; }
   inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
@@ -396,6 +407,11 @@ private:
   bool enable_lob_locator_v2_;
   bool is_spatial_index_;
   bool is_fts_index_;
+  ObIndexUsingType index_using_type_;
+  bool is_build_vector_index_;
+  uint64_t build_vector_index_table_id_;
+  uint64_t build_vector_index_container_table_id_; // 对于查询来说，这里存储了container_table_id
+  int64_t rowkey_cnt_; // 只在container的查询param里有值
 };
 } //namespace schema
 } //namespace share

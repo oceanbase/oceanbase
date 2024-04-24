@@ -29,6 +29,8 @@ public:
     ObTableScanIterator = 1,
     ObLocalIndexLookupIterator = 2,
     ObGroupLookupOp = 3,
+    ObIvfflatBuildIndex = 4,
+    ObIvfflatAnnOp = 5,
   };
 public:
   ObNewRowIterator() : type_(Other) {}

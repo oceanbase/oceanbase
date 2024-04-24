@@ -164,7 +164,7 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
     consumer_group_id_(0), parent_task_id_(0), task_id_(0), type_(DDL_INVALID), src_table_schema_(nullptr),
-    dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr), tenant_data_version_(0)
+    dest_table_schema_(nullptr), container_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr), tenant_data_version_(0)
 {
 }
 
@@ -179,10 +179,11 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
                                            ObIAllocator *allocator,
                                            const obrpc::ObDDLArg *ddl_arg,
                                            const int64_t parent_task_id,
-                                           const int64_t task_id)
+                                           const int64_t task_id,
+                                           const ObTableSchema *container_table_schema)
   : sub_task_trace_id_(0), tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
-    ddl_arg_(ddl_arg), allocator_(allocator)
+    container_table_schema_(container_table_schema), ddl_arg_(ddl_arg), allocator_(allocator)
 {
 }
 

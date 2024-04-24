@@ -27,6 +27,7 @@ void ObPhyPlanHint::reset()
 {
   read_consistency_ = INVALID_CONSISTENCY;
   query_timeout_ = -1;
+  vector_ivfflat_probes_ = -1;
   plan_cache_policy_ = OB_USE_PLAN_CACHE_INVALID;
   force_trace_log_ = false;
   log_level_.reset();
@@ -37,6 +38,7 @@ void ObPhyPlanHint::reset()
 OB_SERIALIZE_MEMBER(ObPhyPlanHint,
                     read_consistency_,
                     query_timeout_,
+                    vector_ivfflat_probes_,
                     plan_cache_policy_,
                     force_trace_log_,
                     log_level_,
@@ -48,6 +50,7 @@ int ObPhyPlanHint::deep_copy(const ObPhyPlanHint &other, ObIAllocator &allocator
   int ret = OB_SUCCESS;
   read_consistency_ = other.read_consistency_;
   query_timeout_ = other.query_timeout_;
+  vector_ivfflat_probes_ = other.vector_ivfflat_probes_;
   plan_cache_policy_ = other.plan_cache_policy_;
   force_trace_log_ = other.force_trace_log_;
   parallel_ = other.parallel_;
@@ -127,6 +130,17 @@ void ObGlobalHint::merge_query_timeout_hint(int64_t hint_time)
       query_timeout_ = hint_time;
     } else {
       query_timeout_ = std::min(hint_time, query_timeout_);
+    }
+  }
+}
+
+void ObGlobalHint::merge_vector_ivfflat_probes_hint(int64_t vector_ivfflat_probes)
+{
+  if (vector_ivfflat_probes > 0) {
+    if (vector_ivfflat_probes_ < 0) {
+      vector_ivfflat_probes_ = vector_ivfflat_probes;
+    } else {
+      vector_ivfflat_probes_ = std::min(vector_ivfflat_probes_, vector_ivfflat_probes);
     }
   }
 }
@@ -281,6 +295,7 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || -1 != topk_precision_
          || 0 != sharding_minimum_row_count_
          || UNSET_QUERY_TIMEOUT != query_timeout_
+         || UNSET_VECTOR_IVFFLAT_PROBES != vector_ivfflat_probes_
          || (-1 != tx_id_ && -1 != tm_sessid_)
          || common::INVALID_CONSISTENCY != read_consistency_
          || OB_USE_PLAN_CACHE_INVALID != plan_cache_policy_
@@ -305,6 +320,7 @@ void ObGlobalHint::reset()
   topk_precision_ = -1;
   sharding_minimum_row_count_ = 0;
   query_timeout_ = UNSET_QUERY_TIMEOUT;
+  vector_ivfflat_probes_ = UNSET_VECTOR_IVFFLAT_PROBES;
   tx_id_ = -1;
   tm_sessid_ = -1;
   read_consistency_ = common::INVALID_CONSISTENCY;
@@ -338,6 +354,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   merge_read_consistency_hint(other.read_consistency_, other.frozen_version_);
   merge_topk_hint(other.topk_precision_, other.sharding_minimum_row_count_);
   merge_query_timeout_hint(other.query_timeout_);
+  merge_vector_ivfflat_probes_hint(other.vector_ivfflat_probes_);
   merge_dblink_info_hint(other.tx_id_, other.tm_sessid_);
   enable_lock_early_release_ |= other.enable_lock_early_release_;
   merge_log_level_hint(other.log_level_);
@@ -437,6 +454,9 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
   }
   if (OB_SUCC(ret) && UNSET_QUERY_TIMEOUT != query_timeout_) { //QUERY_TIMEOUT
     PRINT_GLOBAL_HINT_NUM("QUERY_TIMEOUT", query_timeout_);
+  }
+  if (OB_SUCC(ret) && UNSET_VECTOR_IVFFLAT_PROBES != vector_ivfflat_probes_) {
+    PRINT_GLOBAL_HINT_NUM("PROBES", vector_ivfflat_probes_);
   }
   if (OB_SUCC(ret) && -1 != tx_id_ && -1 != tm_sessid_) { //DBLINK_INFO
     if (OB_FAIL(BUF_PRINTF("%s%s(%ld , %ld)", outline_indent, "DBLINK_INFO", tx_id_, tm_sessid_))) {

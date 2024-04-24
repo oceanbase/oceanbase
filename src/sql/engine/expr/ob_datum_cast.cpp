@@ -1077,6 +1077,7 @@ static OB_INLINE int common_double_float(const ObExpr &expr,
   int warning = OB_SUCCESS;
   out_val = static_cast<float>(in_val);
   ObObjType out_type = expr.datum_meta_.type_;
+  out_type = out_type == ObVectorType ? ObFloatType : out_type;
   // oracle support float/double infiniy, no need to verify data overflow.
   // C language would cast value to infinity, which is correct behavor in oracle mode
   if (lib::is_mysql_mode() && CAST_FAIL(real_range_check(out_type, in_val, out_val))) {
@@ -3580,6 +3581,60 @@ CAST_FUNC_NAME(string, decimalint)
       LOG_WARN("cast string to decimal int failed", K(ret));
     } else {
       res_datum.set_decimal_int(res_val.get_decimal_int(), res_val.get_int_bytes());
+    }
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(string, vector)
+{
+  EVAL_STRING_ARG()
+  {
+    ObString in_str(child_res->len_, child_res->ptr_);
+    // in_str.trim();
+    int64_t len = in_str.length();
+    DEF_IN_OUT_TYPE();
+    if (OB_UNLIKELY(len < 2 || '[' != in_str[0] || ']' != in_str[len - 1])) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      int64_t idx = 1;
+      int64_t last_delimiter = 0;
+      float out_val = 0.0;
+      ObArray<float> out_vals;
+      ObString tmp_slice;
+      while (OB_SUCC(ret) && idx <= len - 1) {
+        if (',' == in_str[idx] || idx == len - 1) {
+          tmp_slice.reset();
+          tmp_slice.assign(in_str.ptr() + last_delimiter + 1, idx - last_delimiter - 1);
+          if (OB_FAIL(common_string_float(expr, tmp_slice, out_val))) {
+            LOG_WARN("common_string_float failed", K(ret), K(tmp_slice), K(expr));
+          } else {
+            out_vals.push_back(out_val);
+          }
+          last_delimiter = idx;
+        }
+        ++idx;
+      }
+
+      if (OB_FAIL(ret)) {
+        // do_nothing
+      } else if (-1 != expr.max_length_ && expr.max_length_ != out_vals.count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("vector length mismatch", K(ret), K(expr.max_length_), K(out_vals.count()));
+      } else {
+        char* out_ptr = nullptr;
+        int64_t vector_len = out_vals.count();
+        if (OB_ISNULL(out_ptr = expr.get_str_res_mem(ctx, sizeof(float) * vector_len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret), K(vector_len));
+        } else {
+          float* out_double_ptr = reinterpret_cast<float*>(out_ptr);
+          for (int64_t i = 0; i < vector_len; ++i) {
+            out_double_ptr[i] = out_vals.at(i);
+          }
+          res_datum.set_vector(out_ptr, vector_len * sizeof(float));
+        }
+      }
     }
   }
   return ret;
@@ -10425,6 +10480,22 @@ CAST_FUNC_NAME(decimalint, geometry)
   return ret;
 }
 
+CAST_FUNC_NAME(vector, string)
+{
+  EVAL_ARG()
+  {
+  }
+  return ret;
+}
+
+CAST_FUNC_NAME(vector, vector)
+{
+  EVAL_ARG()
+  {
+  }
+  return ret;
+}
+
 // exclude varchar/char type
 int anytype_anytype_explicit(const sql::ObExpr &expr,
                              sql::ObEvalCtx &ctx,
@@ -12995,6 +13066,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_eval_arg,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_eval_arg,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*int -> XXX*/
@@ -13024,6 +13096,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     int_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     int_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*uint -> XXX*/
@@ -13053,6 +13126,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     uint_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     uint_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*float -> XXX*/
@@ -13082,6 +13156,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     float_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     float_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*double -> XXX*/
@@ -13111,6 +13186,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     double_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     double_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*number -> XXX*/
@@ -13140,6 +13216,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     number_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     number_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*datetime -> XXX*/
@@ -13169,6 +13246,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     datetime_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     datetime_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*date -> XXX*/
@@ -13198,6 +13276,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     date_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     date_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*time -> XXX*/
@@ -13227,6 +13306,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     time_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     time_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*year -> XXX*/
@@ -13256,6 +13336,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     year_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     year_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*string -> XXX*/
@@ -13285,6 +13366,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     string_decimalint,/*decimalint*/
+    string_vector,/*vector*/
   },
   {
     /*extend -> XXX*/
@@ -13314,6 +13396,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_support,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*unknown -> XXX*/
@@ -13343,6 +13426,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     unknown_other,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*text -> XXX*/
@@ -13372,6 +13456,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     text_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*bit -> XXX*/
@@ -13401,6 +13486,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     bit_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     bit_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*enumset -> XXX*/
@@ -13430,6 +13516,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     enumset_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -13459,6 +13546,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     enumset_inner_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*otimestamp -> XXX*/
@@ -13488,6 +13576,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*raw -> XXX*/
@@ -13517,6 +13606,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*interval -> XXX*/
@@ -13546,6 +13636,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*rowid -> XXX*/
@@ -13575,6 +13666,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*lob -> XXX*/
@@ -13604,6 +13696,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*json -> XXX*/
@@ -13633,6 +13726,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     json_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*geometry -> XXX*/
@@ -13662,6 +13756,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     geometry_geometry,/*geometry*/
     cast_not_expected, /*udt*/
     geometry_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*udt -> XXX*/
@@ -13691,6 +13786,7 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     cast_not_expected, /*decimal int*/
+    cast_not_support,/*vector*/
   },
   {
     /*decimalint -> XXX*/
@@ -13720,6 +13816,37 @@ ObExpr::EvalFunc OB_DATUM_CAST_MYSQL_IMPLICIT[ObMaxTC][ObMaxTC] =
     decimalint_geometry,/*geometry*/
     cast_not_expected,/*udt, not implemented in mysql mode*/
     decimalint_decimalint, /*decimal int*/
+    cast_not_support,/*vector*/
+  },
+  {
+    /*vector -> XXX*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    vector_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
+    cast_not_support,/*enumset*/
+    cast_not_support,/*enumset_inner*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
+    cast_not_support,/*interval*/
+    cast_not_support,/*rowid*/
+    cast_not_support,/*lob*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
+    cast_not_support,/*udt, not implemented in mysql mode*/
+    cast_not_support, /*decimal int*/
+    vector_vector,/*vector*/
   },
 };
 
@@ -14344,6 +14471,9 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
       if (OB_FAIL(setup_cast_expr(dst_type, src_expr, cm, *cast_expr_))) {
         LOG_WARN("setup_cast_expr failed", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && -1 != dst_type.vector_len_) {
+      cast_expr_->max_length_ = dst_type.vector_len_;
     }
     if (OB_SUCC(ret) && OB_FAIL(cast_expr_->eval(*eval_ctx_, res))) {
       LOG_WARN("eval cast expr failed", K(ret));

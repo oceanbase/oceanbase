@@ -235,7 +235,8 @@ int ObSchemaGetterGuard::get_can_read_index_array(
     bool with_mv,
     bool with_global_index /* =true */,
     bool with_domain_index /*=true*/,
-    bool with_spatial_index /*=true*/)
+    bool with_spatial_index /*=true*/,
+    ObVectorDistanceType vd_type)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
@@ -273,7 +274,9 @@ int ObSchemaGetterGuard::get_can_read_index_array(
         }
       }
       if (OB_SUCC(ret)) {
-        if (!with_mv && index_schema->is_mlog_table()) {
+        if (index_schema->is_using_vector_index() && vd_type != index_schema->get_vector_distance_func()) {
+          // skip
+        } else if (!with_mv && index_schema->is_mlog_table()) {
           // skip
         } else if (!with_global_index && index_schema->is_global_index_table()) {
           // skip

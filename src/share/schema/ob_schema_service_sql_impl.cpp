@@ -1850,7 +1850,6 @@ int ObSchemaServiceSQLImpl::fetch_aux_tables(
 {
   int ret = OB_SUCCESS;
   aux_tables.reset();
-
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     ObMySQLResult *result = NULL;
     ObSqlString sql;

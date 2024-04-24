@@ -41,6 +41,7 @@ const char *const STR_COLUMN_TYPE_M_TIME = "modify_time";
 const char *const STR_COLUMN_TYPE_BOOLEAN = "bool";
 const char *const STR_COLUMN_TYPE_NUMBER = "number";
 const char *const STR_COLUMN_TYPE_RAW = "raw";
+const char *const STR_COLUMN_TYPE_VECTOR = "vector";
 const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 
 class ObTableSchema;

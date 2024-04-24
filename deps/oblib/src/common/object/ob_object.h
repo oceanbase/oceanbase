@@ -15,6 +15,7 @@
 
 #include "lib/ob_define.h"
 #include "lib/string/ob_string.h"
+#include "lib/vector/ob_vector.h"
 #include "common/ob_action_flag.h"
 #include "common/object/ob_obj_type.h"
 #include "common/ob_accuracy.h"
@@ -204,6 +205,7 @@ public:
   OB_INLINE void set_varbinary() { type_ = static_cast<uint8_t>(ObVarcharType); set_collation_type(CS_TYPE_BINARY); }
   OB_INLINE void set_binary() { type_ = static_cast<uint8_t>(ObCharType); set_collation_type(CS_TYPE_BINARY); }
   OB_INLINE void set_hex_string() { type_ = static_cast<uint8_t>(ObHexStringType); set_collation_type(CS_TYPE_BINARY); }
+  OB_INLINE void set_vector() { type_ = static_cast<uint8_t>(ObVectorType); set_collation_type(CS_TYPE_BINARY); }
   OB_INLINE void set_raw() { type_ = static_cast<uint8_t>(ObRawType); set_collation_level(common::CS_LEVEL_IMPLICIT); set_collation_type(CS_TYPE_BINARY); }
   OB_INLINE void set_ext() { type_ = static_cast<uint8_t>(ObExtendType); set_collation_level(CS_LEVEL_INVALID); set_collation_type(CS_TYPE_INVALID); set_extend_type(0); }
   OB_INLINE void set_unknown() { type_ = static_cast<uint8_t>(ObUnknownType); set_collation_level(CS_LEVEL_INVALID); set_collation_type(CS_TYPE_INVALID); }
@@ -291,6 +293,7 @@ public:
   OB_INLINE bool is_nvarchar2() const { return type_ == static_cast<uint8_t>(ObNVarchar2Type); }
   OB_INLINE bool is_nchar() const { return type_ == static_cast<uint8_t>(ObNCharType); }
   OB_INLINE bool is_decimal_int() const { return type_ == static_cast<uint8_t>(ObDecimalIntType); }
+  OB_INLINE bool is_vector() const { return type_ == static_cast<uint8_t>(ObVectorType); }
   OB_INLINE bool is_varchar() const
   {
     return ((type_ == static_cast<uint8_t>(ObVarcharType)) && (CS_TYPE_BINARY != cs_type_));
@@ -1213,6 +1216,7 @@ union ObObjValue
   int64_t nsecond_; //for interval day to second
 
   ObDecimalInt *decimal_int_;
+  float *double_array_;
   void *ptr_;
 };
 
@@ -1415,6 +1419,8 @@ public:
   void set_char_value(const char *ptr, const ObString::obstr_size_t size);
   void set_varbinary(const ObString &value);
   void set_binary(const ObString &value);
+  void set_vector(float* ptr, const uint64_t vector_len);
+  void set_vector_value(float* ptr, const uint64_t vector_len);
   void set_raw(const ObString &value);
   void set_raw(const char *ptr, const ObString::obstr_size_t size);
   void set_raw_value(const char *ptr, const ObString::obstr_size_t size);
@@ -1558,6 +1564,9 @@ public:
 
   int get_urowid(ObURowIDData &urowid_data) const;
 
+  int get_vector(ObTypeVector &vector) const;
+  int get_vector_value(float *&vector, int64_t &vector_len) const;
+
   /// the follow getters do not check type, use them when you already known the type
   OB_INLINE int8_t get_tinyint() const { return static_cast<int8_t>(v_.int64_); }
   OB_INLINE int16_t get_smallint() const { return static_cast<int16_t>(v_.int64_); }
@@ -1594,6 +1603,11 @@ public:
 
   OB_INLINE ObString get_string() const {
     return ObString(val_len_, v_.string_);
+  }
+  OB_INLINE ObTypeVector get_vector() const {
+    return ObTypeVector(const_cast<float*>(
+                        reinterpret_cast<const float*>(v_.string_)),
+                        val_len_ / sizeof(float));
   }
   OB_INLINE ObString get_varchar() const { return ObString(val_len_, v_.string_); }
   OB_INLINE ObString get_char() const { return ObString(val_len_, v_.string_); }
@@ -1921,6 +1935,8 @@ public:
   inline bool is_nop_value() const;
   inline bool is_true() const;
   inline bool is_false() const;
+
+  inline bool is_vector() const { return meta_.is_vector(); }
 
   bool is_zero() const;
   //@}
@@ -2559,6 +2575,22 @@ inline void ObObj::set_varchar(const char *cstr)
   val_len_ = static_cast<int32_t>(strlen(cstr));
 }
 
+inline void ObObj::set_vector(float* ptr, const uint64_t vector_len)
+{
+  meta_.set_vector();
+  meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  v_.string_ = reinterpret_cast<char*>(ptr);
+  val_len_ = vector_len * sizeof(float);
+}
+
+inline void ObObj::set_vector_value(float* ptr, const uint64_t vector_len)
+{
+  meta_.set_vector();
+  meta_.set_collation_level(CS_LEVEL_IMPLICIT);
+  v_.double_array_ = ptr;
+  val_len_ = vector_len * sizeof(float);
+}
+
 inline void ObObj::set_char(const ObString &value)
 {
   meta_.set_char();
@@ -2931,6 +2963,7 @@ inline bool ObObj::is_false() const
 inline bool ObObj::need_deep_copy()const
 {
   return (((ob_is_string_type(meta_.get_type())
+            || ob_is_vector_type(meta_.get_type())
             || ob_is_lob_locator(meta_.get_type())
             || ob_is_json(meta_.get_type())
             || ob_is_geometry(meta_.get_type())
@@ -3529,6 +3562,27 @@ inline int ObObj::get_udt(ObString &udt_data) const
   return ret;
 }
 
+inline int ObObj::get_vector(ObTypeVector &vector) const
+{
+  int ret = OB_OBJ_TYPE_ERROR;
+  if (meta_.is_vector()) {
+    vector.assign(v_.double_array_, val_len_ / sizeof(float));
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
+inline int ObObj::get_vector_value(float *&vector, int64_t &vector_len) const
+{
+  int ret = OB_OBJ_TYPE_ERROR;
+  if (meta_.is_vector()) {
+    vector = v_.double_array_;
+    vector_len = val_len_ / sizeof(float);
+    ret = OB_SUCCESS;
+  }
+  return ret;
+}
+
 //Obj中所有public的varchar hash方法，以及varchar类型的obj调用hash方法时，都调用了此方法
 OB_INLINE static uint64_t varchar_hash_with_collation(const ObObj &obj,
                                                       const ObCollationType cs_type,
@@ -3902,6 +3956,13 @@ inline void ObObj::set_obj_value<ObString>(const ObString &v)
 }
 
 template<>
+inline void ObObj::set_obj_value<ObTypeVector>(const ObTypeVector &vec)
+{
+  v_.string_ = reinterpret_cast<char*>(vec.ptr());
+  val_len_ = vec.dims() * sizeof(float);
+}
+
+template<>
 inline void ObObj::set_obj_value<ObIntervalYMValue>(const ObIntervalYMValue &v)
 {
   v_.nmonth_ = v.nmonth_;
@@ -4194,7 +4255,7 @@ OB_INLINE int64_t ObObj::get_deep_copy_size() const
 {
   int64_t ret = 0;
   if (is_string_type() || is_raw() || ob_is_rowid_tc(get_type()) || is_lob_locator() || is_json()
-      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type())) {
+      || is_geometry() || is_user_defined_sql_type() || ob_is_decimal_int(get_type()) || ob_is_vector_type(get_type())) {
     ret += val_len_;
   } else if (ob_is_number_tc(get_type())) {
     ret += (sizeof(uint32_t) * nmb_desc_.len_);

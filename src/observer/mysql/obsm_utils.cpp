@@ -89,6 +89,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_GEOMETRY,   BLOB_FLAG | BINARY_FLAG, 0}, /* ObGeometryType */
   {EMySQLFieldType::MYSQL_TYPE_COMPLEX,   0, 0}, /* ObUserDefinedSQLType */
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL, 0, 0},                           /* ObDecimalIntType */
+  {EMySQLFieldType::MYSQL_TYPE_VAR_STRING,    0, 0}
   /* ObMaxType */
 };
 
@@ -329,6 +330,10 @@ int ObSMUtils::cell_str(
       case ObDecimalIntTC: {
         ret = ObMySQLUtil::decimalint_cell_str(buf, len, obj.get_decimal_int(), obj.get_int_bytes(),
                                                obj.get_scale(), pos, zerofill, zflength);
+        break;
+      }
+      case ObVectorTC: {
+        ret = ObMySQLUtil::vector_cell_str(MTL_ID(), buf, len, obj.get_vector(), pos);
         break;
       }
       default:

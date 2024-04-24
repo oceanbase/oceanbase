@@ -1278,15 +1278,16 @@ struct OrderItem
     reset();
   }
   explicit OrderItem(ObRawExpr *expr)
-    : expr_(expr), order_type_(default_asc_direction()) {}
-  OrderItem(ObRawExpr *expr, ObOrderDirection order_type)
-    : expr_(expr), order_type_(order_type) {}
+    : expr_(expr), order_type_(default_asc_direction()), is_using_vector_index_(false) {}
+  OrderItem(ObRawExpr *expr, ObOrderDirection order_type, bool is_using_vector_index = false)
+    : expr_(expr), order_type_(order_type), is_using_vector_index_(is_using_vector_index) {}
 public:
   virtual ~OrderItem() {}
   void reset()
   {
     expr_ = NULL;
     order_type_ = default_asc_direction();
+    is_using_vector_index_ = false;
   }
   inline bool operator ==(const OrderItem &other) const
   {
@@ -1354,6 +1355,7 @@ public:
 
   ObRawExpr* expr_;
   ObOrderDirection order_type_;
+  bool is_using_vector_index_; // For index ordering
 };
 
 class ObQueryRefRawExpr;
@@ -1784,6 +1786,9 @@ public:
   inline bool is_obj_access_expr() const { return T_OBJ_ACCESS_REF == get_expr_type(); }
   inline bool is_assoc_index_expr() const { return T_FUN_PL_ASSOCIATIVE_INDEX == get_expr_type(); }
   virtual inline bool is_white_runtime_filter_expr() const { return false; }
+  inline bool is_vector_distance_expr() const { return T_OP_VECTOR_L2_DISTANCE == get_expr_type() ||
+                                                       T_OP_VECTOR_INNER_PRODUCT == get_expr_type() ||
+                                                       T_OP_VECTOR_COSINE_DISTANCE == get_expr_type(); }
   bool is_not_calculable_expr() const;
   bool cnt_not_calculable_expr() const;
   int is_const_inherit_expr(bool &is_const_inherit, const bool param_need_replace = false) const;

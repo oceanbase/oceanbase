@@ -36,6 +36,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "lib/container/ob_array_wrap.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "share/vector_index/ob_hnsw_ann_helper.h"
 
 namespace oceanbase
 {
@@ -110,6 +111,7 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
 {
   int ret = OB_SUCCESS;
   bool has_lookup = (lookup_ctdef_ != nullptr);
+  bool has_container = (container_ctdef_ != nullptr);
   OB_UNIS_ENCODE(pre_query_range_);
   OB_UNIS_ENCODE(flashback_item_.need_scn_);
   OB_UNIS_ENCODE(flashback_item_.flashback_query_expr_);
@@ -121,6 +123,11 @@ OB_DEF_SERIALIZE(ObTableScanCtDef)
   if (OB_SUCC(ret) && has_lookup) {
     OB_UNIS_ENCODE(*lookup_ctdef_);
     OB_UNIS_ENCODE(*lookup_loc_meta_);
+  }
+  OB_UNIS_ENCODE(has_container);
+  if (OB_SUCC(ret) && has_container) {
+    OB_UNIS_ENCODE(*container_ctdef_);
+    OB_UNIS_ENCODE(*container_loc_meta_);
   }
   bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
   OB_UNIS_ENCODE(has_dppr_tbl);
@@ -149,6 +156,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
 {
   int64_t len = 0;
   bool has_lookup = (lookup_ctdef_ != nullptr);
+  bool has_container = (container_ctdef_ != nullptr);
   OB_UNIS_ADD_LEN(pre_query_range_);
   OB_UNIS_ADD_LEN(flashback_item_.need_scn_);
   OB_UNIS_ADD_LEN(flashback_item_.flashback_query_expr_);
@@ -160,6 +168,11 @@ OB_DEF_SERIALIZE_SIZE(ObTableScanCtDef)
   if (has_lookup) {
     OB_UNIS_ADD_LEN(*lookup_ctdef_);
     OB_UNIS_ADD_LEN(*lookup_loc_meta_);
+  }
+  OB_UNIS_ADD_LEN(has_container);
+  if (has_container) {
+    OB_UNIS_ADD_LEN(*container_ctdef_);
+    OB_UNIS_ADD_LEN(*container_loc_meta_);
   }
   bool has_dppr_tbl = (das_dppr_tbl_ != nullptr);
   OB_UNIS_ADD_LEN(has_dppr_tbl);
@@ -187,6 +200,7 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
 {
   int ret = OB_SUCCESS;
   bool has_lookup = false;
+  bool has_container = false;
   OB_UNIS_DECODE(pre_query_range_);
   OB_UNIS_DECODE(flashback_item_.need_scn_);
   OB_UNIS_DECODE(flashback_item_.flashback_query_expr_);
@@ -212,6 +226,27 @@ OB_DEF_DESERIALIZE(ObTableScanCtDef)
       } else {
         lookup_loc_meta_ = new(loc_meta_buf) ObDASTableLocMeta(allocator_);
         OB_UNIS_DECODE(*lookup_loc_meta_);
+      }
+    }
+  }
+  OB_UNIS_DECODE(has_container);
+  if (OB_SUCC(ret) && has_container) {
+    void *ctdef_buf = allocator_.alloc(sizeof(ObDASScanCtDef));
+    if (OB_ISNULL(ctdef_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate das scan ctdef buffer failed", K(ret), K(sizeof(ObDASScanCtDef)));
+    } else {
+      container_ctdef_ = new(ctdef_buf) ObDASScanCtDef(allocator_);
+      OB_UNIS_DECODE(*container_ctdef_);
+    }
+    if (OB_SUCC(ret)) {
+      void *loc_meta_buf = allocator_.alloc(sizeof(ObDASTableLocMeta));
+      if (OB_ISNULL(loc_meta_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate table loc meta failed", K(ret));
+      } else {
+        container_loc_meta_ = new(loc_meta_buf) ObDASTableLocMeta(allocator_);
+        OB_UNIS_DECODE(*container_loc_meta_);
       }
     }
   }
@@ -657,12 +692,98 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     report_checksum_(false),
     in_rescan_(false),
     global_index_lookup_op_(NULL),
-    spat_index_()
+    spat_index_(),
+    need_close_conn_(false),
+    saved_conn_(),
+    sql_proxy_(NULL),
+    inner_conn_(NULL),
+    tenant_id_(-1),
+    ann_output_objs_(NULL),
+    hnsw_index_scan_cell_cnt_(-1),
+    hnsw_index_scan_row_cnt_(-1),
+    ivfflat_helper_(),
+    saved_session_(NULL)
 {
 }
 
 ObTableScanOp::~ObTableScanOp()
 {
+}
+
+int ObTableScanOp::open_inner_conn()
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnectionPool *pool = NULL;
+  ObSQLSessionInfo *session = NULL;
+  common::sqlclient::ObISQLConnection *conn;
+  if (OB_ISNULL(sql_proxy_ = ctx_.get_sql_proxy())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is NULL", K(ret));
+  } else if (OB_ISNULL(session = ctx_.get_my_session())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (NULL != session->get_inner_conn()) {
+    // do nothing.
+  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy_->get_pool()))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection pool is NULL", K(ret));
+  } else if (common::sqlclient::INNER_POOL != pool->get_type()) {
+    LOG_WARN("connection pool type is not inner", K(ret), K(pool->get_type()));
+  } else if (OB_FAIL(pool->acquire(session, conn))) {
+    LOG_WARN("failed to acquire inner connection", K(ret));
+  } else {
+    session->set_inner_conn(conn);
+    need_close_conn_ = true;
+  }
+  if (OB_SUCC(ret)) {
+    inner_conn_ = static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn());
+    tenant_id_ = session->get_effective_tenant_id();
+  }
+  return ret;
+}
+
+int ObTableScanOp::close_inner_conn()
+{
+  int ret = OB_SUCCESS;
+  if (need_close_conn_) {
+    ObSQLSessionInfo *session = ctx_.get_my_session();
+    if (OB_ISNULL(sql_proxy_) || OB_ISNULL(session)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("sql_proxy of session is NULL", K(ret), KP(sql_proxy_), KP(session));
+    } else {
+        OZ(sql_proxy_->close(static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn()), true));
+        OX(session->set_inner_conn(NULL));
+    }
+    need_close_conn_ = false;
+  }
+  sql_proxy_ = NULL;
+  inner_conn_ = NULL;
+  return ret;
+}
+
+int ObTableScanOp::begin_nested_session(bool skip_cur_stmt_tables)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(inner_conn_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("inner connection is NULL", K(ret));
+  } else if (OB_FAIL(inner_conn_->begin_nested_session(get_saved_session(), saved_conn_,
+                                                       skip_cur_stmt_tables))) {
+    LOG_WARN("failed to begin nested session", K(ret));
+  }
+  return ret;
+}
+
+int ObTableScanOp::end_nested_session()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(inner_conn_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("inner connection is NULL", K(ret));
+  } else if (OB_FAIL(inner_conn_->end_nested_session(get_saved_session(), saved_conn_))) {
+    LOG_WARN("failed to end nested session", K(ret));
+  }
+  return ret;
 }
 
 bool ObTableScanOp::has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op)
@@ -690,7 +811,7 @@ int ObTableScanOp::init_das_group_range(const int64_t cur_group_idx, const int64
   return ret;
 }
 
-OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
+OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc, bool no_dist_das)
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
@@ -708,6 +829,33 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
     scan_op->set_can_part_retry(nullptr == tsc_rtdef_.scan_rtdef_.sample_info_
                                 && can_partition_retry());
     scan_op->set_inner_rescan(in_rescan_);
+    scan_op->set_hnsw_index_iter_info(ann_output_objs_, hnsw_index_scan_cell_cnt_, hnsw_index_scan_row_cnt_);
+
+    scan_op->set_ivfflat_helper(&ivfflat_helper_);
+    scan_op->set_ivfflat_build_helper(&ivfflat_build_helper_);
+    // TODO(@wangmiao): set ivfflat_build_helper_
+    if (OB_UNLIKELY(ivfflat_helper_.is_inited()) && no_dist_das
+        && OB_FAIL(ivfflat_helper_.set_partition_name(tablet_loc->tablet_id_))) {
+      if (ret == OB_OP_NOT_ALLOW) {
+        // ignore error
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to set partition name for ivfflat helper", K(ret), K(tablet_loc->tablet_id_));
+      }
+    }
+    ivfflat_helper_.reuse();
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(ivfflat_build_helper_.is_inited() && no_dist_das
+        && OB_FAIL(ivfflat_build_helper_.set_partition_name(
+           tablet_loc->tablet_id_, MY_SPEC.ref_table_id_)))) {
+      if (ret == OB_OP_NOT_ALLOW) {
+        // ignore error
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to set partition name for ivfflat builder helper",
+                K(ret), K(tablet_loc->tablet_id_), K(scan_op->get_scan_param().index_id_));
+      }
+    }
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
     if (!MY_SPEC.is_index_global_ && MY_CTDEF.lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
@@ -725,6 +873,23 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
         LOG_WARN("set lookup tablet id failed", K(ret), KPC(lookup_tablet_loc));
       } else {
         lookup_table_loc->is_reading_ = true;
+      }
+    }
+    if (MY_CTDEF.container_ctdef_ != nullptr) {
+      ObDASTableLoc *container_table_loc = tsc_rtdef_.container_rtdef_->table_loc_;
+      ObDASTabletLoc *container_tablet_loc = ObDASUtils::get_related_tablet_loc(
+          *tablet_loc, container_table_loc->loc_meta_->ref_table_id_);
+      if (OB_ISNULL(container_tablet_loc)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("container tablet loc is nullptr", K(ret), KPC(tablet_loc), KPC(container_table_loc->loc_meta_));
+      } else if (OB_FAIL(scan_op->set_container_ctdef(MY_CTDEF.container_ctdef_))) {
+        LOG_WARN("set container ctdef failed", K(ret));
+      } else if (OB_FAIL(scan_op->set_container_rtdef(tsc_rtdef_.container_rtdef_))) {
+        LOG_WARN("set container rtdef failed", K(ret));
+      } else if (OB_FAIL(scan_op->set_container_tablet_id(container_tablet_loc->tablet_id_))) {
+        LOG_WARN("set container tablet id failed", K(ret), KPC(container_tablet_loc));
+      } else {
+        container_table_loc->is_reading_ = true;
       }
     }
   }
@@ -777,7 +942,7 @@ int ObTableScanOp::prepare_das_task()
   int ret = OB_SUCCESS;
   ObTaskExecutorCtx &task_exec_ctx = ctx_.get_task_exec_ctx();
   if (OB_LIKELY(!MY_SPEC.use_dist_das_)) {
-    if (OB_FAIL(create_one_das_task(MY_INPUT.tablet_loc_))) {
+    if (OB_FAIL(create_one_das_task(MY_INPUT.tablet_loc_, true))) {
       LOG_WARN("create one das task failed", K(ret));
     }
   } else if (OB_LIKELY(nullptr == MY_CTDEF.das_dppr_tbl_)) {
@@ -909,6 +1074,29 @@ int ObTableScanOp::init_table_scan_rtdef()
     } else if (!MY_SPEC.use_dist_das_ && !MY_SPEC.gi_above_ && !scan_rtdef.table_loc_->empty()) {
       MY_INPUT.tablet_loc_ = scan_rtdef.table_loc_->get_first_tablet_loc();
     }
+    if (OB_SUCC(ret) && MY_CTDEF.scan_ctdef_.table_param_.get_is_build_vector_index()) {
+      tsc_rtdef_.is_build_vector_index_ = true;
+      tsc_rtdef_.build_vector_index_table_id_ = MY_CTDEF.scan_ctdef_.table_param_.get_build_vector_index_table_id();
+      tsc_rtdef_.build_vector_index_container_table_id_ = MY_CTDEF.scan_ctdef_.table_param_.get_build_vector_index_container_table_id();
+    }
+    if (OB_SUCC(ret) && MY_CTDEF.scan_ctdef_.table_param_.is_vector_index()) {
+      tsc_rtdef_.is_ann_scan_ = true;
+      if (OB_FAIL(calc_expr_int_value(*(scan_ctdef.as_expr_spec_.k_expr_),
+                                      scan_rtdef.ann_search_k_,
+                                      is_null_value))) {
+        LOG_WARN("fail get val", K(ret));
+      } else if (OB_UNLIKELY(is_null_value)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ann search k can not be null", K(ret));
+      } else if (OB_FAIL(calc_expr_vector_value(*(scan_ctdef.as_expr_spec_.query_vector_expr_),
+                                                scan_rtdef.ann_search_vector_,
+                                                is_null_value))) {
+        LOG_WARN("fail get val", K(ret));
+      } else if (OB_UNLIKELY(is_null_value)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ann search k can not be null", K(ret));
+      }
+    }
   }
   if (OB_SUCC(ret) && MY_CTDEF.lookup_ctdef_ != nullptr) {
     const ObDASScanCtDef &lookup_ctdef = *MY_CTDEF.lookup_ctdef_;
@@ -920,6 +1108,19 @@ int ObTableScanOp::init_table_scan_rtdef()
       if (OB_FAIL(init_das_scan_rtdef(lookup_ctdef, *tsc_rtdef_.lookup_rtdef_, MY_CTDEF.lookup_loc_meta_))) {
         LOG_WARN("init das scan rtdef failed", K(ret), K(lookup_ctdef));
       }
+    }
+  }
+  if (OB_SUCC(ret) && MY_CTDEF.container_ctdef_ != nullptr) {
+    const ObDASScanCtDef &container_ctdef = *MY_CTDEF.container_ctdef_;
+    ObDASBaseRtDef *das_rtdef = nullptr;
+    if (OB_FAIL(das_factory.create_das_rtdef(DAS_OP_TABLE_SCAN, das_rtdef))) {
+      LOG_WARN("create das rtdef failed", K(ret));
+    } else {
+      tsc_rtdef_.container_rtdef_ = static_cast<ObDASScanRtDef*>(das_rtdef);
+      if (OB_FAIL(init_das_scan_rtdef(container_ctdef, *tsc_rtdef_.container_rtdef_, MY_CTDEF.container_loc_meta_))) {
+        LOG_WARN("init das scan rtdef failed", K(ret), K(container_ctdef));
+      }
+      // 不需要将qvector和k存到container_rtdef_，ivfflat_helper_里有
     }
   }
   return ret;
@@ -1314,6 +1515,186 @@ int ObTableScanOp::init_converter()
   return ret;
 }
 
+int ObTableScanOp::init_hnsw_index_output_rows(int64_t cell_cnt, int64_t row_cnt, ObObj* &objs)
+{
+  int ret = OB_SUCCESS;
+  void *tmp_ptr = nullptr;
+  objs = nullptr;
+  int64_t obj_cnt = cell_cnt * row_cnt;
+  if (0 == obj_cnt) {
+  } else if (OB_ISNULL(tmp_ptr = hnsw_index_alloc_.alloc(obj_cnt * sizeof(ObObj)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to alloc cells", K(ret), K(obj_cnt));
+  } else if (OB_ISNULL(objs = new (tmp_ptr) ObObj[obj_cnt])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to new cell array", K(ret), K(obj_cnt));
+  }
+  return ret;
+}
+
+int ObTableScanOp::get_hnsw_index_meta(ObVectorDistanceType& vd_type, int64_t &hnsw_dim, int64_t &hnsw_m,
+                                       int64_t &hnsw_ef_construction, int64_t &hnsw_entry_level,
+                                       ObArray<ObString> &rowkey,
+                                       common::ObArenaAllocator* allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString hnsw_index_meta_sql;
+  if (OB_FAIL(hnsw_index_meta_sql.append_fmt("select vector_distance_type,hnsw_dim,hnsw_m,hnsw_ef_construction,hnsw_entry_level,rowkey_value from oceanbase.%s where vector_index_table_id=%ld",
+                                              OB_ALL_VECTOR_HNSW_INDEX_TNAME,
+                                              MY_SPEC.vector_index_tb_id_))) {
+    LOG_WARN("fail to append sql", K(ret), K(MY_SPEC.vector_index_tb_id_));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, read_res) {
+      sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql_proxy_->read(read_res, tenant_id_, hnsw_index_meta_sql.ptr()))) {
+        LOG_WARN("fail to get hnsw index meta", K(ret), K(tenant_id_));
+      } else if (OB_ISNULL(result = read_res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get sql result", K(ret), KP(result));
+      } else {
+        bool simple_meta_inited = false;
+        while (OB_SUCC(ret)) {
+          if (OB_FAIL(result->next())) {
+            if (OB_ITER_END == ret) {
+              if (OB_UNLIKELY(!simple_meta_inited)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("hnsw index meta does not exist", K(ret));
+              } else {
+                ret = OB_SUCCESS;
+                break;
+              }
+            } else {
+              LOG_WARN("fail to get next row", K(ret));
+            }
+          } else {
+            if (!simple_meta_inited) {
+              int64_t tmp_vd_type = -1;
+              EXTRACT_INT_FIELD_MYSQL(*result, "vector_distance_type", tmp_vd_type, int64_t);
+              if (OB_SUCC(ret)) {
+                vd_type = static_cast<ObVectorDistanceType>(tmp_vd_type);
+              }
+              EXTRACT_INT_FIELD_MYSQL(*result, "hnsw_dim", hnsw_dim, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "hnsw_m", hnsw_m, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "hnsw_ef_construction", hnsw_ef_construction, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "hnsw_entry_level", hnsw_entry_level, int64_t);
+              simple_meta_inited = true;
+            }
+            if (OB_SUCC(ret)) {
+              ObString rk, tmp;
+              EXTRACT_VARCHAR_FIELD_MYSQL(*result, "rowkey_value", tmp);
+              if (OB_SUCC(ret) && OB_FAIL(ob_write_string(*allocator, tmp, rk))) {
+                LOG_WARN("fail to write string", K(ret), K(tmp));
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(rowkey.push_back(rk))) {
+                LOG_WARN("fail to push back rowkey", K(ret), K(rk));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableScanOp::open_hnsw_index_op()
+{
+  int ret = OB_SUCCESS;
+  ObTypeVector &qvector = tsc_rtdef_.scan_rtdef_.ann_search_vector_;
+  int64_t ann_k = tsc_rtdef_.scan_rtdef_.ann_search_k_;
+  ObArray<ObHNSWCandidate> res_cands;
+  ObHNSWIndexReader *ann_reader = nullptr;
+  lib::ObMemAttr mattr(tenant_id_, "HNSW");
+  ObArenaAllocator tmp_allocator(mattr);
+  hnsw_index_alloc_.set_attr(mattr);
+  common::ObMySQLTransaction trans(true);
+  int64_t hnsw_ef_search = 0;
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    hnsw_ef_search = tenant_config->vector_hnsw_ef_search;
+  }
+  if (OB_FAIL(trans.start(sql_proxy_, tenant_id_))) {
+    LOG_WARN("fail to start transaction", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(MTL(share::ObHNSWAnnHelper*)->get_ann_reader(MY_SPEC.vector_index_tb_id_, ann_reader))) {
+    if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
+      ObVectorDistanceType vd_type = ObVectorDistanceType::INVALID_DISTANCE_TYPE;
+      int64_t hnsw_dim = -1;
+      int64_t hnsw_m = -1;
+      int64_t hnsw_ef_construction = -1;
+      int64_t hnsw_entry_level = -1;
+      ObArray<ObString> rowkeys;
+      ObTypeVector::VectorIndexDistanceFunc dfunc = nullptr;
+      if (OB_FAIL(get_hnsw_index_meta(vd_type, hnsw_dim, hnsw_m, hnsw_ef_construction, hnsw_entry_level, rowkeys, &tmp_allocator))) {
+        LOG_WARN("fail to get hnsw index meta", K(ret));
+      } if (OB_FAIL(ObTypeVector::get_vector_dfunc(vd_type, dfunc))) {
+        LOG_WARN("fail to get vector dfunc", K(ret), K(vd_type));
+      } else {
+        CreateAnnReaderArgs args = {
+          hnsw_m,
+          hnsw_ef_construction,
+          dfunc,
+          MY_SPEC.vector_index_real_name_,
+          MY_SPEC.vector_index_db_name_,
+          MY_SPEC.vector_column_name_,
+          MY_SPEC.base_tb_pkey_count_,
+          tenant_id_,
+          hnsw_dim,
+          hnsw_entry_level,
+          &rowkeys,
+          &trans
+        };
+        if (OB_FAIL(MTL(share::ObHNSWAnnHelper*)->create_ann_reader(MY_SPEC.vector_index_tb_id_, &args, ann_reader))) {
+          LOG_WARN("fail to create ann reader", K(ret));
+        } else {
+          LOG_INFO("############ hnsw create ann reader", K(MY_SPEC.vector_index_tb_id_));
+        }
+      }
+    } else {
+      LOG_WARN("fail to get ann reader", K(ret));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ann_reader->search_vector(&trans, qvector, ann_k, hnsw_ef_search, res_cands))) {
+    LOG_WARN("fail to search vector", K(ret));
+  } else {
+    hnsw_index_scan_row_cnt_ = res_cands.count();
+    hnsw_index_scan_cell_cnt_ = MY_SPEC.base_tb_pkey_count_ * 2 + 2;
+    ann_output_objs_ = nullptr;
+    // MY_SPEC.access_column_ids_
+    if (OB_SUCC(ret) && OB_FAIL(init_hnsw_index_output_rows(hnsw_index_scan_cell_cnt_, hnsw_index_scan_row_cnt_, ann_output_objs_))) {
+      LOG_WARN("fail to init hnsw index output rows", K(ret), K(hnsw_index_scan_cell_cnt_), K(hnsw_index_scan_row_cnt_));
+    }
+    int64_t obj_idx = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < hnsw_index_scan_row_cnt_; ++i) {
+      const ObHNSWCandidate& cd = res_cands.at(i);
+      // base_pks
+      for (int64_t pk_id = 0; OB_SUCC(ret) && pk_id < MY_SPEC.base_tb_pkey_count_; ++pk_id, ++obj_idx) {
+        cd.element_->pk_ptr_.objs_[pk_id].copy_value_or_obj(ann_output_objs_[obj_idx], true);
+      }
+      // level: make it null
+      ann_output_objs_[obj_idx++].set_null();
+      // ref_pks: make it null
+      for (int64_t pk_id = 0; OB_SUCC(ret) && pk_id < MY_SPEC.base_tb_pkey_count_; ++pk_id, ++obj_idx) {
+        ann_output_objs_[obj_idx].set_null();
+      }
+      // vector
+      ann_output_objs_[obj_idx++].set_vector(cd.element_->vector_.ptr(), cd.element_->vector_.dims());
+    }
+  }
+
+  if (trans.is_started()) {
+    bool commit = (OB_SUCCESS == ret);
+    int tmp_ret = trans.end(commit);
+    if (OB_SUCCESS != tmp_ret) {
+      ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+    }
+  }
+  // LOG_INFO("################ mem usage", K(ret), K(hnsw_index_alloc_.used()), K(hnsw_index_alloc_.total()));
+  return ret;
+}
+
 int ObTableScanOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -1370,7 +1751,64 @@ int ObTableScanOp::inner_open()
       }
     }
   }
-  if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
+
+  if (OB_SUCC(ret) && tsc_rtdef_.is_build_vector_index_) {
+    LOG_INFO("############### ivfflat_sp build_vector_index", KP(this));
+    ObSqlCtx *sql_ctx = NULL;
+    const ObTableSchema *vector_index_table_schema = NULL;
+    if (OB_ISNULL(sql_ctx = ctx_.get_sql_ctx()) || OB_ISNULL(sql_ctx->schema_guard_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status: sql ctx or schema guard is null", K(ret));
+    } else if (OB_FAIL(sql_ctx->schema_guard_->get_table_schema(MTL_ID(),
+                       tsc_rtdef_.build_vector_index_table_id_,
+                       vector_index_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K(tsc_rtdef_.build_vector_index_table_id_));
+    } else if (OB_ISNULL(vector_index_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("NULL ptr", K(ret));
+    } else if (USING_IVFFLAT != vector_index_table_schema->get_index_using_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("table scan build vector index is not supported", K(ret));
+    } else if (OB_FAIL(open_inner_conn())) {
+      LOG_WARN("fail to open inner connection", K(ret));
+    } else if (ivfflat_build_helper_.init(MTL_ID(),
+               vector_index_table_schema->get_vector_ivfflat_lists(),
+               static_cast<ObVectorDistanceType>(vector_index_table_schema->get_vector_distance_func()))) {
+      LOG_WARN("failed to init ivfflat index build helper", K(ret), K(vector_index_table_schema));
+    } else {
+      LOG_INFO("############### ivfflat_sp build_vector_index", KP(this), K(ivfflat_build_helper_.is_inited()));
+    }
+  }
+
+  if (OB_SUCC(ret) && tsc_rtdef_.is_ann_scan_) {
+    if (OB_FAIL(open_inner_conn())) {
+      LOG_WARN("fail to open inner connection", K(ret));
+    } else if (MY_CTDEF.scan_ctdef_.table_param_.is_vector_ivfflat_index()) {
+      ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
+      const ObPhysicalPlan *phy_plan = nullptr;
+      int64_t probes = 0;
+      if (OB_NOT_NULL(plan_ctx)) {
+        phy_plan = plan_ctx->get_phy_plan();
+        if (OB_NOT_NULL(phy_plan)) {
+          probes = phy_plan->get_phy_plan_hint().vector_ivfflat_probes_;
+        }
+      }
+      if (OB_FAIL(ivfflat_helper_.init(tenant_id_,
+          MY_CTDEF.scan_ctdef_.table_param_.get_table_id(),
+          tsc_rtdef_.scan_rtdef_.ann_search_k_,
+          probes,
+          tsc_rtdef_.scan_rtdef_.ann_search_vector_,
+          MY_CTDEF.scan_ctdef_.table_param_.get_output_projector(),
+          inner_conn_,
+          ctx_.get_my_session()))) {
+        LOG_WARN("failed to init ivfflat helper", K(ret));
+      }
+    } else {
+      if (OB_FAIL(open_hnsw_index_op())) {
+        LOG_WARN("fail to open hnsw index op", K(ret));
+      }
+    }
+  } else if (OB_SUCC(ret) && MY_SPEC.is_global_index_back()) {
     if (OB_NOT_NULL(global_index_lookup_op_)) {
       global_index_lookup_op_->destroy();
       global_index_lookup_op_->~ObGlobalIndexLookupOpImpl();
@@ -1393,6 +1831,14 @@ int ObTableScanOp::inner_open()
 int ObTableScanOp::inner_close()
 {
   int ret = OB_SUCCESS;
+  hnsw_index_alloc_.reset();
+  unsafe_in_ring_allocator1_.reset();
+  unsafe_out_ring_allocator1_.reset();
+  unsafe_in_ring_allocator2_.reset();
+  unsafe_out_ring_allocator2_.reset();
+  ivfflat_helper_.destroy();
+  ivfflat_build_helper_.destroy();
+  close_inner_conn();
   if (das_ref_.has_task()) {
     int tmp_ret = fill_storage_feedback_info();
     if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
@@ -1462,15 +1908,23 @@ int ObTableScanOp::do_init_before_get_row()
       LOG_DEBUG("do init before get row meet iter end", K(MY_SPEC.id_));
     } else {
       if (MY_SPEC.gi_above_) {
+        // if GRANULE ITERATOR does not exist, set_partition_name in create_one_das_task
         ObGranuleTaskInfo info;
         if (OB_FAIL(get_access_tablet_loc(info))) {
           LOG_WARN("fail to get access partition failed", K(ret));
         } else if (OB_FAIL(reassign_task_ranges(info))) {
           LOG_WARN("assign task ranges failed", K(ret));
         }
+        if (OB_UNLIKELY(ivfflat_helper_.is_inited()) &&
+            OB_FAIL(ivfflat_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
+          LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+        }
+        if (OB_UNLIKELY(ivfflat_build_helper_.is_inited()) &&
+            OB_FAIL(ivfflat_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_))) {
+          LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+        }
       }
-      if (OB_FAIL(ret) || OB_UNLIKELY(iter_end_)) {
-        // do nothing
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(prepare_all_das_tasks())) {
         LOG_WARN("prepare das task failed", K(ret));
       } else if (OB_FAIL(do_table_scan())) {
@@ -1646,6 +2100,12 @@ int ObTableScanOp::local_iter_rescan()
   ObGranuleTaskInfo info;
   if (OB_FAIL(get_access_tablet_loc(info))) {
     LOG_WARN("fail to get access partition", K(ret));
+  } if (OB_UNLIKELY(ivfflat_helper_.is_inited()) &&
+        OB_FAIL(ivfflat_helper_.set_partition_name(info.tablet_loc_->tablet_id_))) {
+    LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
+  } else if (OB_UNLIKELY(ivfflat_build_helper_.is_inited()
+             && OB_FAIL(ivfflat_build_helper_.set_partition_name(info.tablet_loc_->tablet_id_, MY_SPEC.ref_table_id_)))) {
+    LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
   } else if (OB_FAIL(local_iter_reuse())) {
     LOG_WARN("failed to reset query range", K(ret));
   } else if (OB_FAIL(reassign_task_ranges(info))) {
@@ -1667,6 +2127,14 @@ int ObTableScanOp::local_iter_rescan()
               *MY_INPUT.tablet_loc_, MY_CTDEF.lookup_ctdef_->ref_table_id_);
           if (OB_FAIL(scan_op->set_lookup_tablet_id(lookup_tablet_loc->tablet_id_))) {
             LOG_WARN("set lookup tablet id failed", K(ret), KPC(lookup_tablet_loc));
+          }
+        }
+        if (MY_CTDEF.container_ctdef_ != nullptr) {
+          ObDASTableLoc *container_table_loc = tsc_rtdef_.container_rtdef_->table_loc_;
+          ObDASTabletLoc *container_tablet_loc = ObDASUtils::get_related_tablet_loc(
+              *MY_INPUT.tablet_loc_, MY_CTDEF.container_ctdef_->ref_table_id_);
+          if (OB_FAIL(scan_op->set_container_tablet_id(container_tablet_loc->tablet_id_))) {
+            LOG_WARN("set container tablet id failed", K(ret), KPC(container_tablet_loc));
           }
         }
       }
@@ -2220,6 +2688,24 @@ int ObTableScanOp::calc_expr_int_value(const ObExpr &expr, int64_t &retval, bool
   return ret;
 }
 
+int ObTableScanOp::calc_expr_vector_value(ObExpr &expr, common::ObTypeVector &vec, bool &is_null_value)
+{
+  int ret = OB_SUCCESS;
+  is_null_value = false;
+  OB_ASSERT(ob_is_vector_type(expr.datum_meta_.type_));
+  ObDatum *datum = NULL;
+  expr.max_length_ = -1;
+  if (OB_FAIL(expr.eval(eval_ctx_, datum))) {
+    LOG_WARN("expr evaluate failed", K(ret));
+  } else if (datum->null_) {
+    is_null_value = true;
+  } else {
+    vec.assign(reinterpret_cast<float*>(const_cast<char*>(datum->ptr_)),
+                   datum->pack_ / sizeof(float));
+  }
+  return ret;
+}
+
 OB_INLINE int ObTableScanOp::do_table_scan()
 {
   int ret = OB_SUCCESS;
@@ -2246,6 +2732,7 @@ OB_INLINE int ObTableScanOp::do_table_scan()
   return ret;
 }
 
+// 此处填充了key_range
 int ObTableScanOp::cherry_pick_range_by_tablet_id(ObDASScanOp *scan_op)
 {
   int ret = OB_SUCCESS;

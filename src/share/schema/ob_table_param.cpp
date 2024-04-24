@@ -624,7 +624,12 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     rowid_projector_(allocator),
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
-    is_fts_index_(false)
+    is_fts_index_(false),
+    index_using_type_(USING_TYPE_MAX),
+    is_build_vector_index_(false),
+    build_vector_index_table_id_(common::OB_INVALID_ID),
+    build_vector_index_container_table_id_(common::OB_INVALID_ID),
+    rowkey_cnt_(0)
 {
   reset();
 }
@@ -672,7 +677,12 @@ OB_DEF_SERIALIZE(ObTableParam)
               is_spatial_index_,
               group_by_projector_,
               is_fts_index_,
-              read_param_version_);
+              read_param_version_,
+              index_using_type_,
+              is_build_vector_index_,
+              build_vector_index_table_id_,
+              build_vector_index_container_table_id_,
+              rowkey_cnt_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, cg_read_infos_.count()))) {
       LOG_WARN("Fail to encode column count", K(ret));
@@ -718,7 +728,12 @@ OB_DEF_DESERIALIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_fts_index_,
-                read_param_version_);
+                read_param_version_,
+                index_using_type_,
+                is_build_vector_index_,
+                build_vector_index_table_id_,
+                build_vector_index_container_table_id_,
+                rowkey_cnt_);
   }
   if (OB_SUCC(ret) && pos < data_len) {
     int64_t cg_read_info_cnt = 0;
@@ -776,7 +791,12 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               is_spatial_index_,
               group_by_projector_,
               is_fts_index_,
-              read_param_version_);
+              read_param_version_,
+              index_using_type_,
+              is_build_vector_index_,
+              build_vector_index_table_id_,
+              build_vector_index_container_table_id_,
+              rowkey_cnt_);
   if (OB_SUCC(ret)) {
     len += serialization::encoded_length_vi64(cg_read_infos_.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
@@ -1480,7 +1500,12 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(use_lob_locator),
        K_(rowid_version),
        K_(rowid_projector),
-       K_(enable_lob_locator_v2));
+       K_(enable_lob_locator_v2),
+       K_(index_using_type),
+       K_(is_build_vector_index),
+       K_(build_vector_index_table_id),
+       K_(build_vector_index_container_table_id),
+       K_(rowkey_cnt));
   J_OBJ_END();
 
   return pos;

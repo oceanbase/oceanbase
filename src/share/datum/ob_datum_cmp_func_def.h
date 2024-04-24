@@ -269,7 +269,18 @@ template <> struct ObDatumTCCmp<ObNullTC, ObExtendTC> : public ObDummyCmp {};
 template <> struct ObDatumTCCmp<ObExtendTC, ObNullTC> : public ObDummyCmp {};
 template <> struct ObDatumTCCmp<ObNullTC, ObNullTC> : public ObDummyCmp {};
 
+template <>
+struct ObDatumTCCmp<ObVectorTC, ObVectorTC> : public ObDefined<>
+{
+  inline static int cmp(const ObDatum &l, const ObDatum &r, int &cmp_ret)
+  {
+    cmp_ret = 0;
+    return OB_SUCCESS;
+  }
+};
 
+template <> struct ObDatumTCCmp<ObVectorTC, ObNullTC> : public ObDummyCmp {};
+template <> struct ObDatumTCCmp<ObNullTC, ObVectorTC> : public ObDummyCmp {};
 ///////////////////////////////////////////////////////////////////////////////
 // begin define compare by ObObjType
 ///////////////////////////////////////////////////////////////////////////////

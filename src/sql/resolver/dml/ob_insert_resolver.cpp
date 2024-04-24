@@ -923,11 +923,20 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
   int ret = OB_SUCCESS;
   bool is_generated_column = false;
   const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
+  bool skip_col_value_cnt_check = (1 == insert_stmt.get_table_size()
+                                   && 1 == select_stmt.get_table_size()
+                                   && NULL != insert_stmt.get_table_item(0)
+                                   && NULL != select_stmt.get_table_item(0)
+                                   && insert_stmt.get_table_item(0)->is_index_table_
+                                   && insert_stmt.get_table_item(0)->is_using_vector_index_
+                                   && select_stmt.get_table_item(0)->type_ == TableItem::BASE_TABLE
+                                   && insert_stmt.get_table_item(0)->base_table_id_ ==
+                                      select_stmt.get_table_item(0)->ref_id_);
   ObSelectStmt *ref_stmt = NULL;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session_info_", K(ret));
-  } else if (values_desc.count() != select_stmt.get_select_item_size()) {
+  } else if (!skip_col_value_cnt_check && values_desc.count() != select_stmt.get_select_item_size()) {
     ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
     LOG_WARN("column count mismatch", K(values_desc.count()), K(select_stmt.get_select_item_size()));
     LOG_USER_ERROR(OB_ERR_COULUMN_VALUE_NOT_MATCH, 1l);

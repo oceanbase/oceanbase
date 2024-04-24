@@ -421,6 +421,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "validate_password_number_count",
   "validate_password_policy",
   "validate_password_special_char_count",
+  "vector_ivfflat_probes",
   "version",
   "version_comment",
   "version_compile_machine",
@@ -689,6 +690,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_VALIDATE_PASSWORD_NUMBER_COUNT,
   SYS_VAR_VALIDATE_PASSWORD_POLICY,
   SYS_VAR_VALIDATE_PASSWORD_SPECIAL_CHAR_COUNT,
+  SYS_VAR_VECTOR_IVFFLAT_PROBES,
   SYS_VAR_VERSION,
   SYS_VAR_VERSION_COMMENT,
   SYS_VAR_VERSION_COMPILE_MACHINE,
@@ -962,7 +964,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_security_version",
   "cardinality_estimation_model",
   "query_rewrite_enabled",
-  "query_rewrite_integrity"
+  "query_rewrite_integrity",
+  "vector_ivfflat_probes"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1396,6 +1399,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarCardinalityEstimationModel)
         + sizeof(ObSysVarQueryRewriteEnabled)
         + sizeof(ObSysVarQueryRewriteIntegrity)
+        + sizeof(ObSysVarVectorIvfflatProbes)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3787,6 +3791,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_QUERY_REWRITE_INTEGRITY))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarQueryRewriteIntegrity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVectorIvfflatProbes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVectorIvfflatProbes", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_VECTOR_IVFFLAT_PROBES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarVectorIvfflatProbes));
       }
     }
 
@@ -6711,6 +6724,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarQueryRewriteIntegrity())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarQueryRewriteIntegrity", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_VECTOR_IVFFLAT_PROBES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarVectorIvfflatProbes)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarVectorIvfflatProbes)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarVectorIvfflatProbes())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarVectorIvfflatProbes", K(ret));
       }
       break;
     }

@@ -3899,8 +3899,12 @@ int ObLSTabletService::check_is_gencol_check_failed(const ObRelativeTable &data_
         } else if (is_shadow_column(column->get_column_id())) {
           //shadow column does not exists in basic table, do nothing
         } else if (OB_ISNULL(column = data_table_schema->get_column_schema(column->get_column_id()))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret), KP(column));
+          if (index_table_schema->is_using_ivfflat_index() && 0 == (*iter)->get_column_name_str().compare("center_idx")) {
+            // do nothing // ivfflat index extra column
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret), KP(column));
+          }
         } else if (column->is_virtual_generated_column()) {
           is_virtual_gen_col = true;
         }

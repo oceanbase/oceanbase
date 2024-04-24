@@ -47,6 +47,7 @@ ObEvalCtx::ObEvalCtx(ObExecContext &exec_ctx, ObIAllocator *allocator)
     tmp_alloc_(exec_ctx.get_eval_tmp_allocator()),
     datum_caster_(NULL),
     tmp_alloc_used_(exec_ctx.get_tmp_alloc_used()),
+    with_order_(false),
     batch_idx_(0),
     batch_size_(0),
     expr_res_alloc_((dynamic_cast<ObArenaAllocator*>(allocator) != NULL) ? (*(dynamic_cast<ObArenaAllocator*>(allocator))) : exec_ctx.get_eval_res_allocator())

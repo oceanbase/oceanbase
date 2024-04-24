@@ -293,7 +293,9 @@ public:
   inline int512_t get_decimal_int512() const { return *decimal_int_->int512_v_; }
 
   inline int32_t get_int_bytes() const { return len_; }
-
+  inline ObTypeVector get_vector() const { return ObTypeVector(const_cast<float*>(
+                                                                reinterpret_cast<const float*>(ptr_)),
+                                                               len_ / sizeof(float)); }
   // Setter functions for ObDatum.
   // CAUTION: The caller is responsible for ensuring %ptr_ has enough memory.
   //
@@ -403,6 +405,11 @@ public:
   {
     lob_data_ = &value;
     pack_ = static_cast<uint32_t>(length);//TODO(yuanzhi.zy):need check
+  }
+  inline void set_vector(const char* ptr, int64_t length)
+  {
+    ptr_ = ptr;
+    pack_ = static_cast<uint32_t>(length);
   }
   inline void set_datum(const ObDatum &other) { *this = other; }
   inline int64_t get_deep_copy_size() const { return is_null() ? 0 : len_; }
@@ -924,6 +931,10 @@ inline int ObDatum::from_obj(const ObObj &obj)
         obj2datum<OBJ_DATUM_DECIMALINT>(obj);
         break;
       }
+      case ObVectorType: {
+        obj2datum<OBJ_DATUM_STRING>(obj);
+        break;
+      }
       case ObMaxType: {
         ret = common::OB_ERR_UNEXPECTED;
         COMMON_LOG(WARN, "invalid obj type", K(ret), K(obj), K(obj.get_type()));
@@ -1067,6 +1078,10 @@ inline int ObDatum::to_obj(ObObj &obj, const ObObjMeta &meta) const
       }
       case ObDecimalIntType: {
         datum2obj<OBJ_DATUM_DECIMALINT>(obj);
+        break;
+      }
+      case ObVectorType: {
+        datum2obj<OBJ_DATUM_STRING>(obj);
         break;
       }
       case ObMaxType: {

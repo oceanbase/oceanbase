@@ -1374,6 +1374,67 @@ static uint64_t varchar_murmurhash(const ObObj &obj, const ObCollationType cs_ty
 DEF_VARCHAR_FUNCS(ObVarcharType, varchar, ObString);
 DEF_VARCHAR_FUNCS(ObCharType, char, ObString);
 
+// ObVectorType
+#define DEF_VECTOR_PRINT_FUNCS(OBJTYPE)                           \
+  template <>                                                           \
+  inline int obj_print_sql<OBJTYPE>(const ObObj &obj, char *buffer, int64_t length, int64_t &pos, \
+                                    const ObObjPrintParams &params)      \
+  {                                                                     \
+    UNUSED(params);                                                    \
+    int ret = OB_SUCCESS;                                               \
+    ObTypeVector vec = obj.get_vector();                                    \
+    if (OB_FAIL(databuff_printf(buffer, length, pos, "[ dims: %ld ]", vec.dims()))) { \
+    }                                                                   \
+    return ret;                                                         \
+  }                                                                     \
+  template <>                                                           \
+  inline int obj_print_str<OBJTYPE>(const ObObj &obj, char *buffer, int64_t length, int64_t &pos, \
+                                    const ObObjPrintParams &params)      \
+  {                                                                     \
+    UNUSED(params);                                                    \
+    int ret = OB_SUCCESS;                                               \
+    ObTypeVector vec = obj.get_vector();                                    \
+    if (OB_FAIL(databuff_printf(buffer, length, pos, "[ dims: %ld ]", vec.dims()))) { \
+    }                                                                   \
+    return ret;                                                         \
+  } \
+  template <>                                                           \
+  inline int obj_print_plain_str<OBJTYPE>(const ObObj &obj, char *buffer, int64_t length, int64_t &pos, \
+                                    const ObObjPrintParams &params)      \
+  {                                                                     \
+    UNUSED(params);                                                    \
+    int ret = OB_SUCCESS;                                               \
+    ObTypeVector vec = obj.get_vector();                                    \
+    if (OB_FAIL(databuff_printf(buffer, length, pos, "[ dims: %ld ]", vec.dims()))) { \
+    }                                                                   \
+    return ret;                                                         \
+  } \
+  template <>                                                           \
+  inline int obj_print_json<OBJTYPE>(const ObObj &obj, char *buf, int64_t buf_len, int64_t &pos,\
+                                     const ObObjPrintParams &params) \
+  {                                                                     \
+    UNUSED(params);                                                    \
+    J_OBJ_START();                                                      \
+    PRINT_META();                                                       \
+    BUF_PRINTO(ob_obj_type_str(obj.get_type()));                        \
+    J_COLON();                                                          \
+    BUF_PRINTO(obj.get_vector().dims());                               \
+    J_COLON();                                                        \
+    for (int64_t i = 0; i < obj.get_vector().dims(); ++i) {            \
+      BUF_PRINTO(obj.get_vector().at(i));                             \
+      J_COMMA();                                                      \
+    }                                                                 \
+    J_OBJ_END();                                                        \
+    return OB_SUCCESS;                                                  \
+  } \
+
+#define DEF_VECTOR_FUNCS(OBJTYPE, TYPE, VTYPE) \
+  DEF_VECTOR_PRINT_FUNCS(OBJTYPE);             \
+  DEF_STRING_CS_FUNCS(OBJTYPE);                \
+  DEF_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
+
+DEF_VECTOR_FUNCS(ObVectorType, vector, ObTypeVector);
+
 // ObRawType=39
 #define DEF_RAW_PRINT_FUNCS(OBJTYPE)                                \
   template <>                                                           \

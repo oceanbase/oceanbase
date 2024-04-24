@@ -43,7 +43,8 @@ protected:
       const int64_t index_keyname_value,
       ParseNode *table_option_node,
       ObCreateIndexStmt *crt_idx_stmt,
-      const share::schema::ObTableSchema *tbl_schema);
+      const share::schema::ObTableSchema *tbl_schema,
+      bool& is_crt_vector_index);
   int resolve_index_option_node(
       ParseNode *index_option_node,
       ObCreateIndexStmt *crt_idx_stmt,

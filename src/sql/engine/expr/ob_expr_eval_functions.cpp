@@ -340,6 +340,7 @@
 #include "ob_expr_extract_cert_expired_time.h"
 #include "ob_expr_transaction_id.h"
 #include "ob_expr_inner_row_cmp_val.h"
+#include "sql/engine/expr/ob_expr_vector.h"
 
 namespace oceanbase
 {
@@ -1131,6 +1132,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprGTIDSubtract::eval_subtract,                         /* 687 */
   NULL, // ObExprWaitForExecutedGTIDSet::eval_wait_for_executed_gtid_set, /* 688 */
   NULL, // ObExprWaitUntilSQLThreadAfterGTIDs::eval_wait_until_sql_thread_after_gtids /* 689 */
+  ObExprMul::mul_vector_num,
+  ObExprMul::mul_num_vector,
+  ObExprVectorL2Distance::calc_result,
+  ObExprVectorIpDistance::calc_result,
+  ObExprVectorCosineDistance::calc_result,
+
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1264,6 +1271,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
+  ObExprMul::mul_vector_num_batch,
+  ObExprMul::mul_num_vector_batch,
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {

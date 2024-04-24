@@ -5990,13 +5990,18 @@ int ObResolverUtils::resolve_data_type(const ParseNode &type_node,
         }
       //}
       break;
+    case ObVectorTC:
+      data_type.set_length(length);
+      data_type.set_precision(default_accuracy.get_precision());
+      data_type.set_scale(default_accuracy.get_scale());
+      break;
     default:
       ret = OB_ERR_ILLEGAL_TYPE;
       SQL_RESV_LOG(WARN, "Unsupport data type of column definiton", K(ident_name), K(data_type), K(ret));
       break;
   }
   }
-  LOG_DEBUG("resolve data type", K(ret), K(data_type), K(lbt()));
+  LOG_INFO("resolve data type", K(ret), K(data_type), K(lbt()));
   return ret;
 }
 

@@ -123,7 +123,7 @@ int ObMySQLTransaction::do_stash_query(int min_batch_cnt)
     if (it->second->get_row_cnt() < min_batch_cnt) {
       continue;
     }
-    const uint64_t start_time = ObTimeUtility::current_time();
+    // const uint64_t start_time = ObTimeUtility::current_time();
     if (it->second->get_tenant_id() == OB_INVALID_TENANT_ID) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("do_stash_query", K(ret));
@@ -133,9 +133,9 @@ int ObMySQLTransaction::do_stash_query(int min_batch_cnt)
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("query_write", K(ret), K(affected_rows), "row_cnt", it->second->get_row_cnt(), "query", it->second->get_stash_query());
     } else {
-      const uint64_t end_time = ObTimeUtility::current_time();
+      // const uint64_t end_time = ObTimeUtility::current_time();
       it->second->reset();
-      LOG_INFO("query_write succ", "table", it->first, "rows", affected_rows, "cost", end_time - start_time);
+      // LOG_INFO("query_write succ", "table", it->first, "rows", affected_rows, "cost", end_time - start_time);
     }
   }
   return ret;

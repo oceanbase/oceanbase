@@ -86,6 +86,8 @@ public:
   int get_interval_ds(const int64_t col_idx, common::ObIntervalDSValue &val) const;
   int get_nvarchar2(const int64_t col_idx, common::ObString &nvarchar2_val) const;
   int get_nchar(const int64_t col_idx, common::ObString &nchar_val) const;
+  int get_vector_value(const int64_t col_idx, float *&vector, int64_t &vector_len) const;
+  int get_vector(const int64_t col_idx, ObTypeVector &vector) const;
 
   /*
    * read int/str/TODO from result set
@@ -123,6 +125,8 @@ public:
   int get_interval_ds(const char *col_name, common::ObIntervalDSValue &val) const;
   int get_nvarchar2(const char *col_name, common::ObString &nvarchar2_val) const;
   int get_nchar(const char *col_name, common::ObString &nchar_val) const;
+  int get_vector_value(const char *col_name, float *&vector, int64_t &vector_len) const;
+  int get_vector(const char *col_name, ObTypeVector &vector) const;
 
   //debug function
   int print_info() const;

@@ -4218,6 +4218,10 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Only special op can allocate a granule iterator", K(get_type()));
   } else {
+    if (LOG_TABLE_SCAN == get_type()
+        && reinterpret_cast<ObLogTableScan*>(this)->get_is_vector_index()) {
+      LOG_INFO("allocate gi in vector index searching");
+    }
     ObLogicalOperator *log_op = NULL;
     ObLogOperatorFactory &factory = get_plan()->get_log_op_factory();
     if (OB_ISNULL(log_op = factory.allocate(*(get_plan()), LOG_GRANULE_ITERATOR))) {
@@ -4292,6 +4296,12 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
         if (OB_FAIL(gi_op->is_partition_gi(partition_granule))) {
           LOG_WARN("failed judge partition granule", K(ret));
         }
+      }
+
+      if (OB_SUCC(ret) && LOG_TABLE_SCAN == get_type()
+          && (static_cast<ObLogTableScan*>(this)->get_is_vector_index()
+          || static_cast<ObLogTableScan*>(this)->get_is_build_vector_index())) {
+        gi_op->add_flag(GI_FORCE_PARTITION_GRANULE);
       }
 
       if (ctx.force_partition() || partition_granule) {

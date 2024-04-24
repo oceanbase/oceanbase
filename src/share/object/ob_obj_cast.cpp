@@ -5104,6 +5104,66 @@ static int string_int(const ObObjType expect_type, ObObjCastParams &params,
   return ret;
 }
 
+static int string_vector(const ObObjType expect_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(params.allocator_v2_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid allocator", K(ret));
+  } else {
+    ObString in_str = in.get_string();
+    in_str.trim();
+    int64_t len = in_str.length();
+    if (OB_UNLIKELY(len < 2 || '[' != in_str[0] || ']' != in_str[len - 1])) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("varchar is not in vector format", K(ret));
+    } else {
+      int64_t idx = 1;
+      int64_t last_delimiter = 0;
+      float out_val = 0.0;
+      ObArray<float> out_vals;
+      ObString tmp_slice;
+      while (OB_SUCC(ret) && idx <= len - 1) {
+        if (',' == in_str[idx] || idx == len - 1) {
+          ObString str_utf8;
+          int err = 0;
+          char *endptr = NULL;
+          tmp_slice.reset();
+          tmp_slice.assign(in_str.ptr() + last_delimiter + 1, idx - last_delimiter - 1);
+          if (OB_FAIL(convert_string_collation(tmp_slice, in.get_collation_type(), str_utf8,
+                                  ObCharset::get_system_collation(), params))) {
+            LOG_WARN("convert_string_collation", K(ret), K(str_utf8), K(tmp_slice));
+          } else {
+            out_val = ObCharset::strntodv2(str_utf8.ptr(), str_utf8.length(), &endptr, &err);
+            if (EOVERFLOW == err && (-DBL_MAX == out_val || DBL_MAX == out_val)) {
+              ret = OB_DATA_OUT_OF_RANGE;
+            } else {
+              out_vals.push_back(out_val);
+            }
+          }
+        }
+        ++idx;
+      }
+
+      float* d_vals = nullptr;
+      int64_t vector_len = out_vals.count();
+      if (OB_FAIL(ret)) {
+        // do_nothing
+      } else if (OB_ISNULL(d_vals = reinterpret_cast<float*>(params.alloc(vector_len * sizeof(float))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret));
+      } else {
+        for (int64_t i = 0; i < vector_len; ++i) {
+          d_vals[i] = out_vals.at(i);
+        }
+        out.set_vector(d_vals, vector_len);
+      }
+    }
+  }
+  return ret;
+}
+
 static int string_uint(const ObObjType expect_type, ObObjCastParams &params,
                        const ObObj &in, ObObj &out, const ObCastMode cast_mode)
 {
@@ -10436,6 +10496,47 @@ static int geometry_decimalint(const ObObjType expected_type, ObObjCastParams &p
   return ret;
 }
 
+static int vector_string(const ObObjType expected_type, ObObjCastParams &params,
+                         const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ObVectorTC != in.get_type_class()
+                  || ObStringTC != ob_obj_type_class(expected_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expected_type));
+  } else {
+    char *tmp_buf = nullptr;
+    int64_t tmp_buf_len = 0;
+    int64_t tmp_buf_pos = 0;
+    ObIAllocator* allocator = params.allocator_v2_;
+    const ObTypeVector& val = in.get_vector();
+
+    if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, "["))) {
+      LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < val.dims(); ++i) {
+        if (i == 0) {
+          if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, "%.6f", val.at(i)))) {
+            LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos), K(i), K(val.at(i)));
+          }
+        } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, ",%.6f", val.at(i)))) {
+          LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos), K(i), K(val.at(i)));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, "]"))) {
+        LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      out.set_varchar(tmp_buf, static_cast<int32_t>(tmp_buf_pos));
+    }
+  }
+
+  return ret;
+}
+
 ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
 {
   {
@@ -10466,6 +10567,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_identity,/*geometry*/
     cast_not_expected,/*udt, mysql mode does not have udt*/
     cast_identity,/*decimalint*/
+    cast_identity,/*vector*/
   },
   {
     /*int -> XXX*/
@@ -10495,6 +10597,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     int_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     int_decimalint,/*decimal int*/
+    cast_not_support,/*vector*/
   },
   {
     /*uint -> XXX*/
@@ -10524,6 +10627,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     uint_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     uint_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*float -> XXX*/
@@ -10553,6 +10657,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     float_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     float_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*double -> XXX*/
@@ -10582,6 +10687,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     double_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     double_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*number -> XXX*/
@@ -10611,6 +10717,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     number_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     number_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*datetime -> XXX*/
@@ -10640,6 +10747,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     datetime_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     datetime_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*date -> XXX*/
@@ -10669,6 +10777,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     date_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     date_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*time -> XXX*/
@@ -10698,6 +10807,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     time_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     time_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*year -> XXX*/
@@ -10727,6 +10837,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     year_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     year_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*string -> XXX*/
@@ -10756,6 +10867,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     string_decimalint,/*decimalint*/
+    string_vector,/*vector*/
   },
   {
     /*extend -> XXX*/
@@ -10785,6 +10897,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     pl_extend_sql_udt,/*udt*/
     cast_not_support,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*unknown -> XXX*/
@@ -10814,6 +10927,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     unknown_other,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*text -> XXX*/
@@ -10843,6 +10957,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     string_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     text_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*bit -> XXX*/
@@ -10872,6 +10987,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     bit_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     bit_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*enum -> XXX*/
@@ -10901,6 +11017,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*enumset_inner -> XXX*/
@@ -10930,6 +11047,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_support,/*geometry*/
     cast_not_expected,/*udt*/
     enumset_inner_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*otimestamp -> XXX*/
@@ -10959,6 +11077,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*raw -> XXX*/
@@ -10988,6 +11107,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*interval -> XXX*/
@@ -11017,6 +11137,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*rowid -> XXX*/
@@ -11046,6 +11167,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*lob -> XXX*/
@@ -11075,6 +11197,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     lob_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     lob_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*json -> XXX*/
@@ -11104,6 +11227,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     json_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     json_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*geometry -> XXX*/
@@ -11133,6 +11257,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     geometry_geometry,/*geometry*/
     cast_not_expected,/*udt*/
     geometry_decimalint,/*decimalint*/
+    cast_not_support,/*vector*/
   },
   {
     /*udt -> XXX*/
@@ -11162,6 +11287,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*geometry*/
     cast_not_expected,/*udt*/
     cast_not_expected,/*decimal int */
+    cast_not_support,/*vector*/
   },
   {
     /*decimalint-> XXX*/
@@ -11191,7 +11317,38 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     decimalint_geometry,/*geometry*/
     cast_not_expected, /*udt*/
     decimalint_decimalint,/*decimalint*/
-  }
+    cast_not_support,/*vector*/
+  },
+  {
+    /*vector-> XXX*/
+    cast_not_support,/*null*/
+    cast_not_support,/*int*/
+    cast_not_support,/*uint*/
+    cast_not_support,/*float*/
+    cast_not_support,/*double*/
+    cast_not_support,/*number*/
+    cast_not_support,/*datetime*/
+    cast_not_support,/*date*/
+    cast_not_support,/*time*/
+    cast_not_support,/*year*/
+    vector_string,/*string*/
+    cast_not_support,/*extend*/
+    cast_not_support,/*unknown*/
+    cast_not_support,/*text*/
+    cast_not_support,/*bit*/
+    cast_not_support,/*enumset*/
+    cast_not_support,/*enumset_inner*/
+    cast_not_support,/*otimestamp*/
+    cast_not_support,/*raw*/
+    cast_not_support,/*interval*/
+    cast_not_support,/*rowid*/
+    cast_not_support,/*lob*/
+    cast_not_support,/*json*/
+    cast_not_support,/*geometry*/
+    cast_not_support, /*udt*/
+    cast_not_support,/*decimalint*/
+    cast_not_support,/*vector*/
+  },
 };
 
 ObObjCastFunc OBJ_CAST_ORACLE_EXPLICIT[ObMaxTC][ObMaxTC] =

@@ -237,6 +237,12 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
           }
         }
       }
+      if (OB_SUCC(ret) && value.get_type() == ObVectorType) {
+        ObCastCtx cast_ctx(&result.get_mem_pool(), NULL, CM_WARN_ON_FAIL, CS_TYPE_BINARY);
+        if (OB_FAIL(common::ObObjCaster::to_type(ObVarcharType, cast_ctx, value, value))) {
+          LOG_WARN("failed to cast vector to string", K(ret), K(value), K(value.get_type()));
+        }
+      }
       if (OB_SUCC(ret) && !is_packed) {
         // cluster version < 4.1
         //    use only locator and response routine

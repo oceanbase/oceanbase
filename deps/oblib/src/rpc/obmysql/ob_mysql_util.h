@@ -18,6 +18,7 @@
 #include <float.h>              // for FLT_DIG and DBL_DIG
 #include "lib/oblog/ob_log.h"
 #include "lib/string/ob_string.h"
+#include "lib/vector/ob_vector.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/number/ob_number_v2.h"
 #include "lib/timezone/ob_timezone_info.h"
@@ -436,6 +437,7 @@ public:
                                  const ObDecimalInt *decint, const int32_t int_bytes, int16_t scale,
                                  int64_t &pos, bool zerofill, int32_t zflength);
   static int geometry_cell_str(char *buf, const int64_t len, const ObString &val, int64_t &pos);
+  static int vector_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObTypeVector &val, int64_t &pos);
   static inline int16_t float_length(const int16_t scale);
 
 public:

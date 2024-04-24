@@ -27,6 +27,11 @@
 #include "sql/das/ob_text_retrieval_op.h"
 #include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "observer/ob_inner_sql_connection.h"
+#include "share/vector_index/ob_hnsw_index_builder.h"
+#include "share/vector_index/ob_hnsw_index_reader.h"
+#include "share/vector_index/ob_ivfflat_index_search_helper.h"
+#include "share/vector_index/ob_ivfflat_index_build_helper.h"
 namespace oceanbase
 {
 namespace common
@@ -99,8 +104,8 @@ public:
   //the virtual agent table's access_exprs logically corresponds to DAS.result_output_exprs
   //but DAS.result_outputs is the column of the real table
   //so the pointer of the expr is not equal
-  ExprFixedArray access_exprs_;
-  common::ObFixedArray<uint64_t, common::ObIAllocator> access_column_ids_;
+  ExprFixedArray access_exprs_; // 需要访问（得到）的列expr
+  common::ObFixedArray<uint64_t, common::ObIAllocator> access_column_ids_; // 需要访问（得到）的列id
   common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> access_row_types_;
   common::ObFixedArray<common::ObObjMeta, common::ObIAllocator> key_types_;
 };
@@ -137,6 +142,8 @@ public:
       scan_ctdef_(allocator),
       lookup_ctdef_(nullptr),
       lookup_loc_meta_(nullptr),
+      container_ctdef_(nullptr),
+      container_loc_meta_(nullptr),
       das_dppr_tbl_(nullptr),
       allocator_(allocator),
       calc_part_id_expr_(NULL),
@@ -163,6 +170,8 @@ public:
                K_(scan_ctdef),
                KPC_(lookup_ctdef),
                KPC_(lookup_loc_meta),
+               KP_(container_ctdef),
+               KP_(container_loc_meta),
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
@@ -188,6 +197,9 @@ public:
   //lookup_loc_meta_ used to calc the main table tablet location
   //when query access the global index and lookup the main table
   ObDASTableLocMeta *lookup_loc_meta_;
+  // 用于查ivfflat索引表前查询container表 // 和ivfflat索引表强绑定
+  ObDASScanCtDef *container_ctdef_;
+  ObDASTableLocMeta *container_loc_meta_;
   //used for dynamic partition pruning
   ObTableLocation *das_dppr_tbl_;
   common::ObIAllocator &allocator_;
@@ -208,10 +220,15 @@ struct ObTableScanRtDef
     : bnlj_params_(allocator),
       scan_rtdef_(),
       lookup_rtdef_(nullptr),
+      container_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
       group_size_(0),
-      max_group_size_(0)
+      max_group_size_(0),
+      is_ann_scan_(false),
+      is_build_vector_index_(false),
+      build_vector_index_table_id_(common::OB_INVALID_ID),
+      build_vector_index_container_table_id_(common::OB_INVALID_ID)
   { }
 
   void prepare_multi_part_limit_param();
@@ -220,17 +237,26 @@ struct ObTableScanRtDef
   TO_STRING_KV(K_(scan_rtdef),
                KPC_(lookup_rtdef),
                K_(group_size),
-               K_(max_group_size));
+               K_(max_group_size),
+               K_(is_ann_scan),
+               K_(is_build_vector_index),
+               K_(build_vector_index_table_id),
+               K_(build_vector_index_container_table_id));
 
   GroupRescanParamArray bnlj_params_;
   ObDASScanRtDef scan_rtdef_;
   ObDASScanRtDef *lookup_rtdef_;
+  ObDASScanRtDef *container_rtdef_;
   // for equal_query_range opt
   void *range_buffers_;
   int64_t range_buffer_idx_;
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
+  bool is_ann_scan_;
+  bool is_build_vector_index_;
+  uint64_t build_vector_index_table_id_;
+  uint64_t build_vector_index_container_table_id_;
 };
 
 // table scan operator input
@@ -400,6 +426,12 @@ public:
   };
   int64_t tenant_id_col_idx_;
   int64_t partition_id_calc_type_;
+  // For HNSW index table scan
+  common::ObString vector_index_real_name_;
+  common::ObString vector_index_db_name_;
+  int64_t base_tb_pkey_count_;
+  common::ObString vector_column_name_;
+  int64_t vector_index_tb_id_;
 };
 
 class ObTableScanOp : public ObOperator
@@ -412,6 +444,14 @@ public:
   ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   ~ObTableScanOp();
 
+  sql::ObSQLSessionInfo::StmtSavedValue &get_saved_session()
+  {
+    if (NULL == saved_session_) {
+      saved_session_ = new (saved_session_buf_) sql::ObSQLSessionInfo::StmtSavedValue();
+    }
+    return *saved_session_;
+  }
+
   int inner_open() override;
   int inner_rescan() override;
   int switch_iterator() override;
@@ -420,6 +460,17 @@ public:
   int inner_close() override;
   int do_init_before_get_row() override;
   void destroy() override;
+
+  int open_inner_conn();
+  int close_inner_conn();
+  int begin_nested_session(bool skip_cur_stmt_tables);
+  int end_nested_session();
+  int open_hnsw_index_op();
+  int get_hnsw_index_meta(ObVectorDistanceType& vd_type, int64_t &hnsw_dim, int64_t &hnsw_m,
+                          int64_t &hnsw_ef_construction, int64_t &hnsw_entry_level,
+                          ObArray<ObString> &rowkey,
+                          common::ObArenaAllocator* allocator);
+  int init_hnsw_index_output_rows(int64_t cell_cnt, int64_t row_cnt, ObObj* &objs);
 
   void set_iter_end(bool iter_end) { iter_end_ = iter_end; }
 
@@ -452,6 +503,7 @@ protected:
   int switch_batch_iter();
   int set_batch_iter(int64_t group_id);
   int calc_expr_int_value(const ObExpr &expr, int64_t &retval, bool &is_null_value);
+  int calc_expr_vector_value(ObExpr &expr, common::ObTypeVector &vec, bool &is_null_value);
   int init_table_scan_rtdef();
   int init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef,
                           ObDASScanRtDef &das_rtdef,
@@ -499,7 +551,7 @@ protected:
   int prepare_pushdown_limit_param();
   bool has_das_scan_op(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op);
   int init_das_group_range(const int64_t cur_group_idx, const int64_t group_size);
-  int create_one_das_task(ObDASTabletLoc *tablet_loc);
+  int create_one_das_task(ObDASTabletLoc *tablet_loc, bool no_dist_das = false);
   int do_table_scan();
   int get_next_row_with_das();
   bool need_init_checksum();
@@ -630,6 +682,28 @@ protected:
   bool in_rescan_;
   ObGlobalIndexLookupOpImpl *global_index_lookup_op_;
   ObSpatialIndexCache spat_index_;
+  bool need_close_conn_;
+  observer::ObInnerSQLConnection::SavedValue saved_conn_;
+  // HNSW INDEX OP
+  common::ObMySQLProxy *sql_proxy_;
+  observer::ObInnerSQLConnection *inner_conn_;
+  uint64_t tenant_id_;
+  common::ObArenaAllocator hnsw_index_alloc_;
+  common::ObArenaAllocator unsafe_in_ring_allocator1_;
+  common::ObArenaAllocator unsafe_out_ring_allocator1_;
+  common::ObArenaAllocator unsafe_in_ring_allocator2_;
+  common::ObArenaAllocator unsafe_out_ring_allocator2_;
+  // HNSW INDEX RESULT ITER
+  ObObj* ann_output_objs_;
+  int64_t hnsw_index_scan_cell_cnt_;
+  int64_t hnsw_index_scan_row_cnt_;
+
+  // IVFFLAT INDEX SEARCH HELPER
+  ObIvfflatIndexSearchHelper ivfflat_helper_;
+  ObIvfflatIndexBuildHelper  ivfflat_build_helper_;
+private:
+  ObSQLSessionInfo::StmtSavedValue *saved_session_;
+  char saved_session_buf_[sizeof(ObSQLSessionInfo::StmtSavedValue)] __attribute__((aligned (16)));;
  };
 
 class ObGlobalIndexLookupOpImpl : public ObIndexLookupOpImpl

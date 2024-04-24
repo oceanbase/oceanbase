@@ -1257,7 +1257,8 @@ int ObObj::build_not_strict_default_value(int16_t precision)
 int ObObj::deep_copy(const ObObj &src, char *buf, const int64_t size, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type()) || ob_is_geometry(src.get_type())) {
+  if (ob_is_string_type(src.get_type()) || ob_is_json(src.get_type()) || ob_is_geometry(src.get_type()) ||
+      ob_is_vector_type(src.get_type())) {
     ObString src_str = src.get_string();
     if (OB_UNLIKELY(size < (pos + src_str.length()))) {
       ret = OB_BUF_NOT_ENOUGH;
@@ -1341,7 +1342,8 @@ void* ObObj::get_deep_copy_obj_ptr()
 {
   void * ptr = NULL;
   if (ob_is_string_type(this->get_type()) || ob_is_json(this->get_type())
-      || ob_is_geometry(this->get_type()) || ob_is_user_defined_sql_type(this->get_type())) {
+      || ob_is_geometry(this->get_type()) || ob_is_user_defined_sql_type(this->get_type())
+      || ob_is_vector_type(this->get_type())) {
     // val_len_ == 0 is empty string, and it may point to unexpected address
     // Therefore, reset it to NULL
     if (val_len_ != 0) {
@@ -1769,7 +1771,8 @@ ObObjTypeFuncs OBJ_FUNCS[ObMaxType] =
   DEF_FUNC_ENTRY(ObJsonType),          // 47, json
   DEF_FUNC_ENTRY(ObGeometryType),      // 48, geometry TODO!!!!!
   DEF_FUNC_ENTRY(ObUserDefinedSQLType),// 49, udt
-  DEF_FUNC_ENTRY(ObDecimalIntType)     // 50, decimal int
+  DEF_FUNC_ENTRY(ObDecimalIntType),    // 50, decimal int
+  DEF_FUNC_ENTRY(ObVectorType),         // 51, vector
 };
 
 ob_obj_hash ObObjUtil::get_murmurhash_v3(ObObjType type)

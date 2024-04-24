@@ -4999,7 +4999,11 @@ int ObSelectResolver::resolve_table_column_ref(const ObQualifiedName &q_name, Ob
   //3. object (sequence)
   int ret = OB_SUCCESS;
   if (OB_FAIL(resolve_table_column_expr(q_name, real_ref_expr))) {
-    LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
+    if (q_name.col_name_ == "center_idx") {
+      LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
+    } else {
+      LOG_WARN("resolve table column expr failed", K(ret), K(q_name), K(lbt()));
+    }
   } else if (column_need_check_group_by(q_name)) {
     //任何一个表达式引用到的本层的列，都必须记录到standard group checker中，并进行only full group by检查
     // In Oracle mode, it will add all referenced columns, but group by checker will check every expression recursively intead of one by one column

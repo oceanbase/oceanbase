@@ -647,36 +647,68 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         ObColumnSchemaV2 last_col;
         bool is_valid_col = false;
         ObArray<ObString> ctxcat_cols;
-        for (int64_t k = 0; OB_SUCC(ret) && k < index_column_num; k++) {
-          const ObRowkeyColumn *rowkey_column = index_rowkey_info.get_column(k);
-          const ObColumnSchemaV2 *col = NULL;
-          if (NULL == rowkey_column) {
-            ret = OB_SCHEMA_ERROR;
-            SHARE_SCHEMA_LOG(WARN, "fail to get rowkey column", K(ret));
-          } else if (NULL == (col = schema_guard_.get_column_schema(index_schema->get_tenant_id(),
-                                                                    index_schema->get_table_id(),
-                                                                    rowkey_column->column_id_))) {
-            ret = OB_SCHEMA_ERROR;
-            SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
-          } else if (!col->is_shadow_column()) {
-            if (OB_SUCC(ret) && is_valid_col) {
-              if (OB_FAIL(print_index_column(table_schema, last_col, ctxcat_cols, false /* not last one */, buf, buf_len, pos))) {
-                SHARE_SCHEMA_LOG(WARN, "fail to print index column", K(last_col), K(ret));
+        if (index_schema->is_using_vector_index()) {
+          ObArray<schema::ObColDesc> column_ids;
+          if (FAILEDx(index_schema->get_column_ids(column_ids))) {
+            LOG_WARN("fail to get column ids", K(ret));
+          } else {
+            int64_t index_column_idx = column_ids.count() - 1; // last column is vector index column
+            if (index_schema->is_using_hnsw_index()) {
+              index_column_idx = column_ids.count() - 3; // last three column: index column | n_neighbors | distance
+            }
+            if (index_column_idx < 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpect index_column_idx", K(ret), K(index_column_idx), KPC(index_schema));
+            } else {
+              const int64_t col_id = column_ids.at(index_column_idx).col_id_;
+              const ObColumnSchemaV2 *col = NULL;
+              if (OB_ISNULL(col = index_schema->get_column_schema(col_id))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+              } else if (OB_FAIL(last_col.assign(*col))) {
+                LOG_WARN("fail to assign column", KR(ret));
+              } else if (index_schema->is_using_hnsw_index()) {
+                ObString column_name;
+                column_name.assign_ptr(last_col.get_column_name_str().ptr(), last_col.get_column_name_str().length());
+                column_name += 1; // skip _
+                if (OB_FAIL(last_col.set_column_name(column_name))) {
+                  LOG_WARN("failed to set column name", K(ret));
+                }
               }
             }
-            // Generated column of index is convert to normal column,
-            // we need to get column schema from data table here.
-            if (OB_FAIL(ret)) {
-            } else if (NULL == table_schema.get_column_schema(col->get_column_id())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get column schema from data table failed", K(ret));
-            } else if (OB_FAIL(last_col.assign(*table_schema.get_column_schema(col->get_column_id())))) {
-              LOG_WARN("fail to assign column", KR(ret));
+          }
+        } else {
+          for (int64_t k = 0; OB_SUCC(ret) && k < index_column_num; k++) {
+            const ObRowkeyColumn *rowkey_column = index_rowkey_info.get_column(k);
+            const ObColumnSchemaV2 *col = NULL;
+            if (NULL == rowkey_column) {
+              ret = OB_SCHEMA_ERROR;
+              SHARE_SCHEMA_LOG(WARN, "fail to get rowkey column", K(ret));
+            } else if (NULL == (col = schema_guard_.get_column_schema(index_schema->get_tenant_id(),
+                                                                      index_schema->get_table_id(),
+                                                                      rowkey_column->column_id_))) {
+              ret = OB_SCHEMA_ERROR;
+              SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
+            } else if (!col->is_shadow_column()) {
+              if (OB_SUCC(ret) && is_valid_col) {
+                if (OB_FAIL(print_index_column(table_schema, last_col, ctxcat_cols, false /* not last one */, buf, buf_len, pos))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print index column", K(last_col), K(ret));
+                }
+              }
+              // Generated column of index is convert to normal column,
+              // we need to get column schema from data table here.
+              if (OB_FAIL(ret)) {
+              } else if (NULL == table_schema.get_column_schema(col->get_column_id())) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get column schema from data table failed", K(ret));
+              } else if (OB_FAIL(last_col.assign(*table_schema.get_column_schema(col->get_column_id())))) {
+                LOG_WARN("fail to assign column", KR(ret));
+              } else {
+                is_valid_col = true;
+              }
             } else {
-              is_valid_col = true;
+              is_valid_col = false;
             }
-          } else {
-            is_valid_col = false;
           }
         }
         if (OB_SUCC(ret)) {
@@ -2398,6 +2430,10 @@ int ObSchemaPrinter::print_index_definition_columns(
     OB_LOG(WARN, "argument is invalid", K(ret), K(buf), K(buf_len));
   } else {
     // index columns contain rowkeys of base table, but no need to show them.
+    ObArray<schema::ObColDesc> column_ids;
+    if (OB_FAIL(index_schema.get_column_ids_without_rowkey(column_ids))) { //add other columns
+      LOG_WARN("Fail to get column ids with out rowkey", K(ret));
+    }
     const int64_t index_column_num = index_schema.get_index_column_number();
     const ObRowkeyInfo &index_rowkey_info = index_schema.get_rowkey_info();
     for (int64_t k = 0; OB_SUCC(ret) && k < index_column_num; k++) {
@@ -2408,6 +2444,10 @@ int ObSchemaPrinter::print_index_definition_columns(
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get rowkey column", K(ret));
       } else if (NULL == (col = index_schema.get_column_schema(rowkey_column->column_id_))) {
+        ret = OB_SCHEMA_ERROR;
+        SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));
+      } else if (k == 0 && index_schema.is_using_ivfflat_index()
+          && NULL == (col = index_schema.get_column_schema(column_ids.at(0).col_id_))) {
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));
       } else if (!col->is_shadow_column()) {

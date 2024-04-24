@@ -140,7 +140,8 @@ int ObCreateIndexResolver::resolve_index_column_node(
     const int64_t index_keyname_value,
     ParseNode *table_option_node,
     ObCreateIndexStmt *crt_idx_stmt,
-    const ObTableSchema *tbl_schema)
+    const ObTableSchema *tbl_schema,
+    bool& is_crt_vector_index)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 8> input_index_columns_name;
@@ -233,6 +234,47 @@ int ObCreateIndexResolver::resolve_index_column_node(
         }
       }
 
+      // 向量数据距离
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (col_node->num_child_ <= 4) {
+        //no distance function, do nothing
+      } else if (col_node->children_[4]) {
+        const ObColumnSchemaV2 *column_schema = NULL;
+        if (OB_UNLIKELY(index_keyname_value != static_cast<int64_t>(INDEX_KEYNAME::NORMAL_KEY))) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("invalid syntax. Vector index is only valid on normal columns", K(ret));
+        } else if (OB_ISNULL(column_schema = tbl_schema->get_column_schema(sort_item.column_name_))) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+        } else if (OB_UNLIKELY(ObVectorType != column_schema->get_meta_type().get_type())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("invalid syntax. Vector index is only valid on vector type column", K(ret));
+        } else {
+          switch (col_node->children_[4]->type_) {
+          case T_DISTANCE_L2: {
+            sort_item.vd_type_ = common::ObVectorDistanceType::L2;
+            break;
+          }
+          case T_DISTANCE_INNER_PRODUCT: {
+            sort_item.vd_type_ = common::ObVectorDistanceType::INNER_PRODUCT;
+            break;
+          }
+          case T_DISTANCE_COSINE: {
+            sort_item.vd_type_ = common::ObVectorDistanceType::COSINE;
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected vector distance type", K(ret));
+          }
+          }
+          if (OB_SUCC(ret)) {
+            is_crt_vector_index = true;
+          }
+        }
+      }
+
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(add_sort_column(sort_item))) {
         LOG_WARN("fail to add index column", K(ret));
@@ -242,6 +284,11 @@ int ObCreateIndexResolver::resolve_index_column_node(
           SQL_RESV_LOG(WARN, "add column name to input_index_columns_name failed",K(sort_item.column_name_), K(ret));
         }
       }
+    }
+
+    if (OB_SUCC(ret) && is_crt_vector_index && 1 != index_column_node->num_child_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("multi columns for vector index is not supported", K(ret), K(index_column_node->num_child_));
     }
 
     if (OB_SUCC(ret) && lib::is_mysql_mode() && cnt_func_index) {
@@ -333,6 +380,11 @@ int ObCreateIndexResolver::resolve_index_option_node(
       crt_idx_stmt->set_index_dop(table_dop_);
     }
 
+    // ivfflat
+    if (OB_SUCC(ret)) {
+      crt_idx_stmt->set_vector_ivfflat_lists(vector_ivfflat_lists_);
+    }
+
     // block_size
     if (OB_SUCC(ret)) {
       if(T_TABLE_OPTION_LIST != index_option_node->type_ || index_option_node->num_child_ < 1) {
@@ -407,6 +459,8 @@ int ObCreateIndexResolver::resolve_index_method_node(
   } else {
     if (T_USING_HASH == index_method_node->type_) {
       crt_idx_stmt->set_index_using_type(USING_HASH);
+    } else if (T_USING_IVFFLAT == index_method_node->type_) {
+      crt_idx_stmt->set_index_using_type(USING_IVFFLAT);
     } else {
       crt_idx_stmt->set_index_using_type(USING_BTREE);
     }
@@ -557,13 +611,15 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
+  bool is_crt_vector_index = false;
   if (FAILEDx(resolve_index_name_node(parse_node.children_[0], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index name node", K(ret));
   } else if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
                                                parse_tree.children_[0]->value_,
                                                parse_tree.children_[3],
                                                crt_idx_stmt,
-                                               data_tbl_schema))) {
+                                               data_tbl_schema,
+                                               is_crt_vector_index))) {
     LOG_WARN("fail to resolve index column node", K(ret));
   } else if (NULL != parse_node.children_[4]
       && OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
@@ -573,6 +629,11 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
                                                data_tbl_schema,
                                                NULL != parse_node.children_[5]))) {
     LOG_WARN("fail to resolve index option node", K(ret));
+  } else if ((!is_vector_using_type(crt_idx_stmt->get_index_using_type()) && is_crt_vector_index)
+      || (is_vector_using_type(crt_idx_stmt->get_index_using_type()) && !is_crt_vector_index)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vector index need to specify using_type and distance type", K(ret),
+        "using_type", crt_idx_stmt->get_index_using_type(), "has_distance_type", is_crt_vector_index);
   } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
     LOG_WARN("fail to generate index schema", K(ret));
   } else {
@@ -619,6 +680,20 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
+  // create ivfflat container table schema
+  if (OB_SUCC(ret) && ObIndexUsingType::USING_IVFFLAT == crt_idx_stmt->get_index_using_type()) {
+    SMART_VAR(ObTableSchema, container_table_schema) {
+      ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(container_table_schema.assign(index_schema))) {
+          LOG_WARN("failed to assign table schema", K(ret));
+        } else if (OB_FAIL(crt_idx_stmt->get_create_index_arg().vector_help_schema_.push_back(container_table_schema))) {
+          LOG_WARN("fail to push back container table schema", KR(ret));
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret)) {
     const ParseNode *parallel_node = parse_tree.children_[8];
     if (OB_FAIL(resolve_hints(parse_tree.children_[8], *crt_idx_stmt, *tbl_schema))) {
@@ -647,7 +722,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     }
   }
   DEBUG_SYNC(HANG_BEFORE_RESOLVER_FINISH);
-
   return ret;
 }
 
@@ -721,6 +795,13 @@ int ObCreateIndexResolver::set_table_option_to_stmt(bool is_partitioned)
         index_arg.index_type_ = INDEX_TYPE_SPATIAL_LOCAL;
       }
     }
+    // if (is_vector_using_type(index_arg.index_using_type_)) {
+    //   if (global_) {
+    //     index_arg.index_type_ = INDEX_TYPE_VECTOR_GLOBAL;
+    //   } else {
+    //     index_arg.index_type_ = INDEX_TYPE_VECTOR_LOCAL;
+    //   }
+    // }
     index_arg.data_table_id_ = data_table_id_;
     index_arg.index_table_id_ = index_table_id_;
     index_arg.index_option_.block_size_ = block_size_;

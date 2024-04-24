@@ -259,6 +259,12 @@ enum ObMVOnQueryComputationFlag
   IS_MV_ON_QUERY_COMPUTATION = 1,
 };
 
+enum ObVecIvfflatContainerTableFlag
+{
+  IS_NOT_IVFFLAT_CONTAINER_TABLE = 0,
+  IS_IVFFLAT_CONTAINER_TABLE = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -288,7 +294,9 @@ private:
   static const int32_t TM_MV_ENABLE_QUERY_REWRITE_BITS = 1;
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_OFFSET = 28;
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
-  static const int32_t TM_RESERVED = 3;
+  static const int32_t TM_VEC_IVFFLAT_CONTAINER_TABLE_OFFSET = 29;
+  static const int32_t TM_VEC_IVFFLAT_CONTAINER_TABLE_BITS = 1;
+  static const int32_t TM_RESERVED = 2;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -303,6 +311,7 @@ private:
   static const uint32_t TABLE_REFERENCED_BY_MV_MASK = (1U << TM_TABLE_REFERENCED_BY_MV_BITS) - 1;
   static const uint32_t MV_ENABLE_QUERY_REWRITE_MASK = (1U << TM_MV_ENABLE_QUERY_REWRITE_BITS) - 1;
   static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
+  static const uint32_t VEC_IVFFLAT_CONTAINER_TABLE_MASK = (1U << TM_VEC_IVFFLAT_CONTAINER_TABLE_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -367,6 +376,10 @@ public:
   {
       return (ObMVOnQueryComputationFlag)((table_mode >> TM_MV_ON_QUERY_COMPUTATION_OFFSET) & MV_ON_QUERY_COMPUTATION_MASK);
   }
+  static ObVecIvfflatContainerTableFlag get_vec_ivfflat_container_table_flag(int32_t table_mode)
+  {
+    return (ObVecIvfflatContainerTableFlag)((table_mode >> TM_VEC_IVFFLAT_CONTAINER_TABLE_OFFSET) & VEC_IVFFLAT_CONTAINER_TABLE_MASK);
+  }
   inline bool is_user_hidden_table() const
   { return TABLE_STATE_IS_HIDDEN_MASK & state_flag_; }
   TO_STRING_KV("table_mode_flag", mode_flag_,
@@ -378,7 +391,8 @@ public:
                "rowid_mode", rowid_mode_,
                "view_column_filled_flag", view_column_filled_flag_,
                "mv_container_table_flag", mv_container_table_flag_,
-               "mv_available_flag", mv_available_flag_);
+               "mv_available_flag", mv_available_flag_,
+               "vec_ivfflat_container_table_flag", vec_ivfflat_container_table_flag_);
   union {
     int32_t mode_;
     struct {
@@ -392,6 +406,7 @@ public:
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
       uint32_t mv_container_table_flag_ : TM_MV_CONTAINER_TABLE_BITS;
       uint32_t mv_available_flag_ : TM_MV_AVAILABLE_BITS;
+      uint32_t vec_ivfflat_container_table_flag_ : TM_VEC_IVFFLAT_CONTAINER_TABLE_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -629,7 +644,16 @@ public:
   virtual void set_tablegroup_id(const uint64_t tablegroup_id) override { tablegroup_id_ = tablegroup_id; }
   virtual uint64_t get_tablegroup_id() const override { return tablegroup_id_; }
   inline void set_data_table_id(const uint64_t data_table_id) { data_table_id_ = data_table_id; }
-  virtual inline uint64_t get_data_table_id() const { return data_table_id_; }
+  virtual inline uint64_t get_data_table_id() const {
+    uint64_t data_table_id = OB_INVALID_ID;
+    if (vec_ivfflat_container_table()) {
+      data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(table_name_);
+    }
+    if (OB_INVALID_ID == data_table_id) {
+      data_table_id = data_table_id_;
+    }
+    return data_table_id;
+  }
   inline int set_table_name(const common::ObString &table_name)
   { return deep_copy_str(table_name, table_name_); }
   inline const char *get_table_name() const { return extract_str(table_name_); }
@@ -705,6 +729,10 @@ public:
   { return IS_MV_AVAILABLE == (enum ObMVAvailableFlag)table_mode_.mv_available_flag_; }
   inline void set_mv_available(const ObMVAvailableFlag flag)
   { table_mode_.mv_available_flag_ = flag; }
+  inline bool vec_ivfflat_container_table() const
+  { return IS_IVFFLAT_CONTAINER_TABLE == (enum ObVecIvfflatContainerTableFlag)table_mode_.vec_ivfflat_container_table_flag_; }
+  inline void set_vec_ivfflat_container_table(const ObVecIvfflatContainerTableFlag flag)
+  { table_mode_.vec_ivfflat_container_table_flag_ = flag; }
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }
@@ -868,7 +896,10 @@ public:
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   inline bool is_aux_lob_table() const { return is_aux_lob_meta_table() || is_aux_lob_piece_table(); }
-  inline bool is_aux_table() const { return share::schema::ObTableType::USER_INDEX == table_type_ || share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_ || share::schema::ObTableType::AUX_LOB_PIECE == table_type_ || share::schema::ObTableType::AUX_LOB_META == table_type_; }
+  inline bool is_aux_table() const { return share::schema::ObTableType::USER_INDEX == table_type_ ||
+                                            share::schema::ObTableType::AUX_VERTIAL_PARTITION_TABLE == table_type_ ||
+                                            share::schema::ObTableType::AUX_LOB_PIECE == table_type_ ||
+                                            share::schema::ObTableType::AUX_LOB_META == table_type_; }
   // Primary partition table judgment: still USER_TABLE, but data_table_id_ is the same as itself,
   // the default data_table_id_ is 0
   virtual inline bool is_primary_vp_table() const override { return (share::schema::ObTableType::USER_TABLE == table_type_) && (table_id_ == data_table_id_); }
@@ -890,6 +921,8 @@ public:
   inline bool should_check_major_merge_progress() const;
   inline bool is_spatial_index() const;
   inline static bool is_spatial_index(ObIndexType index_type);
+  // inline bool is_vector_index() const;
+  // inline static bool is_vector_index(ObIndexType index_type);
   inline bool is_normal_index() const;
   inline bool is_unique_index() const;
   inline static bool is_unique_index(ObIndexType index_type);
@@ -950,7 +983,15 @@ public:
 
   inline bool has_rowid() const { return is_user_table() || is_tmp_table(); }
   inline bool gen_normal_tablet() const { return has_rowid() && !is_extended_rowid_mode(); }
-
+  inline void set_index_using_type(const ObIndexUsingType index_using_type) { index_using_type_ = index_using_type; }
+  inline ObIndexUsingType get_index_using_type() const { return index_using_type_; }
+  inline bool is_ordered() const { return USING_BTREE == index_using_type_ ||
+                                          USING_HNSW == index_using_type_ ||
+                                          USING_IVFFLAT == index_using_type_; }
+  inline bool is_using_vector_index() const { return USING_HNSW == index_using_type_ ||
+                                                     USING_IVFFLAT == index_using_type_; }
+  inline bool is_using_hnsw_index() const { return USING_HNSW == index_using_type_; }
+  inline bool is_using_ivfflat_index() const { return USING_IVFFLAT == index_using_type_; }
   DECLARE_VIRTUAL_TO_STRING;
 protected:
   uint64_t tenant_id_;
@@ -993,6 +1034,7 @@ protected:
   ObTabletID tablet_id_;
   ObObjectStatus object_status_;
   bool is_force_view_; // only record in create view path, do not persist to disk
+  ObIndexUsingType index_using_type_;
 };
 class ObTableSchema : public ObSimpleTableSchemaV2
 {
@@ -1108,7 +1150,6 @@ public:
   inline void set_charset_type(const common::ObCharsetType type) { charset_type_ = type; }
   inline void set_collation_type(const common::ObCollationType type) { collation_type_ = type; }
   inline void set_code_version(const int64_t code_version) {code_version_ = code_version; }
-  inline void set_index_using_type(const ObIndexUsingType index_using_type) { index_using_type_ = index_using_type; }
   inline void set_max_column_id(const uint64_t id) { max_used_column_id_ = id; }
   inline void set_is_use_bloomfilter(const bool is_use_bloomfilter) { is_use_bloomfilter_ = is_use_bloomfilter; }
   inline void set_block_size(const int64_t block_size) { block_size_ = block_size; }
@@ -1227,7 +1268,6 @@ public:
   inline int64_t get_partition_key_column_num() const { return partition_key_info_.get_size(); }
   inline int64_t get_subpartition_key_column_num() const { return subpartition_key_info_.get_size(); }
   inline ObTableLoadType get_load_type() const { return load_type_; }
-  inline ObIndexUsingType get_index_using_type() const { return index_using_type_; }
   inline ObTableDefType get_def_type() const { return def_type_; }
 
   virtual inline const char *get_compress_func_name() const override { return all_compressor_name[compressor_type_]; }
@@ -1438,12 +1478,17 @@ public:
                                    common::ObString &mlog_table_name,
                                    const bool is_oracle_mode);
 
+  // vector index related
+  int64_t get_vector_ivfflat_lists() const { return vector_ivfflat_lists_; }
+  void set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists) { vector_ivfflat_lists_ = vector_ivfflat_lists; }
+  int64_t get_vector_distance_func() const { return static_cast<int64_t>(vector_distance_func_); }
+  void set_vector_distance_func(const ObVectorDistanceType distance_func) { vector_distance_func_ = distance_func; }
+
   //other methods
   int64_t get_convert_size() const;
   void reset();
   //int64_t to_string(char *buf, const int64_t buf_len) const;
   //whether the primary key or index is ordered
-  inline bool is_ordered() const { return USING_BTREE == index_using_type_; }
   virtual int serialize_columns(char *buf, const int64_t data_len, int64_t &pos) const;
   virtual int deserialize_columns(const char *buf, const int64_t data_len, int64_t &pos);
   int serialize_constraints(char *buf, const int64_t data_len, int64_t &pos) const;
@@ -1756,7 +1801,6 @@ protected:
   uint64_t auto_increment_;
   bool read_only_;
   ObTableLoadType load_type_; // not used yet
-  ObIndexUsingType index_using_type_;
   ObTableDefType def_type_;
   common::ObCharsetType charset_type_;//default:utf8mb4
   common::ObCollationType collation_type_;//default:utf8mb4_general_ci
@@ -1858,6 +1902,10 @@ protected:
   CgIdHashArray *cg_id_hash_arr_;
   CgNameHashArray *cg_name_hash_arr_;
   uint64_t mlog_tid_;
+
+  // vector index
+  int64_t vector_ivfflat_lists_;
+  ObVectorDistanceType vector_distance_func_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema
@@ -1872,7 +1920,7 @@ private:
 // the storage of the index and the main table are put together
 inline bool ObSimpleTableSchemaV2::is_index_local_storage() const
 {
-  return USER_INDEX == table_type_
+  return USER_INDEX == table_type_ && !vec_ivfflat_container_table() // TODO(@jingshui): 特殊处理container table，跳过建索引时对主表的检查
         // && schema::is_index_local_storage(index_type_); TODO(wangzhennan.wzn): use is_index_local_storage later
          && (INDEX_TYPE_NORMAL_LOCAL == index_type_
              || INDEX_TYPE_UNIQUE_LOCAL == index_type_
@@ -1937,6 +1985,17 @@ inline bool ObSimpleTableSchemaV2::is_spatial_index() const
   return is_spatial_index(index_type_);
 }
 
+// inline bool ObSimpleTableSchemaV2::is_vector_index(ObIndexType index_type)
+// {
+//   return INDEX_TYPE_VECTOR_LOCAL == index_type
+//           || INDEX_TYPE_VECTOR_GLOBAL == index_type;
+// }
+
+// inline bool ObSimpleTableSchemaV2::is_vector_index() const
+// {
+//   return is_vector_index(index_type_);
+// }
+
 inline bool ObSimpleTableSchemaV2::is_normal_index() const
 {
   return INDEX_TYPE_NORMAL_LOCAL == index_type_
@@ -1968,8 +2027,8 @@ inline bool ObSimpleTableSchemaV2::is_domain_index(ObIndexType index_type)
 
 inline bool ObSimpleTableSchemaV2::should_not_validate_data_index_ckm() const
 {
-  // spatial index column is different from data table column, should not validate data & index column checksum
-  return is_spatial_index();
+  // spatial/vector index column is different from data table column, should not validate data & index column checksum
+  return is_spatial_index() || is_using_vector_index();
 }
 
 inline bool ObSimpleTableSchemaV2::should_check_major_merge_progress() const

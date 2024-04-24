@@ -79,7 +79,13 @@ public:
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
         table_type_(share::schema::MAX_TABLE_TYPE),
-        use_column_store_(false)
+        use_column_store_(false),
+        is_vector_index_(false),
+        container_table_id_(common::OB_INVALID_ID),
+        vector_ann_k_expr_(NULL),
+        query_vector_expr_(NULL),
+        is_build_vector_index_(false),
+        build_vector_index_table_id_(common::OB_INVALID_ID)
   {
   }
 
@@ -201,6 +207,23 @@ public:
   inline bool get_is_spatial_index() const
   { return is_spatial_index_; }
 
+  /*
+   * set is vector index
+   */
+  inline  void set_is_vector_index(bool is_vector_index)
+  { is_vector_index_ = is_vector_index; }
+
+  inline bool get_is_vector_index() const
+  { return is_vector_index_; }
+
+  inline void set_container_table_id(const int64_t container_table_id)
+  { container_table_id_ = container_table_id; }
+
+  inline int64_t get_container_table_id() const
+  { return container_table_id_; }
+
+  inline bool need_container_table() const
+  { return OB_INVALID_ID != container_table_id_; }
   /**
    *  Set scan direction
    */
@@ -262,6 +285,10 @@ public:
    */
   inline common::ObIArray<ObRawExpr *> &get_access_exprs()
   { return access_exprs_; }
+
+  // get extra access expressions
+  inline const common::ObIArray<ObRawExpr *> &get_extra_access_exprs() const
+  { return extra_access_exprs_; }
 
 // removal it in cg layer, up to opt layer.
   inline const common::ObIArray<uint64_t> &get_ddl_output_column_ids() const
@@ -427,6 +454,12 @@ public:
   inline const ObRawExpr* get_flashback_query_expr() const { return fq_expr_; }
   inline ObRawExpr* &get_flashback_query_expr() { return fq_expr_; }
   inline void set_flashback_query_expr(ObRawExpr *expr) { fq_expr_ = expr; }
+  inline const ObRawExpr* get_vector_ann_k_expr() const { return vector_ann_k_expr_; }
+  inline ObRawExpr* get_vector_ann_k_expr() { return vector_ann_k_expr_; }
+  inline void set_vector_ann_k_expr(ObRawExpr *expr) { vector_ann_k_expr_ = expr; }
+  inline const ObRawExpr* get_query_vector_expr() const { return query_vector_expr_; }
+  inline ObRawExpr* get_query_vector_expr() { return query_vector_expr_; }
+  inline void set_query_vector_expr(ObRawExpr *expr) { query_vector_expr_ = expr; }
   int add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
                                 ObRawExpr *&real_expr);
   int get_phy_location_type(ObTableLocationType &location_type);
@@ -480,6 +513,10 @@ public:
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
   virtual int get_card_without_filter(double &card) override;
+  void set_is_build_vector_index() { is_build_vector_index_ = true; }
+  bool get_is_build_vector_index() const { return is_build_vector_index_; }
+  void set_build_vector_index_table_id(uint64_t table_id) { build_vector_index_table_id_ = table_id; }
+  uint64_t get_build_vector_index_table_id() const { return build_vector_index_table_id_; }
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -498,8 +535,8 @@ private: // member functions
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id
-  uint64_t ref_table_id_; //base table id
-  uint64_t index_table_id_;
+  uint64_t ref_table_id_; //base table id // 查询的表的id
+  uint64_t index_table_id_; // 实际查询执行时查询的表id // 走索引为索引表id
   uint64_t session_id_; //for temporary table, record session id
   uint64_t advisor_table_id_; // used for duplicate table replica selection in the plan cache
   bool is_index_global_;
@@ -531,6 +568,8 @@ protected: // memeber variables
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> rowkey_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> part_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> spatial_exprs_;
+  // for ivfflat index table
+  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> extra_access_exprs_;
   //for external table
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_file_column_exprs_;
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ext_column_convert_exprs_;
@@ -602,6 +641,12 @@ protected: // memeber variables
   bool use_column_store_;
 
   ObPxRFStaticInfo px_rf_info_;
+  bool is_vector_index_;
+  int64_t container_table_id_;
+  ObRawExpr *vector_ann_k_expr_;
+  ObRawExpr *query_vector_expr_;
+  bool is_build_vector_index_;
+  uint64_t build_vector_index_table_id_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

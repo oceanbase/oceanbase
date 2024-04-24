@@ -1324,6 +1324,12 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         break;
       }
 
+      // opt order by vector <-> vector
+      if (OB_NOT_NULL(spec_.get_parent()) && PHY_SORT == spec_.get_parent()->get_type()) {
+        eval_ctx_.with_order_ = true;
+      } else {
+        eval_ctx_.with_order_ = false;
+      }
       // do project
       if (OB_SUCC(ret) && brs_.size_ > 0) {
         FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {

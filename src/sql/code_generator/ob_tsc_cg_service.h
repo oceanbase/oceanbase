@@ -45,6 +45,12 @@ public:
                               const share::schema::ObTableSchema &table_schema,
                               const ObSQLSessionInfo &session,
                               ObDASTableLocMeta &loc_meta);
+  int generate_table_loc_meta(uint64_t table_loc_id,
+                              const uint64_t data_table_id,
+                              const ObDMLStmt &stmt,
+                              const share::schema::ObTableSchema &table_schema,
+                              const ObSQLSessionInfo &session,
+                              ObDASTableLocMeta &loc_meta);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
                                  ObDASScanCtDef &scan_ctdef,
                                  const ObRawExpr *trans_info_expr,
@@ -52,12 +58,16 @@ public:
 private:
   int generate_access_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);
   int generate_pushdown_aggr_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
-  int generate_das_scan_ctdef(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool &has_rowscn);
-  int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef);
+  int generate_das_scan_ctdef(const ObLogTableScan &op,
+                              ObDASScanCtDef &scan_ctdef,
+                              bool &has_rowscn,
+                              const bool is_lookup_ctdef = false);
+  int generate_table_param(const ObLogTableScan &op, ObDASScanCtDef &scan_ctdef, bool is_ann_search);
   int extract_das_output_column_ids(const ObLogTableScan &op,
                                     common::ObTableID table_id,
                                     const ObTableSchema &index_schema,
-                                    common::ObIArray<uint64_t> &output_cids);
+                                    common::ObIArray<uint64_t> &output_cids,
+                                    common::ObIArray<uint64_t> &result_cids);
 
   int extract_das_access_exprs(const ObLogTableScan &op,
                                common::ObTableID scan_table_id,

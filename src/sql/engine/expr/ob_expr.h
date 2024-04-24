@@ -61,20 +61,22 @@ struct ObDatumMeta
   OB_UNIS_VERSION(1);
 public:
   ObDatumMeta() : type_(common::ObNullType), cs_type_(common::CS_TYPE_INVALID)
-                  , scale_(-1), precision_(-1)
-  {
-  }
-  ObDatumMeta(const common::ObObjType type,
-              const common::ObCollationType cs_type,
-              const int8_t scale)
-    : type_(type), cs_type_(cs_type), scale_(scale), precision_(-1)
+                  , scale_(-1), precision_(-1), vector_len_(-1)
   {
   }
   ObDatumMeta(const common::ObObjType type,
               const common::ObCollationType cs_type,
               const int8_t scale,
-              const common::ObPrecision prec)
-    : type_(type), cs_type_(cs_type), scale_(scale), precision_(prec)
+              int64_t vector_len = -1)
+    : type_(type), cs_type_(cs_type), scale_(scale), precision_(-1), vector_len_(vector_len)
+  {
+  }
+  ObDatumMeta(const common::ObObjType type,
+              const common::ObCollationType cs_type,
+              const int8_t scale,
+              const common::ObPrecision prec,
+              int64_t vector_len = -1)
+    : type_(type), cs_type_(cs_type), scale_(scale), precision_(prec), vector_len_(vector_len)
   {
   }
 
@@ -88,6 +90,7 @@ public:
     common::ObPrecision precision_;
     common::ObLengthSemantics length_semantics_;
   };
+  int64_t vector_len_;
   OB_INLINE bool is_clob() const
   {
     return (is_oracle_mode()
@@ -267,6 +270,7 @@ public:
   common::ObArenaAllocator &tmp_alloc_;
   ObDatumCaster *datum_caster_;
   bool &tmp_alloc_used_;
+  bool with_order_;
 private:
   int64_t batch_idx_;
   int64_t batch_size_;
@@ -354,7 +358,8 @@ struct ObDynReserveBuf
            || common::ObLobTC == tc
            || common::ObJsonTC == tc
            || common::ObGeometryTC == tc
-           || common::ObUserDefinedSQLTC == tc;
+           || common::ObUserDefinedSQLTC == tc
+           || common::ObVectorTC == tc;
   }
 
   ObDynReserveBuf() = default;

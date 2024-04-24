@@ -70,6 +70,9 @@ public:
   OB_INLINE bool is_unique_index() const { return ObTableSchema::is_unique_index(index_type_); }
   OB_INLINE bool is_domain_index() const { return ObTableSchema::is_domain_index(index_type_); }
   OB_INLINE bool is_spatial_index() const { return ObTableSchema::is_spatial_index(index_type_); }
+  OB_INLINE bool is_vector_ivfflat_index() const { return USING_IVFFLAT == index_using_type_; }
+  OB_INLINE uint32_t get_extra_rowkey_id() const { return extra_rowkey_id_; }
+  OB_INLINE uint32_t get_vector_index_id() const { return vector_index_id_; }
   int is_rowkey_column(const uint64_t column_id, bool &is_rowkey) const;
   int is_column_nullable_for_write(const uint64_t column_id, bool &is_nullable_for_write) const;
 
@@ -99,6 +102,7 @@ private:
   ObTableType table_type_;
   ObIndexType index_type_;
   ObIndexStatus index_status_;
+  ObIndexUsingType index_using_type_;
   int64_t shadow_rowkey_column_num_;
   uint64_t fulltext_col_id_;
   uint64_t spatial_geo_col_id_; // geometry column id in data table_schema.
@@ -114,6 +118,9 @@ private:
   storage::ObTableReadInfo read_info_;
   storage::ObFixedMetaObjArray<storage::ObTableReadInfo *> cg_read_infos_;
   int64_t lob_inrow_threshold_;
+  // for ivfflat index
+  uint32_t extra_rowkey_id_; // rowkey column id of "center_idx"
+  uint32_t vector_index_id_; // index column id of vector
 };
 
 class ObTableDMLParam

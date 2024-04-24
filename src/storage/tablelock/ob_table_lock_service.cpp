@@ -1244,7 +1244,7 @@ int ObTableLockService::process_lock_task_(ObTableLockCtx &ctx,
     }
   }
 
-  LOG_INFO("[table lock] lock_table", K(ret), K(ctx), K(lock_mode), K(lock_owner));
+  LOG_INFO("[table lock] lock_table", K(ret), K(ctx), K(lock_mode), K(lock_owner), K(lbt()));
 
   return ret;
 }

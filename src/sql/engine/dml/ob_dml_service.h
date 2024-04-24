@@ -346,6 +346,7 @@ int ObDASIndexDMLAdaptor<N, DMLIterator>::write_tablet(DMLIterator &iter, int64_
                   K(ls_id_), K(related_tablet_id), K(related_ctdef->table_id_), K(related_ctdef->index_tid_));
       if (OB_FAIL(iter.rewind(related_ctdef))) {
         SQL_DAS_LOG(WARN, "rewind iterator failed", K(ret));
+      } else if (FALSE_IT(iter.set_tablet_id(related_tablet_id))) {
       } else if (OB_FAIL(ObDMLService::init_dml_param(*related_ctdef, *related_rtdef, *snapshot_, write_branch_id_, *das_allocator_, dml_param_))) {
         SQL_DAS_LOG(WARN, "init index dml param failed", K(ret),
                     K(related_ctdef->table_id_), K(related_ctdef->index_tid_));

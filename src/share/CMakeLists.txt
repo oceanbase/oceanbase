@@ -286,6 +286,17 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_throttle_common.cpp
 )
 
+ob_set_subtarget(ob_share vector_index
+  vector_index/ob_ivfflat_index_build_helper.cpp
+  vector_index/ob_ivfflat_index_search_helper.cpp
+  vector_index/ob_ivfflat_index_sample_cache.cpp
+  vector_index/ob_tenant_ivfflat_center_cache.cpp
+  vector_index/ob_hnsw_index_builder.cpp
+  vector_index/ob_hnsw_index_cache.cpp
+  vector_index/ob_hnsw_index_reader.cpp
+  vector_index/ob_hnsw_ann_helper.cpp
+)
+
 ob_set_subtarget(ob_share tablet
   tablet/ob_tablet_info.cpp
   tablet/ob_tablet_table_operator.cpp

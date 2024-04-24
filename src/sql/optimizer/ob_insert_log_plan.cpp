@@ -46,6 +46,8 @@ int ObInsertLogPlan::generate_normal_raw_plan()
   } else {
     LOG_TRACE("start to allocate operators for ", "sql", get_optimizer_context().get_query_ctx()->get_sql_stmt());
     OPT_TRACE("generate plan for ", get_stmt());
+    bool is_build_vector_index_stmt = false;
+    uint64_t build_vector_index_table_id = common::OB_INVALID_ID;
     if (!insert_stmt->value_from_select()) {
       // insert into values xxxx
       ObLogicalOperator *top = NULL;
@@ -59,12 +61,44 @@ int ObInsertLogPlan::generate_normal_raw_plan()
       } else { /*do nothing*/ }
     } else {
       // insert into select xxx
-      if (OB_FAIL(generate_plan_tree())) {
+      int64_t child_stmt_size = 0;
+      common::ObArray<ObSelectStmt *> child_stmts;
+      if (OB_FAIL(insert_stmt->get_child_stmt_size(child_stmt_size))) {
+        LOG_WARN("fail to get child stmt size", K(ret));
+      } else if (OB_UNLIKELY(1 != child_stmt_size)) {
+        // do nothing
+      } else if (OB_FAIL(insert_stmt->get_child_stmts(child_stmts))) {
+        LOG_WARN("fail to get child stmts", K(ret));
+      } else {
+        ObSelectStmt *select_stmt = child_stmts.at(0);
+        build_vector_index_table_id = insert_stmt->get_table_item(0)->ref_id_;
+        is_build_vector_index_stmt = (1 == select_stmt->get_table_size()
+                                      && NULL != insert_stmt->get_table_item(0)
+                                      && NULL != select_stmt->get_table_item(0)
+                                      && insert_stmt->get_table_item(0)->is_index_table_
+                                      && insert_stmt->get_table_item(0)->is_using_vector_index_
+                                      && select_stmt->get_table_item(0)->type_ == TableItem::BASE_TABLE
+                                      && insert_stmt->get_table_item(0)->base_table_id_ ==
+                                         select_stmt->get_table_item(0)->ref_id_);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(generate_plan_tree(is_build_vector_index_stmt))) {
         LOG_WARN("failed to generate plan tree", K(ret));
       } else if (insert_stmt->has_sequence() &&
                  OB_FAIL(candi_allocate_sequence())) {
         LOG_WARN("failed to allocate sequence", K(ret));
       } else { /*do nothing*/}
+    }
+
+    if (OB_SUCC(ret) && is_build_vector_index_stmt) {
+      for (int64_t i = 0; i < candidates_.candidate_plans_.count(); ++i) {
+        ObLogicalOperator *root_op = candidates_.candidate_plans_.at(i).plan_tree_;
+        if (OB_LIKELY(LOG_TABLE_SCAN == root_op->get_type())) {
+          ObLogTableScan *tbl_scan = reinterpret_cast<ObLogTableScan*>(root_op);
+          tbl_scan->set_is_build_vector_index();
+          tbl_scan->set_build_vector_index_table_id(build_vector_index_table_id);
+        }
+      }
     }
 
     // allocate subplan filter for "INSERT .. ON DUPLICATE KEY UPDATE c1 = (select...)"
@@ -120,7 +154,9 @@ int ObInsertLogPlan::generate_normal_raw_plan()
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(prepare_dml_infos())) {
+      if (OB_UNLIKELY(is_build_vector_index_stmt)) {
+        // do nothing
+      } else if (OB_FAIL(prepare_dml_infos())) {
         LOG_WARN("failed to prepare dml infos", K(ret));
       } else if (use_pdml()) {
         if (OB_FAIL(candi_allocate_pdml_insert(osg_info))) {

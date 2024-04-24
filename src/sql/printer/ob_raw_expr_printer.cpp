@@ -4426,6 +4426,11 @@ int ObRawExprPrinter::print_cast_type(ObRawExpr *expr)
         }
         break;
       }
+      case T_VECTOR: {
+        int32_t length = parse_node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
+        DATA_PRINTF("vector(%d)", length);
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown cast type", K(ret), K(cast_type));

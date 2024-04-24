@@ -23,6 +23,8 @@
 #include "share/scn.h"
 #include "share/schema/ob_mlog_info.h"
 #include "lib/mysqlclient/ob_mysql_transaction.h"
+#include "share/vector_index/ob_hnsw_index_builder.h"
+#include "share/vector_index/ob_ivfflat_index_build_helper.h"
 
 using namespace oceanbase::rootserver;
 using namespace oceanbase::common;
@@ -53,6 +55,422 @@ int ObIndexSSTableBuildTask::set_nls_format(const ObString &nls_date_format,
   return ret;
 }
 
+int ObIndexSSTableBuildTask::inner_normal_process(
+    const ObTableSchema &data_schema,
+    const ObTableSchema &index_schema,
+    const bool is_oracle_mode,
+    const ObSqlString &sql_string)
+{
+  int ret = OB_SUCCESS;
+  bool need_padding = false;
+  if (OB_FAIL(data_schema.is_need_padding_for_generated_column(need_padding))) {
+    LOG_WARN("fail to check need padding", K(ret));
+  } else {
+    common::ObCommonSqlProxy *user_sql_proxy = nullptr;
+    int64_t affected_rows = 0;
+    ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | (need_padding ? SMO_PAD_CHAR_TO_FULL_LENGTH : 0);
+    ObSessionParam session_param;
+    session_param.sql_mode_ = (int64_t *)&sql_mode;
+    session_param.tz_info_wrap_ = nullptr;
+    session_param.ddl_info_.set_is_ddl(true);
+    session_param.ddl_info_.set_source_table_hidden(data_schema.is_user_hidden_table());
+    session_param.ddl_info_.set_dest_table_hidden(index_schema.is_user_hidden_table());
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
+    session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
+    session_param.use_external_session_ = true;  // means session id dispatched by session mgr
+    session_param.consumer_group_id_ = consumer_group_id_;
+
+    common::ObAddr *sql_exec_addr = nullptr;
+    if (inner_sql_exec_addr_.is_valid()) {
+      sql_exec_addr = &inner_sql_exec_addr_;
+      LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (is_oracle_mode) {
+      user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
+    } else {
+      user_sql_proxy = GCTX.ddl_sql_proxy_;
+    }
+    DEBUG_SYNC(BEFORE_INDEX_SSTABLE_BUILD_TASK_SEND_SQL);
+    ObTimeoutCtx timeout_ctx;
+    const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+    LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT));
+    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set trx timeout failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set timeout failed", K(ret));
+    } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, CREATE_INDEX_BUILD_SSTABLE_FAILED))) {
+      LOG_WARN("ddl sim failure: create index build sstable failed", K(ret), K(tenant_id_), K(task_id_));
+    } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
+                is_oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
+      LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
+        LOG_WARN("fail to check sstable checksum_report_finish",
+          K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
+      }
+    }
+  }
+  return ret;
+}
+
+// TODO(@wangmiao) : may reuse the existed interface
+int ObIndexSSTableBuildTask::inner_hnsw_process(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema &data_schema,
+    const ObTableSchema &index_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTraceIdGuard trace_id_guard(trace_id_);
+  ObTabletID unused_tablet_id;
+  const ObDatabaseSchema *data_db_schema = nullptr;
+  const ObDatabaseSchema *index_db_schema = nullptr;
+  ObSqlString base_scan_sql;
+  int64_t real_parallelism = std::max(1L, parallelism_);
+  real_parallelism = std::min(blocksstable::ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
+  int64_t vector_dim = -1;
+  int64_t max_ep_level = -1;
+  ObSqlString vector_hnsw_index_sql;
+  int64_t total_vector_cnt = 0;
+
+  if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_schema.get_database_id(), data_db_schema))) {
+    LOG_WARN("fail to get database schema", K(ret), K(tenant_id_), K(data_schema.get_database_id()));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema.get_database_id(), index_db_schema))) {
+    LOG_WARN("fail to get database schema", K(ret), K(tenant_id_), K(index_schema.get_database_id()));
+  } else if (OB_FAIL(base_scan_sql.append_fmt("select /*+ monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) opt_param('enable_newsort', 'false') use_px */ ",
+                                               real_parallelism, execution_id_, task_id_))) {
+    LOG_WARN("failed to append base_scan_sql", K(ret));
+  } else {
+    const common::ObRowkeyInfo &base_rowkeys = data_schema.get_rowkey_info();
+    const common::ObRowkeyColumn *index_info = index_schema.get_index_info().get_column(0);
+    uint64_t base_rowkey_column_id = 0;
+    common::ObString column_name;
+    bool is_col_exist = false;
+    bool is_first_col_name = true;
+    // append select column sql
+    for (int64_t i = 0; OB_SUCC(ret) && i < base_rowkeys.get_size(); ++i) {
+      if (OB_FAIL(base_rowkeys.get_column_id(i, base_rowkey_column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i), K(base_rowkey_column_id));
+      } else if (OB_FALSE_IT(data_schema.get_column_name_by_column_id(base_rowkey_column_id, column_name, is_col_exist))) {
+      } else if (OB_UNLIKELY(!is_col_exist)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column not exist with unexpection", K(ret));
+      } else if (OB_FAIL(base_scan_sql.append_fmt(is_first_col_name ? "%.*s" : ",%.*s",
+                                                  static_cast<int>(column_name.length()),
+                                                  column_name.ptr()))) {
+        LOG_WARN("failed to append base_scan_sql", K(ret), K(column_name));
+      }
+      is_first_col_name = false;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(index_schema.get_column_name_by_column_id(index_info->column_id_, column_name, is_col_exist))) {
+    } else if (OB_UNLIKELY(!is_col_exist)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column not exist with unexpection", K(ret));
+    } else if (OB_FAIL(base_scan_sql.append_fmt(",%.*s", static_cast<int>(column_name.length() - 1),
+                                                column_name.ptr() + 1))) {
+      LOG_WARN("failed to append base_scan_sql", K(ret), K(column_name));
+    }
+    // append select table
+    ObString data_db_name = data_db_schema->get_database_name_str();
+    ObString data_tb_name = data_schema.get_table_name_str();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(base_scan_sql.append_fmt(" from `%.*s`.`%.*s` as of snapshot %ld",
+                                                static_cast<int>(data_db_name.length()), data_db_name.ptr(),
+                                                static_cast<int>(data_tb_name.length()), data_tb_name.ptr(),
+                                                snapshot_version_))) {
+      LOG_WARN("failed to append base_scan_sql", K(ret), K(data_db_name), K(data_tb_name));
+    }
+
+    // start sql proxy to read vectors from base table
+    if (OB_FAIL(ret)) {
+    } else {
+      uint64_t base_rowkey_cnt = base_rowkeys.get_size();
+      uint64_t select_column_cnt = base_rowkey_cnt + 1;
+      common::ObCommonSqlProxy *user_sql_proxy = GCTX.sql_proxy_;
+      common::ObMySQLTransaction trans(true);
+      ObTimeoutCtx timeout_ctx;
+      const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+      common::ObAddr *sql_exec_addr = nullptr;
+      ObTypeVector::VectorIndexDistanceFunc dfunc = nullptr;
+      if (inner_sql_exec_addr_.is_valid()) {
+        sql_exec_addr = &inner_sql_exec_addr_;
+        LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
+      }
+      LOG_INFO("execute sql" , K(base_scan_sql), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT));
+      if (OB_FAIL(ObTypeVector::get_vector_dfunc(get_vd_type(), dfunc))) {
+        LOG_WARN("fail to get vector dfunc", K(ret), K(get_vd_type()));
+      } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+        LOG_WARN("set trx timeout failed", K(ret));
+      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+        LOG_WARN("set timeout failed", K(ret));
+      } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
+        LOG_WARN("fail to start transaction", K(ret), K(tenant_id_));
+      } else {
+        int64_t hnsw_m = 16;
+        int64_t hnsw_ef_construction = 200;
+        {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+          hnsw_m = tenant_config->vector_hnsw_m;
+          hnsw_ef_construction = tenant_config->vector_hnsw_ef_construction;
+        }
+        lib::ObMemAttr mattr(tenant_id_, "HNSW");
+        ObArenaAllocator allocator(mattr);
+        ObArenaAllocator unsafe_in_ring_allocator1(mattr);
+        ObArenaAllocator unsafe_out_ring_allocator1(mattr);
+        ObArenaAllocator unsafe_in_ring_allocator2(mattr);
+        ObArenaAllocator unsafe_out_ring_allocator2(mattr);
+        common::ObSafeArenaAllocator in_ring_allocator1(unsafe_in_ring_allocator1);
+        common::ObSafeArenaAllocator out_ring_allocator1(unsafe_out_ring_allocator1);
+        common::ObSafeArenaAllocator in_ring_allocator2(unsafe_in_ring_allocator2);
+        common::ObSafeArenaAllocator out_ring_allocator2(unsafe_out_ring_allocator2);
+        const int64_t mem_allow_limit = lib::get_tenant_memory_limit(tenant_id_);
+        const double hnsw_build_mem_percentage = 0.5;
+        LOG_INFO("############ hnsw build index info", K(mem_allow_limit), K(hnsw_build_mem_percentage));
+
+        share::ObHNSWIndexBuilder hnsw_builder(hnsw_m, hnsw_ef_construction, dfunc,
+                                                index_schema.get_table_name_str(), index_db_schema->get_database_name_str(), &allocator, base_rowkey_cnt, column_name,
+                                                &trans, tenant_id_, &in_ring_allocator1, &out_ring_allocator1, &in_ring_allocator2, &out_ring_allocator2,
+                                                4);
+        // hnsw_builder.get
+        SMART_VAR(ObMySQLProxy::MySQLResult, read_res) {
+          sqlclient::ObMySQLResult *result = NULL;
+          if (OB_FAIL(user_sql_proxy->read(read_res, tenant_id_, base_scan_sql.ptr(), sql_exec_addr))) {
+            LOG_WARN("fail to scan base table", K(ret), K(tenant_id_));
+          } else if (OB_ISNULL(result = read_res.get_result())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get sql result", K(ret), KP(result));
+          } else {
+            // TODO: shk
+            if (OB_FAIL(hnsw_builder.init())) {
+              LOG_WARN("fail to init hnsw builder", K(ret));
+            }
+            while (OB_SUCC(ret)) {
+              if (OB_FAIL(result->next())) {
+                if (OB_ITER_END == ret) {
+                  ret = OB_SUCCESS;
+                  break;
+                } else {
+                  LOG_WARN("fail to get next row", K(ret));
+                }
+              } else if (OB_FAIL(hnsw_builder.insert_vector(result))) {
+                LOG_WARN("fail to insert vector into hnsw index table", K(ret));
+              } else if (OB_FALSE_IT(++total_vector_cnt)) {
+              } else if (hnsw_builder.get_cache_mem_usage() > hnsw_build_mem_percentage * mem_allow_limit) {
+                hnsw_builder.show_cache_info();
+                if (OB_FAIL(hnsw_builder.reset())) {
+                  LOG_WARN("fail to reset hnsw_builder", K(ret));
+                }
+              }
+              if (OB_SUCC(ret) && 0 == total_vector_cnt % 3000) {
+                // if (OB_FAIL(hnsw_builder.write_all_updates())) {
+                //   LOG_WARN("fail to write all updates", K(ret));
+                // } else {
+                  LOG_INFO("############ hnsw build index count", K(total_vector_cnt));
+                // }
+              }
+              if (OB_SUCC(ret) && 0 == total_vector_cnt % 10000) {
+                if (OB_FAIL(hnsw_builder.write_all_updates())) {
+                  LOG_WARN("fail to write all updates", K(ret));
+                }
+              }
+            }
+            LOG_INFO("############ hnsw ready for write all updates", K(ret));
+            if (OB_SUCC(ret) && OB_FAIL(hnsw_builder.write_all_updates())) {
+              LOG_WARN("fail to write remaining updates", K(ret));
+            }
+            LOG_INFO("############ hnsw finsh write all updates", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          vector_dim = hnsw_builder.get_hnsw_vector_dim();
+          max_ep_level = hnsw_builder.get_max_ep_level();
+          const ObHNSWElement *ep = hnsw_builder.get_ep();
+          if (OB_NOT_NULL(ep)) {
+            ObHNSWCPoolPtr pkey_ptr = ep->pk_ptr_;
+            ObArenaAllocator tmp_allocator;
+            if (OB_FAIL(vector_hnsw_index_sql.append_fmt("insert into %s (vector_index_table_id,rowkey_id,vector_distance_type,hnsw_dim,hnsw_m,hnsw_ef_construction,hnsw_entry_level,rowkey_value) values ",
+                                                          OB_ALL_VECTOR_HNSW_INDEX_TNAME))) {
+              LOG_WARN("fail to append vector hnsw index insertion sql", K(ret));
+            }
+            ObCastCtx cast_ctx(&tmp_allocator, NULL, CM_NONE, ObCharset::get_system_collation());
+            ObObj tmp_obj;
+            for (int64_t i = 0; OB_SUCC(ret) && i < base_rowkey_cnt; ++i) {
+              if (OB_FAIL(ObObjCaster::to_type(ObVarcharType, cast_ctx, pkey_ptr.objs_[i], tmp_obj))) {
+                  LOG_WARN("fail to cast obj to varchar", K(pkey_ptr.objs_[i]));
+              } else if (OB_FAIL(vector_hnsw_index_sql.append_fmt(i == 0 ? "(%ld,%ld,%ld,%ld,%ld,%ld,%ld,'%.*s')" : ",(%ld,%ld,%ld,%ld,%ld,%ld,%ld,'%.*s')",
+                                                                  index_schema.get_table_id(), i,
+                                                                  static_cast<int64_t>(get_vd_type()), vector_dim,
+                                                                  hnsw_m, hnsw_ef_construction, max_ep_level,
+                                                                  static_cast<int>(tmp_obj.get_string().length()),
+                                                                  tmp_obj.get_string().ptr()))) {
+                LOG_WARN("fail to append sql", K(ret), K(tmp_obj.get_string()));
+              }
+            }
+          } else {
+            if (OB_FAIL(vector_hnsw_index_sql.append_fmt("insert into %s (vector_index_table_id,rowkey_id,vector_distance_type,hnsw_dim,hnsw_m,hnsw_ef_construction,hnsw_entry_level,rowkey_value) values ",
+                                                          OB_ALL_VECTOR_HNSW_INDEX_TNAME))) {
+              LOG_WARN("fail to append vector hnsw index insertion sql", K(ret));
+            } else {
+              for (int64_t i = 0; OB_SUCC(ret) && i < base_rowkey_cnt; ++i) {
+                if (OB_FAIL(vector_hnsw_index_sql.append_fmt(i == 0 ? "(%ld,%ld,%ld,%ld,%ld,%ld,%ld,'')" : ",(%ld,%ld,%ld,%ld,%ld,%ld,%ld,'')",
+                                                                    index_schema.get_table_id(), i,
+                                                                    static_cast<int64_t>(get_vd_type()), vector_dim,
+                                                                    16L, 200L, max_ep_level))) {
+                  LOG_WARN("fail to append sql", K(ret));
+                }
+              }
+            }
+          }
+        }
+
+        if (trans.is_started()) {
+          bool commit = (OB_SUCCESS == ret);
+          LOG_INFO("############ hnsw start commit", K(ret), K(commit));
+          int tmp_ret = trans.end(commit);
+          LOG_INFO("############ hnsw finish commit", K(tmp_ret));
+          if (OB_SUCCESS != tmp_ret) {
+            ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+          }
+        }
+      }
+    }
+  }
+
+  // set __all_vector_hnsw_index
+  if (OB_SUCC(ret)) {
+    ObMySQLTransaction trans;
+    int64_t affected_rows = 0;
+    if (OB_FAIL(trans.start(&root_service_->get_sql_proxy(), tenant_id_))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id_));
+    } else if (OB_FAIL(trans.write(tenant_id_, vector_hnsw_index_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to do insertion", K(ret));
+    }
+    if (trans.is_started()) {
+      bool commit = (OB_SUCCESS == ret);
+      int tmp_ret = trans.end(commit);
+      if (OB_SUCCESS != tmp_ret) {
+        ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
+      }
+    }
+  }
+
+  LOG_INFO("build hnsw index finish", K(ret), K(*this));
+  ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
+  ObDDLTaskInfo info;
+  int tmp_ret = root_service_->get_ddl_scheduler().on_sstable_complement_job_reply(
+      unused_tablet_id, task_key, snapshot_version_, execution_id_, ret, info);
+  if (OB_SUCCESS != tmp_ret) {
+    LOG_WARN("report build finish failed", K(ret), K(tmp_ret));
+    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+  }
+  return ret;
+}
+
+int ObIndexSSTableBuildTask::inner_ivfflat_process(
+    const ObTableSchema &data_schema,
+    const ObTableSchema &index_schema,
+    const bool is_oracle_mode)
+{
+  int ret = OB_SUCCESS;
+  if (is_oracle_mode) {
+    ret = OB_NOT_SUPPORTED; // TODO(@jinshui)
+    LOG_WARN("not supported now", K(ret), K(is_oracle_mode));
+  } else {
+    ObString index_table_name;
+    ObString data_table_name;
+    ObString database_name;
+    ObSqlString select_column_str;
+    common::ObArray<uint64_t> index_col_ids;
+    int64_t affected_rows = 0;
+    schema::ObSchemaGetterGuard schema_guard;
+    const schema::ObTableSchema *index_table_schema = nullptr;
+    const schema::ObTableSchema *data_table_schema = nullptr;
+    const schema::ObDatabaseSchema *db_schema = nullptr;
+    common::ObCommonSqlProxy *user_sql_proxy = nullptr;
+    ObTimeoutCtx timeout_ctx;
+    const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
+    user_sql_proxy = GCTX.sql_proxy_;
+    if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set trx timeout failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
+      LOG_WARN("set timeout failed", K(ret));
+    } else if (OB_FAIL(schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+        tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret), K(data_table_id_));
+    } else if (OB_FAIL(schema_guard.check_formal_guard())) {
+      LOG_WARN("fail to check formal guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, data_table_id_, data_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K_(tenant_id), K(data_table_id_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, dest_table_id_, index_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K_(tenant_id), K(dest_table_id_));
+    } else if (OB_ISNULL(index_table_schema) || OB_ISNULL(data_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("fail to get table schema", K(ret), KP(index_table_schema), KP(data_table_schema),
+        K_(tenant_id), K(dest_table_id_), K(data_table_id_));
+    } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), db_schema))) {
+      LOG_WARN("fail to get database schema", K(ret), K_(tenant_id), K(data_table_schema->get_database_id()));
+    } else if (OB_ISNULL(db_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, database schema must not be nullptr", K(ret));
+    } else if (OB_FAIL(index_table_schema->get_column_ids(index_col_ids))) {
+      LOG_WARN("fail to get index table column ids", K(ret));
+    } else {
+      data_table_name = data_table_schema->get_table_name();
+      index_table_name = index_table_schema->get_table_name();
+      database_name = db_schema->get_database_name();
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_col_ids.count(); ++i) {
+      const ObColumnSchemaV2 *index_col_schema = index_table_schema->get_column_schema(index_col_ids.at(i));
+      const ObString& index_col_name = index_col_schema->get_column_name();
+      if (index_col_schema->is_hidden() ||
+          index_col_name == "center_idx") {
+        // do nothing
+      } else if (OB_FAIL(select_column_str.append_fmt(select_column_str.empty() ? "%.*s" : ",%.*s",
+                  static_cast<int>(index_col_name.length()), index_col_name.ptr()))) {
+        LOG_WARN("fail to append select_column_str", K(ret), K(index_col_name));
+      }
+    }
+
+    ObSqlString ivfflat_build_sql_string;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ivfflat_build_sql_string.append_fmt("insert /*+parallel(%ld)*/ into `%.*s`.`%.*s` select %.*s from `%.*s`.`%.*s`",
+        parallelism_,
+        static_cast<int>(database_name.length()), database_name.ptr(),
+        static_cast<int>(index_table_name.length()), index_table_name.ptr(),
+        static_cast<int>(select_column_str.length()), select_column_str.ptr(),
+        static_cast<int>(database_name.length()), database_name.ptr(),
+        static_cast<int>(data_table_name.length()), data_table_name.ptr()))) {
+      LOG_WARN("fail to append ivfflat_build_sql_string", K(database_name), K(index_table_name), K(data_table_name));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, read_res) { // 这里又调一次set_end_stmt
+        sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(user_sql_proxy->read(read_res, tenant_id_, ivfflat_build_sql_string.ptr()))) {
+          LOG_WARN("fail to scan base table", K(ret), K(tenant_id_));
+        } else if (OB_ISNULL(result = read_res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", K(ret), KP(result));
+        } else {
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("fail to get next row", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIndexSSTableBuildTask::process()
 {
   int ret = OB_SUCCESS;
@@ -64,7 +482,7 @@ int ObIndexSSTableBuildTask::process()
   ObTabletID unused_tablet_id;
   const ObTableSchema *data_schema = nullptr;
   const ObTableSchema *index_schema = nullptr;
-  bool need_padding = false;
+
   bool need_exec_new_inner_sql = true;
 
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
@@ -93,70 +511,28 @@ int ObIndexSSTableBuildTask::process()
   } else if (nullptr == index_schema) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
-  } else {
-    if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
-                                                           dest_table_id_,
-                                                           data_schema->get_schema_version(),
-                                                           snapshot_version_,
-                                                           execution_id_,
-                                                           task_id_,
-                                                           parallelism_,
-                                                           false/*use_heap_table_ddl*/,
-                                                           !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
-                                                           nullptr,
-                                                           sql_string))) {
-      LOG_WARN("fail to generate build replica sql", K(ret));
-    } else if (OB_FAIL(data_schema->is_need_padding_for_generated_column(need_padding))) {
-      LOG_WARN("fail to check need padding", K(ret));
-    } else {
-      common::ObCommonSqlProxy *user_sql_proxy = nullptr;
-      int64_t affected_rows = 0;
-      ObSQLMode sql_mode = SMO_STRICT_ALL_TABLES | (need_padding ? SMO_PAD_CHAR_TO_FULL_LENGTH : 0);
-      ObSessionParam session_param;
-      session_param.sql_mode_ = (int64_t *)&sql_mode;
-      session_param.tz_info_wrap_ = nullptr;
-      session_param.ddl_info_.set_is_ddl(true);
-      session_param.ddl_info_.set_source_table_hidden(data_schema->is_user_hidden_table());
-      session_param.ddl_info_.set_dest_table_hidden(index_schema->is_user_hidden_table());
-      session_param.nls_formats_[ObNLSFormatEnum::NLS_DATE] = nls_date_format_;
-      session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format_;
-      session_param.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = nls_timestamp_tz_format_;
-      session_param.use_external_session_ = true;  // means session id dispatched by session mgr
-      session_param.consumer_group_id_ = consumer_group_id_;
-
-      common::ObAddr *sql_exec_addr = nullptr;
-      if (inner_sql_exec_addr_.is_valid()) {
-        sql_exec_addr = &inner_sql_exec_addr_;
-        LOG_INFO("inner sql execute addr" , K(*sql_exec_addr));
-      }
-      int tmp_ret = OB_SUCCESS;
-      if (oracle_mode) {
-        user_sql_proxy = GCTX.ddl_oracle_sql_proxy_;
-      } else {
-        user_sql_proxy = GCTX.ddl_sql_proxy_;
-      }
-      DEBUG_SYNC(BEFORE_INDEX_SSTABLE_BUILD_TASK_SEND_SQL);
-      ObTimeoutCtx timeout_ctx;
-      const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
-      add_event_info(ret, "index sstable build task send innersql");
-      LOG_INFO("execute sql" , K(sql_string), K(data_table_id_), K(tenant_id_), K(DDL_INNER_SQL_EXECUTE_TIMEOUT), "ddl_event_info", ObDDLEventInfo());
-      if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
-        LOG_WARN("set trx timeout failed", K(ret));
-      } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
-        LOG_WARN("set timeout failed", K(ret));
-      } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, CREATE_INDEX_BUILD_SSTABLE_FAILED))) {
-        LOG_WARN("ddl sim failure: create index build sstable failed", K(ret), K(tenant_id_), K(task_id_));
-      } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows,
-                  oracle_mode ? ObCompatibilityMode::ORACLE_MODE : ObCompatibilityMode::MYSQL_MODE, &session_param, sql_exec_addr))) {
-        LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObCheckTabletDataComplementOp::check_finish_report_checksum(tenant_id_, dest_table_id_, execution_id_, task_id_))) {
-          LOG_WARN("fail to check sstable checksum_report_finish",
-            K(ret), K(tenant_id_), K(dest_table_id_), K(execution_id_), K(task_id_));
-        }
-      }
+  } else if (ObIndexUsingType::USING_HNSW == vector_index_using_type_) {
+    if (OB_FAIL(inner_hnsw_process(schema_guard, *data_schema, *index_schema))) {
+      LOG_WARN("failed to process hnsw index", K(ret));
     }
+  } else if (ObIndexUsingType::USING_IVFFLAT == vector_index_using_type_) {
+    if (OB_FAIL(inner_ivfflat_process(*data_schema, *index_schema, oracle_mode))) {
+      LOG_WARN("failed to process ivfflat index", K(ret));
+    }
+  } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
+                                                          dest_table_id_,
+                                                          data_schema->get_schema_version(),
+                                                          snapshot_version_,
+                                                          execution_id_,
+                                                          task_id_,
+                                                          parallelism_,
+                                                          false/*use_heap_table_ddl*/,
+                                                          !data_schema->is_user_hidden_table()/*use_schema_version_hint_for_src_table*/,
+                                                          nullptr,
+                                                          sql_string))) {
+    LOG_WARN("fail to generate build replica sql", K(ret));
+  } else if (OB_FAIL(inner_normal_process(*data_schema, *index_schema, oracle_mode, sql_string))) {
+    LOG_WARN("failed to process normal index", K(ret));
   }
 
   ObDDLTaskKey task_key(tenant_id_, dest_table_id_, schema_version_);
@@ -204,7 +580,11 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
         trace_id_,
         parallelism_,
         root_service_,
-        inner_sql_exec_addr_);
+        inner_sql_exec_addr_,
+        is_vector_index_);
+    task->set_vector_index_using_type(vector_index_using_type_);
+    task->set_vd_type(vd_type_);
+    task->set_container_table_id(container_table_id_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -360,6 +740,7 @@ int ObIndexBuildTask::init(
     const obrpc::ObCreateIndexArg &create_index_arg,
     const int64_t parent_task_id /* = 0 */,
     const uint64_t tenant_data_version,
+    const ObTableSchema *container_schema /* nullptr */,
     const int64_t task_status /* = TaskStatus::PREPARE */,
     const int64_t snapshot_version /* = 0 */)
 {
@@ -401,6 +782,9 @@ int ObIndexBuildTask::init(
     tenant_id_ = tenant_id;
     object_id_ = data_table_schema->get_table_id();
     index_table_id_ = index_schema->get_table_id();
+    if (OB_NOT_NULL(container_schema)) {
+      create_index_arg_.container_table_id_ = container_schema->get_table_id();
+    }
     schema_version_ = schema_version;
     parallelism_ = parallelism;
     create_index_arg_.exec_tenant_id_ = tenant_id_;
@@ -874,7 +1258,20 @@ int ObIndexBuildTask::send_build_single_replica_request()
         trace_id_,
         parallelism_,
         root_service_,
-        create_index_arg_.inner_sql_exec_addr_);
+        create_index_arg_.inner_sql_exec_addr_,
+        create_index_arg_.is_vector_index());
+    if (create_index_arg_.is_vector_index()) {
+      task.set_vector_index_using_type(create_index_arg_.index_using_type_);
+      task.set_vd_type(create_index_arg_.index_columns_.at(0).vd_type_);
+      if (USING_IVFFLAT == create_index_arg_.index_using_type_) {
+        if (create_index_arg_.vector_help_schema_.empty()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected empty vector help schema", K(ret), K_(create_index_arg));
+        } else {
+          task.set_container_table_id(create_index_arg_.container_table_id_);
+        }
+      }
+    }
     if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
                                     create_index_arg_.nls_timestamp_format_,
                                     create_index_arg_.nls_timestamp_tz_format_))) {
@@ -969,7 +1366,9 @@ int ObIndexBuildTask::wait_data_complement()
       state_finished = true;
     }
   }
-  if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index()) {
+  if (OB_SUCC(ret) && state_finished &&
+      !create_index_arg_.is_spatial_index() &&
+      !create_index_arg_.is_vector_index()) {
     bool dummy_equal = false;
     bool need_verify_checksum = true;
 #ifdef ERRSIM
@@ -1003,7 +1402,7 @@ int ObIndexBuildTask::check_need_verify_checksum(bool &need_verify)
     LOG_WARN("not init", K(ret));
   } else if (is_unique_index_) {
     need_verify = true;
-  } else if (create_index_arg_.is_spatial_index()) {
+  } else if (create_index_arg_.is_spatial_index() || create_index_arg_.is_vector_index()) {
     need_verify = false;
   } else {
     ObSchemaGetterGuard schema_guard;

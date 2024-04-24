@@ -4032,7 +4032,7 @@ int ObVirtualTableResultConverter::convert_output_row(
   int ret = OB_SUCCESS;
   if (!inited_row_ && OB_FAIL(init_output_row(dst_exprs.count()))) {
     LOG_WARN("failed to init row");
-  } else if (dst_exprs.count() != dst_exprs.count() ||
+  } else if (src_exprs.count() != dst_exprs.count() ||
       output_column_ids_->count() != dst_exprs.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: src row and dst row is not match", K(ret), K(dst_exprs.count()));

@@ -1532,6 +1532,14 @@ public:
   virtual int get_interval_ds(const int64_t col_idx, common::ObIntervalDSValue &int_val) const = 0;
   virtual int get_nvarchar2(const int64_t col_idx, common::ObString &nvarchar2_val) const = 0;
   virtual int get_nchar(const int64_t col_idx, common::ObString &nchar_val) const = 0;
+  virtual int get_vector_value(const int64_t col_idx, float *&vector, int64_t &vector_len) const
+  {
+    UNUSED(col_idx); UNUSED(vector); UNUSED(vector_len); return common::OB_NOT_IMPLEMENT;
+  }
+  virtual int get_vector(const int64_t col_idx, ObTypeVector &vector) const
+  {
+    UNUSED(col_idx); UNUSED(vector); return common::OB_NOT_IMPLEMENT;
+  }
   /*
   * read int/str/TODO from result set
   * col_name: indicate which column to read
@@ -1591,6 +1599,14 @@ public:
   virtual int get_interval_ds(const char *col_name, common::ObIntervalDSValue &int_val) const = 0;
   virtual int get_nvarchar2(const char *col_name, common::ObString &nvarchar2_val) const = 0;
   virtual int get_nchar(const char *col_name, common::ObString &nchar_val) const = 0;
+  virtual int get_vector_value(const char *col_name, float *&vector, int64_t &vector_len) const
+  {
+    UNUSED(col_name); UNUSED(vector); UNUSED(vector_len); return common::OB_NOT_IMPLEMENT;
+  }
+  virtual int get_vector(const char *col_name, ObTypeVector &vector) const
+  {
+    UNUSED(col_name); UNUSED(vector); return common::OB_NOT_IMPLEMENT;
+  }
   // single row get value
   int get_single_int(const int64_t row_idx, const int64_t col_idx, int64_t &int_val);
 

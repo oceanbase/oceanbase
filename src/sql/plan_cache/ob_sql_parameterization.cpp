@@ -312,6 +312,21 @@ bool ObSqlParameterization::is_node_not_param(TransformTreeCtx &ctx)
   return not_param;
 }
 
+bool ObSqlParameterization::is_vector_sort(const ParseNode *root, const ParseNode *tree)
+{
+  bool ret_bool = false;
+  if (NULL == tree || NULL == root) {
+    ret_bool = false;
+  } else if (T_OP_VECTOR_L2_DISTANCE == root->type_
+      || T_OP_VECTOR_INNER_PRODUCT == root->type_
+      || T_OP_VECTOR_COSINE_DISTANCE == root->type_) {
+    if (T_VARCHAR == tree->type_) {
+      ret_bool = true;
+    }
+  }
+  return ret_bool;
+}
+
 //判断该节点及其子节点是常量时也不能参数化。
 bool ObSqlParameterization::is_tree_not_param(const ParseNode *tree)
 {
@@ -854,6 +869,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
             //如果not_param本来就是true则不需要再判断；因为某结点判断为true，则该结点子树均为true;
             if (!ctx.not_param_) {
               ctx.not_param_ = is_tree_not_param(ctx.tree_);
+            } else if (is_vector_sort(root, ctx.tree_)) {
+              ctx.not_param_ = false;
             }
           }
 

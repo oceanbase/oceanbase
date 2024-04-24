@@ -281,6 +281,7 @@ namespace share
   static const char* const OB_SV_CARDINALITY_ESTIMATION_MODEL = "cardinality_estimation_model";
   static const char* const OB_SV_QUERY_REWRITE_ENABLED = "query_rewrite_enabled";
   static const char* const OB_SV_QUERY_REWRITE_INTEGRITY = "query_rewrite_integrity";
+  static const char* const OB_SV_VECTOR_IVFFLAT_PROBES = "vector_ivfflat_probes";
 
 }
 }

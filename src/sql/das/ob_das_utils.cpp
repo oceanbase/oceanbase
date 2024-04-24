@@ -205,7 +205,8 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
                                     const ObDASWriteBuffer::DmlRow &dml_row,
                                     const IntFixedArray &row_projector,
                                     ObIAllocator &allocator,
-                                    ObNewRow &storage_row)
+                                    ObNewRow &storage_row,
+                                    ObTabletID *tablet_id)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
@@ -213,8 +214,34 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
     const ObObjMeta &col_type = dml_ctdef.column_types_.at(i);
     const ObAccuracy &col_accuracy = dml_ctdef.column_accuracys_.at(i);
     if (projector_idx < 0) {
-      //this column is not touched by query, only need to be marked as nop
-      storage_row.cells_[i].set_nop_value();
+      if (dml_ctdef.table_param_.get_data_table().is_vector_ivfflat_index()
+          && dml_ctdef.column_ids_[i] == dml_ctdef.table_param_.get_data_table().get_extra_rowkey_id()) {
+        if (OB_ISNULL(tablet_id)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("nullptr tablet_id", K(ret), K(tablet_id));
+        }
+        for (int64_t j = row_projector.count() - 1; OB_SUCC(ret) && j >= 0; --j) {
+          const uint64_t column_id = dml_ctdef.column_ids_[j];
+          if (column_id == dml_ctdef.table_param_.get_data_table().get_vector_index_id()
+              && dml_ctdef.column_types_.at(j).is_vector()) {
+            ObObj obj;
+            ObTypeVector vector;
+            if (OB_FAIL(dml_row.cells()[row_projector.at(j)].to_obj(obj, dml_ctdef.column_types_.at(j)))) {
+              LOG_WARN("stored row to new row obj failed", K(ret), K(j),
+                K(dml_row.cells()[row_projector.at(j)]), K(dml_ctdef.column_types_.at(j)));
+            } else if (OB_FAIL(obj.get_vector(vector))) {
+              LOG_WARN("failed to get vector", K(ret), K(obj));
+            } else if (OB_FAIL(MTL(ObTenantIvfflatCenterCache*)->get_nearest_center(
+                vector, dml_ctdef.table_param_.get_data_table().get_table_id(), *tablet_id, storage_row.cells_[i]))) {
+              LOG_WARN("failed to get nearest center", K(ret));
+            }
+            break;
+          }
+        }
+      } else {
+        //this column is not touched by query, only need to be marked as nop
+        storage_row.cells_[i].set_nop_value();
+      }
     } else if (OB_FAIL(dml_row.cells()[projector_idx].to_obj(storage_row.cells_[i], col_type))) {
       LOG_WARN("stored row to new row obj failed", K(ret),
                K(dml_row.cells()[projector_idx]), K(col_type), K(projector_idx), K(i));

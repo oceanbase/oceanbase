@@ -54,7 +54,7 @@ int ObDASTableLocMeta::init_related_meta(uint64_t related_table_id,
   related_meta.ref_table_id_ = related_table_id;
   related_meta.related_table_ids_.set_capacity(related_table_ids_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < related_table_ids_.count(); ++i) {
-    //the related table ids of other table meta are the other related table id and source table id
+    //the related table ids of other table meta are the other related table id and source table id // 主表的related_table是索引表
     uint64_t tmp_related_id = (related_table_ids_.at(i) == related_table_id ?
                               ref_table_id_ : related_table_ids_.at(i));
     ret = related_meta.related_table_ids_.push_back(tmp_related_id);

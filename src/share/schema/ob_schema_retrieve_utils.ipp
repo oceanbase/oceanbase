@@ -1504,6 +1504,11 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         uint64_t, true, true/*ignore_column_error*/, COLUMN_GROUP_START_ID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, column_store, table_schema,
         bool, true, true/*ignore_column_error*/, false);
+    // field for vector index
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, vector_ivfflat_lists, table_schema,
+        int64_t, true, true/*ignore_column_error*/, OB_DEFAULT_VECTOR_IVFFLAT_LISTS);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, vector_distance_func, table_schema,
+        ObVectorDistanceType, true, true/*ignore_column_error*/, 0);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));
@@ -4184,6 +4189,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
     ignore_column_error = true;
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, object_status, table_schema, int64_t, true, ignore_column_error, ObObjectStatus::VALID);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, truncate_version, table_schema, int64_t, true, ignore_column_error, common::OB_INVALID_VERSION);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, index_using_type, table_schema, ObIndexUsingType);
   }
   return ret;
 }

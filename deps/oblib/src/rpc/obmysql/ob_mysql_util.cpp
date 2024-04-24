@@ -1253,5 +1253,50 @@ int ObMySQLUtil::geometry_cell_str(char *buf, const int64_t len, const ObString 
   return ret;
 }
 
+int ObMySQLUtil::vector_cell_str(uint64_t tenant_id, char *buf, const int64_t len, const ObTypeVector &val, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  lib::ObMemAttr mem_attr(tenant_id, "VectorAlloc");
+  ObArenaAllocator allocator(mem_attr);
+  char *tmp_buf = nullptr;
+  int64_t tmp_buf_len = 0;
+  int64_t tmp_buf_pos = 0;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid input args", K(ret), KP(buf));
+  } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, allocator, "[ "))) {
+    LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < val.dims(); ++i) {
+      if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, allocator, "%.6f, ", val.at(i)))) {
+        LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos), K(i), K(val.at(i)));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, allocator, "]"))) {
+      LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(tmp_buf_pos < len - pos)) {
+    int64_t saved_pos = pos;
+    if (OB_FAIL(ObMySQLUtil::store_length(buf, len, tmp_buf_pos, pos))) {
+    } else {
+      if (OB_LIKELY(tmp_buf_pos <= len - pos)) {
+        MEMCPY(buf + pos, tmp_buf, tmp_buf_pos);
+        pos += tmp_buf_pos;
+      } else {
+        pos = saved_pos;
+        ret = OB_SIZE_OVERFLOW;
+      }
+    }
+  } else {
+    ret = OB_SIZE_OVERFLOW;
+  }
+  return ret;
+}
+
 } // namespace obmysql
 } // namespace oceanbase

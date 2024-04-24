@@ -592,6 +592,9 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
             }
           }
         } else if (!dst_expr->obj_meta_.is_lob_storage()) {
+          if (dst_expr->datum_meta_.type_ == ObVectorType) {
+            dst_expr->datum_meta_.vector_len_ = dst_expr->max_length_;
+          }
           if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
                                             cm_, datum))) {
             LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),

@@ -16,6 +16,8 @@
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "share/vector_index/ob_ivfflat_index_search_helper.h"
+#include "share/vector_index/ob_ivfflat_index_build_helper.h"
 namespace oceanbase
 {
 namespace sql
@@ -24,6 +26,18 @@ class ObDASExtraData;
 class ObLocalIndexLookupOp;
 struct ObDASIRCtDef;
 struct ObDASIRRtDef;
+
+class AnnSearchExprSpec {
+  OB_UNIS_VERSION(1);
+public:
+  AnnSearchExprSpec() : k_expr_(nullptr), query_vector_expr_(nullptr) {}
+  ~AnnSearchExprSpec() = default;
+  TO_STRING_KV(K_(k_expr),
+               K_(query_vector_expr));
+
+  ObExpr *k_expr_;
+  ObExpr *query_vector_expr_;
+};
 
 struct ObDASScanCtDef : ObDASBaseCtDef
 {
@@ -47,7 +61,8 @@ public:
       external_files_(alloc),
       external_file_format_str_(alloc),
       trans_info_expr_(nullptr),
-      ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN)
+      ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
+      as_expr_spec_()
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -81,8 +96,9 @@ public:
                        K_(external_file_format_str),
                        K_(external_file_location),
                        KPC_(trans_info_expr),
-                       K_(ir_scan_type));
-  common::ObTableID ref_table_id_;
+                       K_(ir_scan_type),
+                       K_(as_expr_spec));
+  common::ObTableID ref_table_id_; // 这个是真实对应的表id
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
   share::schema::ObTableParam table_param_;
@@ -102,6 +118,7 @@ public:
   ObExternalFileFormat::StringData external_file_format_str_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
+  AnnSearchExprSpec as_expr_spec_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -128,7 +145,9 @@ public:
       stmt_allocator_("StmtScanAlloc"),
       scan_allocator_("TableScanAlloc"),
       sample_info_(nullptr),
-      is_for_foreign_check_(false)
+      is_for_foreign_check_(false),
+      ann_search_k_(-1),
+      ann_search_vector_()
   { }
   virtual ~ObDASScanRtDef();
   bool enable_rich_format() const { return scan_flag_.enable_rich_format_; }
@@ -164,6 +183,8 @@ public:
   common::ObWrapperAllocatorWithAttr scan_allocator_;
   const common::SampleInfo *sample_info_; //Block(Row)SampleScan, only support local das scan
   bool is_for_foreign_check_;
+  int64_t ann_search_k_;
+  common::ObTypeVector ann_search_vector_;
 private:
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
@@ -229,12 +250,23 @@ public:
   { related_ctdefs_.set_capacity(1); return related_ctdefs_.push_back(lookup_ctdef); }
   int set_lookup_rtdef(ObDASScanRtDef *lookup_rtdef)
   { related_rtdefs_.set_capacity(1); return related_rtdefs_.push_back(lookup_rtdef); }
+  // container table
+  int set_container_ctdef(const ObDASScanCtDef *container_ctdef)
+  { container_ctdefs_.set_capacity(1); return container_ctdefs_.push_back(container_ctdef); }
+  int set_container_rtdef(ObDASScanRtDef *container_rtdef)
+  { container_rtdefs_.set_capacity(1); return container_rtdefs_.push_back(container_rtdef); }
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const
   { return related_ctdefs_.empty() ? nullptr : static_cast<const ObDASScanCtDef*>(related_ctdefs_.at(0)); }
   ObDASScanRtDef *get_lookup_rtdef()
   { return related_rtdefs_.empty() ? nullptr : static_cast<ObDASScanRtDef*>(related_rtdefs_.at(0)); }
+  // container table
+  const ObDASScanCtDef *get_container_ctdef() const
+  { return container_ctdefs_.empty() ? nullptr : static_cast<const ObDASScanCtDef*>(container_ctdefs_.at(0)); }
+  ObDASScanRtDef *get_container_rtdef()
+  { return container_rtdefs_.empty() ? nullptr : static_cast<ObDASScanRtDef*>(container_rtdefs_.at(0)); }
   int set_lookup_tablet_id(const common::ObTabletID &tablet_id);
+  int set_container_tablet_id(const common::ObTabletID &tablet_id);
   int init_scan_param();
   virtual int rescan();
   virtual int reuse_iter();
@@ -247,6 +279,20 @@ public:
   virtual bool need_all_output() { return false; }
   virtual int switch_scan_group() { return common::OB_SUCCESS; };
   virtual int set_scan_group(int64_t group_id) { UNUSED(group_id); return common::OB_NOT_IMPLEMENT; };
+  void set_hnsw_index_iter_info(ObObj* ann_output_objs,
+                                int64_t hnsw_index_scan_cell_cnt,
+                                int64_t hnsw_index_scan_row_cnt)
+  {
+    ann_output_objs_ = ann_output_objs;
+    hnsw_index_scan_cell_cnt_ = hnsw_index_scan_cell_cnt;
+    hnsw_index_scan_row_cnt_ = hnsw_index_scan_row_cnt;
+  }
+  int create_hnsw_index_ann_iter();
+  void set_ivfflat_helper(share::ObIvfflatIndexSearchHelper *ivfflat_helper) { ivfflat_helper_ = ivfflat_helper; }
+  void set_ivfflat_build_helper(share::ObIvfflatIndexBuildHelper *ivfflat_build_helper) { ivfflat_build_helper_ = ivfflat_build_helper; }
+  int create_build_vector_index_dummy_result();
+
+  int create_ivfflat_ann_scan_op();
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,
                        KPC_(scan_ctdef),
                        KPC_(scan_rtdef),
@@ -285,6 +331,122 @@ protected:
     common::ObArenaAllocator retry_alloc_buf_;
   };
   ObDASIRParam ir_param_;
+  // HNSW INDEX RESULT ITER
+  ObObj* ann_output_objs_;
+  int64_t hnsw_index_scan_cell_cnt_;
+  int64_t hnsw_index_scan_row_cnt_;
+  // IVFFLAT INDEX SEARCH HELPER
+  share::ObIvfflatIndexSearchHelper *ivfflat_helper_;
+  share::ObIvfflatIndexBuildHelper *ivfflat_build_helper_;
+};
+
+class ObBuildVectorIndexDummyResult : public common::ObNewRowIterator
+{
+public:
+  ObBuildVectorIndexDummyResult(share::ObIvfflatIndexBuildHelper *ivfflat_build_helper,
+                                uint64_t base_table_id,
+                                uint64_t index_table_id,
+                                uint64_t container_table_id)
+    : ObNewRowIterator(ObNewRowIterator::IterType::ObIvfflatBuildIndex),
+      ivfflat_build_helper_(ivfflat_build_helper),
+      base_table_id_(base_table_id),
+      index_table_id_(index_table_id),
+      container_table_id_(container_table_id)
+  {}
+  virtual ~ObBuildVectorIndexDummyResult() {}
+  virtual int get_next_row(ObNewRow *&row) override;
+  virtual void reset() { ivfflat_build_helper_->reuse(); }
+  virtual int get_next_row() override;
+  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
+  void reuse() { ivfflat_build_helper_->reuse(); }
+  share::ObIvfflatIndexBuildHelper *get_ivfflat_build_helper() { return ivfflat_build_helper_; }
+private:
+  share::ObIvfflatIndexBuildHelper *ivfflat_build_helper_;
+  uint64_t base_table_id_;
+  uint64_t index_table_id_;
+  uint64_t container_table_id_;
+};
+
+class ObIvfflatAnnScanOp : public common::ObNewRowIterator
+{
+protected:
+  enum AnnState : int32_t
+  {
+    CONTAINER_SCAN,
+    INDEX_SCAN,
+    OUTPUT_ROWS,
+    FINISHED
+  };
+public:
+  ObIvfflatAnnScanOp()
+    : ObNewRowIterator(ObNewRowIterator::IterType::ObIvfflatAnnOp),
+      state_(CONTAINER_SCAN),
+      cur_row_idx_(0),
+      index_iter_(nullptr),
+      container_iter_(nullptr),
+      index_ctdef_(nullptr),
+      index_rtdef_(nullptr),
+      container_ctdef_(nullptr),
+      container_rtdef_(nullptr),
+      tx_desc_(nullptr),
+      snapshot_(nullptr),
+      tablet_id_(),
+      ls_id_(),
+      container_scan_param_(),
+      index_scan_param_(nullptr),
+      arena_allocator_(),
+      ivfflat_helper_(nullptr)
+  {}
+  int init(const ObDASScanCtDef *index_ctdef,
+           ObDASScanRtDef *index_rtdef,
+           const ObDASScanCtDef *container_ctdef,
+           ObDASScanRtDef *container_rtdef,
+           transaction::ObTxDesc *tx_desc,
+           transaction::ObTxReadSnapshot *snapshot,
+           storage::ObTableScanParam *scan_param,
+           share::ObIvfflatIndexSearchHelper *ivfflat_helper);
+  virtual ~ObIvfflatAnnScanOp() {}
+  virtual int get_next_row(ObNewRow *&row) override;
+  virtual int get_next_row() override;
+  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
+  virtual void reset() { cur_row_idx_ = 0; }
+
+  void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
+  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
+
+  // int rescan();
+  int reuse();
+  int revert_iter();
+private:
+  int init_scan_param();
+  int prepare_container_key_range();
+  common::ObITabletScan &get_tsc_service();
+  int reuse_iter(ObNewRowIterator *iter);
+
+  int do_container_scan(const int64_t capcity = 1);
+  int do_index_scan(const int64_t capcity = 1);
+  int do_get_row();
+  int do_get_rows(int64_t &count, const int64_t capacity);
+protected:
+  AnnState state_;
+  int64_t cur_row_idx_;
+  // 和lookup不同，这里初始时两个迭代器都是空（没有做table_scan），因为是index_iter_依赖container_iter_得到的rowkey
+  common::ObNewRowIterator *index_iter_;
+  common::ObNewRowIterator *container_iter_;
+  const ObDASScanCtDef *index_ctdef_; //index ctdef
+  ObDASScanRtDef *index_rtdef_; //index rtdef
+  const ObDASScanCtDef *container_ctdef_;
+  ObDASScanRtDef *container_rtdef_;
+  // container table的依赖信息
+  transaction::ObTxDesc *tx_desc_;
+  transaction::ObTxReadSnapshot *snapshot_;
+  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
+  storage::ObTableScanParam container_scan_param_;
+
+  storage::ObTableScanParam *index_scan_param_;
+  common::ObArenaAllocator arena_allocator_;
+  share::ObIvfflatIndexSearchHelper *ivfflat_helper_;
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator
@@ -318,6 +480,36 @@ private:
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
   bool enable_rich_format_;
+};
+
+class ObHNSWIndexAnnScanRowIterator : public common::ObNewRowIterator
+{
+public:
+  ObHNSWIndexAnnScanRowIterator(ObEvalCtx *eval_ctx, const ExprFixedArray *output_exprs, const common::ObIArray<int32_t> *output_projector,
+                                ObObj* ann_output_objs, int64_t hnsw_index_scan_cell_cnt,
+                                int64_t hnsw_index_scan_row_cnt)
+    : eval_ctx_(eval_ctx), output_exprs_(output_exprs), output_projector_(output_projector),
+      ann_output_objs_(ann_output_objs), hnsw_index_scan_cell_cnt_(hnsw_index_scan_cell_cnt),
+      hnsw_index_scan_row_cnt_(hnsw_index_scan_row_cnt), cur_cell_id_(-1) {}
+
+  virtual ~ObHNSWIndexAnnScanRowIterator() {}
+  virtual int get_next_row(ObNewRow *&row) override;
+  virtual void reset() { cur_cell_id_ = -1; }
+  virtual int get_next_row() override;
+  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
+private:
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ObHNSWIndexAnnScanRowIterator);
+
+  ObEvalCtx *eval_ctx_;
+  const ExprFixedArray *output_exprs_;
+  const common::ObIArray<int32_t> *output_projector_;
+  ObObj* ann_output_objs_;
+  int64_t hnsw_index_scan_cell_cnt_;
+  int64_t hnsw_index_scan_row_cnt_;
+
+  int64_t cur_cell_id_;
+  ObNewRow cur_row_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

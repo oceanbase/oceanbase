@@ -87,6 +87,8 @@ public:
   virtual int get_interval_ds(const int64_t col_idx, ObIntervalDSValue &int_val) const;
   virtual int get_nvarchar2(const int64_t col_idx, common::ObString &nvarchar2_val) const;
   virtual int get_nchar(const int64_t col_idx, common::ObString &nchar_val) const;
+  virtual int get_vector_value(const int64_t col_idx, float *&vector, int64_t &vector_len) const;
+  virtual int get_vector(const int64_t col_idx, ObTypeVector &vector) const;
 
   virtual int get_int(const char *col_name, int64_t &int_val) const;
   virtual int get_uint(const char *col_name, uint64_t &int_val) const;

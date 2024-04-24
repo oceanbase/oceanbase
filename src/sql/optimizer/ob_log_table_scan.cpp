@@ -178,9 +178,18 @@ int ObLogTableScan::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
     LOG_WARN("failed to add lookup trans expr", K(ret));
   } else if (NULL != trans_info_expr_ && OB_FAIL(all_exprs.push_back(trans_info_expr_))) {
     LOG_WARN("failed to push back expr", K(ret));
+  } else if (NULL != vector_ann_k_expr_ && OB_FAIL(all_exprs.push_back(vector_ann_k_expr_))) {
+    LOG_WARN("failed to push back vector ann expr", K(ret));
+  } else if (NULL != query_vector_expr_ && OB_FAIL(all_exprs.push_back(query_vector_expr_))) {
+    LOG_WARN("failed to push back query vector expr", K(ret));
   } else if (OB_FAIL(append(all_exprs, access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(append(all_exprs, pushdown_aggr_exprs_))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (is_vector_index_
+      && OB_FAIL(get_plan()->get_extra_access_exprs(table_id_, index_table_id_, extra_access_exprs_))) {
+    LOG_WARN("failed to get extra access exprs", K(ret));
+  } else if (OB_FAIL(append(all_exprs, extra_access_exprs_))) {
     LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(ObLogicalOperator::get_op_exprs(all_exprs))) {
     LOG_WARN("failed to get exprs", K(ret));
@@ -203,6 +212,15 @@ int ObLogTableScan::allocate_expr_post(ObAllocExprContext &ctx)
   for (int64_t i = 0; OB_SUCC(ret) && i < pushdown_aggr_exprs_.count(); i++) {
     ObRawExpr *expr = NULL;
     if (OB_ISNULL(expr = pushdown_aggr_exprs_.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null expr", K(ret));
+    } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {
+      LOG_WARN("failed to mark expr as produced", K(*expr), K(branch_id_), K(id_), K(ret));
+    } else { /*do nothing*/ }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < extra_access_exprs_.count(); i++) {
+    ObRawExpr *expr = NULL;
+    if (OB_ISNULL(expr = extra_access_exprs_.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get null expr", K(ret));
     } else if (OB_FAIL(mark_expr_produced(expr, branch_id_, id_, ctx))) {

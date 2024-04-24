@@ -63,6 +63,17 @@ public:
       const share::schema::ObTableSchema &data_schema,
       share::schema::ObTableSchema &index_schema,
       bool check_data_schema = true);
+  static int set_index_table_columns_for_vector_hnsw(
+      const obrpc::ObCreateIndexArg &arg,
+      const share::schema::ObTableSchema &data_schema,
+      share::schema::ObTableSchema &index_schema,
+      common::ObRowDesc &row_desc);
+  static int set_index_table_columns_for_vector_ivfflat(
+      const obrpc::ObCreateIndexArg &arg,
+      const share::schema::ObTableSchema &data_schema,
+      const ObColumnSchemaV2 &data_column,
+      share::schema::ObTableSchema &index_schema,
+      common::ObRowDesc &row_desc);
   static void del_column_flags_and_default_value(share::schema::ObColumnSchemaV2 &column);
   static int add_column(
       const share::schema::ObColumnSchemaV2 *data_column,
@@ -72,7 +83,11 @@ public:
       common::ObRowDesc &row_desc,
       share::schema::ObTableSchema &table_schema,
       const bool is_hidden,
-      const bool is_specified_storing_col);
+      const bool is_specified_storing_col,
+      const char *new_col_name = nullptr,
+      const int64_t new_col_name_len = 0,
+      const int64_t new_col_id = -1,
+      const int64_t index_position = -1);
   static int set_shadow_column_info(
       const ObString &src_column_name,
       const uint64_t src_column_id,

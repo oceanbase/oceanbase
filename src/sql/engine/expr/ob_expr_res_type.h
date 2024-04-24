@@ -155,7 +155,8 @@ public:
     int ret = common::OB_SUCCESS;
     common::ObLength length = accuracy_.get_length();
     if (!is_string_type() && !is_enum_or_set() && !is_enumset_inner_type()
-        && !is_ext() && !is_lob_locator() && !is_user_defined_sql_type()) {
+        && !is_ext() && !is_lob_locator() && !is_user_defined_sql_type()
+        && !is_vector()) {
       if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        common::CS_TYPE_INVALID,
@@ -193,7 +194,9 @@ public:
   {
     int ret = common::OB_SUCCESS;
     length = -1;
-    if (is_string_or_lob_locator_type() || is_enum_or_set() || is_enumset_inner_type() || is_json() || is_geometry()) {
+    if (is_vector()) {
+      length = get_accuracy().get_length() * sizeof(float);
+    } else if (is_string_or_lob_locator_type() || is_enum_or_set() || is_enumset_inner_type() || is_json() || is_geometry()) {
       if (OB_FAIL(common::ObField::get_field_mb_length(get_type(),
                                                        get_accuracy(),
                                                        get_collation_type(),

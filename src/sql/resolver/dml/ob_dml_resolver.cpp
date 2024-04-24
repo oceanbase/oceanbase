@@ -4868,7 +4868,10 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         LOG_WARN("table or index get schema failed", K(ret));
       }
     }
-    
+
+    if (OB_SUCC(ret) && OB_NOT_NULL(tschema)) {
+      item->is_using_vector_index_ = tschema->is_using_vector_index();
+    }
     // restrict accessible virtual table can not be use in sys tenant or sys view.
     if (OB_SUCC(ret)
         && tschema->is_vir_table()
@@ -4958,6 +4961,7 @@ int ObDMLResolver::resolve_base_or_alias_table_item_normal(uint64_t tenant_id,
         }
         item->table_id_ = generate_table_id();
         item->type_ = TableItem::ALIAS_TABLE;
+        item->base_table_id_ = tschema->get_data_table_id();
         //主表schema
         if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(), tschema->get_data_table_id(), tab_schema))) {
           LOG_WARN("get data table schema failed", K(ret), K_(item->ref_id));
@@ -12989,6 +12993,12 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
     case T_QUERY_TIMEOUT: {
       CHECK_HINT_PARAM(hint_node, 1) {
         global_hint.merge_query_timeout_hint(child0->value_);
+      }
+      break;
+    }
+    case T_VECTOR_IVFFLAT_PROBES: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        global_hint.merge_vector_ivfflat_probes_hint(child0->value_);
       }
       break;
     }

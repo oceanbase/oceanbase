@@ -52,7 +52,8 @@ public:
                                  const ObDASWriteBuffer::DmlRow &dml_row,
                                  const IntFixedArray &row_projector,
                                  common::ObIAllocator &allocator,
-                                 common::ObNewRow &storage_row);
+                                 common::ObNewRow &storage_row,
+                                 ObTabletID *tablet_id = nullptr);
   static int reshape_storage_value(const common::ObObjMeta &col_type,
                                    const common::ObAccuracy &col_accuracy,
                                    common::ObIAllocator &allocator,

@@ -108,7 +108,9 @@ struct ObIndexMetaInfo
       is_unique_index_(false),
       is_global_index_(false),
       is_geo_index_(false),
-      index_micro_block_count_(-1)
+      index_micro_block_count_(-1),
+      is_vector_index_(false),
+      container_table_id_(OB_INVALID_ID)
   { }
   virtual ~ObIndexMetaInfo()
   { }
@@ -117,7 +119,8 @@ struct ObIndexMetaInfo
   TO_STRING_KV(K_(ref_table_id), K_(index_id), K_(index_micro_block_size),
                K_(index_part_count), K_(index_part_size),
                K_(index_column_count), K_(is_index_back),
-               K_(is_unique_index), K_(index_micro_block_count));
+               K_(is_unique_index), K_(index_micro_block_count),
+               K_(is_vector_index));
   uint64_t ref_table_id_; // ref table id
   uint64_t index_id_; // index id
   int64_t index_micro_block_size_; //index micro block size, same as main table when path is primary
@@ -129,6 +132,8 @@ struct ObIndexMetaInfo
   bool is_global_index_; // whether is global index
   bool is_geo_index_; // whether is spatial index
   int64_t index_micro_block_count_;  // micro block count from table static info
+  bool is_vector_index_;  // For HNSW & IVVFLAT
+  int64_t container_table_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObIndexMetaInfo);
 };

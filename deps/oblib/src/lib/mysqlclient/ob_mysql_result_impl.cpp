@@ -321,6 +321,42 @@ int ObMySQLResultImpl::get_nchar(const int64_t col_idx, ObString &nchar) const
   return get_varchar(col_idx, nchar);
 }
 
+int ObMySQLResultImpl::get_vector_value(const int64_t col_idx, float *&vector, int64_t &vector_len) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_row_) || OB_ISNULL(cur_row_result_lengths_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check cur row or length failed", K(ret));
+  } else {
+    if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {
+      vector = reinterpret_cast<float*>(cur_row_[col_idx]);
+      vector_len = static_cast<int64_t>(cur_row_result_lengths_[col_idx]) / sizeof(float);
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid index", K(col_idx), K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMySQLResultImpl::get_vector(const int64_t col_idx, ObTypeVector &vector) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(cur_row_) || OB_ISNULL(cur_row_result_lengths_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("check cur row or length failed", K(ret));
+  } else {
+    if (OB_LIKELY(col_idx >= 0) && OB_LIKELY(col_idx < result_column_count_)) {
+      vector.assign(reinterpret_cast<float*>(cur_row_[col_idx]),
+          static_cast<int64_t>(cur_row_result_lengths_[col_idx]) / sizeof(float));
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid index", K(col_idx), K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObMySQLResultImpl::inner_get_number(const int64_t col_idx, common::number::ObNumber &nmb_val,
                                         IAllocator &allocator) const
 {
@@ -422,6 +458,30 @@ int ObMySQLResultImpl::get_nvarchar2(const char *col_name, ObString &nvarchar2_v
 int ObMySQLResultImpl::get_nchar(const char *col_name, ObString &nchar_val) const
 {
   return get_varchar(col_name, nchar_val);
+}
+
+int ObMySQLResultImpl::get_vector_value(const char *col_name, float *&vector, int64_t &vector_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t col_idx = OB_INVALID_INDEX;
+  if (OB_FAIL(get_column_index(col_name, col_idx))) {
+    LOG_WARN("fail to get column index", K(ret));
+  } else {
+    ret = get_vector_value(col_idx, vector, vector_len);
+  }
+  return ret;
+}
+
+int ObMySQLResultImpl::get_vector(const char *col_name, ObTypeVector &vector) const
+{
+  int ret = OB_SUCCESS;
+  int64_t col_idx = OB_INVALID_INDEX;
+  if (OB_FAIL(get_column_index(col_name, col_idx))) {
+    LOG_WARN("fail to get column index", K(ret));
+  } else {
+    ret = get_vector(col_idx, vector);
+  }
+  return ret;
 }
 
 int ObMySQLResultImpl::get_int(const char *col_name, int64_t &int_val) const
@@ -1087,6 +1147,17 @@ int ObMySQLResultImpl::get_obj(const int64_t col_idx, ObObj &obj,
           obj.set_bit(obj_value.uint64_);
         }*/
         ret = OB_NOT_SUPPORTED;
+        break;
+      }
+      case ObVectorType: {
+        float *vector = nullptr;
+        int64_t vector_len = 0;
+        if (lib::is_oracle_mode()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("oracle not support vector type now", K(ret), K(type.get_type()));
+        } else if (OB_SUCC(get_vector_value(col_idx, vector, vector_len))) {
+          obj.set_vector_value(vector, vector_len);
+        }
         break;
       }
       default:

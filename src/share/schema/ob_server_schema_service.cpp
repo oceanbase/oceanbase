@@ -5113,7 +5113,8 @@ int ObServerSchemaService::fetch_increment_table_schemas_for_data_dict_(
         } else {
           LOG_INFO("fetch increment table schema for data dict", K(tenant_id),
                    "table_id", table_schema->get_table_id(),
-                   "schema_version", table_schema->get_schema_version());
+                   "schema_version", table_schema->get_schema_version(),
+                   KPC(table_schema));
         }
       } // end for
     }
@@ -5132,6 +5133,9 @@ bool ObServerSchemaService::need_construct_aux_infos_(
        || table_schema.is_aux_lob_table()
        || table_schema.is_mlog_table()) {
     bret = false;
+  }
+  if (table_schema.is_index_table() && table_schema.is_using_ivfflat_index()) {
+    bret = true;
   }
   return bret;
 }

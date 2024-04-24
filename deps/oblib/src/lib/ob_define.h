@@ -281,6 +281,8 @@ const int64_t OB_INNER_MAX_ROWKEY_COLUMN_NUMBER = OB_MAX_ROWKEY_COLUMN_NUMBER + 
 const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH = 64;
 const int64_t OB_MAX_TENANT_SNAPSHOT_NAME_LENGTH_STORE = 128;
 
+// for vector
+const int64_t OB_DEFAULT_VECTOR_IVFFLAT_LISTS = 128;
 
 //for recybin
 const int64_t OB_MAX_OBJECT_NAME_LENGTH = 128; //should include index_name
@@ -2245,6 +2247,14 @@ enum ObOrderType
 {
   ASC = 0,
   DESC = -1,
+};
+
+enum ObVectorDistanceType
+{
+  INVALID_DISTANCE_TYPE = 0,
+  L2 = 1,
+  INNER_PRODUCT = 2,
+  COSINE = 3,
 };
 
 enum ObJITEnableMode

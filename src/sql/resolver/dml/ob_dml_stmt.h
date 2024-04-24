@@ -182,6 +182,8 @@ struct TableItem
     ddl_table_id_ = common::OB_INVALID_ID;
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
+    is_using_vector_index_ = false;
+    base_table_id_ = 0;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -342,6 +344,8 @@ struct TableItem
   ObJsonTableDef* json_table_def_;
   // values table
   common::ObArray<ObRawExpr*, common::ModulePageAllocator, true> table_values_;
+  bool is_using_vector_index_;
+  uint64_t base_table_id_;
 };
 
 struct ColumnItem

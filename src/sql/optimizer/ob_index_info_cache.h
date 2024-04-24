@@ -143,7 +143,9 @@ public:
     interesting_order_info_(OrderingFlag::NOT_MATCH),
     interesting_order_prefix_count_(0),
     partition_info_(NULL),
-    sharding_info_(NULL) {
+    sharding_info_(NULL),
+    is_vector_index_(false),
+    container_table_id_(common::OB_INVALID_ID) {
   }
   virtual ~IndexInfoEntry() {}
   QueryRangeInfo &get_range_info() { return range_info_; }
@@ -175,9 +177,13 @@ public:
   ObTablePartitionInfo *get_partition_info() const { return partition_info_; }
   void set_sharding_info(ObShardingInfo *sharding_info) { sharding_info_ = sharding_info; }
   ObShardingInfo *get_sharding_info() const { return sharding_info_; }
+  bool is_index_vector() const { return is_vector_index_; }
+  void set_is_index_vector(const bool is_index_vector) { is_vector_index_ = is_index_vector; }
+  int64_t get_container_table_id() const { return container_table_id_; }
+  void set_container_table_id(const int64_t container_table_id) { container_table_id_ = container_table_id; }
   TO_STRING_KV(K_(index_id), K_(is_unique_index), K_(is_index_back), K_(is_index_global),
                K_(range_info), K_(ordering_info), K_(interesting_order_info),
-               K_(interesting_order_prefix_count));
+               K_(interesting_order_prefix_count), K_(is_vector_index), K_(container_table_id));
 private:
   uint64_t index_id_;
   bool is_unique_index_;
@@ -192,6 +198,8 @@ private:
   int64_t interesting_order_prefix_count_;
   ObTablePartitionInfo *partition_info_;
   ObShardingInfo *sharding_info_;
+  bool is_vector_index_;  // for HNSW & IVVFLAT
+  int64_t container_table_id_;
   DISALLOW_COPY_AND_ASSIGN(IndexInfoEntry);
 };
 

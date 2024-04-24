@@ -220,6 +220,10 @@ public:
   static int mul_decimalint128_int128_int128_oracle(EVAL_FUNC_ARG_DECL);
   static int mul_decimalint128_int128_int128_oracle_batch(BATCH_EVAL_FUNC_ARG_DECL);
   static int mul_decimalint128_int128_int128_oracle_vector(VECTOR_EVAL_FUNC_ARG_DECL);
+  static int mul_vector_num(EVAL_FUNC_ARG_DECL);
+  static int mul_vector_num_batch(BATCH_EVAL_FUNC_ARG_DECL);
+  static int mul_num_vector(EVAL_FUNC_ARG_DECL);
+  static int mul_num_vector_batch(BATCH_EVAL_FUNC_ARG_DECL);
 
   // temporary used, remove after all expr converted
   virtual int cg_expr(ObExprCGCtx &op_cg_ctx,

@@ -170,6 +170,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       object_status_ = other.object_status_;
       is_force_view_ = other.is_force_view_;
       truncate_version_ = other.truncate_version_;
+      index_using_type_ = other.index_using_type_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -288,6 +289,7 @@ void ObSimpleTableSchemaV2::reset()
   in_offline_ddl_white_list_ = false;
   object_status_ = ObObjectStatus::VALID;
   is_force_view_ = false;
+  index_using_type_ = USING_BTREE;
   for (int64_t i = 0; i < simple_foreign_key_info_array_.count(); ++i) {
     free(simple_foreign_key_info_array_.at(i).foreign_key_name_.ptr());
   }
@@ -1527,6 +1529,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       is_column_store_supported_ = src_schema.is_column_store_supported_;
       max_used_column_group_id_ = src_schema.max_used_column_group_id_;
       mlog_tid_ = src_schema.mlog_tid_;
+      vector_ivfflat_lists_ = src_schema.vector_ivfflat_lists_;
+      vector_distance_func_ = src_schema.vector_distance_func_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -3348,6 +3352,9 @@ void ObTableSchema::reset()
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
+
+  vector_ivfflat_lists_ = OB_DEFAULT_VECTOR_IVFFLAT_LISTS;
+  vector_distance_func_ = common::INVALID_DISTANCE_TYPE;
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -3796,7 +3803,7 @@ int ObTableSchema::is_multiple_key_column(ObSchemaGetterGuard &schema_guard,
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("index schema from schema guard is NULL", K(ret), K(index_schema));
       } else if ((index_schema->is_unique_index() && 1 < index_schema->get_index_column_num()) ||
-                 index_schema->is_normal_index()) {
+                 index_schema->is_normal_index()) {    // TODO: shk: fix bug
         const ObIndexInfo &index_info = index_schema->get_index_info();
         uint64_t idx_col_id = OB_INVALID_ID;
         if (OB_FAIL(index_info.get_column_id(0, idx_col_id))) {
@@ -6368,7 +6375,9 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(column_group_cnt),
     "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
     K_(mlog_tid),
-    K_(auto_increment_cache_size));
+    K_(auto_increment_cache_size),
+    K_(vector_ivfflat_lists),
+    K_(vector_distance_func));
   J_OBJ_END();
 
   return pos;
@@ -6644,6 +6653,13 @@ OB_DEF_SERIALIZE(ObTableSchema)
                   is_column_store_supported_,
                   max_used_column_group_id_);
     }
+  }
+
+  // serialize vector index
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                vector_ivfflat_lists_,
+                vector_distance_func_);
   }
   }();
 
@@ -7074,6 +7090,12 @@ OB_DEF_DESERIALIZE(ObTableSchema)
                   max_used_column_group_id_);
     }
   }
+  // decode vector index
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                vector_ivfflat_lists_,
+                vector_distance_func_);
+  }
   }();
 
   OB_UNIS_DECODE(mlog_tid_);
@@ -7228,6 +7250,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
+  OB_UNIS_ADD_LEN(vector_ivfflat_lists_);
+  OB_UNIS_ADD_LEN(vector_distance_func_);
   return len;
 }
 
@@ -7900,7 +7924,6 @@ int ObTableSchema::add_simple_index_info(const ObAuxTableMetaInfo &simple_index_
       LOG_WARN("failed to push back simple_index_info", K(ret), K(simple_index_info));
     }
   }
-
   return ret;
 }
 
@@ -8987,7 +9010,9 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(aux_lob_piece_tid),
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
-    K_(mlog_tid)
+    K_(mlog_tid),
+    K_(vector_ivfflat_lists),
+    K_(vector_distance_func)
   );
   J_OBJ_END();
   return pos;

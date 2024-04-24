@@ -743,6 +743,7 @@ OB_SERIALIZE_MEMBER(FlashBackQueryItem,
 OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     tenant_schema_version_, //该字段执行期没被使用
                     phy_hint_.query_timeout_,
+                    phy_hint_.vector_ivfflat_probes_,
                     phy_hint_.read_consistency_,
                     is_sfu_,
                     dependency_tables_,

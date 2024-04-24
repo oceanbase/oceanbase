@@ -382,6 +382,12 @@ public:
   {
     return ObStorageSchema::is_valid() && common::OB_INVALID_ID != table_id_;
   }
+  share::schema::ObIndexUsingType get_index_using_type() const { return index_using_type_; }
+  bool is_using_vector_index() const
+  {
+    return share::schema::USING_HNSW == index_using_type_ ||
+           share::schema::USING_IVFFLAT == index_using_type_;
+  }
   int init(common::ObIAllocator &allocator,
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
@@ -389,7 +395,7 @@ public:
       const int64_t compat_version);
   int init(common::ObIAllocator &allocator,
       const ObCreateTabletSchema &old_schema);
-  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version));
+  INHERIT_TO_STRING_KV("ObStorageSchema", ObStorageSchema, K_(table_id), K_(index_status), K_(truncate_version), K_(index_using_type));
 private:
   // for cdc
   uint64_t table_id_;
@@ -397,6 +403,7 @@ private:
   share::schema::ObIndexStatus index_status_;
   // for tablet throttling
   int64_t truncate_version_;
+  share::schema::ObIndexUsingType index_using_type_;
 };
 
 template <typename T>

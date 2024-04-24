@@ -162,6 +162,8 @@ public:
   int purge(const ObMemtableKey *key, int64_t version);
   int scan(const ObMemtableKey *start_key, const bool start_exclude, const ObMemtableKey *end_key,
            const bool end_exclude, const int64_t version, ObIQueryEngineIterator *&ret_iter);
+  // TODO:(@wangmiao)
+  // int knn(const ObTypeVector& qvector, uint32_t k, DISTFUNC dist_func, const int64_t version, ObIQueryEngineIterator *&ret_iter);
   void revert_iter(ObIQueryEngineIterator *iter);
   int estimate_size(const ObMemtableKey *start_key,
                     const ObMemtableKey *end_key,
@@ -224,6 +226,9 @@ private:
   IteratorAlloc<BtreeRawIterator> raw_iter_alloc_;
   KeyBtree keybtree_;
   KeyHash keyhash_;
+  // TODO(@wangmiao): KeyHNSW for Vector Index
+  // bool is_vector_index_mode_;
+  // KeyHNSW keyhnsw_;
 };
 
 } // namespace memtable

@@ -4281,6 +4281,8 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_is_index_global(ap->is_global_index_);
     scan->set_index_back(ap->est_cost_info_.index_meta_info_.is_index_back_);
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
+    scan->set_is_vector_index(ap->est_cost_info_.index_meta_info_.is_vector_index_);
+    scan->set_container_table_id(ap->est_cost_info_.index_meta_info_.container_table_id_);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -5419,7 +5421,8 @@ int ObLogPlan::set_connect_by_property(JoinPath *join_path,
 }
 
 int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
-                                      ObLogicalOperator *&out_subquery_path_op)
+                                      ObLogicalOperator *&out_subquery_path_op,
+                                      bool dummy_subscan_op)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *root = NULL;
@@ -5429,6 +5432,8 @@ int ObLogPlan::allocate_subquery_path(SubQueryPath *subpath,
       OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(subpath->subquery_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(subpath), K(root), K(get_stmt()), K(table_item), K(ret));
+  } else if (OB_UNLIKELY(dummy_subscan_op)) {
+    out_subquery_path_op = root;
   } else if (OB_ISNULL(subplan_scan = static_cast<ObLogSubPlanScan*>
                       (get_log_op_factory().allocate(*this, LOG_SUBPLAN_SCAN)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -5476,7 +5481,8 @@ int ObLogPlan::allocate_material_as_top(ObLogicalOperator *&old_top)
 }
 
 int ObLogPlan::create_plan_tree_from_path(Path *path,
-                                          ObLogicalOperator *&out_plan_tree)
+                                          ObLogicalOperator *&out_plan_tree,
+                                          bool dummy_subscan_op)
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *op = NULL;
@@ -5518,7 +5524,7 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
       } else {/* do nothing */ }
     } else if (path->is_subquery_path()) {
       SubQueryPath *subquery_path = static_cast<SubQueryPath *>(path);
-      if (OB_FAIL(allocate_subquery_path(subquery_path, op))) {
+      if (OB_FAIL(allocate_subquery_path(subquery_path, op, dummy_subscan_op))) {
         LOG_WARN("failed to allocate subquery path", K(ret));
       } else { /* Do nothing */ }
     } else if (path->is_values_table_path()) {
@@ -5551,7 +5557,7 @@ int ObLogPlan::create_plan_tree_from_path(Path *path,
   return ret;
 }
 
-int ObLogPlan::init_candidate_plans()
+int ObLogPlan::init_candidate_plans(bool maybe_dummy_create_subscan_op)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(join_order_)) {
@@ -5567,7 +5573,7 @@ int ObLogPlan::init_candidate_plans()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(i));
       } else if (OB_FAIL(create_plan_tree_from_path(join_order_->get_interesting_paths().at(i),
-                                                    root))) {
+                                                    root, maybe_dummy_create_subscan_op))) {
         LOG_WARN("failed to create a path", K(ret));
       } else if (OB_ISNULL(root)) {
         ret = OB_ERR_UNEXPECTED;
@@ -7653,7 +7659,7 @@ int ObLogPlan::adjust_exprs_by_win_func(ObIArray<ObRawExpr *> &exprs,
   return ret;
 }
 
-int ObLogPlan::generate_plan_tree()
+int ObLogPlan::generate_plan_tree(bool may_create_dummy_subscan_op)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
@@ -7666,7 +7672,7 @@ int ObLogPlan::generate_plan_tree()
     if (OB_FAIL(generate_join_orders())) {
       LOG_WARN("failed to generate the access path for the single-table query",
                K(ret), K(get_optimizer_context().get_query_ctx()->get_sql_stmt()));
-    } else if (OB_FAIL(init_candidate_plans())) {
+    } else if (OB_FAIL(init_candidate_plans(may_create_dummy_subscan_op))) {
       LOG_WARN("failed to initialized the plan candidates from the join order", K(ret));
     } else {
       LOG_TRACE("plan candidates is initialized from the join order",
@@ -7935,17 +7941,53 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
       bool is_reliable = false;
+      bool is_ann_search = false;
       CandidatePlan candidate_plan = candidates_.candidate_plans_.at(i);
       OPT_TRACE("generate order by for plan:", candidate_plan);
-      if (OB_FAIL(create_order_by_plan(candidate_plan.plan_tree_,
-                                       order_items,
-                                       topn_expr,
-                                       is_fetch_with_ties))) {
+      if (candidate_plan.plan_tree_->get_type() == LOG_TABLE_SCAN
+          && reinterpret_cast<ObLogTableScan*>(candidate_plan.plan_tree_)->get_is_vector_index()
+          && OB_NOT_NULL(topn_expr)) {
+        // Vetcor Index Enabled: no need to alloc order by (SORT) LogOperator
+        ObLogTableScan* scan = reinterpret_cast<ObLogTableScan*>(candidate_plan.plan_tree_);
+        scan->set_vector_ann_k_expr(topn_expr);
+        if (1 == order_by_exprs.count()) {
+          ObRawExpr *raw_expr = order_by_exprs.at(0);
+          if (raw_expr->is_vector_distance_expr() && 2 == raw_expr->get_param_count()) {
+            if (!(raw_expr->get_param_expr(0)->is_column_ref_expr())) {
+              scan->set_query_vector_expr(raw_expr->get_param_expr(0));
+            } else {
+              scan->set_query_vector_expr(raw_expr->get_param_expr(1));
+            }
+          }
+        }
+        ObRawExpr *raw_expr = order_by_exprs.at(0);
+        OB_ASSERT(raw_expr->is_vector_distance_expr() && 2 == raw_expr->get_param_count());
+        if (!(raw_expr->get_param_expr(0)->is_column_ref_expr())) {
+          scan->set_query_vector_expr(raw_expr->get_param_expr(0));
+        } else {
+          scan->set_query_vector_expr(raw_expr->get_param_expr(1));
+        }
+        if (candidate_plan.plan_tree_->is_sharding() &&
+            OB_FAIL(create_order_by_plan(candidate_plan.plan_tree_,
+                                              order_items,
+                                              topn_expr,
+                                              is_fetch_with_ties))) {
+          LOG_WARN("failed to create order by plan", K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          is_ann_search = true;
+        }
+      } else if (OB_FAIL(create_order_by_plan(candidate_plan.plan_tree_,
+                                              order_items,
+                                              topn_expr,
+                                              is_fetch_with_ties))) {
         LOG_WARN("failed to create order by plan", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (NULL != topn_expr && OB_FAIL(is_plan_reliable(candidate_plan.plan_tree_,
                                                                is_reliable))) {
         LOG_WARN("failed to check if plan is reliable", K(ret));
-      } else if (is_reliable) {
+      } else if (is_reliable || is_ann_search) {
         ret = limit_plans.push_back(candidate_plan);
       } else {
         ret = order_by_plans.push_back(candidate_plan);
@@ -8432,7 +8474,11 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
         (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;
-      if (OB_FAIL(allocate_sort_as_top(top,
+      /*if (OB_NOT_NULL(top)
+          && top->get_type() == LOG_TABLE_SCAN
+          && reinterpret_cast<ObLogTableScan*>(top)->get_is_vector_index()) {
+        // No need to alloc top-n sort operator.
+      } else*/ if (OB_FAIL(allocate_sort_as_top(top,
                                        sort_keys,
                                        real_prefix_pos,
                                        real_local_order,
@@ -12421,7 +12467,8 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else if (OB_FAIL(table_partition_info->replace_final_location_key(
           *optimizer_context_.get_exec_ctx(),
           table_scan->get_real_index_table_id(),
-          table_scan->is_index_scan() && !table_scan->get_is_index_global()))) {
+          table_scan->is_index_scan() && !table_scan->get_is_index_global(),
+          table_scan->get_container_table_id()))) {
         LOG_WARN("failed to set table partition info", K(ret));
       } else if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
         LOG_WARN("failed to add table partition info", K(ret));
@@ -12500,6 +12547,7 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       TableLocRelInfo rel_info;
       rel_info.table_loc_id_ = tsc_op.get_table_id();
       rel_info.ref_table_id_ = tsc_op.get_real_ref_table_id();
+      // 索引表 主表 聚簇中心表
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_index_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
       } else if (table_part_info != nullptr &&
@@ -12510,10 +12558,13 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
           LOG_WARN("store the related table id failed", K(ret));
         }
       }
+      if (OB_SUCC(ret) && tsc_op.need_container_table() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_container_table_id()))) {
+        LOG_WARN("store the related container table id failed", K(ret));
+      }
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));
       }
-    } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) {
+    } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) { // TODO(@jingshui) 全局索引
       //for global index lookup
       TableLocRelInfo rel_info;
       rel_info.table_loc_id_ = tsc_op.get_table_id();
@@ -12613,7 +12664,7 @@ int ObLogPlan::build_location_related_tablet_ids()
           //set related table ids to loc meta
           if (rel_info.related_ids_.at(k) == source_part_info->get_ref_table_id()) {
             //ignore itself, do nothing
-          } else if (OB_FAIL(source_loc_meta.related_table_ids_.push_back(rel_info.related_ids_.at(k)))) {
+          } else if (OB_FAIL(source_loc_meta.related_table_ids_.push_back(rel_info.related_ids_.at(k)))) { //这里把主表和中心表加进来
             LOG_WARN("store related table ids failed", K(ret));
           }
         }
@@ -12638,7 +12689,7 @@ int ObLogPlan::build_location_related_tablet_ids()
       // partition count is 0 means no matching partition for data table, no need to calculate
       // related tablet ids for it.
     } else if (!table_part_info->get_table_location().use_das() &&
-               OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(
+               OB_FAIL(ObPhyLocationGetter::build_related_tablet_info( // 索引表tablet_id，相关表table_id -> 相关表tablet_id，object_id
                        table_part_info->get_table_location(), *optimizer_context_.get_exec_ctx(), map))) {
       LOG_WARN("rebuild related tablet info failed", K(ret));
     }
@@ -12983,26 +13034,130 @@ int ObLogPlan::get_rowkey_exprs(const uint64_t table_id,
                                 ObIArray<ObRawExpr*> &keys)
 {
   int ret = OB_SUCCESS;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
   const ObColumnSchemaV2 *column_schema = NULL;
   const ColumnItem *column_item = NULL;
   ColumnItem column_item2;
-  for (int i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-    uint64_t  column_id = OB_INVALID_ID;
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("Failed to get column_id from rowkey_info", K(ret));
-    } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
-      if (OB_FAIL(keys.push_back(column_item->expr_))) {
+  // The index key is not the rowkey in HNSW index table. // vector index只填入了索引列
+  if (table_schema.is_using_vector_index()) {
+    const common::ObIndexInfo &index_info = table_schema.get_index_info();
+    for (int i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+      uint64_t column_id = OB_INVALID_ID;
+      if (OB_FAIL(index_info.get_column_id(i, column_id))) {
+        LOG_WARN("Failed to get column_id from index_info", K(ret));
+      } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
+        if (OB_FAIL(keys.push_back(column_item->expr_))) {
+          LOG_WARN("failed to push column item", K(ret));
+        }
+      } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
+                                              *column_schema, column_item2))) {
+        LOG_WARN("failed to get rowkey exprs", K(ret));
+      } else if (OB_FAIL(keys.push_back(column_item2.expr_))) {
         LOG_WARN("failed to push column item", K(ret));
       }
-    } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get column schema", K(column_id), K(ret));
-    } else if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
-                                            *column_schema, column_item2))) {
-      LOG_WARN("failed to get rowkey exprs", K(ret));
-    } else if (OB_FAIL(keys.push_back(column_item2.expr_))) {
-      LOG_WARN("failed to push column item", K(ret));
+    }
+  } else {
+    const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+    for (int i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+      uint64_t  column_id = OB_INVALID_ID;
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+        LOG_WARN("Failed to get column_id from rowkey_info", K(ret));
+      } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
+        if (OB_FAIL(keys.push_back(column_item->expr_))) {
+          LOG_WARN("failed to push column item", K(ret));
+        }
+      } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
+                                              *column_schema, column_item2))) {
+        LOG_WARN("failed to get rowkey exprs", K(ret));
+      } else if (OB_FAIL(keys.push_back(column_item2.expr_))) {
+        LOG_WARN("failed to push column item", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_extra_access_exprs(const uint64_t table_id,
+                                      const uint64_t ref_table_id,
+                                      ObIArray<ObRawExpr*> &extra_columns)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  if (OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(schema_guard), K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(table_id, ref_table_id, get_stmt(), table_schema))) {
+    LOG_WARN("fail to get table schema", K(ref_table_id), K(table_schema), K(ret));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index schema should not be null", K(table_schema), K(ret));
+  } else if (OB_FAIL(get_extra_access_exprs(table_id, *table_schema, extra_columns))) {
+    LOG_WARN("failed to get rowkey exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObLogPlan::get_extra_access_exprs(const uint64_t table_id,
+                                      const ObTableSchema &table_schema,
+                                      ObIArray<ObRawExpr*> &extra_columns)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  const ColumnItem *column_item = NULL;
+  ColumnItem column_item2;
+  if (table_schema.is_using_vector_index()) {
+    const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+    for (int i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+      uint64_t  column_id = OB_INVALID_ID;
+      if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+        LOG_WARN("Failed to get column_id from rowkey_info", K(ret));
+      } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
+        if (0 == column_item->column_name_.compare("center_idx")) { // 这列保证了column_id是最大的，不会和原来的column_id重复
+          if (OB_FAIL(extra_columns.push_back(column_item->expr_))) {
+            LOG_WARN("failed to push column item", K(ret));
+          }
+          break;
+        }
+      } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (0 == column_schema->get_column_name_str().compare("center_idx")) {
+        if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
+                                                *column_schema, column_item2))) {
+          LOG_WARN("failed to get rowkey exprs", K(ret));
+        } else if (OB_FAIL(extra_columns.push_back(column_item2.expr_))) {
+          LOG_WARN("failed to push column item", K(ret));
+        }
+        break;
+      }
+    }
+    const common::ObIndexInfo &index_info = table_schema.get_index_info();
+    for (int i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+      uint64_t column_id = OB_INVALID_ID;
+      if (i > 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected index info size", K(ret), K(index_info));
+      } else if (OB_FAIL(index_info.get_column_id(i, column_id))) {
+        LOG_WARN("Failed to get column_id from index_info", K(ret));
+      } else if (NULL != (column_item = get_column_item_by_id(table_id, column_id))) {
+        if (OB_FAIL(extra_columns.push_back(column_item->expr_))) {
+          LOG_WARN("failed to push column item", K(ret));
+        }
+      } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get column schema", K(column_id), K(ret));
+      } else if (OB_FAIL(generate_column_expr(get_optimizer_context().get_expr_factory(), table_id,
+                                              *column_schema, column_item2))) {
+        LOG_WARN("failed to get rowkey exprs", K(ret));
+      } else if (OB_FAIL(extra_columns.push_back(column_item2.expr_))) {
+        LOG_WARN("failed to push column item", K(ret));
+      }
     }
   }
   return ret;

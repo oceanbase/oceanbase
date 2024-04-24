@@ -5308,6 +5308,7 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
     bool has_distinct = false;
     bool has_winfunc = false;
     bool has_orderby = stmt->has_order_by();
+    bool is_only_order_by = false;
     bool winfunc_require_sort = false;
     bool group_match = false;
     bool winfunc_match = false;
@@ -5319,6 +5320,7 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
       has_group = select_stmt->get_group_expr_size() > 0 || select_stmt->get_rollup_expr_size() > 0;
       has_distinct = select_stmt->has_distinct();
       has_winfunc = select_stmt->has_window_function();
+      is_only_order_by = !has_group && !has_distinct && !has_winfunc && has_orderby;
     }
 
     if (has_group && check_group) {
@@ -5375,7 +5377,7 @@ int ObOptimizerUtil::compute_stmt_interesting_order(const ObIArray<OrderItem> &o
       if (OB_SUCC(ret) && has_orderby && check_order) {
         prefix_count = 0;
         if (OB_FAIL(is_order_by_match(ordering, stmt, equal_sets, const_exprs,
-                                      prefix_count, orderby_match))) {
+                                      prefix_count, orderby_match, is_only_order_by))) {
           LOG_WARN("failed to check is order by match", K(ret));
         } else if (orderby_match) {
           max_prefix_count = std::max(max_prefix_count, prefix_count);
@@ -5726,7 +5728,8 @@ int ObOptimizerUtil::match_order_by_against_index(const ObIArray<OrderItem> &exp
                                                   const ObIArray<ObRawExpr *> &const_exprs,
                                                   bool &full_covered,
                                                   int64_t &match_count,
-                                                  bool check_direction /* = true */)
+                                                  bool check_direction /* = true */,
+                                                  bool is_only_order_by)
 {
   int ret = OB_SUCCESS;
   int64_t expect_offset = expect_ordering.count();
@@ -5755,6 +5758,10 @@ int ObOptimizerUtil::match_order_by_against_index(const ObIArray<OrderItem> &exp
         || OB_ISNULL(expect_expr = expect_ordering.at(expect_offset).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(input_expr), K(expect_expr));
+    } else if (OB_FAIL(get_column_ref_raw_expr_in_orderitem(expect_expr, input_ordering.at(input_offset).is_using_vector_index_,
+                                                            is_only_order_by, 1 == expect_ordering.count(), equal_sets,
+                                                            const_exprs))) {
+      LOG_WARN("fail to get column_ref_raw_expr in OrderItem", K(ret));
     } else if (is_expr_equivalent(input_expr, expect_expr, equal_sets) && direction_match) {
       match_count = ++input_offset;
       ++expect_offset;
@@ -5852,19 +5859,70 @@ int ObOptimizerUtil::is_set_match(const ObIArray<ObRawExpr*> &keys,
                                   match_prefix_count, sort_match);
 }
 
+int ObOptimizerUtil::get_column_ref_raw_expr_in_orderitem(ObRawExpr* &order_expr,
+                                                          bool is_using_vector_index,
+                                                          bool is_only_order_by,
+                                                          bool is_single_order_expr,
+                                                          const EqualSets &equal_sets,
+                                                          const ObIArray<ObRawExpr *> &const_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_cnt = 0;
+  if (!is_using_vector_index || !is_only_order_by
+      || !is_single_order_expr
+      || !order_expr->is_vector_distance_expr()) {
+    // do nothing
+  } else if (OB_UNLIKELY(2 != (param_cnt = order_expr->get_param_count()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector distance expr expect 2 param expr", K(ret), K(param_cnt));
+  } else {
+    ObRawExpr* left_expr = order_expr->get_param_expr(0);
+    ObRawExpr* right_expr = order_expr->get_param_expr(1);
+    int column_ref_cnt = 0;
+    if (left_expr->is_column_ref_expr()) {
+      ++column_ref_cnt;
+    }
+    if (right_expr->is_column_ref_expr()) {
+      ++column_ref_cnt;
+    }
+    if (1 != column_ref_cnt) {
+      // do nothing
+    } else if (left_expr->is_column_ref_expr()) {
+      bool is_const = true;
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(right_expr, equal_sets,
+                                                 const_exprs, is_const))) {
+        LOG_WARN("failed to check right_expr is const expr", K(ret));
+      } else if (is_const) {
+        order_expr = left_expr;
+      }
+    } else if (right_expr->is_column_ref_expr()) {
+      bool is_const = true;
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(left_expr, equal_sets,
+                                                 const_exprs, is_const))) {
+        LOG_WARN("failed to check right_expr is const expr", K(ret));
+      } else if (is_const) {
+        order_expr = right_expr;
+      }
+    }
+  }
+  return ret;
+}
+
 //get max prefix
 int ObOptimizerUtil::is_order_by_match(const ObIArray<OrderItem> &ordering,
                                        const ObDMLStmt *stmt,
                                        const EqualSets &equal_sets,
                                        const ObIArray<ObRawExpr *> &const_exprs,
                                        int64_t &match_prefix,
-                                       bool &sort_match)
+                                       bool &sort_match,
+                                       bool is_only_order_by)
 {
   int ret = OB_SUCCESS;
   int64_t match_count = 0;
   bool dummy_full_covered = false;
   match_prefix = 0;
   sort_match = false;
+  const bool check_direction = true;
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt should not be null", K(ret));
@@ -5874,7 +5932,7 @@ int ObOptimizerUtil::is_order_by_match(const ObIArray<OrderItem> &ordering,
                                                   equal_sets,
                                                   const_exprs,
                                                   dummy_full_covered,
-                                                  match_count))) {
+                                                  match_count, check_direction, is_only_order_by))) {
     LOG_WARN("failed to match order by against index", K(ret));
   } else if (match_count > 0) {
     sort_match = true;

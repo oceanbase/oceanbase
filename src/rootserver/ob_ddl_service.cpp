@@ -6197,8 +6197,11 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
       } else if (OB_ISNULL(data_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("data table schema not exists", KR(ret), K(data_table_id));
-      } else if (OB_FAIL(schemas.push_back(&index_schema))
-        || OB_FAIL(need_create_empty_majors.push_back(false))) {
+      } else if (OB_FAIL(schemas.push_back(&index_schema))) {
+        LOG_WARN("failed to push_back", KR(ret), K(index_schema));
+      } else if (index_schema.is_using_vector_index() && OB_FAIL(need_create_empty_majors.push_back(true))) {
+        LOG_WARN("failed to push_back", KR(ret), K(index_schema));
+      } else if (!index_schema.is_using_vector_index() && OB_FAIL(need_create_empty_majors.push_back(false))) {
         LOG_WARN("failed to push_back", KR(ret), K(index_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
@@ -6214,16 +6217,18 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     } else {
+      bool need_create_empty_major_sstable = false;
       if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets");
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(
               ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
+      } else if (index_schema.is_using_vector_index() && FALSE_IT(need_create_empty_major_sstable = true)) {
       } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(
             index_schema,
             ls_id_array,
             tenant_data_version,
-            false /*need_create_empty_major_sstable*/))) {
+            need_create_empty_major_sstable))) {
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     }
@@ -21312,6 +21317,7 @@ int ObDDLService::drop_aux_table_in_drop_table(
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_container_infos;
   ObSEArray<uint64_t, 16> aux_tid_array; // for aux_vp or aux_lob
   bool is_index = false;
 
@@ -21345,6 +21351,7 @@ int ObDDLService::drop_aux_table_in_drop_table(
 
   ObTableSchema new_table_schema;
   int64_t N = is_index ? simple_index_infos.count() : aux_tid_array.count();
+  // get container tables
   for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
     const ObTableSchema *aux_table_schema = NULL;
     uint64_t tid = is_index ? simple_index_infos.at(i).table_id_ : aux_tid_array.at(i);
@@ -21355,6 +21362,23 @@ int ObDDLService::drop_aux_table_in_drop_table(
       LOG_WARN("table schema should not be null", K(tenant_id), K(tid), KR(ret), K(table_type));
     } else if (OB_FAIL(new_table_schema.assign(*aux_table_schema))) {
       LOG_WARN("assign table schema failed", K(ret));
+    } else if (USING_IVFFLAT ==  new_table_schema.get_index_using_type()) { // get container table info
+      if (OB_FAIL(new_table_schema.get_simple_index_infos(simple_container_infos))) {
+        LOG_WARN("get_simple_index_infos failed", K(ret));
+      }
+    }
+  }
+  // drop container table first
+  for (int64_t i = 0; OB_SUCC(ret) && i < simple_container_infos.count(); ++i) {
+    const ObTableSchema *aux_table_schema = NULL;
+    uint64_t tid = simple_container_infos.at(i).table_id_;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tid, aux_table_schema))) {
+      LOG_WARN("get_table_schema failed", K(tenant_id), "table id", tid, K(ret));
+    } else if (OB_ISNULL(aux_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema should not be null", K(ret));
+    } else if (OB_FAIL(new_table_schema.assign(*aux_table_schema))) {
+      LOG_WARN("assign table schema failed", K(ret));
     } else {
       // If the data table of the delayed index table is placed in the recycle bin,
       // the delayed index will also go in, and a row of data will be inserted into __all_recyclebin
@@ -21363,9 +21387,9 @@ int ObDDLService::drop_aux_table_in_drop_table(
         if (new_table_schema.is_in_recyclebin()) {
           LOG_INFO("aux table is already in recyclebin");
         } else if (OB_FAIL(ddl_operator.drop_table_to_recyclebin(new_table_schema,
-                                                                 schema_guard,
-                                                                 trans,
-                                                                 NULL /* ddl_stmt_str */))) {
+                                                                schema_guard,
+                                                                trans,
+                                                                NULL /* ddl_stmt_str */))) {
           LOG_WARN("drop aux table to recycle failed", K(ret));
         }
       } else if (OB_FAIL(ddl_operator.drop_table(new_table_schema, trans))) {
@@ -21373,7 +21397,35 @@ int ObDDLService::drop_aux_table_in_drop_table(
       }
     }
   }
-
+  // drop index table
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    const ObTableSchema *aux_table_schema = NULL;
+    uint64_t tid = is_index ? simple_index_infos.at(i).table_id_ : aux_tid_array.at(i);
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, tid, aux_table_schema))) {
+      LOG_WARN("get_table_schema failed", K(tenant_id), "table id", tid, K(ret));
+    } else if (OB_ISNULL(aux_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema should not be null", K(ret));
+    } else if (OB_FAIL(new_table_schema.assign(*aux_table_schema))) {
+      LOG_WARN("assign table schema failed", K(ret));
+    } else {
+      // If the data table of the delayed index table is placed in the recycle bin,
+      // the delayed index will also go in, and a row of data will be inserted into __all_recyclebin
+      new_table_schema.set_in_offline_ddl_white_list(table_schema.get_in_offline_ddl_white_list());
+      if (to_recyclebin && !is_inner_table(table_schema.get_table_id())) {
+        if (new_table_schema.is_in_recyclebin()) {
+          LOG_INFO("aux table is already in recyclebin");
+        } else if (OB_FAIL(ddl_operator.drop_table_to_recyclebin(new_table_schema,
+                                                                schema_guard,
+                                                                trans,
+                                                                NULL /* ddl_stmt_str */))) {
+          LOG_WARN("drop aux table to recycle failed", K(ret));
+        }
+      } else if (OB_FAIL(ddl_operator.drop_table(new_table_schema, trans))) {
+        LOG_WARN("ddl_operator drop_table failed", K(*aux_table_schema), K(ret));
+      }
+    }
+  }
   return ret;
 }
 
@@ -22618,10 +22670,6 @@ int ObDDLService::check_table_exists(const uint64_t tenant_id,
           LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(table_item.database_name_),
               to_cstring(table_item.table_name_), "VIEW");
         }
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Unknow table type", K(expected_table_type),
-            "table_type", tmp_table_schema->get_table_type());
       }
     }
   }

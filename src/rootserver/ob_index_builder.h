@@ -78,6 +78,11 @@ public:
                       const bool global_index_without_column_info,
                       const bool generate_id,
                       share::schema::ObTableSchema &index_schema);
+  int generate_container_schema(
+      obrpc::ObCreateIndexArg &arg,
+      const ObTableSchema &data_schema,
+      const share::schema::ObTableSchema &index_schema,
+      const bool generate_id);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &data_schema,
@@ -85,7 +90,8 @@ public:
       const int64_t schema_version,
       const obrpc::ObDropIndexArg &arg,
       common::ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record);
+      ObDDLTaskRecord &task_record,
+      const ObTableSchema *container_schema = nullptr);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
@@ -96,7 +102,8 @@ public:
                               const int64_t group_id,
                               const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
-                              ObDDLTaskRecord &task_record);
+                              ObDDLTaskRecord &task_record,
+                              const ObTableSchema *container_schema = nullptr);
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder

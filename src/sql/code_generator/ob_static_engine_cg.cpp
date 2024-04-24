@@ -357,6 +357,7 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
   } else if (log_op_def::LOG_TABLE_SCAN == op.get_type()) {
     const ObLogTableScan &tsc = static_cast<const ObLogTableScan &>(op);
     if (tsc.get_index_back()
+        || tsc.get_is_vector_index()
         || tsc.use_batch()
         || is_virtual_table(tsc.get_ref_table_id())
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
@@ -973,10 +974,14 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     ObTableScanSpec &tsc_spec = static_cast<ObTableScanSpec&>(spec);
     ObDASScanCtDef &scan_ctdef = tsc_spec.tsc_ctdef_.scan_ctdef_;
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
+    ObDASScanCtDef *container_ctdef = tsc_spec.tsc_ctdef_.container_ctdef_;
     if (OB_FAIL(scan_ctdef.pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
     } else if (lookup_ctdef != nullptr &&
         OB_FAIL(lookup_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
+      LOG_WARN("assign all pushdown exprs failed", K(ret));
+    } else if (container_ctdef != nullptr &&
+        OB_FAIL(container_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
     }
   }
@@ -4726,6 +4731,54 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
 
   OZ(set_optimization_info(op, spec));
   OZ(set_partition_range_info(op, spec));
+
+  if (OB_SUCC(ret)) {
+    uint64_t index_id = op.get_index_table_id();
+    const schema::ObTableSchema* index_schema = nullptr;
+    const schema::ObDatabaseSchema *index_db_schema = nullptr;
+    if (OB_FAIL(schema_guard->get_table_schema(index_id, index_schema))) {
+      LOG_WARN("fail to get index schema", K(ret));
+    } else if (!index_schema->is_using_hnsw_index()) {
+      // do nothing
+    } else {
+      if (OB_FALSE_IT(spec.vector_index_tb_id_ = index_schema->get_table_id())) {
+      } else if (OB_FAIL(ob_write_string(phy_plan_->get_allocator(), index_schema->get_table_name_str(), spec.vector_index_real_name_))) {
+        LOG_WARN("fail to write vector index real name", K(ret));
+      } else if (OB_FAIL(ob_write_string(phy_plan_->get_allocator(), opt_ctx_->get_session_info()->get_database_name(), spec.vector_index_db_name_))) {
+        LOG_WARN("fail to write index db name", K(ret));
+      } else {
+        int64_t column_cnt = index_schema->get_column_count();
+        int64_t base_pkey_count = 0;
+        for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
+          const schema::ObColumnSchemaV2* col = nullptr;
+          if (OB_ISNULL(col = index_schema->get_column_schema_by_idx(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("fail to get column schema", K(ret), K(i));
+          } else {
+            if (col->get_column_name_str().prefix_match("base_pk")) {
+              base_pkey_count++;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          spec.base_tb_pkey_count_ = base_pkey_count;
+          const ObIndexInfo& index_info = index_schema->get_index_info();
+          uint64_t index_column_id = 0;
+          ObString index_column_name;
+          bool index_column_exist = false;
+          if (OB_FAIL(index_info.get_column_id(0, index_column_id))) {
+            LOG_WARN("fail to get index column id", K(ret));
+          } else if (OB_FALSE_IT(index_schema->get_column_name_by_column_id(index_column_id, index_column_name, index_column_exist))) {
+          } else if (OB_UNLIKELY(!index_column_exist)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("vector column must exist in hnsw index", K(ret));
+          } else if (OB_FAIL(ob_write_string(phy_plan_->get_allocator(), index_column_name, spec.vector_column_name_))) {
+            LOG_WARN("fail to write vector column name", K(ret));
+          }
+        }
+      }
+    }
+  }
 
   if (OB_SUCC(ret)) {
     spec.table_loc_id_ = op.get_table_id();

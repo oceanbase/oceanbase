@@ -935,6 +935,7 @@ class SqlKeywords:
          CONTAINS
          CONTEXT
          CONTRIBUTORS
+         COSINE
          CPU
          CUBE
          CURRENT
@@ -999,6 +1000,7 @@ class SqlKeywords:
          HANDLER
          HASH
          HELP
+         HNSW
          HOST
          HOSTS
          HOUR
@@ -1007,6 +1009,7 @@ class SqlKeywords:
          IMPORT
          INDEXES
          INITIAL_SIZE
+         INNER_PRODUCT
          INSERT_METHOD
          INSTALL
          INVOKER
@@ -1015,7 +1018,9 @@ class SqlKeywords:
          IPC
          ISOLATION
          ISSUER
+         IVFFLAT
          KEY_BLOCK_SIZE
+         L2
          LANGUAGE
          LAST
          LEAVES
@@ -1023,6 +1028,7 @@ class SqlKeywords:
          LEVEL
          LINESTRING
          LIST_
+         LISTS
          LOCAL
          LOCKS
          LOGFILE
@@ -1231,6 +1237,7 @@ class SqlKeywords:
          USER_RESOURCES
          USE_FRM
          VARIABLES
+         VECTOR
          VIEW
          WAIT
          WARNINGS
@@ -1551,6 +1558,7 @@ class SqlKeywords:
          CONTEXT
          CONTRIBUTORS
          COPY
+         COSINE
          COUNT
          CPU
          CREATE_TIMESTAMP
@@ -1634,6 +1642,7 @@ class SqlKeywords:
          HANDLER
          HASH
          HELP
+         HNSW
          HOST
          HOSTS
          HOUR
@@ -1643,6 +1652,7 @@ class SqlKeywords:
          IMPORT
          INDEXES
          INITIAL_SIZE
+         INNER_PRODUCT
          INSERT_METHOD
          INSTALL
          INTERSECT
@@ -1652,9 +1662,11 @@ class SqlKeywords:
          IPC
          ISOLATION
          ISSUER
+         IVFFLAT
          JSON
          KEY_BLOCK_SIZE
          KEY_VERSION
+         L2
          LANGUAGE
          LAST
          LAST_INSERT_ID
@@ -1664,6 +1676,7 @@ class SqlKeywords:
          LEVEL
          LINESTRING
          LIST_
+         LISTS
          LOCAL
          LOCKED
          LOCKS
@@ -1944,6 +1957,7 @@ class SqlKeywords:
          USER_RESOURCES
          VALUE
          VARIABLES
+         VECTOR
          VERBOSE
          VIEW
          WAIT

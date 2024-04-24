@@ -3736,13 +3736,26 @@ static struct VarsInit{
     ObSysVars[264].alias_ = "OB_SV_QUERY_REWRITE_INTEGRITY" ;
     }();
 
+    [&] (){
+      ObSysVars[265].default_value_ = "0" ;
+      ObSysVars[265].info_ = "The center counts which should be checked in ivfflat index. 0 means calculate by self" ;
+      ObSysVars[265].name_ = "vector_ivfflat_probes" ;
+      ObSysVars[265].data_type_ = ObUInt64Type ;
+      ObSysVars[265].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[265].id_ = SYS_VAR_VECTOR_IVFFLAT_PROBES ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_VECTOR_IVFFLAT_PROBES)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_VECTOR_IVFFLAT_PROBES] = 265 ;
+      ObSysVars[265].base_value_ = "0" ;
+    ObSysVars[265].alias_ = "OB_SV_VECTOR_IVFFLAT_PROBES" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 265;
+static int64_t var_amount = 266;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

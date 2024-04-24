@@ -1036,7 +1036,8 @@ public:
                                           const ObIArray<ObRawExpr *> &const_exprs,
                                           bool &full_covered,
                                           int64_t &match_count,
-                                          bool check_direction = true);
+                                          bool check_direction = true,
+                                          bool is_only_order_by = false);
 
   /**
    * 用来判断distinct的列或set的列是否匹配序前缀
@@ -1065,6 +1066,13 @@ public:
                           int64_t &match_prefix_count,
                           bool &sort_match);
 
+  static int get_column_ref_raw_expr_in_orderitem(ObRawExpr* &order_expr,
+                                                  bool is_using_vector_index,
+                                                  bool is_only_order_by,      // no window func/distinct/group by
+                                                  bool is_single_order_expr,
+                                                  const EqualSets &equal_sets,
+                                                  const ObIArray<ObRawExpr *> &const_exprs);
+
   /**
    * 用来判断order by的列能否匹配序的前缀
    * @ordering 待匹配的序
@@ -1076,7 +1084,8 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                int64_t &match_prefix_count,
-                               bool &sort_match);
+                               bool &sort_match,
+                               bool is_only_order_by = false);
 
   // fast check, return bool result
   static int is_order_by_match(const ObIArray<OrderItem> &expect_ordering,

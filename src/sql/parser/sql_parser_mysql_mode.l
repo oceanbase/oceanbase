@@ -994,6 +994,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>DEFAULT  { return DEFAULT; }
 <hint>MAX_CONCURRENT { return MAX_CONCURRENT; }
 <hint>PARALLEL { return PARALLEL; }
+<hint>PROBES { return PROBES; }
 <hint>MANUAL { return MANUAL; }
 <hint>NO_PARALLEL { return NO_PARALLEL; }
 <hint>MONITOR  { return MONITOR; }
@@ -1440,6 +1441,9 @@ BEGIN(in_c_comment);
 ">>"  {return SHIFT_RIGHT;}
 "->"  {return JSON_EXTRACT;}
 "->>"  {return JSON_EXTRACT_UNQUOTED;}
+"<->"  { return VECTOR_L2_DISTANCE; }
+"<@>"  { return VECTOR_INNER_PRODUCT; }
+"<~>"  { return VECTOR_COSINE_DISTANCE; }
 
 "?" {
   //use for outline now, means any value

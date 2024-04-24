@@ -4388,6 +4388,18 @@ int ObDDLOperator::drop_table(
     } else if (OB_FAIL(snapshot_mgr.batch_release_snapshot_in_trans(
             trans, SNAPSHOT_FOR_DDL, tenant_id, -1/*schema_version*/, invalid_scn/*snapshot_scn*/, tablet_ids))) {
       LOG_WARN("fail to release ddl snapshot acquired by this table", K(ret));
+    } else if (table_schema.is_using_ivfflat_index() && !table_schema.vec_ivfflat_container_table()) {
+      int tmp_ret = OB_SUCCESS;
+      int64_t part_count = 0;
+      if (PARTITION_LEVEL_ZERO != table_schema.get_part_level()) {
+        part_count = table_schema.get_part_option().get_part_num();
+      }
+      MTL_SWITCH(tenant_id) {
+        if (OB_TMP_FAIL(MTL(ObTenantIvfflatCenterCache*)->drop(table_schema.get_table_id(), part_count))) {
+          LOG_WARN("failed to drop center cache", K(tmp_ret), K(table_schema));
+        }
+      }
+
     }
   }
 
@@ -9659,57 +9671,61 @@ int ObDDLOperator::drop_inner_generated_index_column(ObMySQLTransaction &trans,
   } else {
     new_data_table_schema.set_in_offline_ddl_white_list(index_schema.get_in_offline_ddl_white_list());
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
-    // Generated columns on index table are converted to normal column,
-    // we need to get column schema from data table here.
-    if (OB_ISNULL(index_col = data_table->get_column_schema(
-        tenant_id, index_info.get_column(i)->column_id_))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get index column schema failed", K(ret), K(tenant_id), K(index_info));
-    } else if (index_col->is_hidden() && index_col->is_generated_column()) {
-      // delete the generated column generated internally when the index is created,
-      // This kind of generated column is hidden.
-      // delete generated column in data table for spatial index
-      bool exist_index = false;
-      for (int64_t j = 0; OB_SUCC(ret) && !exist_index && j < simple_index_infos.count(); ++j) {
-        const ObColumnSchemaV2 *tmp_col = NULL;
-        if (simple_index_infos.at(j).table_id_ != index_schema.get_table_id()) {
-          // If there are other indexes on the hidden column, they cannot be deleted.
-          if (OB_FAIL(schema_guard.get_column_schema(tenant_id,
-              simple_index_infos.at(j).table_id_, index_col->get_column_id(), tmp_col))) {
-            LOG_WARN("get column schema from schema guard failed", KR(ret), K(tenant_id),
-                     K(simple_index_infos.at(j).table_id_), K(index_col->get_column_id()));
-          } else if (tmp_col != NULL) {
-            exist_index = true;
+  if (index_schema.vec_ivfflat_container_table()) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_info.get_size(); ++i) {
+      // Generated columns on index table are converted to normal column,
+      // we need to get column schema from data table here.
+      if (OB_ISNULL(index_col = data_table->get_column_schema(
+          tenant_id, index_info.get_column(i)->column_id_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get index column schema failed", K(ret), K(tenant_id), K(index_info));
+      } else if (index_col->is_hidden() && index_col->is_generated_column()) {
+        // delete the generated column generated internally when the index is created,
+        // This kind of generated column is hidden.
+        // delete generated column in data table for spatial index
+        bool exist_index = false;
+        for (int64_t j = 0; OB_SUCC(ret) && !exist_index && j < simple_index_infos.count(); ++j) {
+          const ObColumnSchemaV2 *tmp_col = NULL;
+          if (simple_index_infos.at(j).table_id_ != index_schema.get_table_id()) {
+            // If there are other indexes on the hidden column, they cannot be deleted.
+            if (OB_FAIL(schema_guard.get_column_schema(tenant_id,
+                simple_index_infos.at(j).table_id_, index_col->get_column_id(), tmp_col))) {
+              LOG_WARN("get column schema from schema guard failed", KR(ret), K(tenant_id),
+                      K(simple_index_infos.at(j).table_id_), K(index_col->get_column_id()));
+            } else if (tmp_col != NULL) {
+              exist_index = true;
+            }
           }
         }
-      }
-      // There are no other indexes, delete the hidden column.
-      if (OB_SUCC(ret) && !exist_index) {
-				// if generate column is not the last column // 1. update prev_column_id // 2. update inner table
-        if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
-          LOG_WARN("failed to update column previous id for delete column", K(ret));
-        } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, index_col->get_column_name_str()))) {
-          LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*index_col));
+        // There are no other indexes, delete the hidden column.
+        if (OB_SUCC(ret) && !exist_index) {
+          // if generate column is not the last column // 1. update prev_column_id // 2. update inner table
+          if (OB_FAIL(update_prev_id_for_delete_column(*data_table, new_data_table_schema, *index_col, trans))) {
+            LOG_WARN("failed to update column previous id for delete column", K(ret));
+          } else if (OB_FAIL(delete_single_column(trans, new_data_table_schema, index_col->get_column_name_str()))) {
+            LOG_WARN("delete index inner generated column failed", K(new_data_table_schema), K(*index_col));
+          }
         }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(alter_table_options(schema_guard,
-                                    new_data_table_schema,
-                                    *data_table,
-                                    false,
-                                    trans))) {
-      LOG_WARN("alter table options failed", K(ret), K(new_data_table_schema));
-    } else {
-      for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count(); ++j) {
-        if (simple_index_infos.at(j).table_id_ == index_schema.get_table_id()) {
-          simple_index_infos.remove(j);
-          if (OB_FAIL(new_data_table_schema.set_simple_index_infos(simple_index_infos))) {
-            LOG_WARN("fail to set simple index infos", K(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(alter_table_options(schema_guard,
+                                      new_data_table_schema,
+                                      *data_table,
+                                      false,
+                                      trans))) {
+        LOG_WARN("alter table options failed", K(ret), K(new_data_table_schema));
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < simple_index_infos.count(); ++j) {
+          if (simple_index_infos.at(j).table_id_ == index_schema.get_table_id()) {
+            simple_index_infos.remove(j);
+            if (OB_FAIL(new_data_table_schema.set_simple_index_infos(simple_index_infos))) {
+              LOG_WARN("fail to set simple index infos", K(ret));
+            }
+            break;
           }
-          break;
         }
       }
     }

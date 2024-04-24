@@ -492,6 +492,36 @@ DEF_GET_VALUE_BY_INDEX(get_nchar, ObString);
 DEF_GET_VALUE_BY_INDEX(get_float, float);
 DEF_GET_VALUE_BY_INDEX(get_double, double);
 
+int ObInnerSQLResult::get_vector_value(const int64_t col_idx, float *&vector, int64_t &vector_len) const
+{
+  int ret = OB_SUCCESS;
+  const ObObj *obj = NULL;
+  if (OB_FAIL(get_obj(col_idx, obj))) {
+    LOG_WARN("get obj error", K(ret));
+  } else if (OB_ISNULL(obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get a invalud obj", K(col_idx), K(obj), K(ret));
+  } else if (OB_FAIL(obj->get_vector_value(vector, vector_len))) {
+    LOG_WARN("failed to get vector value", K(ret), K(col_idx), K(*obj));
+  }
+  return ret;
+}
+
+int ObInnerSQLResult::get_vector(const int64_t col_idx, ObTypeVector &vector) const
+{
+  int ret = OB_SUCCESS;
+  const ObObj *obj = NULL;
+  if (OB_FAIL(get_obj(col_idx, obj))) {
+    LOG_WARN("get obj error", K(col_idx), K(ret));
+  } else if (OB_ISNULL(obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get a invalud obj", K(col_idx), K(obj), K(ret));
+  } else if (OB_FAIL(obj->get_vector(vector))) {
+    LOG_WARN("failed to get vector", K(ret), K(col_idx), K(*obj));
+  }
+  return ret;
+}
+
 int ObInnerSQLResult::get_int(const int64_t col_idx, int64_t &int_val) const
 {
   int ret = OB_SUCCESS;

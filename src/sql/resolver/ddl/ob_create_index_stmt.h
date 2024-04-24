@@ -43,6 +43,7 @@ public:
   void set_tenant_id(const uint64_t tenant_id);
   void set_index_dop(int64_t index_dop);
   int64_t get_index_dop();
+  void set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists);
   inline void set_database_name(const common::ObString &db_name);
   inline const common::ObString &get_database_name() const;
   inline const common::ObString &get_table_name() const;
@@ -168,6 +169,11 @@ inline void ObCreateIndexStmt::set_index_dop(int64_t index_dop)
 inline int64_t ObCreateIndexStmt::get_index_dop()
 {
   return create_index_arg_.index_schema_.get_dop();
+}
+
+inline void ObCreateIndexStmt::set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists)
+{
+  create_index_arg_.index_schema_.set_vector_ivfflat_lists(vector_ivfflat_lists);
 }
 }//namespace sql
 }//namespace oceanbase

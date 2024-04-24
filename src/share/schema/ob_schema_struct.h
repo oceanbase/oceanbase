@@ -321,16 +321,24 @@ enum ObIndexType
   * Attention!!! when add new index type,
   * need update func ObSimpleTableSchemaV2::should_not_validate_data_index_ckm()
   */
-  INDEX_TYPE_MAX = 23,
+  INDEX_TYPE_VECTOR_LOCAL = 23,
+  INDEX_TYPE_VECTOR_GLOBAL = 24,
+  INDEX_TYPE_MAX = 25,
 };
+
+bool is_vector_index_table(const ObIndexType index_type);
 
 // using type for index
 enum ObIndexUsingType
 {
   USING_BTREE = 0,
   USING_HASH,
+  USING_HNSW,
+  USING_IVFFLAT,
   USING_TYPE_MAX,
 };
+
+bool is_vector_using_type(const ObIndexUsingType index_using_type);
 
 enum ViewCheckOption
 {

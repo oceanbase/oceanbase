@@ -1619,6 +1619,21 @@ protected:
     return ret;
   }
 
+  // template <typename Functor, typename... Args>
+  // static int def_vector_arith_eval_func(EVAL_FUNC_ARG_DECL, Args &...args)
+  // {
+  //   int ret = common::OB_SUCCESS;
+  //   ObDatum *l = NULL;
+  //   ObDatum *r = NULL;
+  //   bool finish = false;
+  //   if (OB_FAIL(get_arith_operand(expr, ctx, l, r, expr_datum, finish))) {
+  //     SQL_ENG_LOG(WARN, "evaluate operand failed", K(ret), K(expr));
+  //   } else if (!finish) {
+  //     ret = Functor()(ctx, expr_datum, *l, *r, args...);  // use ctx to alloc memory for new vector
+  //   }
+  //   return ret;
+  // }
+
   virtual int calc_result_type2(ObExprResType &type,
                                 ObExprResType &type1,
                                 ObExprResType &type2,
@@ -1929,6 +1944,26 @@ protected:
       uint64_t &out, const common::ObCastMode &cast_mode);
 };
 
+class ObVectorTypeExprOperator : public ObExprOperator
+{
+public:
+  ObVectorTypeExprOperator(common::ObIAllocator &alloc,
+                           ObExprOperatorType type,
+                           const char *name,
+                           int32_t param_num,
+                           int32_t dimension)
+    : ObExprOperator(alloc, type, name, param_num, VALID_FOR_GENERATED_COL, dimension)
+  {
+  }
+  virtual ~ObVectorTypeExprOperator()
+  {
+  }
+
+  virtual int calc_result_type2(ObExprResType &type,
+                                ObExprResType &type1,
+                                ObExprResType &type2,
+                                common::ObExprTypeCtx &type_ctx) const;
+};
 
 class ObMinMaxExprOperator : public ObExprOperator
 {

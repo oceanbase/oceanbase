@@ -213,7 +213,8 @@ int ObDASDMLIterator::get_next_row(ObNewRow *&row)
                                                         *sr,
                                                         *row_projector_,
                                                         allocator_,
-                                                        *cur_row_))) {
+                                                        *cur_row_,
+                                                        &tablet_id_))) {
         LOG_WARN("project storage row failed", K(ret));
       } else {
         row = cur_row_;
@@ -260,7 +261,8 @@ int ObDASDMLIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
                                                          *sr,
                                                          *row_projector_,
                                                          allocator_,
-                                                         cur_rows_[row_count]))) {
+                                                         cur_rows_[row_count],
+                                                         &tablet_id_))) {
         LOG_WARN("Failed to project storage row", K(ret));
       } else {
         ++row_count;

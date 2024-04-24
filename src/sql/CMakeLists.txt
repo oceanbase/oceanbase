@@ -686,6 +686,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_extract_cert_expired_time.cpp
   engine/expr/ob_expr_transaction_id.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
+  engine/expr/ob_expr_vector.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join
@@ -802,6 +803,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
+  engine/table/ob_index_hnsw_ann_op.cpp
 )
 
 ob_set_subtarget(ob_sql executor

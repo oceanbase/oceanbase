@@ -404,7 +404,28 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
           }
           // index_type
           case OB_APP_MIN_COLUMN_ID + 13: {
-            cells[cell_idx].set_varchar(ObString("BTREE")); //FIXME 一定是BTREE吗？
+            switch (table_schema.get_index_using_type()) {
+              case share::schema::USING_HNSW: {
+                cells[cell_idx].set_varchar(ObString("HNSW"));
+                break;
+              }
+              case share::schema::USING_IVFFLAT: {
+                cells[cell_idx].set_varchar(ObString("IVFFLAT"));
+                break;
+              }
+              case share::schema::USING_BTREE: {
+                cells[cell_idx].set_varchar(ObString("BTREE"));
+                break;
+              }
+              case share::schema::USING_HASH: {
+                cells[cell_idx].set_varchar(ObString("HASH"));
+                break;
+              }
+              default: {
+                ret = OB_ERR_UNEXPECTED;
+                SERVER_LOG(WARN, "unexpected index using type", K(ret));
+              }
+            }
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;
           }
@@ -779,7 +800,28 @@ int ObTableIndex::add_normal_index_column(const ObString &database_name,
             } else if (index_schema->is_spatial_index()) {
               cells[cell_idx].set_varchar(ObString("SPATIAL"));
             } else {
-              cells[cell_idx].set_varchar(ObString("BTREE")); //FIXME 一定是BTREE吗？
+              switch (index_schema->get_index_using_type()) {
+                case share::schema::USING_HNSW: {
+                  cells[cell_idx].set_varchar(ObString("HNSW"));
+                  break;
+                }
+                case share::schema::USING_IVFFLAT: {
+                  cells[cell_idx].set_varchar(ObString("IVFFLAT"));
+                  break;
+                }
+                case share::schema::USING_BTREE: {
+                  cells[cell_idx].set_varchar(ObString("BTREE"));
+                  break;
+                }
+                case share::schema::USING_HASH: {
+                  cells[cell_idx].set_varchar(ObString("HASH"));
+                  break;
+                }
+                default: {
+                  ret = OB_ERR_UNEXPECTED;
+                  SERVER_LOG(WARN, "unexpected index using type", K(ret));
+                }
+              }
             }
             cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
             break;

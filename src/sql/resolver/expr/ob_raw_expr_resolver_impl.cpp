@@ -574,7 +574,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
       case T_OP_BIT_OR:
       case T_OP_BIT_XOR:
       case T_OP_BIT_LEFT_SHIFT:
-      case T_OP_BIT_RIGHT_SHIFT: {
+      case T_OP_BIT_RIGHT_SHIFT:
+      case T_OP_VECTOR_L2_DISTANCE:
+      case T_OP_VECTOR_INNER_PRODUCT:
+      case T_OP_VECTOR_COSINE_DISTANCE: {
         if (T_OP_ASSIGN == node->type_) {
           is_contains_assignment_ |= true;
         }

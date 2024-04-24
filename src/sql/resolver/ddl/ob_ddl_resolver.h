@@ -952,6 +952,7 @@ protected:
   int64_t tablespace_id_;
   int64_t table_dop_; // default value is 1
   int64_t hash_subpart_num_;
+  int64_t vector_ivfflat_lists_;
   bool is_external_table_;
   common::ObString ttl_definition_;
   common::ObString kv_attributes_;

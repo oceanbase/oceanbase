@@ -224,7 +224,7 @@ public:
    * the 'common' part of those statements, including joins, order-by, limit and
    * etc.
    */
-  virtual int generate_plan_tree();
+  virtual int generate_plan_tree(bool may_create_dummy_subscan_op = false);
   /**
    * Generate the "explain plan" string
    */
@@ -684,17 +684,19 @@ public:
 
   /** @brief Allcoate operator for subquery path */
   int allocate_subquery_path(SubQueryPath *subpath,
-                             ObLogicalOperator *&out_subquery_op);
+                             ObLogicalOperator *&out_subquery_op,
+                             bool dummy_subscan_op = false);
 
   /** @brief Allcoate a ,aterial operator as parent of a path */
   int allocate_material_as_top(ObLogicalOperator *&old_top);
 
   /** @brief Create plan tree from an interesting order */
   int create_plan_tree_from_path(Path *path,
-                                 ObLogicalOperator *&out_plan_tree);
+                                 ObLogicalOperator *&out_plan_tree,
+                                 bool dummy_subscan_op = false);
 
   /** @brief Initialize the candidate plans from join order */
-  int init_candidate_plans();
+  int init_candidate_plans(bool maybe_dummy_create_subscan_op = false);
 
   int init_candidate_plans(ObIArray<CandidatePlan> &candi_plans);
 
@@ -1319,6 +1321,15 @@ public:
   int get_rowkey_exprs(const uint64_t table_id,
                        const ObTableSchema &table_schema,
                        ObIArray<ObRawExpr*> &keys);
+
+  // for ivfflat index
+  int get_extra_access_exprs(const uint64_t table_id,
+                       const uint64_t ref_table_id,
+                       ObIArray<ObRawExpr*> &extra_columns);
+
+  int get_extra_access_exprs(const uint64_t table_id,
+                       const ObTableSchema &table_schema,
+                       ObIArray<ObRawExpr*> &extra_columns);
 
   int get_index_column_items(ObRawExprFactory &expr_factory,
                               uint64_t table_id,

@@ -282,6 +282,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 500	__all_tenant_snapshot_job	0	201001	1
 502	__all_trusted_root_certificate	0	201001	1
 507	__all_tenant_snapshot_ls_replica_history	0	201001	1
+518	__all_vector_hnsw_index	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1

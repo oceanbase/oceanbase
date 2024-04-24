@@ -1745,6 +1745,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.index_meta_info_.is_unique_index_ = index_info_entry->is_unique_index();
     ap->est_cost_info_.index_meta_info_.is_global_index_ = index_info_entry->is_index_global();
     ap->est_cost_info_.index_meta_info_.is_geo_index_ = index_info_entry->is_index_geo();
+    ap->est_cost_info_.index_meta_info_.is_vector_index_ = index_info_entry->is_index_vector();
+    ap->est_cost_info_.index_meta_info_.container_table_id_ = index_info_entry->get_container_table_id();
     ap->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_id);
     ap->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
     ap->est_cost_info_.sel_ctx_ = &get_plan()->get_selectivity_ctx();
@@ -2142,12 +2144,13 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
     LOG_WARN("NULL pointer error", K(ret), K(table_id), K(ref_table_id), K(index_id));
   } else if (!index_schema->is_ordered()) {
     // for virtual table, we have HASH index which offers no ordering on index keys
-  } else if (index_schema->is_global_index_table() && is_index_back) {
+  } else if (index_schema->is_global_index_table() && is_index_back) { // TODO: shk: HNSW global index
     // for global index lookup, the order is wrong.
   } else if (OB_FAIL(append(ordering, index_keys))) {
     LOG_WARN("failed to append index ordering expr", K(ret));
   } else if (OB_FAIL(get_index_scan_direction(ordering, stmt,
-                                              get_plan()->get_equal_sets(), direction))) {
+                                              get_plan()->get_equal_sets(), direction,
+                                              index_schema->is_using_vector_index()))) {
     LOG_WARN("failed to get index scan direction", K(ret));
   }
   return ret;
@@ -2160,7 +2163,8 @@ int ObJoinOrder::get_access_path_ordering(const uint64_t table_id,
 int ObJoinOrder::get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                           const ObDMLStmt *stmt,
                                           const EqualSets &equal_sets,
-                                          ObOrderDirection &index_direction)
+                                          ObOrderDirection &index_direction,
+                                          bool is_using_vector_index)
 {
   int ret = OB_SUCCESS;
   index_direction = default_asc_direction();
@@ -2197,7 +2201,8 @@ int ObJoinOrder::get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                               equal_sets,
                                               get_plan()->get_const_exprs(),
                                               tmp_direction,
-                                              order_match_count))) {
+                                              order_match_count,
+                                              is_using_vector_index))) {
           LOG_WARN("failed to match order-by against index", K(ret));
         } else if (order_match_count > max_order_match_count) {
           max_order_match_count = order_match_count;
@@ -2214,10 +2219,57 @@ int ObJoinOrder::get_index_scan_direction(const ObIArray<ObRawExpr *> &keys,
                                           equal_sets,
                                           get_plan()->get_const_exprs(),
                                           tmp_direction,
-                                          order_match_count))) {
+                                          order_match_count,
+                                          is_using_vector_index))) {
       LOG_WARN("failed to match order-by against index", K(ret));
     } else if (order_match_count > 0) {
       index_direction = tmp_direction;
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_column_ref_raw_expr_in_order_expr(ObRawExpr* &order_expr,
+                                                       bool is_using_vector_index,
+                                                       bool is_single_order_expr,
+                                                       const EqualSets &equal_sets,
+                                                       const ObIArray<ObRawExpr *> &const_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_cnt = 0;
+  if (!is_using_vector_index || !is_single_order_expr || !order_expr->is_vector_distance_expr()) {
+    // do nothing
+  } else if (OB_UNLIKELY(2 != (param_cnt = order_expr->get_param_count()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("vector distance expr expect 2 param expr", K(ret), K(param_cnt));
+  } else {
+    ObRawExpr* left_expr = order_expr->get_param_expr(0);
+    ObRawExpr* right_expr = order_expr->get_param_expr(1);
+    int column_ref_cnt = 0;
+    if (left_expr->is_column_ref_expr()) {
+      ++column_ref_cnt;
+    }
+    if (right_expr->is_column_ref_expr()) {
+      ++column_ref_cnt;
+    }
+    if (1 != column_ref_cnt) {
+      // do nothing
+    } else if (left_expr->is_column_ref_expr()) {
+      bool is_const = true;
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(right_expr, equal_sets,
+                                                 const_exprs, is_const))) {
+        LOG_WARN("failed to check right_expr is const expr", K(ret));
+      } else if (is_const) {
+        order_expr = left_expr;
+      }
+    } else if (right_expr->is_column_ref_expr()) {
+      bool is_const = true;
+      if (OB_FAIL(ObOptimizerUtil::is_const_expr(left_expr, equal_sets,
+                                                 const_exprs, is_const))) {
+        LOG_WARN("failed to check right_expr is const expr", K(ret));
+      } else if (is_const) {
+        order_expr = right_expr;
+      }
     }
   }
   return ret;
@@ -2229,7 +2281,8 @@ int ObJoinOrder::get_direction_in_order_by(const ObIArray<OrderItem> &order_by,
                                            const EqualSets &equal_sets,
                                            const ObIArray<ObRawExpr *> &const_exprs,
                                            ObOrderDirection &direction,
-                                           int64_t &order_match_count)
+                                           int64_t &order_match_count,
+                                           bool is_using_vector_index)
 {
   int ret = OB_SUCCESS;
   order_match_count = 0;
@@ -2261,6 +2314,12 @@ int ObJoinOrder::get_direction_in_order_by(const ObIArray<OrderItem> &order_by,
         OB_ISNULL(order_expr = order_by.at(order_offset).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("exprs have null", K(ret), K(index_expr), K(order_expr));
+    } else if (OB_FAIL(get_column_ref_raw_expr_in_order_expr(order_expr,
+                                                             is_using_vector_index,
+                                                             1 == order_by.count(),
+                                                             equal_sets,
+                                                             const_exprs))) {
+      LOG_WARN("fail to get column_ref_raw_expr in order_expr", K(ret), K(is_using_vector_index), K(order_by.count()));
     } else if (ObOptimizerUtil::is_expr_equivalent(index_expr, order_expr, equal_sets) &&
                (is_ascending_direction(order_by.at(order_offset).order_type_)
                 == is_ascending_direction(direction))) {
@@ -2586,6 +2645,7 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
       bool is_unique_index = false;
       bool is_index_global = false;
       bool is_index_geo = index_schema->is_spatial_index();
+      bool is_index_vector = index_schema->is_using_vector_index() && (index_id != base_table_id);
       entry->set_index_id(index_id);
       int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
       int64_t max_prefix_count = 0;
@@ -2602,14 +2662,37 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
         entry->set_is_index_global(is_index_global);
         entry->set_is_index_geo(is_index_geo);
         entry->set_is_index_back(is_index_back);
+        entry->set_is_index_vector(is_index_vector);
         entry->set_is_unique_index(is_unique_index);
         entry->get_ordering_info().set_scan_direction(direction);
+        if (is_index_vector && index_schema->is_using_ivfflat_index()) {
+          const ObTableSchema *container_schema = NULL;
+          ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+          if (OB_FAIL(index_schema->get_simple_index_infos(simple_index_infos))) {
+            LOG_WARN("get simple_index_infos failed", KR(ret), K(table_id));
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+            const uint64_t container_id = simple_index_infos.at(i).table_id_;
+            if (OB_FAIL(schema_guard->get_table_schema(container_id, container_schema))) {
+              LOG_WARN("cannot get table schema for table", KR(ret), K(container_id));
+            } else if (OB_ISNULL(container_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("index schema should not be null", KR(ret), K(container_id));
+            } else if (!container_schema->vec_ivfflat_container_table()) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid container table for ivfflat index table", K(ret), K(*container_schema));
+            } else {
+              entry->set_container_table_id(container_id);
+              break;
+            }
+          }
+        }
       }
       if (OB_SUCC(ret)) {
         ObSEArray<OrderItem, 4> index_ordering;
         ObIArray<ObRawExpr*> &ordering_expr = entry->get_ordering_info().get_ordering();
         for (int64_t i = 0; OB_SUCC(ret) && i < ordering_expr.count(); ++i) {
-          OrderItem order_item(ordering_expr.at(i), direction);
+          OrderItem order_item(ordering_expr.at(i), direction, index_schema->is_using_vector_index());
           if (OB_FAIL(index_ordering.push_back(order_item))) {
             LOG_WARN("failed to push back order item", K(ret));
           }
@@ -2965,6 +3048,38 @@ int ObJoinOrder::compute_table_rowcount_info()
   return ret;
 }
 
+int ObJoinOrder::get_order_by_vector_distance_type(const ObDMLStmt *stmt, ObVectorDistanceType &vd_type)
+{
+  int ret = OB_SUCCESS;
+  vd_type = ObVectorDistanceType::INVALID_DISTANCE_TYPE;
+  if (1 != stmt->get_order_items().count() || !(stmt->has_limit())) {
+    // do nothing
+  } else if (!(stmt->get_order_items().at(0).expr_->is_vector_distance_expr())) {
+    // do nothing
+  } else {
+    ObItemType item_type = stmt->get_order_items().at(0).expr_->get_expr_type();
+    switch (item_type) {
+    case T_OP_VECTOR_L2_DISTANCE: {
+      vd_type = ObVectorDistanceType::L2;
+      break;
+    }
+    case T_OP_VECTOR_INNER_PRODUCT: {
+      vd_type = ObVectorDistanceType::INNER_PRODUCT;
+      break;
+    }
+    case T_OP_VECTOR_COSINE_DISTANCE: {
+      vd_type = ObVectorDistanceType::COSINE;
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected vector distance type", K(ret));
+    }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
                                      const uint64_t ref_table_id,
                                      ObIArray<uint64_t> &valid_index_ids)
@@ -2976,6 +3091,7 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
   uint64_t tids[OB_MAX_INDEX_PER_TABLE + 1];
   int64_t index_count = OB_MAX_INDEX_PER_TABLE + 1;
   const LogTableHint *log_table_hint = NULL;
+  ObVectorDistanceType vd_type = ObVectorDistanceType::INVALID_DISTANCE_TYPE;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(schema_guard = OPT_CTX.get_sql_schema_guard())) {
@@ -2994,13 +3110,16 @@ int ObJoinOrder::get_valid_index_ids(const uint64_t table_id,
     if (OB_FAIL(valid_index_ids.assign(log_table_hint->index_list_))) {
       LOG_WARN("failed to assign index ids", K(ret));
     }
+  } else if (OB_FAIL(get_order_by_vector_distance_type(stmt, vd_type))) {
+    LOG_WARN("fail to get order_by vector distance type", K(ret));
   } else if (OB_FAIL(schema_guard->get_can_read_index_array(ref_table_id,
                                                             tids,
                                                             index_count,
                                                             false,
                                                             table_item->access_all_part(),
                                                             false /*domain index*/,
-                                                            false /*spatial index*/))) {
+                                                            false /*spatial index*/,
+                                                            vd_type))) {
     LOG_WARN("failed to get can read index", K(ref_table_id), K(ret));
   } else if (index_count > OB_MAX_INDEX_PER_TABLE + 1) {
     ret = OB_ERR_UNEXPECTED;
@@ -4842,7 +4961,7 @@ int ObJoinOrder::add_recycled_paths(Path* path)
  * 4 it is more pipeline than another one
  */
 int ObJoinOrder::compute_path_relationship(const Path &first_path,
-                                           const Path &second_path,
+                                           const Path &second_path,    // new path
                                            DominateRelation &relation)
 {
   int ret = OB_SUCCESS;

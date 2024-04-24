@@ -336,6 +336,7 @@
 # 500: __all_tenant_snapshot_job
 # 502: __all_trusted_root_certificate
 # 507: __all_tenant_snapshot_ls_replica_history
+# 518: __all_vector_hnsw_index
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index

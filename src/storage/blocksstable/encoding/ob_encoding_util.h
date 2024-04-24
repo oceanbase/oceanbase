@@ -119,6 +119,7 @@ OB_INLINE ObObjTypeStoreClass *get_store_class_map()
     ObGeometrySC, //ObGeometryTC
     ObStringSC, // ObUserDefinedSQLTC， UDT null_bitmaps
     ObDecimalIntSC, // ObDecimalIntTC
+    ObStringSC,    // ObVectorTC
     ObMaxSC // ObMaxTC
   };
   STATIC_ASSERT(ARRAYSIZEOF(store_class_map) == common::ObMaxTC + 1,
@@ -180,6 +181,7 @@ OB_INLINE int64_t *get_type_size_map()
     -1, //Geometry
     -1, //ObUserDefinedSQLType
     -1, //ObDecimalIntType
+    -1, // ObVectorType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(type_size_map) == common::ObMaxType + 1,
@@ -242,6 +244,7 @@ OB_INLINE int64_t *get_estimate_base_store_size_map()
     9, // ObGeometryType
     8, // ObUserDefinedSQLType
     8, // ObDecimalIntType
+    9, // ObVectorType
     -1 // ObMaxType
   };
   STATIC_ASSERT(ARRAYSIZEOF(estimate_base_store_size_map) == common::ObMaxType + 1,

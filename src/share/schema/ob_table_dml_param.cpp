@@ -30,6 +30,7 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     table_type_(MAX_TABLE_TYPE),
     index_type_(INDEX_TYPE_MAX),
     index_status_(INDEX_STATUS_MAX),
+    index_using_type_(USING_TYPE_MAX),
     shadow_rowkey_column_num_(0),
     fulltext_col_id_(OB_INVALID_ID),
     spatial_geo_col_id_(OB_INVALID_ID),
@@ -42,7 +43,9 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     read_param_version_(0),
     read_info_(),
     cg_read_infos_(),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    extra_rowkey_id_(0),
+    vector_index_id_(0)
 {
 }
 
@@ -58,6 +61,7 @@ void ObTableSchemaParam::reset()
   table_type_ = MAX_TABLE_TYPE;
   index_type_ = INDEX_TYPE_MAX;
   index_status_ = INDEX_STATUS_MAX;
+  index_using_type_ = USING_TYPE_MAX;
   shadow_rowkey_column_num_ = 0;
   fulltext_col_id_ = OB_INVALID_ID;
   spatial_geo_col_id_ = OB_INVALID_ID;
@@ -71,6 +75,8 @@ void ObTableSchemaParam::reset()
   cg_read_infos_.reset();
   read_param_version_ = 0;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+  extra_rowkey_id_ = 0;
+  vector_index_id_ = 0;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -112,6 +118,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   if(OB_SUCC(ret) && schema->is_index_table()) {
     index_type_ = schema->get_index_type();
     index_status_ = schema->get_index_status();
+    index_using_type_ = schema->get_index_using_type();
     shadow_rowkey_column_num_ = schema->get_shadow_rowkey_column_num();
     ObString tmp_name;
 
@@ -127,7 +134,8 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
 
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
+    } else if (!schema->is_using_ivfflat_index()
+        && OB_FAIL(schema->get_index_info().get_fulltext_column(fulltext_col_id_))) {
       LOG_WARN("fail to get fulltext column id", K(ret), K(schema->get_index_info()));
     } else if (OB_FAIL(schema->get_index_name(tmp_name))) {
       LOG_WARN("fail to get index name", K(ret), K(schema->get_index_info()));
@@ -184,6 +192,12 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
         LOG_WARN("Fail to get column group index", K(ret));
       } else if (use_cs && OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
         LOG_WARN("Fail to push back cg idx", K(ret));
+      } else if (schema->is_using_ivfflat_index()) {
+        if (column_schema->is_rowkey_column() && 0 == column_schema->get_column_name_str().compare("center_idx")) {
+          extra_rowkey_id_ = column_id;
+        } else if (column_schema->is_index_column() && ObVectorType == column_schema->get_data_type()) {
+          vector_index_id_ = column_id;
+        }
       }
     }
   }
@@ -395,6 +409,7 @@ int64_t ObTableSchemaParam::to_string(char *buf, const int64_t buf_len) const
        K_(table_type),
        K_(index_type),
        K_(index_status),
+       K_(index_using_type),
        K_(shadow_rowkey_column_num),
        K_(fulltext_col_id),
        K_(index_name),
@@ -415,6 +430,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
               table_type_,
               index_type_,
               index_status_,
+              index_using_type_,
               shadow_rowkey_column_num_,
               fulltext_col_id_);
 
@@ -446,6 +462,8 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
       }
     }
   }
+  OB_UNIS_ENCODE(extra_rowkey_id_);
+  OB_UNIS_ENCODE(vector_index_id_);
   return ret;
 }
 
@@ -458,6 +476,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
               table_type_,
               index_type_,
               index_status_,
+              index_using_type_,
               shadow_rowkey_column_num_,
               fulltext_col_id_);
 
@@ -527,6 +546,8 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
       }
     }
   }
+  OB_UNIS_DECODE(extra_rowkey_id_);
+  OB_UNIS_DECODE(vector_index_id_);
   return ret;
 }
 
@@ -541,6 +562,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
               table_type_,
               index_type_,
               index_status_,
+              index_using_type_,
               shadow_rowkey_column_num_,
               fulltext_col_id_);
   len += index_name_.get_serialize_size();
@@ -568,6 +590,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
       }
     }
   }
+  OB_UNIS_ADD_LEN(extra_rowkey_id_);
+  OB_UNIS_ADD_LEN(vector_index_id_);
   return len;
 }
 

@@ -468,7 +468,8 @@ public:
       cur_rows_(nullptr),
       main_ctdef_(das_ctdef),
       spat_rows_(nullptr),
-      spatial_row_idx_(0)
+      spatial_row_idx_(0),
+      tablet_id_(0)
   {
     set_ctdef(das_ctdef);
     batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
@@ -487,6 +488,7 @@ public:
     set_ctdef(das_ctdef);
     return common::OB_SUCCESS;
   }
+  void set_tablet_id(const ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
 
 private:
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef)
@@ -512,6 +514,7 @@ private:
   ObSpatIndexRow *spat_rows_;
   uint32_t spatial_row_idx_;
   int64_t batch_size_;
+  ObTabletID tablet_id_;
 };
 
 class ObDASMLogDMLIterator : public ObNewRowIterator

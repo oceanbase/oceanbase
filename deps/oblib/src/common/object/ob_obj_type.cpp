@@ -105,6 +105,7 @@ const char *ob_sql_type_str(ObObjType type)
       "GEOMETRY",
       "UDT",
       "DECIMAL_INT",
+      "VECTOR"
       ""
     },
     {
@@ -161,6 +162,7 @@ const char *ob_sql_type_str(ObObjType type)
       "GEOMETRY",
       "UDT",
       "DECIMAL_INT",
+      "VECTOR"
       ""
     }
   };
@@ -469,6 +471,16 @@ int ob_empty_str(char *buff, int64_t buff_length, int64_t &pos, int64_t length, 
   return ob_empty_str(buff, buff_length, coll_type);
 }
 
+int ob_vector_str(char *buff, int64_t buff_length, int64_t &pos, int64_t length, int64_t precision, int64_t scale, ObCollationType coll_type)
+{
+  UNUSED(coll_type);
+  UNUSED(precision);
+  UNUSED(scale);
+  int ret = OB_SUCCESS;
+  ret = databuff_printf(buff, buff_length, pos, "vector(%ld)", length);
+  return ret;
+}
+
 int ob_geometry_sub_type_str(char *buff, int64_t buff_length, int64_t &pos, const common::ObGeoType geo_type)
 {
   int ret = OB_SUCCESS;
@@ -752,6 +764,7 @@ int ob_sql_type_str(char *buff,
     ob_geometry_str,//geometry
     nullptr,
     ob_decimal_int_str, //decimal int
+    ob_vector_str,      // vector
     ob_empty_str             // MAX
   };
   static_assert(sizeof(sql_type_name) / sizeof(ObSqlTypeStrFunc) == ObMaxType + 1, "Not enough initializer");
@@ -936,6 +949,7 @@ const char *ob_sql_tc_str(ObObjTypeClass tc)
     "GEOMETRY",
     "UDT",
     "DECIMAL_INT",
+    "VECTOR",
     ""
   };
   static_assert(sizeof(sql_tc_name) / sizeof(const char *) == ObMaxTC + 1, "Not enough initializer");
