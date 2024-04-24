@@ -50,7 +50,7 @@ int ObCOWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter)
 
   if (OB_SUCC(ret) && filter.is_logic_and_node()) {
     bool reorder = true;
-    for (uint32_t i = 0; i < child_cnt; ++i) {
+    for (uint32_t i = 0; reorder && i < child_cnt; ++i) {
         sql::ObPushdownFilterExecutor &child_filter = *children[i];
         // if (child_filter.is_filter_dynamic_node()) {
         //     reorder = false;
@@ -81,12 +81,10 @@ int ObCOWhereOptimizer::analyze_impl(sql::ObPushdownFilterExecutor &filter)
           std::sort(&filter_conditions_[0], &filter_conditions_[0] + child_cnt);
           const uint64_t best_filter_idx = filter_conditions_[0].idx_;
           best_filter = children[best_filter_idx];
-          if (best_filter == children[0]) {
-            reorder = false;
-          } else if (!can_choose_best_filter(&filter_conditions_[0], *best_filter, filter)) {
-            reorder = false;
+          if (0 == best_filter_idx ||
+              !can_choose_best_filter(&filter_conditions_[0], *best_filter, filter)) {
           } else {
-            for (uint32_t i = 1; i <= best_filter_idx; ++i) {
+            for (uint32_t i = best_filter_idx; i > 0; i--) {
               children[i] = children[i - 1];
             }
             children[0] = best_filter;
