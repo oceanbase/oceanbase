@@ -354,7 +354,6 @@ int ObTableApiTTLExecutor::update_row_to_das()
                                             ttl_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
           LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
         } else {
-          clear_evaluated_flag();
           for (int i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
             const ObTableUpdCtDef &upd_ctdef = ttl_spec_.get_ctdefs().at(i)->upd_ctdef_;
             ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(i).upd_rtdef_;
@@ -466,8 +465,15 @@ int ObTableApiTTLExecutor::process_expire()
           LOG_WARN("fail to check expired", K(ret));
         } else if (is_expired_) { // 过期，删除旧行，写入新行
           LOG_DEBUG("row is expired", K(ret));
+          // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
+          //  and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+          //  which will cause 4377 when do_delete
+          clear_evaluated_flag();
           if (OB_FAIL(do_delete())) {
             LOG_WARN("fail to delete expired old row", K(ret));
+          }
+          clear_evaluated_flag();
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(do_insert())) {
             LOG_WARN("fail to insert new row", K(ret));
           } else if (OB_FAIL(execute_das_task(dml_rtctx_, true/* del_task_ahead */))) {

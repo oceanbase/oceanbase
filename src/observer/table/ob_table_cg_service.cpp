@@ -65,7 +65,7 @@ int ObTableExprCgService::generate_all_column_exprs(ObTableCtx &ctx)
     }
   }
 
-  // generate stored generated column assign item expr
+  // generate generated column assign item expr
   if (OB_SUCC(ret)) {
     const ObColumnSchemaV2 *col_schema = nullptr;
     ObIArray<ObTableAssignment> &assigns = ctx.get_assignments();
@@ -74,7 +74,7 @@ int ObTableExprCgService::generate_all_column_exprs(ObTableCtx &ctx)
       if (OB_ISNULL(assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("assign column info is null", K(ret), K(assign));
-      } else if (!assign.column_info_->is_stored_generated_column_)  {
+      } else if (!assign.column_info_->is_generated_column_)  {
         // do nothing
       } else if (OB_ISNULL(col_schema = table_schema->get_column_schema(assign.column_info_->column_id_))) {
         ret = OB_SCHEMA_ERROR;
@@ -752,14 +752,8 @@ int ObTableExprCgService::generate_assign_expr(ObTableCtx &ctx, ObTableAssignmen
       LOG_WARN("fail to generate autoinc nextval expr", K(ret));
     }
   } else if (column_info->is_generated_column_) {
-    if (!column_info->is_stored_generated_column_) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "assign virtual generated column");
-      LOG_WARN("assign virtual generated column is not supported", K(ret));
-    } else {
-      if (OB_FAIL(build_generated_column_expr(ctx, *item, column_info->generated_expr_str_, tmp_expr))) {
-        LOG_WARN("fail to build generated column expr", K(ret), K(*item));
-      }
+    if (OB_FAIL(build_generated_column_expr(ctx, *item, column_info->generated_expr_str_, tmp_expr))) {
+      LOG_WARN("fail to build generated column expr", K(ret), K(*item));
     }
   } else if (assign.is_inc_or_append_) {
     bool is_inc_or_append = true;
@@ -1480,7 +1474,7 @@ int ObTableExprCgService::refresh_delta_exprs_frame(ObTableCtx &ctx,
       if (OB_ISNULL(assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("assign column item is null", K(ret), K(assign));
-      } else if (assign.column_info_->auto_filled_timestamp_) {
+      } else if (assign.column_info_->auto_filled_timestamp_ || assign.column_info_->is_generated_column_) {
         // do nothing
       } else if (idx >= delta_row.count()) {
         ret = OB_INVALID_ARGUMENT;
@@ -1527,10 +1521,6 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
     } else if (new_row.count() < assign.column_info_->col_idx_) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
-    } else if (assign.column_info_->is_virtual_generated_column_) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
-      LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
     } else {
       // on update current timestamp will not find value
       const ObExpr *expr = new_row.at(assign.column_info_->col_idx_);
@@ -1538,11 +1528,11 @@ int ObTableExprCgService::refresh_assign_exprs_frame(ObTableCtx &ctx,
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("expr is null", K(ret));
       } else if (!assign.is_assigned_) {
-        if (!assign.column_info_->auto_filled_timestamp_ && !assign.column_info_->is_stored_generated_column_) {
+        if (!assign.column_info_->auto_filled_timestamp_ && !assign.column_info_->is_generated_column_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get assign propertity value", K(ret), K(assign));
-        } else if (assign.column_info_->is_stored_generated_column_) {
-          // do nothing, stored generated column not need to fill
+        } else if (assign.column_info_->is_generated_column_) {
+          // do nothing, generated column not need to fill
         } else { // on update current timestamp
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx, tmp_datum))) {

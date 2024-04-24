@@ -101,7 +101,7 @@ int ObTableCtx::cons_column_items_for_cg()
         if (OB_ISNULL(assign.column_info_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("assign column info is NULL", K(ret), K(i));
-        } else if (assign.column_info_->is_stored_generated_column_) {
+        } else if (assign.column_info_->is_generated_column_) {
           void *buf = ctx_allocator_.alloc(sizeof(ObTableColumnItem));
           if (OB_ISNULL(buf)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -572,6 +572,7 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
 /*
   check user rowkey is valid or not.
   1. rowkey count should equal schema rowkey count, except for auto increment.
+    1.1. when rowkey has auto incrment column and it is not filled, do delete/update is not allow
   2. rowkey value should be valid.
 */
 int ObTableCtx::adjust_rowkey()
@@ -610,17 +611,22 @@ int ObTableCtx::adjust_rowkey()
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "auto increment column set to be partition column");
           LOG_WARN("auto increment column could not be partition column", K(ret));
-        } else if (!is_full_filled) { // curr column is auto_increment and user not fill，no need to check
+        } else if (!is_full_filled && !need_full_rowkey_op()) {
+          // curr column is auto_increment and user not fill，no need to check
           need_check = false;
         }
       }
 
       if (OB_SUCC(ret) && need_check) {
-        if (idx >= entity_rowkey_cnt) {
+        if (!is_full_filled && need_full_rowkey_op()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "operation is not supported to partially fill rowkey columns");
+          LOG_WARN("rowkey columns is not fullfilled", K(ret), K_(operation_type), K(entity_rowkey_cnt), K(schema_rowkey_cnt), K(rowkey));
+        } else if (idx >= entity_rowkey_cnt) {
           ret = OB_KV_ROWKEY_COUNT_NOT_MATCH;
           LOG_USER_ERROR(OB_KV_ROWKEY_COUNT_NOT_MATCH, schema_rowkey_cnt, entity_rowkey_cnt);
           LOG_WARN("entity rowkey count mismatch table schema rowkey count", K(ret),
-                    K(entity_rowkey_cnt), K(schema_rowkey_cnt));
+                    K(entity_rowkey_cnt), K(schema_rowkey_cnt), K(rowkey));
         } else if (OB_FAIL(adjust_column_type(*col_info, obj_ptr[idx]))) { // [c1][c2][c3] [c1][c3]
           LOG_WARN("fail to adjust rowkey column type", K(ret), K(obj_ptr[idx]), KPC(col_info));
         } else {
@@ -676,6 +682,10 @@ int ObTableCtx::adjust_properties()
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "mutate rowkey column");
         LOG_WARN("property should not be rowkey column", K(ret), K(prop_names), K(i));
+      } else if (col_info->is_generated_column_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "The specified value for generated column");
+        LOG_WARN("The specified value for generated column is not allowed", K(ret), K(col_info->column_name_));
       } else if (OB_FAIL(adjust_column_type(*col_info, prop_obj))) {
         LOG_WARN("fail to adjust rowkey column type", K(ret), K(prop_obj), KPC(col_info));
       }
@@ -1135,8 +1145,8 @@ int ObTableCtx::init_put()
     cascaded_column_ids_-(17)
   2. add new ObTableAssignment.
 */
-int ObTableCtx::add_stored_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
-                                                       const ObTableAssignment &assign)
+int ObTableCtx::add_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
+                                                const ObTableAssignment &assign)
 {
   int ret = OB_SUCCESS;
 
@@ -1145,7 +1155,7 @@ int ObTableCtx::add_stored_generated_column_assignment(const ObIArray<ObTableCol
     if (OB_ISNULL(col_info = col_info_array.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column info is NULL", K(ret), K(i));
-    } else if (col_info->is_stored_generated_column_) {
+    } else if (col_info->is_generated_column_) {
       bool match = false;
       for (int64_t j = 0; j < col_info->cascaded_column_ids_.count() && !match; j++) {
         const uint64_t column_id = col_info->cascaded_column_ids_.at(j);
@@ -1153,7 +1163,7 @@ int ObTableCtx::add_stored_generated_column_assignment(const ObIArray<ObTableCol
           match = true;
         }
       }
-      if (match) {
+      if (match) { // add this generated column into assigment column array
         ObTableAssignment tmp_assign(col_info);
         if (OB_FAIL(assigns_.push_back(tmp_assign))) {
           LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(tmp_assign));
@@ -1204,7 +1214,7 @@ int ObTableCtx::init_assignments(const ObTableEntity &entity)
           if (OB_FAIL(assigns_.push_back(assign))) {
             LOG_WARN("fail to push back assignment", K(ret), K_(assigns), K(assign));
           } else if (has_generated_column_ &&
-                     OB_FAIL(add_stored_generated_column_assignment(column_info_array, assign))) {
+                     OB_FAIL(add_generated_column_assignment(column_info_array, assign))) {
             LOG_WARN("fail to add soterd generated column assignment", K(ret), K(assign));
           }
         }
@@ -1440,7 +1450,7 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
       if (OB_ISNULL(assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("column item is null", K(ret), K(assign));
-      } else if (assign.column_info_->auto_filled_timestamp_) {
+      } else if (assign.column_info_->auto_filled_timestamp_ || assign.column_info_->is_generated_column_) {
         // do nothing
       } else if (delta.is_null()) {
         ret = OB_NOT_SUPPORTED;

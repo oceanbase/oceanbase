@@ -342,7 +342,12 @@ int ObTableApiReplaceExecutor::prepare_final_replace_task()
 
   OZ(conflict_checker_.get_primary_table_map(primary_map));
   CK(OB_NOT_NULL(primary_map));
+  // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
+  // and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+  // which will cause 4377 when do_delete
+  clear_evaluated_flag();
   OZ(do_delete(primary_map));
+  clear_evaluated_flag();
   OZ(do_insert());
 
   return ret;

@@ -131,7 +131,10 @@ struct ObTableAssignment : public sql::ObAssignment
   ObString generated_expr_str_; // for append/increment
   sql::ObColumnRefRawExpr *delta_expr_; // for append/increment
   common::ObObj assign_value_;
-  bool is_assigned_; // did user assign specific value or not
+  // did user assign specific value or not,
+  // e.g. virtual generated column will be added into assignment internally
+  //     when its dependent column is assigned by user but its is_assigned_ will false
+  bool is_assigned_;
 };
 
 enum ObTableExecutorType
@@ -413,6 +416,12 @@ public:
   {
     return ObTableOperationType::Type::GET != operation_type_ && !is_scan_;
   }
+  OB_INLINE bool need_full_rowkey_op() const
+  {
+    return ObTableOperationType::Type::DEL == operation_type_
+      || ObTableOperationType::Type::UPDATE == operation_type_
+      || ObTableOperationType::Type::GET == operation_type_;
+  }
   // for dml
   OB_INLINE ObTableIndexInfo& get_primary_index_info() { return table_index_info_.at(0); }
   OB_INLINE const ObTableIndexInfo& get_primary_index_info() const { return table_index_info_.at(0); }
@@ -578,7 +587,7 @@ private:
   int check_if_can_skip_update_index(const share::schema::ObTableSchema *index_schema, bool &is_exist);
   // for update
   int init_assignments(const ObTableEntity &entity);
-  int add_stored_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
+  int add_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
                                              const ObTableAssignment &assign);
   // Init size of aggregation project array.
   //
