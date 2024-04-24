@@ -1119,7 +1119,7 @@ void ObTenant::destroy()
   }
   if (cgroup_ctrl_.is_valid() &&
       OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
-          id_, OB_INVALID_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   group_map_.destroy_group();

@@ -366,7 +366,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     dag_ret_(OB_SUCCESS),
     add_time_(0),
     start_time_(0),
-    consumer_group_id_(OB_INVALID_GROUP_ID),
+    consumer_group_id_(USER_RESOURCE_OTHER_GROUP_ID),
     allocator_(nullptr),
     is_inited_(false),
     type_(type),
@@ -419,7 +419,7 @@ void ObIDag::clear_running_info()
 {
   add_time_ = 0;
   start_time_ = 0;
-  consumer_group_id_ = OB_INVALID_GROUP_ID;
+  consumer_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   running_task_cnt_ = 0;
   dag_status_ = ObDagStatus::DAG_STATUS_INITING;
   dag_ret_ = OB_SUCCESS;
@@ -1418,7 +1418,7 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
   uint64_t consumer_group_id = USER_RESOURCE_OTHER_GROUP_ID;
-  if (is_valid_resource_group(group_id)) {
+  if (is_user_group(group_id)) {
     //user level
     consumer_group_id = group_id;
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {

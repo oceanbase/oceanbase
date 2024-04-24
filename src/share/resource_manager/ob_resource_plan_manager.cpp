@@ -69,7 +69,12 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) { //overrite
+      if (GCTX.cgroup_ctrl_->is_valid() &&
+          OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(tenant_id,
+              OB_INVALID_GROUP_ID,
+              GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+        LOG_WARN("remove tenant cgroup failed", K(ret), K(tenant_id));
+      } else if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite
         LOG_WARN("set plan failed", K(ret), K(tenant_id));
       } else {
         LOG_INFO("switch resource plan success", K(tenant_id), K(origin_plan), K(cur_plan));
