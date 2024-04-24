@@ -1493,7 +1493,6 @@ int ObTenantFreezer::print_tenant_usage(
 {
   int ret = OB_SUCCESS;
   ObTenantStatistic stat;
-  lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1531,11 +1530,6 @@ int ObTenantFreezer::print_tenant_usage(
                           stat.memstore_allocated_pos_,
                           stat.memstore_frozen_pos_,
                           stat.memstore_reclaimed_pos_);
-  }
-
-  if (!OB_ISNULL(mallocator)) {
-    mallocator->print_tenant_memory_usage(tenant_info_.tenant_id_);
-    mallocator->print_tenant_ctx_memory_usage(tenant_info_.tenant_id_);
   }
 
   return ret;

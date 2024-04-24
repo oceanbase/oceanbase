@@ -355,7 +355,6 @@ int ObVirtualTenantManager::print_tenant_usage_(
     int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  lib::ObMallocAllocator *mallocator = lib::ObMallocAllocator::get_instance();
   int64_t kv_cache_mem = 0;
   if (OB_FAIL(get_kv_cache_mem_(node.tenant_id_,
                                 kv_cache_mem))) {
@@ -371,10 +370,6 @@ int ObVirtualTenantManager::print_tenant_usage_(
                           get_tenant_memory_limit(node.tenant_id_),
                           get_tenant_memory_hold(node.tenant_id_),
                           kv_cache_mem);
-  }
-  if (!OB_ISNULL(mallocator)) {
-    mallocator->print_tenant_memory_usage(node.tenant_id_);
-    mallocator->print_tenant_ctx_memory_usage(node.tenant_id_);
   }
   return ret;
 }

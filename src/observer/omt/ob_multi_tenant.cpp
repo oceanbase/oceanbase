@@ -573,7 +573,7 @@ int ObMultiTenant::start()
   } else if (OB_FAIL(ObTenantNodeBalancer::get_instance().start())) {
     LOG_ERROR("start tenant node balancer thread failed", K(ret));
   // start memstore print timer.
-  } else if (OB_FAIL(printer.register_timer_task(lib::TGDefIDs::MemDumpTimer))) {
+  } else if (OB_FAIL(printer.register_timer_task(lib::TGDefIDs::ServerGTimer))) {
     LOG_ERROR("Fail to register timer task", K(ret));
   } else {
     LOG_INFO("succ to start multi tenant");
