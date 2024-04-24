@@ -966,7 +966,6 @@ int ObTsMgr::get_gts_sync(const uint64_t tenant_id,
     }
     if (fall_back_to_sleep) {
       TRANS_LOG(WARN, "failed to get ObTsSyncGetTsCbTask, fall back to sleep", K(ret));
-
       int64_t expire_ts = ObClockGenerator::getClock() + timeout_us;
       int retry_times = 0;
       const int64_t SLEEP_TIME_US = 500;
