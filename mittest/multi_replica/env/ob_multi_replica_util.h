@@ -234,23 +234,26 @@ namespace unittest
     common::ObString trace_id;                                                                    \
     common::ObString query_sql;                                                                   \
     int64_t request_time = 0;                                                                     \
+    int64_t snapshot = 0;                                                                         \
     int64_t ret_code = OB_SUCCESS;                                                                \
     int64_t retry_cnt = 0;                                                                        \
     ASSERT_EQ(true, conn != nullptr);                                                             \
-    std::string sql_str =                                                                         \
-        "select TX_ID, TRACE_ID, REQUEST_TIME, RET_CODE, RETRY_CNT, QUERY_SQL from "              \
-        "oceanbase.V$OB_SQL_AUDIT where QUERY_SQL like "                                          \
-        + std::string(" \"") + std::string(sql) + std::string("\" order by REQUEST_TIME DESC");   \
+    std::string sql_str = "select TX_ID, SNAPSHOT_VERSION, TRACE_ID, REQUEST_TIME, RET_CODE, "    \
+                          "RETRY_CNT, QUERY_SQL from "                                            \
+                          "oceanbase.V$OB_SQL_AUDIT where QUERY_SQL like "                        \
+                          + std::string(" \"") + std::string(sql)                                 \
+                          + std::string("\" order by REQUEST_TIME DESC");                         \
     READ_SQL_BY_CONN(conn, process_result, sql_str.c_str());                                      \
     ASSERT_EQ(OB_SUCCESS, process_result->next());                                                \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("TX_ID", tx_id));                               \
+    ASSERT_EQ(OB_SUCCESS, process_result->get_int("SNAPSHOT_VERSION", snapshot));             \
     ASSERT_EQ(OB_SUCCESS, process_result->get_varchar("TRACE_ID", trace_id));                     \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("REQUEST_TIME", request_time));                 \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("RET_CODE", ret_code));                         \
     ASSERT_EQ(OB_SUCCESS, process_result->get_int("RETRY_CNT", retry_cnt));                       \
     ASSERT_EQ(OB_SUCCESS, process_result->get_varchar("QUERY_SQL", query_sql));                   \
     SERVER_LOG(INFO, "[ObMultiReplicaTestBase] query sql_audit for tx_id", K(trace_id), K(tx_id), \
-               K(request_time), K(ret_code), K(retry_cnt), K(query_sql));                         \
+               K(snapshot), K(request_time), K(ret_code), K(retry_cnt), K(query_sql));             \
   }
 
 #define PREPARE_CONN_ENV(conn)                                           \
@@ -406,6 +409,76 @@ public:
   transaction::ObTransID tx_id_;
   transaction::ObPartTransCtx *tx_ctx_;
   storage::ObLS *ls_;
+};
+
+class TestEnvTool
+{
+public:
+  static void create_table_for_test_env(sqlclient::ObISQLConnection *test_conn,
+                                        const std::string table_name,
+                                        const int64_t part_num,
+                                        bool is_dup_table,
+                                        int64_t &table_ls_id_num,
+                                        int64_t &table_id,
+                                        ObSEArray<int64_t, 10> &tablet_id_array)
+  {
+    int ret = OB_SUCCESS;
+
+    const std::string dup_scope_arg = "duplicate_scope='cluster'";
+
+    const std::string part_str = " PARTITION BY hash(id_x) partitions " + std::to_string(part_num);
+
+    std::string create_table_sql =
+        "CREATE TABLE " + table_name + " (" + "id_x int , id_y int, id_z int, PRIMARY KEY(id_x))";
+
+    if (is_dup_table) {
+      create_table_sql += dup_scope_arg;
+    }
+
+    if (part_num > 0) {
+      create_table_sql += part_str;
+    }
+
+    WRITE_SQL_BY_CONN(test_conn, create_table_sql.c_str());
+
+    const std::string select_table_id_str = "select table_id, duplicate_scope from "
+                                            "oceanbase.__all_table where table_name = '"
+                                            + table_name + "' ";
+    READ_SQL_BY_CONN(test_conn, table_info_result, select_table_id_str.c_str());
+
+    ASSERT_EQ(OB_SUCCESS, table_info_result->next());
+    // int64_t table_id;
+    int64_t dup_scope;
+    ASSERT_EQ(OB_SUCCESS, table_info_result->get_int("table_id", table_id));
+    ASSERT_EQ(OB_SUCCESS, table_info_result->get_int("duplicate_scope", dup_scope));
+    ASSERT_EQ(true, table_id > 0);
+    ASSERT_EQ(is_dup_table, dup_scope != 0);
+
+    std::string tablet_count_sql =
+        "select count(*), ls_id from oceanbase.__all_tablet_to_ls where table_id = "
+        + std::to_string(table_id) + " group by ls_id order by count(*)";
+    READ_SQL_BY_CONN(test_conn, tablet_count_result, tablet_count_sql.c_str());
+    int64_t tablet_count = 0;
+    ASSERT_EQ(OB_SUCCESS, tablet_count_result->next());
+    ASSERT_EQ(OB_SUCCESS, tablet_count_result->get_int("count(*)", tablet_count));
+    ASSERT_EQ(OB_SUCCESS, tablet_count_result->get_int("ls_id", table_ls_id_num));
+    ASSERT_EQ(part_num, tablet_count);
+    ASSERT_EQ(true, share::ObLSID(table_ls_id_num).is_valid());
+
+    std::string tablet_id_sql =
+        "select tablet_id from oceanbase.__all_tablet_to_ls where table_id = "
+        + std::to_string(table_id) + " and ls_id = " + std::to_string(table_ls_id_num);
+    READ_SQL_BY_CONN(test_conn, tablet_id_reult, tablet_id_sql.c_str());
+    while (OB_SUCC(tablet_id_reult->next())) {
+      int64_t id = 0;
+      ASSERT_EQ(OB_SUCCESS, tablet_id_reult->get_int("tablet_id", id));
+      ASSERT_EQ(true, ObTabletID(id).is_valid());
+      ASSERT_EQ(OB_SUCCESS, tablet_id_array.push_back(id));
+    }
+    ASSERT_EQ(tablet_count, tablet_id_array.count());
+    ASSERT_EQ(OB_ITER_END, ret);
+    ret = OB_SUCCESS;
+  }
 };
 
 } // namespace unittest
