@@ -262,38 +262,40 @@ namespace unittest
   WRITE_SQL_BY_CONN(connection, "set ob_query_timeout = 3000000000");    \
   WRITE_SQL_BY_CONN(connection, "set autocommit=0");
 
-#define RETRY_UNTIL_TIMEOUT(condition, timeout_us, retry_interval_us)                         \
-  {                                                                                           \
-    int64_t start_time = ObTimeUtility::fast_current_time();                                  \
-    while (OB_SUCC(ret) && !(condition)) {                                                    \
-      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                     \
-        ret = OB_TIMEOUT;                                                                     \
-        break;                                                                                \
-      }                                                                                       \
-      SERVER_LOG(INFO, "retry one time until timeout", K(condition), K(start_time),           \
-                 K(timeout_us));                                                              \
-      ob_usleep(retry_interval_us);                                                           \
-    }                                                                                         \
-    SERVER_LOG(INFO, "retry to wait one condition successfully", K(condition), K(start_time), \
-               K(timeout_us), K(ObTimeUtility::fast_current_time() - start_time));            \
+#define RETRY_UNTIL_TIMEOUT(condition, timeout_us, retry_interval_us)                             \
+  {                                                                                               \
+    ret = OB_SUCCESS;                                                                             \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                      \
+    while (OB_SUCC(ret) && !(condition)) {                                                        \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                         \
+        ret = OB_TIMEOUT;                                                                         \
+        break;                                                                                    \
+      }                                                                                           \
+      SERVER_LOG(INFO, "retry one time until timeout", K(condition), K(start_time),               \
+                 K(timeout_us));                                                                  \
+      ob_usleep(retry_interval_us);                                                               \
+    }                                                                                             \
+    SERVER_LOG(INFO, "retry to wait one condition successfully", K(ret), K(condition),            \
+               K(start_time), K(timeout_us), K(ObTimeUtility::fast_current_time() - start_time)); \
   }
 
-#define RETRY_OP_UNTIL_TIMEOUT(op, condition, timeout_us, retry_interval_us)                       \
-  {                                                                                                \
-    int64_t start_time = ObTimeUtility::fast_current_time();                                       \
-    op; \
-    while (OB_SUCC(ret) && !(condition)) {                                                         \
-      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                          \
-        ret = OB_TIMEOUT;                                                                          \
-        break;                                                                                     \
-      }                                                                                            \
-      SERVER_LOG(INFO, "retry opertion until timeout", K(condition), K(start_time),                \
-                 K(timeout_us));                                                                   \
-      ob_usleep(retry_interval_us);                                                                \
-      op;                                                                                          \
-    }                                                                                              \
-    SERVER_LOG(INFO, "retry to opertion successfully", K(condition), K(start_time), K(timeout_us), \
-               K(ObTimeUtility::fast_current_time() - start_time));                                \
+#define RETRY_OP_UNTIL_TIMEOUT(op, condition, timeout_us, retry_interval_us)                \
+  {                                                                                         \
+    ret = OB_SUCCESS;                                                                       \
+    int64_t start_time = ObTimeUtility::fast_current_time();                                \
+    op;                                                                                     \
+    while (OB_SUCC(ret) && !(condition)) {                                                  \
+      if (ObTimeUtility::fast_current_time() - start_time > timeout_us) {                   \
+        ret = OB_TIMEOUT;                                                                   \
+        break;                                                                              \
+      }                                                                                     \
+      SERVER_LOG(INFO, "retry opertion until timeout", K(condition), K(start_time),         \
+                 K(timeout_us));                                                            \
+      ob_usleep(retry_interval_us);                                                         \
+      op;                                                                                   \
+    }                                                                                       \
+    SERVER_LOG(INFO, "retry to opertion successfully", K(ret), K(condition), K(start_time), \
+               K(timeout_us), K(ObTimeUtility::fast_current_time() - start_time));          \
   }
 
 #define WAIT_START_SERVICE_SUCCC(timeout_us, retry_interval_us)                                  \
