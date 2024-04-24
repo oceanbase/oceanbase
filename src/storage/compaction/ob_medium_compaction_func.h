@@ -161,8 +161,7 @@ protected:
     bool &medium_clog_submitted);
   int choose_new_medium_snapshot(
       const int64_t max_reserved_snapshot,
-      ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
+      ObMediumCompactionInfo &medium_info);
   static int choose_medium_schema_version(
       common::ObArenaAllocator &allocator,
       const int64_t medium_snapshot,

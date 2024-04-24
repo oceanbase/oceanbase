@@ -79,7 +79,6 @@ ObMergeParameter::ObMergeParameter()
     merge_range_(),
     sstable_logic_seq_(0),
     version_range_(),
-    scn_range_(),
     rowkey_read_info_(nullptr),
     is_full_merge_(false),
     trans_state_mgr_(nullptr),
@@ -112,7 +111,6 @@ void ObMergeParameter::reset()
   sstable_logic_seq_ = 0;
   merge_range_.reset();
   version_range_.reset();
-  scn_range_.reset();
   is_full_merge_ = false;
   trans_state_mgr_ = nullptr;
   rowkey_read_info_ = nullptr;
@@ -149,18 +147,17 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
       // rewrite version to whole version range
       version_range_.snapshot_version_ = MERGE_READ_SNAPSHOT_VERSION;
     }
-    scn_range_ = merge_ctx.scn_range_;
     is_full_merge_ = merge_ctx.is_full_merge_;
     rowkey_read_info_ = &(merge_ctx.tablet_handle_.get_obj()->get_rowkey_read_info());
     merge_scn_ = merge_ctx.merge_scn_;
 
-    if (merge_scn_ > scn_range_.end_scn_) {
+    if (merge_scn_ > merge_ctx.scn_range_.end_scn_) {
       if (ObMergeType::BACKFILL_TX_MERGE != merge_type_) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
-            K(ret), K(merge_scn_), K(scn_range_), K(merge_type_));
+            K(ret), K(merge_scn_), K(merge_ctx.scn_range_), K(merge_type_));
       } else {
-        FLOG_INFO("set backfill merge scn", K(merge_scn_), K(scn_range_), K(merge_type_));
+        FLOG_INFO("set backfill merge scn", K(merge_scn_), K(merge_ctx.scn_range_), K(merge_type_));
       }
     }
   }

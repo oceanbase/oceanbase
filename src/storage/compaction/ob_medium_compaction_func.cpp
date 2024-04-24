@@ -417,8 +417,7 @@ int ObMediumCompactionScheduleFunc::get_max_reserved_snapshot(int64_t &max_reser
 
 int ObMediumCompactionScheduleFunc::choose_new_medium_snapshot(
   const int64_t max_reserved_snapshot,
-  ObMediumCompactionInfo &medium_info,
-  ObGetMergeTablesResult &result)
+  ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
   ObTablet *tablet = tablet_handle_.get_obj();
@@ -519,7 +518,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot(
       } else if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
         LOG_WARN("failed to get multi_version_start", K(ret), KPC(this));
       } else if (medium_info.medium_snapshot_ < max_reserved_snapshot
-          && OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info, result))) {
+          && OB_FAIL(choose_new_medium_snapshot(max_reserved_snapshot, medium_info))) {
         // chosen medium snapshot is far too old
         LOG_WARN("failed to choose new medium snapshot", KR(ret), K(max_reserved_snapshot), K(medium_info));
       } else if (OB_FAIL(choose_medium_schema_version(allocator_, medium_info.medium_snapshot_, *tablet, schema_version))) {

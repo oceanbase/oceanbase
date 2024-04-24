@@ -13,10 +13,12 @@
 #ifndef OB_PARTITION_MERGE_POLICY_H_
 #define OB_PARTITION_MERGE_POLICY_H_
 
+// #include "storage/tablet/ob_tablet_member_wrapper.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "share/ob_table_range.h"
 #include "share/schema/ob_table_schema.h"
+
 namespace oceanbase
 {
 namespace storage
@@ -264,16 +266,15 @@ public:
 
 private:
   static int find_adaptive_merge_tables(
-        const ObMergeType &merge_type,
-        const storage::ObTablet &tablet,
-        storage::ObGetMergeTablesResult &result);
-  static int add_meta_merge_result(
-      const ObMergeType &merge_type,
-      storage::ObITable *table,
-      const storage::ObStorageMetaHandle &table_meta_handle,
-      storage::ObGetMergeTablesResult &result,
-      const bool update_snapshot_flag);
+    const storage::ObTablet &tablet,
+    const int64_t base_table_snapshot_version,
+    const int64_t base_table_row_cnt,
+    storage::ObGetMergeTablesResult &result);
 private:
+  static int check_table_mode(
+    const storage::ObTablet &tablet,
+    const int64_t base_row_cnt,
+    const int64_t inc_row_cnt);
   static int check_load_data_situation(
       const storage::ObTabletStatAnalyzer &analyzer,
       AdaptiveMergeReason &merge_reason);

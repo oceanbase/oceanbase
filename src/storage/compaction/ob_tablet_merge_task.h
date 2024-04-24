@@ -65,13 +65,12 @@ struct ObMergeParameter {
   blocksstable::ObDatumRange merge_range_;
   int16_t sstable_logic_seq_;
   ObVersionRange version_range_;
-  share::ObScnRange scn_range_;
   const ObITableReadInfo *rowkey_read_info_;
   bool is_full_merge_;               // full merge or increment merge, duplicated with merge_level
   compaction::ObCachedTransStateMgr *trans_state_mgr_;
   share::SCN merge_scn_;
   TO_STRING_KV(KPC_(tables_handle), K_(merge_type), K_(merge_level), KP_(merge_schema),
-               K_(merge_range), K_(version_range), K_(scn_range), K_(is_full_merge), K_(merge_scn));
+               K_(merge_range), K_(version_range), K_(is_full_merge), K_(merge_scn));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMergeParameter);
 };
