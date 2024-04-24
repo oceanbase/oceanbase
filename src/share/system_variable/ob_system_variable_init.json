@@ -6008,5 +6008,19 @@
     "info_cn": "用于控制是否使用旧版字符集推导规则",
     "background_cn": "",
     "ref_url": ""
+  },
+  "enable_sql_plan_monitor": {
+    "id": 10327,
+    "name": "enable_sql_plan_monitor",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "To set whether the SQL for the current session is logged into the SQL plan monitor.",
+    "flags": "SESSION",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": "",
+    "placeholder": true
   }
 }
