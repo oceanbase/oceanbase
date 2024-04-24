@@ -31269,8 +31269,8 @@ def_table_schema(
   WHERE a.tenant_id = b.tenant_id
   """.replace("\n", " ")
 )
-# 21459：GV$OB_SESSION
-# 21460：V$OB_SESSION
+# 21459: GV$OB_SESSION
+# 21460: V$OB_SESSION
 
 def_table_schema(
     owner = 'hr351303',
@@ -33397,6 +33397,8 @@ def_table_schema(
 """.replace("\n", " "),
   normal_columns  = [],
 )
+
+# 21580: EVENTS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

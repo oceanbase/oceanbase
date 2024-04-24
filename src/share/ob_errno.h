@@ -1553,6 +1553,7 @@ constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
 constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
+constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
@@ -3756,6 +3757,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__USER_ERROR_MSG "too many open files"
+#define OB_DIRECT_LOAD_COMMIT_ERROR__USER_ERROR_MSG "fail to commit direct load"
 #define OB_S3_ERROR__USER_ERROR_MSG "S3 error"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' already exist"
@@ -5975,6 +5977,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9103, too many open files"
+#define OB_DIRECT_LOAD_COMMIT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9104, fail to commit direct load"
 #define OB_S3_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9105, S3 error"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9106, Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9107, Tenant snapshot \'%.*s\' already exist"
@@ -6288,7 +6291,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2215];
+extern int g_all_ob_errnos[2216];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
