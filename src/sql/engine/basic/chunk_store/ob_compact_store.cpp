@@ -395,11 +395,11 @@ void ObCompactStore::reset()
 {
   if (OB_NOT_NULL(reader_)) {
     reader_->reset();
-    allocator_->free(reader_);
+    get_inner_allocator().free(reader_);
   }
   if (OB_NOT_NULL(writer_)) {
     writer_->reset();
-    allocator_->free(writer_);
+    get_inner_allocator().free(writer_);
   }
   writer_ = nullptr;
   reader_ = nullptr;
@@ -428,8 +428,8 @@ int ObCompactStore::init_writer_reader()
   int ret = OB_SUCCESS;
   void *writer_buf = nullptr;
   void *reader_buf = nullptr;
-  writer_buf = allocator_->alloc(sizeof(ObCompactBlockWriter));
-  reader_buf = allocator_->alloc(sizeof(ObCompactBlockReader));
+  writer_buf = get_inner_allocator().alloc(sizeof(ObCompactBlockWriter));
+  reader_buf = get_inner_allocator().alloc(sizeof(ObCompactBlockReader));
   if (OB_ISNULL(writer_buf) || OB_ISNULL(reader_buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for writer", K(ret));

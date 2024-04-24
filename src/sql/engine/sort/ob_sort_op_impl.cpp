@@ -1800,7 +1800,7 @@ int ObSortOpImpl::build_ems_heap(int64_t &merge_ways)
     if (OB_SUCC(ret)) {
       ObSortOpChunk *chunk = sort_chunks_.get_first();
       for (int64_t i = 0; i < merge_ways && OB_SUCC(ret); i++) {
-        chunk->datum_store_.reset();
+        chunk->datum_store_.reset_iter();
         if (OB_FAIL(chunk->datum_store_.get_next_row(chunk->row_))
             || NULL == chunk->row_) {
           if (OB_ITER_END == ret || OB_SUCCESS == ret) {

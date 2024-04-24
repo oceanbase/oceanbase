@@ -84,7 +84,7 @@ public:
     return is_compact_ ? compact_store_.get_mem_hold() : datum_store_.get_mem_hold();
   }
 
-  int reset()
+  int reset_iter()
   {
     int ret = OB_SUCCESS;
     if (is_compact_) {
