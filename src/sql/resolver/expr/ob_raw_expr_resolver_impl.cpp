@@ -1118,6 +1118,44 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         if (OB_FAIL(process_pseudo_column_node(*node, expr))) {
           LOG_WARN("fail to process pseudo column", K(ret));
         }
+        if (OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED == ret) {
+          if (1 == node->num_child_
+              && NULL != ctx_.secondary_namespace_
+              && NULL != node->children_[0]
+              && (T_LEVEL == node->children_[0]->type_
+                  || T_CONNECT_BY_ISLEAF == node->children_[0]->type_
+                  || T_CONNECT_BY_ISCYCLE == node->children_[0]->type_)) {
+            ret = OB_SUCCESS;
+            ParseNode *ident = NULL;
+            ParseNode *access = NULL;
+            if (NULL == (ident = new_terminal_node(&ctx_.expr_factory_.get_allocator(), T_IDENT))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc memory", K(ret));
+            } else if (NULL == (access = new_non_terminal_node(&ctx_.expr_factory_.get_allocator(),
+                                                               T_OBJ_ACCESS_REF, 2, ident, NULL))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to alloc memory", K(ret));
+            } else {
+#define SET_IDENT_INFO(str)                   \
+              ident->str_value_ = str;        \
+              ident->str_len_ = STRLEN(str);  \
+              ident->raw_text_ = str;         \
+              ident->text_len_ = STRLEN(str);
+              if (T_LEVEL == node->children_[0]->type_) {
+                SET_IDENT_INFO("LEVEL")
+              } else if (T_CONNECT_BY_ISLEAF == node->children_[0]->type_) {
+                SET_IDENT_INFO("CONNECT_BY_ISLEAF")
+              } else {
+                SET_IDENT_INFO("CONNECT_BY_ISCYCLE")
+              }
+#undef SET_IDENT_INFO
+              if (OB_FAIL(process_obj_access_node(*access, expr))) {
+                LOG_WARN("process obj access node failed", K(ret));
+                ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+              }
+            }
+          }
+        }
         break;
       }
       case T_FUN_SYS_SYSTIMESTAMP: {
