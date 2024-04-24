@@ -136,7 +136,16 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
   int64_t notify_idx = 0;
   ObTenantDirectLoadMgr *tenant_direct_load_mgr = MTL(ObTenantDirectLoadMgr *);
   ObInsertMonitor insert_monitor(op_monitor_info_.otherstat_2_value_, op_monitor_info_.otherstat_1_value_);
-  if (OB_UNLIKELY(nullptr == child_ || nullptr == tenant_direct_load_mgr)) {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      ret = OB_E(EventTable::EN_DDL_EXECUTE_FAILED) OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("errsim ddl execute get next row failed", KR(ret));
+      }
+    }
+#endif
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(nullptr == child_ || nullptr == tenant_direct_load_mgr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the child op is null", K(ret), K(MTL_ID()), KP(child_), KP(tenant_direct_load_mgr));
   } else if (get_spec().is_returning_) {

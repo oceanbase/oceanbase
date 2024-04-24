@@ -300,10 +300,6 @@ public:
         v.retry_type_ = RETRY_TYPE_NONE;
       }
       v.no_more_test_ = true;
-    } else if (v.session_.get_ddl_info().is_retryable_ddl()) {
-      v.client_ret_ = err;
-      v.retry_type_ = RETRY_TYPE_NONE;
-      v.no_more_test_ = true;
     } else if (is_load_local(v)) {
       v.client_ret_ = err;
       v.retry_type_ = RETRY_TYPE_NONE;
@@ -629,9 +625,14 @@ public:
   virtual void test(ObRetryParam &v) const override
   {
     int ret = OB_SUCCESS;
+    if (v.session_.get_ddl_info().is_ddl() && !v.session_.get_ddl_info().is_retryable_ddl()) {
+      v.client_ret_ = v.err_;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.no_more_test_ = true;
+    }
     // nested transaction already supported In 32x and can only rollback nested sql.
     // for forigen key, we keep old logic and do not retry. for pl will retry current nested sql.
-    if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_) {
+    else if (is_nested_conn(v) && !is_static_engine_retry(v.err_) && !v.is_from_pl_) {
       // right now, top session will retry, bug we can do something here like refresh XXX cache.
       // in future, nested session can retry if nested transaction is supported.
       v.no_more_test_ = true;

@@ -42,6 +42,7 @@ public:
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg &alter_table_arg,
       const uint64_t tenant_data_version,
+      const bool ddl_need_retry_at_executor,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
@@ -80,7 +81,7 @@ protected:
                                 const int64_t row_scanned,
                                 const int64_t row_inserted);
   int repending(const share::ObDDLTaskStatus next_task_status);
-  virtual bool task_can_retry() const override { return is_ddl_retryable_; }
+  virtual bool task_can_retry() const override { return share::ObDDLTaskStatus::REDEFINITION == task_status_ ? is_ddl_retryable_ : true; }
 private:
   inline bool get_is_copy_indexes() const {return is_copy_indexes_;}
   inline bool get_is_copy_triggers() const {return is_copy_triggers_;}
@@ -99,7 +100,7 @@ private:
   int check_use_heap_table_ddl_plan(const share::schema::ObTableSchema *target_table_schema);
   int get_direct_load_job_stat(common::ObArenaAllocator &allocator, sql::ObLoadDataStat &job_stat);
   int check_target_cg_cnt();
-  int check_ddl_can_retry(const share::schema::ObTableSchema *table_schema);
+  int check_ddl_can_retry(const bool ddl_need_retry_at_executor, const share::schema::ObTableSchema *table_schema);
 private:
   static const int64_t OB_TABLE_REDEFINITION_TASK_VERSION = 1L;
   bool has_rebuild_index_;

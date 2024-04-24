@@ -58,6 +58,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
                                   const int32_t sub_task_trace_id,
                                   const ObAlterTableArg &alter_table_arg,
                                   const uint64_t tenant_data_version,
+                                  const bool ddl_need_retry_at_executor,
                                   const int64_t task_status,
                                   const int64_t snapshot_version)
 {
@@ -115,7 +116,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
       LOG_WARN("fail to get target cg cnt", K(ret), KPC(dst_table_schema));
     } else if (OB_FAIL(init_ddl_task_monitor_info(target_object_id_))) {
       LOG_WARN("init ddl task monitor info failed", K(ret));
-    } else if (OB_FAIL(check_ddl_can_retry(dst_table_schema))) {
+    } else if (OB_FAIL(check_ddl_can_retry(ddl_need_retry_at_executor, dst_table_schema))) {
       LOG_WARN("check use heap table ddl plan failed", K(ret));
     } else {
       is_inited_ = true;
@@ -346,7 +347,7 @@ int ObTableRedefinitionTask::check_build_replica_end(bool &is_end)
   return ret;
 }
 
-int ObTableRedefinitionTask::check_ddl_can_retry(const ObTableSchema *table_schema)
+int ObTableRedefinitionTask::check_ddl_can_retry(const bool ddl_need_retry_at_executor, const ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   is_ddl_retryable_ = true;
@@ -361,8 +362,10 @@ int ObTableRedefinitionTask::check_ddl_can_retry(const ObTableSchema *table_sche
     if (ObDDLUtil::use_idempotent_mode(data_format_version_)) {
       if (use_heap_table_ddl_plan_) {
         is_ddl_retryable_ = false;
-      } else if (DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION == task_type_) {
-        is_ddl_retryable_ = false;
+        LOG_INFO("ddl schedule will not retry for heap table", K(use_heap_table_ddl_plan_), K_(task_id));
+      } else if (ddl_need_retry_at_executor) {
+        is_ddl_retryable_ = false;  // do not retry at ddl scheduler when ddl need retry at executor
+        LOG_INFO("ddl schedule will not retry for ddl which will retry at table executor level", K(use_heap_table_ddl_plan_), K_(task_id));
       }
     }
   }

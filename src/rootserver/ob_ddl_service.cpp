@@ -4067,7 +4067,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                                            const ObTableSchema &orig_table_schema,
                                            ObSchemaGetterGuard &schema_guard,
                                            const bool is_oracle_mode,
-                                           ObDDLType &ddl_type)
+                                           ObDDLType &ddl_type,
+                                           bool &ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
   bool is_modify_partition_key = false;
@@ -4077,6 +4078,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   AlterColumnSchema *alter_column_schema = NULL;
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  ddl_need_retry_at_executor = false;
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
       ret = OB_ERR_UNEXPECTED;
@@ -4183,7 +4185,12 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
               } else if (orig_table_schema.get_autoinc_column_id() == 0) {
                 if (orig_column_schema->is_nullable()) {
                   // if the original table has null, we need to do double write to fill the nulls
-                  ddl_type = ObDDLType::DDL_MODIFY_AUTO_INCREMENT_WITH_REDEFINITION;
+                  if (ObDDLType::DDL_INVALID == ddl_type || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
+                    ddl_type = ObDDLType::DDL_MODIFY_COLUMN;
+                  } else {
+                    ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+                  }
+                  ddl_need_retry_at_executor = true;
                 } else {
                   if (ObDDLType::DDL_INVALID == ddl_type) {
                     ddl_type = ObDDLType::DDL_MODIFY_AUTO_INCREMENT;
@@ -12143,7 +12150,7 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
               alter_table_schema.set_origin_database_name(database_schema->get_database_name());
               alter_table_schema.set_origin_table_name(table_schema->get_table_name());
               alter_table_schema.set_tenant_id(table_schema->get_tenant_id());
-              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, res.ddl_type_))) {
+              if (OB_FAIL(check_is_offline_ddl(alter_table_arg, res.ddl_type_, res.ddl_need_retry_at_executor_))) {
                 LOG_WARN("failed to to check is offline ddl", K(ret));
               } else {
                 // offline ddl cannot appear at the same time with other ddl types
@@ -13014,7 +13021,8 @@ int ObDDLService::check_alter_column_group(const obrpc::ObAlterTableArg &alter_t
 
 
 int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
-                                       ObDDLType &ddl_type)
+                                       ObDDLType &ddl_type,
+                                       bool &ddl_need_retry_at_executor)
 {
   int ret = OB_SUCCESS;
   ddl_type = ObDDLType::DDL_INVALID;
@@ -13042,7 +13050,8 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                             *orig_table_schema,
                                             schema_guard,
                                             is_oracle_mode,
-                                            ddl_type))) {
+                                            ddl_type,
+                                            ddl_need_retry_at_executor))) {
       LOG_WARN("fail to check alter table column", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_alter_indexs_
@@ -13568,7 +13577,8 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                    &alter_table_arg.allocator_,
                                    &alter_table_arg,
                                    0/*parent_task_id*/,
-                                   task_id);
+                                   task_id,
+                                   res.ddl_need_retry_at_executor_);
         param.tenant_data_version_ = tenant_data_version;
         if (orig_table_schema->is_external_table()) {
           ret = OB_OP_NOT_ALLOW;
@@ -15224,6 +15234,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
   const uint64_t tenant_id = alter_table_schema.get_tenant_id();
   int64_t &task_id = res.task_id_;
   ObDDLType &ddl_type = res.ddl_type_;
+  bool &ddl_need_retry_at_executor = res.ddl_need_retry_at_executor_;
   ddl_type = DDL_INVALID;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init", K(ret));
@@ -15306,7 +15317,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
         } else {
           LOG_INFO("refresh session active time of temp tables succeed!", K(ret));
         }
-      } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, ddl_type))) {
+      } else if (OB_FAIL(check_is_offline_ddl(alter_table_arg, ddl_type, ddl_need_retry_at_executor))) {
         LOG_WARN("failed to check is offline ddl", K(ret));
       } else {
         // offline ddl cannot appear at the same time with other ddl types

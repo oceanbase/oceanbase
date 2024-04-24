@@ -1485,7 +1485,8 @@ private:
   // offline ddl cannot appear at the same time with other ddl types
   // Offline ddl cannot appear at the same time as offline ddl
   int check_is_offline_ddl(obrpc::ObAlterTableArg &alter_table_arg,
-                           share::ObDDLType &ddl_type);
+                           share::ObDDLType &ddl_type,
+                           bool &ddl_need_retry_at_executor);
   int check_can_bind_tablets(const share::ObDDLType ddl_type,
                              bool &bind_tablets);
   int check_ddl_with_primary_key_operation(const obrpc::ObAlterTableArg &alter_table_arg,
@@ -1609,7 +1610,8 @@ private:
                                const share::schema::ObTableSchema &orig_table_schema,
                                share::schema::ObSchemaGetterGuard &schema_guard,
                                const bool is_oracle_mode,
-                               share::ObDDLType &ddl_type);
+                               share::ObDDLType &ddl_type,
+                               bool &ddl_need_retry_at_executor);
   int check_alter_table_partition(const obrpc::ObAlterTableArg &alter_table_arg,
                                   const share::schema::ObTableSchema &orig_table_schema,
                                   const bool is_oracle_mode,

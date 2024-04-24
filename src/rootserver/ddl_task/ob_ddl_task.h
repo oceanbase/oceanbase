@@ -173,14 +173,15 @@ public:
                        ObIAllocator *allocator,
                        const obrpc::ObDDLArg *ddl_arg = nullptr,
                        const int64_t parent_task_id = 0,
-                       const int64_t task_id = 0);
+                       const int64_t task_id = 0,
+                       const bool ddl_need_retry_at_executor = false);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
-               K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(aux_doc_word_schema));
-
+               K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(aux_doc_word_schema),
+               K_(ddl_need_retry_at_executor));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -199,6 +200,7 @@ public:
   const ObTableSchema *aux_doc_rowkey_schema_;
   const ObTableSchema *aux_doc_word_schema_;
   uint64_t tenant_data_version_;
+  bool ddl_need_retry_at_executor_;
 };
 
 class ObDDLTaskRecordOperator final

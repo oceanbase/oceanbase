@@ -399,6 +399,7 @@ private:
       const int32_t sub_task_trace_id,
       const obrpc::ObAlterTableArg *alter_table_arg,
       const uint64_t tenant_data_version,
+      const bool ddl_need_retry_at_executor,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 
