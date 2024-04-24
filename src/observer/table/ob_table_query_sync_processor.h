@@ -85,7 +85,7 @@ public:
       timeout_ts_(10000000),
       iterator_mementity_(nullptr),
       iterator_mementity_destroy_guard_(iterator_mementity_),
-      allocator_("TbAQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      allocator_("TableAQSessAlc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tenant_id_(MTL_ID()),
       query_(),
       select_columns_(),
