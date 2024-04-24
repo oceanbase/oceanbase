@@ -110,15 +110,19 @@ int ObTableGroupCommitMgr::ObTableGroupStatisAndTriggerTask::trigger_failed_grou
   return ret;
 }
 
-int64_t ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::get_new_group_size(int64_t cur, double persent)
+int64_t ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::get_new_group_size(int64_t cur,
+                                                                              double persent,
+                                                                              bool is_dec)
 {
   double delta = persent * DEFAULT_GROUP_CHANGE_SIZE;
-  if (delta > 0 && delta < 0.5) {
+  if (delta > 0 && delta <= 0.5) {
     delta = 1;
   } else if (delta > 0.5) {
     delta = DEFAULT_GROUP_CHANGE_SIZE;
+  } else { // delta <= 0
+    delta = 0;
   }
-  int64_t new_group_size = cur + delta;
+  int64_t new_group_size = is_dec ? (cur - delta) : (cur + delta);
   if (new_group_size > DEFAULT_MAX_GROUP_SIZE) {
     new_group_size = DEFAULT_MAX_GROUP_SIZE;
   } else if (new_group_size < DEFAULT_MIN_GROUP_SIZE) {
@@ -165,7 +169,8 @@ void ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::runTimerTask()
       bool is_get_ops_decing = cur_get_op_ops < (last_get_ops - last_get_ops * DEFAULT_FLUCTUATION);
       // inc put group size
       if (is_put_ops_rising && is_qt_decing) {
-        int64_t new_group_size = get_new_group_size(cur_put_op_group_size, put_op_persent);
+        bool is_dec = false;
+        int64_t new_group_size = get_new_group_size(cur_put_op_group_size, put_op_persent, is_dec);
         group_mgr_.set_put_op_group_size(new_group_size);
         LOG_INFO("inc put group size", K(cur_avg_queue_time), K(last_avg_queue_time), K(cur_put_op_ops),
             K(last_put_ops), K(cur_put_op_group_size), K(new_group_size));
@@ -173,7 +178,8 @@ void ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::runTimerTask()
 
       // dec put group size
       if (is_put_ops_decing && is_qt_decing) {
-        int64_t new_group_size = get_new_group_size(cur_put_op_group_size, put_op_persent);
+        bool is_dec = true;
+        int64_t new_group_size = get_new_group_size(cur_put_op_group_size, put_op_persent, is_dec);
         group_mgr_.set_put_op_group_size(new_group_size);
         LOG_INFO("dec group size", K(cur_avg_queue_time), K(last_avg_queue_time), K(cur_put_op_ops),
             K(last_put_ops), K(cur_put_op_group_size), K(new_group_size));
@@ -181,7 +187,8 @@ void ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::runTimerTask()
 
       // inc get group size
       if (is_get_ops_rising && is_qt_decing) {
-        int64_t new_group_size = get_new_group_size(cur_get_op_group_size, get_op_persent);
+        bool is_dec = false;
+        int64_t new_group_size = get_new_group_size(cur_get_op_group_size, get_op_persent, is_dec);
         group_mgr_.set_get_op_group_size(new_group_size);
         LOG_INFO("inc get group size", K(cur_avg_queue_time), K(last_avg_queue_time), K(cur_get_op_ops),
             K(last_get_ops), K(cur_get_op_group_size), K(new_group_size));
@@ -189,7 +196,8 @@ void ObTableGroupCommitMgr::ObTableGroupSizeAndOpsTask::runTimerTask()
 
       // dec get group size
       if (is_get_ops_decing && is_qt_decing) {
-        int64_t new_group_size = get_new_group_size(cur_get_op_group_size, get_op_persent);
+        bool is_dec = true;
+        int64_t new_group_size = get_new_group_size(cur_get_op_group_size, get_op_persent, is_dec);
         group_mgr_.set_get_op_group_size(new_group_size);
         LOG_INFO("dec get group size", K(cur_avg_queue_time), K(last_avg_queue_time), K(cur_get_op_ops),
             K(last_get_ops), K(cur_get_op_group_size), K(new_group_size));

@@ -133,7 +133,7 @@ public:
     {}
     virtual void runTimerTask(void) override;
   private:
-    int64_t get_new_group_size(int64_t cur, double persent);
+    int64_t get_new_group_size(int64_t cur, double persent, bool is_dec);
     ObTableGroupCommitMgr &group_mgr_;
   };
 private:
