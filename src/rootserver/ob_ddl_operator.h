@@ -1153,6 +1153,17 @@ private:
                            int64_t routine_id);
 
 private:
+  int alter_table_rename_built_in_fts_index_(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const uint64_t database_id,
+      const ObString &index_name,
+      const ObString &new_index_name,
+      const ObIndexStatus *new_index_status,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      common::ObMySQLTransaction &trans,
+      ObArenaAllocator &allocator);
+
   int inner_alter_table_rename_index_(
       const uint64_t tenant_id,
       const share::schema::ObTableSchema *index_table_schema,

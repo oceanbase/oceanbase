@@ -390,6 +390,8 @@ int ObTextRetrievalMerge::init_iters(
   } else if (FALSE_IT(next_batch_iter_idxes_.set_allocator(allocator_))) {
   } else if (OB_FAIL(next_batch_iter_idxes_.init(query_tokens_.count()))) {
     LOG_WARN("failed to init next batch iter idxes array", K(ret));
+  } else if (OB_FAIL(next_batch_iter_idxes_.prepare_allocate(query_tokens_.count()))) {
+    LOG_WARN("failed to prepare allocate next batch iter idxes array", K(ret));
   } else {
     next_batch_cnt_ = query_tokens.count();
   }

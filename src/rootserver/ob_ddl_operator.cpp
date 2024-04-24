@@ -21,6 +21,7 @@
 #include "share/ob_version.h"
 #include "share/ob_autoincrement_service.h"
 #include "share/ob_cluster_version.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/resource_manager/ob_resource_manager_proxy.h"
 #include "share/schema/ob_schema_service.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -3559,7 +3560,80 @@ int ObDDLOperator::alter_table_rename_index(
               new_index_status, trans, new_index_table_schema))) {
         LOG_WARN("fail to alter table rename index", K(ret), K(tenant_id), KPC(index_table_schema),
             K(new_index_table_name));
+      } else if (is_fts_index_aux(index_table_schema->get_index_type())) {
+        if (OB_FAIL(alter_table_rename_built_in_fts_index_(tenant_id,
+                                                           data_table_id,
+                                                           database_id,
+                                                           index_name,
+                                                           new_index_name,
+                                                           new_index_status,
+                                                           schema_guard,
+                                                           trans,
+                                                           allocator))) {
+          LOG_WARN("failed to rename built in fts index", K(ret), K(tenant_id),
+              K(data_table_id), K(database_id), K(index_name), K(new_index_name));
+        }
       }
+    }
+  }
+  return ret;
+}
+
+int ObDDLOperator::alter_table_rename_built_in_fts_index_(
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    const uint64_t database_id,
+    const ObString &index_name,
+    const ObString &new_index_name,
+    const ObIndexStatus *new_index_status,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    common::ObMySQLTransaction &trans,
+    ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  SMART_VARS_3((ObTableSchema, new_fts_doc_word_schema),
+               (obrpc::ObCreateIndexArg, origin_index_arg),
+               (obrpc::ObCreateIndexArg, new_index_arg)) {
+    const ObTableSchema *origin_fts_doc_word_schema = NULL;
+    origin_index_arg.index_name_ = index_name;
+    origin_index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_LOCAL;
+    new_index_arg.index_name_ = new_index_name;
+    new_index_arg.index_type_ = INDEX_TYPE_FTS_DOC_WORD_LOCAL;
+    ObString origin_fts_doc_word_index_table_name;
+    ObString new_fts_doc_word_index_table_name;
+    if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(origin_index_arg, &allocator))) {
+      LOG_WARN("failed to generate origin fts doc word name", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::generate_fts_aux_index_name(new_index_arg, &allocator))) {
+      LOG_WARN("failed to generate new fts doc word name", K(ret));
+    } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                             data_table_id,
+                                                             origin_index_arg.index_name_,
+                                                             origin_fts_doc_word_index_table_name))) {
+      LOG_WARN("failed to build origin fts doc word table name", K(ret),
+          K(data_table_id), K(origin_index_arg.index_name_));
+    } else if (OB_FAIL(ObTableSchema::build_index_table_name(allocator,
+                                                             data_table_id,
+                                                             new_index_arg.index_name_,
+                                                             new_fts_doc_word_index_table_name))) {
+      LOG_WARN("failed to build new fts doc word table name", K(ret),
+          K(data_table_id), K(new_index_arg.index_name_));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                     database_id,
+                                                     origin_fts_doc_word_index_table_name,
+                                                     true/*is_index*/,
+                                                     origin_fts_doc_word_schema,
+                                                     false/*is_hidden*/,
+                                                     true/*is_built_in_index*/))) {
+      LOG_WARN("failed to get origin fts_doc_word schema", K(ret));
+    } else if (OB_FAIL(inner_alter_table_rename_index_(tenant_id,
+                                                       origin_fts_doc_word_schema,
+                                                       new_fts_doc_word_index_table_name,
+                                                       new_index_status,
+                                                       trans,
+                                                       new_fts_doc_word_schema))) {
+      LOG_WARN("fail to alter table rename fts doc word index",
+          K(ret), K(tenant_id), KPC(origin_fts_doc_word_schema),
+          K(new_fts_doc_word_schema));
     }
   }
   return ret;
