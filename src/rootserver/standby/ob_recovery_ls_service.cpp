@@ -536,6 +536,7 @@ int ObRecoveryLSService::process_upgrade_log_(
       LOG_WARN("failed to get primary_data_version", KR(ret), K(pos), K(node.get_data_buf().length()));
     } else {
       LOG_INFO("get primary_data_version", K(primary_data_version));
+      uint64_t current_data_version = 0;//用户网络备库的版本号校验，防止备租户创建的版本号大于主租户的版本号
       if (!primary_data_version.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("primary_data_version not valid", KR(ret), K(primary_data_version));
@@ -552,6 +553,19 @@ int ObRecoveryLSService::process_upgrade_log_(
         int tmp_ret = OB_SUCCESS;
         if (OB_TMP_FAIL(init_restore_status(sync_scn, OB_ERR_RESTORE_STANDBY_VERSION_LAG))) {
           LOG_WARN("failed to init restore status", KR(tmp_ret), K(sync_scn));
+        }
+      } else if (OB_FAIL(get_min_data_version_(current_data_version))) {
+        LOG_WARN("failed to get min data version", KR(ret));
+      } else if (0 == current_data_version) {
+        //standby cluster not set data version now, need retry
+        ret = OB_EAGAIN;
+        LOG_WARN("standby data version not valid, need retry", KR(ret), K(current_data_version),
+            K(primary_data_version));
+      } else if (primary_data_version.get_data_version() < current_data_version) {
+        ret = OB_ITER_STOP;
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {//1min
+          LOG_ERROR("standby version is larger than primary version", KR(ret),
+              K(current_data_version), K(primary_data_version));
         }
       }
     }
