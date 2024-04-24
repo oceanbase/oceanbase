@@ -300,10 +300,9 @@ TEST_F(TestGeoCommon, sql_udt_to_wkt)
   ASSERT_EQ(ObGeoTypeUtil::sql_geo_obj_to_ewkt(map2, allocator, ewkt2), OB_SUCCESS);
   ASSERT_EQ(ewkt2 == "SRID=NULL;POINT(9.87 6.54)", true) << ewkt2.ptr();
 }
-
+#endif
 } // namespace common
 } // namespace oceanbase
-#endif
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

@@ -29,7 +29,7 @@ namespace sql
 {
 ObExprPrivSTMakeValid::ObExprPrivSTMakeValid(common::ObIAllocator &alloc)
     : ObFuncExprOperator(alloc, T_FUN_SYS_PRIV_ST_MAKE_VALID, N_PRIV_ST_MAKEVALID, ZERO_OR_ONE,
-        NOT_VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
+        VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
 {}
 
 ObExprPrivSTMakeValid::~ObExprPrivSTMakeValid()

@@ -83,7 +83,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |478         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -125,17 +125,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -145,7 +145,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |478         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -187,17 +187,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -207,7 +207,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |478         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -249,17 +249,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -269,7 +269,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |363         |
+|0 |TABLE FULL SCAN|t(idx)|2       |879         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -312,17 +312,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      physical_range_rows:26
+      logical_range_rows:26
+      index_back_rows:6
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -332,7 +332,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |478         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -374,17 +374,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -394,7 +394,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |359         |
+|0 |TABLE FULL SCAN|t(idx)|1       |493         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -437,17 +437,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -457,7 +457,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |351         |
+|0 |TABLE FULL SCAN|t(idx)|2       |799         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -500,17 +500,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
-      output_rows:0
+      physical_range_rows:24
+      logical_range_rows:24
+      index_back_rows:6
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -520,7 +520,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |355         |
+|0 |TABLE FULL SCAN|t(idx)|1       |478         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -562,17 +562,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:2
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:3
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -641,7 +641,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|2       |166         |
+|0 |TABLE FULL SCAN|t(idx)|3       |185         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -683,17 +683,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
-      index_back_rows:3
-      output_rows:1
+      physical_range_rows:12
+      logical_range_rows:12
+      index_back_rows:5
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -703,7 +703,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |338         |
+|0 |TABLE FULL SCAN|t(idx)|1       |453         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -745,8 +745,8 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:8
-      physical_range_rows:8
-      logical_range_rows:8
+      physical_range_rows:12
+      logical_range_rows:12
       index_back_rows:0
       output_rows:0
       table_dop:1
@@ -754,8 +754,8 @@ Optimization Info:
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -972,7 +972,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|geo_table2(geom)|1       |187         |
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |305         |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1016,17 +1016,17 @@ Optimization Info:
 -------------------------------------
   geo_table2:
       table_rows:2
-      physical_range_rows:2
-      logical_range_rows:2
-      index_back_rows:0
+      physical_range_rows:6
+      logical_range_rows:6
+      index_back_rows:1
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1042,7 +1042,7 @@ Query Plan
 ===========================================================
 |ID|OPERATOR       |NAME            |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------
-|0 |TABLE FULL SCAN|geo_table2(geom)|1       |187         |
+|0 |TABLE FULL SCAN|geo_table2(geom)|1       |305         |
 ===========================================================
 Outputs & filters:
 -------------------------------------
@@ -1086,17 +1086,17 @@ Optimization Info:
 -------------------------------------
   geo_table2:
       table_rows:2
-      physical_range_rows:2
-      logical_range_rows:2
-      index_back_rows:0
+      physical_range_rows:6
+      logical_range_rows:6
+      index_back_rows:1
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[geom, geo_table2]
       pruned_index_name:[geo_table2]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1127,8 +1127,8 @@ Query Plan
 ============================================================
 |ID|OPERATOR         |NAME           |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------
-|0 |SORT             |               |1       |299         |
-|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |299         |
+|0 |SORT             |               |1       |305         |
+|1 |└─TABLE FULL SCAN|geo_table(geom)|1       |305         |
 ============================================================
 Outputs & filters:
 -------------------------------------
@@ -1181,8 +1181,8 @@ Optimization Info:
       avaiable_index_name:[geom, geo_table]
       pruned_index_name:[geo_table]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1348,7 +1348,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1390,17 +1390,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1410,7 +1410,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1452,17 +1452,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1472,7 +1472,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1514,17 +1514,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1534,7 +1534,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |540         |
+|0 |TABLE FULL SCAN|t(idx)|3       |1128        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1578,17 +1578,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:35
+      logical_range_rows:35
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1598,7 +1598,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1640,17 +1640,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1660,7 +1660,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |1031        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1703,17 +1703,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:32
+      logical_range_rows:32
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1723,7 +1723,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+|0 |TABLE FULL SCAN|t(idx)|1       |295         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1766,17 +1766,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
+      physical_range_rows:6
+      logical_range_rows:6
+      index_back_rows:1
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1786,7 +1786,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -1828,17 +1828,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -1960,7 +1960,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2002,17 +2002,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2022,7 +2022,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2064,17 +2064,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2084,7 +2084,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2126,17 +2126,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2146,7 +2146,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |531         |
+|0 |TABLE FULL SCAN|t(idx)|4       |1526        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2189,17 +2189,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:49
+      logical_range_rows:49
+      index_back_rows:12
+      output_rows:3
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2209,7 +2209,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2251,17 +2251,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2271,7 +2271,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |1031        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2314,17 +2314,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:32
+      logical_range_rows:32
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2334,7 +2334,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+|0 |TABLE FULL SCAN|t(idx)|3       |1387        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2377,17 +2377,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:45
+      logical_range_rows:45
+      index_back_rows:11
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2397,7 +2397,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2439,17 +2439,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2459,7 +2459,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2501,17 +2501,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2521,7 +2521,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2563,17 +2563,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2583,7 +2583,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2625,17 +2625,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2645,7 +2645,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |540         |
+|0 |TABLE FULL SCAN|t(idx)|3       |1128        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2689,17 +2689,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:35
+      logical_range_rows:35
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2709,7 +2709,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2751,17 +2751,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2771,7 +2771,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |527         |
+|0 |TABLE FULL SCAN|t(idx)|2       |1031        |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2814,17 +2814,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:32
+      logical_range_rows:32
+      index_back_rows:8
+      output_rows:2
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2834,7 +2834,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |519         |
+|0 |TABLE FULL SCAN|t(idx)|1       |295         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2877,17 +2877,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
+      physical_range_rows:6
+      logical_range_rows:6
+      index_back_rows:1
       output_rows:0
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -2897,7 +2897,7 @@ Query Plan
 =================================================
 |ID|OPERATOR       |NAME  |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |TABLE FULL SCAN|t(idx)|1       |523         |
+|0 |TABLE FULL SCAN|t(idx)|2       |999         |
 =================================================
 Outputs & filters:
 -------------------------------------
@@ -2939,17 +2939,17 @@ Optimization Info:
 -------------------------------------
   t:
       table_rows:14
-      physical_range_rows:14
-      logical_range_rows:14
-      index_back_rows:3
-      output_rows:0
+      physical_range_rows:31
+      logical_range_rows:31
+      index_back_rows:7
+      output_rows:1
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[idx, t]
       pruned_index_name:[t]
       stats version:0
-      dynamic sampling level:1
-      estimation method:[DYNAMIC SAMPLING BASIC]
+      dynamic sampling level:0
+      estimation method:[DEFAULT, STORAGE]
   Plan Type:
       LOCAL
   Note:
@@ -3201,7 +3201,7 @@ Query Plan
 ========================================================================================
 |ID|OPERATOR       |NAME                                         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------------------
-|0 |TABLE FULL SCAN|spatial_point_in_line(index_spatial_line_geo)|1       |279         |
+|0 |TABLE FULL SCAN|spatial_point_in_line(index_spatial_line_geo)|1       |324         |
 ========================================================================================
 Outputs & filters:
 -------------------------------------
