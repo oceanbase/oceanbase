@@ -16,7 +16,7 @@ let $tenant_id=`select tenant_id from oceanbase.__all_tenant where tenant_name =
 
 let $tenant_name=mysql;
 
---source tx_free_route.inc
+--source mysql_test/test_suite/trx/t/tx_free_route.inc
 
 connection conn0;
 
