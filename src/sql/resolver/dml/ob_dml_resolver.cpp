@@ -7033,7 +7033,7 @@ int ObDMLResolver::recursive_check_equal_condition(const ObRawExpr &expr)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret));
       } else if (child->has_flag(CNT_CONST) && child->has_flag(CNT_COLUMN) &&
-                OB_FAIL(recursive_check_equal_condition(*child))) {
+                OB_FAIL(SMART_CALL(recursive_check_equal_condition(*child)))) {
         LOG_WARN("recursive check equal condition failed", K(ret));
       }
     }
