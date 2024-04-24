@@ -190,6 +190,18 @@ public:
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
   void destroy();
+  // @brief: read logs from cold cache. If miss cold cache, read logs from the disk and fill cold cache
+  // @param[in] const int64_t flashback_version: flashback_version from LogStorage
+  // @param[in] const LSN &lsn: start lsn for read
+  // @param[in] const int64_t in_read_size: needed read size
+  // @param[out] ReadBuf &read_buf: buf for read logs
+  // @param[out] int64_t &out_read_size: actual read size
+  // @param[out] LogIteratorInfo *iterator_info: iterator info
+  // @return
+  // - OB_SUCCESS: read logs successfully
+  // - OB_INVALID_ARGUEMENTS: invalid arguments
+  // - OB_IO_ERROR: error when reading disk
+  // - other: bug
   int read(const int64_t flashback_version,
            const LSN &lsn,
            const int64_t in_read_size,

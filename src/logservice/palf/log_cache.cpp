@@ -769,9 +769,9 @@ int LogColdCache::fill_cache_lines_(const int64_t flashback_version,
       }
     }
 
-    if (OB_SIZE_OVERFLOW == ret) {
+    if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
       ret = OB_SUCCESS;
-      PALF_LOG(TRACE, "LogCache size is up to limit, can't fill logs",  K(flashback_version), K(fill_lsn), PRINT_INFO);
+      PALF_LOG(TRACE, "can't fill logs because of memory limit",  K(flashback_version), K(fill_lsn), PRINT_INFO);
     }
   }
 
