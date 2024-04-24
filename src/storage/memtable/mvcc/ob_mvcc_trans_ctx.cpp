@@ -200,8 +200,10 @@ void ObTransCallbackMgr::reset()
     int cnt = need_merge_ ? MAX_CALLBACK_LIST_COUNT : MAX_CALLBACK_LIST_COUNT - 1;
     for (int i = 0; i < cnt; ++i) {
       if (!callback_lists_[i].empty()) {
-        ob_abort();
         TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn callback list is broken", K(stat), K(i), K(this));
+#ifdef ENABLE_DEBUG_LOG
+        ob_abort();
+#endif
       }
     }
   }
@@ -250,7 +252,9 @@ void ObTransCallbackMgr::free_mvcc_row_callback(ObITransCallback *cb)
     cb_allocators_[owner - 1].free(cb);
   } else {
     TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected cb", KPC(cb));
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   }
 }
 
@@ -368,24 +372,31 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
       // this log has been accumulated, it will not be required in all calback-list
       if (parallel_replay_) {
         ret = OB_ERR_UNEXPECTED;
-        TRANS_LOG(ERROR, "parallel replay an serial log", K(ret), KPC(this));
+        TRANS_LOG(ERROR, "parallel replay a serial log", K(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
         ob_abort();
+#endif
       }
-      if (OB_UNLIKELY(!has_branch_replayed_into_first_list_)) {
+      if (OB_SUCC(ret) && OB_UNLIKELY(!has_branch_replayed_into_first_list_)) {
         // sanity check: the serial_final_seq_no must be set
         // which will be used in replay `rollback branch savepoint` log
         if (OB_UNLIKELY(!serial_final_seq_no_.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "serial_final_seq_no is invalid", K(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
+        } else {
+          ATOMIC_STORE(&has_branch_replayed_into_first_list_, true);
+          TRANS_LOG(INFO, "replay log before serial final when reach serial final",
+                    KPC(this), KPC(get_trans_ctx()), KPC(node));
         }
-        ATOMIC_STORE(&has_branch_replayed_into_first_list_, true);
-        TRANS_LOG(INFO, "replay log before serial final when reach serial final",
-                  KPC(this), KPC(get_trans_ctx()), KPC(node));
       }
       slot = 0;
     }
-    if (slot == 0) {
+
+    if (OB_FAIL(ret)) {
+    } else if (slot == 0) {
       // no parallel and no branch requirement
       ret = callback_list_.append_callback(node, for_replay_, parallel_replay_, is_serial_final_());
       // try to extend callback_lists_ if required
@@ -441,10 +452,12 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 
 int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
                                     const ObTxSEQ from_seq_no,
-                                    const share::SCN replay_scn)
+                                    const share::SCN replay_scn,
+                                    int64_t &remove_cnt)
 {
   int ret = OB_SUCCESS;
   int slot = -1;
+  remove_cnt = callback_remove_for_rollback_to_count_;
   if (OB_LIKELY(to_seq_no.support_branch())) { // since 4.3
     // it is a global savepoint, rollback on all list
     if (to_seq_no.get_branch() == 0) {
@@ -480,6 +493,7 @@ int ObTransCallbackMgr::rollback_to(const ObTxSEQ to_seq_no,
   if (OB_FAIL(ret)) {
     TRANS_LOG(WARN, "rollback to fail", K(ret), K(slot), K(from_seq_no), K(to_seq_no));
   }
+  remove_cnt = callback_remove_for_rollback_to_count_ - remove_cnt;
   return ret;
 }
 
@@ -1144,7 +1158,9 @@ int ObTransCallbackMgr::log_submitted(const ObCallbackScopeArray &callbacks, sha
         OB_ASSERT(iter->need_submit_log());
         if (OB_FAIL(iter->log_submitted_cb(scn, last_mt))) {
           TRANS_LOG(ERROR, "fail to log_submitted cb", K(ret), KPC(iter));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
         } // check dup table tx
         else if(check_dup_tablet_(iter)) {
           // mem_ctx_->get_trans_ctx()->set_dup_table_tx_();
@@ -1181,7 +1197,11 @@ int ObTransCallbackMgr::log_sync_succ(const ObCallbackScopeArray &callbacks,
         sync_cnt += scope.cnt_;
       }
     } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "callback scope is null", K(ret), K(scope), K(scn), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     }
   }
   return ret;
@@ -2201,7 +2221,10 @@ inline ObTxCallbackList *ObTransCallbackMgr::get_callback_list_(const int16_t in
     OB_ASSERT(index < MAX_CALLBACK_LIST_COUNT);
     return &callback_lists_[index - 1];
   } else if (!nullable) {
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback list is null", K(index));
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   }
   return NULL;
 }
@@ -2214,8 +2237,10 @@ void ObTransCallbackMgr::check_all_redo_flushed()
     ok &= list->check_all_redo_flushed(false/*quite*/);
   }
   if (!ok) {
-    usleep(1000000);
+    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "has redo not flushed", KPC(this));
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   }
 }
 __attribute__((noinline))

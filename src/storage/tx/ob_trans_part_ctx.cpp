@@ -1942,8 +1942,8 @@ int ObPartTransCtx::serial_submit_redo_after_write_()
     ret = submitter.serial_submit(should_switch);
     if (should_switch && submitter.get_submitted_cnt() > 0) {
       const share::SCN serial_final_scn = submitter.get_submitted_scn();
-      switch_to_parallel_logging_(serial_final_scn, exec_info_.max_submitted_seq_no_);
-      TRANS_LOG(INFO, "**switch to parallel logging**",
+      int tmp_ret = switch_to_parallel_logging_(serial_final_scn, exec_info_.max_submitted_seq_no_);
+      TRANS_LOG(INFO, "**leader switch to parallel logging**", K(tmp_ret),
                 K_(ls_id), K_(trans_id),
                 K(serial_final_scn),
                 "serial_final_seq_no", exec_info_.serial_final_seq_no_,
@@ -2206,8 +2206,10 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), KPC(this));
       print_trace_log_();
+#ifdef ENABLE_DEBUG_LOG
       usleep(5000);
       ob_abort();
+#endif
     }
     if (log_cb->is_callbacked()) {
 #ifndef NDEBUG
@@ -2224,9 +2226,12 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
         busy_cbs_.remove(log_cb);
         return_log_cb_(log_cb);
       } else {
-        TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback was missed when tx ctx exiting", KPC(log_cb), KPC(this));
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "callback was missed when tx ctx exiting", K(ret), KPC(log_cb), KPC(this));
         print_trace_log_();
+#ifdef ENABLE_DEBUG_LOG
         ob_abort();
+#endif
       }
     } else {
       // save the first error code
@@ -2630,8 +2635,10 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
   int ret = OB_SUCCESS;
   share::SCN max_committed_scn;
   if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_palf_committed_max_scn(max_committed_scn))) {
-    TRANS_LOG(ERROR, "get palf max committed scn fail, need retry", K(ret));
-    ob_abort(); // fast abort for easy debug, TODO(yunxing.cyx) change to return do retry
+    TRANS_LOG(ERROR, "get palf max committed scn fail, need retry", K(ret), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+    ob_abort(); // fast abort for easy debug
+#endif
   } else {
     TRANS_LOG(INFO, "succ get palf max_commited_scn", K(max_committed_scn), KPC(log_cb));
   }
@@ -5124,10 +5131,12 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
       if (!is_tx_log_queue) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "serial final redo must be in tx_log_queue", K(ret), KPC(this), K(timestamp));
+#ifdef ENABLE_DEBUG_LOG
         usleep(50_ms);
         ob_abort();
+#endif
       } else if (!exec_info_.serial_final_scn_.is_valid()) {
-        switch_to_parallel_logging_(timestamp, max_seq_no);
+        ret = switch_to_parallel_logging_(timestamp, max_seq_no);
       }
     }
   }
@@ -5230,8 +5239,10 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
         && !pre_barrier) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "missing pre barrier flag for parallel replay", KR(ret), K(*this));
+#ifdef ENABLE_DEBUG_LOG
       usleep(5000);
       ob_abort();
+#endif
     } else if (OB_FAIL(check_replay_avaliable_(offset, timestamp, part_log_no, need_replay))) {
       TRANS_LOG(WARN, "check replay available failed", KR(ret), K(offset), K(timestamp), K(*this));
     } else if (!need_replay) {
@@ -5285,7 +5296,9 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "code should not go here", K(ret), K(timestamp), K_(trans_id), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
         ob_abort();
+#endif
       }
     }
     if (OB_SUCC(ret) &&
@@ -5450,8 +5463,10 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   if (is_parallel_logging() && !pre_barrier) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "missing pre barrier flag for parallel replay", KR(ret), K(*this));
+#ifdef ENABLE_DEBUG_LOG
     usleep(5000);
     ob_abort();
+#endif
   } else if (OB_FAIL(check_replay_avaliable_(offset, timestamp, part_log_no, need_replay))) {
     TRANS_LOG(WARN, "check replay available failed", KR(ret), K(offset), K(timestamp), K(*this));
   } else if (!need_replay) {
@@ -5739,10 +5754,6 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
                                             cluster_version_,
                                             checksum))) {
       TRANS_LOG(WARN, "trans replay commit failed", KR(ret), K(commit_log), KPC(this));
-      if (OB_CHECKSUM_ERROR == ret) {
-        usleep(500000);
-        ob_abort();
-      }
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
@@ -10105,30 +10116,37 @@ inline bool ObPartTransCtx::is_support_parallel_replay_() const
   return cluster_version_accurate_ && cluster_version_ >= CLUSTER_VERSION_4_3_0_0;
 }
 
-inline void ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_final_scn,
-                                                        const ObTxSEQ max_seq_no)
+inline int ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_final_scn,
+                                                       const ObTxSEQ max_seq_no)
 {
-  // when start replaying serial final redo log or submitted serial final redo log
-  // switch the Tx's logging mode to parallel logging
-  // this include mark serial final scn point in exec_info_
-  // and notify callback_mgr to remember the serial_final_scn
-  // which used to for check whether the callback-list has replayed continuously
-  // or all of it's serial logs has been synced continously
-  // if reach these condition, the checksum calculations of callback-list can continues
-  // into the parallel logged part
-  exec_info_.serial_final_scn_.atomic_set(serial_final_scn);
-  // remember the max of seq_no of redos currently submitted
-  // if an rollback to savepoint before this point, which means
-  // replay of this rollback-savepoint-log must pre-berrier to
-  // wait serial replay parts finished
+  int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!max_seq_no.is_valid())) {
-    TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "max seq_no of serial final log is invalid",
-                  K(serial_final_scn), K(max_seq_no), KPC(this));
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "max seq_no of serial final log is invalid",
+              K(ret), K(serial_final_scn), K(max_seq_no), KPC(this));
     print_trace_log_();
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   }
-  exec_info_.serial_final_seq_no_ = max_seq_no;
-  mt_ctx_.set_parallel_logging(serial_final_scn, max_seq_no);
+  if (OB_SUCC(ret)) {
+    // when start replaying serial final redo log or submitted serial final redo log
+    // switch the Tx's logging mode to parallel logging
+    // this include mark serial final scn point in exec_info_
+    // and notify callback_mgr to remember the serial_final_scn
+    // which used to for check whether the callback-list has replayed continuously
+    // or all of it's serial logs has been synced continously
+    // if reach these condition, the checksum calculations of callback-list can continues
+    // into the parallel logged part
+    exec_info_.serial_final_scn_.atomic_set(serial_final_scn);
+    // remember the max of seq_no of redos currently submitted
+    // if an rollback to savepoint before this point, which means
+    // replay of this rollback-savepoint-log must pre-berrier to
+    // wait serial replay parts finished
+    exec_info_.serial_final_seq_no_ = max_seq_no;
+    mt_ctx_.set_parallel_logging(serial_final_scn, max_seq_no);
+  }
+  return ret;
 }
 
 inline void ObPartTransCtx::recovery_parallel_logging_()

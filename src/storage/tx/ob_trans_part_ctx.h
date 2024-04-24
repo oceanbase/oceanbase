@@ -549,8 +549,8 @@ private:
                                   share::SCN &scn,
                                   bool need_free_extra_cb = false);
   bool should_switch_to_parallel_logging_();
-  void switch_to_parallel_logging_(const share::SCN serial_final_scn,
-                                   const ObTxSEQ max_seq_no);
+  int switch_to_parallel_logging_(const share::SCN serial_final_scn,
+                                  const ObTxSEQ max_seq_no);
   bool has_replay_serial_final_() const;
   void recovery_parallel_logging_();
   int check_can_submit_redo_();

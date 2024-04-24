@@ -96,12 +96,19 @@ public:
       ctx_.next_epoch_ = iter->get_epoch();
     } else if (iter->get_epoch() < ctx_.epoch_from_) {
       ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "found callback with epoch less than `from`", K(ret), KPC(iter), K(ctx_));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     } else if (FALSE_IT(ctx_.cur_epoch_ = iter->get_epoch())) {
     } else if (!iter->need_submit_log()) {
       // this should not happend
       // because log_cursor is _strictly_ point to the right next to logging position
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "found callback has been logged, maybe log_cursor value is insane", K(ret), KPC(iter), K(ctx_));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     } else if (iter->is_logging_blocked()) {
       ret = OB_BLOCK_FROZEN;
       ctx_.last_log_blocked_memtable_ = static_cast<memtable::ObMemtable *>(iter->get_memtable());

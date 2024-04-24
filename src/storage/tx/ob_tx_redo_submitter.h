@@ -257,8 +257,11 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         if (ctx.fill_count_ == 0) {
           // BIG_ROW has been handled in `fill_log_block_`
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "should not reach here", K(ret));
+          TRANS_LOG(ERROR, "should not reach here", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
+          break;
         } else {
           fill_ret = OB_SUCCESS;
         }
@@ -277,9 +280,11 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         } else {
           // serial logging, shouldn't reach here
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), KPC(this));
-          usleep(1000);
+          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
+          break;
         }
       } else if (OB_EAGAIN == fill_ret) {
         // this list is all filled, but others remains
@@ -288,14 +293,18 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
         } else {
           // serial logging, shouldn't reach here
           ret = OB_ERR_UNEXPECTED;
-          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), KPC(this));
+          TRANS_LOG(ERROR, "oops! fatal panic", K(ret), K(ctx), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           usleep(1000);
           ob_abort();
+#endif
+          break;
         }
       } else {
         stop = true;
         ret = fill_ret;
       }
+
       // start submit out filled log block
       bool submitted = false;
       int submit_ret = OB_SUCCESS;
@@ -360,8 +369,10 @@ int ObTxRedoSubmitter::after_submit_redo_out_()
   int ret = OB_SUCCESS;
   if (OB_FAIL(mt_ctx_.log_submitted(*helper_))) {
     TRANS_LOG(WARN, "callback memctx fail", K(ret));
+#ifdef ENABLE_DEBUG_LOG
     usleep(1000);
     ob_abort();
+#endif
   }
   helper_->reset();
   return ret;
@@ -373,7 +384,9 @@ int ObTxRedoSubmitter::prepare_()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(log_cb_)) {
     ret = OB_ERR_UNEXPECTED;
+#ifdef ENABLE_DEBUG_LOG
     ob_abort();
+#endif
   } else {
     ret = tx_ctx_.prepare_for_submit_redo(log_cb_, *log_block_, serial_final_);
   }

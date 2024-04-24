@@ -253,8 +253,6 @@ int ObTxReplayExecutor::replay_tx_log_(const ObTxLogType log_type)
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "[Replay Tx] Unknown Log Type in replay buf",
               K(log_type), KPC(this));
-    usleep(100000);
-    ob_abort();
   }
   }
   return ret;
@@ -656,7 +654,9 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo, const bool s
         if (OB_UNLIKELY(!seq_no.is_valid())) {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "seq no is invalid in mutator row", K(seq_no), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
           ob_abort();
+#endif
         }
         if (seq_no.get_seq() > max_seq_no.get_seq()) {
           max_seq_no = seq_no;

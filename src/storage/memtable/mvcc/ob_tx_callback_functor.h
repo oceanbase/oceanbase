@@ -97,8 +97,12 @@ public:
       // case3: the callback has not been sync successfully
       is_iter_end = true;
     } else if (callback->get_scn().is_min()) {
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback scn is min_scn", KPC(callback));
+#ifdef ENABLE_DEBUG_LOG
       usleep(5000);
       ob_abort();
+#endif
+      is_iter_end = true;
     } else if (0 >= need_remove_count_ && callback->get_scn() != last_scn_for_remove_) {
       // case4: the callback has exceeded the last log whose log ts need to be
       //         removed
@@ -400,8 +404,11 @@ public:
     /*   ret = OB_ERR_UNEXPECTED; */
     /*   TRANS_LOG(ERROR, "unexpected callback", KP(callback)); */
     } else if (is_commit_ && callback->get_scn().is_max()) {
-      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", KP(callback));
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "callback has not submitted log yet when commit callback", K(ret), KP(callback));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     } else if (is_commit_
                && OB_FAIL(callback->trans_commit())) {
       TRANS_LOG(ERROR, "trans commit failed", KPC(callback));

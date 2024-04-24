@@ -129,10 +129,15 @@ void ObMemtableCtx::reset()
     }
     if (OB_UNLIKELY(callback_alloc_count_ != callback_free_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", K(*this));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
     if (OB_UNLIKELY(unsubmitted_cnt_ != 0)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsubmitted cnt not zero", K(*this), K(unsubmitted_cnt_));
+#ifdef ENABLE_DEBUG_LOG
       ob_abort();
+#endif
     }
     if (OB_TRANS_KILLED != end_code_) {
       // _NOTE_: skip when txn was forcedly killed
@@ -144,7 +149,9 @@ void ObMemtableCtx::reset()
       if (OB_UNLIKELY(fill != sync_succ + sync_fail)) {
         TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "redo filled_count != sync_succ + sync_fail", KPC(this),
                     K(fill), K(sync_succ), K(sync_fail));
+#ifdef ENABLE_DEBUG_LOG
         ob_abort();
+#endif
       }
     }
     is_inited_ = false;
@@ -514,8 +521,10 @@ int ObMemtableCtx::do_trans_end(
     // after a transaction finishes, callback memory should be released
     // and check memory leakage
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
-      TRANS_LOG(ERROR, "callback alloc and free count not match", K(*this));
-      ob_abort(); // for easy debug, remove later
+      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+      ob_abort();
+#endif
     }
     // release durable table lock
     if (OB_FAIL(ret)) {
@@ -585,7 +594,10 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
                   "checksum_replayed", checksum_collapsed,
                   "checksum_before_collapse", replay_checksum,
                   K(checksum_signature), KPC(this));
+#ifdef ENABLE_DEBUG_LOG
+        ob_usleep(5000);
         ob_abort();
+#endif
       }
     }
   }
@@ -818,9 +830,9 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
                             const share::SCN replay_scn)
 {
   int ret = OB_SUCCESS;
-  common::ObTimeGuard timeguard("remove callbacks for rollback to", 10 * 1000);
+  const int64_t start_ts = common::ObClockGenerator::getClock();
   ObByteLockGuard guard(lock_);
-
+  int64_t remove_cnt = 0;
   if (!to_seq_no.is_valid() || !from_seq_no.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid argument", K(ret), K(from_seq_no), K(to_seq_no));
@@ -829,13 +841,14 @@ int ObMemtableCtx::rollback(const transaction::ObTxSEQ to_seq_no,
     TRANS_LOG(WARN, "ctx is NULL", K(ret));
   } else if (OB_FAIL(reuse_log_generator_())) {
     TRANS_LOG(ERROR, "fail to reset log generator", K(ret));
-  } else if (OB_FAIL(trans_mgr_.rollback_to(to_seq_no, from_seq_no, replay_scn))) {
+  } else if (OB_FAIL(trans_mgr_.rollback_to(to_seq_no, from_seq_no, replay_scn, remove_cnt))) {
     TRANS_LOG(WARN, "rollback to failed", K(ret), K(*this));
   // rollback the table lock that with no tablelock callback
   } else if (OB_FAIL(rollback_table_lock_(to_seq_no, from_seq_no))) {
     TRANS_LOG(WARN, "rollback table lock failed", K(ret), K(*this), K(to_seq_no));
   } else {
-    TRANS_LOG(INFO, "memtable handle rollback to successfuly", K(from_seq_no), K(to_seq_no), K(*this));
+    const int64_t elapsed = common::ObClockGenerator::getClock() - start_ts;
+    TRANS_LOG(INFO, "memtable handle rollback to successfuly", K(from_seq_no), K(to_seq_no), K(remove_cnt), K(elapsed), KPC(this));
   }
   return ret;
 }

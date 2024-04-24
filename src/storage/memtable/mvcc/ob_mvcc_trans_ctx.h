@@ -245,7 +245,8 @@ public:
   int replay_succ(const int16_t callback_list_idx, const share::SCN scn);
   int rollback_to(const transaction::ObTxSEQ seq_no,
                   const transaction::ObTxSEQ from_seq_no,
-                  const share::SCN replay_scn);
+                  const share::SCN replay_scn,
+                  int64_t &remove_cnt);
   void set_for_replay(const bool for_replay);
   bool is_for_replay() const { return ATOMIC_LOAD(&for_replay_); }
   int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
