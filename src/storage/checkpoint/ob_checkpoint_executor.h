@@ -90,9 +90,12 @@ public:
   int diagnose(CheckpointDiagnoseInfo &diagnose_info) const;
 
   int traversal_flush() const;
+
 private:
   int check_need_flush_(const SCN max_decided_scn, const SCN recycle_scn);
   int calculate_recycle_scn_(const SCN max_decided_scn, SCN &recycle_scn);
+  int calculate_min_recycle_scn_(const palf::LSN clog_checkpoint_lsn, SCN &min_recycle_scn);
+  int calculate_expected_recycle_scn_(const palf::LSN clog_checkpoint_lsn, SCN &expected_recycle_scn);
 
 private:
   static const int64_t CLOG_GC_PERCENT = 60;

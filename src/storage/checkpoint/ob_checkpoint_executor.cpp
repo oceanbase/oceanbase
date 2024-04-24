@@ -18,6 +18,7 @@
 #include "storage/checkpoint/ob_data_checkpoint.h"
 #include "share/ob_force_print_log.h"
 #include "logservice/ob_log_base_type.h"
+#include "logservice/ob_log_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
@@ -238,7 +239,9 @@ int ObCheckpointExecutor::advance_checkpoint_by_flush(const share::SCN input_rec
     if (OB_FAIL(loghandler_->get_max_decided_scn(max_decided_scn))) {
       STORAGE_LOG(WARN, "failed to get_max_decided_scn", K(ls_id));
     } else if (!recycle_scn.is_valid() && OB_FAIL(calculate_recycle_scn_(max_decided_scn, recycle_scn))) {
-      STORAGE_LOG(WARN, "calculate recycle scn failed", KR(ret));
+      if (OB_EAGAIN != ret) {
+        STORAGE_LOG(WARN, "calculate recycle scn failed", KR(ret));
+      }
     } else if (OB_FAIL(check_need_flush_(max_decided_scn, recycle_scn))) {
       STORAGE_LOG(WARN, "no need flush");
     } else {
@@ -257,52 +260,160 @@ int ObCheckpointExecutor::advance_checkpoint_by_flush(const share::SCN input_rec
   return ret;
 }
 
+/**
+ * @brief There are four situations to decide recycle_scn to advance checkpoint:
+ *
+ * CASE 1 : If : 1) previous recycle_scn and previous clog_checkpoint is valid; 2) current clog_checkpiot == previous
+ * clog_checkpoint; Then : use previous recycle_scn to advance checkpoint again
+ *
+ *
+ * CASE 2 : If : min_recycle_scn > max_decided_scn; Then : skip advance checkpoint once
+ *
+ *       │ ◄── 5% ──► │                        │
+ *       │            │                        │
+ *       │            │                        │
+ * checkpoint_lsn     │                     end_lsn
+ *       │            │                        │
+ *       │     min_recycle_lsn                 │
+ *       │            │                        │
+ *       │            │                        │
+ *       ▼            ▼                        ▼
+ *       ┌───────────────────────────────────────────────────────────────────────────────────┐
+ *       │                                                                                   │
+ *       │                                 total clog disk                                   │
+ *       │                                                                                   │
+ *       └───────────────────────────────────────────────────────────────────────────────────┘
+ *              ▲
+ *              │
+ *              │
+ *       max_decided_scn
+ *
+ * CASE 3 : If : max_decided_scn < expected_recycle_scn; Then : use max_decided_scn to advance checkpoint *
+
+ *       │            │                        │
+ *       ▼            ▼                        ▼
+ *       ┌───────────────────────────────────────────────────────────────────────────────────┐
+ *       │                                                                                   │
+ *       │                                 total clog disk                                   │
+ *       │                                                                                   │
+ *       └───────────────────────────────────────────────────────────────────────────────────┘
+ *                        ▲         ▲
+ *                        │         │
+ *                 max_decided_scn  │
+ *                        │         │
+ *                        │expected_recycle_scn
+ *                        │         │
+ *                        │         │
+ *
+ * CASE 4 : If : max_decided_scn > expected_recycle_scn; Then : use expected_recycle_scn to advance checkpoint
+ *
+ *       │            │                        │
+ *       ▼            ▼                        ▼
+ *       ┌───────────────────────────────────────────────────────────────────────────────────┐
+ *       │                                                                                   │
+ *       │                                 total clog disk                                   │
+ *       │                                                                                   │
+ *       └───────────────────────────────────────────────────────────────────────────────────┘
+ *                                  ▲      ▲
+ *                                  │      │
+ *                                  │      │
+ *                                  │      │
+ *              expected_recycle_scn│      │max_decided_scn
+ *                                  │      │
+ *                                  │      │
+ */
 int ObCheckpointExecutor::calculate_recycle_scn_(const SCN max_decided_scn, SCN &recycle_scn)
 {
   int ret = OB_SUCCESS;
-  LSN end_lsn;
   const ObLSID ls_id = ls_->get_ls_id();
   const LSN clog_checkpoint_lsn = ls_->get_clog_base_lsn();
   const SCN clog_checkpoint_scn = ls_->get_clog_checkpoint_scn();
-  // locate_by_lsn_coarsely may return a recycle_scn less than checkpoint_scn
-  // so if prev_recycle_scn_ <= clog_checkpoint_scn, the recycle_scn is still needed to be calculated again
   if (prev_clog_checkpoint_lsn_.is_valid() && (prev_clog_checkpoint_lsn_ == clog_checkpoint_lsn) &&
       prev_recycle_scn_.is_valid() && (prev_recycle_scn_ > clog_checkpoint_scn)) {
     recycle_scn = prev_recycle_scn_;
     reuse_recycle_scn_times_++;
     if (reuse_recycle_scn_times_ % 1000 == 0) {
-      STORAGE_LOG_RET(WARN, 0, "attention! clog checkpiont has not changed for a long time");
+      STORAGE_LOG_RET(WARN, 0, "attention! clog checkpiont has not changed for a long time", K(ls_id));
       recycle_scn.set_max();
     }
     STORAGE_LOG(INFO,
                 "clog checkpoint has not changed yet. use previous recycle_scn to advance checkpoint",
+                K(ls_id),
                 K(reuse_recycle_scn_times_),
                 K(clog_checkpoint_lsn),
                 K(recycle_scn));
-  } else if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
-    STORAGE_LOG(WARN, "get end lsn failed", K(ret), K(ls_id));
   } else {
-    LSN calcu_recycle_lsn = clog_checkpoint_lsn + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
-    if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, recycle_scn))) {
-      STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn), K(recycle_scn), K(ls_id));
+    SCN min_recycle_scn;
+    SCN expected_recycle_scn;
+    if (OB_FAIL(calculate_min_recycle_scn_(clog_checkpoint_lsn, min_recycle_scn))) {
+      STORAGE_LOG(WARN, "calculate min recycle scn failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(calculate_expected_recycle_scn_(clog_checkpoint_lsn, expected_recycle_scn))) {
+      STORAGE_LOG(WARN, "calculate expected recycle scn failed", KR(ret), K(ls_id));
     } else {
-      // recycle_scn must less than max_decided_scn
-      recycle_scn = MIN(recycle_scn, max_decided_scn);
-
-      prev_clog_checkpoint_lsn_ = clog_checkpoint_lsn;
-      prev_recycle_scn_ = recycle_scn;
-      reuse_recycle_scn_times_ = 0;
-      STORAGE_LOG(INFO,
-                  "advance checkpoint by flush to avoid clog disk full",
-                  K(recycle_scn),
-                  K(max_decided_scn),
-                  K(end_lsn),
-                  K(clog_checkpoint_lsn),
-                  K(calcu_recycle_lsn),
-                  K(ls_->get_ls_id()));
+      recycle_scn = MIN(max_decided_scn, expected_recycle_scn);
+      if (recycle_scn < min_recycle_scn) {
+        ret = OB_EAGAIN;
+        STORAGE_LOG(INFO,
+                    "recycle_scn too small, skip trigger flush once",
+                    KR(ret),
+                    K(ls_id),
+                    K(min_recycle_scn),
+                    K(expected_recycle_scn),
+                    K(max_decided_scn));
+      } else {
+        prev_clog_checkpoint_lsn_ = clog_checkpoint_lsn;
+        prev_recycle_scn_ = recycle_scn;
+        reuse_recycle_scn_times_ = 0;
+        STORAGE_LOG(INFO,
+                    "advance checkpoint by flush to avoid clog disk full",
+                    K(ls_id),
+                    K(recycle_scn),
+                    K(max_decided_scn),
+                    K(clog_checkpoint_lsn),
+                    K(clog_checkpoint_scn),
+                    K(min_recycle_scn),
+                    K(expected_recycle_scn));
+      }
     }
   }
+  return ret;
+}
 
+int ObCheckpointExecutor::calculate_min_recycle_scn_(const LSN clog_checkpoint_lsn, SCN &min_recycle_scn)
+{
+  const int64_t MIN_RECYCLE_CLOG_PERCENTAGE = 5;
+  int ret = OB_SUCCESS;
+  int64_t used_size = 0;
+  int64_t total_size = 0;
+
+  logservice::ObLogService *log_service = nullptr;
+  if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "get_log_service failed", K(ret));
+  } else if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
+    STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
+  } else {
+    LSN min_recycle_lsn = clog_checkpoint_lsn + (total_size * MIN_RECYCLE_CLOG_PERCENTAGE / 100);
+    if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(min_recycle_lsn, min_recycle_scn))) {
+      STORAGE_LOG(WARN, "locate min_recycle_scn by lsn failed", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCheckpointExecutor::calculate_expected_recycle_scn_(const palf::LSN clog_checkpoint_lsn,
+                                                          SCN &expected_recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  LSN end_lsn;
+  if (OB_FAIL(loghandler_->get_end_lsn(end_lsn))) {
+    STORAGE_LOG(WARN, "get end lsn failed", K(ret));
+  } else {
+    LSN calcu_recycle_lsn = clog_checkpoint_lsn + ((end_lsn - clog_checkpoint_lsn) * CLOG_GC_PERCENT / 100);
+    if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(calcu_recycle_lsn, expected_recycle_scn))) {
+      STORAGE_LOG(WARN, "locate_by_lsn_coarsely failed", K(calcu_recycle_lsn));
+    }
+  }
   return ret;
 }
 
