@@ -408,6 +408,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_create_audit_purge_job",
   "_drop_audit_purge_job",
   "_enable_mysql_pl_priv_check",
+  "_enable_old_charset_aggregation",
   "_enable_parallel_ddl",
   "_enable_parallel_dml",
   "_enable_parallel_query",
@@ -471,6 +472,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "debug",
   "debug_sync",
   "default_authentication_plugin",
+  "default_collation_for_utf8mb4",
   "default_password_lifetime",
   "default_storage_engine",
   "disabled_storage_engines",
@@ -820,6 +822,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__CREATE_AUDIT_PURGE_JOB,
   SYS_VAR__DROP_AUDIT_PURGE_JOB,
   SYS_VAR__ENABLE_MYSQL_PL_PRIV_CHECK,
+  SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION,
   SYS_VAR__ENABLE_PARALLEL_DDL,
   SYS_VAR__ENABLE_PARALLEL_DML,
   SYS_VAR__ENABLE_PARALLEL_QUERY,
@@ -883,6 +886,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DEBUG,
   SYS_VAR_DEBUG_SYNC,
   SYS_VAR_DEFAULT_AUTHENTICATION_PLUGIN,
+  SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4,
   SYS_VAR_DEFAULT_PASSWORD_LIFETIME,
   SYS_VAR_DEFAULT_STORAGE_ENGINE,
   SYS_VAR_DISABLED_STORAGE_ENGINES,
@@ -1635,7 +1639,9 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "skip_slave_start",
   "slave_load_tmpdir",
   "slave_skip_errors",
-  "innodb_sync_debug"
+  "innodb_sync_debug",
+  "default_collation_for_utf8mb4",
+  "_enable_old_charset_aggregation"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2213,6 +2219,8 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSlaveLoadTmpdir)
         + sizeof(ObSysVarSlaveSkipErrors)
         + sizeof(ObSysVarInnodbSyncDebug)
+        + sizeof(ObSysVarDefaultCollationForUtf8mb4)
+        + sizeof(ObSysVarEnableOldCharsetAggregation)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -5900,6 +5908,24 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SYNC_DEBUG))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSyncDebug));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultCollationForUtf8mb4())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultCollationForUtf8mb4", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultCollationForUtf8mb4));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOldCharsetAggregation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOldCharsetAggregation", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOldCharsetAggregation));
       }
     }
 
@@ -10408,6 +10434,28 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncDebug())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarInnodbSyncDebug", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultCollationForUtf8mb4)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultCollationForUtf8mb4)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultCollationForUtf8mb4())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultCollationForUtf8mb4", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEnableOldCharsetAggregation)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEnableOldCharsetAggregation)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOldCharsetAggregation())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEnableOldCharsetAggregation", K(ret));
       }
       break;
     }

@@ -5978,5 +5978,35 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "default_collation_for_utf8mb4": {
+    "id": 10325,
+    "name": "default_collation_for_utf8mb4",
+    "default_value": "45",
+    "base_value": "45",
+    "data_type": "int",
+    "info": "control default collation for utf8mb4",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | MYSQL_ONLY",
+    "get_meta_type_func": "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar",
+    "to_select_obj_func": "ObSysVarToObjFuncs::to_obj_collation",
+    "to_show_str_func": "ObSysVarToStrFuncs::to_str_collation",
+    "base_class": "ObCharsetSysVar",
+    "publish_version": "424",
+    "info_cn": "用于设置utf8mb4字符集默认的字符集",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "_enable_old_charset_aggregation": {
+    "id": 10326,
+    "name": "_enable_old_charset_aggregation",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "control wether to enable old charset aggregation rule",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN | NEED_SERIALIZE | MYSQL_ONLY | INVISIBLE",
+    "publish_version": "424",
+    "info_cn": "用于控制是否使用旧版字符集推导规则",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

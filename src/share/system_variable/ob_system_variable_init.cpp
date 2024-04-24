@@ -5766,13 +5766,43 @@ static struct VarsInit{
     ObSysVars[408].alias_ = "OB_SV_INNODB_SYNC_DEBUG" ;
     }();
 
+    [&] (){
+      ObSysVars[409].default_value_ = "45" ;
+      ObSysVars[409].info_ = "control default collation for utf8mb4" ;
+      ObSysVars[409].name_ = "default_collation_for_utf8mb4" ;
+      ObSysVars[409].data_type_ = ObIntType ;
+      ObSysVars[409].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_collation" ;
+      ObSysVars[409].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[409].base_class_ = "ObCharsetSysVar" ;
+      ObSysVars[409].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_collation" ;
+      ObSysVars[409].id_ = SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4 ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4] = 409 ;
+      ObSysVars[409].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
+      ObSysVars[409].base_value_ = "45" ;
+    ObSysVars[409].alias_ = "OB_SV_DEFAULT_COLLATION_FOR_UTF8MB4" ;
+    }();
+
+    [&] (){
+      ObSysVars[410].default_value_ = "0" ;
+      ObSysVars[410].info_ = "control wether to enable old charset aggregation rule" ;
+      ObSysVars[410].name_ = "_enable_old_charset_aggregation" ;
+      ObSysVars[410].data_type_ = ObIntType ;
+      ObSysVars[410].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[410].id_ = SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION] = 410 ;
+      ObSysVars[410].base_value_ = "0" ;
+    ObSysVars[410].alias_ = "OB_SV__ENABLE_OLD_CHARSET_AGGREGATION" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 409;
+static int64_t var_amount = 411;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
