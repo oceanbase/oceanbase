@@ -2646,7 +2646,7 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
 
                     ObColumnNameHashWrapper budy_column_name_key(budy_column_schema->get_column_name_str());
                     if (OB_FAIL(column_name_set_.set_refactored(budy_column_name_key))) {
-                      LOG_WARN("add column name to map failed", K(column_schema->get_column_name_str()), K(ret));
+                      LOG_WARN("add column name to map failed", K(budy_column_schema->get_column_name_str()), K(ret));
                     } else if (OB_FAIL(add_sort_column(budy_sort_item))) {
                       LOG_WARN("failed to add sort item", K(ret));
                     }

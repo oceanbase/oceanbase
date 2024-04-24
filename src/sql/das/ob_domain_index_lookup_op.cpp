@@ -698,7 +698,10 @@ int ObMulValueIndexLookupOp::save_doc_id_and_rowkey()
 {
   int ret = OB_SUCCESS;
 
+  // index_column_cnt : |multivalue column| rowkey column | doc-id column |
   int64_t index_column_cnt = index_ctdef_->result_output_.count();
+  const storage::ObTableReadInfo& read_info = lookup_ctdef_->table_param_.get_read_info();
+  int64_t main_rowkey_column_cnt = read_info.get_schema_rowkey_count();
   ObObj *obj_ptr = nullptr;
 
   ObIAllocator &allocator = lookup_memctx_->get_arena_allocator();
@@ -712,7 +715,7 @@ int ObMulValueIndexLookupOp::save_doc_id_and_rowkey()
 
   int64_t rowkey_null_count = 0;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < index_column_cnt - 1; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < main_rowkey_column_cnt; ++i) {
     ObObj tmp_obj;
     ObExpr *expr = index_ctdef_->result_output_.at(i);
     if (T_PSEUDO_GROUP_ID == expr->type_) {
@@ -730,10 +733,10 @@ int ObMulValueIndexLookupOp::save_doc_id_and_rowkey()
   }
 
   if (OB_FAIL(ret)) {
-  } else if (rowkey_null_count != index_column_cnt - 1) {
+  } else if (rowkey_null_count != main_rowkey_column_cnt) {
     ++index_rowkey_cnt_;
     ++lookup_rowkey_cnt_;
-    ObRowkey main_rowkey(obj_ptr, index_column_cnt - 1);
+    ObRowkey main_rowkey(obj_ptr, main_rowkey_column_cnt);
     if (OB_FAIL(sorter_.add_item(main_rowkey))) {
       LOG_WARN("filter mbr failed", K(ret));
     }
@@ -741,19 +744,19 @@ int ObMulValueIndexLookupOp::save_doc_id_and_rowkey()
     ++aux_key_count_;
     ++lookup_rowkey_cnt_;
     // last column is doc-id
-    int64_t doc_id_idx = index_column_cnt - 1;
+    int64_t doc_id_idx = main_rowkey_column_cnt;
     ObExpr* doc_id_expr = index_ctdef_->result_output_.at(doc_id_idx);
     ObDatum& doc_id_datum = doc_id_expr->locate_expr_datum(*lookup_rtdef_->eval_ctx_);
     ObObj tmp_obj;
     if (OB_FAIL(doc_id_datum.to_obj(tmp_obj, doc_id_expr->obj_meta_, doc_id_expr->obj_datum_map_))) {
       LOG_WARN("convert datum to obj failed", K(ret));
-    } else if (OB_FAIL(ob_write_obj(allocator, tmp_obj, obj_ptr[0]))) {
+    } else if (OB_FAIL(ob_write_obj(allocator, tmp_obj, obj_ptr[doc_id_idx]))) {
       LOG_WARN("deep copy rowkey value failed", K(ret), K(tmp_obj));
     } else if (doc_id_datum.is_null()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("docid and rowkey can't both be null", K(ret));
     } else {
-      ObRowkey table_rowkey(obj_ptr, 1);
+      ObRowkey table_rowkey(&obj_ptr[doc_id_idx], 1);
       if (OB_FAIL(aux_sorter_.add_item(table_rowkey))) {
         LOG_WARN("filter mbr failed", K(ret));
       }
@@ -993,18 +996,20 @@ int ObMulValueIndexLookupOp::fetch_rowkey_from_aux()
           break;
         }
       } else {
-        int64_t rowkey_colunmn_cnt = doc_id_lookup_ctdef_->result_output_.count();
         ObObj *obj_ptr = nullptr;
         ObIAllocator &allocator = lookup_memctx_->get_arena_allocator();
 
-        if (OB_ISNULL(obj_ptr = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * rowkey_colunmn_cnt)))) {
+        const storage::ObTableReadInfo& read_info = lookup_ctdef_->table_param_.get_read_info();
+        int64_t main_rowkey_column_cnt = read_info.get_schema_rowkey_count();
+
+        if (OB_ISNULL(obj_ptr = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * main_rowkey_column_cnt)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate buffer failed", K(ret), K(rowkey_colunmn_cnt));
+          LOG_WARN("allocate buffer failed", K(ret), K(main_rowkey_column_cnt));
         } else {
-          obj_ptr = new(obj_ptr) ObObj[rowkey_colunmn_cnt];
+          obj_ptr = new(obj_ptr) ObObj[main_rowkey_column_cnt];
         }
 
-        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_colunmn_cnt; ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < main_rowkey_column_cnt; ++i) {
           ObObj tmp_obj;
           ObExpr *expr = doc_id_lookup_ctdef_->result_output_.at(i);
           if (T_PSEUDO_GROUP_ID == expr->type_) {
@@ -1019,11 +1024,11 @@ int ObMulValueIndexLookupOp::fetch_rowkey_from_aux()
           }
         }
         if (OB_SUCC(ret)) {
-          ObRowkey table_rowkey(obj_ptr, rowkey_colunmn_cnt);
+          ObRowkey table_rowkey(obj_ptr, main_rowkey_column_cnt);
           if (OB_FAIL(sorter_.add_item(table_rowkey))) {
             LOG_WARN("filter mbr failed", K(ret));
           } else {
-            LOG_TRACE("add rowkey success", K(table_rowkey), K(obj_ptr), K(obj_ptr[0]), K(rowkey_colunmn_cnt));
+            LOG_TRACE("add rowkey success", K(table_rowkey), K(obj_ptr), K(obj_ptr[0]), K(main_rowkey_column_cnt));
           }
         }
       }

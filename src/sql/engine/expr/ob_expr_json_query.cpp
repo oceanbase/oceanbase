@@ -436,11 +436,11 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
   ObJsonOpaque apaque(str_bin, ObUserDefinedSQLType);
   ObStringBuffer str_buff(&allocator);
 
-  uint32_t element_count = json_base == nullptr ? 0 : json_base->element_count();
+  uint32_t element_count = (json_base == nullptr) ?
+    0 : (json_base->json_type() == ObJsonNodeType::J_ARRAY ? json_base->element_count() : 1);
+
   uint8_t is_cast = false;
   uint64_t reserve_len = 0;
-
-
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_enable_cast_index_array(json_base, false))) {
