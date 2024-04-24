@@ -219,6 +219,7 @@ public:
   OB_INLINE int64_t get_column_count() { return column_cnt_; }
   OB_INLINE int64_t get_rowkey_count() { return rowkey_cnt_; }
   OB_INLINE const ObString& get_kv_attributes() { return kv_attributes_; }
+  OB_INLINE const ObString& get_ttl_definition() { return ttl_definition_; }
   OB_INLINE int64_t get_auto_inc_cache_size() { return auto_inc_cache_size_; }
 private:
   int build_index_map();
@@ -236,6 +237,7 @@ private:
   ObFixedArray<uint64_t, common::ObIAllocator> local_index_tids_;
   ObFixedArray<uint64_t, common::ObIAllocator> global_index_tids_;
   ObString kv_attributes_;
+  ObString ttl_definition_;
   int64_t column_cnt_;
   int64_t rowkey_cnt_;
   int64_t auto_inc_cache_size_;
@@ -274,6 +276,7 @@ public:
   int is_partitioned_table(bool &is_partitioned_table);
   int has_global_index(bool &has_gloabl_index);
   int get_kv_attributes(ObString& kv_attributes);
+  int get_ttl_definition(ObString& ttl_definition);
   int get_or_create_cache_obj(ObSchemaGetterGuard &schema_guard);
   int create_schema_cache_obj(ObSchemaGetterGuard &schema_guard);
   void reset();

@@ -381,7 +381,8 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
   ObObj *cells = nullptr;
   const ObTableCtx &tb_ctx = scan_executor_->get_table_ctx();
   const ExprFixedArray &output_exprs = scan_executor_->get_spec().get_ctdef().output_exprs_;
-  const int64_t cells_cnt = output_exprs.count();
+  const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
+  const int64_t cells_cnt = tb_ctx.is_scan() ? query_col_ids.count() : output_exprs.count();
   row_allocator_.reuse();
 
   if (OB_ISNULL(scan_executor_)) {
@@ -405,7 +406,6 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
     ObEvalCtx &eval_ctx = scan_executor_->get_eval_ctx();
     if (tb_ctx.is_scan()) { // 转为用户select的顺序
       const ObIArray<uint64_t> &select_col_ids = tb_ctx.get_select_col_ids();
-      const ObIArray<uint64_t> &query_col_ids = tb_ctx.get_query_col_ids();
       for (int64_t i = 0; OB_SUCC(ret) && i < query_col_ids.count(); i++) {
         uint64_t col_id = query_col_ids.at(i);
         int64_t idx = -1;

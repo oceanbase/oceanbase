@@ -342,8 +342,6 @@ int ObTableApiProcessorBase::init_schema_info(uint64_t table_id)
     LOG_WARN("fail to get table schema", K(ret), K(credential_.tenant_id_), K(table_id));
   } else if (OB_ISNULL(simple_table_schema_)) {
     ret = OB_TABLE_NOT_EXIST;
-    ObString db("");
-    LOG_USER_ERROR(OB_TABLE_NOT_EXIST, "", "");
     LOG_WARN("table not exist", K(ret), K(credential_), K(table_id));
   } else if (OB_FAIL(schema_cache_guard_.init(credential_.tenant_id_,
                                               simple_table_schema_->get_table_id(),

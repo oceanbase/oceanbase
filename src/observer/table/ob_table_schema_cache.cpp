@@ -68,6 +68,11 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     auto_inc_cache_size_ = table_schema->get_auto_increment_cache_size();
     set_is_ttl_table(!table_schema->get_ttl_definition().empty());
     set_is_partitioned_table(table_schema->is_partitioned_table());
+    if (flags_.is_ttl_table_ ) {
+      if (OB_FAIL(ob_write_string(allocator_, table_schema->get_ttl_definition(), ttl_definition_))) {
+        LOG_WARN("fail to copy ttl definaitions", K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -447,6 +452,18 @@ int ObKvSchemaCacheGuard::get_kv_attributes(ObString &kv_attributes)
     LOG_WARN("fail to get cache obj", K(ret));
   } else {
     kv_attributes = cache_obj->get_kv_attributes();
+  }
+  return ret;
+}
+
+int ObKvSchemaCacheGuard::get_ttl_definition(ObString &ttl_definition)
+{
+  int ret = OB_SUCCESS;
+  ObKvSchemaCacheObj *cache_obj = nullptr;
+  if (OB_FAIL(get_cache_obj(cache_obj))) {
+    LOG_WARN("fail to get cache obj", K(ret));
+  } else {
+    ttl_definition = cache_obj->get_ttl_definition();
   }
   return ret;
 }

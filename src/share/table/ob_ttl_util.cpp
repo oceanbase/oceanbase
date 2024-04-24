@@ -1252,6 +1252,42 @@ const char * ObTTLUtil::get_ttl_tenant_status_cstr(const ObTTLTaskStatus &status
   return status_cstr;
 }
 
+int ObTTLUtil::get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns)
+{
+  int ret = OB_SUCCESS;
+  if (ttl_definition.empty()) {
+    // do nothing
+  } else {
+    ObString right = ttl_definition;
+    bool is_end = false;
+    while (OB_SUCC(ret) && !is_end) {
+      ObString left = right.split_on(',');
+      if (left.empty()) {
+        left = right;
+        is_end = true;
+      }
+      ObString column_name = left.split_on('+').trim();
+      if (column_name.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column name", K(ret));
+      } else if (OB_FAIL(ttl_columns.push_back(column_name))) {
+        LOG_WARN("fail to add column name", K(ret), K(column_name));
+      }
+    }
+  }
+  return ret;
+}
+
+bool ObTTLUtil::is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns)
+{
+  bool bret = false;
+  for (int64_t i = 0; i < ttl_columns.count() && !bret; i++) {
+    if (orig_column_name.case_compare(ttl_columns.at(i)) == 0) {
+      bret = true;
+    }
+  }
+  return bret;
+}
 
 } // end namespace rootserver
 } // end namespace oceanbase

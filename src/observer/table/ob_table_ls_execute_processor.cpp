@@ -175,6 +175,11 @@ int ObTableLSExecuteP::try_process()
   bool need_all_prop = arg_.ls_op_.need_all_prop_bitmap();
   table_id_ = table_id;  // init move response need
   if (OB_FAIL(init_schema_info(table_id))) {
+    if (ret == OB_TABLE_NOT_EXIST) {
+      ObString db("");
+      const ObString &table_name = ls_op.get_table_name();
+      LOG_USER_ERROR(OB_TABLE_NOT_EXIST, to_cstring(db), to_cstring(table_name));
+    }
     LOG_WARN("fail to init schema info", K(ret), K(table_id));
   } else if (OB_FAIL(get_ls_id(ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));

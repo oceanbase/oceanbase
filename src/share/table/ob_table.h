@@ -1555,6 +1555,7 @@ public:
   OB_INLINE const ObTableTabletOp &at(int64_t idx) const { return tablet_ops_.at(idx); }
   OB_INLINE ObTableTabletOp &at(int64_t idx) { return tablet_ops_.at(idx); }
   OB_INLINE uint64_t get_table_id() const { return table_id_; }
+  OB_INLINE const ObString& get_table_name() const { return table_name_; }
   OB_INLINE const ObIArray<ObString>& get_all_rowkey_names() {return rowkey_names_; }
   OB_INLINE const ObIArray<ObString>& get_all_properties_names() {return properties_names_; }
   OB_INLINE bool return_one_result() const { return return_one_result_; }
