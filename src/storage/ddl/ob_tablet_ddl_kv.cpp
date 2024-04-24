@@ -1011,6 +1011,11 @@ int ObDDLKV::get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable
   return ret;
 }
 
+int ObDDLKV::get_first_ddl_memtable(ObDDLMemtable *&ddl_memtable)
+{
+  return get_ddl_memtable(0, ddl_memtable);
+}
+
 int ObDDLKV::set_macro_block(
     ObTablet &tablet,
     const ObDDLMacroBlock &macro_block,

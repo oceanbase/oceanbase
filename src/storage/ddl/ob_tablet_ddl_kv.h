@@ -322,6 +322,7 @@ public:
   int64_t get_macro_block_cnt() const { return macro_block_count_; }
   int create_ddl_memtable(ObTablet &tablet, const ObITable::TableKey &table_key, ObDDLMemtable *&ddl_memtable);
   int get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable);
+  int get_first_ddl_memtable(ObDDLMemtable *&ddl_memtable);
   ObIArray<ObDDLMemtable *> &get_ddl_memtables() { return ddl_memtables_; }
   void inc_pending_cnt(); // used by ddl kv pending guard
   void dec_pending_cnt();

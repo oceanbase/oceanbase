@@ -1326,10 +1326,14 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         ++memtable_cnt;
         if (table_ptr->is_direct_load_memtable()) {
           ObDDLMemtable *ddl_memtable = nullptr;
-          if (OB_FAIL((static_cast<ObDDLKV*>(table_ptr)->get_ddl_memtable(0, ddl_memtable)))) {
-            LOG_WARN("fail to get ddl memtable but ignore the failure, return nullpoint", K(ret));
-          } else if (OB_ISNULL(ddl_memtable)) {
-            continue;
+          if (OB_FAIL((static_cast<ObDDLKV*>(table_ptr)->get_first_ddl_memtable(ddl_memtable)))) {
+            if (ret == OB_ENTRY_NOT_EXIST) {
+              // memtable is null, ignore the ddl_kv
+              ret = OB_SUCCESS;
+              continue;
+            } else {
+              LOG_WARN("fail to get ddl memtable", K(ret));
+            }
           } else {
             target_table_ptr = ddl_memtable;
           }
