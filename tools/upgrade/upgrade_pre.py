@@ -614,6 +614,7 @@
 #import upgrade_health_checker
 #import tenant_upgrade_action
 #import upgrade_post_checker
+#import re
 #
 ## 由于用了/*+read_consistency(WEAK) */来查询，因此升级期间不能允许创建或删除租户
 #
@@ -622,6 +623,11 @@
 #  sql_dump_filename = config.post_upgrade_sql_filename
 #  rollback_sql_filename =  config.post_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#    def format(self, record):
+#        s = super(PasswordMaskingFormatter, self).format(record)
+#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -629,15 +635,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -770,6 +779,7 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #import logging
+#import re
 #
 #import config
 #import opts
@@ -785,6 +795,11 @@
 #  sql_dump_filename = config.pre_upgrade_sql_filename
 #  rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#    def format(self, record):
+#        s = super(PasswordMaskingFormatter, self).format(record)
+#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -792,15 +807,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -1650,10 +1668,17 @@
 #import logging
 #import getopt
 #import time
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
 #  old_version = '4.0.0.0'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#    def format(self, record):
+#        s = super(PasswordMaskingFormatter, self).format(record)
+#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):
@@ -1923,15 +1948,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #
@@ -2456,9 +2484,15 @@
 #from mysql.connector import errorcode
 #import logging
 #import getopt
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_cluster_health_checker.log'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#    def format(self, record):
+#        s = super(PasswordMaskingFormatter, self).format(record)
+#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2711,15 +2745,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #def check_zone_valid(query_cur, zone):
