@@ -472,6 +472,7 @@ struct ObStoreCtx
                     const int64_t timeout,
                     const int64_t lock_timeout_us,
                     const share::SCN &snapshot_version);
+  bool is_uncommitted_data_rollbacked() const;
   void force_print_trace_log();
   TO_STRING_KV(KP(this),
                K_(ls_id),

@@ -558,10 +558,10 @@ int ObTxCallbackList::sync_log_fail(const ObCallbackScope &callbacks,
   return ret;
 }
 
-int ObTxCallbackList::clean_unlog_callbacks(int64_t &removed_cnt)
+int ObTxCallbackList::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove)
 {
   int ret = OB_SUCCESS;
-  ObCleanUnlogCallbackFunctor functor;
+  ObCleanUnlogCallbackFunctor functor(before_remove);
 
   LockGuard guard(*this, LOCK_MODE::LOCK_ALL);
   if (log_cursor_ == &head_) {

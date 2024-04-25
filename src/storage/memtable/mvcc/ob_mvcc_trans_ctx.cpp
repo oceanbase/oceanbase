@@ -640,17 +640,17 @@ int ObTransCallbackMgr::remove_callback_for_uncommited_txn(const memtable::ObMem
 
 // when leader revoked, writes has not been logged must be discarded
 // otherwise freeze memtable checkpoint will be blocked on waiting these.
-int ObTransCallbackMgr::clean_unlog_callbacks(int64_t &removed_cnt)
+int ObTransCallbackMgr::clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove)
 {
   int ret = OB_SUCCESS;
   if (need_merge_) { // OLD (before 4.3)
-    if (OB_FAIL(callback_list_.clean_unlog_callbacks(removed_cnt))) {
+    if (OB_FAIL(callback_list_.clean_unlog_callbacks(removed_cnt, before_remove))) {
       TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret));
     }
   } else { // NEW (since 4.3)
     CALLBACK_LISTS_FOREACH(idx, list) {
       int64_t rm_cnt = 0;
-      if (OB_FAIL(list->clean_unlog_callbacks(rm_cnt))) {
+      if (OB_FAIL(list->clean_unlog_callbacks(rm_cnt, before_remove))) {
         TRANS_LOG(WARN, "clean unlog callbacks failed", K(ret), K(idx));
       } else {
         removed_cnt += rm_cnt;

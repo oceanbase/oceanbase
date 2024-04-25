@@ -91,6 +91,7 @@ protected:
   void reset_iter_array(const bool can_reuse = false);
   void reuse_iter_array();
   void reclaim_iter_array();
+  int handle_4377(const char* func);
   void dump_tx_statistic_for_4377(ObStoreCtx *store_ctx);
   void dump_table_statistic_for_4377();
   int set_base_version() const;

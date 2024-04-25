@@ -1535,7 +1535,7 @@ int ObPartTransCtx::gc_ctx_()
   if (OB_FAIL(prepare_mul_data_source_tx_end_(false))) {
     TRANS_LOG(WARN, "trans gc need retry", K(ret), K(trans_id_), K(ls_id_));
   } else {
-    TRANS_LOG(INFO, "[TRANS GC] part ctx abort", "context", *this);
+    TRANS_LOG(INFO, "[TRANS GC] participant will **abort** itself due to scheduler has quit", KPC(this));
     REC_TRANS_TRACE_EXT2(tlog_, tx_ctx_gc, OB_ID(ref), get_ref());
     if (need_callback_scheduler_()) {
       TRANS_LOG(INFO, "[TRANS GC] scheduler has down, skip callback scheduler", KP(this),
@@ -1563,7 +1563,7 @@ int ObPartTransCtx::check_scheduler_status()
       TRANS_LOG(WARN, "check rs scheduler is alive error", KR(ret), K(is_alive), KPC(this));
       // scheduler已宕机
     } else if (!is_alive) {
-      TRANS_LOG(WARN, "scheduler server is not alive, tx ctx will do gc", KPC(this));
+      TRANS_LOG(WARN, "[TRANS GC] scheduler server is not alive, participant will GC", KPC(this));
       if (OB_FAIL(gc_ctx_())) {
         TRANS_LOG(WARN, "force kill part_ctx error", KR(ret), KPC(this));
       }
@@ -1718,7 +1718,7 @@ int ObPartTransCtx::recover_tx_ctx_table_info(ObTxCtxTableInfo &ctx_info)
         ctx_source_ = PartCtxSource::TRANSFER_RECOVER;
       }
     }
-    TRANS_LOG(INFO, "recover tx ctx table info succeed", K(ret), KPC(this), K(ctx_info));
+    TRANS_LOG(INFO, "[TRANS RECOVERY] recover tx ctx table info succeed", K(ret), KPC(this), K(ctx_info));
   }
 
   REC_TRANS_TRACE_EXT2(tlog_,
@@ -1790,7 +1790,7 @@ int ObPartTransCtx::serialize_tx_ctx_to_buffer(ObTxLocalBuffer &buffer, int64_t 
       serialize_size = pos;
     }
   }
-
+  TRANS_LOG(INFO, "[TRANS CHECKPOINT] checkpoint trans ctx", K(ret), K_(trans_id), K_(ls_id), KP(this));
   return ret;
 }
 

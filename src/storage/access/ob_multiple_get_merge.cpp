@@ -233,18 +233,12 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
           // and if we find that it does not exist, there must be an anomaly
           if (GCONF.enable_defensive_check()
               && access_ctx_->query_flag_.is_lookup_for_4377()) {
-            ret = OB_ERR_DEFENSIVE_CHECK;
-            ObString func_name = ObString::make_string("[index lookup]ObMultipleGetMerge::inner_get_next_row");
-            LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
-            LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg", "Fatal Error!!! Catch a defensive error!", K(ret),
-                          K(rowkeys_),
-                          K(get_row_range_idx_ - 1),
-                          K(rowkeys_->at(get_row_range_idx_ - 1)),
-                          K(fuse_row),
-                          KPC(access_ctx_->store_ctx_));
-            concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
-            dump_table_statistic_for_4377();
-            dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+            ret = handle_4377("[index lookup]ObMultipleGetMerge::inner_get_next_row");
+            STORAGE_LOG(WARN,"[index lookup] row not found", K(ret),
+                        K(rowkeys_),
+                        K(get_row_range_idx_ - 1),
+                        K(rowkeys_->at(get_row_range_idx_ - 1)),
+                        K(fuse_row));
           }
         }
       }

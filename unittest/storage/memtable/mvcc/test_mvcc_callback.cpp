@@ -577,7 +577,8 @@ TEST_F(TestTxCallbackList, remove_callback_by_clean_unlog_callbacks)
 
   EXPECT_EQ(9, callback_list_.get_length());
   int64_t removed_cnt = 0;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.clean_unlog_callbacks(removed_cnt));
+  ObFunction<void()> before_remove = []{};
+  EXPECT_EQ(OB_SUCCESS, callback_list_.clean_unlog_callbacks(removed_cnt, before_remove));
   EXPECT_EQ(5, callback_list_.get_length());
 
   EXPECT_EQ(4, rollback_cnt_);

@@ -361,6 +361,9 @@ public:
   // newly added for 4.0
 
   bool is_decided() const { return ctx_tx_data_.is_decided(); }
+  // check data is rollbacked either partially or totally
+  // in which case the reader should be failed
+  bool is_data_rollbacked() const { return mt_ctx_.is_tx_rollbacked(); }
   int retry_dup_trx_before_prepare(
       const share::SCN &before_prepare_version,
       const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);

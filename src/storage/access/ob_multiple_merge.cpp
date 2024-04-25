@@ -1581,6 +1581,26 @@ void ObMultipleMerge::reuse_lob_locator()
   lob_reader_.reuse();
 }
 
+int ObMultipleMerge::handle_4377(const char* func)
+{
+  int ret = OB_ERR_DEFENSIVE_CHECK;
+  // check whether txn is aborted
+  if (access_ctx_->store_ctx_->is_uncommitted_data_rollbacked()) {
+    STORAGE_LOG(WARN, "transaction has been aborted", KPC(access_ctx_->store_ctx_));
+    ret = OB_TRANS_KILLED;
+  } else {
+    ObString func_name = ObString::make_string(func);
+    LOG_USER_ERROR(OB_ERR_DEFENSIVE_CHECK, func_name.length(), func_name.ptr());
+    LOG_DBA_ERROR(OB_ERR_DEFENSIVE_CHECK, "msg",
+                  "Fatal Error!!! Catch a defensive error! index lookup: row not found in data-table",
+                  K(ret), KPC(access_ctx_->store_ctx_));
+    concurrency_control::ObDataValidationService::set_delay_resource_recycle(access_ctx_->ls_id_);
+    dump_table_statistic_for_4377();
+    dump_tx_statistic_for_4377(access_ctx_->store_ctx_);
+  }
+  return ret;
+}
+
 void ObMultipleMerge::dump_tx_statistic_for_4377(ObStoreCtx *store_ctx)
 {
   int ret = OB_SUCCESS;

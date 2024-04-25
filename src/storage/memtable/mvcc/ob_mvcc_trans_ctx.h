@@ -272,7 +272,7 @@ public:
                                ObIArray<share::SCN> &checksum_scn);
   int update_checksum(const ObIArray<uint64_t> &checksum,
                       const ObIArray<share::SCN> &checksum_scn);
-  int clean_unlog_callbacks(int64_t &removed_cnt);
+  int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   // when not inc, return -1
   int64_t inc_pending_log_size(const int64_t size);
   void try_merge_multi_callback_lists(const int64_t new_size, const int64_t size, const bool is_logging_blocked);

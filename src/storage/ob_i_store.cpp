@@ -131,6 +131,15 @@ void ObStoreCtx::force_print_trace_log()
   }
 }
 
+bool ObStoreCtx::is_uncommitted_data_rollbacked() const
+{
+  bool bret = false;
+  if (NULL != mvcc_acc_ctx_.tx_ctx_) {
+    bret = mvcc_acc_ctx_.tx_ctx_->is_data_rollbacked();
+  }
+  return bret;
+}
+
 void ObStoreRowLockState::reset()
 {
   is_locked_ = false;

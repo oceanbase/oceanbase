@@ -75,7 +75,7 @@ public:
 
   // clean_unlog_callbacks will remove all unlogged callbacks. Which is called
   // when switch to follower forcely.
-  int clean_unlog_callbacks(int64_t &removed_cnt);
+  int clean_unlog_callbacks(int64_t &removed_cnt, common::ObFunction<void()> &before_remove);
   int fill_log(ObITransCallback* log_cursor, ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &functor);
   int submit_log_succ(const ObCallbackScope &callbacks);
   int sync_log_succ(const share::SCN scn, int64_t sync_cnt);

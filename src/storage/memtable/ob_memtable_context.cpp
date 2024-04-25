@@ -894,17 +894,22 @@ int ObMemtableCtx::remove_callback_for_uncommited_txn(const memtable::ObMemtable
 int ObMemtableCtx::clean_unlog_callbacks()
 {
   int ret = OB_SUCCESS;
-  int64_t removed_cnt = 0;
   {
+    int64_t removed_cnt = 0;
+    struct BeforeRemoveCallback {
+      memtable::ObMemtableCtx *mt_;
+      BeforeRemoveCallback(memtable::ObMemtableCtx *mt) : mt_(mt) {}
+      void operator()() {
+        mt_->set_partial_rollbacked();
+      }
+    };
+    ObFunction<void()> before_remove(BeforeRemoveCallback(this));
     ObByteLockGuard guard(lock_);
-    if (OB_FAIL(trans_mgr_.clean_unlog_callbacks(removed_cnt))) {
+    if (OB_FAIL(trans_mgr_.clean_unlog_callbacks(removed_cnt, before_remove))) {
       TRANS_LOG(WARN, "clean unlog callbacks failed", KR(ret));
     } else {
       trans_mgr_.clear_pending_log_size();
     }
-  }
-  if (removed_cnt > 0) {
-    set_partial_rollbacked();
   }
   return ret;
 }
