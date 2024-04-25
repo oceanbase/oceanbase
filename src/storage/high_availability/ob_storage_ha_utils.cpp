@@ -47,6 +47,7 @@ namespace oceanbase
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_TRANSFER_ALLOW_RETRY);
 int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;
@@ -461,6 +462,15 @@ bool ObTransferUtils::is_need_retry_error(const int err)
     default:
       break;
   }
+
+#ifdef ERRSIM
+  int tmp_ret = OB_SUCCESS;
+  tmp_ret = EN_TRANSFER_ALLOW_RETRY ? : OB_SUCCESS;
+  if (OB_TMP_FAIL(tmp_ret)) {
+    bool_ret = false;
+  }
+#endif
+
   return bool_ret;
 }
 

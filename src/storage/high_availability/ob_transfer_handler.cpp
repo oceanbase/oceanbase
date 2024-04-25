@@ -548,6 +548,14 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
 
+    if (OB_FAIL(ret)) {
+      if (timeout_ctx.is_timeouted()) {
+        //overwrite ret
+        LOG_WARN("transfer trans already timeout, error code will change to timeout", K(ret));
+        ret = OB_TIMEOUT;
+      }
+    }
+
     int64_t trans_commit_begin = ObTimeUtil::current_time();
     commit_succ = OB_SUCC(ret);
     if (OB_TMP_FAIL(commit_trans_(ret, trans))) {
@@ -1742,6 +1750,7 @@ int ObTransferHandler::get_transfer_tablets_meta_(
   tablet_meta_list.reset();
   obrpc::ObCopyTabletInfo tablet_info;
   const int64_t start_ts = ObTimeUtil::current_time();
+  DEBUG_SYNC(BEFORE_START_TRANSFER_GET_TABLET_META);
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
