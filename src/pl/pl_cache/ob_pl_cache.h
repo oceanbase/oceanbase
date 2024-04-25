@@ -204,13 +204,15 @@ struct ObPLObjectKey : public ObILibCacheKey
     db_id_(common::OB_INVALID_ID),
     key_id_(common::OB_INVALID_ID),
     sessid_(0),
-    name_() {}
+    name_(),
+    sys_vars_str_() {}
   ObPLObjectKey(uint64_t db_id, uint64_t key_id)
   : ObILibCacheKey(ObLibCacheNameSpace::NS_INVALID),
     db_id_(db_id),
     key_id_(key_id),
     sessid_(0),
-    name_() {}
+    name_(),
+    sys_vars_str_() {}
 
   void reset();
   virtual int deep_copy(common::ObIAllocator &allocator, const ObILibCacheKey &other) override;
@@ -227,6 +229,7 @@ struct ObPLObjectKey : public ObILibCacheKey
   uint64_t  key_id_; // routine id or package id
   uint32_t sessid_;
   common::ObString name_;
+  common::ObString sys_vars_str_;
 };
 
 

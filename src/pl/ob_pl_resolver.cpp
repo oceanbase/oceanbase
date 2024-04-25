@@ -4251,6 +4251,9 @@ int ObPLResolver::resolve_when(const ObStmtNodeTree *parse_tree, ObRawExpr *case
 
       OZ (func.add_expr(expr));
       OZ (expr->formalize(&resolve_ctx_.session_info_));
+      if (!is_bool_stmt && lib::is_mysql_mode()) {
+        OZ (set_cm_warn_on_fail(expr));
+      }
       OZ (stmt->add_when_clause(func.get_expr_count() - 1, body));
     }
   }
