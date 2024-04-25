@@ -746,7 +746,7 @@ public:
    * end_access - end of txn protected resources access
    */
   int end_access();
-  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ from_scn, const ObTxSEQ to_scn);
+  int rollback_to_savepoint(const int64_t op_sn, const ObTxSEQ to_scn);
   int set_block_frozen_memtable(memtable::ObMemtable *memtable);
   void clear_block_frozen_memtable();
   bool is_logging_blocked();
