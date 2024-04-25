@@ -1300,10 +1300,14 @@ int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
   } else if (!memtables.empty()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
       ObITable *table = memtables.at(i).get_table();
-      memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-      if (OB_ISNULL(table) || !table->is_memtable()) {
+      memtable::ObMemtable *memtable = nullptr;
+      if (OB_ISNULL(table) || !table->is_tablet_memtable()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
+      } else if (table->is_direct_load_memtable()) {
+        ret = OB_TRANSFER_SYS_ERROR;
+        LOG_ERROR("find a direct load memtable", K(ret), KPC(table));
+      } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
       } else if (memtable->is_active_memtable()) {
         if (memtable->not_empty()) {
           ret = OB_TRANSFER_SYS_ERROR;

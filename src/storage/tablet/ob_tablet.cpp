@@ -4219,11 +4219,17 @@ int ObTablet::get_newest_schema_version(int64_t &schema_version) const
     int64_t max_schema_version_on_memtable = 0;
     int64_t unused_max_column_cnt_on_memtable = 0;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < memtables.count(); ++idx) {
-      memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(memtables.at(idx));
-      if (OB_FAIL(memtable->get_schema_info(
-          store_column_cnt_in_schema,
-          max_schema_version_on_memtable, unused_max_column_cnt_on_memtable))) {
-        LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(memtable));
+      ObITable *table = memtables.at(idx);
+      if (table->is_data_memtable()) {
+        ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+        if (OB_FAIL(memtable->get_schema_info(
+                store_column_cnt_in_schema, max_schema_version_on_memtable, unused_max_column_cnt_on_memtable))) {
+          LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
+        }
+      } else if (table->is_direct_load_memtable()) {
+        // FIXME : @suzhi.yt
+        // ret = OB_NOT_SUPPORTED;
+        LOG_INFO("find a direct load memtable", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -5557,12 +5563,19 @@ int ObTablet::get_storage_schema_for_transfer_in(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table in tables_handle is invalid", K(ret), KP(table));
-      } else if (OB_FAIL(static_cast<memtable::ObMemtable *>(table)->get_schema_info(
-          store_column_cnt_in_schema,
-          max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
-        LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
+      } else if (table->is_data_memtable()) {
+        ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+        if (OB_FAIL(memtable->get_schema_info(
+                store_column_cnt_in_schema, max_schema_version_in_memtable, max_column_cnt_in_memtable))) {
+          LOG_WARN("failed to get schema info from memtable", KR(ret), KPC(table));
+        }
+      } else if (table->is_direct_load_memtable()) {
+        // FIXME : @suzhi.yt
+        // ret = OB_NOT_SUPPORTED;
+        LOG_INFO("find a direct load memtable", KR(ret));
       }
     }
+
   }
 
   if (OB_FAIL(ret)) {

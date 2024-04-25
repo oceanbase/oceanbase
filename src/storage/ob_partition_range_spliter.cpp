@@ -931,7 +931,11 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
   if (OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid table pointer", K(ret), KP(table));
-  } else if (!table->is_sstable()) {
+  } else if (table->is_direct_load_memtable()) {
+    // FIXME : @suzhi.yt
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(WARN, "get single range from direct load memtable not supported", KR(ret), KPC(table));
+  } else if (table->is_data_memtable()) {
     memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
     int64_t row_count = 0;
     if (OB_FAIL(memtable->estimate_phy_size(&store_range.get_start_key(),
@@ -940,7 +944,7 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
                                             row_count))) {
       STORAGE_LOG(WARN, "Failed to get single range info from memtable", K(ret), K(store_range));
     }
-  } else {
+  } else if (table->is_sstable()) {
     ObSSTable *sstable = static_cast<ObSSTable *>(table);
     if (store_range.is_whole_range()) {
       ObSSTableMetaHandle meta_handle;
@@ -1073,26 +1077,30 @@ int ObPartitionRangeSpliter::split_ranges(ObRangeSplitInfo &range_info,
 
   return ret;
 }
-
 int ObPartitionRangeSpliter::split_ranges_memtable(ObRangeSplitInfo &range_info,
                                                    ObIAllocator &allocator,
                                                    ObIArray<ObStoreRange> &range_array)
 {
   int ret = OB_SUCCESS;
-
+  ObITable *table = range_info.tables_->at(0);
   if (OB_UNLIKELY(!range_info.is_valid() || range_info.is_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid range info to split ranges for memtable", K(ret));
   } else if (OB_UNLIKELY(range_info.tables_->count() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected table count for memtable range info", K(ret), K(range_info));
-  } else {
+  } else if (OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "Unexpected null table", K(ret), KP(table), K(range_info));
+  } else if (table->is_direct_load_memtable()) {
+    // FIXME : @suzhi.yt support direct load memtable?
+    ret = OB_NOT_SUPPORTED;
+    STORAGE_LOG(WARN, "not supported memtable", KR(ret), KPC(table));
+  } else if (table->is_data_memtable()) {
     ObSEArray<ObStoreRange, 16> store_ranges;
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(range_info.tables_->at(0));
-    if (OB_ISNULL(memtable)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "Unexpected null memtable", K(ret), KP(memtable), K(range_info));
-    } else if (OB_FAIL(memtable->get_split_ranges(
+    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+
+    if (OB_FAIL(memtable->get_split_ranges(
         &range_info.store_range_->get_start_key(),
         &range_info.store_range_->get_end_key(),
         range_info.parallel_target_count_,

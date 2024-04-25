@@ -153,6 +153,10 @@ int ObTableEstimator::estimate_multi_scan_row_count(
           }
         }
       }
+    } else if (current_table->is_direct_load_memtable()) {
+      // FIXME : @suzhi.yt
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported memtable", KR(ret), KPC(current_table));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected table type", K(ret), K(*current_table));

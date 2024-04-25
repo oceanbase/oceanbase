@@ -5763,9 +5763,12 @@ void ObLSTabletService::dump_diag_info_for_old_row_loss(
       } else if (table->is_sstable()) {
         FLOG_INFO("Found rowkey in the sstable",
             KPC(row), KPC(reinterpret_cast<ObSSTable*>(table)));
-      } else {
+      } else if (table->is_data_memtable()) {
         FLOG_INFO("Found rowkey in the memtable",
-            KPC(row), KPC(reinterpret_cast<memtable::ObMemtable*>(table)));
+            KPC(row), KPC(static_cast<memtable::ObMemtable*>(table)));
+      } else if (table->is_direct_load_memtable()) {
+        FLOG_INFO("Found rowkey in the direct load memtable",
+            KPC(row), KPC(static_cast<ObITabletMemtable*>(table)));
       }
 
       // ignore error in the loop
@@ -6059,7 +6062,9 @@ int ObLSTabletService::estimate_block_count_and_row_count(
     } else if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(tablet_iter.table_iter()));
-    } else if (table->is_memtable()) {
+    } else if (table->is_direct_load_memtable()) {
+      // FIXME : @suzhi.yt
+    } else if (table->is_data_memtable()) {
       memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
     } else if (table->is_sstable()) {
       sstable = static_cast<ObSSTable *>(table);

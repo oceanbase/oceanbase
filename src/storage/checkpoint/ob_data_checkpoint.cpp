@@ -929,9 +929,12 @@ void ObDataCheckpoint::add_diagnose_info_for_ls_frozen_()
   RLOCK(LS_FROZEN);
   ls_frozen_list_.get_iterator(iterator);
   while (iterator.has_next()) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable*>(iterator.get_next());
-    if (!memtable->is_active_checkpoint()) {
-      memtable->report_memtable_diagnose_info(memtable::ObMemtable::AddCheckpointDiagnoseInfoForMemtable());
+    ObITabletMemtable *tablet_memtable = static_cast<ObITabletMemtable *>(iterator.get_next());
+    if (tablet_memtable->is_data_memtable()) {
+      if (!tablet_memtable->is_active_checkpoint()) {
+        (static_cast<memtable::ObMemtable *>(tablet_memtable))
+            ->report_memtable_diagnose_info(memtable::ObMemtable::AddCheckpointDiagnoseInfoForMemtable());
+      }
     }
   }
 }

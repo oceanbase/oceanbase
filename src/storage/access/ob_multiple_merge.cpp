@@ -1321,10 +1321,11 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         LOG_DEBUG("cur table is empty", K(ret), KPC(table_ptr));
         continue;
       } else if (table_ptr->is_memtable()) {
-        read_released_memtable = read_released_memtable ||
-            TabletMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
         ++memtable_cnt;
-        if (table_ptr->is_direct_load_memtable()) {
+        if (table_ptr->is_data_memtable()) {
+          read_released_memtable = read_released_memtable ||
+            TabletMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
+        } else if (table_ptr->is_direct_load_memtable()) {
           ObDDLMemtable *ddl_memtable = nullptr;
           if (OB_FAIL((static_cast<ObDDLKV*>(table_ptr)->get_first_ddl_memtable(ddl_memtable)))) {
             if (ret == OB_ENTRY_NOT_EXIST) {

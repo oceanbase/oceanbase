@@ -581,10 +581,14 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
           ObITable *table = memtables.at(i).get_table();
-          memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-          if (OB_ISNULL(table) || !table->is_data_memtable()) {
+          memtable::ObMemtable *memtable = nullptr;
+          if (OB_ISNULL(table) || !table->is_tablet_memtable()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
+          } else if (table->is_direct_load_memtable()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("find a direct load memtable", KR(ret), K(tablet_info_.tablet_id_), KPC(table));
+          } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
           } else if (table->get_start_scn() >= backfill_tx_ctx_->log_sync_scn_
               && memtable->not_empty()
               && !memtable->get_rec_scn().is_max()) {

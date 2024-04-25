@@ -64,7 +64,7 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
   if (get_table_param_.is_valid()) {
     int64_t memtable_row_count = 0;
     int64_t sstable_row_count = 0;
-    common::ObSEArray<ObITable *, 4> memtables;
+    common::ObSEArray<memtable::ObMemtable *, 4> memtables;
 
     // iter all tables to estimate row count
     get_table_param_.tablet_iter_.table_iter()->resume();
@@ -78,12 +78,15 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
         } else {
           STORAGE_LOG(WARN, "Fail to get next table iter", K(ret), K(get_table_param_.tablet_iter_.table_iter()));
         }
-      } else if (table->is_memtable()) {
-        if (OB_FAIL(memtables.push_back(table))) {
+      } else if (table->is_data_memtable()) {
+        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
+        if (OB_FAIL(memtables.push_back(memtable))) {
           STORAGE_LOG(WARN, "push back memtable failed", KR(ret));
         } else {
-          memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
+          memtable_row_count += memtable->get_physical_row_cnt();
         }
+      } else if (table->is_direct_load_memtable()) {
+        // FIXEM : @suzhi.yt support direct load memtable get_row_count();
       } else if (table->is_sstable()) {
         sstable_row_count += static_cast<ObSSTable *>(table)->get_row_count();
       }
@@ -112,7 +115,7 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
   return ret;
 }
 
-int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<ObITable *> &memtables,
+int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<memtable::ObMemtable *> &memtables,
                                                        ObIArray<ObDatumRange> &sample_ranges)
 {
   int ret = OB_SUCCESS;
@@ -121,7 +124,7 @@ int ObGetSampleIterHelper::get_memtable_sample_ranges_(const ObIArray<ObITable *
 
   // get split ranges from all memtables
   for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); i++) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(memtables.at(i));
+    memtable::ObMemtable *memtable = memtables.at(i);
     int tmp_ret = OB_SUCCESS;
     if (OB_ISNULL(memtable)) {
       ret = OB_ERR_UNEXPECTED;
