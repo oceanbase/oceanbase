@@ -525,7 +525,7 @@ int ObChunkSliceStore::prepare_datum_stores(const uint64_t tenant_id, ObTabletHa
             LOG_WARN("failed to init chunk datum store", K(ret));
           } else {
             datum_store->set_dir_id(dir_id);
-            datum_store->set_allocator(allocator);
+            datum_store->get_inner_allocator().set_tenant_id(tenant_id);
             LOG_INFO("set dir id", K(dir_id));
           }
           if (OB_SUCC(ret)) {

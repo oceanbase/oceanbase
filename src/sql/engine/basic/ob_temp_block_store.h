@@ -396,7 +396,7 @@ public:
   inline int64_t get_file_size() const { return file_size_; }
   inline int64_t get_max_blk_size() const { return max_block_size_; }
   inline int64_t get_max_hold_mem() const { return max_hold_mem_; }
-  inline ObIAllocator& get_inner_allocator() { return inner_allocator_; }
+  inline common::DefaultPageAllocator& get_inner_allocator() { return inner_allocator_; }
   inline int64_t has_dumped() const { return block_cnt_on_disk_ > 0; }
   inline int64_t get_last_buffer_mem_size() const
   {
