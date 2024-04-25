@@ -304,7 +304,7 @@ int MdsUnit<K, V>::set(MdsTableBase *p_mds_table,
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   bool is_lvalue = std::is_lvalue_reference<decltype(value)>::value;
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   SetOP op(this, is_lvalue, p_mds_table, key, value, ctx, is_for_remove, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::WRITE>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -382,7 +382,7 @@ int MdsUnit<K, V>::get_snapshot(const K &key,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, key, read_op, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -427,7 +427,7 @@ int MdsUnit<K, V>::get_by_writer(const K &key,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetByWriterOp<typename std::remove_reference<OP>::type> op(this, key, read_op, writer, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -678,7 +678,7 @@ int MdsUnit<DummyKey, V>::set(MdsTableBase *p_mds_table,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   bool is_lvalue = std::is_lvalue_reference<decltype(value)>::value;
   SetOP op(this, is_lvalue, value, ctx, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::WRITE>(lock_, retry_param, op))) {
@@ -738,7 +738,7 @@ int MdsUnit<DummyKey, V>::get_snapshot(OP &&read_op,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, read_op, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
@@ -778,7 +778,7 @@ int MdsUnit<DummyKey, V>::get_by_writer(OP &&read_op,
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  RetryParam retry_param(lock_timeout_us);
+  RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
   GetByWriterOp<typename std::remove_reference<OP>::type> op(this, read_op, writer, snapshot, read_seq, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {

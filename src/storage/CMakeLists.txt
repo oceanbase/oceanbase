@@ -570,6 +570,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/adapter_define/mds_dump_node.cpp
   multi_data_source/runtime_utility/mds_tenant_service.cpp
   multi_data_source/runtime_utility/mds_factory.cpp
+  multi_data_source/runtime_utility/mds_retry_control.cpp
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
