@@ -34701,10 +34701,7 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
     if (OB_ISNULL(conn = dynamic_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("conn_ is NULL", KR(ret));
-    } else if (OB_FAIL(schema_service_->get_ddl_trans_controller().check_enable_ddl_trans_new_lock(tenant_id, enable_ddl_trans_new_lock))) {
-      LOG_WARN("fail to check_enable_ddl_lock_obj", K(ret), K(tenant_id));
-    } else if (enable_ddl_trans_new_lock) {
-      // new lock_obj
+    } else {
       ObLockObjRequest lock_arg;
       lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_TENANT;
       lock_arg.obj_id_ = tenant_id;
@@ -34716,32 +34713,6 @@ int ObDDLSQLTransaction::lock_all_ddl_operation(
                                                       lock_arg,
                                                       conn))) {
         LOG_WARN("lock table failed", KR(ret), K(tenant_id));
-      }
-    } else {
-      uint64_t compat_version = 0;
-      // first use old all_ddl_operation row lock
-      if (OB_FAIL(lock_all_ddl_operation(trans, tenant_id))) {
-        LOG_WARN("lock all_ddl_operation failed", K(ret), K(tenant_id));
-      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-        LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-      } else if (compat_version >= DATA_VERSION_4_1_0_0) {
-        // new lock_obj
-        ObLockObjRequest lock_arg;
-        lock_arg.obj_type_ = ObLockOBJType::OBJ_TYPE_TENANT;
-        lock_arg.obj_id_ = tenant_id;
-        lock_arg.owner_id_ = ObTableLockOwnerID(0);
-        lock_arg.lock_mode_ = !enable_parallel ? EXCLUSIVE : SHARE;
-        lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-        lock_arg.timeout_us_ = ctx.get_timeout();
-        if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id,
-                                                        lock_arg,
-                                                        conn))) {
-          LOG_WARN("lock table failed", KR(ret), K(tenant_id));
-        } else if (OB_FAIL(schema_service_->get_ddl_trans_controller().set_enable_ddl_trans_new_lock(tenant_id))) {
-          LOG_WARN("set enable_ddl_lock_obj failed", K(ret), K(tenant_id));
-        }
-      } else {
-        // only use old ddl operation row lock
       }
     }
   }
