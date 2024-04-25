@@ -1610,23 +1610,22 @@ void ObTenant::handle_retry_req(bool need_clear)
   int ret = OB_SUCCESS;
   ObLink* task = nullptr;
   ObRequest *req = NULL;
-  while (OB_SUCC(ret) && OB_SUCC(retry_queue_.pop(task, need_clear))) {
+  // even if ret != OB_SUCCESS, the loop must continue to pop all requests
+  while (OB_SUCC(retry_queue_.pop(task, need_clear))) {
+    // if pop returns OB_SUCCESS, then the task must not be NULL.
     req = static_cast<rpc::ObRequest*>(task);
-    if (nullptr != req) {
-      if (req->large_retry_flag()) {
-        if (OB_FAIL(recv_large_request(*req))) {
-          on_translate_fail(req, ret);
-          LOG_WARN("tenant patrol push req into large_query queue fail", "tenant_id", id_, K(ret));
-        }
-      } else {
-        if (OB_FAIL(recv_request(*req))) {
-          on_translate_fail(req, ret);
-          LOG_WARN("tenant patrol push req into common queue fail", "tenant_id", id_, K(ret));
-        }
+    if (req->large_retry_flag()) {
+      if (OB_FAIL(recv_large_request(*req))) {
+        LOG_WARN("tenant patrol push req into large_query queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("the req is NULL", "tenant_id", id_, K(ret));
+      if (OB_FAIL(recv_request(*req))) {
+        LOG_WARN("tenant patrol push req into common queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
+      }
     }
   }
 }
