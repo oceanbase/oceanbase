@@ -676,6 +676,15 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append)
       break;
     }
   }
+
+  if (ObTxDesc::State::IMPLICIT_ACTIVE == state_ && !active_scn_.is_valid()) {
+    /*
+     * it is a first stmt's retry, we should set active scn
+     * to enable recognizing it is first stmt
+     */
+    active_scn_ = get_tx_seq();
+  }
+
   if (!hit) {
     if (append) {
       a.last_touch_ts_ = exec_info_reap_ts_ + 1;
