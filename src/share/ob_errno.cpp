@@ -12777,8 +12777,8 @@ static const _error _error_OB_ERR_DEPRECATED_SYNTAX_NO_REP = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5518, This syntax is deprecated and will be removed in a future release",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5518, %s is deprecated and will be removed in a future release"
 };
-static const _error _error_OB_ERR_CAST_ARRAY_SUPPORT = {
-      .error_name            = "OB_ERR_CAST_ARRAY_SUPPORT",
+static const _error _error_OB_NOT_MULTIVALUE_SUPPORT = {
+      .error_name            = "OB_NOT_MULTIVALUE_SUPPORT",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = ER_NOT_SUPPORTED_YET,
@@ -28079,7 +28079,7 @@ struct ObStrErrorInit
     _errors[-OB_ERR_DEPRECATED_SYNTAX] = &_error_OB_ERR_DEPRECATED_SYNTAX;
     _errors[-OB_ERR_NON_STRING_NOT_SUPPORT] = &_error_OB_ERR_NON_STRING_NOT_SUPPORT;
     _errors[-OB_ERR_DEPRECATED_SYNTAX_NO_REP] = &_error_OB_ERR_DEPRECATED_SYNTAX_NO_REP;
-    _errors[-OB_ERR_CAST_ARRAY_SUPPORT] = &_error_OB_ERR_CAST_ARRAY_SUPPORT;
+    _errors[-OB_NOT_MULTIVALUE_SUPPORT] = &_error_OB_NOT_MULTIVALUE_SUPPORT;
     _errors[-OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX] = &_error_OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
     _errors[-OB_ERR_JSON_CONTAINER_CAST_SCALAR] = &_error_OB_ERR_JSON_CONTAINER_CAST_SCALAR;
     _errors[-OB_ERR_INVALID_IDENTIFIER_JSON_TABLE] = &_error_OB_ERR_INVALID_IDENTIFIER_JSON_TABLE;

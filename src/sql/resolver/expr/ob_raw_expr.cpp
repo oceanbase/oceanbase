@@ -619,6 +619,9 @@ ObRawExpr* ObRawExpr::get_json_domain_param_expr()
     param_expr = get_param_expr(0);
   } else if (get_expr_type() == T_FUN_SYS_JSON_OVERLAPS) {
     param_expr = get_param_expr(0);
+    if (OB_NOT_NULL(param_expr) && param_expr->is_const_expr()) {
+      param_expr = get_param_expr(1);
+    }
   }
 
   return param_expr;
@@ -4092,20 +4095,33 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
       && r_expr->is_domain_json_expr()) {
     const ObRawExpr *r_param_expr = nullptr;
     const ObRawExpr *l_param_expr = l_expr->get_param_expr(1);
+
+    const ObRawExpr *r_column_expr = nullptr;
+    const ObRawExpr *l_column_expr = l_expr->get_param_expr(0);
+
     if (r_expr->get_expr_type() == T_FUN_SYS_JSON_MEMBER_OF) {
       r_param_expr = r_expr->get_param_expr(1);
     } else {
       r_param_expr = r_expr->get_param_expr(0);
+      if (r_expr->get_expr_type() == T_FUN_SYS_JSON_OVERLAPS && OB_NOT_NULL(r_param_expr) && r_param_expr->is_const_expr()) {
+        r_param_expr = r_expr->get_param_expr(1);
+      }
     }
     if (OB_ISNULL(r_param_expr)) {
     } else if (r_param_expr->is_wrappered_json_extract()) {
       r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
+      r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
     } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
+      r_column_expr = r_param_expr->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(1);
     }
 
     if (OB_NOT_NULL(r_param_expr)) {
       bool_ret = l_param_expr->same_as(*r_param_expr, check_context);
+    }
+
+    if (bool_ret) {
+      bool_ret = r_column_expr == l_column_expr;
     }
   } else if (l_expr->get_expr_type() == r_expr->get_expr_type()) {
     bool_ret = l_expr->same_as(*r_expr, check_context);

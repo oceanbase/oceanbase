@@ -374,11 +374,11 @@ int ObExprJsonQuery::check_enable_cast_index_array(ObIJsonBase* json_base, bool 
     ret = OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
     LOG_USER_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX);
   } else if (json_base->json_type() == ObJsonNodeType::J_BOOLEAN) {
-    ret = OB_ERR_CAST_ARRAY_SUPPORT;
-    LOG_USER_ERROR(OB_ERR_CAST_ARRAY_SUPPORT, "CAST-ing JSON BOOLEAN type to array");
+    ret = OB_NOT_MULTIVALUE_SUPPORT;
+    LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing JSON BOOLEAN type to array");
   } else if (!disable_container && json_base->json_type() == ObJsonNodeType::J_OBJECT) {
-    ret = OB_ERR_CAST_ARRAY_SUPPORT;
-    LOG_USER_ERROR(OB_ERR_CAST_ARRAY_SUPPORT, "CAST-ing JSON OBJECT type to array");
+    ret = OB_NOT_MULTIVALUE_SUPPORT;
+    LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing JSON OBJECT type to array");
   }
 
   if (OB_FAIL(ret)) {

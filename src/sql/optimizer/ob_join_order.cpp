@@ -3729,18 +3729,15 @@ int ObJoinOrder::check_exprs_overlap_multivalue_index(
       } else if (qual->get_expr_type() != T_OP_BOOL)  {
       } else if (!qual->is_domain_json_expr()) {
       } else {
-        const ObColumnSchemaV2 *mulvalue_col = nullptr;
         for (int64_t k = 0; k < keys.count() && !match; k++) {
           ObColumnRefRawExpr *ref = static_cast<ObColumnRefRawExpr *>(keys.at(k));
           ObRawExpr *column_expr = nullptr;
           ObRawExpr *depend_expr = nullptr;
           if (!ref->is_multivalue_generated_column()) {
           } else if (OB_ISNULL(column_expr = stmt->get_column_expr_by_id(table_id, ref->get_column_id()))) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get multivalue column, null expr", K(ret));
+            // quals not contains json multivalue index is normal, need not return error
           } else if (OB_ISNULL(depend_expr = (static_cast<ObColumnRefRawExpr*>(column_expr))->get_dependant_expr())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("failed to get multivalue depend expr, null expr", K(ret));
+            // quals not contains json multivalue index is normal, need not return error
           } else {
             qual = ObRawExprUtils::skip_inner_added_expr(qual);
             ObExprEqualCheckContext equal_ctx;

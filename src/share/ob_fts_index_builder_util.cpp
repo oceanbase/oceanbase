@@ -2376,6 +2376,7 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
   HEAP_VAR(ObRowDesc, row_desc) {
     common::ObOrderType order_type;
     const ObColumnSchemaV2 *mvi_array_column = nullptr;
+    int32_t multi_column_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
       const ObColumnSchemaV2 *mvi_column = nullptr;
       const ObColumnSortItem &mvi_col_item = arg.index_columns_.at(i);
@@ -2400,6 +2401,12 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
                                                    false/*is_specified_storing_col*/))) {
           LOG_WARN("add column failed", "mvi_column", *mvi_column, "rowkey_order_type",
               mvi_col_item.order_type_, K(row_desc), K(ret));
+        } else if (mvi_column->is_multivalue_generated_column()) {
+          multi_column_cnt++;
+          if (multi_column_cnt > 1) {
+            ret = OB_NOT_MULTIVALUE_SUPPORT;
+            LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "more than one multi-valued key part per index");
+          }
         }
       } else if (mvi_column->is_multivalue_generated_array_column()) {
         mvi_array_column = mvi_column;

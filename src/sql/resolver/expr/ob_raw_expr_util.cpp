@@ -4613,6 +4613,8 @@ int ObRawExprUtils::replace_qual_param_if_need(ObRawExpr* qual,
 {
   INIT_SUCC(ret);
   ObRawExpr* qual_expr = nullptr;
+  const ObRawExpr* param_expr = nullptr;
+  int32_t idx = 0;
 
   if (qual->get_expr_type() == T_OP_BOOL
       && OB_NOT_NULL(qual_expr = qual->get_param_expr(0))
@@ -4621,8 +4623,14 @@ int ObRawExprUtils::replace_qual_param_if_need(ObRawExpr* qual,
       if (OB_FAIL(static_cast<ObOpRawExpr *>(qual_expr)->replace_param_expr(1, col_expr))) {
         LOG_WARN("replace const int expr failed", K(ret));
       }
-    } else if (OB_FAIL(static_cast<ObOpRawExpr *>(qual_expr)->replace_param_expr(0, col_expr))) {
-      LOG_WARN("replace const int expr failed", K(ret));
+    } else {
+      if (OB_NOT_NULL(param_expr = qual_expr->get_param_expr(0)) && param_expr->is_const_expr()) {
+        idx = 1;
+      }
+
+      if (OB_FAIL(static_cast<ObOpRawExpr *>(qual_expr)->replace_param_expr(idx, col_expr))) {
+        LOG_WARN("replace const int expr failed", K(ret));
+      }
     }
   }
 

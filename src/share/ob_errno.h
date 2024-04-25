@@ -891,7 +891,7 @@ constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
 constexpr int OB_ERR_NON_STRING_NOT_SUPPORT = -5517;
 constexpr int OB_ERR_DEPRECATED_SYNTAX_NO_REP = -5518;
-constexpr int OB_ERR_CAST_ARRAY_SUPPORT = -5519;
+constexpr int OB_NOT_MULTIVALUE_SUPPORT = -5519;
 constexpr int OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX = -5520;
 constexpr int OB_ERR_JSON_CONTAINER_CAST_SCALAR = -5521;
 constexpr int OB_ERR_INVALID_IDENTIFIER_JSON_TABLE = -5522;
@@ -2943,7 +2943,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_DEPRECATED_SYNTAX_NO_REP__USER_ERROR_MSG "%s is deprecated and will be removed in a future release"
-#define OB_ERR_CAST_ARRAY_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support %s"
+#define OB_NOT_MULTIVALUE_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support %s"
 #define OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX__USER_ERROR_MSG "Invalid JSON value for CAST for functional index."
 #define OB_ERR_JSON_CONTAINER_CAST_SCALAR__USER_ERROR_MSG "Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__USER_ERROR_MSG "invalid identifier used for path expression in JSON_TABLE"
@@ -5195,7 +5195,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5517, This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
 #define OB_ERR_DEPRECATED_SYNTAX_NO_REP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5518, %s is deprecated and will be removed in a future release"
-#define OB_ERR_CAST_ARRAY_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5519, This version of MySQL doesn't yet support %s"
+#define OB_NOT_MULTIVALUE_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5519, This version of MySQL doesn't yet support %s"
 #define OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5520, Invalid JSON value for CAST for functional index."
 #define OB_ERR_JSON_CONTAINER_CAST_SCALAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5521, Cannot store an array or an object in a scalar key part of the index."
 #define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__ORA_USER_ERROR_MSG "ORA-40680: invalid identifier used for path expression in JSON_TABLE"
