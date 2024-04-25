@@ -4920,7 +4920,7 @@ int ObTablet::write_sync_tablet_seq_log(ObTabletAutoincSeq &autoinc_seq,
   ObSyncTabletSeqMdsLogCb *cb = nullptr;
   ObLogHandler *log_handler = get_log_handler();
   palf::LSN lsn;
-  const bool need_nonblock= false;
+  const bool need_nonblock = true; // log_handler->append may return OB_EAGAIN, caller is responsible for retry
   const bool allow_compression= false;
   const SCN ref_scn = SCN::min_scn();
   uint64_t new_autoinc_seq = 0;
