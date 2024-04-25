@@ -166,9 +166,13 @@ private:
       const bool for_old_mds);
   static void handle_ret_for_replay(int &ret);
   static int convert_schemas(obrpc::ObBatchCreateTabletArg &arg);
-  static bool check_need_create_empty_major_sstable(
-      const ObCreateTabletSchema &create_tablet_schema,
-      const obrpc::ObCreateTabletExtraInfo &create_tablet_extra_info);
+  static int check_and_get_create_tablet_schema_info(
+      const ObSArray<ObCreateTabletSchema*> &create_tablet_schemas,
+      const ObSArray<obrpc::ObCreateTabletExtraInfo> &create_tablet_extra_infos,
+      const obrpc::ObCreateTabletInfo &info,
+      const int64_t index,
+      const ObCreateTabletSchema *&create_tablet_schema,
+      bool &need_create_empty_major_sstable);
 };
 } // namespace storage
 } // namespace oceanbase

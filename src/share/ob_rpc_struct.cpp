@@ -9364,6 +9364,22 @@ OB_DEF_DESERIALIZE(ObBatchCreateTabletArg)
       }
     }
   }
+
+  if (OB_SUCC(ret) && tablet_extra_infos_.empty()) {
+    // process the compatibility of the ObCreateTabletExtraInfo.
+    const int64_t schemas_count = create_tablet_schemas_.empty() ? table_schemas_.count() : create_tablet_schemas_.count();
+    if (OB_UNLIKELY(schemas_count <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arg", K(ret), K(schemas_count), K(table_schemas_), K(create_tablet_schemas_));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < schemas_count; i++) {
+        obrpc::ObCreateTabletExtraInfo create_tablet_extra_info; // placeholder.
+        if (OB_FAIL(tablet_extra_infos_.push_back(create_tablet_extra_info))) {
+          LOG_WARN("failed to push back create tablet extra info", K(ret));
+        }
+      }
+    }
+  }
   LST_DO_CODE(OB_UNIS_DECODE, clog_checkpoint_scn_);
   return ret;
 }
