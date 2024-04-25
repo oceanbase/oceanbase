@@ -1,0 +1,11 @@
+#!/bin/bash
+echo "execute pre install script"
+version=@OceanBase_CE_VERSION@
+
+if [ "$1" -gt 1 ]; then
+    parent_name=$(cat /proc/$PPID/comm)
+    if [[ "$parent_name" != "ocp_mgragent" ]]; then
+        echo "The upgrade of the oceanbase $version is not allowed." >&2
+        exit 1
+    fi
+fi

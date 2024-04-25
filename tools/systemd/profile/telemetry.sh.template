@@ -4,7 +4,7 @@ url="https://openwebapi.oceanbase.com/api/web/oceanbase/report"
 type=@CPACK_PACKAGE_NAME@
 version=@CPACK_PACKAGE_VERSION@
 release=@CPACK_RPM_PACKAGE_RELEASE@
-ip=$(hostname -i)
+ip=$(hostname -I | awk '/^[0-9]/ {print $1; exit}')
 hostHash=$(echo -n "$ip" | sha1sum | awk '{print $1}')
 osName=$(cat /etc/os-release | grep "^ID=" | cut -f2 -d=)
 osRelease=$(cat /etc/os-release | grep "^VERSION_ID=" | cut -f2 -d=)
