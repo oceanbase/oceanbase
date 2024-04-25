@@ -1227,7 +1227,9 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
   for(int64_t routine_idx = 0; OB_SUCC(ret) && routine_idx < routine_table.get_count(); routine_idx++) {
     ObPLFunctionAST *routine_ast = NULL;
     const ObPLRoutineInfo *routine_info = NULL;
-    if (OB_FAIL(routine_table.get_routine_info(routine_idx, routine_info))) {
+    if (OB_FAIL(ObPL::check_session_alive(session_info))) {
+      LOG_WARN("session is killed or interrupted", K(ret));
+    } else if (OB_FAIL(routine_table.get_routine_info(routine_idx, routine_info))) {
       LOG_WARN("get routine info failed", K(ret));
     } else if (OB_ISNULL(routine_info)) {
       //empty routine info is possible when package body is empty, push null to make idx correct
