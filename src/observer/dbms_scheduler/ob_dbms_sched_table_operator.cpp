@@ -145,14 +145,16 @@ int ObDBMSSchedTableOperator::_build_job_finished_dml(int64_t now, ObDBMSSchedJo
   OZ (dml.add_column("state", job_info.state_));
   if (0 == job_info.state_.case_compare("COMPLETED")) {
     OZ (dml.add_column("enabled", false));
+  } else if (0 == job_info.state_.case_compare("BROKEN")) {
+    OZ (dml.add_time_column("next_date", 64060560000000000));
   }
   OZ (dml.add_column(true, "this_date"));
   OZ (dml.add_time_column("last_date", job_info.this_date_));
-  OZ (dml.add_time_column("next_date", job_info.next_date_));
   OZ (dml.add_column("failures", job_info.failures_));
   OZ (dml.add_column("flag", job_info.flag_));
   OZ (dml.add_column("total", job_info.total_));
   OZ (dml.get_extra_condition().assign_fmt("state!='BROKEN'"));
+  OZ (dml.get_extra_condition().assign_fmt("this_date<=usec_to_time(%ld)", job_info.this_date_));
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   return ret;
 }
@@ -168,6 +170,7 @@ int ObDBMSSchedTableOperator::_build_job_rollback_start_dml(ObDBMSSchedJobInfo &
   OZ (dml.add_pk_column("job", job_info.job_));
   OZ (dml.add_pk_column("job_name", job_info.job_name_));
   OZ (dml.add_column(true, "this_date"));
+  OZ (dml.add_time_column("next_date", job_info.next_date_));// roll back to old next date
   OZ (dml.splice_update_sql(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, sql));
   return ret;
 }
@@ -327,10 +330,10 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
     OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.
-      job_info.next_date_ = 64060560000000000; // 4000-01-01
       job_info.state_ = ObString("BROKEN");
-    } else if (now >= job_info.end_date_) {
+    } else if (now >= job_info.end_date_ || job_info.get_interval_ts() == 0) {
       // when end_date is reach and auto_drop is set false, disable set completed state.
+      // for once job, not wait until end date, set completed state when running end
       job_info.state_ = ObString("COMPLETED");
     }
     OZ (_build_job_finished_dml(now, job_info, sql1));

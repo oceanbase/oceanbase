@@ -128,7 +128,7 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
       ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
     OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
   }
-  OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+  OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
   CK (OB_NOT_NULL(user_info = user_infos.at(0)));
   CK (OB_NOT_NULL(user_info));
   CK (OB_NOT_NULL(tenant_info));
