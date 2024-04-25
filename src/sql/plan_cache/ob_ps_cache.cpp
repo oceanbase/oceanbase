@@ -48,17 +48,16 @@ ObPsCache::ObPsCache()
 
 void ObPsCache::destroy()
 {
+  TG_DESTROY(tg_id_);
   if (inited_) {
     // ps_stmt_id和ps_stmt_info创建时，会给其增加引用计数
     // 现在PsCache要析构了，对所有内部对象减去1,如果引用计数到0，会显式free内存
-    TG_DESTROY(tg_id_);
     cache_evict_all_ps();
-
-    if (NULL != mem_context_) {
-      DESTROY_CONTEXT(mem_context_);
-      mem_context_ = NULL;
-    }
     inited_ = false;
+  }
+  if (NULL != mem_context_) {
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
   }
 }
 
