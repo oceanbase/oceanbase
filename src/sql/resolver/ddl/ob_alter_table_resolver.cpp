@@ -4235,16 +4235,22 @@ int ObAlterTableResolver::resolve_modify_foreign_key_state(const ParseNode *node
         const ObColumnSchemaV2 *child_col = NULL;
         const ObColumnSchemaV2 *parent_col = NULL;
         for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_info->child_column_ids_.count(); ++i) {
+          ObString tmp_child_column_name;
+          ObString tmp_parent_column_name;
           if (OB_ISNULL(child_col = table_schema_->get_column_schema(foreign_key_info->child_column_ids_.at(i)))) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "child column schema not exists", K(ret), K(foreign_key_info->child_column_ids_.at(i)));
           } else if (OB_ISNULL(parent_col = parent_table_schema->get_column_schema(foreign_key_info->parent_column_ids_.at(i)))) {
             ret = OB_ERR_UNEXPECTED;
             SQL_RESV_LOG(WARN, "parent column schema not exists", K(ret), K(foreign_key_info->parent_column_ids_.at(i)));
-          } else if (OB_FAIL(foreign_key_arg.child_columns_.push_back(child_col->get_column_name_str()))) {
-            SQL_RESV_LOG(WARN, "push back failed", K(ret), K(child_col->get_column_name_str()));
-          } else if (OB_FAIL(foreign_key_arg.parent_columns_.push_back(parent_col->get_column_name_str()))) {
-            SQL_RESV_LOG(WARN, "push back failed", K(ret), K(parent_col->get_column_name_str()));
+          } else if (OB_FAIL(ob_write_string(*allocator_, child_col->get_column_name_str(), tmp_child_column_name))) {
+            SQL_RESV_LOG(WARN, "deep copy parent database name failed", K(ret), K(child_col->get_column_name_str()));
+          } else if (OB_FAIL(ob_write_string(*allocator_, parent_col->get_column_name_str(), tmp_parent_column_name))) {
+            SQL_RESV_LOG(WARN, "deep copy parent table name failed", K(ret), K(parent_col->get_column_name_str()));
+          } else if (OB_FAIL(foreign_key_arg.child_columns_.push_back(tmp_child_column_name))) {
+            SQL_RESV_LOG(WARN, "push back failed", K(ret), K(tmp_child_column_name));
+          } else if (OB_FAIL(foreign_key_arg.parent_columns_.push_back(tmp_parent_column_name))) {
+            SQL_RESV_LOG(WARN, "push back failed", K(ret), K(tmp_parent_column_name));
           }
         }
         if (OB_FAIL(ret)) {
