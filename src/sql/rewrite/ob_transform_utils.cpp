@@ -14469,5 +14469,19 @@ int ObTransformUtils::check_child_projection_validity(const ObSelectStmt *child_
   return ret;
 }
 
+bool ObTransformUtils::is_const_null(ObRawExpr &expr)
+{
+  int bret = false;
+  if (!expr.is_const_raw_expr()) {
+    // do nothing
+  } else if (expr.get_expr_type() == T_NULL) {
+    bret = true;
+  } else if (expr.get_expr_type() == T_QUESTIONMARK) {
+    bret = expr.get_result_type().get_param().is_null() ||
+           (lib::is_oracle_mode() && expr.get_result_type().get_param().is_null_oracle());
+  }
+  return bret;
+}
+
 } // namespace sql
 } // namespace oceanbase

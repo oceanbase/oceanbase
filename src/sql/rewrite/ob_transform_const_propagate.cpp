@@ -1465,7 +1465,8 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     LOG_WARN("get unexpected null", K(ret));
   } else if (!const_info.const_expr_->is_static_scalar_const_expr()) {
     is_valid = false;
-  } else if (const_info.need_add_constraint_ == PRE_CALC_RESULT_NULL) {
+  } else if (const_info.need_add_constraint_ == PRE_CALC_RESULT_NULL ||
+             ObTransformUtils::is_const_null(*const_info.const_expr_)) {
     // do nothing
   } else if (OB_FAIL(ObRawExprUtils::check_need_cast_expr(const_info.const_expr_->get_result_type(),
                                                         const_info.column_expr_->get_result_type(),
