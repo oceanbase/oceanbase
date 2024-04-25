@@ -36,33 +36,37 @@ int ObSpatialMBR::filter(const ObSpatialMBR &other, ObGeoRelationType type, bool
     } else if (OB_FAIL(other.generate_latlng_rect(other_rect))) {
       LOG_WARN("fail to generate other latlng rectangle", K(ret));
     } else {
-      switch (type) {
-        case ObGeoRelationType::T_COVERS: {
-          pass_through = !other_rect.Contains(this_rect);
-          break;
-        }
+      if (is_point_ && other.is_point_ && this_rect.ApproxEquals(other_rect)) {
+        pass_through = false;
+      } else {
+       switch (type) {
+          case ObGeoRelationType::T_COVERS: {
+            pass_through = !other_rect.Contains(this_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_DWITHIN:
-        case ObGeoRelationType::T_INTERSECTS: {
-          pass_through = !this_rect.Intersects(other_rect);
-          break;
-        }
+          case ObGeoRelationType::T_DWITHIN:
+          case ObGeoRelationType::T_INTERSECTS: {
+            pass_through = !this_rect.Intersects(other_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_COVEREDBY: {
-          pass_through = !this_rect.Contains(other_rect);
-          break;
-        }
+          case ObGeoRelationType::T_COVEREDBY: {
+            pass_through = !this_rect.Contains(other_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_DFULLYWITHIN: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support within geo relation type", K(ret), K(type));
-          break;
-        }
+          case ObGeoRelationType::T_DFULLYWITHIN: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support within geo relation type", K(ret), K(type));
+            break;
+          }
 
-        default: {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("undefined geo relation type", K(ret), K(type));
-          break;
+          default: {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("undefined geo relation type", K(ret), K(type));
+            break;
+          }
         }
       }
     }
