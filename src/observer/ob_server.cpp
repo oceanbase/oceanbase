@@ -407,8 +407,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
     } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
-        storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_,
-        true/*need_reserved*/))) {
+        storage_env_.sstable_dir_, storage_env_.log_spec_.max_log_file_size_,
+        storage_env_.slog_file_spec_))) {
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));

@@ -72,7 +72,7 @@ void TestStorageLogReplay::SetUp()
   TestDataFilePrepare::TearDown();
   TestDataFilePrepare::SetUp();
   FileDirectoryUtils::create_full_path("./test_storage_log_replay");
-  SLOGGERMGR.init(dir_, MAX_FILE_SIZE, log_file_spec_);
+  SLOGGERMGR.init(dir_, dir_, MAX_FILE_SIZE, log_file_spec_);
   static ObTenantBase tenant_ctx(10);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;

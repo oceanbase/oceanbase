@@ -579,7 +579,7 @@ int MockTenantModuleEnv::init_slogger_mgr(const char *log_dir)
   log_file_spec.retry_write_policy_ = "normal";
   log_file_spec.log_create_policy_ = "normal";
   log_file_spec.log_write_policy_ = "truncate";
-  if (OB_FAIL(SLOGGERMGR.init(log_dir, MAX_FILE_SIZE, log_file_spec))) {
+  if (OB_FAIL(SLOGGERMGR.init(log_dir, log_dir, MAX_FILE_SIZE, log_file_spec))) {
     STORAGE_LOG(WARN, "fail to init SLOGGERMGR", K(ret));
   }
 
