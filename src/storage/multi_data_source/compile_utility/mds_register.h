@@ -60,7 +60,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletCreateMdsHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           3,\
-                                          CREATE_TABLET_NEW_MDS)
+                                          CREATE_TABLET_NEW_MDS) // FARM COMPAT WHITELIST: compat guaranteed
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletDeleteMdsHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           4,\
@@ -76,7 +76,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletStartTransferInHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           21,\
-                                          START_TRANSFER_IN)
+                                          START_TRANSFER_IN) // FARM COMPAT WHITELIST: compat guaranteed
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletFinishTransferOutHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           22,\
@@ -84,7 +84,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletFinishTransferInHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           23,\
-                                          FINISH_TRANSFER_IN)
+                                          FINISH_TRANSFER_IN) // FARM COMPAT WHITELIST: compat guaranteed
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObBalanceTaskMDSHelper,\
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           24,\
