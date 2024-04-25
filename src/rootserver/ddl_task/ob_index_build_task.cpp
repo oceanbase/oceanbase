@@ -1378,6 +1378,7 @@ int ObIndexBuildTask::clean_on_failed()
         ObSqlString drop_index_sql;
         bool is_oracle_mode = false;
         ObString index_name;
+        ObIndexArg::IndexActionType index_action_type = ObIndexArg::DROP_INDEX;
         if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, index_schema->get_database_id(), database_schema))) {
           LOG_WARN("get database schema failed", K(ret), K_(tenant_id), K(index_schema->get_database_id()));
         } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_schema->get_data_table_id(), data_table_schema))) {
@@ -1392,6 +1393,17 @@ int ObIndexBuildTask::clean_on_failed()
         } else if (index_schema->is_in_recyclebin()) {
           // index is already in recyclebin, skip get index name, use a fake one, this is just to pass IndexArg validity check
           index_name = "__fake";
+        } else if (ObIndexArg::ADD_MLOG == create_index_arg_.index_action_type_) {
+          const ObString &data_table_name = data_table_schema->get_table_name_str();
+          if (OB_FAIL(index_schema->get_mlog_name(index_name))) {
+            LOG_WARN("failed to get mlog name", KR(ret));
+          } else if (OB_FALSE_IT(index_action_type = obrpc::ObIndexArg::DROP_MLOG)) {
+          } else if ((0 == parent_task_id_) && create_index_arg_.ddl_stmt_str_.empty()) {
+            if (OB_FAIL(drop_index_sql.append_fmt("drop materialized view log on %.*s",
+                data_table_name.length(), data_table_name.ptr()))) {
+              LOG_WARN("failed to generate drop mlog sql", KR(ret), K(data_table_name));
+            }
+          }
         } else if (OB_FAIL(index_schema->get_index_name(index_name))) {
           LOG_WARN("get index name failed", K(ret));
         } else if (0 == parent_task_id_) {
@@ -1420,7 +1432,7 @@ int ObIndexBuildTask::clean_on_failed()
           drop_index_arg.index_name_        = index_name;
           drop_index_arg.table_name_        = data_table_schema->get_table_name();
           drop_index_arg.database_name_     = database_schema->get_database_name_str();
-          drop_index_arg.index_action_type_ = obrpc::ObIndexArg::DROP_INDEX;
+          drop_index_arg.index_action_type_ = index_action_type;
           drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
           drop_index_arg.is_add_to_scheduler_ = false;
           drop_index_arg.is_hidden_         = data_table_schema->is_user_hidden_table(); // just use to fetch data table schema.
