@@ -18,6 +18,7 @@ using namespace oceanbase::common;
 
 volatile int64_t ObMallocTimeMonitor::WARN_THRESHOLD = 100000;
 __thread ObBasicTimeGuard *ObMallocTimeMonitor::tl_time_guard = NULL;
+__thread bool ObMallocTimeMonitor::tl_enable_time_guard = true;
 
 ObMallocTimeMonitor::Guard::Guard(const int64_t size, const ObMemAttr &attr)
   : size_(size), attr_(attr), last_time_guard_(tl_time_guard), time_guard_()

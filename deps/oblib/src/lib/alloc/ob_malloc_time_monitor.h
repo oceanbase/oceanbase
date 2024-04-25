@@ -47,7 +47,7 @@ public:
   }
   static void click(const char *mod = NULL)
   {
-    if (NULL != tl_time_guard) {
+    if (tl_enable_time_guard && NULL != tl_time_guard) {
       tl_time_guard->click(mod);
     }
   }
@@ -62,6 +62,8 @@ public:
     }
   }
   void print();
+public:
+  static __thread bool tl_enable_time_guard;
 private:
   static __thread ObBasicTimeGuard *tl_time_guard;
 private:
