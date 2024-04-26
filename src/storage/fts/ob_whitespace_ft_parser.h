@@ -26,6 +26,9 @@ namespace storage
 class ObSpaceFTParser final
 {
 public:
+  static const int64_t FT_MIN_WORD_LEN = 3;
+  static const int64_t FT_MAX_WORD_LEN = 84;
+public:
   static int segment(
       lib::ObFTParserParam *param,
       const char *fulltext,

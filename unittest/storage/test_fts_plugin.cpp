@@ -79,8 +79,8 @@ class ObTestAddWord final : public lib::ObFTParserParam::ObIAddWord
 {
 public:
   static const char *TEST_FULLTEXT;
-  static const int64_t TEST_WORD_COUNT = 9;
-  static const int64_t TEST_WORD_COUNT_WITHOUT_STOPWORD = 6;
+  static const int64_t TEST_WORD_COUNT = 5;
+  static const int64_t TEST_WORD_COUNT_WITHOUT_STOPWORD = 4;
 public:
   ObTestAddWord();
   virtual ~ObTestAddWord() = default;
@@ -99,8 +99,8 @@ private:
 const char *ObTestAddWord::TEST_FULLTEXT = "OceanBase fulltext search is No.1 in the world.";
 
 ObTestAddWord::ObTestAddWord()
-  : words_{"oceanbase", "fulltext", "search", "is", "no", "1", "in", "the", "world"},
-    words_without_stopword_{"oceanbase", "fulltext", "search", "no", "1", "world"},
+  : words_{"oceanbase", "fulltext", "search", "the", "world"},
+    words_without_stopword_{"oceanbase", "fulltext", "search", "world"},
     ith_word_(0)
 {
 }
@@ -449,6 +449,42 @@ TEST_F(ObTestFTParseHelper, test_parse_fulltext)
   for (int64_t i = 0; i < words.count(); ++i) {
     ASSERT_TRUE(0 == strncmp(test_add_word.words_without_stopword_[i], words[i].word_.ptr(), words[i].word_.length()));
   }
+}
+
+TEST_F(ObTestFTParseHelper, test_min_and_max_word_len)
+{
+  common::ObSEArray<ObFTWord, 16> words;
+  int64_t doc_length = 0;
+
+  // word len = 2;
+  const char *word_len_2 = "ab";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_2, std::strlen(word_len_2), doc_length, words));
+  ASSERT_EQ(0, words.count());
+
+  // word len = 3;
+  const char *word_len_3 = "abc";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_3, std::strlen(word_len_3), doc_length, words));
+  ASSERT_EQ(1, words.count());
+
+  // word len = 4;
+  const char *word_len_4 = "abcd";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_4, std::strlen(word_len_4), doc_length, words));
+  ASSERT_EQ(1, words.count());
+
+  // word len = 76;
+  const char *word_len_76 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_76, std::strlen(word_len_76), doc_length, words));
+  ASSERT_EQ(1, words.count());
+
+  // word len = 84;
+  const char *word_len_84 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz123456";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_84, std::strlen(word_len_84), doc_length, words));
+  ASSERT_EQ(1, words.count());
+
+  // word len = 85;
+  const char *word_len_85 = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz1234567";
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, word_len_85, std::strlen(word_len_85), doc_length, words));
+  ASSERT_EQ(0, words.count());
 }
 
 class ObTestNgramFTParseHelper : public ::testing::Test

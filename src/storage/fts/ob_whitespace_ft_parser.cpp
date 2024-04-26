@@ -76,6 +76,8 @@ namespace storage
       || OB_UNLIKELY(0 >= word_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param), KP(allocator), KP(word), K(word_len));
+  } else if (word_len < FT_MIN_WORD_LEN || word_len > FT_MAX_WORD_LEN) {
+    LOG_DEBUG("skip too small or large word", K(ret), K(word_len));
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(word_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate word memory", K(ret), K(word_len));
