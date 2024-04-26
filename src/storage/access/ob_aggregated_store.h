@@ -228,7 +228,7 @@ public:
   }
   OB_INLINE void set_end() { iter_end_flag_ = IterEndState::ITER_END; }
   int check_agg_in_row_mode(const ObTableIterParam &iter_param);
-  TO_STRING_KV(K_(is_firstrow_aggregated), K_(agg_row), K_(agg_flat_row_mode));
+  INHERIT_TO_STRING_KV("ObBlockBatchedRowStore", ObBlockBatchedRowStore, K_(is_firstrow_aggregated), K_(agg_row), K_(agg_flat_row_mode));
 
 private:
   bool is_firstrow_aggregated_;
