@@ -421,7 +421,7 @@ bool ObArchiveSender::in_normal_status_(const ArchiveKey &key) const
   return round_mgr_->is_in_archive_status(key) || round_mgr_->is_in_suspend_status(key);
 }
 
-ERRSIM_POINT_DEF(ERRSIM_OB_BACKUP_PERMISSION_DENIED);
+ERRSIM_POINT_DEF(ERRSIM_OB_ARCHIVE_SENDER_ERROR);
 // 仅有需要重试的任务返回错误码
 void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume_status)
 {
@@ -467,8 +467,8 @@ void ObArchiveSender::handle(ObArchiveSendTask &task, TaskConsumeStatus &consume
     }
   }
 
-  if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_OB_BACKUP_PERMISSION_DENIED)) {
-    ret = ERRSIM_OB_BACKUP_PERMISSION_DENIED;
+  if (OB_SUCC(ret) && OB_UNLIKELY(ERRSIM_OB_ARCHIVE_SENDER_ERROR)) {
+    ret = ERRSIM_OB_ARCHIVE_SENDER_ERROR;
   }
 
   if (OB_FAIL(ret)) {
@@ -775,14 +775,29 @@ void ObArchiveSender::handle_archive_ret_code_(const ObLSID &id,
     // skip it
   } else if (OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code) {
     // ret code should report to user
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
       LOG_DBA_ERROR(OB_BACKUP_DEVICE_OUT_OF_SPACE, "msg", "archive device is full", "ret", ret_code,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
   } else if (OB_BACKUP_PERMISSION_DENIED == ret_code) {
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+    // backup permission denied
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
       LOG_DBA_ERROR(OB_BACKUP_PERMISSION_DENIED, "msg", "archive dest permission denied", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_ERR_AES_ENCRYPT == ret_code) {
+    // archive dest encrypt failed
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_ERR_AES_ENCRYPT, "msg", "archive dest encrypt failed", "ret", ret_code,
+          "archive_dest_id", key.dest_id_,
+          "archive_round", key.round_);
+    }
+  } else if (OB_ERR_AES_DECRYPT == ret_code) {
+    // archive desc decrypt failed
+    if (REACH_TIME_INTERVAL(ARCHIVE_DBA_ERROR_LOG_PRINT_INTERVAL)) {
+      LOG_DBA_ERROR(OB_ERR_AES_DECRYPT, "msg", "archive dest decrypt failed", "ret", ret_code,
           "archive_dest_id", key.dest_id_,
           "archive_round", key.round_);
     }
@@ -803,7 +818,9 @@ bool ObArchiveSender::is_retry_ret_code_(const int ret_code) const
     || OB_BACKUP_DEVICE_OUT_OF_SPACE == ret_code
     || OB_BACKUP_PWRITE_OFFSET_NOT_MATCH == ret_code
     || OB_IO_LIMIT == ret_code
-    || OB_BACKUP_PERMISSION_DENIED == ret_code;
+    || OB_BACKUP_PERMISSION_DENIED == ret_code
+    || OB_ERR_AES_ENCRYPT == ret_code
+    || OB_ERR_AES_DECRYPT == ret_code;
 }
 
 bool ObArchiveSender::is_ignore_ret_code_(const int ret_code) const
