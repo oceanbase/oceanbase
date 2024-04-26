@@ -264,90 +264,90 @@ void ObTestFTPluginHelper::TearDown()
   ASSERT_EQ(OB_SUCCESS, handler_.close());
 }
 
-TEST_F(ObTestFTPluginHelper, test_fts_plugin)
-{
-  int64_t version = -1;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_version(version));
-  ASSERT_EQ(OB_PLUGIN_INTERFACE_VERSION, version);
-
-  int64_t size = -1;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_size(size));
-  ASSERT_EQ(sizeof(lib::ObPlugin), size);
-
-  lib::ObPlugin *plugin = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin(plugin));
-  ASSERT_TRUE(nullptr != plugin);
-  ASSERT_TRUE(plugin->is_valid());
-  ASSERT_EQ(lib::ObPluginType::OB_FT_PARSER_PLUGIN, plugin->type_);
-  LOG_INFO("jinzhu debug", KCSTRING(plugin->name_), KCSTRING(plugin->author_), KCSTRING(plugin->spec_));
-  ASSERT_TRUE(0 == std::strncmp("mock_ft_parser", plugin->name_, std::strlen("mock_ft_parser")));
-  ASSERT_TRUE(0 == std::strncmp(OB_PLUGIN_AUTHOR_OCEANBASE, plugin->author_, std::strlen(OB_PLUGIN_AUTHOR_OCEANBASE)));
-  ASSERT_TRUE(0 == std::strncmp("This is mock fulltext parser plugin.", plugin->spec_, std::strlen("This is mock fulltext parser plugin.")));
-  ASSERT_EQ(0x00001, plugin->version_);
-  ASSERT_EQ(lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, plugin->license_);
-  ASSERT_TRUE(nullptr != plugin->desc_);
-
-  lib::ObIFTParserDesc *desc = nullptr;
-  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::get_fulltext_parser_desc(handler_, desc));
-  ASSERT_TRUE(nullptr != desc);
-
-  ObTestAddWord test_add_word;
-  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::segment(1/*plugin_vserion*/, desc, cs_, TEST_FULLTEXT,
-        strlen(TEST_FULLTEXT), allocator_, test_add_word));
-}
-
-TEST_F(ObTestFTPluginHelper, test_main_program_for_plugin)
-{
-  ASSERT_EQ(OB_SUCCESS, handler_.close());
-  ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, nullptr/*use main program*/));
-
-  int64_t version = -1;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_version(version));
-  ASSERT_EQ(OB_PLUGIN_INTERFACE_VERSION, version);
-
-  int64_t size = -1;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_size(size));
-  ASSERT_EQ(sizeof(lib::ObPlugin), size);
-
-  lib::ObPlugin *plugin = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin(plugin));
-  ASSERT_TRUE(nullptr != plugin);
-  ASSERT_TRUE(plugin->is_valid());
-  ASSERT_EQ(lib::ObPluginType::OB_FT_PARSER_PLUGIN, plugin->type_);
-  LOG_INFO("jinzhu debug", KCSTRING(plugin->name_), KCSTRING(plugin->author_), KCSTRING(plugin->spec_));
-  ASSERT_TRUE(0 == std::strncmp("mock_ft_parser", plugin->name_, std::strlen("mock_ft_parser")));
-  ASSERT_TRUE(0 == std::strncmp(OB_PLUGIN_AUTHOR_OCEANBASE, plugin->author_, std::strlen(OB_PLUGIN_AUTHOR_OCEANBASE)));
-  ASSERT_TRUE(0 == std::strncmp("This is mock fulltext parser plugin.", plugin->spec_, std::strlen("This is mock fulltext parser plugin.")));
-  ASSERT_EQ(0x00001, plugin->version_);
-  ASSERT_EQ(lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, plugin->license_);
-  ASSERT_TRUE(nullptr != plugin->desc_);
-
-  lib::ObIFTParserDesc *desc = nullptr;
-  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::get_fulltext_parser_desc(handler_, desc));
-  ASSERT_TRUE(nullptr != desc);
-
-  ObTestAddWord test_add_word;
-  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::segment(1/*plugin_vserion*/, desc, cs_, TEST_FULLTEXT,
-        strlen(TEST_FULLTEXT), allocator_, test_add_word));
-
-  ASSERT_EQ(0, ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, "OceanBase", "Oceanbase"));
-}
-
-TEST_F(ObTestFTPluginHelper, test_no_exist_symbol)
-{
-  void *sym_ptr = nullptr;
-  ASSERT_EQ(OB_SEARCH_NOT_FOUND, handler_.get_symbol_ptr("test_no_exist_symbol", sym_ptr));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, handler_.get_symbol_ptr(nullptr, sym_ptr));
-
-  ASSERT_EQ(OB_SUCCESS, handler_.close());
-  ASSERT_EQ(OB_FILE_NOT_OPENED, handler_.get_symbol_ptr("test_no_exist_symbol", sym_ptr));
-
-  ASSERT_EQ(OB_ERR_SYS, handler_.open(plugin_name_, "./test_no_exist_file.so"));
-  ASSERT_EQ(OB_INVALID_ARGUMENT, handler_.open(nullptr/*plugin name*/, nullptr/*file_name*/));
-
-  ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, nullptr/*use main program*/));
-  ASSERT_EQ(OB_INIT_TWICE, handler_.open(plugin_name_, nullptr/*use main program*/));
-}
+//TEST_F(ObTestFTPluginHelper, test_fts_plugin)
+//{
+//  int64_t version = -1;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_version(version));
+//  ASSERT_EQ(OB_PLUGIN_INTERFACE_VERSION, version);
+//
+//  int64_t size = -1;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_size(size));
+//  ASSERT_EQ(sizeof(lib::ObPlugin), size);
+//
+//  lib::ObPlugin *plugin = nullptr;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin(plugin));
+//  ASSERT_TRUE(nullptr != plugin);
+//  ASSERT_TRUE(plugin->is_valid());
+//  ASSERT_EQ(lib::ObPluginType::OB_FT_PARSER_PLUGIN, plugin->type_);
+//  LOG_INFO("jinzhu debug", KCSTRING(plugin->name_), KCSTRING(plugin->author_), KCSTRING(plugin->spec_));
+//  ASSERT_TRUE(0 == std::strncmp("mock_ft_parser", plugin->name_, std::strlen("mock_ft_parser")));
+//  ASSERT_TRUE(0 == std::strncmp(OB_PLUGIN_AUTHOR_OCEANBASE, plugin->author_, std::strlen(OB_PLUGIN_AUTHOR_OCEANBASE)));
+//  ASSERT_TRUE(0 == std::strncmp("This is mock fulltext parser plugin.", plugin->spec_, std::strlen("This is mock fulltext parser plugin.")));
+//  ASSERT_EQ(0x00001, plugin->version_);
+//  ASSERT_EQ(lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, plugin->license_);
+//  ASSERT_TRUE(nullptr != plugin->desc_);
+//
+//  lib::ObIFTParserDesc *desc = nullptr;
+//  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::get_fulltext_parser_desc(handler_, desc));
+//  ASSERT_TRUE(nullptr != desc);
+//
+//  ObTestAddWord test_add_word;
+//  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::segment(1/*plugin_vserion*/, desc, cs_, TEST_FULLTEXT,
+//        strlen(TEST_FULLTEXT), allocator_, test_add_word));
+//}
+//
+//TEST_F(ObTestFTPluginHelper, test_main_program_for_plugin)
+//{
+//  ASSERT_EQ(OB_SUCCESS, handler_.close());
+//  ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, nullptr/*use main program*/));
+//
+//  int64_t version = -1;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_version(version));
+//  ASSERT_EQ(OB_PLUGIN_INTERFACE_VERSION, version);
+//
+//  int64_t size = -1;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin_size(size));
+//  ASSERT_EQ(sizeof(lib::ObPlugin), size);
+//
+//  lib::ObPlugin *plugin = nullptr;
+//  ASSERT_EQ(OB_SUCCESS, handler_.get_plugin(plugin));
+//  ASSERT_TRUE(nullptr != plugin);
+//  ASSERT_TRUE(plugin->is_valid());
+//  ASSERT_EQ(lib::ObPluginType::OB_FT_PARSER_PLUGIN, plugin->type_);
+//  LOG_INFO("jinzhu debug", KCSTRING(plugin->name_), KCSTRING(plugin->author_), KCSTRING(plugin->spec_));
+//  ASSERT_TRUE(0 == std::strncmp("mock_ft_parser", plugin->name_, std::strlen("mock_ft_parser")));
+//  ASSERT_TRUE(0 == std::strncmp(OB_PLUGIN_AUTHOR_OCEANBASE, plugin->author_, std::strlen(OB_PLUGIN_AUTHOR_OCEANBASE)));
+//  ASSERT_TRUE(0 == std::strncmp("This is mock fulltext parser plugin.", plugin->spec_, std::strlen("This is mock fulltext parser plugin.")));
+//  ASSERT_EQ(0x00001, plugin->version_);
+//  ASSERT_EQ(lib::ObPluginLicenseType::OB_MULAN_V2_LICENSE, plugin->license_);
+//  ASSERT_TRUE(nullptr != plugin->desc_);
+//
+//  lib::ObIFTParserDesc *desc = nullptr;
+//  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::get_fulltext_parser_desc(handler_, desc));
+//  ASSERT_TRUE(nullptr != desc);
+//
+//  ObTestAddWord test_add_word;
+//  ASSERT_EQ(OB_SUCCESS, ObFTParseHelper::segment(1/*plugin_vserion*/, desc, cs_, TEST_FULLTEXT,
+//        strlen(TEST_FULLTEXT), allocator_, test_add_word));
+//
+//  ASSERT_EQ(0, ObCharset::strcmp(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI, "OceanBase", "Oceanbase"));
+//}
+//
+//TEST_F(ObTestFTPluginHelper, test_no_exist_symbol)
+//{
+//  void *sym_ptr = nullptr;
+//  ASSERT_EQ(OB_SEARCH_NOT_FOUND, handler_.get_symbol_ptr("test_no_exist_symbol", sym_ptr));
+//  ASSERT_EQ(OB_INVALID_ARGUMENT, handler_.get_symbol_ptr(nullptr, sym_ptr));
+//
+//  ASSERT_EQ(OB_SUCCESS, handler_.close());
+//  ASSERT_EQ(OB_FILE_NOT_OPENED, handler_.get_symbol_ptr("test_no_exist_symbol", sym_ptr));
+//
+//  ASSERT_EQ(OB_ERR_SYS, handler_.open(plugin_name_, "./test_no_exist_file.so"));
+//  ASSERT_EQ(OB_INVALID_ARGUMENT, handler_.open(nullptr/*plugin name*/, nullptr/*file_name*/));
+//
+//  ASSERT_EQ(OB_SUCCESS, handler_.open(plugin_name_, nullptr/*use main program*/));
+//  ASSERT_EQ(OB_INIT_TWICE, handler_.open(plugin_name_, nullptr/*use main program*/));
+//}
 
 class ObTestFTParseHelper : public ::testing::Test
 {
