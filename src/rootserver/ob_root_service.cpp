@@ -2920,19 +2920,6 @@ int ObRootService::alter_database(const ObAlterDatabaseArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (common::STANDBY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()) {
-    const int64_t tenant_id = arg.database_schema_.get_tenant_id();
-    ObSchemaGetterGuard schema_guard;
-    uint64_t database_id = OB_INVALID_ID;
-    if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(
-            tenant_id, schema_guard))) {
-      LOG_WARN("get_schema_guard with version in inner table failed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_database_id(tenant_id,
-            arg.database_schema_.get_database_name_str(), database_id))) {
-      LOG_WARN("failed to get database id", K(ret), K(tenant_id), K(arg));
-    }
-  }
-  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ddl_service_.alter_database(arg))) {
     LOG_WARN("alter database failed", K(arg), K(ret));
   }
@@ -8489,7 +8476,6 @@ int ObRootService::admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeA
 int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantArg &arg, obrpc::Int64 &res_job_id)
 {
   int ret = OB_SUCCESS;
-  bool has_standby_cluster = false;
   res_job_id = OB_INVALID_ID;
   int64_t current_timestamp = ObTimeUtility::current_time();
   int64_t start_ts = ObTimeUtility::current_time();
@@ -8511,12 +8497,10 @@ int ObRootService::physical_restore_tenant(const obrpc::ObPhysicalRestoreTenantA
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("restore tenant while in standby cluster or "
-             "in upgrade mode is not allowed", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW,
-                   "restore tenant while in standby cluster or in upgrade mode");
+    LOG_WARN("in upgrade mode is not allowed", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "in upgrade mode");
   } else if (0 == restore_concurrency) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("restore tenant when restore_concurrency is 0 not allowed", KR(ret));
@@ -9839,7 +9823,6 @@ int ObRootService::get_recycle_schema_versions(
 {
   int ret = OB_SUCCESS;
   LOG_INFO("receive get recycle schema versions request", K(arg));
-  bool is_standby = GCTX.is_standby_cluster();
   bool in_service = is_full_service();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -9847,10 +9830,10 @@ int ObRootService::get_recycle_schema_versions(
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (!is_standby || !in_service) {
+  } else if (!in_service) {
     ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("should be standby cluster and rs in service",
-             KR(ret), K(is_standby), K(in_service));
+    LOG_WARN("should be rs in service",
+             KR(ret), K(in_service));
   } else if (OB_FAIL(schema_history_recycler_.get_recycle_schema_versions(arg, result))) {
     LOG_WARN("fail to get recycle schema versions", KR(ret), K(arg));
   }
@@ -10510,10 +10493,6 @@ int ObRootService::handle_recover_table(const obrpc::ObRecoverTableArg &arg)
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(arg));
-  } else if (GCTX.is_standby_cluster()) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("recover table in standby tenant is not allowed", K(ret), K(arg));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "recover table in standby tenant");
   } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("recover table in upgrade mode is not allowed", K(ret), K(arg));

@@ -446,5 +446,108 @@ bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
   return bret;
 }
 
+int ObShareUtil::mtl_get_tenant_role(const uint64_t tenant_id, ObTenantRole::Role &tenant_role)
+{
+  int ret = OB_SUCCESS;
+  tenant_role = ObTenantRole::INVALID_TENANT;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    tenant_role = ObTenantRole::PRIMARY_TENANT;
+  } else {
+    MTL_SWITCH(tenant_id) {
+      tenant_role = MTL_GET_TENANT_ROLE_CACHE();
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(is_invalid_tenant(tenant_role))) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("tenant role is not ready, need wait", KR(ret), K(tenant_id), K(tenant_role));
+  }
+  return ret;
+}
+
+int ObShareUtil::mtl_check_if_tenant_role_is_primary(const uint64_t tenant_id, bool &is_primary)
+{
+  int ret = OB_SUCCESS;
+  is_primary = false;
+  ObTenantRole::Role tenant_role;
+  if (OB_FAIL(mtl_get_tenant_role(tenant_id, tenant_role))) {
+    LOG_WARN("fail to execute mtl_get_tenant_role", KR(ret), K(tenant_id));
+  } else if (is_primary_tenant(tenant_role)) {
+    is_primary = true;
+  }
+  return ret;
+}
+
+int ObShareUtil::mtl_check_if_tenant_role_is_standby(const uint64_t tenant_id, bool &is_standby)
+{
+  int ret = OB_SUCCESS;
+  is_standby = false;
+  ObTenantRole::Role tenant_role;
+  if (OB_FAIL(mtl_get_tenant_role(tenant_id, tenant_role))) {
+    LOG_WARN("fail to execute mtl_get_tenant_role", KR(ret), K(tenant_id));
+  } else if (is_standby_tenant(tenant_role)) {
+    is_standby = true;
+  }
+  return ret;
+}
+int ObShareUtil::table_get_tenant_role(const uint64_t tenant_id, ObTenantRole &tenant_role)
+{
+  int ret = OB_SUCCESS;
+  tenant_role.reset();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else if (is_sys_tenant(tenant_id) || is_meta_tenant(tenant_id)) {
+    tenant_role = ObTenantRole::PRIMARY_TENANT;
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(GCTX.sql_proxy_, tenant_id, tenant_role))) {
+    LOG_WARN("fail to get tenant role", KR(ret), KP(GCTX.sql_proxy_), K(tenant_id));
+  } else if (tenant_role.is_invalid()) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("tenant role is not ready, need wait", KR(ret), K(tenant_role));
+  }
+  return ret;
+}
+int ObShareUtil::table_check_if_tenant_role_is_primary(const uint64_t tenant_id, bool &is_primary)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantRole tenant_role;
+  is_primary = false;
+  if (OB_FAIL(table_get_tenant_role(tenant_id, tenant_role))) {
+    LOG_WARN("fail to execute table_get_tenant_role", KR(ret), K(tenant_id));
+  } else if (tenant_role.is_primary()) {
+    is_primary = true;
+  }
+  return ret;
+}
+int ObShareUtil::table_check_if_tenant_role_is_standby(const uint64_t tenant_id, bool &is_standby)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantRole tenant_role;
+  is_standby = false;
+  if (OB_FAIL(table_get_tenant_role(tenant_id, tenant_role))) {
+    LOG_WARN("fail to execute table_get_tenant_role", KR(ret), K(tenant_id));
+  } else if (tenant_role.is_standby()) {
+    is_standby = true;
+  }
+  return ret;
+}
+int ObShareUtil::table_check_if_tenant_role_is_restore(const uint64_t tenant_id, bool &is_restore)
+{
+  int ret = OB_SUCCESS;
+  share::ObTenantRole tenant_role;
+  is_restore = false;
+  if (OB_FAIL(table_get_tenant_role(tenant_id, tenant_role))) {
+    LOG_WARN("fail to execute table_get_tenant_role", KR(ret), K(tenant_id));
+  } else if (tenant_role.is_restore()) {
+    is_restore = true;
+  }
+  return ret;
+}
+
 } //end namespace share
 } //end namespace oceanbase

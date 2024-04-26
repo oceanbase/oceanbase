@@ -46,20 +46,21 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
   int ret = OB_SUCCESS;
   ObTableStatParam param;
   param.allocator_ = &ctx.get_allocator();
-  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
   ObSQLSessionInfo *session = ctx.get_my_session();
-  bool in_restore = false;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(session)) {
+  if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(schema_guard), K(session));
-  } else if (OB_FAIL(schema_guard->check_tenant_is_restore(session->get_effective_tenant_id(),
-                                                           in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
-  } else if (OB_FAIL(stmt.fill_table_stat_param(ctx, param))) {
+    LOG_WARN("get unexpected null", K(ret), K(session));
+  } else {
+    uint64_t tenant_id = session->get_effective_tenant_id();
+    bool is_primary = true;
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!is_primary)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during non-primary tenant");
+    }
+  }
+  if (FAILEDx(stmt.fill_table_stat_param(ctx, param))) {
     LOG_WARN("failed to fill table stat param", K(ret));
   } else if (OB_FAIL(pl::ObDbmsStats::process_not_size_manual_column(ctx, param))) {
     LOG_WARN("failed to process not size_manual column", K(ret));
@@ -69,7 +70,7 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
     int64_t start_time = ObTimeUtility::current_time();
     ObOptStatTaskInfo task_info;
     if (OB_FAIL(pl::ObDbmsStats::init_gather_task_info(ctx, ObOptStatGatherType::MANUAL_GATHER,
-                                                       start_time, task_cnt, task_info))) {
+                                                      start_time, task_cnt, task_info))) {
       LOG_WARN("failed to init gather task info", K(ret));
     } else {
       ObOptStatGatherStat gather_stat(task_info);

@@ -920,32 +920,6 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
   return ret;
 }
 
-//清理oracle临时表中数据来源和当前session id相同, 但属于被重用的旧的session数据
-int ObSQLSessionInfo::drop_reused_oracle_temp_tables()
-{
-  int ret = OB_SUCCESS;
-  //obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  if (false == get_is_deserialized()
-      && !is_inner()
-      && !GCTX.is_standby_cluster()) {
-    obrpc::ObDropTableArg drop_table_arg;
-    drop_table_arg.if_exist_ = true;
-    drop_table_arg.to_recyclebin_ = false;
-    drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_SESS;
-    drop_table_arg.session_id_ = get_sessid_for_table();
-    drop_table_arg.tenant_id_ = get_effective_tenant_id();
-    drop_table_arg.sess_create_time_ = get_sess_create_time();
-    //common_rpc_proxy = GCTX.rs_rpc_proxy_;
-    if (OB_FAIL(delete_from_oracle_temp_tables(drop_table_arg))) {
-    //if (OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg))) {
-      LOG_WARN("failed to drop reused temporary table", K(drop_table_arg), K(ret));
-    } else {
-      LOG_DEBUG("succeed to delete old rows for oracle temporary table", K(drop_table_arg));
-    }
-  }
-  return ret;
-}
-
 //proxy方式下session创建、断开和后台定时task检查:
 //如果距离上次更新此session->last_refresh_temp_table_time_ 超过1hr
 //则更新session创建的临时表最后活动时间SESSION_ACTIVE_TIME

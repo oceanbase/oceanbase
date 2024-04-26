@@ -1002,9 +1002,8 @@ public:
 
   SchemaGuardType get_schema_guard_type() const { return schema_guard_type_; }
 
-  bool is_standby_cluster() { return is_standby_cluster_; }
   bool restore_tenant_exist() { return restore_tenant_exist_; }
-  bool use_schema_status() { return is_standby_cluster() || restore_tenant_exist(); }
+  bool use_schema_status() { return restore_tenant_exist(); }
 
   int check_formal_guard() const;
   int is_lazy_mode(const uint64_t tenant_id, bool &is_lazy) const;
@@ -1129,7 +1128,7 @@ private:
       const T *&schema,
       common::ObKVCacheHandle &handle);
 
-  int init(const bool is_standby_cluster);
+  int init();
   int fast_reset() {
     return is_inited_? reset(): common::OB_SUCCESS;
   }
@@ -1180,7 +1179,6 @@ private:
 
   ObSchemaMgrItem::Mod mod_;
   SchemaGuardType schema_guard_type_;
-  bool is_standby_cluster_;
   bool restore_tenant_exist_;
   bool is_inited_;
   int64_t pin_cache_size_;

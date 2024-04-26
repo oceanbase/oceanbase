@@ -128,11 +128,9 @@ protected:
           } else if (OB_INVALID_TENANT_ID == ddl_arg_->exec_tenant_id_) {
             ret = OB_INVALID_ARGUMENT;
             RS_LOG(WARN, "exec tenant id is invalid", K(ret), "arg", *ddl_arg_);
-          } else if (common::STANDBY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()
-                     && !ddl_arg_->is_allow_in_standby()) {
-            ret = OB_OP_NOT_ALLOW;
-            RS_LOG(WARN, "ddl operation not allow in standby", KR(ret), KPC(ddl_arg_));
           } else {
+            // TODO (linqiucen.lqc): check whether the tenant is standby
+            //                       it will be done after DDL is executed by the tenant itself rather than sys tenant
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);
             // used for parallel ddl
             auto *tsi_generator = GET_TSI(share::schema::TSISchemaVersionGenerator);

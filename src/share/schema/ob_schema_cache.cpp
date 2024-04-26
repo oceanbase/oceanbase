@@ -933,7 +933,6 @@ int ObSchemaFetcher::fetch_schema(ObSchemaType schema_type,
     LOG_WARN("inner stat error", K(ret));
   } else {
     do {
-      observer::ObUseWeakGuard use_weak_guard;
       if (INT64_MAX == schema_version) {
         // skip inspection while fetch latest schema
       } else if (OB_FAIL(schema_service_->can_read_schema_version(schema_status, schema_version))) {

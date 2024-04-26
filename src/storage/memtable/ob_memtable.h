@@ -542,10 +542,6 @@ private:
   void set_begin(ObMvccAccessCtx &ctx);
   void set_end(ObMvccAccessCtx &ctx, int ret);
 
-  int check_standby_cluster_schema_condition_(storage::ObStoreCtx &ctx,
-                                              const int64_t table_id,
-                                              const int64_t table_version);
-
 
   int set_(
 	  const storage::ObTableIterParam &param,

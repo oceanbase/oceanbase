@@ -54,6 +54,7 @@ public:
   bool operator != (const ObTenantRole &other) const { return value_ != other.value_; }
 
   // ObTenantRole attribute interface
+  bool is_invalid() const { return INVALID_TENANT == value_; }
   bool is_primary() const { return PRIMARY_TENANT == value_; }
   bool is_standby() const { return STANDBY_TENANT == value_; }
   bool is_restore() const { return RESTORE_TENANT == value_; }

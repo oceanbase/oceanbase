@@ -2528,20 +2528,14 @@ int ObTableLockService::check_op_allowed_(const uint64_t table_id,
     // all the tmp table is a normal table now, deal it as a normal user table
     // table lock not support virtual table/sys table(not in white list) etc.
     is_allowed = false;
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    is_allowed = false;
-  } else if (!GCTX.is_standby_cluster()) {
-    bool is_restore = false;
-    ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
-    if (OB_FAIL(schema_service->check_tenant_is_restore(NULL,
-                                                        tenant_id,
-                                                        is_restore))) {
-      LOG_WARN("failed to check tenant restore", K(ret), K(table_id));
-    } else if (is_restore) {
+  } else {
+    bool is_primary = true;
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (!is_primary) {
       is_allowed = false;
     }
   }
-
   return ret;
 }
 

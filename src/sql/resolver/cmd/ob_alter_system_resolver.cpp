@@ -2217,7 +2217,10 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
           ret = OB_OBJECT_NAME_NOT_EXIST;
           LOG_WARN("fail to get keystore schema", K(ret));
         } else if (0 != keystore_schema->get_master_key_id()) {
-          if (!GCTX.is_standby_cluster()) {
+          bool is_standby = false;
+          if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+            LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+          } else if (!is_standby) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("alter tde method is not support", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
@@ -3731,7 +3734,10 @@ int ObAlterSystemSetResolver::check_param_valid(int64_t tenant_id ,
         ret = OB_OBJECT_NAME_NOT_EXIST;
         LOG_WARN("fail to get keystore schema", K(ret));
       } else if (0 != keystore_schema->get_master_key_id()) {
-        if (!GCTX.is_standby_cluster()) {
+        bool is_standby = false;
+        if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+          LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+        } else if (!is_standby) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("alter tde method is not support", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
