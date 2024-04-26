@@ -211,15 +211,9 @@ template<size_t KEY_LEN, bool IS_BATCH_SEED>
 inline int murmurhash64A(const void *keys, uint64_t *hashes, size_t total_len, const uint64_t *seeds)
 {
   int ret = OB_SUCCESS;
-  if (total_len % KEY_LEN != 0) {
+  if (KEY_LEN > 0 && total_len % KEY_LEN != 0) {
     ret = OB_ERROR;
     COMMON_LOG(WARN, "total_len must be a multiple of KEY_LEN!");
-    return ret;
-  }
-  if (KEY_LEN != 1 && KEY_LEN != 2 && KEY_LEN != 4 && KEY_LEN != 8 &&
-      KEY_LEN != 16 && KEY_LEN != 32 && KEY_LEN != 64) {
-    ret = OB_ERROR;
-    COMMON_LOG(WARN, "KEY_LEN must be 1, 2, 4, 8, 16, 32 or 64!");
     return ret;
   }
 #if OB_USE_MULTITARGET_CODE

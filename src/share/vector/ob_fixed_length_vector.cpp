@@ -20,34 +20,6 @@ namespace oceanbase
 namespace common
 {
 
-#define TRY_USE_MURMURHASH_SIMD()                                              \
-  if (!this->has_null() && bound.get_all_rows_active()) {                      \
-    const void *keys = this->get_data() + bound.start() * 8;                   \
-    uint64_t *hashes = hash_values + bound.start();                            \
-    size_t total_len = bound.range_size() * 8;                                 \
-    const uint64_t *target_seeds = seeds + bound.start();                      \
-    if (this->type_size() == 1) {                                              \
-      if (is_batch_seed) {                                                     \
-        return murmurhash64A<1, true>(keys, hashes, total_len, target_seeds);  \
-      }                                                                        \
-      return murmurhash64A<1, false>(keys, hashes, total_len, target_seeds);   \
-    } else if (this->type_size() == 2) {                                       \
-      if (is_batch_seed) {                                                     \
-        return murmurhash64A<2, true>(keys, hashes, total_len, target_seeds);  \
-      }                                                                        \
-      return murmurhash64A<2, false>(keys, hashes, total_len, target_seeds);   \
-    } else if (this->type_size() == 4) {                                       \
-      if (is_batch_seed) {                                                     \
-        return murmurhash64A<4, true>(keys, hashes, total_len, target_seeds);  \
-      }                                                                        \
-      return murmurhash64A<4, false>(keys, hashes, total_len, target_seeds);   \
-    } else if (this->type_size() == 8) {                                       \
-      if (is_batch_seed) {                                                     \
-        return murmurhash64A<8, true>(keys, hashes, total_len, target_seeds);  \
-      }                                                                        \
-      return murmurhash64A<8, false>(keys, hashes, total_len, target_seeds);   \
-    }                                                                          \
-  }
 
 template<typename ValueType, typename BasicOp>
 int ObFixedLengthVector<ValueType, BasicOp>::default_hash(BATCH_EVAL_HASH_ARGS) const
@@ -60,7 +32,6 @@ int ObFixedLengthVector<ValueType, BasicOp>::default_hash(BATCH_EVAL_HASH_ARGS) 
 template<typename ValueType, typename BasicOp>
 int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash(BATCH_EVAL_HASH_ARGS) const
 {
-  TRY_USE_MURMURHASH_SIMD();
   BatchHashResIter hash_iter(hash_values);
   return VecOpUtil::template hash_dispatch<ObMurmurHash, false, BatchHashResIter>(
     hash_iter, expr.obj_meta_, *this, skip, bound, seeds, is_batch_seed);
@@ -69,7 +40,19 @@ int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash(BATCH_EVAL_HASH_ARGS) c
 template<typename ValueType, typename BasicOp>
 int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash_v3(BATCH_EVAL_HASH_ARGS) const
 {
-  TRY_USE_MURMURHASH_SIMD();
+  if (!this->has_null() && bound.get_all_rows_active()) {
+    const void *keys = this->get_data() + bound.start() * sizeof(ValueType);
+    uint64_t *hashes = hash_values + bound.start();
+    size_t total_len = bound.range_size() * sizeof(ValueType);
+    const uint64_t *target_seeds = seeds + bound.start();
+    if (is_batch_seed) {
+      return murmurhash64A<sizeof(ValueType), true>(keys, hashes, total_len,
+                                                    target_seeds);
+    }
+    return murmurhash64A<sizeof(ValueType), false>(keys, hashes, total_len,
+                                                   target_seeds);
+  }
+
   BatchHashResIter hash_iter(hash_values);
   return VecOpUtil::template hash_dispatch<ObMurmurHash, true, BatchHashResIter>(
     hash_iter, expr.obj_meta_, *this, skip, bound, seeds, is_batch_seed);

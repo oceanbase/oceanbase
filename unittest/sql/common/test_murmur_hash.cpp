@@ -35,9 +35,7 @@ int64_t rand_value<int64_t>(const int64_t min_v, const int64_t max_v)
 template <size_t KEY_LEN, bool IS_BATCH_SEED>
 void murmurhash64A_result(const void *keys, uint64_t *hashes, int32_t total_len, uint64_t *seeds) {
   #define SEEDS(i) (IS_BATCH_SEED ? seeds[i] : seeds[0])
-  ASSERT_EQ(total_len % KEY_LEN, 0);
-  ASSERT_EQ(KEY_LEN == 1 || KEY_LEN == 2 || KEY_LEN == 4 || KEY_LEN == 8 ||
-            KEY_LEN == 16 || KEY_LEN == 32 || KEY_LEN == 64, true);
+  ASSERT_EQ(KEY_LEN > 0 && (total_len % KEY_LEN == 0), true);
 
   for (int i = 0; i < total_len / KEY_LEN; i++) {
     hashes[i] = murmurhash64A((char *)keys + i * KEY_LEN, KEY_LEN, SEEDS(i));
@@ -83,6 +81,7 @@ TEST(TestMurmurHash, ALL) {
   test.check_hashes<2, 512>();
   test.check_hashes<4, 512>();
   test.check_hashes<8, 512>();
+  test.check_hashes<10, 512>();
   test.check_hashes<16, 512>();
   test.check_hashes<32, 512>();
   test.check_hashes<64, 512>();
