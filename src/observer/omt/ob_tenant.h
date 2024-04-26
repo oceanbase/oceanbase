@@ -295,7 +295,6 @@ public:
   void check_worker_count();
   void check_worker_count(ObThWorker &w);
   int clear_worker();
-  int get_throttled_time(int64_t &throttled_time);
   common::ObPriorityQueue2<0, 1> &get_req_queue() { return req_queue_; }
   ObMultiLevelQueue* get_multi_level_queue() { return &multi_level_queue_; }
   TO_STRING_KV("group_id", group_id_,
@@ -323,7 +322,6 @@ private:
   int nesting_worker_cnt_;
   ObTenant *tenant_;
   share::ObCgroupCtrl *cgroup_ctrl_;
-  int64_t throttled_time_us_;
 };
 
 typedef common::FixedHash2<ObResourceGroupNode> GroupHash;
@@ -449,7 +447,6 @@ public:
   void update_queue_size();
 
   int timeup();
-  void print_throttled_time();
 
   TO_STRING_KV(K_(id),
                K_(tenant_meta),
