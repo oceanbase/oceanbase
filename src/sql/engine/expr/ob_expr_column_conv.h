@@ -92,6 +92,21 @@ public:
 
   static const int64_t PARAMS_COUNT_WITHOUT_COLUMN_INFO = 5;
   static const int64_t PARAMS_COUNT_WITH_COLUMN_INFO = 6;
+  class ObExprColumnConvCtx : public ObExprOperatorCtx
+  {
+  public:
+    ObExprColumnConvCtx()
+        : ObExprOperatorCtx(),
+          expr_(),
+          args_(NULL)
+    {}
+    int setup_eval_expr(ObIAllocator &allocator, const ObExpr &expr);
+
+    TO_STRING_KV(K_(expr));
+    ObExpr expr_;
+    ObExpr **args_;
+  };
+
 public:
   explicit  ObExprColumnConv(common::ObIAllocator &alloc);
   virtual ~ObExprColumnConv();
@@ -119,6 +134,13 @@ public:
   static int column_convert(const ObExpr &expr,
                             ObEvalCtx &ctx,
                             ObDatum &datum);
+
+  virtual bool need_rt_ctx() const override
+  { return ob_is_enum_or_set_type(result_type_.get_type()); }
+
+private:
+  static int eval_enumset(const ObExpr &expr, ObEvalCtx &ctx, common::ObDatum *&datum);
+
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprColumnConv) const;
