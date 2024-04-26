@@ -128,27 +128,87 @@ private:
   ObPGMgr* pg_mgr_;
 };
 
+class ObIPartitionArrayGuard {
+public:
+  ObIPartitionArrayGuard() : pg_mgr_(nullptr), partitions_()
+  {}
+  virtual ~ObIPartitionArrayGuard()
+  {
+    reuse();
+  }
+  void set_pg_mgr(const ObPGMgr &pg_mgr)
+  {
+    pg_mgr_ = &pg_mgr;
+  }
+  int push_back(ObIPartitionGroup *partition)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_ISNULL(pg_mgr_)) {
+      ret = common::OB_NOT_INIT;
+    } else if (OB_SUCC(partitions_.push_back(partition))) {
+      partition->inc_ref();
+    }
+    return ret;
+  }
+  ObIPartitionGroup *at(int64_t i)
+  {
+    return partitions_.at(i);
+  }
+  int64_t count() const
+  {
+    return partitions_.count();
+  }
+  void reuse()
+  {
+    if (partitions_.count() > 0 && nullptr != pg_mgr_) {
+      for (int64_t i = 0; i < partitions_.count(); ++i) {
+        pg_mgr_->revert_pg(partitions_.at(i));
+      }
+      partitions_.reset();
+    }
+  }
+  int reserve(const int64_t count)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(partitions_.reserve(count))) {
+      STORAGE_LOG(WARN, "failed to reserve partitions", K(ret), K(count));
+    }
+    return ret;
+  }
+  TO_STRING_KV(KP_(pg_mgr), K_(partitions));
+
+private:
+  const ObPGMgr *pg_mgr_;
+  common::ObSEArray<ObIPartitionGroup *, OB_DEFAULT_PARTITION_KEY_COUNT> partitions_;
+  DISALLOW_COPY_AND_ASSIGN(ObIPartitionArrayGuard);
+};
+
 typedef common::ObSEArray<ObPGPartitionGuard*, 16> ObPGPartitionGuardArray;
 
 // iterate all pg partition in current server
 class ObIPGPartitionIterator {
 public:
-  ObIPGPartitionIterator() : need_trans_table_(false)
+  ObIPGPartitionIterator() : need_trans_table_(false), pg_guard_arr_()
   {}
   virtual ~ObIPGPartitionIterator()
   {}
   virtual int get_next(ObPGPartition*& pg_partition) = 0;
+  virtual void set_pg_mgr(ObPGMgr& pg_mgr)
+  {
+    pg_guard_arr_.set_pg_mgr(pg_mgr);
+  }
   int get_pg_partition_guard_array(ObIPartitionGroup* partition, ObPGPartitionGuardArray& pg_partition_guard_arr);
 
 protected:
   bool need_trans_table_;
+  ObIPartitionArrayGuard pg_guard_arr_;
 };
 
 class ObSinglePGPartitionIterator : public ObIPGPartitionIterator {
 public:
   ObSinglePGPartitionIterator();
   virtual ~ObSinglePGPartitionIterator();
-  int init(ObIPartitionGroup* pg, const bool need_trans_table = false);
+  int init(ObPGMgr* pg_mgr, ObIPartitionGroup* pg, const bool need_trans_table = false);
   void reset();
   virtual int get_next(ObPGPartition*& pg_partition);
   ObPGPartitionGuardArray& get_pg_guard_array()
@@ -168,9 +228,10 @@ public:
   virtual ~ObPGPartitionIterator();
   virtual int get_next(ObPGPartition*& pg_partition);
   void reset();
-  void set_pg_mgr(ObPGMgr& pg_mgr)
+  virtual void set_pg_mgr(ObPGMgr& pg_mgr) override
   {
     pg_mgr_ = &pg_mgr;
+    pg_guard_arr_.set_pg_mgr(pg_mgr);
   }
 
 private:
@@ -187,6 +248,10 @@ class ObIPartitionGroupGuard {
 public:
   ObIPartitionGroupGuard() : pg_mgr_(nullptr), pg_(nullptr)
   {}
+  ObIPartitionGroupGuard(const ObPGMgr &pg_mgr, ObIPartitionGroup &pg) : pg_mgr_(nullptr), pg_(nullptr)
+  {
+    set_partition_group(pg_mgr, pg);
+  }
   virtual ~ObIPartitionGroupGuard()
   {
     reset();

@@ -56,6 +56,10 @@ public:
   {
     return pg_mgr_;
   }
+  virtual ObPGMgr *get_pg_mgr_pointer()
+  {
+    return &pg_mgr_;
+  }
   VIRTUAL_FOR_UNITTEST int get_partition(const common::ObPartitionKey& pkey, ObIPartitionGroupGuard& guard) const;
   VIRTUAL_FOR_UNITTEST ObIPartitionGroupIterator* alloc_pg_iter();
   VIRTUAL_FOR_UNITTEST void revert_pg_iter(ObIPartitionGroupIterator* iter);
@@ -132,61 +136,6 @@ protected:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPartitionMetaRedoModule);
-};
-
-class ObIPartitionArrayGuard {
-public:
-  ObIPartitionArrayGuard() : pg_mgr_(nullptr), partitions_()
-  {}
-  virtual ~ObIPartitionArrayGuard()
-  {
-    reuse();
-  }
-  void set_pg_mgr(const ObPGMgr& pg_mgr)
-  {
-    pg_mgr_ = &pg_mgr;
-  }
-  int push_back(ObIPartitionGroup* partition)
-  {
-    int ret = common::OB_SUCCESS;
-    if (OB_ISNULL(pg_mgr_)) {
-      ret = common::OB_NOT_INIT;
-    } else if (OB_SUCC(partitions_.push_back(partition))) {
-      partition->inc_ref();
-    }
-    return ret;
-  }
-  ObIPartitionGroup* at(int64_t i)
-  {
-    return partitions_.at(i);
-  }
-  int64_t count() const
-  {
-    return partitions_.count();
-  }
-  void reuse()
-  {
-    if (partitions_.count() > 0 && nullptr != pg_mgr_) {
-      for (int64_t i = 0; i < partitions_.count(); ++i) {
-        pg_mgr_->revert_pg(partitions_.at(i));
-      }
-      partitions_.reset();
-    }
-  }
-  int reserve(const int64_t count)
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(partitions_.reserve(count))) {
-      STORAGE_LOG(WARN, "failed to reserve partitions", K(ret), K(count));
-    }
-    return ret;
-  }
-  TO_STRING_KV(KP_(pg_mgr), K_(partitions));
-
-private:
-  const ObPGMgr* pg_mgr_;
-  common::ObSEArray<ObIPartitionGroup*, OB_DEFAULT_PARTITION_KEY_COUNT> partitions_;
-  DISALLOW_COPY_AND_ASSIGN(ObIPartitionArrayGuard);
 };
 
 }  // namespace storage

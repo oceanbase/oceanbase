@@ -5966,7 +5966,7 @@ int ObPartitionGroup::get_all_tables(ObTablesHandle& tables_handle)
     ObSinglePGPartitionIterator iter;
     ObTablesHandle tmp_tables_handle;
     const bool need_trans_table = true;
-    if (OB_FAIL(iter.init(this, need_trans_table))) {
+    if (OB_FAIL(iter.init(get_partition_service()->get_pg_mgr_pointer(), this, need_trans_table))) {
       LOG_WARN("fail to init single pg partition iter", K(ret));
     } else {
       while (OB_SUCC(ret)) {

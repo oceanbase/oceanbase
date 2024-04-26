@@ -25,10 +25,25 @@ using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 namespace storage {
 
+ERRSIM_POINT_DEF(ERRSIM_BEFORE_PG_PARTITION_ITER_HANG);
+ERRSIM_POINT_DEF(ERRSIM_AFTER_PG_PARTITION_ITER_HANG);
+
 int ObIPGPartitionIterator::get_pg_partition_guard_array(
     ObIPartitionGroup* partition, ObPGPartitionGuardArray& pg_partition_guard_arr)
 {
   int ret = OB_SUCCESS;
+
+  DEBUG_SYNC(BEFORE_PG_PARTITION_ITER_HANG);
+
+#ifdef ERRSIM
+  ret = ERRSIM_BEFORE_PG_PARTITION_ITER_HANG ?: ret;
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(INFO, "ERRSIM before pg partition iter hang", K(ret), KPC(partition));
+    usleep(1000 * 1000);  // sleep 1s
+    ret = OB_SUCCESS;
+  }
+#endif
+
   if (OB_ISNULL(partition)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(partition));
@@ -37,6 +52,8 @@ int ObIPGPartitionIterator::get_pg_partition_guard_array(
     ObPartitionArray pkeys;
     if (OB_FAIL(partition->get_pg_storage().get_all_pg_partition_keys(pkeys, need_trans_table_))) {
       STORAGE_LOG(WARN, "get all pg partition keys error", K(ret));
+    } else if (OB_FAIL(pg_guard_arr_.push_back(partition))) {
+      STORAGE_LOG(WARN, "push back partition group guard failed", K(ret));
     } else {
       ObPGPartitionGuard* pg_partition_guard = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < pkeys.count(); ++i) {
@@ -65,6 +82,19 @@ int ObIPGPartitionIterator::get_pg_partition_guard_array(
     }
   }
 
+  DEBUG_SYNC(AFTER_PG_PARTITION_ITER_HANG);
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = ERRSIM_AFTER_PG_PARTITION_ITER_HANG ?: ret;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(INFO, "ERRSIM after pg partition iter hang", K(ret), KPC(partition));
+      usleep(1000 * 1000);  // sleep 1s
+      ret = OB_SUCCESS;
+    }
+  }
+#endif
+
   return ret;
 }
 
@@ -76,13 +106,14 @@ ObSinglePGPartitionIterator::~ObSinglePGPartitionIterator()
   reset();
 }
 
-int ObSinglePGPartitionIterator::init(ObIPartitionGroup* partition, const bool need_trans_table)
+int ObSinglePGPartitionIterator::init(ObPGMgr *pg_mgr, ObIPartitionGroup* partition, const bool need_trans_table)
 {
   int ret = OB_SUCCESS;
   need_trans_table_ = need_trans_table;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObSinglePGPartitionIterator has already been inited", K(ret));
+  } else if (FALSE_IT(set_pg_mgr(*pg_mgr))) {
   } else if (OB_FAIL(get_pg_partition_guard_array(partition, pg_partition_guard_arr_))) {
     LOG_WARN("fail to get pg partition guard array", K(ret));
   } else {
@@ -128,6 +159,7 @@ void ObSinglePGPartitionIterator::reset()
     }
   }
   pg_partition_guard_arr_.reset();
+  pg_guard_arr_.reuse();
   array_idx_ = 0;
   is_inited_ = false;
 }
@@ -149,6 +181,7 @@ void ObPGPartitionIterator::reset()
         pg_partition_guard_arr_.at(i) = NULL;
       }
     }
+    pg_guard_arr_.reuse();
     bucket_pos_ = 0;
     array_idx_ = 0;
     pg_mgr_ = NULL;
@@ -173,6 +206,7 @@ int ObPGPartitionIterator::next_pg_()
       }
       pg_partition_guard_arr_.reset();
     }
+    pg_guard_arr_.reuse();
     // iterate pg partition guard arrry
     array_idx_ = 0;
 

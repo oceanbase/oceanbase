@@ -302,6 +302,8 @@ class ObString;
   ACT(BEFORE_UNIQ_TASK_RUN, )                                      \
   ACT(BEFORE_WAIT_FETCH_LOG, )                                     \
   ACT(BEFORE_ARCHIVE_MGR_THREAD_TASK, )                            \
+  ACT(BEFORE_PG_PARTITION_ITER_HANG, )                             \
+  ACT(AFTER_PG_PARTITION_ITER_HANG, )                              \
   ACT(MAX_DEBUG_SYNC_POINT, )
 
 DECLARE_ENUM(ObDebugSyncPoint, debug_sync_point, OB_DEBUG_SYNC_POINT_DEF);
