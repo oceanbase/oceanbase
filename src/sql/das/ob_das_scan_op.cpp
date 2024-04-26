@@ -444,7 +444,7 @@ int ObDASScanOp::do_table_scan()
     }
   } else if (OB_FAIL(get_tsc_service().table_scan(scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
-      ret = OB_TABLE_DEFINITION_CHANGED;
+      ret = OB_INVALID_QUERY_TIMESTAMP;
     } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("fail to scan table", K(scan_param_), K(ret));
     }
