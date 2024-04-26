@@ -184,6 +184,10 @@ int ObDASInsertOp::insert_row_with_fetch()
         }
       }
     }
+    if (OB_FAIL(ret) && OB_NOT_NULL(duplicated_rows)) {
+      ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+      duplicated_rows = NULL;
+    }
   }
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_.count(); ++i) {
@@ -241,8 +245,13 @@ int ObDASInsertOp::insert_row_with_fetch()
           } else {
             // 需要释放iter的内存， 否则会内存泄漏
             ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+            duplicated_rows = NULL;
           }
         }
+      }
+      if (OB_FAIL(ret) && OB_NOT_NULL(duplicated_rows)) {
+        ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
+        duplicated_rows = NULL;
       }
     }
     ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
