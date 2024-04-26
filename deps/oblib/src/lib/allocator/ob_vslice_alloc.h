@@ -103,6 +103,9 @@ public:
     purge_extra_cached_block(0, true);
     bsize_ = 0;
   }
+  void purge() {
+    purge_extra_cached_block(0);
+  }
   void set_nway(int nway) {
     if (nway <= 0) {
       nway = 1;
