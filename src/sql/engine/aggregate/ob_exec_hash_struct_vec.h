@@ -179,7 +179,7 @@ public:
   static const int32_t HASH_VAL_FOR_NULL = 257;
   static const int32_t MAX_BKT_CNT_ONE_COL = 258;
   ShortStringAggregator(ObTempRowStore &group_store) : alloc_(nullptr), inited_(false), is_valid_(false), array_size_(0),
-  groupby_cnt_(0), grs_array_(NULL), max_batch_size_(0), aggr_row_size_(0), size_(0), group_store_(group_store),
+  groupby_cnt_(0), groupby_values_(nullptr), grs_array_(NULL), max_batch_size_(0), aggr_row_size_(0), size_(0), group_store_(group_store),
   new_row_selector_(), new_row_selector_cnt_(0), vector_ptrs_(),
   srows_(nullptr), ser_num_array_(nullptr) {}
   int process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
@@ -539,6 +539,7 @@ public:
                   ObCtxIds::WORK_AREA),
       group_store_(),
       tenant_id_(tenant_id),
+      gby_exprs_(nullptr),
       eval_ctx_(nullptr),
       vector_ptrs_(),
       locate_bucket_(nullptr),
