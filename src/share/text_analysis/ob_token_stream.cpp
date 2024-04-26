@@ -116,8 +116,11 @@ int ObTextWhitespaceTokenizer::get_next(ObDatum &next_token, int64_t &token_freq
       const int64_t c_len = ob_mbcharlen_ptr(cs_, doc + trav_pos_, doc + doc_len);
       trav_pos_ += c_len;
       token_len += c_len;
-      if (trav_pos_ >= doc_len) {
+      if (trav_pos_ >= doc_len || 0 == c_len) {
         iter_end_ = true;
+        if (0 == token_len) {
+          ret = OB_ITER_END;
+        }
         break;
       }
     }
