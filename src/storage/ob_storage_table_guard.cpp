@@ -180,6 +180,10 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
     }
   } while ((OB_SUCC(ret) || OB_ENTRY_NOT_EXIST == ret || OB_EAGAIN == ret) && need_retry);
 
+  if (OB_LS_OFFLINE == ret) {
+    ret = OB_EAGAIN;
+    STORAGE_LOG(INFO, "reset ret code to OB_EAGAIN to avoid error log", KR(ret), K(ls_id), K(tablet_id));
+  }
   return ret;
 }
 
@@ -192,13 +196,17 @@ int ObStorageTableGuard::create_data_memtable_(const share::ObLSID &ls_id,
   ObLSHandle ls_handle;
   ObTabletHandle tmp_handle;
   SCN clog_checkpoint_scn;
+  ObLS *ls = nullptr;
   if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_UNLIKELY(!ls_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid ls handle", K(ret), K(ls_handle), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_tablet(
-                 tablet_id, tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+  } else if (FALSE_IT(ls = ls_handle.get_ls())) {
+  } else if (ls->is_offline()) {
+    ret = OB_LS_OFFLINE;
+    FLOG_INFO("create data memtable failed because of ls offline", KR(ret), K(ls_id), K(tablet_id));
+  } else if (OB_FAIL(ls->get_tablet_svr()->get_tablet(tablet_id, tmp_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("fail to get tablet", K(ret), K(ls_id), K(tablet_id));
   } else if (FALSE_IT(clog_checkpoint_scn = tmp_handle.get_obj()->get_tablet_meta().clog_checkpoint_scn_)) {
   } else if (replay_scn_ > clog_checkpoint_scn) {

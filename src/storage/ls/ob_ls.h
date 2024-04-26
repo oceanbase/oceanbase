@@ -874,7 +874,7 @@ public:
                                          const uint64_t epoch,
                                          ObFuture<int> *result = nullptr);
   int sync_tablet_freeze_for_direct_load(const ObTabletID &tablet_id,
-                                         const int64_t max_retry_time = 3600LL * 1000LL * 1000LL /*1 hour*/);
+                                         const int64_t max_retry_time = 5LL * 1000LL * 1000LL /*5 seconds*/);
   void async_tablet_freeze_for_direct_load(const ObTabletID &tablet_id);
 
   DELEGATE_WITH_RET(ls_freezer_, wait_freeze_finished, int);
