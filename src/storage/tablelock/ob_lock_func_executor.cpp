@@ -947,6 +947,7 @@ int ObReleaseAllLockExecutor::execute(const int64_t client_session_id)
 
       OZ (ObLockFuncContext::valid_execute_context(exec_ctx));
       OZ (execute_(exec_ctx, client_session_id, release_cnt));
+      OX (exec_ctx.set_physical_plan_ctx(nullptr));  // avoid core during release exec_ctx
     }
   }
 
