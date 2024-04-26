@@ -111,8 +111,15 @@ ObPersistLobReader* ObPersistLobReaderCache::alloc_reader()
 int ObPersistLobReader::open(ObPersistentLobApator* adaptor, ObLobAccessParam &param, ObNewRowIterator *&meta_iter)
 {
   int ret = OB_SUCCESS;
+  // scan may be fail, must be sure adaptor not null
+  // then deconstrcutor can release correctly
+  adaptor_ = adaptor;
+
   ObNewRange range;
-  if (! param.lob_meta_tablet_id_.is_valid() || ! param.lob_piece_tablet_id_.is_valid()) {
+  if (OB_ISNULL(adaptor)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("adaptor is null", KR(ret), K(param));
+  } else if (! param.lob_meta_tablet_id_.is_valid() || ! param.lob_piece_tablet_id_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet_id invalid", KR(ret), K(param));
   } else if (OB_FAIL(param.get_rowkey_range(rowkey_objs_, range))) {
@@ -122,7 +129,6 @@ int ObPersistLobReader::open(ObPersistentLobApator* adaptor, ObLobAccessParam &p
   } else if (OB_FAIL(adaptor->do_scan_lob_meta(param, scan_param_, row_iter_))) {
     LOG_WARN("do_scan_lob_meta fail", K(ret));
   } else {
-    adaptor_ = adaptor;
     meta_iter = row_iter_;
     lob_meta_tablet_id_ = param.lob_meta_tablet_id_;
     lob_piece_tablet_id_ = param.lob_piece_tablet_id_;
