@@ -260,7 +260,8 @@ private:
       ObITable **minor_sstables) const;
   int check_minor_table_continue_(
       ObITable *table,
-      ObITable *prev_table) const;
+      ObITable *&prev_table,
+      share::SCN &filled_tx_scn) const;
   int combine_ha_minor_sstables_(
       const ObTablet &tablet,
       common::ObIArray<ObITable *> &old_store_minor_sstables,
