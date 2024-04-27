@@ -122,6 +122,7 @@ private:
     int init(uint64_t tenant_id);
     void runTimerTask() override;
   private:
+    bool gc_mark_delete(ObTableLoadTableCtx *table_ctx);
     bool gc_heart_beat_expired_ctx(ObTableLoadTableCtx *table_ctx);
     bool gc_table_not_exist_ctx(ObTableLoadTableCtx *table_ctx);
   private:

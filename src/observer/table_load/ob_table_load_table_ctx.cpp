@@ -40,6 +40,7 @@ ObTableLoadTableCtx::ObTableLoadTableCtx()
     ref_count_(0),
     is_assigned_resource_(false),
     is_assigned_memory_(false),
+    mark_delete_(false),
     is_dirty_(false),
     is_inited_(false)
 {
@@ -315,6 +316,18 @@ void ObTableLoadTableCtx::free_trans_ctx(ObTableLoadTransCtx *trans_ctx)
   } else {
     trans_ctx_allocator_.free(trans_ctx);
   }
+}
+
+bool ObTableLoadTableCtx::is_stopped() const
+{
+  bool bret = true;
+  if (nullptr != coordinator_ctx_ && !coordinator_ctx_->task_scheduler_->is_stopped()) {
+    bret = false;
+  }
+  if (nullptr != store_ctx_ && !store_ctx_->task_scheduler_->is_stopped()) {
+    bret = false;
+  }
+  return bret;
 }
 
 }  // namespace observer

@@ -150,12 +150,42 @@ void ObTableLoadService::ObGCTask::runTimerTask()
     }
     for (int64_t i = 0; i < table_ctx_array.count(); ++i) {
       ObTableLoadTableCtx *table_ctx = table_ctx_array.at(i);
-      if (gc_heart_beat_expired_ctx(table_ctx)) {
+      if (gc_mark_delete(table_ctx)) {
+      } else if (gc_heart_beat_expired_ctx(table_ctx)) {
       } else if (gc_table_not_exist_ctx(table_ctx)) {
       }
       manager.put_table_ctx(table_ctx);
     }
   }
+}
+
+bool ObTableLoadService::ObGCTask::gc_mark_delete(ObTableLoadTableCtx *table_ctx)
+{
+  int ret = OB_SUCCESS;
+  bool is_removed = false;
+  if (OB_ISNULL(table_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table ctx is null", KR(ret));
+    is_removed = true;
+  } else {
+    const uint64_t table_id = table_ctx->param_.table_id_;
+    const int64_t task_id = table_ctx->ddl_param_.task_id_;
+    const uint64_t dest_table_id = table_ctx->ddl_param_.dest_table_id_;
+    // check if table ctx is removed
+    if (table_ctx->is_dirty()) {
+      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id),
+                "ref_count", table_ctx->get_ref_count());
+      is_removed = true;
+    }
+    // check is mark delete
+    else if (table_ctx->is_mark_delete()) {
+      if (table_ctx->is_stopped() && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+        LOG_WARN("fail to remove table ctx", KR(ret), K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
+      }
+      is_removed = true; // skip other gc
+    }
+  }
+  return is_removed;
 }
 
 bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx *table_ctx)
@@ -168,22 +198,27 @@ bool ObTableLoadService::ObGCTask::gc_heart_beat_expired_ctx(ObTableLoadTableCtx
     is_removed = true;
   } else {
     const uint64_t table_id = table_ctx->param_.table_id_;
-    const uint64_t hidden_table_id = table_ctx->ddl_param_.dest_table_id_;
+    const int64_t task_id = table_ctx->ddl_param_.task_id_;
+    const uint64_t dest_table_id = table_ctx->ddl_param_.dest_table_id_;
     // check if table ctx is removed
     if (table_ctx->is_dirty()) {
-      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), "ref_count",
-                table_ctx->get_ref_count());
+      LOG_DEBUG("table load ctx is dirty", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id),
+                "ref_count", table_ctx->get_ref_count());
       is_removed = true;
     }
-    // check if heart beat expired
-    else if (nullptr != table_ctx->store_ctx_ && table_ctx->store_ctx_->enable_heart_beat_check()) {
+    // check if heart beat expired, ignore coordinator
+    else if (nullptr == table_ctx->coordinator_ctx_ &&
+             nullptr != table_ctx->store_ctx_ &&
+             table_ctx->store_ctx_->enable_heart_beat_check()) {
       if (OB_UNLIKELY(
             table_ctx->store_ctx_->check_heart_beat_expired(HEART_BEEAT_EXPIRED_TIME_US))) {
-        LOG_INFO("store heart beat expired, abort", K(tenant_id_), K(table_id), K(hidden_table_id));
+        FLOG_INFO("store heart beat expired, abort", K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
         bool is_stopped = false;
         ObTableLoadStore::abort_ctx(table_ctx, is_stopped);
-        // 先不移除, 防止心跳超时后, 网络恢复, 控制节点查不到table_ctx, 直接认为已经停止
-        // 如果网络一直不恢复, 也可以通过table不存在来gc此table_ctx
+        table_ctx->mark_delete();
+        if (is_stopped && OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {
+          LOG_WARN("fail to remove table ctx", KR(ret), K(tenant_id_), K(table_id), K(task_id), K(dest_table_id));
+        }
         is_removed = true; // skip other gc
       }
     }
