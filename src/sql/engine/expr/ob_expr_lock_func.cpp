@@ -104,7 +104,14 @@ bool ObExprLockFunc::proxy_is_support(const ObExecContext &exec_ctx)
   if (OB_ISNULL(session)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "session is null!");
   } else {
-    is_support = session->is_feedback_proxy_info_support() || !session->is_obproxy_mode();
+    is_support = (session->is_feedback_proxy_info_support() && session->is_client_sessid_support()) || !session->is_obproxy_mode();
+    if (!is_support) {
+      LOG_WARN_RET(OB_NOT_SUPPORTED,
+                   "proxy is not support this feature",
+                   K(session->get_sessid()),
+                   K(session->is_feedback_proxy_info_support()),
+                   K(session->is_client_sessid_support()));
+    }
   }
   return is_support;
 }
@@ -334,7 +341,7 @@ int ObExprIsUsedLock::is_used_lock(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   int ret = OB_SUCCESS;
   // we can get session info use this
   const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
-  int64_t sess_id = 0;
+  uint32_t sess_id = 0;
   ObDatum *lock_name = NULL;
 
   if (!proxy_is_support(ctx.exec_ctx_)) {
@@ -362,7 +369,7 @@ int ObExprIsUsedLock::is_used_lock(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 
   // 1. get the lock session id
   if (OB_SUCC(ret)) {
-    result.set_int(sess_id);
+    result.set_uint32(sess_id);
   } else if (OB_EMPTY_RESULT == ret) {
     // 2. there is nobody hold the lock
     ret = OB_SUCCESS;

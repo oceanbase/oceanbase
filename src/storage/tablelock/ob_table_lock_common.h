@@ -436,6 +436,10 @@ class ObTableLockOwnerID
 public:
   static const int64_t INVALID_ID = -1;
   static const int64_t INVALID_RAW_OWNER_ID = ((1L << 54) - 1);
+  static const int64_t CLIENT_SESS_CREATE_TS_BIT = 22;
+  static const int64_t CLIENT_SESS_CREATE_TS_MASK = (1L << CLIENT_SESS_CREATE_TS_BIT) - 1;
+  static const int64_t CLIENT_SESS_ID_BIT = 32;
+  static const int64_t CLIENT_SESS_ID_MASK = (1L << CLIENT_SESS_ID_BIT) - 1;
   static const int64_t MAX_VALID_RAW_OWNER_ID = INVALID_RAW_OWNER_ID - 1;
 
   ObTableLockOwnerID() : pack_(INVALID_ID) {}
@@ -462,7 +466,8 @@ public:
   int convert_from_value(const int64_t packed_id);
   // check valid.
   int convert_from_value(const ObLockOwnerType owner_type, const int64_t raw_owner_id);
-  int convert_to_sessid(int64_t &sessid) const;
+  int convert_from_client_sessid(const uint32_t client_sessid, const uint64_t client_sess_create_ts);
+  int convert_to_sessid(uint32_t &sessid) const;
   // assignment
   ObTableLockOwnerID &operator=(const ObTableLockOwnerID &other)
   { pack_ = other.pack_; return *this; }

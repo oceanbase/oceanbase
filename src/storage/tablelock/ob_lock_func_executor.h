@@ -124,8 +124,10 @@ public:
   static constexpr int64_t LOCK_ID_LENGTH = 10;
   static constexpr int64_t MIN_LOCK_HANDLE_ID = 0x40000000;
   static constexpr int64_t MAX_LOCK_HANDLE_ID = 1999999999;
+  static constexpr int64_t DEFAULT_EXPIRATION_US = 60 * 1000 * 1000L; // 1min
 
 public:
+  int check_lock_exist_(const uint64_t &lock_id);
   int check_lock_exist_(ObLockFuncContext &ctx,
                         const int64_t raw_owner_id,
                         const uint64_t &lock_id,
@@ -139,18 +141,22 @@ public:
   int check_lock_exist_(ObLockFuncContext &ctx,
                         ObSqlString &where_cond,
                         bool &exist);
-  int remove_lock_id_(ObLockFuncContext &ctx,
-                      const int64_t raw_owner_id,
-                      const uint64_t &lock_id);
+  int check_client_ssid_(ObLockFuncContext &ctx,
+                         const uint32_t client_session_id,
+                         const uint64_t client_session_create_ts);
+  int remove_lock_id_(ObLockFuncContext &ctx, const int64_t raw_owner_id, const uint64_t &lock_id);
   int remove_lock_id_(ObLockFuncContext &ctx,
                       const int64_t lock_id);
   int remove_session_record_(ObLockFuncContext &ctx,
-                             const int64_t client_session_id);
+                             const uint32_t client_session_id);
   int unlock_obj_(transaction::ObTxDesc *tx_desc,
                   const transaction::ObTxParam &tx_param,
                   const ObUnLockObjsRequest &arg);
   int query_lock_id_(const ObString &lock_name,
                      uint64_t &lock_id);
+  int query_lock_id_and_lock_handle_(const ObString &lock_name,
+                                     uint64_t &lock_id,
+                                     char *lock_handle_buf);
   int query_lock_owner_(const uint64_t &lock_id,
                         int64_t &owner_id);
   int extract_lock_id_(const ObString &lock_handle,
@@ -169,25 +175,27 @@ public:
 private:
   int generate_lock_id_(ObLockFuncContext &ctx,
                         const ObString &lock_name,
+                        const int64_t timeout_us,
                         uint64_t &lock_id);
   int update_session_table_(ObLockFuncContext &ctx,
-                            const int64_t client_session_id,
+                            const uint32_t client_session_id,
                             const uint64_t client_session_create_ts,
-                            const int64_t server_session_id);
+                            const uint32_t server_session_id);
   int check_need_reroute_(ObLockFuncContext &ctx,
                           sql::ObSQLSessionInfo *session,
-                          const int64_t client_session_id,
+                          const uint32_t client_session_id,
                           const uint64_t client_session_create_ts);
   int get_lock_session_(ObLockFuncContext &ctx,
-                        const int64_t client_session_id,
+                        const uint32_t client_session_id,
                         const uint64_t client_session_create_ts,
                         ObAddr &lock_session_addr,
-                        int64_t &lock_session_id);
-  int get_first_session_info_(common::sqlclient::ObMySQLResult &res, ObAddr &session_addr, int64_t &server_session_id);
+                        uint32_t &lock_session_id);
+  int get_first_session_info_(common::sqlclient::ObMySQLResult &res, ObAddr &session_addr, uint32_t &server_session_id);
   int get_sql_port_(ObLockFuncContext &ctx, const ObAddr &svr_addr, int32_t &sql_port);
   int lock_obj_(sql::ObSQLSessionInfo *session,
                 const transaction::ObTxParam &tx_param,
-                const int64_t client_session_id,
+                const uint32_t client_session_id,
+                const uint64_t client_session_create_ts,
                 const int64_t obj_id,
                 const int64_t timeout_us);
   int generate_lock_id_(const ObString &lock_name,
@@ -195,6 +203,7 @@ private:
                         char *lock_handle);
   int write_lock_id_(ObLockFuncContext &ctx,
                      const ObString &lock_name,
+                     const int64_t timeout_us,
                      const uint64_t &lock_id,
                      const char *lock_handle_buf);
 };
@@ -212,15 +221,19 @@ public:
   int execute(sql::ObExecContext &ctx,
               int64_t &release_cnt);
   // used internal, release all the lock that required by the session.
-  int execute(const int64_t client_session_id);
+  int execute(const int64_t raw_owner_id);
 private:
   int execute_(sql::ObExecContext &ctx,
-               const int64_t client_session_id,
+               const uint32_t client_session_id,
+               const uint64_t client_session_create_ts,
+               int64_t &release_cnt);
+  int execute_(sql::ObExecContext &ctx,
+               const ObTableLockOwnerID &owner_id,
                int64_t &release_cnt);
   int release_all_locks_(ObLockFuncContext &ctx,
                          sql::ObSQLSessionInfo *session,
                          const transaction::ObTxParam &tx_param,
-                         const int64_t client_session_id,
+                         const ObTableLockOwnerID &owner_id,
                          int64_t &release_cnt);
   int release_all_locks_(ObLockFuncContext &ctx,
                          const ObIArray<ObUnLockObjsRequest> &arg_list,
@@ -248,7 +261,7 @@ class ObISUsedLockExecutor : public ObLockFuncExecutor
 public:
   int execute(sql::ObExecContext &ctx,
               const ObString &lock_name,
-              int64_t &sess_id);
+              uint32_t &sess_id);
 };
 
 } // tablelock

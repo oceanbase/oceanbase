@@ -190,14 +190,24 @@ int ObTableLockOwnerID::convert_from_value(const ObLockOwnerType owner_type,
   return ret;
 }
 
-int ObTableLockOwnerID::convert_to_sessid(int64_t &sessid) const
+int ObTableLockOwnerID::convert_from_client_sessid(const uint32_t client_sessid, const uint64_t client_sess_create_ts)
+{
+  int ret = OB_SUCCESS;
+  pack_ = 0;
+  type_ = static_cast<unsigned char>(ObLockOwnerType::SESS_ID_OWNER_TYPE);
+  int64_t client_unique_id = client_sess_create_ts & CLIENT_SESS_CREATE_TS_MASK;
+  id_ = (static_cast<int64_t>(client_sessid)) | (client_unique_id << CLIENT_SESS_ID_BIT);
+  return ret;
+}
+
+int ObTableLockOwnerID::convert_to_sessid(uint32_t &sessid) const
 {
   int ret = OB_SUCCESS;
   if (type_ != static_cast<int64_t>(ObLockOwnerType::SESS_ID_OWNER_TYPE)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("this lock owner id cannot be converted to session id", K(ret), K_(type));
   } else {
-    sessid = id_;
+    sessid = static_cast<uint32_t>(id_ & CLIENT_SESS_ID_MASK);
   }
   return ret;
 }
