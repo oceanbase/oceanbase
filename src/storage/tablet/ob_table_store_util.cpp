@@ -230,7 +230,7 @@ int ObSSTableArray::inner_init(
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null table ptr", K(ret));
-      } else if (OB_UNLIKELY(!table->is_sstable() && !table->is_ddl_kv_sstable())) {
+      } else if (OB_UNLIKELY(!table->is_sstable() && !table->is_ddl_mem_sstable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected table type", K(ret), KPC(table));
       } else if (OB_FAIL(static_cast<ObSSTable *>(table)->deep_copy(allocator, sstable_array_[i - start_pos]))) {

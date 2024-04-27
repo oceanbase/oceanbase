@@ -1034,7 +1034,7 @@ int ObDDLMacroBlockIterator::open(ObSSTable *sstable, const ObDatumRange &query_
   } else if (OB_UNLIKELY(nullptr == sstable || !query_range.is_valid() || !read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(sstable), K(query_range), K(read_info));
-  } else if (sstable->is_ddl_kv_sstable()) { // ddl mem, scan keybtree
+  } else if (sstable->is_ddl_mem_sstable()) { // ddl mem, scan keybtree
     ObDDLMemtable *ddl_memtable = static_cast<ObDDLMemtable *>(sstable);
     if (OB_ISNULL(ddl_memtable)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1085,7 +1085,7 @@ int ObDDLMacroBlockIterator::get_next(ObDataMacroBlockMeta &data_macro_meta, int
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (sstable_->is_ddl_kv_sstable()) {
+  } else if (sstable_->is_ddl_mem_sstable()) {
     ObDatumRowkeyWrapper tree_key;
     ObBlockMetaTreeValue *tree_value = nullptr;
     if (OB_FAIL(ddl_iter_.get_next(tree_key, tree_value))) {

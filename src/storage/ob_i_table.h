@@ -105,6 +105,7 @@ public:
     DDL_MERGE_CG_SSTABLE = 22, // used for column store ddl, for normal cg sstable, rowkey cg not supported
     DDL_MEM_CO_SSTABLE = 23,
     DDL_MEM_CG_SSTABLE = 24,
+    DDL_MEM_MINI_SSTABLE = 25,
     // < add new sstable before here, See is_sstable()
 
     MAX_TABLE_TYPE
@@ -284,7 +285,6 @@ public:
   virtual bool is_empty() const = 0;
   virtual bool no_data_to_read() const { return is_empty(); }
   virtual bool is_ddl_merge_empty_sstable() const { return is_empty() && is_ddl_merge_sstable(); }
-  virtual bool is_ddl_kv_sstable() const { return is_ddl_mem_sstable() || is_direct_load_memtable(); }
   DECLARE_VIRTUAL_TO_STRING;
 
   static bool is_sstable(const TableType table_type)
@@ -309,7 +309,7 @@ public:
     return ObITable::TableType::MINOR_SSTABLE == table_type
         || ObITable::TableType::MINI_SSTABLE == table_type
         || ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE == table_type
-        || ObITable::TableType::DIRECT_LOAD_MEMTABLE == table_type;
+        || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type;
   }
 
   static bool is_multi_version_table(const TableType table_type)
@@ -426,7 +426,8 @@ public:
   {
     return ObITable::TableType::DDL_MEM_SSTABLE == table_type
       || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type
-      || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type;
+      || ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type
+      || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type;
   }
   static bool is_ddl_merge_sstable(const TableType table_type)
   {
