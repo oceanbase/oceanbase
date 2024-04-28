@@ -247,7 +247,12 @@ bool ObRedoLogGenerator::big_row_log_fully_filled() const
 
 bool ObRedoLogGenerator::is_logging_big_row() const
 {
-  return NULL != big_row_buf_;
+  return NULL != big_row_buf_
+         // because the mask big_row_buf_ is used asynchronously(it is reset only
+         // when the next fill_redo_log), so we need relay on its real state instead
+         // of the mask big_row_buf_. What's more, the big_row_log_fully_filled() is
+         // reliable because the is_logging_big_row() is only used when !is_logging()
+         && !big_row_log_fully_filled();
 }
 
 int ObRedoLogGenerator::fill_redo_log(char* buf, const int64_t buf_len, int64_t& buf_pos)
