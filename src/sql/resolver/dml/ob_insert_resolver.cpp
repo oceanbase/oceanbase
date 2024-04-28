@@ -184,9 +184,6 @@ int ObInsertResolver::resolve_insert_clause(const ParseNode &node)
         LOG_WARN("pullup part exprs for view failed", K(ret));
       } else { /*do nothing*/ }
     }
-    if (is_oracle_mode()) {
-      OZ(add_default_sequence_id_to_stmt(insert_stmt->get_table_item(0)->table_id_));
-    }
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(generate_insert_table_info(*table_item, insert_stmt->get_insert_table_info()))) {
