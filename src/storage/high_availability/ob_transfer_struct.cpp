@@ -477,7 +477,7 @@ int ObTXTransferUtils::build_empty_minor_sstable_param_(
     param.data_checksum_ = 0;
     param.occupy_size_ = 0;
     param.ddl_scn_.set_min();
-    param.filled_tx_scn_ = end_scn;
+    param.filled_tx_scn_.set_min();
     param.original_size_ = 0;
     param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
 
