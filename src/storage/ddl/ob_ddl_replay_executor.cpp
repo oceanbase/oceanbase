@@ -360,6 +360,13 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     if (is_incremental_direct_load(redo_info.type_)) {
       if (OB_FAIL(do_inc_replay_(tablet_handle, write_info, macro_block))) {
         LOG_WARN("fail to do inc replay", K(ret));
+        if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
+          LOG_INFO("no need to replay ddl inc redo log", K(ret));
+          ret = OB_SUCCESS;
+        } else if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to do_inc_replay_", K(ret), K(log_), K(scn_));
+          ret = OB_EAGAIN;
+        }
       }
     } else {
       if (OB_FAIL(do_full_replay_(tablet_handle, write_info, macro_block))) {
