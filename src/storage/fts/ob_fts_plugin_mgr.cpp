@@ -56,6 +56,8 @@ int ObTenantFTPluginMgr::register_plugins()
     LOG_WARN("fail to register default fulltext parser", K(ret));
   } else if (OB_FAIL(register_plugin<ObBuildInNgramFTParser>())) {
     LOG_WARN("fail to register ngram fulltext parser", K(ret));
+  } else if (OB_FAIL(register_plugin<ObBuildInBEngFTParser>())) {
+    LOG_WARN("fail to register basic english fulltext parser", K(ret));
   }
   return ret;
 }
@@ -67,6 +69,8 @@ void ObTenantFTPluginMgr::unregister_plugins()
     LOG_ERROR("fail to unregister default fulltext parser", K(ret));
   } else if (OB_FAIL(unregister_plugin<ObBuildInNgramFTParser>())) {
     LOG_ERROR("fail to unregister ngram fulltext parser", K(ret));
+  } else if (OB_FAIL(unregister_plugin<ObBuildInBEngFTParser>())) {
+    LOG_ERROR("fail to unregister basic english fulltext parser", K(ret));
   }
 }
 
@@ -133,6 +137,8 @@ int ObTenantFTPluginMgr::init_plugin_handler()
     LOG_WARN("fail to set default fulltext parser", K(ret));
   } else if (OB_FAIL(set_plugin_handler<ObBuildInNgramFTParser>())) {
     LOG_WARN("fail to set ngram fulltext parser", K(ret));
+  } else if (OB_FAIL(set_plugin_handler<ObBuildInBEngFTParser>())) {
+    LOG_WARN("fail to set basic english fulltext parser", K(ret));
   }
   return ret;
 }
