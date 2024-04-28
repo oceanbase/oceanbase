@@ -820,10 +820,18 @@ public:
   ~ObGhostRowUtil() = delete;
   static int make_ghost_row(
       const int64_t sql_sequence_col_idx,
-      const common::ObQueryFlag &query_flag,
       blocksstable::ObDatumRow &row);
   static int is_ghost_row(const blocksstable::ObMultiVersionRowFlag &flag, bool &is_ghost_row);
   static const int64_t GHOST_NUM = INT64_MAX;
+};
+
+struct ObShadowRowUtil {
+public:
+  ObShadowRowUtil() = delete;
+  ~ObShadowRowUtil() = delete;
+  static int make_shadow_row(
+      const int64_t sql_sequence_col_idx,
+      blocksstable::ObDatumRow &row);
 };
 
 struct ObSqlDatumInfo {

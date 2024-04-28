@@ -995,8 +995,9 @@ int ObMemtableMultiVersionScanIterator::set_compacted_row_state(const bool add_s
   row_.row_flag_.fuse_flag(value_iter_->get_row_first_dml_flag());
   row_.mvcc_row_flag_.set_last_multi_version_row(value_iter_->is_multi_version_iter_end());
   if (add_shadow_row) {
-    row_.set_shadow_row();
-    row_.storage_datums_[sql_sequence_col_idx_].set_int(-INT64_MAX);
+    if (OB_FAIL(ObShadowRowUtil::make_shadow_row(sql_sequence_col_idx_, row_))) {
+      LOG_WARN("failed to make shadow row", K(ret), K(row_), K_(sql_sequence_col_idx));
+    }
   } else {
     // sql_sequence of committed data is 0
     row_.storage_datums_[sql_sequence_col_idx_].set_int(0);

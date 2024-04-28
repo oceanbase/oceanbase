@@ -295,7 +295,11 @@ public:
       const ObMicroBlockData &block_data,
       const bool is_left_border,
       const bool is_right_border) override final;
-  INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner", ObIMicroBlockRowScanner, K_(read_row_direct_flag), K_(version_range), K_(is_last_multi_version_row), K_(finish_scanning_cur_rowkey));
+  INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner",
+                       ObIMicroBlockRowScanner, K_(read_row_direct_flag),
+                       K_(version_range), K_(is_last_multi_version_row),
+                       K_(finish_scanning_cur_rowkey));
+
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
   virtual void inner_reset();
@@ -339,7 +343,6 @@ private:
   int64_t trans_version_col_idx_;
   int64_t sql_sequence_col_idx_;
   int64_t cell_cnt_;
-  transaction::ObTransID trans_id_;
   common::ObVersionRange version_range_;
   bool read_row_direct_flag_;
 };
@@ -382,27 +385,21 @@ public:
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
 private:
-  enum ScanState{
-    SCAN_START = 0,
-    GET_RUNNING_TRANS_ROW = 1,
-    PREPARE_COMMITTED_ROW_QUEUE = 2,
-    FILTER_ABORT_TRANS_ROW = 3,
-    COMPACT_COMMIT_TRANS_ROW = 4,
-    GET_ROW_FROM_ROW_QUEUE = 5,
-    LOCATE_LAST_COMMITTED_ROW = 6,
-  };
-private:
-  int get_trans_state(const transaction::ObTransID &trans_id,
-                       int64_t &state,
-                       int64_t &commit_trans_version);
-  int check_curr_row_can_read(const transaction::ObTransID &trans_id, const transaction::ObTxSEQ &sql_seq, bool &can_read);
+  int get_trans_state(
+    const transaction::ObTransID &read_trans_id,
+    int64_t &state,
+    bool &can_read);
+  int64_t get_trans_state_from_cache(
+    const transaction::ObTransID &read_trans_id,
+    const transaction::ObTxSEQ &sql_seq,
+    bool &can_read);
+  int get_trans_state_from_tx_table(
+    const transaction::ObTransID &read_trans_id,
+    const transaction::ObTxSEQ &sql_seq,
+    int64_t &state,
+    bool &can_read);
   int check_row_trans_state(bool &skip_curr_row);
 private:
-  enum RowCompactInfoIndex{
-    COMPACT_FIRST_ROW = 0,
-    COMPACT_LAST_ROW = 1,
-    COMPACT_MAX_ROW,
-  };
   // multi version
   int64_t trans_version_col_idx_;
   int64_t sql_sequence_col_idx_;

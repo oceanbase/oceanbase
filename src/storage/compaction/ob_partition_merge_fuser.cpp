@@ -142,6 +142,11 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
   return ret;
 }
 
+int ObMergeFuser::make_result_row_shadow(const int64_t sql_sequence_col_idx)
+{
+  return ObShadowRowUtil::make_shadow_row(sql_sequence_col_idx, result_row_);
+}
+
 // fuse delete row
 int ObMergeFuser::fuse_delete_row(
     const blocksstable::ObDatumRow &del_row,

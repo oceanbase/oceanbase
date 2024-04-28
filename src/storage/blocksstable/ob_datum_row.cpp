@@ -835,7 +835,6 @@ int ObGhostRowUtil::is_ghost_row(
 
 int ObGhostRowUtil::make_ghost_row(
     const int64_t sql_sequence_col_idx,
-    const ObQueryFlag &query_flag,
     blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -855,6 +854,22 @@ int ObGhostRowUtil::make_ghost_row(
     for (int i = sql_sequence_col_idx + 1; i < row.get_column_count(); ++i) {
       row.storage_datums_[i].set_nop();
     }
+  }
+  return ret;
+}
+
+int ObShadowRowUtil::make_shadow_row(const int64_t sql_sequence_col_idx,
+                                    blocksstable::ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(((row.mvcc_row_flag_.is_uncommitted_row() || row.trans_id_.is_valid()))
+                  || row.get_column_count() < sql_sequence_col_idx)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(row), K(sql_sequence_col_idx));
+  } else {
+    row.storage_datums_[sql_sequence_col_idx].reuse();
+    row.storage_datums_[sql_sequence_col_idx].set_int(-INT64_MAX);
+    row.set_shadow_row();
   }
   return ret;
 }
