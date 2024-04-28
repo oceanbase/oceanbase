@@ -514,6 +514,9 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = nullptr;
   bool got_row = false;
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker interrupt", K(ret));
+  }
   while (OB_SUCC(ret) && !got_row) {
     if (row_idx_ >= rows_.count()) {
       rows_.reuse();

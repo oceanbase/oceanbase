@@ -173,6 +173,11 @@ int ObTenantFTPluginMgr::get_plugin_handler(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(name));
   } else if (OB_FAIL(handler_map_.get_refactored(name, plugin_handler))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_FUNCTION_NOT_DEFINED;
+      LOG_WARN("Function not defined", K(ret));
+      LOG_USER_ERROR(OB_FUNCTION_NOT_DEFINED, name.len(), name.str());
+    }
     LOG_WARN("fail to get plugin handler", K(ret), K(name));
   }
   return ret;

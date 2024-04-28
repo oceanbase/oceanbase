@@ -2296,6 +2296,8 @@ DEFINE_ERROR(OB_MARK_BLOCK_INFO_TIMEOUT, -9201, -1, "HY000", "Mark blocks timeou
 DEFINE_ERROR(OB_NOT_READY_TO_EXTEND_FILE, -9202, -1, "HY000", "Auto extend param is not ready to start extending file");
 ////////////////////////////////////////////////////////////////
 
+DEFINE_ERROR_EXT(OB_FUNCTION_NOT_DEFINED, -9203, ER_FUNCTION_NOT_DEFINED, "HY000", "Function not defined", "Function %.*s is not defined");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // Storage错误码值域 [-9000, -9500)
