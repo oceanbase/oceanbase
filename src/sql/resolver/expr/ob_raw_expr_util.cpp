@@ -6047,7 +6047,7 @@ int ObRawExprUtils::build_pad_expr(ObRawExprFactory &expr_factory,
                       CS_TYPE_UTF8MB4_BIN : column_schema->get_collation_type())) {
   } else if (is_char && OB_FAIL(build_const_string_expr(expr_factory,
                                                         padding_expr_type,
-                                                        padding_char,
+                                                        ObCharsetUtils::get_const_str(padding_expr_collation, OB_PADDING_CHAR),
                                                         padding_expr_collation,
                                                         pading_word_expr))) {
     LOG_WARN("fail to build pading word expr", K(ret));
