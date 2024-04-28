@@ -8970,7 +8970,7 @@ void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
 {
   if (snapshot > lastest_snapshot_) {
     build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()) {
+  } else if (snapshot <= lastest_snapshot_) {
     if (refresh_state_info_interval_.reach()) {
       build_and_post_collect_state_msg_(snapshot);
     }
@@ -9164,7 +9164,7 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
     } else if (state_info_array_.at(i-1).need_update(msg.state_info_)) {
       state_info_array_.at(i-1) = msg.state_info_;
     } else {
-      state_info_array_.at(i-1).snapshot_version_ = msg.state_info_.snapshot_version_;
+      state_info_array_.at(i-1).snapshot_version_.inc_update(msg.state_info_.snapshot_version_);
     }
     if (OB_SUCC(ret)) {
       standby_part_collected_.add_member(i-1);
