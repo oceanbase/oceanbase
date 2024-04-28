@@ -198,11 +198,20 @@ int ObTabletStartTransferOutReplayExecutor::check_src_transfer_tablet_(
         !is_committed)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is unexpected", K(ret), KPC(tablet), K(tablet_info_), K(user_data));
-  } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
-        ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_ ||
-        is_committed)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet status is unexpected", K(ret), KPC(tablet), K(tablet_info_), K(user_data));
+    // In the case of MDS txn rollback, during its restart, there is a
+    // possibility that replay may start directly from the middle (as committed
+    // MDS txns can block rec_scn through the mds_node, while rollbacked txns
+    // cannot do the same). Therefore, at this time, we are unable to verify the
+    // tablet_status with transfer_out through replaying transfer_out_v2 log.
+    //
+    // TODO(handora.qc): open the case if the MDS node can remember the rec_scn
+    // of rollbacked txns
+
+  // } else if (mds_op_type_ == ObTxDataSourceType::START_TRANSFER_OUT_V2 && (
+  //       ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_ ||
+  //       is_committed)) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("tablet status is unexpected", K(ret), KPC(tablet), K(tablet_info_), K(user_data));
   } else if (tablet_info_.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet transfer seq is unexpected", K(ret), KPC(tablet), K(tablet_info_), K(user_data));
