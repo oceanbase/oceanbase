@@ -1829,10 +1829,9 @@ int ObTabletTableStore::check_minor_tables_continue_(T &minor_tables) const
   int ret = OB_SUCCESS;
   ObITable *prev_table = nullptr;
   prev_table = nullptr;
-  SCN filled_tx_scn(SCN::min_scn());
   for (int64_t i = 0; OB_SUCC(ret) && i < minor_tables.count(); ++i) {
     ObITable *table =  minor_tables.at(i);
-    if (OB_FAIL(check_minor_table_continue_(table, prev_table, filled_tx_scn))) {
+    if (OB_FAIL(check_minor_table_continue_(table, prev_table))) {
       LOG_WARN("failed to check minor table continue", K(ret), KPC(table));
     }
   }
@@ -2201,41 +2200,30 @@ int ObTabletTableStore::cut_ha_sstable_scn_range_(
 
 int ObTabletTableStore::check_minor_table_continue_(
     ObITable *table,
-    ObITable *&prev_table,
-    share::SCN &filled_tx_scn) const
+    ObITable *prev_table) const
 {
   int ret = OB_SUCCESS;
   ObSSTable *curr_sstable = nullptr;
-
+  ObSSTable *prev_sstable = nullptr;
   if (OB_UNLIKELY(OB_ISNULL(table) || !table->is_multi_version_minor_sstable())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table must be multi version minor table", K(ret), KPC(table));
-  } else if (FALSE_IT(curr_sstable = static_cast<ObSSTable *>(table))) {
   } else if (OB_ISNULL(prev_table)) {
-    //do nothing
+    // do nothing
   } else if (table->get_start_scn() > prev_table->get_end_scn()
       || table->get_end_scn() <= prev_table->get_end_scn()) {
     ret = OB_ERR_SYS;
     LOG_ERROR("table scn range not continuous or overlap", K(ret), KPC(table), KPC(prev_table));
-  } else if (table->get_key().tablet_id_.is_ls_inner_tablet()) {
-    //do nothing
-  } else if (curr_sstable->is_empty() || curr_sstable->get_filled_tx_scn().is_max()) {
-    //skip empty sstable pr max filled tx scn for compatible
-    LOG_INFO("current sstable is empty or filled tx scn is max, skip check this tablet filled tx scn", KPC(curr_sstable));
-  } else if (curr_sstable->get_filled_tx_scn() < filled_tx_scn) {
+  } else if (FALSE_IT(curr_sstable = static_cast<ObSSTable *>(table))) {
+  } else if (FALSE_IT(prev_sstable = static_cast<ObSSTable *>(prev_table))) {
+  } else if (table->get_key().tablet_id_.is_ls_inner_tablet() || prev_sstable->get_filled_tx_scn().is_max()) {
+    // do nothing
+  } else if (curr_sstable->get_filled_tx_scn() < prev_sstable->get_filled_tx_scn()) {
     ret = OB_ERR_SYS;
     LOG_WARN("sstable's filled_tx_scn is out of order", K(ret), KPC(table), KP(prev_table),
-        "curr_filled_tx_scn", curr_sstable->get_filled_tx_scn(), "prev_filled_tx_scn", filled_tx_scn);
+        "curr_filled_tx_scn", curr_sstable->get_filled_tx_scn(), "prev_filled_tx_scn", prev_sstable->get_filled_tx_scn());
   }
-
-  if (OB_SUCC(ret)) {
-    prev_table = table;
-    if (!curr_sstable->get_key().tablet_id_.is_ls_inner_tablet()
-        && !curr_sstable->is_empty()
-        && !curr_sstable->get_filled_tx_scn().is_max()) {
-      filled_tx_scn = curr_sstable->get_filled_tx_scn();
-    }
-  }
+  prev_table = table;
   return ret;
 }
 
@@ -2246,7 +2234,6 @@ int ObTabletTableStore::check_minor_tables_continue_(
   int ret = OB_SUCCESS;
   ObITable *prev_table = nullptr;
   prev_table = nullptr;
-  SCN filled_tx_scn(SCN::min_scn());
   if (count > 0 && OB_ISNULL(minor_sstables)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("check minor tables continue minor sstables is unexpected", K(ret), KP(minor_sstables), K(count));
@@ -2254,7 +2241,7 @@ int ObTabletTableStore::check_minor_tables_continue_(
 
   for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
     ObITable *table =  minor_sstables[i];
-    if (OB_FAIL(check_minor_table_continue_(table, prev_table, filled_tx_scn))) {
+    if (OB_FAIL(check_minor_table_continue_(table, prev_table))) {
       LOG_WARN("failed to check minor table continue", K(ret), KPC(table));
     }
   }
