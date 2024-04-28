@@ -17390,11 +17390,11 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Joine
     ret = OB_ERR_UNEXPECTED;
     STORAGE_FTS_LOG(WARN, "unexpected null", K(ret));
   } else if (!left_table->is_basic_table()) {
-    if (OB_FAIL(ObTransformUtils::check_table_with_fulltext_recursively(const_cast<TableItem*>(left_table),
+    if (OB_FAIL(ObTransformUtils::check_table_with_fts_or_multivalue_recursively(const_cast<TableItem*>(left_table),
                                                                         schema_checker_,
                                                                         session_info_,
                                                                         has_table_with_fulltext_index))) {
-      STORAGE_FTS_LOG(WARN, "fail to check table with fulltext recursively", K(ret));
+      STORAGE_FTS_LOG(WARN, "fail to check table with fulltext or mutivalue recursively", K(ret));
     } else if (has_table_with_fulltext_index) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext index");

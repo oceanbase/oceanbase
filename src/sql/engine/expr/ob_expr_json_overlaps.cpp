@@ -43,6 +43,16 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
   type.set_int32();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
+
+  if (ob_is_string_type(type1.get_type()) && type1.get_collation_type() != CS_TYPE_BINARY) {
+    type1.set_calc_type(ObJsonType);
+    type1.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  }
+
+  if (ob_is_string_type(type2.get_type()) && type2.get_collation_type() != CS_TYPE_BINARY) {
+    type2.set_calc_type(ObJsonType);
+    type2.set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+  }
   
   return ret;
 }

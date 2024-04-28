@@ -341,7 +341,6 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (record_num == 0) {
-    ret = OB_ITER_END;
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
@@ -362,13 +361,19 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
       }
       for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
         obj_arr[j].set_nop_value();
-        const ObObjMeta &col_type = das_ctdef.column_types_.at(j);
+        ObObjMeta col_type = das_ctdef.column_types_.at(j);
         const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
         int64_t projector_idx = row_projector.at(j);
         if (multivalue_idx == projector_idx) {
           if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
             LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
           } else {
+            if (ob_is_numeric_type(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+              col_type.set_collation_level(CS_LEVEL_NUMERIC);
+            } else {
+              col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            }
+
             obj_arr[j].set_collation_level(col_type.get_collation_level());
             obj_arr[j].set_collation_type(col_type.get_collation_type());
             obj_arr[j].set_type(col_type.get_type());

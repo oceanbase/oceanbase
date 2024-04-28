@@ -1888,10 +1888,10 @@ public:
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
-  static int check_table_with_fulltext_recursively(TableItem *table,
+  static int check_table_with_fts_or_multivalue_recursively(TableItem *table,
                                                    ObSchemaChecker *schema_checker,
                                                    ObSQLSessionInfo *session_info,
-                                                   bool &has_fulltext_index);
+                                                   bool &has_fts_or_multivalue_index);
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
                                   ObRawExpr *expr);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);

@@ -15359,10 +15359,10 @@ bool ObTransformUtils::is_const_null(ObRawExpr &expr)
   return bret;
 }
 
-int ObTransformUtils::check_table_with_fulltext_recursively(TableItem *table,
+int ObTransformUtils::check_table_with_fts_or_multivalue_recursively(TableItem *table,
                                                             ObSchemaChecker *schema_checker,
                                                             ObSQLSessionInfo *session_info,
-                                                            bool &has_fulltext_index)
+                                                            bool &has_fts_or_multivalue_index)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table) || OB_ISNULL(schema_checker) || OB_ISNULL(session_info)) {
@@ -15374,12 +15374,12 @@ int ObTransformUtils::check_table_with_fulltext_recursively(TableItem *table,
       LOG_WARN("unexpected null", K(ret));
     } else {
       ObIArray<TableItem*> &tables = table->ref_query_->get_table_items();
-      for (int64_t i = 0; OB_SUCC(ret) && !has_fulltext_index && i < tables.count(); ++i) {
-        if (SMART_CALL(check_table_with_fulltext_recursively(tables.at(i),
+      for (int64_t i = 0; OB_SUCC(ret) && !has_fts_or_multivalue_index && i < tables.count(); ++i) {
+        if (SMART_CALL(check_table_with_fts_or_multivalue_recursively(tables.at(i),
                                                              schema_checker,
                                                              session_info,
-                                                             has_fulltext_index))) {
-          LOG_WARN("failed to check table with fulltext recursively", K(ret));
+                                                             has_fts_or_multivalue_index))) {
+          LOG_WARN("failed to check table with fulltext or multivalue recursively", K(ret));
         }
       }
     }
@@ -15390,22 +15390,26 @@ int ObTransformUtils::check_table_with_fulltext_recursively(TableItem *table,
                                                  table_schema))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_FAIL(table_schema->check_has_fts_index(*schema_checker->get_schema_guard(),
-                                                         has_fulltext_index))) {
+                                                         has_fts_or_multivalue_index))) {
       LOG_WARN("failed to check has fts index", K(ret));
+    } else if (has_fts_or_multivalue_index) {
+    } else if (OB_FAIL(table_schema->check_has_multivalue_index(*schema_checker->get_schema_guard(),
+                                                                has_fts_or_multivalue_index))) {
+      LOG_WARN("failed to check has multivalue.", K(ret));
     }
   } else if (table->is_joined_table()) {
     JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (OB_FAIL(SMART_CALL(check_table_with_fulltext_recursively(joined_table->left_table_,
+    if (OB_FAIL(SMART_CALL(check_table_with_fts_or_multivalue_recursively(joined_table->left_table_,
                                                                  schema_checker,
                                                                  session_info,
-                                                                 has_fulltext_index)))) {
+                                                                 has_fts_or_multivalue_index)))) {
       LOG_WARN("failed to check left table", K(ret));
-    } else if (has_fulltext_index) {
+    } else if (has_fts_or_multivalue_index) {
       // do nothing
-    } else if (OB_FAIL(SMART_CALL(check_table_with_fulltext_recursively(joined_table->right_table_,
+    } else if (OB_FAIL(SMART_CALL(check_table_with_fts_or_multivalue_recursively(joined_table->right_table_,
                                                                         schema_checker,
                                                                         session_info,
-                                                                        has_fulltext_index)))) {
+                                                                        has_fts_or_multivalue_index)))) {
       LOG_WARN("failed to check right table", K(ret));
     }
   }

@@ -10171,15 +10171,15 @@ int ObTransformPreProcess::disable_complex_dml_for_fulltext_index(ObDMLStmt *stm
     // do nothing
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && !has_table_with_fulltext_index && i < tables_to_check.count(); ++i) {
-      if (OB_FAIL(ObTransformUtils::check_table_with_fulltext_recursively(tables_to_check.at(i),
+      if (OB_FAIL(ObTransformUtils::check_table_with_fts_or_multivalue_recursively(tables_to_check.at(i),
                                                                           ctx_->schema_checker_,
                                                                           ctx_->session_info_,
                                                                           has_table_with_fulltext_index))) {
-        LOG_WARN("failed to check table with fulltext recursively", K(ret));
+        LOG_WARN("failed to check table with fulltext or mutivalue recursively", K(ret));
       } else if (has_table_with_fulltext_index) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext index");
-        LOG_WARN("not supported complex dml operations on table with fulltext index", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "complex dml operations on table with fulltext or multivalue index");
+        LOG_WARN("not supported complex dml operations on table with fulltext or mutivalue index", K(ret));
       }
     }
   }
