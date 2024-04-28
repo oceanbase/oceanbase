@@ -290,6 +290,7 @@ _enable_choose_migration_source_policy
 _enable_compaction_diagnose
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
+_enable_dbms_job_package
 _enable_defensive_check
 _enable_easy_keepalive
 _enable_hash_join_hasher

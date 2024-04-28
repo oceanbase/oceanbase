@@ -913,6 +913,7 @@ private:
   void update_cpu_quota_concurrency_in_memory_();
   int set_cpu_quota_concurrency_config_();
   int set_enable_trace_log_();
+  int disable_dbms_job();
   int try_notify_switch_leader(const obrpc::ObNotifySwitchLeaderArg::SwitchLeaderComment &comment);
 
   int precheck_interval_part(const obrpc::ObAlterTableArg &arg);
