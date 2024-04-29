@@ -280,7 +280,7 @@ int ObPLDataType::get_table_type_by_name(uint64_t tenant_id,
   const ObTableSchema *table_info = NULL;
   OZ (schema_guard.get_table_schema(tenant_id, owner_id, table, false, table_info));
   if (OB_SUCC(ret) && OB_ISNULL(table_info)) {
-    uint64_t object_owner_id = session_info.get_database_id();
+    uint64_t object_owner_id = owner_id;
     ObString object_name = table;
     bool exist = false;
     OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
@@ -2280,13 +2280,6 @@ int ObPLCursorInfo::set_rowcount(int64_t rowcount)
         rowcount_ += rowcount;
       }
     } else {
-      // 非forall的dml语句，需要首先清除掉forall中填充的bulk信息
-      if (bulk_rowcount_.count() != 0) {
-        bulk_rowcount_.reset();
-      }
-      if (bulk_exceptions_.count() != 0) {
-        bulk_exceptions_.reset();
-      }
       rowcount_ = rowcount;
     }
     isopen_ = true; // 隐式游标用这个值来判断是否有执行过dml，因此每次set_rowcount都设置这个值

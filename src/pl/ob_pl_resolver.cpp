@@ -2798,7 +2798,12 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
       OZ (guard.get_table_schema(tenant_id, access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
-      OX (extern_type_info->type_owner_ = table->get_database_id());
+      if (OB_FAIL(ret)) {
+      } else if (ObCharset::case_compat_mode_equal(extern_type_info->type_subname_, table->get_table_name_str())) {
+        OX (extern_type_info->type_owner_ = table->get_database_id());
+      } else {
+        OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      }
     }
     OZ (fill_schema_obj_version(guard,
                                 ObParamExternType::SP_EXTERN_TAB_COL,
@@ -2834,7 +2839,7 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       OX (package_id = access_idxs.at(0).var_index_);
       OX (type = access_idxs.at(0).access_type_);
     } else {
-      OZ(resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
       OX (package_id = current_block_->get_namespace().get_package_id());
       OX (type = ObObjAccessIdx::IS_PKG_NS);
     }
@@ -2859,6 +2864,12 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       OZ (guard.get_table_schema(tenant_id, access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
       OX (extern_type_info->type_owner_ = table->get_database_id());
+      if (OB_FAIL(ret)) {
+      } else if (ObCharset::case_compat_mode_equal(extern_type_info->type_name_, table->get_table_name_str())) {
+        OX (extern_type_info->type_owner_ = table->get_database_id());
+      } else {
+        OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      }
     }
     OZ (fill_schema_obj_version(guard,
                                 ObParamExternType::SP_EXTERN_TAB,
@@ -11669,6 +11680,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     OX (expr = udf_info.ref_expr_);
     // if cant find user define construtor, try default construct
     if ((OB_SUCCESS == ret && use_buildin_default_constructor)
+     || OB_ERR_CALL_WRONG_ARG == ret
      || OB_ERR_SP_WRONG_ARG_NUM == ret
      || OB_ERR_FUNCTION_UNKNOWN == ret
      || OB_ERR_SP_UNDECLARED_VAR == ret
@@ -14250,6 +14262,11 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
   if (OB_FAIL(ret)) {
+  } else if (user_type->is_udt_type()) {
+    ObString database_name, udt_name;
+    OZ (get_udt_names(resolve_ctx_.schema_guard_, user_type_id, database_name, udt_name));
+    OX (access_ident.udf_info_.udf_name_ = udt_name);
+    OX (access_ident.udf_info_.udf_database_ = database_name);
   } else if (access_idxs.count() > 0) {
     OZ (get_names_by_access_ident(access_ident,
                                   access_idxs,

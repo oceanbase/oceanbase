@@ -512,20 +512,26 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                       ObString("SYS_REFCURSOR"),
                                       ObString("")));
             } else if (param_info->is_complex_type()) { // UDT
-              if (param_info->get_type_owner() == session_info_->get_database_id()) {
+              int64_t tenant_id = pl::get_tenant_id_by_object_id(pl_type.get_user_type_id());
+              int64_t type_owner = OB_INVALID_ID;
+              const ObUDTTypeInfo *udt_info = NULL;
+              OZ (schema_checker_->get_udt_info(tenant_id, pl_type.get_user_type_id(), udt_info));
+              CK (OB_NOT_NULL(udt_info));
+              OX (type_owner = udt_info->get_database_id());
+              if (OB_FAIL(ret)) {
+              } else if (type_owner == session_info_->get_database_id()) {
                 CK (!session_info_->get_database_name().empty());
                 OZ (call_proc_info->add_out_param(i,
                                         param_info->get_mode(),
                                         param_info->get_param_name(),
                                         pl_type,
-                                        param_info->get_type_name(),
+                                        udt_info->get_type_name(),
                                         session_info_->get_database_name()));
               } else {
                 const ObDatabaseSchema *db_schema = NULL;
                 CK (OB_NOT_NULL(schema_checker_));
                 CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
-                OZ (schema_checker_->get_schema_mgr()->get_database_schema(param_info->get_tenant_id(),
-                    param_info->get_type_owner(), db_schema), param_info->get_type_owner());
+                OZ (schema_checker_->get_schema_mgr()->get_database_schema(tenant_id, type_owner, db_schema), K(param_info->get_type_owner()));
                 if (OB_SUCC(ret) && OB_ISNULL(db_schema)) {
                   ret = OB_ERR_BAD_DATABASE;
                   LOG_WARN("failed to get type owner", K(param_info->get_type_owner()));
@@ -534,9 +540,9 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                         param_info->get_mode(),
                                         param_info->get_param_name(),
                                         pl_type,
-                                        param_info->get_type_name(),
+                                        udt_info->get_type_name(),
                                         OB_SYS_TENANT_ID == db_schema->get_tenant_id()
-                                          ? ObString("SYS") : db_schema->get_database_name_str()), i);
+                                          ? ObString("SYS") : db_schema->get_database_name_str()), K(i));
               }
             } else if (pl_type.is_user_type()) {
               // 通过Call语句执行PL且参数是复杂类型的情况, 仅在PS模式支持, 通过客户端无法构造复杂数据类型;
