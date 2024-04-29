@@ -42,6 +42,7 @@ public:
       const common::ObAddr &inner_sql_exec_addr);
   int init(
       const ObTableSchema &orig_table_schema,
+      const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap);
   ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
