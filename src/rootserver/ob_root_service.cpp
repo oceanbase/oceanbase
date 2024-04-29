@@ -7268,6 +7268,9 @@ int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
                                                     &arg.ddl_stmt_str_))) {
               LOG_WARN("drop package failed", K(ret), K(package_name));
             }
+            if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+              res->store_routine_schema_version_ = package_info->get_schema_version();
+            }
           } else {
             ObSArray<ObDependencyInfo> &dep_infos =
                                const_cast<ObSArray<ObDependencyInfo> &>(arg.dependency_infos_);
@@ -7285,10 +7288,10 @@ int ObRootService::alter_package_common(const obrpc::ObAlterPackageArg &arg,
                                                     &arg.ddl_stmt_str_))) {
               LOG_WARN("create package failed", K(ret), K(new_package_info));
             }
+            if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
+              res->store_routine_schema_version_ = new_package_info.get_schema_version();
+            }
           }
-        }
-        if (OB_SUCC(ret) && OB_NOT_NULL(res)) {
-          res->store_routine_schema_version_ = package_info->get_schema_version();
         }
       } else {
         ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
