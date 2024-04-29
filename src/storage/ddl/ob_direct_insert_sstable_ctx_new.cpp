@@ -1860,20 +1860,25 @@ int ObTabletDirectLoadMgr::calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sor
   return ret;
 }
 
+struct CancelSliceWriterMapFn
+{
+public:
+  CancelSliceWriterMapFn() {}
+  int operator () (hash::HashMapPair<int64_t, ObDirectLoadSliceWriter *> &entry) {
+    int ret = OB_SUCCESS;
+    if (nullptr != entry.second) {
+      LOG_INFO("slice writer cancel", K(&entry.second), "slice_id", entry.first);
+      entry.second->cancel();
+    }
+    return ret;
+  }
+};
+
 int ObTabletDirectLoadMgr::cancel()
 {
-  int ret = OB_SUCCESS;
-  for (ObTabletDirectLoadBuildCtx::SLICE_MGR_MAP::const_iterator iter = sqc_build_ctx_.slice_mgr_map_.begin();
-      OB_SUCC(ret) && iter != sqc_build_ctx_.slice_mgr_map_.end(); ++iter) {
-    ObDirectLoadSliceWriter *cur_slice = iter->second;
-    if (OB_ISNULL(cur_slice)) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid argument", K(ret), KP(cur_slice));
-    } else {
-      cur_slice->cancel();
-    }
-  }
-  return ret;
+  CancelSliceWriterMapFn cancel_map_fn;
+  sqc_build_ctx_.slice_mgr_map_.foreach_refactored(cancel_map_fn);
+  return OB_SUCCESS;
 }
 
 int ObTabletDirectLoadMgr::close_sstable_slice(
