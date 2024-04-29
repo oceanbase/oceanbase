@@ -2198,9 +2198,14 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
   const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
   const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
-  if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op)) {
+  if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op) || OB_ISNULL(dml_op->get_child())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
+  } else if (OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
+    OB_FAIL(dml_op->last_store_row_.init(dml_op->get_exec_ctx().get_allocator(), dml_op->get_child()->get_spec().output_.count()))) {
+    LOG_WARN("failed to init shadow stored row", K(ret));
+  } else if (OB_FAIL(dml_op->last_store_row_.shadow_copy(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+    LOG_WARN("failed to backup the datum ptr of child operator", K(ret));
   } else {
     ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
     for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
@@ -2260,8 +2265,12 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
     }
 
     // check the result of batch foreign key check results
-    if (OB_SUCC(ret) && dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
-      LOG_WARN("failed to perform batch foreign key check", K(ret));
+    if (OB_SUCC(ret)) {
+      if (dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
+        LOG_WARN("failed to perform batch foreign key check", K(ret));
+      } else if (OB_FAIL(dml_op->last_store_row_.restore(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+        LOG_WARN("failed to restore the datum ptr", K(ret));
+      }
     }
   }
   return ret;
