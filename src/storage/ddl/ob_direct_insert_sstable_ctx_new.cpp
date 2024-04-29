@@ -31,6 +31,7 @@
 #include "storage/lob/ob_lob_util.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/column_store/ob_column_oriented_sstable.h"
+#include "storage/direct_load/ob_direct_load_insert_table_row_iterator.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -929,7 +930,8 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
     }
   }
   if (OB_SUCC(ret) && nullptr != row_iter) {
-    ObDDLInsertRowIterator *ddl_row_iter = reinterpret_cast<ObDDLInsertRowIterator*>(row_iter);
+    ObDDLInsertRowIterator *ddl_row_iter = dynamic_cast<ObDDLInsertRowIterator*>(row_iter);
+    ObDirectLoadInsertTableRowIterator *direct_load_row_iter = dynamic_cast<ObDirectLoadInsertTableRowIterator*>(row_iter);
     const ObDatumRow *row = nullptr;
     const bool skip_lob = true;
     while (OB_SUCC(ret)) {
@@ -938,8 +940,11 @@ int ObTenantDirectLoadMgr::check_and_process_finished_tablet(
       } else {
         if (ddl_row_iter != nullptr) {
           ret = ddl_row_iter->get_next_row(skip_lob, row);
+        } else if (direct_load_row_iter != nullptr) {
+          ret = direct_load_row_iter->get_next_row(skip_lob, row);
         } else {
-          ret = row_iter->get_next_row(row);
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("wrong type of row iter", K(typeid(*row_iter).name()), KP(row_iter), KR(ret));
         }
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
