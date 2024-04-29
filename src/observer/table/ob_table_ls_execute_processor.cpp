@@ -185,6 +185,8 @@ int ObTableLSExecuteP::try_process()
   const ObTableLSOp &ls_op = arg_.ls_op_;
   ObLSID ls_id = ls_op.get_ls_id();
   bool exist_global_index = false;
+  uint64_t table_id = ls_op.get_table_id();
+  table_id_ = table_id;  // init move response need
   if (OB_FAIL(get_ls_id(ls_id))) {
     LOG_WARN("fail to get ls id", K(ret));
   } else if (OB_FAIL(check_has_global_index(exist_global_index))) {

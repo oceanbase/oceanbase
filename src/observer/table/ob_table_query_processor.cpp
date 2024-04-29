@@ -142,6 +142,9 @@ int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
     LOG_WARN("fail to init table ctx common part", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(tb_ctx_.init_scan(arg_.query_, is_weak_read, arg_.table_id_))) {
     LOG_WARN("fail to init table ctx scan part", K(ret), K(arg_.table_name_), K(arg_.table_id_));
+  } else if (!tb_ctx_.is_global_index_scan() && arg_.table_id_ != tb_ctx_.get_ref_table_id()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("arg table id is not equal to schema table id", K(ret), K(arg_.table_id_), K(tb_ctx_.get_ref_table_id()));
   } else if (OB_FAIL(cache_guard.init(&tb_ctx_))) {
     LOG_WARN("fail to init cache guard", K(ret));
   } else if (OB_FAIL(cache_guard.get_expr_info(&tb_ctx_, expr_frame_info))) {
@@ -266,15 +269,14 @@ int ObTableQueryP::try_process()
   ObTableApiExecutor *executor = nullptr;
   observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
   ObTableApiCacheGuard cache_guard;
-
+  table_id_ = arg_.table_id_; // init move response need
+  tablet_id_ = arg_.tablet_id_;
   if (OB_FAIL(init_tb_ctx(cache_guard))) {
     LOG_WARN("fail to init table ctx", K(ret));
   } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, spec))) {
     LOG_WARN("fail to get spec from cache", K(ret));
   } else if (OB_FAIL(spec->create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
-  } else if (FALSE_IT(table_id_ = arg_.table_id_)) {
-  } else if (FALSE_IT(tablet_id_ = arg_.tablet_id_)) {
   } else if (OB_FAIL(start_trans(true, /* is_readonly */
                                  sql::stmt::T_SELECT,
                                  arg_.consistency_level_,
