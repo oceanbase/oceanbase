@@ -23,8 +23,6 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
   all_exprs_.reset();
   sk_vec_ptrs_.reset();
   addon_vec_ptrs_.reset();
-  sk_store_.reset();
-  addon_store_.reset();
   inmem_row_size_ = 0;
   local_merge_sort_ = false;
   need_rewind_ = false;
@@ -89,12 +87,20 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
       topn_heap_ = nullptr;
     }
     if (nullptr != last_ties_row_) {
+      if (has_addon) {
+        Store_Row *new_addon_row = last_ties_row_ -> get_addon_ptr(sk_store_.get_row_meta());
+        if (nullptr != new_addon_row) {
+          mem_context_->get_malloc_allocator().free(new_addon_row);
+        }
+      }
       mem_context_->get_malloc_allocator().free(last_ties_row_);
       last_ties_row_ = nullptr;
     }
     // can not destroy mem_entify here, the memory may hold by %iter_ or
     // %datum_store_
   }
+  sk_store_.reset();
+  addon_store_.reset();
   inited_ = false;
   io_event_observer_ = nullptr;
 }
