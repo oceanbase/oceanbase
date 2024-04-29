@@ -16,6 +16,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "sql/das/ob_group_scan_iter.h"
 
 namespace oceanbase
 {
@@ -398,14 +399,22 @@ protected:
 };
 
 // NOTE: ObDASGroupScanOp defined here is For cross-version compatibility， and it will be removed in future barrier-version;
-// For das remote execution in upgrade stage, ctrl(4.2.1) -> executor (4.2.3)
-// the executor will execute das group-rescan op as the logic of das-scan op, and return the result to ctr;
+// For das remote execution in upgrade stage,
+//   1. ctrl(4.2.1) -> executor(4.2.3):
+//        the executor will execute group scan task as the logic of das scan op, and return the result to ctr;
+//   2. ctrl(4.2.3) -> executor(4.2.1):
+//        the ctrl will send group scan task to executor to ensure exectuor will execute succeed;
 class ObDASGroupScanOp : public ObDASScanOp
 {
   OB_UNIS_VERSION(1);
 public:
   ObDASGroupScanOp(common::ObIAllocator &op_alloc);
   virtual ~ObDASGroupScanOp();
+  void init_group_range(int64_t cur_group_idx, int64_t group_size);
+private:
+  ObGroupScanIter iter_;
+  int64_t cur_group_idx_;
+  int64_t group_size_;
 };
 
 
