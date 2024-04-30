@@ -8987,7 +8987,9 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
             ret = tmp_ret;
             synonym_name.reset();
             synonym_db_name.reset();
-          } else { /* do nothing */ }
+          } else if (!dblink_name.empty()) {
+            query_ctx->set_has_dblink(true);
+          }
         } else if (OB_FAIL(ret)) {
           synonym_name.reset();
           synonym_db_name.reset();
