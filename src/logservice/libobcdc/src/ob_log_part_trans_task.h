@@ -565,6 +565,8 @@ public:
 public:
   TO_STRING_KV("IStmtTask", static_cast<const IStmtTask &>(*this),
       "is_cb", is_callback_,
+      "seq_no", row_.get_seq_no(),
+      "dml_flag", row_.get_dml_flag(),
       K_(table_id),
       K_(row),
       K_(log_entry_task));
