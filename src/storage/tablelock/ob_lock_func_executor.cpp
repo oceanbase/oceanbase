@@ -367,17 +367,24 @@ int ObLockFuncExecutor::check_lock_exist_(ObLockFuncContext &ctx, const uint64_t
   return ret;
 }
 
-int ObLockFuncExecutor::check_lock_exist_(ObLockFuncContext &ctx,
-                                          const int64_t raw_owner_id,
-                                          bool &exist)
+int ObLockFuncExecutor::check_owner_exist_(ObLockFuncContext &ctx,
+                                           const uint32_t client_session_id,
+                                           const uint64_t client_session_create_ts,
+                                           bool &exist)
 {
   int ret = OB_SUCCESS;
   ObSqlString where_cond;
-  if (OB_FAIL(where_cond.assign_fmt("owner_id = %ld", raw_owner_id))) {
-    LOG_WARN("fail to assign fmt", KR(ret));
-  } else if (OB_FAIL(check_lock_exist_(ctx, where_cond, exist))) {
-    LOG_WARN("check lock exist failed", K(ret));
+  ObTableLockOwnerID lock_owner;
+
+  OZ (lock_owner.convert_from_client_sessid(client_session_id, client_session_create_ts));
+  if (client_session_create_ts > 0) {
+    OZ (where_cond.assign_fmt("owner_id = %" PRId64, lock_owner.raw_value()));
+  } else {
+    // if client_session_create_ts <= 0, means there's no accurate client_session_create_ts
+    // (from lock live detector), so we only judge client_session_id in this situation
+    OZ (where_cond.assign_fmt("(owner_id & %" PRId64 ") = %" PRIu32, ObTableLockOwnerID::CLIENT_SESS_ID_MASK, client_session_id));
   }
+  OZ (check_lock_exist_(ctx, where_cond, exist));
   return ret;
 }
 
@@ -447,15 +454,18 @@ int ObLockFuncExecutor::check_client_ssid_(ObLockFuncContext &ctx,
 }
 
 int ObLockFuncExecutor::remove_session_record_(ObLockFuncContext &ctx,
-                                               const uint32_t client_session_id)
+                                               const uint32_t client_session_id,
+                                               const uint64_t client_session_create_ts)
 {
   int ret = OB_SUCCESS;
-  bool lock_exist = false;
+  bool owner_exist = false;
   char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
   ObTableLockOwnerID lock_owner;
   ObSqlString delete_sql;
   int64_t affected_rows = 0;
-  if (OB_SUCC(ret) && !lock_exist) {
+
+  OZ (check_owner_exist_(ctx, client_session_id, client_session_create_ts, owner_exist));
+  if (OB_SUCC(ret) && !owner_exist) {
     lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
     OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                         "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TNAME));
@@ -1005,7 +1015,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
                session, LOCK_OBJECT, arg, need_remove_from_lock_table));
         if (OB_SUCC(ret) && need_remove_from_lock_table) {
           OZ (unlock_obj_(tx_desc, tx_param, arg));
-          OZ (remove_session_record_(stack_ctx, client_session_id));
+          OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
         } else if (OB_EMPTY_RESULT == ret) {
           if (OB_TMP_FAIL(check_lock_exist_(stack_ctx, lock_id, lock_id_existed))) {
             LOG_WARN("check lock_id existed failed", K(tmp_ret), K(lock_id));
@@ -1103,7 +1113,7 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
                                tx_param,
                                owner_id,
                                release_cnt));
-        OZ (remove_session_record_(stack_ctx, client_session_id));
+        OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
       }
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx.destroy(ctx, *(ctx.get_my_session()), is_rollback))) {
@@ -1135,7 +1145,7 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
         ObTxParam tx_param;
         OZ (ObInnerConnectionLockUtil::build_tx_param(session, tx_param));
         OZ (release_all_locks_(stack_ctx, session, tx_param, owner_id, release_cnt));
-        OZ (remove_session_record_(stack_ctx, client_session_id));
+        OZ (remove_session_record_(stack_ctx, client_session_id, 0));
       }
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx.destroy(ctx, *(ctx.get_my_session()), is_rollback))) {

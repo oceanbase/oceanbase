@@ -135,9 +135,10 @@ public:
   int check_lock_exist_(ObLockFuncContext &ctx,
                         const uint64_t &lock_id,
                         bool &exist);
-  int check_lock_exist_(ObLockFuncContext &ctx,
-                        const int64_t raw_owner_id,
-                        bool &exist);
+  int check_owner_exist_(ObLockFuncContext &ctx,
+                         const uint32_t client_session_id,
+                         const uint64_t client_session_create_ts,
+                         bool &exist);
   int check_lock_exist_(ObLockFuncContext &ctx,
                         ObSqlString &where_cond,
                         bool &exist);
@@ -148,7 +149,8 @@ public:
   int remove_lock_id_(ObLockFuncContext &ctx,
                       const int64_t lock_id);
   int remove_session_record_(ObLockFuncContext &ctx,
-                             const uint32_t client_session_id);
+                             const uint32_t client_session_id,
+                             const uint64_t client_session_create_ts);
   int unlock_obj_(transaction::ObTxDesc *tx_desc,
                   const transaction::ObTxParam &tx_param,
                   const ObUnLockObjsRequest &arg);
