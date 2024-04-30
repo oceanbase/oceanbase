@@ -134,7 +134,7 @@ int ObAccessPathEstimation::check_path_can_use_stroage_estimate(const AccessPath
       int64_t partition_count = part_info->get_phy_tbl_location_info().get_partition_cnt();
       if (partition_count > 1 ||
           scan_range_count <= 0 ||
-          scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM) {
+          (!path->est_cost_info_.index_meta_info_.is_geo_index_ && scan_range_count > ObOptEstCost::MAX_STORAGE_RANGE_ESTIMATION_NUM)) {
         can_use = false;
       } else {
         can_use = true;
