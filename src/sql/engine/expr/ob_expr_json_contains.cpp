@@ -49,6 +49,11 @@ int ObExprJsonContains::calc_result_typeN(ObExprResType& type,
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
 
+    if (ob_is_string_type(types_stack[1].get_type())) {
+      types_stack[1].set_calc_type(ObJsonType);
+      types_stack[1].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+    }
+
     // set type for json_path
     if (OB_SUCC(ret) && param_num == 3) {
       if (OB_FAIL(ObJsonExprHelper::is_valid_for_path(types_stack, 2))) {

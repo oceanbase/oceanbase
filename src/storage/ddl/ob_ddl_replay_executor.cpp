@@ -360,6 +360,13 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     if (is_incremental_direct_load(redo_info.type_)) {
       if (OB_FAIL(do_inc_replay_(tablet_handle, write_info, macro_block))) {
         LOG_WARN("fail to do inc replay", K(ret));
+        if (OB_TABLET_NOT_EXIST == ret || OB_NO_NEED_UPDATE == ret) {
+          LOG_INFO("no need to replay ddl inc redo log", K(ret));
+          ret = OB_SUCCESS;
+        } else if (OB_EAGAIN != ret) {
+          LOG_WARN("failed to do_inc_replay_", K(ret), K(log_), K(scn_));
+          ret = OB_EAGAIN;
+        }
       }
     } else {
       if (OB_FAIL(do_full_replay_(tablet_handle, write_info, macro_block))) {
@@ -659,9 +666,9 @@ int ObDDLIncStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       if (lob_meta_tablet_id.is_valid()) {
         tmp_ret_lob = ls_->sync_tablet_freeze_for_direct_load(lob_meta_tablet_id);
       }
-      ret = tmp_ret | tmp_ret_lob;
-      if (OB_FAIL(ret)) {
-        LOG_ERROR("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
+      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
       }
     }
   }
@@ -727,9 +734,9 @@ int ObDDLIncCommitReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
       if (lob_meta_tablet_id.is_valid()) {
         tmp_ret_lob = ls_->sync_tablet_freeze_for_direct_load(lob_meta_tablet_id);
       }
-      ret = tmp_ret | tmp_ret_lob;
-      if (OB_FAIL(ret)) {
-        LOG_ERROR("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
+      if (OB_SUCCESS != (tmp_ret | tmp_ret_lob)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("sync freeze failed", KR(ret), KR(tmp_ret), KR(tmp_ret_lob), K(tablet_id), K(lob_meta_tablet_id));
       }
     }
   }

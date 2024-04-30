@@ -56,8 +56,8 @@ namespace storage
         ++c_nums;
       }
       if (NGRAM_TOKEN_SIZE == c_nums) {
-        if (OB_FAIL(add_word(param, start, next - start))) {
-          LOG_WARN("fail to add word", K(ret), KP(param), KP(start), KP(next));
+        if (OB_FAIL(add_word(param, start, next - start, c_nums))) {
+          LOG_WARN("fail to add word", K(ret), KP(param), KP(start), KP(next), K(c_nums));
         } else {
           start += ob_mbcharlen_ptr(cs, start, end);
           c_nums = NGRAM_TOKEN_SIZE - 1;
@@ -71,7 +71,8 @@ namespace storage
 /*static*/ int ObNgramFTParser::add_word(
     lib::ObFTParserParam *param,
     const char *word,
-    int64_t word_len)
+    const int64_t word_len,
+    const int64_t char_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param)
@@ -79,8 +80,8 @@ namespace storage
       || OB_UNLIKELY(0 >= word_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param), KP(word), K(word_len));
-  } else if (OB_FAIL(param->add_word(param, word, word_len))) {
-    LOG_WARN("fail to add word", K(ret), KPC(param), K(ObString(word_len, word)));
+  } else if (OB_FAIL(param->add_word(param, word, word_len, char_cnt))) {
+    LOG_WARN("fail to add word", K(ret), KPC(param), K(char_cnt), K(ObString(word_len, word)));
   }
   return ret;
 }

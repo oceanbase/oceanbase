@@ -199,13 +199,16 @@ int ObMPStmtPrexecute::before_process()
           } else {
             oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
             do {
+              // reset `ret` explicitly before local retry
+              ret = OB_SUCCESS;
               SMART_VAR(ObMySQLResultSet, result, *session, THIS_WORKER.get_allocator()) {
                 result.set_has_more_result(false);
                 share::schema::ObSchemaGetterGuard schema_guard;
                 const uint64_t tenant_id = session->get_effective_tenant_id();
                 ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
                 retry_ctrl_.clear_state_before_each_retry(session->get_retry_info_for_update());
-                if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
                   LOG_WARN("get schema guard failed", K(ret));
                 } else if (OB_FAIL(schema_guard.get_schema_version(
                                     session->get_effective_tenant_id(), tenant_version))) {

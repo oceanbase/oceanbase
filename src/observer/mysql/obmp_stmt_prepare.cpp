@@ -310,9 +310,12 @@ int ObMPStmtPrepare::process_prepare_stmt(const ObMultiStmtItem &multi_stmt_item
       ctx_.is_prepare_stage_ = true;
       need_response_error = false;
       do {
+        // reset `ret` explicitly before local retry
+        ret = OB_SUCCESS;
         share::schema::ObSchemaGetterGuard schema_guard;
         retry_ctrl_.clear_state_before_each_retry(session.get_retry_info_for_update());
-        if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(
                     session.get_effective_tenant_id(), schema_guard))) {
           LOG_WARN("get schema guard failed", K(ret));
         } else if (OB_FAIL(schema_guard.get_schema_version(

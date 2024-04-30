@@ -76,7 +76,7 @@ int ObSSTableSecMetaIterator::open(
 {
   int ret = OB_SUCCESS;
   bool is_meta_root = false;
-  const bool is_ddl_mem_sstable = sstable.is_ddl_kv_sstable();
+  const bool is_ddl_mem_sstable = sstable.is_ddl_mem_sstable();
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("Fail to open sstable secondary meta iterator", K(ret));

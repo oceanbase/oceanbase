@@ -678,7 +678,7 @@ int ObCgroupCtrl::get_cpu_usage(const uint64_t tenant_id, int32_t &cpu_usage)
         K(ret), K(usage_path), K(usage_value), K(tenant_id));
   } else {
     usage_value[VALUE_BUFSIZE] = '\0';
-    cur_usage = std::stoull(usage_value);
+    cur_usage = strtoull(usage_value, NULL, 10);
   }
 
   cpu_usage = 0;
@@ -706,7 +706,7 @@ int ObCgroupCtrl::get_cpu_time(const uint64_t tenant_id, int64_t &cpu_time)
           K(ret), K(usage_path), K(usage_value), K(tenant_id));
     } else {
       usage_value[VALUE_BUFSIZE] = '\0';
-      cpu_time = std::stoull(usage_value) / 1000;
+      cpu_time = strtoull(usage_value, NULL, 10) / 1000;
     }
   }
   return ret;

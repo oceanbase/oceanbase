@@ -1127,7 +1127,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   int64_t schema_version = 0;
   ObStorageSchema *storage_schema = nullptr;
 
-  if (OB_UNLIKELY(!is_meta_major_merge(static_param_.get_merge_type())
+  if (OB_UNLIKELY(!is_meta_major_merge(get_merge_type())
                || nullptr != static_param_.schema_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected static param", K(ret), K(static_param_), KPC(static_param_.schema_));

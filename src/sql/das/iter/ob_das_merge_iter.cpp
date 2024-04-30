@@ -88,10 +88,27 @@ int MergeStoreRows::to_expr(bool is_vectorized, int64_t size)
   return ret;
 }
 
+int64_t MergeStoreRows::get_group_idx(int64_t idx)
+{
+  OB_ASSERT(idx < saved_size_);
+  return store_rows_[idx].store_row_->cells()[group_id_idx_].get_int();
+}
+
 int64_t MergeStoreRows::cur_group_idx()
 {
+  return get_group_idx(cur_idx_);
+}
+
+int64_t MergeStoreRows::row_cnt_with_cur_group_idx()
+{
   OB_ASSERT(cur_idx_ < saved_size_);
-  return store_rows_[cur_idx_].store_row_->cells()[group_id_idx_].get_int();
+  int64_t group_idx = cur_group_idx();
+  // index of first row with greater group idx
+  int64_t end_idx = cur_idx_ + 1;
+  while (end_idx < saved_size_ && get_group_idx(end_idx) == group_idx) {
+     end_idx++;
+  }
+  return end_idx - cur_idx_;
 }
 
 void MergeStoreRows::reuse()
@@ -687,9 +704,11 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
             LOG_WARN("failed to update output tablet id", K(ret), K(tablet_id));
           }
         }
-        ret = merge_store_rows_arr_[output_idx].to_expr(true, 1);
+        MergeStoreRows &store_rows = merge_store_rows_arr_.at(output_idx);
+        int64_t ret_count = store_rows.row_cnt_with_cur_group_idx();
+        ret = store_rows.to_expr(true, ret_count);
         if (OB_SUCC(ret)) {
-          count = 1;
+          count = ret_count;
           merge_state_arr_[output_idx].row_store_have_data_ = merge_store_rows_arr_[output_idx].have_data();
         } else {
           LOG_WARN("failed to convert store row to expr", K(output_idx), K(ret));

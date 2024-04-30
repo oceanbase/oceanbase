@@ -320,14 +320,22 @@ int ObDLIBatchSet::assign(const ObDLIBatchSet &other)
 {
   int ret = OB_SUCCESS;
 
-  reuse();
-  ObDLIBatchSet::const_iterator iter = other.begin();
+  ObMemAttr mem_attr(MTL_ID(), "DLI_BATCH_HASH");
+  if (!other.created() || other.empty()) {
+    reuse();
+    // do nothing
+  } else if (!created() && OB_FAIL(create(32, mem_attr, mem_attr))) {
+    TRANS_LOG(WARN, "create batch hash set failed", K(ret));
+  } else {
+    reuse();
+    ObDLIBatchSet::const_iterator iter = other.begin();
 
-  while (iter != other.end() && OB_SUCC(ret)) {
-    if (OB_FAIL(set_refactored(iter->first, 1))) {
-      TRANS_LOG(WARN, "overwrite existed batch_info failed", K(ret), K(iter->first));
+    while (iter != other.end() && OB_SUCC(ret)) {
+      if (OB_FAIL(set_refactored(iter->first, 1))) {
+        TRANS_LOG(WARN, "overwrite existed batch_info failed", K(ret), K(iter->first));
+      }
+      iter++;
     }
-    iter++;
   }
 
   return ret;

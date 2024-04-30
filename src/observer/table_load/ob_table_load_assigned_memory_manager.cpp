@@ -69,7 +69,8 @@ int ObTableLoadAssignedMemoryManager::assign_memory(bool is_sort, int64_t assign
     ObMutexGuard guard(mutex_);
     chunk_count_ += (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ -= (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory", K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_));
+    LOG_INFO("ObTableLoadAssignedMemoryManager::assign_memory",
+        K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_), K(avail_memory_));
   }
 
   return ret;
@@ -85,7 +86,8 @@ int ObTableLoadAssignedMemoryManager::recycle_memory(bool is_sort, int64_t assig
     ObMutexGuard guard(mutex_);
     chunk_count_ -= (is_sort ? assign_memory / ObDirectLoadExternalMultiPartitionRowChunk::MIN_MEMORY_LIMIT : 0);
     avail_sort_memory_ += (is_sort ? 0 : assign_memory);
-    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory", K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_));
+    LOG_INFO("ObTableLoadAssignedMemoryManager::recycle_memory",
+        K(MTL_ID()), K(is_sort), K(chunk_count_), K(assign_memory), K(avail_sort_memory_), K(avail_memory_));
   }
 
   return ret;
@@ -111,6 +113,8 @@ int ObTableLoadAssignedMemoryManager::refresh_avail_memory(int64_t avail_memory)
     ObMutexGuard guard(mutex_);
     avail_sort_memory_ += avail_memory - avail_memory_;
     avail_memory_ = avail_memory;
+    LOG_INFO("ObTableLoadAssignedMemoryManager::refresh_avail_memory",
+        K(MTL_ID()), K(avail_memory), K(chunk_count_), K(avail_sort_memory_), K(avail_memory_));
   }
 
   return ret;
@@ -127,6 +131,9 @@ int ObTableLoadAssignedMemoryManager::get_sort_memory(int64_t &sort_memory)
     if (OB_UNLIKELY(chunk_count_ == 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected chunk_count_ equal to zero", KR(ret));
+    } else if (OB_UNLIKELY(avail_memory_ == 0)) {
+      ret = OB_EAGAIN;
+      LOG_WARN("avail_memory_ equal to zero, resource has been migrated", KR(ret));
     } else {
       sort_memory = avail_sort_memory_ / chunk_count_;
     }

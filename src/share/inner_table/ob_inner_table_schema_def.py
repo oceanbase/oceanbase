@@ -5940,6 +5940,9 @@ def_table_schema(
     ('group_id', 'int', 'true'),
     ('tx_id', 'int', 'true'),
     ('blocking_session_id', 'int', 'true'),
+    ('plan_hash', 'int', 'true'),
+    ('thread_id', 'int', 'true'),
+    ('stmt_type', 'int', 'true'),
   ],
 )
 
@@ -12459,6 +12462,9 @@ def_table_schema(
     ('GROUP_ID', 'int', 'true'),
     ('TX_ID', 'int', 'true'),
     ('BLOCKING_SESSION_ID', 'int', 'true'),
+    ('PLAN_HASH', 'int', 'true'),
+    ('THREAD_ID', 'int', 'true'),
+    ('STMT_TYPE', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',

@@ -84,7 +84,7 @@ int ObTableLockDetectFuncList::do_session_alive_detect()
   ObArray<ObTuple<int64_t>> owner_ids;
   bool client_session_alive = true;
   ObTableLockOwnerID owner_id;
-  int64_t client_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
+  uint32_t client_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
   char full_table_name[OB_MAX_TABLE_NAME_BUF_LENGTH];
   lib::CompatModeGuard compat_guard(lib::Worker::CompatMode::MYSQL);
   if (OB_FAIL(databuff_printf(
@@ -112,8 +112,7 @@ int ObTableLockDetectFuncList::do_session_alive_detect()
       } else if (!client_session_alive) {
         LOG_INFO(
           "find client session is not alive, we will clean all recodrs of it later", K(ret), K(client_session_id));
-        ObReleaseAllLockExecutor executor;
-        executor.execute(client_session_id);
+        ObTableLockDetector::remove_lock_by_owner_id(owner_ids[i].element<0>());
       }
     }
   }
@@ -251,18 +250,19 @@ int ObTableLockDetectFuncList::check_server_is_online_(const ObString &svr_ip, c
   is_online = false;
   char full_table_name[OB_MAX_TABLE_NAME_BUF_LENGTH];
 
-  if (OB_FAIL(databuff_printf(
-        where_cond,
-        512,
-        "WHERE (svr_ip, svr_port) IN (SELECT u.svr_ip, u.svr_port FROM %s.%s AS u JOIN %s.%s AS r on "
-        "r.resource_pool_id = u.resource_pool_id WHERE tenant_id = %ld) and svr_ip = '%s' and svr_port = %ld",
-        OB_SYS_DATABASE_NAME,
-        OB_ALL_UNIT_TNAME,
-        OB_SYS_DATABASE_NAME,
-        OB_ALL_RESOURCE_POOL_TNAME,
-        MTL_ID(),
-        to_cstring(svr_ip),
-        svr_port))) {
+  if (OB_FAIL(
+        databuff_printf(where_cond,
+                        512,
+                        "WHERE (svr_ip, svr_port) IN (SELECT u.svr_ip, u.svr_port FROM %s.%s AS u JOIN %s.%s AS r on "
+                        "r.resource_pool_id = u.resource_pool_id WHERE tenant_id = %ld) and svr_ip = '%s' and svr_port "
+                        "= %ld and status = 'active'",
+                        OB_SYS_DATABASE_NAME,
+                        OB_ALL_UNIT_TNAME,
+                        OB_SYS_DATABASE_NAME,
+                        OB_ALL_RESOURCE_POOL_TNAME,
+                        MTL_ID(),
+                        to_cstring(svr_ip),
+                        svr_port))) {
     LOG_WARN("generate where condition for select sql failed", K(svr_ip), K(svr_port));
   } else if (OB_FAIL(databuff_printf(
                full_table_name, OB_MAX_TABLE_NAME_BUF_LENGTH, "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_SERVER_TNAME))) {
@@ -289,15 +289,14 @@ const char *ObTableLockDetector::detect_columns[8] = {
 int ObTableLockDetector::record_detect_info_to_inner_table(sql::ObSQLSessionInfo *session_info,
                                                            const ObTableLockTaskType &task_type,
                                                            const ObLockRequest &lock_req,
+                                                           const bool for_dbms_lock,
                                                            bool &need_record_to_lock_table)
 {
   int ret = OB_SUCCESS;
   observer::ObInnerSQLConnection *inner_conn = nullptr;
   char full_table_name[OB_MAX_TABLE_NAME_BUF_LENGTH];
-  share::ObDMLSqlSplicer dml;
-  ObSqlString insert_sql;
-  int64_t affected_rows = 0;
   bool need_release_conn = false;
+  bool is_existed = false;
 
   need_record_to_lock_table = true;
   lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
@@ -321,21 +320,16 @@ int ObTableLockDetector::record_detect_info_to_inner_table(sql::ObSQLSessionInfo
                                      OB_SYS_DATABASE_NAME,
                                      OB_ALL_DETECT_LOCK_INFO_TNAME))) {
     LOG_WARN("generate full table_name failed", K(OB_SYS_DATABASE_NAME), K(OB_ALL_DETECT_LOCK_INFO_TNAME));
-  } else if (OB_FAIL(generate_insert_dml_(task_type, lock_req, dml))) {
-    LOG_WARN("generate insert dml failed", K(ret));
-  } else if (OB_FAIL(dml.splice_insert_sql(full_table_name, insert_sql))) {
-    LOG_WARN("generate insert sql failed", K(ret), K(full_table_name));
-  } else if (OB_FAIL(insert_sql.append(" ON DUPLICATE  KEY UPDATE cnt = cnt + 1"))) {
-    LOG_WARN("append 'cnt = cnt + 1' to the insert_sql failed", K(ret), K(insert_sql));
-  } else if (OB_FAIL(ObInnerConnectionLockUtil::execute_write_sql(inner_conn, insert_sql, affected_rows))) {
-    LOG_WARN("execute insert sql failed", K(ret), K(insert_sql));
-  } else if (affected_rows == 2) {
+  } else if (for_dbms_lock && OB_FAIL(check_dbms_lock_record_exist_(inner_conn, full_table_name, task_type, lock_req, is_existed))) {
+    LOG_WARN("check dbms_lock record exist failed", K(ret), K(task_type), K(lock_req));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (for_dbms_lock && is_existed) {
     need_record_to_lock_table = false;
-    LOG_INFO("there's the same lock in __all_detect_lock_info table, no need to record it to the lock table",
-             K(lock_req));
-  } else if (affected_rows != 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only can affetct 1 row due to insert, or 2 rows due to insert on duplicate key", K(affected_rows));
+  } else if (OB_FAIL(record_detect_info_to_inner_table_(
+               inner_conn, full_table_name, task_type, lock_req, need_record_to_lock_table))) {
+    LOG_WARN("record_detect_info_to_inner_table_ failed", K(ret), K(task_type), K(lock_req));
   }
 
   if (need_release_conn && OB_NOT_NULL(inner_conn)) {
@@ -474,6 +468,102 @@ int ObTableLockDetector::do_detect_and_clear()
   return ret;
 }
 
+int ObTableLockDetector::remove_lock_by_owner_id(const int64_t raw_owner_id)
+{
+  int ret = OB_SUCCESS;
+  ObReleaseAllLockExecutor executor;
+  if (OB_FAIL(executor.execute(raw_owner_id))) {
+    LOG_WARN("remove lock by owner_id failed", K(raw_owner_id));
+  }
+  return ret;
+}
+
+int ObTableLockDetector::record_detect_info_to_inner_table_(observer::ObInnerSQLConnection *inner_conn,
+                                                            const char *table_name,
+                                                            const ObTableLockTaskType &task_type,
+                                                            const ObLockRequest &lock_req,
+                                                            bool &need_record_to_lock_table)
+{
+  int ret = OB_SUCCESS;
+  share::ObDMLSqlSplicer dml;
+  ObSqlString insert_sql;
+  int64_t affected_rows = 0;
+
+  if (OB_FAIL(generate_insert_dml_(task_type, lock_req, dml))) {
+    LOG_WARN("generate insert dml failed", K(ret));
+  } else if (OB_FAIL(dml.splice_insert_sql(table_name, insert_sql))) {
+    LOG_WARN("generate insert sql failed", K(ret), K(table_name));
+  } else if (OB_FAIL(insert_sql.append(" ON DUPLICATE  KEY UPDATE cnt = cnt + 1"))) {
+    LOG_WARN("append 'cnt = cnt + 1' to the insert_sql failed", K(ret), K(insert_sql));
+  } else if (OB_FAIL(ObInnerConnectionLockUtil::execute_write_sql(inner_conn, insert_sql, affected_rows))) {
+    LOG_WARN("execute insert sql failed", K(ret), K(insert_sql));
+  } else if (affected_rows == 2) {
+    need_record_to_lock_table = false;
+    LOG_INFO("there's the same lock in __all_detect_lock_info table, no need to record it to the lock table",
+             K(lock_req));
+  } else if (affected_rows != 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only can affetct 1 row due to insert, or 2 rows due to insert on duplicate key", K(affected_rows));
+  }
+  return ret;
+}
+
+int ObTableLockDetector::check_dbms_lock_record_exist_(observer::ObInnerSQLConnection *inner_conn,
+                                                            const char *table_name,
+                                                            const ObTableLockTaskType &task_type,
+                                                            const ObLockRequest &lock_req,
+                                                            bool &is_existed)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  uint64_t obj_type = static_cast<uint64_t>(ObLockOBJType::OBJ_TYPE_INVALID);
+  uint64_t obj_id = OB_INVALID_ID;
+
+  if (LOCK_OBJECT != task_type) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the task_type for DBMS_LOCK should be LOCK_OBJECT", K(ret), K(task_type), K(lock_req));
+  } else {
+    const ObLockObjsRequest &arg = static_cast<const ObLockObjsRequest &>(lock_req);
+    if (arg.objs_.count() > 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("do not support detect batch lock obj request right now", K(arg));
+    } else {
+      obj_type = static_cast<uint64_t>(arg.objs_[0].obj_type_);
+      obj_id = arg.objs_[0].obj_id_;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql.append_fmt("SELECT 1 FROM %s WHERE task_type = %d AND obj_type = %" PRIu64 " AND obj_id = %" PRIu64
+                            " AND owner_id = %" PRId64,
+                            table_name,
+                            static_cast<int>(task_type),
+                            obj_type,
+                            obj_id,
+                            lock_req.owner_id_.raw_value()))) {
+    LOG_WARN("make select sql failed", K(ret), K(task_type), K(lock_req));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res)
+    {
+      common::sqlclient::ObMySQLResult *result = nullptr;
+      if (OB_FAIL(ObInnerConnectionLockUtil::execute_read_sql(inner_conn, sql, res))) {
+        LOG_WARN("execute_read_sql for check_dbms_lock_record_exist_ failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get result", KR(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          is_existed = false;
+        }
+      } else {
+        is_existed = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableLockDetector::generate_insert_dml_(const ObTableLockTaskType &task_type,
                                               const ObLockRequest &lock_req,
                                               share::ObDMLSqlSplicer &dml)
@@ -502,7 +592,7 @@ int ObTableLockDetector::add_pk_column_to_dml_(const ObTableLockTaskType &task_t
                                                share::ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
-  uint64_t obj_type = static_cast<uint64_t>(ObTableLockTaskType::INVALID_LOCK_TASK_TYPE);
+  uint64_t obj_type = static_cast<uint64_t>(ObLockOBJType::OBJ_TYPE_INVALID);
   uint64_t obj_id = OB_INVALID_ID;
 
   switch (task_type) {

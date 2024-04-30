@@ -13116,7 +13116,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
     }
     if (OB_SUCC(ret) && is_double_table_long_running_ddl(ddl_type)) {
       bool has_index_operation = false;
-      bool has_fts_index = false;
+      bool has_fts_or_multivalue_index = false;
       bool is_adding_constraint = false;
       bool is_column_store = false;
       uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
@@ -13133,19 +13133,19 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
                                           table_id,
                                           has_index_operation))) {
         LOG_WARN("check has index operation failed", K(ret));
-      } else if (OB_FAIL(check_has_fts_index(schema_guard,
+      } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                              tenant_id,
                                              table_id,
-                                             has_fts_index))) {
+                                             has_fts_or_multivalue_index))) {
         LOG_WARN("check has fts index failed", K(ret));
       } else if (OB_FAIL(check_is_adding_constraint(tenant_id, table_id, is_adding_constraint))) {
         LOG_WARN("failed to call check_is_adding_constraint", K(ret));
       } else if (has_index_operation) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with creating index.");
-      } else if (has_fts_index) {
+      } else if (has_fts_or_multivalue_index) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext search index");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Run this DDL operation on table with fulltext search index or multivalue index.");
       } else if (is_adding_constraint) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "The DDL cannot be run concurrently with adding constraint.");
@@ -13155,7 +13155,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
   return ret;
 }
 
-int ObDDLService::check_has_fts_index(
+int ObDDLService::check_has_domain_index(
     ObSchemaGetterGuard &schema_guard,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -14405,18 +14405,18 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     LOG_WARN("split partition in 4.0 not allowed", K(ret), K(tablegroup_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "split partition in 4.0");
   }
-  bool has_fts_index = false;
+  bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_has_fts_index(schema_guard,
+  } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                          tenant_id,
                                          table_id,
-                                         has_fts_index))) {
+                                         has_fts_or_multivalue_index))) {
     LOG_WARN("failed to check if have fts index", K(ret), K(table_id));
-  } else if (has_fts_index) {
+  } else if (has_fts_or_multivalue_index) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("alter partition operation on table with fts index not supported", K(ret), K(orig_table_schema));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fts index");
+    LOG_WARN("alter partition operation on table with fulltext or multivalue index not supported", K(ret), K(orig_table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition operation on table with fulltext or multivalue index");
   }
 
   if (OB_FAIL(ret)) {

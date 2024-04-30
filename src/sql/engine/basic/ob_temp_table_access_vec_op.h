@@ -91,7 +91,7 @@ public:
       is_started_(false),
       result_info_guard_(),
       output_exprs_(exec_ctx.get_allocator()) {}
-  ~ObTempTableAccessVecOp() {}
+  ~ObTempTableAccessVecOp() { destroy(); }
 
   virtual int inner_open() override;
   virtual int inner_rescan() override;

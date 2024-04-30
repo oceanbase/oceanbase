@@ -10,8 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OB_DEFAULT_FT_PARSER_H_
-#define OB_DEFAULT_FT_PARSER_H_
+#ifndef OB_WHITESPACE_FT_PARSER_H_
+#define OB_WHITESPACE_FT_PARSER_H_
 
 #include "lib/ob_plugin.h"
 #include "lib/utility/ob_macro_utils.h"
@@ -26,37 +26,18 @@ namespace storage
 class ObSpaceFTParser final
 {
 public:
+  ObSpaceFTParser() = default;
+  ~ObSpaceFTParser() = default;
   static int segment(
       lib::ObFTParserParam *param,
       const char *fulltext,
       const int64_t ft_len);
-
 private:
-  ObSpaceFTParser()
-    : analysis_ctx_(),
-      english_analyzer_(),
-      is_inited_(false)
-  {}
-  ~ObSpaceFTParser() = default;
-
   static int add_word(
       lib::ObFTParserParam *param,
-      common::ObIAllocator *allocator,
       const char *word,
-      int64_t word_len);
-  int init(lib::ObFTParserParam *param);
-  void reset();
-  int segment(
-      const common::ObDatum &doc,
-      share::ObITokenStream *&token_stream);
-  TO_STRING_KV(K_(analysis_ctx), K_(english_analyzer), K_(is_inited));
-
-private:
-  share::ObTextAnalysisCtx analysis_ctx_;
-  share::ObEnglishTextAnalyzer english_analyzer_;
-  bool is_inited_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObSpaceFTParser);
+      const int64_t word_len,
+      const int64_t char_cnt);
 };
 
 class ObWhiteSpaceFTParserDesc final : public lib::ObIFTParserDesc
@@ -73,8 +54,7 @@ private:
 };
 
 static ObWhiteSpaceFTParserDesc whitespace_parser;
-
 } // end namespace storage
 } // end namespace oceanbase
 
-#endif // OB_DEFAULT_FT_PARSER_H_
+#endif // OB_WHITESPACE_FT_PARSER_H_

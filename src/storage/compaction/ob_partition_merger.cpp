@@ -1287,17 +1287,13 @@ int ObPartitionMinorMerger::set_result_flag(MERGE_ITER_ARRAY &fuse_iters,
         }
       }
     }
-    if (OB_SUCC(ret) && add_shadow_row) {
-      const ObDatumRow &result_row = partition_fuser_->get_result_row();
-      row_flag.set_shadow_row(true);
-      int64_t sql_sequence_col_idx = data_store_desc_.get_schema_rowkey_col_cnt() + 1;
-      result_row.storage_datums_[sql_sequence_col_idx].reuse();
-      result_row.storage_datums_[sql_sequence_col_idx].set_int(-INT64_MAX);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(partition_fuser_->set_multi_version_flag(row_flag))) {
+    if (FAILEDx(partition_fuser_->set_multi_version_flag(row_flag))) {
       STORAGE_LOG(WARN, "Failed to set multi version row flag and dml", K(ret));
+    } else if (add_shadow_row && OB_FAIL(partition_fuser_->make_result_row_shadow(
+          data_store_desc_.get_schema_rowkey_col_cnt() + 1 /*sql_sequence_col_idx*/))) {
+        LOG_WARN("failed to make shadow row", K(ret),
+          "result_row", partition_fuser_->get_result_row(),
+          "sql_seq_col_idx", data_store_desc_.get_schema_rowkey_col_cnt() + 1);
     } else {
       STORAGE_LOG(DEBUG, "succ to set multi version row flag and dml", K(partition_fuser_->get_result_row()),
                   K(row_flag), KPC(base_row));

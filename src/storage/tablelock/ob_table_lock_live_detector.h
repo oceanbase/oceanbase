@@ -98,6 +98,7 @@ public:
   static int record_detect_info_to_inner_table(sql::ObSQLSessionInfo *session_info,
                                                const ObTableLockTaskType &task_type,
                                                const ObLockRequest &lock_req,
+                                               const bool for_dbms_lock,
                                                bool &need_record_to_lock_table);
   static int remove_detect_info_from_inner_table(sql::ObSQLSessionInfo *session_info,
                                                  const ObTableLockTaskType &task_type,
@@ -108,8 +109,19 @@ public:
                                                  const ObLockRequest &lock_req,
                                                  int64_t &cnt);
   static int do_detect_and_clear();
+  static int remove_lock_by_owner_id(const int64_t raw_owner_id);
 
 private:
+  static int record_detect_info_to_inner_table_(observer::ObInnerSQLConnection *inner_conn,
+                                                const char *table_name,
+                                                const ObTableLockTaskType &task_type,
+                                                const ObLockRequest &lock_req,
+                                                bool &need_record_to_lock_table);
+  static int check_dbms_lock_record_exist_(observer::ObInnerSQLConnection *inner_conn,
+                                           const char *table_name,
+                                           const ObTableLockTaskType &task_type,
+                                           const ObLockRequest &lock_req,
+                                           bool &is_existed);
   static int generate_insert_dml_(const ObTableLockTaskType &task_type,
                                   const ObLockRequest &lock_req,
                                   share::ObDMLSqlSplicer &dml);

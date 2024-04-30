@@ -223,7 +223,11 @@ public:
   public:
     ObIAddWord() = default;
     virtual ~ObIAddWord() = default;
-    virtual int operator()(ObFTParserParam *param, const char *word, const int64_t word_len) = 0;
+    virtual int operator()(
+        ObFTParserParam *param,
+        const char *word,
+        const int64_t word_len,
+        const int64_t char_cnt) = 0;
     virtual int64_t get_add_word_count() const = 0;
     DECLARE_PURE_VIRTUAL_TO_STRING;
   };
@@ -247,9 +251,9 @@ public:
         && 0 < ft_length_
         && 0 <= parser_version_;
   }
-  inline int add_word(ObFTParserParam *param, const char *word, int64_t word_len)
+  inline int add_word(ObFTParserParam *param, const char *word, const int64_t word_len, const int64_t char_cnt)
   {
-    return (*add_word_)(param, word, word_len);
+    return (*add_word_)(param, word, word_len, char_cnt);
   }
   inline void reset()
   {

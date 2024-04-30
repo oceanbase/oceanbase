@@ -25,6 +25,7 @@
 #include "sql/engine/expr/ob_expr.h"
 #include "lib/udt/ob_udt_type.h"
 #include "sql/engine/ob_subschema_ctx.h"
+#include "sql/engine/expr/ob_expr_util.h"
 
 namespace oceanbase
 {
@@ -475,7 +476,7 @@ public:
   const ObIArray<ObArrayParamGroup> &get_array_param_groups() const { return array_param_groups_; }
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
-  int get_local_session_vars(int64_t idx, const ObLocalSessionVar *&local_vars);
+  int get_local_session_vars(int64_t idx, const ObSolidifiedVarsContext *&local_vars);
   common::ObIArray<uint64_t> &get_mview_ids() {  return mview_ids_; }
   common::ObIArray<uint64_t> &get_last_refresh_scns() {  return last_refresh_scns_; }
   uint64_t get_last_refresh_scn(uint64_t mview_id) const;
@@ -630,7 +631,7 @@ private:
   ObSubSchemaCtx subschema_ctx_;
   bool enable_rich_format_;
   // for dependant exprs of generated columns
-  common::ObFixedArray<ObLocalSessionVar *, common::ObIAllocator> all_local_session_vars_;
+  common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
   // for last_refresh_scn expr to get last_refresh_scn for rt mview used in query
   common::ObFixedArray<uint64_t, common::ObIAllocator> mview_ids_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> last_refresh_scns_;

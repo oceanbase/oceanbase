@@ -107,6 +107,8 @@ private:
       common::ObIAllocator &allocator,
       lib::ObFTParserParam::ObIAddWord &add_word);
   static bool need_stopword_list(const ObFTParser &parser);
+  static bool need_castdn(const ObFTParser &parser);
+  static bool need_min_max_word(const ObFTParser &parser);
 
   int alloc_add_word(
       const ObCollationType &type,
@@ -119,7 +121,7 @@ private:
   common::ObIAllocator *allocator_;
   lib::ObIFTParserDesc *parser_desc_;
   ObFTParser parser_name_;
-  bool filter_stopword_;
+  ObAddWordFlag add_word_flag_;
   bool is_inited_;
 
 private:

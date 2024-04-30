@@ -192,6 +192,25 @@ TEST_F(TestTextAnalyzer, test_basic_english_analyzer)
   const int64_t tokens_len_6[token_cnt_6] = {9, 3, 5, 3};
   const int64_t tokens_freq_6[token_cnt_6] = {3, 2, 1, 1};
   analyze_test(analyzer, doc_6, doc_len_6, tokens_6, tokens_len_6, tokens_freq_6, token_cnt_6);
+
+  // test invalid character
+  const int64_t doc_len_7 = 128;
+  const char doc_7[doc_len_7] = {(char)0xFF};
+  const int64_t token_cnt_7 = 0;
+  const char *tokens_7[token_cnt_7] = {};
+  const int64_t tokens_len_7[token_cnt_7] = {};
+  const int64_t tokens_freq_7[token_cnt_7] = {};
+  analyze_test(analyzer, doc_7, doc_len_7, tokens_7, tokens_len_7, tokens_freq_7, token_cnt_7);
+
+  // test invalid character in string
+  const int64_t doc_len_8 = 128;
+  const char doc_8[doc_len_8] = {"test invalid character here"};
+  ((char *)doc_8)[16] = char(0xFF);
+  const int64_t token_cnt_8 = 3;
+  const char *tokens_8[token_cnt_8] = {"test", "invalid", "cha"};
+  const int64_t tokens_len_8[token_cnt_8] = {4, 7, 3};
+  const int64_t tokens_freq_8[token_cnt_8] = {1, 1, 1};
+  analyze_test(analyzer, doc_8, doc_len_8, tokens_8, tokens_len_8, tokens_freq_8, token_cnt_8);
 }
 
 }; // namespace share

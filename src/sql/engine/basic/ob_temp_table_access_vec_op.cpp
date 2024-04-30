@@ -227,6 +227,7 @@ void ObTempTableAccessVecOp::destroy()
 {
   output_exprs_.reset();
   result_info_guard_.reset();
+  interm_result_ids_.reset();
   ObOperator::destroy();
 }
 

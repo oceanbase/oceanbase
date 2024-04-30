@@ -4109,8 +4109,8 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
     }
     if (OB_ISNULL(r_param_expr)) {
     } else if (r_param_expr->is_wrappered_json_extract()) {
-      r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
       r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
+      r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
     } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
       r_column_expr = r_param_expr->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(1);

@@ -3,8 +3,20 @@
 #tags: trx, tx_free_route
 
 connect (sys,$OBMYSQL_MS0,root,"",oceanbase,$OBMYSQL_PORT);
+
+connection sys;
+let $client_session_id_version=query_get_value(show proxyconfigs like 'client_session_id_version', value, 1);
+if ($client_session_id_version == '2') {
+--disable_query_log
+  let proxy_id=query_get_value(show proxyconfigs like 'proxy_id', value, 1);
+  alter proxyconfig set proxy_id = 1;
+  alter proxyconfig set client_session_id_version = 1;
+--enable_query_log
+}
+
 connect (conn0,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connect (conn1,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+
 connection sys;
 
 # change tenant primary zone to RANDOM
@@ -849,6 +861,15 @@ connection sys;
 --disable_query_log
 eval alter tenant mysql set primary_zone = "$saved_primary_zone";
 --enable_query_log
+
+if ($client_session_id_version == 2) {
+--disable_query_log
+  eval alter proxyconfig set proxy_id = $proxy_id;
+  alter proxyconfig set client_session_id_version = 2;
+--enable_query_log
+}
+
 --sleep 5
+
 disconnect conn0;
 disconnect conn1;

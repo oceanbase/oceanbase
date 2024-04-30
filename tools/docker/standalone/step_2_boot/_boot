@@ -122,6 +122,13 @@ function deploy_failed {
   fi
 }
 
+function cleanup() {
+  obd cluster stop $OB_CLUSTER_NAME
+  exit 0
+}
+
+trap 'cleanup' SIGTERM
+
 # We should decide whether the observer's data exists and
 # whether the obd has the information of the cluster
 
@@ -261,5 +268,7 @@ else
     echo "Please check the log file ${OB_HOME_PATH}/log/observer.log"
   fi
 fi
-exec tail -f /dev/null
+while :; do
+    sleep 1
+done
 

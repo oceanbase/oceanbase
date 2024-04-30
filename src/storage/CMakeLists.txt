@@ -170,6 +170,7 @@ ob_set_subtarget(ob_storage ckpt
 )
 
 ob_set_subtarget(ob_storage fts
+  fts/ob_beng_ft_parser.cpp
   fts/ob_fts_plugin_mgr.cpp
   fts/ob_fts_plugin_helper.cpp
   fts/ob_fts_stop_word.cpp

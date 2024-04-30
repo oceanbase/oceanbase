@@ -36,6 +36,7 @@
 #include "share/ob_occam_time_guard.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "lib/wait_event/ob_wait_event.h"
 
 namespace oceanbase
 {
@@ -1042,7 +1043,7 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
         }
 
         if (!is_finished) {
-          ob_usleep(WAIT_TIME);
+          ob_usleep<ObWaitEventIds::GARBAGE_COLLECTOR_SLEEP>(WAIT_TIME);
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000L)) {
             CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log wait cb too much time",
                          K(wait_for_update_ls_gc_state), K(log_type), K(ls_id), K(scn));

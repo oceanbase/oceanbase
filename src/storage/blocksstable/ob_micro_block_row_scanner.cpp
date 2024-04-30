@@ -1925,14 +1925,13 @@ int ObMultiVersionMicroBlockRowScanner::get_store_rowkey(ObStoreRowkey &store_ro
   return ret;
 }
 
-////////////////////////////// ObMultiVersionMicroBlockMinorMergeRowScannerV2 //////////////////////////////
+////////////////////////////// ObMultiVersionMicroBlockMinorMergeRowScanner //////////////////////////////
 void ObMultiVersionMicroBlockMinorMergeRowScanner::reuse()
 {
   row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   ObIMicroBlockRowScanner::reuse();
 }
 
-// The scanner of the same sstable is shared, the previous state needs to be kept, so clear_status cannot be called
 int ObMultiVersionMicroBlockMinorMergeRowScanner::init(
     const ObTableIterParam &param,
     ObTableAccessContext &context,
@@ -2000,7 +1999,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::inner_get_next_row(const ObDat
     } else if (FALSE_IT(++current_)) {
     } else if (skip_curr_row) {
       if (row_.is_last_multi_version_row()) {
-        if (OB_FAIL(ObGhostRowUtil::make_ghost_row(sql_sequence_col_idx_, context_->query_flag_, row_))) {
+        if (OB_FAIL(ObGhostRowUtil::make_ghost_row(sql_sequence_col_idx_, row_))) {
           LOG_WARN("failed to make ghost row", K(ret), K(row_));
         } else {
           break;
@@ -2020,7 +2019,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::inner_get_next_row(const ObDat
     LOG_ERROR("row is invalid", KPC(row));
   } else if (FALSE_IT(row = &row_)) {
   } else if (row_.row_flag_.is_delete() && !row_.mvcc_row_flag_.is_uncommitted_row()) {
-    // set delete/insert committed row compacted
+    // set delete committed row compacted
     row_.set_compacted_multi_version_row();
   }
   return ret;
@@ -2031,26 +2030,11 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_row_trans_state(bool &sk
   int ret = OB_SUCCESS;
   skip_curr_row = false;
   if (row_.mvcc_row_flag_.is_uncommitted_row()) {
-    const transaction::ObTransID read_trans_id = row_.get_trans_id();
-    const int64_t sql_sequence = -row_.storage_datums_[sql_sequence_col_idx_].get_int();
     bool can_read = false;
-    //get trans status & committed_trans_version_
-    int64_t state;
-    compaction::ObMergeCachedTransState trans_state;
-    const transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
-    if (OB_NOT_NULL(context_->trans_state_mgr_) &&
-      OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(read_trans_id, tx_sequence, trans_state)) {
-      state = trans_state.trans_state_;
-      last_trans_state_ = trans_state.trans_state_;
-      committed_trans_version_ = trans_state.trans_version_;
-    } else if (OB_FAIL(get_trans_state(read_trans_id, state, committed_trans_version_))) {
-      LOG_WARN("get transaction status failed", K(ret), K(read_trans_id), K(state));
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (state != ObTxData::ABORT
-              && OB_FAIL(check_curr_row_can_read(read_trans_id, tx_sequence, can_read))) {
-      LOG_WARN("micro block reader fail to get row.", K(ret), K_(macro_id));
+    int64_t state = ObTxData::MAX_STATE_CNT;
+    const transaction::ObTransID &read_trans_id = row_.trans_id_;
+    if (OB_FAIL(get_trans_state(read_trans_id, state, can_read))) { // will get committed_trans_version_ & last_trans_state_
+      LOG_WARN("get transaction status failed", K(ret), "trans_id", row_.get_trans_id(), K(state));
     } else if (!can_read) {
       skip_curr_row = true;
     } else {
@@ -2084,59 +2068,80 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_row_trans_state(bool &sk
   return ret;
 }
 
-int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state(const transaction::ObTransID &trans_id,
-                                                                  int64_t &state,
-                                                                  int64_t &commit_trans_version)
+int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state(
+  const transaction::ObTransID &read_trans_id,
+  int64_t &state,
+  bool &can_read)
 {
   int ret = OB_SUCCESS;
-  // get trans status & committed_trans_version_
-  SCN scn_commit_trans_version = SCN::max_scn();
-  auto &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
-  if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(
-      trans_id, context_->merge_scn_, state, scn_commit_trans_version))) {
-    LOG_WARN("get transaction status failed", K(ret), K(trans_id), K(state));
-  } else {
-    commit_trans_version = scn_commit_trans_version.get_val_for_tx();
-    last_trans_state_ = state;
+  can_read = false;
+  const int64_t sql_sequence = -row_.storage_datums_[sql_sequence_col_idx_].get_int();
+  const transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
+  state = get_trans_state_from_cache(read_trans_id, tx_sequence, can_read);
+  if (ObTxCommitData::MAX_STATE_CNT == state
+      && OB_FAIL(get_trans_state_from_tx_table(read_trans_id, tx_sequence, state, can_read))) {
+    LOG_WARN("failed to get trans state from tx table", KR(ret), "trans_id", row_.get_trans_id(), K(tx_sequence));
   }
   return ret;
 }
 
-int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
-    const transaction::ObTransID &trans_id,
-    const transaction::ObTxSEQ &sql_seq,
-    bool &can_read)
+int64_t ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state_from_cache(
+  const transaction::ObTransID &read_trans_id,
+  const transaction::ObTxSEQ &tx_sequence,
+  bool &can_read)
+{
+  int64_t state = ObTxCommitData::MAX_STATE_CNT;
+  compaction::ObMergeCachedTransState trans_state;
+  if (OB_NOT_NULL(context_->trans_state_mgr_) &&
+      OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
+                        read_trans_id, tx_sequence, trans_state)) {
+    state = trans_state.trans_state_;
+    last_trans_state_ = trans_state.trans_state_;
+    committed_trans_version_ = trans_state.trans_version_;
+    can_read = (ObTxData::ABORT == state ? false :trans_state.can_read_);
+  }
+  return state;
+}
+
+int ObMultiVersionMicroBlockMinorMergeRowScanner::get_trans_state_from_tx_table(
+   const transaction::ObTransID &read_trans_id,
+  const transaction::ObTxSEQ &sql_seq,
+  int64_t &state,
+  bool &can_read)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  bool is_cached = false;
   can_read = false;
-  compaction::ObMergeCachedTransState trans_state;
-  if (OB_NOT_NULL(context_->trans_state_mgr_) &&
-    OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(trans_id, sql_seq, trans_state)) {
-    can_read = trans_state.can_read_;
+  SCN scn_commit_trans_version = SCN::max_scn();
+  storage::ObTxTableGuards &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
+  if (OB_FAIL(tx_table_guards.get_tx_state_with_scn(
+      read_trans_id, context_->merge_scn_, state, scn_commit_trans_version))) {
+    LOG_WARN("get transaction status failed", K(ret), K(read_trans_id), K(state));
   } else {
-    storage::ObTxTableGuards &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
-    int64_t cost_time = common::ObClockGenerator::getClock();
-    if (OB_FAIL(tx_table_guards.check_sql_sequence_can_read(
-            trans_id,
-            sql_seq,
-            sstable_->get_end_scn(),
-            can_read))) {
-      LOG_WARN("check sql sequence can read failed", K(ret), K(can_read), K(trans_id), K(sql_seq));
-    } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
-      OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(trans_id, sql_seq,
-        committed_trans_version_, last_trans_state_, can_read))) {
-      LOG_WARN("failed to add minor trans state", K(tmp_ret), K(trans_id), K(sql_seq), K(can_read));
-    }
-    if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
-      cost_time = common::ObClockGenerator::getClock() - cost_time;
-      if (cost_time > 10 * 1000 /*10ms*/) {
-        LOG_INFO("multi-ver minor row scanner check seq", K(ret), K(cost_time));
+    committed_trans_version_ = scn_commit_trans_version.get_val_for_tx();
+    last_trans_state_ = state;
+    if (ObTxData::ABORT != state) { // check sql seq can read for RUNNING/COMMIT trans
+      int64_t cost_time = common::ObClockGenerator::getClock();
+      if (OB_FAIL(tx_table_guards.check_sql_sequence_can_read(
+              read_trans_id,
+              sql_seq,
+              sstable_->get_end_scn(),
+              can_read))) {
+        LOG_WARN("check sql sequence can read failed", K(ret), K(can_read), K(read_trans_id), K(sql_seq));
+      } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
+        OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(read_trans_id, sql_seq,
+          committed_trans_version_, last_trans_state_, can_read))) {
+        LOG_WARN("failed to add minor trans state", K(tmp_ret), K(read_trans_id), K(sql_seq), K(can_read));
+      }
+      if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {
+        cost_time = common::ObClockGenerator::getClock() - cost_time;
+        if (cost_time > 10 * 1000 /*10ms*/) {
+          LOG_INFO("multi-ver minor row scanner check seq", K(ret), K(cost_time));
+        }
       }
     }
   }
-  LOG_DEBUG("cxf debug check sql sequence can read", K(ret), K(can_read), K(trans_id), K(sql_seq));
+  LOG_DEBUG("cxf debug check sql sequence can read", K(ret), K(can_read), K(read_trans_id), K(sql_seq));
   return ret;
 }
 

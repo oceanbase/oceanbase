@@ -94,6 +94,9 @@ protected:
     GROUP_ID,
     TX_ID,
     BLOCKING_SESSION_ID,
+    PLAN_HASH,
+    THREAD_ID,
+    STMT_TYPE,
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualASH);
   share::ObActiveSessHistList::Iterator iterator_;
