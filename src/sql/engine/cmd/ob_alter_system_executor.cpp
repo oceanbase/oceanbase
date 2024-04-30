@@ -1279,7 +1279,7 @@ int ObAlterLSReplicaExecutor::execute(ObExecContext &ctx, ObAlterLSReplicaStmt &
   } else if (OB_ISNULL(common_rpc = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", KR(ret), KP(task_exec_ctx));
-  } else if (OB_FAIL(common_rpc->group_id(share::OBCG_DBA_COMMAND).admin_alter_ls_replica(stmt.get_rpc_arg()))) {
+  } else if (OB_FAIL(common_rpc->admin_alter_ls_replica(stmt.get_rpc_arg()))) {
     LOG_WARN("add ls replica rpc failed", KR(ret), K(stmt.get_rpc_arg()));
   }
   return ret;

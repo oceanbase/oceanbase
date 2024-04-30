@@ -2310,7 +2310,7 @@ int ObDRWorker::do_cancel_ls_replica_task(
   } else if (OB_FAIL(rpc_arg.init(task_id, ls_id, arg.get_tenant_id()))) {
     LOG_WARN("fail to init arg", KR(ret), K(task_id), K(ls_id), K(arg));
   } else if (OB_FAIL(rpc_proxy_->to(task_execute_server).by(arg.get_tenant_id()).timeout(GCONF.rpc_timeout)
-                            .group_id(share::OBCG_DBA_COMMAND).ls_cancel_replica_task(rpc_arg))) {
+                            .ls_cancel_replica_task(rpc_arg))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_USER_ERROR(OB_ENTRY_NOT_EXIST, "Task not exist");
     }
