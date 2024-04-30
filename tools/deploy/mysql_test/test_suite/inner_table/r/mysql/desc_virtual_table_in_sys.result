@@ -6809,7 +6809,7 @@ IN_FILTER_ROWS	tinyint(4)	NO		0
 GROUP_ID	bigint(20)	YES		NULL	
 TX_ID	bigint(20)	YES		NULL	
 BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
-PLAN_HASH	bigint(20)	YES		NULL	
+PLAN_HASH	bigint(20) unsigned	YES		NULL	
 THREAD_ID	bigint(20)	YES		NULL	
 STMT_TYPE	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
@@ -8179,7 +8179,7 @@ event_id	bigint(20)	YES		NULL
 group_id	bigint(20)	YES		NULL	
 tx_id	bigint(20)	YES		NULL	
 blocking_session_id	bigint(20)	YES		NULL	
-plan_hash	bigint(20)	YES		NULL	
+plan_hash	bigint(20) unsigned	YES		NULL	
 thread_id	bigint(20)	YES		NULL	
 stmt_type	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;

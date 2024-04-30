@@ -1372,9 +1372,9 @@ int ObInnerTableSchema::all_virtual_ash_schema(ObTableSchema &table_schema)
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObIntType, //column_type
+      ObUInt64Type, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
+      sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable
@@ -2401,9 +2401,9 @@ int ObInnerTableSchema::all_virtual_ash_all_virtual_ash_i1_schema(ObTableSchema 
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObIntType, //column_type
+      ObUInt64Type, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
+      sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       true,//is_nullable
