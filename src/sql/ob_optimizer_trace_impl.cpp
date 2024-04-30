@@ -1,9 +1,15 @@
-// (C) Copyright 2019 Alibaba Inc. All Rights Reserved.
-//  Authors:
-//    zhenling.zzg <>
-//  Normalizer:
-//
-//
+/**
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
+ */
+
 #define USING_LOG_PREFIX SQL
 #include "lib/utility/ob_utility.h"
 #include "lib/string/ob_sql_string.h"
@@ -25,6 +31,7 @@
 #include "lib/file/file_directory_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/optimizer/ob_dynamic_sampling.h"
+#include "sql/optimizer/ob_skyline_prunning.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -799,6 +806,40 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
       }
     }
     decrease_section();
+  }
+  return ret;
+}
+
+int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
+{
+  int ret = OB_SUCCESS;
+  switch (dim.get_dim_type()) {
+    case ObSkylineDim::INDEX_BACK: {
+      const ObIndexBackDim &index_dim = static_cast<const ObIndexBackDim &>(dim);
+      append("[index back dim] need index back:", index_dim.need_index_back_);
+      append(", has interesting order:", index_dim.has_interesting_order_);
+      append(", can extract range:", index_dim.can_extract_range_);
+      append(", filter columns:", common::ObArrayWrap<uint64_t>(index_dim.filter_column_ids_, index_dim.filter_column_cnt_));
+      break;
+    }
+    case ObSkylineDim::INTERESTING_ORDER: {
+      const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
+      append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
+      append(", need index back:", order_dim.need_index_back_);
+      append(", can extract range:", order_dim.can_extract_range_);
+      append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
+      append(", filter columns:", common::ObArrayWrap<uint64_t>(order_dim.filter_column_ids_, order_dim.filter_column_cnt_));
+      break;
+    }
+    case ObSkylineDim::QUERY_RANGE: {
+      const ObQueryRangeDim &range_dim = static_cast<const ObQueryRangeDim &>(dim);
+      append("[query range dim] rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
+      break;
+    }
+    default: {
+      append("unknown dim");
+      break;
+    }
   }
   return ret;
 }

@@ -1,9 +1,13 @@
 /**
- * ob_optimizer_trace_impl.h
- *
- * Authors:
- *   zhenling.zzg <>
- *
+ * Copyright (c) 2021 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan PubL v2.
+ * You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY KIND,
+ * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
+ * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
+ * See the Mulan PubL v2 for more details.
  */
 
 #ifndef _OB_OPTIMIZER_TRACE_IMPL_H
@@ -39,6 +43,7 @@ class OptTableMetas;
 class TableItem;
 class ObSQLSessionInfo;
 struct CandidatePlan;
+class ObSkylineDim;
 
 class ObOptimizerTraceImpl;
 
@@ -261,6 +266,7 @@ public:
   int append(const ObShardingInfo *info);
   int append(const CandidatePlan &plan);
   int append(const ObDSResultItem &ds_result);
+  int append(const ObSkylineDim &dim);
 /***********************************************/
 ////print template type
 /***********************************************/
@@ -279,14 +285,14 @@ public:
   typename std::enable_if<std::is_base_of<ObIArray<ObRawExpr*>, T>::value, int>::type
   append(const T& value);
 
-  //for ObIArray<uint64_t>
+  //for ObIArrayWrap<uint64_t>
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<uint64_t>, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
   append(const T& value);
 
-  //for ObIArray<int64_t>
+  //for ObIArrayWrap<int64_t>
   template <typename T>
-  typename std::enable_if<std::is_base_of<ObIArray<int64_t>, T>::value, int>::type
+  typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
   append(const T& value);
 
   //for ObIArray<ObDSResultItem>
@@ -393,7 +399,7 @@ ObOptimizerTraceImpl::append(const T& value)
 
 //for ObIArray<uint64_t>
 template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<uint64_t>, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObIArrayWrap<uint64_t>, T>::value, int>::type
 ObOptimizerTraceImpl::append(const T& value)
 {
   int ret = OB_SUCCESS;
@@ -410,7 +416,7 @@ ObOptimizerTraceImpl::append(const T& value)
 
 //for ObIArray<int64_t>
 template <typename T>
-typename std::enable_if<std::is_base_of<ObIArray<int64_t>, T>::value, int>::type
+typename std::enable_if<std::is_base_of<ObIArrayWrap<int64_t>, T>::value, int>::type
 ObOptimizerTraceImpl::append(const T& value)
 {
   int ret = OB_SUCCESS;

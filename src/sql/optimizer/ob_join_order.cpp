@@ -2181,6 +2181,7 @@ int ObJoinOrder::skyline_prunning_index(const uint64_t table_id,
     } else { /*do nothing*/ }
   } else {
     //维度统计信息
+    OPT_TRACE_TITLE("BEGIN SKYLINE INDEX PRUNNING");
     ObSkylineDimRecorder recorder;
     bool has_add = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids.count(); ++i) {
@@ -2282,7 +2283,8 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
             LOG_WARN("failed to push back order item", K(ret));
           }
         }
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) || helper.is_inner_path_) {
+          // The ordering of inner path can not be preserved
         } else if (OB_FAIL(check_all_interesting_order(index_ordering,
                                                        stmt,
                                                        max_prefix_count,

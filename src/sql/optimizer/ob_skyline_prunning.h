@@ -53,7 +53,7 @@ public:
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const = 0;
   Dimension get_dim_type() const { return dim_type_; }
   static const int64_t DIM_COUNT = static_cast<int64_t>(MAX_DIM);;
-  TO_STRING_KV(K(dim_type_));
+  VIRTUAL_TO_STRING_KV(K(dim_type_));
 private:
   const Dimension dim_type_;
 };
@@ -61,6 +61,7 @@ private:
 class ObIndexBackDim : public ObSkylineDim
 {
 public:
+  friend class ObOptimizerTraceImpl;
   ObIndexBackDim() : ObSkylineDim(INDEX_BACK), need_index_back_(false),
     has_interesting_order_(true),
     can_extract_range_(true),
@@ -75,7 +76,7 @@ public:
   void set_index_column_cnt(const int64_t size) { index_column_cnt_ = size; }
   int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range),
+  VIRTUAL_TO_STRING_KV(K_(need_index_back), K_(has_interesting_order), K_(can_extract_range),
                K_(index_column_cnt),
                "restrcit_ids", common::ObArrayWrap<uint64_t>(filter_column_ids_, filter_column_cnt_));
 private:
@@ -100,6 +101,7 @@ private:
 class ObInterestOrderDim : public ObSkylineDim
 {
 public:
+  friend class ObOptimizerTraceImpl;
   ObInterestOrderDim() : ObSkylineDim(INTERESTING_ORDER),
     is_interesting_order_(false),
     column_cnt_(0),
@@ -116,7 +118,7 @@ public:
   void set_extract_range(const bool can) { can_extract_range_ = can; }
   int add_filter_column_ids(const common::ObIArray<uint64_t> &filter_column_ids);
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
-  TO_STRING_KV(K_(is_interesting_order),
+  VIRTUAL_TO_STRING_KV(K_(is_interesting_order),
                K_(column_cnt),
                "column_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_),
                K_(need_index_back),
@@ -145,13 +147,14 @@ private:
 class ObQueryRangeDim: public ObSkylineDim
 {
 public:
+  friend class ObOptimizerTraceImpl;
   ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
     column_cnt_(0)
   { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_USER_MAX_ROWKEY_COLUMN_NUMBER);}
   virtual ~ObQueryRangeDim() {}
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   int add_rowkey_ids(const common::ObIArray<uint64_t> &column_ids);
-  TO_STRING_KV(K_(column_cnt),
+  VIRTUAL_TO_STRING_KV(K_(column_cnt),
                "rowkey_ids", common::ObArrayWrap<uint64_t>(column_ids_, column_cnt_));
 private:
   int64_t column_cnt_;
