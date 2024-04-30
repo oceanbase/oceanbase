@@ -3350,16 +3350,16 @@ int ObJsonBin::rebuild_json_object_v0(ObJsonBuffer &result) const
   uint64_t element_count = this->element_count();
   ObJsonBin dst_bin;
   ObJsonBinMeta meta;
-  uint64_t obj_size = 0;
+  uint64_t new_obj_size = 0;
 
-  if (OB_FAIL(this->get_serialize_size(obj_size))) {
+  if (OB_FAIL(this->get_serialize_size(new_obj_size))) {
     LOG_WARN("get_serialize_size fail", K(ret), K(meta_));
   } else {
     meta.set_type(get_object_vertype(), false);
     meta.set_element_count(element_count);
     meta.set_element_count_var_type(ObJsonVar::get_var_type(element_count));
-    meta.set_obj_size(obj_size);
-    meta.set_obj_size_var_type(ObJsonVar::get_var_type(obj_size));
+    meta.set_obj_size(new_obj_size);
+    meta.set_obj_size_var_type(OB_MAX(entry_var_type(), ObJsonVar::get_var_type(new_obj_size)));
     meta.set_entry_var_type(meta.obj_size_var_type());
     meta.set_is_continuous(true);
     meta.calc_entry_array();
@@ -3433,7 +3433,7 @@ int ObJsonBin::rebuild_json_array_v0(ObJsonBuffer &result) const
     meta.set_element_count(element_count);
     meta.set_element_count_var_type(ObJsonVar::get_var_type(element_count));
     meta.set_obj_size(new_obj_size);
-    meta.set_obj_size_var_type(ObJsonVar::get_var_type(new_obj_size));
+    meta.set_obj_size_var_type(OB_MAX(entry_var_type(), ObJsonVar::get_var_type(new_obj_size)));
     meta.set_entry_var_type(meta.obj_size_var_type());
     meta.set_is_continuous(true);
     meta.calc_entry_array();
