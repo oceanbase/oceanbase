@@ -293,9 +293,22 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
     int ret = OB_SUCCESS;
     transaction::ObPartTransCtx *tx_ctx = ctx_->get_trans_ctx();
     ctx_->write_done();
-    if (write_ret_ && OB_SUCCESS == *write_ret_
-        && OB_NOT_NULL(memtable_)
-        && try_flush_redo_) {
+
+    if (OB_NOT_NULL(memtable_)
+        // Case1: The memtable is frozen, therefore we must submit the logs
+        // (forcely), otherwise, the data written concurrently may not be
+        // scanned by the background freezing worker, leading to missed data
+        // submissions.
+        && (memtable_->is_frozen_memtable()
+        // Case2: The data writes are guaranteed not to rollback and are not in
+        // the middle of write(such as the main table write of the insert
+        // ignore), allowing us to trigger immediate logging. (Especially, it
+        // should be noted that allowing immediate logging at any time could
+        // lead to the bad case that lots of rollback logs will be generated in
+        // insert ignore scenarios.)
+            || (write_ret_
+                && OB_SUCCESS == *write_ret_
+                && try_flush_redo_))) {
       bool is_freeze = memtable_->is_frozen_memtable();
       ret = tx_ctx->submit_redo_after_write(is_freeze/*force*/, write_seq_no_);
       if (OB_FAIL(ret)) {

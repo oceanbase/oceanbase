@@ -308,7 +308,8 @@ private:
   int finish_freeze_with_ls_lock(ObITabletMemtable *tablet_memtable);
   int try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
                                                      bool &ready_for_flush,
-                                                     const int64_t start);
+                                                     const int64_t start,
+                                                     int64_t &last_submit_log_time);
   void submit_checkpoint_task();
 private:
   // flag whether the logsteram is freezing
