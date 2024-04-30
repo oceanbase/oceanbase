@@ -120,9 +120,11 @@ int ObMPStmtPrexecute::before_process()
     }
 
     // sql
-    if (OB_SUCC(ret) && OB_FAIL(ObMySQLUtil::get_length(pos, sql_len_))) {
-      LOG_WARN("failed to get length", K(ret));
-    } else {
+    PS_DEFENSE_CHECK(1)
+    {
+      if (OB_FAIL(ObMySQLUtil::get_length(pos, sql_len_))) {
+        LOG_WARN("failed to get length", K(ret));
+      }
       PS_DEFENSE_CHECK(sql_len_)
       {
         sql_.assign_ptr(pos, static_cast<ObString::obstr_size_t>(sql_len_));
