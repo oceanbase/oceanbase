@@ -327,6 +327,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_xa_query.cpp
   tx/ob_xa_rpc.cpp
   tx/ob_xa_service.cpp
+  tx/ob_xa_trans_event.cpp
   tx/ob_xa_trans_heartbeat_worker.cpp
   tx/ob_tx_ctx_mds.cpp
   tx/ob_multi_data_source.cpp
@@ -479,6 +480,7 @@ ob_set_subtarget(ob_storage common
   ob_common_id_utils.cpp
   ob_tenant_tablet_stat_mgr.cpp
   ob_storage_async_rpc.cpp
+  ob_gc_upper_trans_helper.cpp
 )
 
 ob_set_subtarget(ob_storage common_mixed
@@ -537,6 +539,7 @@ ob_set_subtarget(ob_storage compaction
 ob_set_subtarget(ob_storage memtable
   memtable/ob_lock_wait_mgr.cpp
   memtable/ob_memtable.cpp
+  memtable/ob_memtable_key.cpp
   memtable/ob_memtable_compact_writer.cpp
   memtable/ob_memtable_context.cpp
   memtable/ob_memtable_interface.cpp
@@ -581,6 +584,7 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/ob_start_transfer_in_mds_ctx.cpp
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
   multi_data_source/ob_abort_transfer_in_mds_ctx.cpp
+  multi_data_source/ob_tablet_create_mds_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
 )
 
@@ -682,6 +686,10 @@ ob_set_subtarget(ob_storage lob
   lob/ob_lob_util.cpp
   lob/ob_lob_rpc_struct.cpp
   lob/ob_ext_info_callback.cpp
+  lob/ob_lob_access_param.cpp
+  lob/ob_lob_persistent_reader.cpp
+  lob/ob_lob_persistent_iterator.cpp
+  lob/ob_lob_write_buffer.cpp
 )
 
 ob_add_new_object_target(ob_storage ob_storage)

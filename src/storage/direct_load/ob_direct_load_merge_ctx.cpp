@@ -301,16 +301,17 @@ int ObDirectLoadTabletMergeCtx::build_merge_task(
         LOG_WARN("fail to build empty data merge task", KR(ret));
       }
     } else if (!param_.is_heap_table_) {
-      if (!is_multiple_mode) {
-        if (OB_FAIL(build_pk_table_merge_task(table_array, col_descs, max_parallel_degree))) {
-          LOG_WARN("fail to build pk table merge task", KR(ret));
-        }
-      } else {
+      // 有主键表排序和不排序都写成multiple sstable
+      // if (!is_multiple_mode) {
+      //   if (OB_FAIL(build_pk_table_merge_task(table_array, col_descs, max_parallel_degree))) {
+      //     LOG_WARN("fail to build pk table merge task", KR(ret));
+      //   }
+      // } else {
         if (OB_FAIL(
               build_pk_table_multiple_merge_task(table_array, col_descs, max_parallel_degree))) {
           LOG_WARN("fail to build pk table multiple merge task", KR(ret));
         }
-      }
+      // }
     } else {
       if (!is_multiple_mode) {
         if (OB_FAIL(build_heap_table_merge_task(table_array, col_descs, max_parallel_degree))) {

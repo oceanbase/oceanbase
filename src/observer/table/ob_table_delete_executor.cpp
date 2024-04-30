@@ -24,8 +24,8 @@ namespace oceanbase
 {
 namespace table
 {
-
-int ObTableApiDelSpec::init_ctdefs_array(int64_t size) {
+int ObTableApiDelSpec::init_ctdefs_array(int64_t size)
+{
   int ret = OB_SUCCESS;
   if (OB_FAIL(del_ctdefs_.allocate_array(alloc_, size))) {
     LOG_WARN("fail to alloc ctdefs array", K(ret), K(size));
@@ -72,7 +72,7 @@ int ObTableApiDeleteExecutor::inner_open_with_das()
   }
   for (int64_t i = 0; i < del_rtdefs_.count() && OB_SUCC(ret); i++) {
     ObTableDelRtDef &del_rtdef = del_rtdefs_.at(i);
-     ObTableDelCtDef *del_ctdef = del_spec_.get_ctdefs().at(i);
+    ObTableDelCtDef *del_ctdef = del_spec_.get_ctdefs().at(i);
     if (OB_ISNULL(del_ctdef)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("del ctdef is NULL", K(ret));
@@ -117,14 +117,27 @@ int ObTableApiDeleteExecutor::process_single_operation(const ObTableEntity *enti
 int ObTableApiDeleteExecutor::get_next_row_from_child()
 {
   int ret = OB_SUCCESS;
-  const ObTableEntity *entity = static_cast<const ObTableEntity*>(tb_ctx_.get_entity());
+  const ObIArray<ObTableOperation> *ops = tb_ctx_.get_batch_operation();
+  bool is_batch = (OB_NOT_NULL(ops) && !tb_ctx_.is_htable());
 
-  if (cur_idx_ >= 1) {
-    // prevent the second time process operation if the first one successfully
-    ret = OB_ITER_END;
-  } else if (OB_FAIL(process_single_operation(entity))) {
-    if (OB_ITER_END != ret) {
-      LOG_WARN("fail to process single delete operation", K(ret));
+  // single operation
+  if (!is_batch) {
+    const ObTableEntity *entity = static_cast<const ObTableEntity *>(tb_ctx_.get_entity());
+    if (cur_idx_ >= 1) {
+      ret = OB_ITER_END;
+    } else if (OB_FAIL(process_single_operation(entity))) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("fail to process single insert operation", K(ret));
+      }
+    }
+  } else {
+    if (cur_idx_ >= ops->count()) {
+      ret = OB_ITER_END;
+    } else {
+      const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
+      if (OB_FAIL(process_single_operation(entity))) {
+        LOG_WARN("fail to process single insert operation", K(ret));
+      }
     }
   }
 
@@ -198,7 +211,7 @@ int ObTableApiDeleteExecutor::get_next_row()
       LOG_WARN("fail to process delete", K(ret));
     }
   } else {
-    while(OB_SUCC(ret)) {
+    while (OB_SUCC(ret)) {
       if (OB_FAIL(get_next_row_from_child())) {
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next row", K(ret));

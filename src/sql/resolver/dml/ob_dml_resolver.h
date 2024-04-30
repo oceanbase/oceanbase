@@ -191,7 +191,6 @@ public:
                                 const ParseNode *alias_node,
                                 ObChildStmtResolver &child_resolver,
                                 TableItem *&table_item);
-  int extract_var_init_exprs(ObSelectStmt *ref_query, common::ObIArray<ObRawExpr*> &assign_exprs);
   int resolve_generate_table_item(ObSelectStmt *ref_query, const ObString &alias_name, TableItem *&tbl_item);
   int resolve_joined_table(const ParseNode &parse_node, JoinedTable *&joined_table);
   int resolve_joined_table_item(const ParseNode &parse_node, JoinedTable *&joined_table);
@@ -281,11 +280,13 @@ public:
                                        share::schema::ObSchemaType schema_type,
                                        uint64_t object_id,
                                        uint64_t database_id,
-                                       uint64_t dep_obj_id);
+                                       uint64_t dep_obj_id,
+                                       bool is_db_expilicit = false);
   int add_object_versions_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
                                        const ObIArray<uint64_t> &object_ids,
-                                       const ObIArray<uint64_t> &db_ids);
+                                       const ObIArray<uint64_t> &db_ids,
+                                       bool is_db_expilicit = false);
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
@@ -366,7 +367,7 @@ protected:
                                                 ObIArray<ObRawExpr*> &and_exprs);
   int resolve_where_clause(const ParseNode *node);
   int resolve_order_clause(const ParseNode *node, bool is_for_set_query = false);
-  int resolve_limit_clause(const ParseNode *node);
+  int resolve_limit_clause(const ParseNode *node, bool disable_offset = false);
   int resolve_into_clause(const ParseNode *node);
   int resolve_hints(const ParseNode *node);
   int resolve_outline_data_hints();
@@ -581,7 +582,7 @@ protected:
                                            common::ObString &table_name,
                                            common::ObString &database_name,
                                            bool is_reverse_link);
-  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool error_with_exist);
+  int add_synonym_obj_id(const ObSynonymChecker &synonym_checker, bool is_db_expilicit);
 
   /*
    *
@@ -829,6 +830,7 @@ private:
   int resolve_eliminate_join_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_win_magic_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_place_group_by_hint(const ParseNode &hint_node, ObTransHint *&hint);
+  int resolve_coalesce_aggr_hint(const ParseNode &hint_node, ObTransHint *&hint);
   int resolve_tb_name_list(const ParseNode *tb_name_list_node, ObIArray<ObSEArray<ObTableInHint, 4>> &tb_name_list);
   int resolve_monitor_ids(const ParseNode &tracing_node, ObIArray<ObMonitorHint> &monitoring_ids);
   int resolve_tables_in_leading_hint(const ParseNode *tables_node, ObLeadingTable &leading_table);
@@ -865,11 +867,9 @@ private:
   bool check_expr_has_colref(ObRawExpr *expr);
 
   int resolve_values_table_item(const ParseNode &table_node, TableItem *&table_item);
-  int resolve_table_values_for_select(const ParseNode &table_node,
-                                      ObIArray<ObExprResType> &res_types,
+  int resolve_values_table_for_select(const ParseNode &table_node,
                                       ObValuesTableDef &table_values);
-  int resolve_table_values_for_insert(const ParseNode &table_node,
-                                      ObIArray<ObExprResType> &res_types,
+  int resolve_values_table_for_insert(const ParseNode &table_node,
                                       ObValuesTableDef &table_values);
   int get_values_res_types(const ObIArray<ObExprResType> &cur_values_types,
                            ObIArray<ObExprResType> &res_types);

@@ -63,6 +63,7 @@ void ObActiveSessionGuard::resetup_ash(ObActiveSessionStat &stat)
 
 void ObActiveSessionGuard::resetup_thread_local_ash()
 {
+  thread_local_stat_.last_ts_ = common::ObTimeUtility::current_time();
   get_stat_ptr() = &thread_local_stat_;
 }
 
@@ -111,26 +112,42 @@ void ObActiveSessionStat::set_fixup_buffer(common::ObSharedGuard<ObAshBuffer> &a
     fixup_ash_buffer_ = ash_buffer;
   }
 }
-
 void ObActiveSessionStat::set_async_committing()
 {
   in_committing_ = true;
-  int ret = OB_SUCCESS;
-  wait_event_begin_ts_ = ObTimeUtility::current_time();
-  event_no_ = ObWaitEventIds::ASYNC_COMMITTING_WAIT;
+  set_ash_waiting(ObWaitEventIds::ASYNC_COMMITTING_WAIT);
 }
 
 void ObActiveSessionStat::finish_async_commiting() {
   in_committing_ = false;
+  finish_ash_waiting();
+}
+
+void ObActiveSessionStat::set_ash_waiting(
+  const int64_t event_no,
+  const int64_t p1 /* = 0 */,
+  const int64_t p2 /* = 0 */,
+  const int64_t p3 /* = 0 */)
+{
+  int ret = OB_SUCCESS;
+  wait_event_begin_ts_ = ObTimeUtility::current_time();
+  set_event(event_no, p1, p2, p3);
+}
+
+void ObActiveSessionStat::finish_ash_waiting() {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(event_no_ == 0 || wait_event_begin_ts_ == 0)) {
-    // if happened. caller of set_async_committing should check and revert the wait event.
+    // if happened. caller of set_ash_waiting should check and revert the wait event.
   } else {
-    event_no_ = 0;
+    reset_event();
     const int64_t cur_wait_time = ObTimeUtility::current_time() - wait_event_begin_ts_;
     wait_event_begin_ts_ = 0;
     if (OB_LIKELY(cur_wait_time > 0)) {
-      total_non_idle_wait_time_ += cur_wait_time;
+      if (OB_WAIT_EVENTS[event_no_].wait_class_ != ObWaitClassIds::IDLE) {
+        total_non_idle_wait_time_ += cur_wait_time;
+      } else {
+        total_idle_wait_time_ += cur_wait_time;
+      }
     }
   }
 }
@@ -186,22 +203,35 @@ void ObActiveSessionStat::set_bkgd_sess_inactive()
 
 void ObActiveSessionStat::accumulate_elapse_time()
 {
-  bkgd_elapse_time_ += common::ObTimeUtility::current_time() - last_ts_;
+  if (last_ts_ > 0) {
+    const int64_t cur = common::ObTimeUtility::current_time();
+    bkgd_elapse_time_ += cur - last_ts_;
+    last_ts_ = cur;
+  }
 }
 
 void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     const int64_t delta_time = sample_time - stat.last_ts_ + stat.bkgd_elapse_time_;
+    if (delta_time > 10000000/*10s*/) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "db time up to 10s for one calculation", K(delta_time), K(sample_time), K(stat));
+    }
     stat.bkgd_elapse_time_ = 0;
     if (OB_UNLIKELY(delta_time <= 0)) {
       // ash sample happened before set_session_active
       if (delta_time < -ash_iteration_time) {
-        LOG_WARN_RET(OB_SUCCESS, "ash sample happened before set_session_active.", K(delta_time), K(sample_time), K_(stat.last_ts));
+        LOG_INFO("ash sample happened before set_session_active.", K(delta_time), K(sample_time), K_(stat.last_ts));
       }
+      stat.delta_time_ = 0;
+      stat.delta_cpu_time_ = 0;
+      stat.delta_db_time_ = 0;
     } else if (OB_UNLIKELY(stat.last_ts_ == 0)) {
       // session is active, but last_ts_ is no set yet. see ObBasicSessionInfo::set_session_active()
       // LOG_INFO("stat's last_ts is 0, no need to record", K(stat));
+      stat.delta_time_ = 0;
+      stat.delta_cpu_time_ = 0;
+      stat.delta_db_time_ = 0;
     } else {
       const uint64_t cur_wait_begin_ts = stat.wait_event_begin_ts_;
       const int64_t cur_event_no = stat.event_no_;
@@ -254,67 +284,6 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
   }
 }
 
-void ObActiveSessionStat::calc_db_time_for_background_session(ObActiveSessionStat &stat, const int64_t sample_time)
-{
-  if (oceanbase::lib::is_diagnose_info_enabled()) {
-    const int64_t delta_time = stat.bkgd_elapse_time_;
-    stat.bkgd_elapse_time_ = 0;
-    if (OB_UNLIKELY(delta_time <= 0)) {
-      // ash sample happened before set_session_active
-      if (delta_time < -ash_iteration_time) {
-        LOG_WARN_RET(OB_SUCCESS, "ash sample happened before set_session_active.", K(delta_time), K(sample_time), K_(stat.last_ts));
-      }
-    } else if (OB_UNLIKELY(stat.last_ts_ == 0)) {
-      // session is active, but last_ts_ is no set yet. see ObBasicSessionInfo::set_session_active()
-      // LOG_INFO("stat's last_ts is 0, no need to record", K(stat));
-    } else {
-      const uint64_t cur_wait_begin_ts = stat.wait_event_begin_ts_;
-      const int64_t cur_event_no = stat.event_no_;
-      if (OB_UNLIKELY(cur_wait_begin_ts != 0 && cur_event_no != 0)) {
-        // has unfinished wait event
-        stat.wait_event_begin_ts_ = sample_time;
-        const uint64_t cur_wait_time = sample_time - cur_wait_begin_ts;
-        if (OB_WAIT_EVENTS[cur_event_no].wait_class_ != ObWaitClassIds::IDLE) {
-          stat.total_non_idle_wait_time_ += cur_wait_time;
-        } else {
-          stat.total_idle_wait_time_ += cur_wait_time;
-        }
-      }
-      const int64_t delta_non_idle_wait_time = stat.total_non_idle_wait_time_ - stat.prev_non_idle_wait_time_;
-      const int64_t delta_idle_wait_time = stat.total_idle_wait_time_ - stat.prev_idle_wait_time_;
-      if (OB_UNLIKELY(delta_time < delta_non_idle_wait_time + delta_idle_wait_time)) {
-        /**
-         * Because we take sample_time_ in the begining of ash sample iteration.
-         * So each session's sample actually taken place after sample_time_. Resulting in wait_time >
-         * delta time. Therefore a negative delta db time would happened.
-         * Which is fine. the negative db time got fixed up in the next round of calc_db_time
-         */
-        // LOG_WARN_RET(OB_SUCCESS, "negative db time happened, could be a race condition", K(stat),
-        //     K(delta_time), K(delta_non_idle_wait_time), K(delta_idle_wait_time));
-      } else {
-        stat.last_ts_ = sample_time;
-        stat.prev_non_idle_wait_time_ = stat.total_non_idle_wait_time_;
-        stat.prev_idle_wait_time_ = stat.total_idle_wait_time_;
-        // TODO: verify cpu time
-        stat.delta_time_ = delta_time;
-        stat.delta_cpu_time_ = delta_time - delta_non_idle_wait_time - delta_idle_wait_time;
-        stat.delta_db_time_ = delta_time - delta_idle_wait_time;
-
-        if (stat.session_type_ == ObActiveSessionStatItem::SessionType::BACKGROUND) {
-          ObTenantStatEstGuard guard(stat.tenant_id_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_TIME, delta_time);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_CPU, stat.delta_cpu_time_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_DB_TIME, stat.delta_db_time_);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
-          EVENT_ADD(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
-        } else {
-          LOG_WARN_RET(OB_ERR_UNEXPECTED, "calc background db time wrongly", K(stat));
-        }
-      }
-    }
-  }
-}
-
 void ObActiveSessionGuard::set_bkgd_sess_active()
 {
   get_stat().set_bkgd_sess_active();
@@ -325,11 +294,14 @@ void ObActiveSessionGuard::set_bkgd_sess_inactive()
   get_stat().set_bkgd_sess_inactive();
 }
 
-ObRPCActiveGuard::ObRPCActiveGuard(int pcode) : prev_is_bkgd_active_(true)
+ObRPCActiveGuard::ObRPCActiveGuard(int pcode, int64_t tenant_id)
+    : prev_is_bkgd_active_(true)
 {
   prev_is_bkgd_active_ = ObActiveSessionGuard::get_stat().is_bkgd_active_;
-  ObActiveSessionGuard::set_bkgd_sess_active();
+  prev_tenant_id_ = ObActiveSessionGuard::get_stat().tenant_id_;
   ObActiveSessionGuard::get_stat().pcode_ = pcode;
+  ObActiveSessionGuard::get_stat().tenant_id_ = tenant_id;
+  ObActiveSessionGuard::set_bkgd_sess_active();
 }
 
 ObRPCActiveGuard::~ObRPCActiveGuard()
@@ -342,6 +314,7 @@ ObRPCActiveGuard::~ObRPCActiveGuard()
   }
   ObActiveSessionGuard::get_stat().is_bkgd_active_ = prev_is_bkgd_active_;
   ObActiveSessionGuard::get_stat().pcode_ = 0;
+  ObActiveSessionGuard::get_stat().tenant_id_ = prev_tenant_id_;
 }
 
 ObBackgroundSessionIdGenerator &ObBackgroundSessionIdGenerator::get_instance() {

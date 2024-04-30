@@ -725,7 +725,7 @@ void ObIORequest::finish(const ObIORetCode &ret_code)
       ret_code_ = ret_code;
       is_finished_ = true;
       if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
-        if (get_group_id() > USER_RESOURCE_GROUP_END_ID) {
+        if (is_sys_group(get_group_id())) {
           tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this);
         } else {
           tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);

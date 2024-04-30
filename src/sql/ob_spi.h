@@ -43,8 +43,9 @@ class ObExprObjAccess;
 
 struct ObSPICursor
 {
-  ObSPICursor(ObIAllocator &allocator) :
-    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_()
+  ObSPICursor(ObIAllocator &allocator, sql::ObSQLSessionInfo* session_info) :
+    row_store_(), row_desc_(), allocator_(&allocator), cur_(0), fields_(allocator), complex_objs_(),
+    session_info_(session_info)
   {
     row_desc_.set_tenant_id(MTL_ID());
     complex_objs_.reset();
@@ -54,7 +55,7 @@ struct ObSPICursor
   ~ObSPICursor()
   {
     for (int64_t i = 0; i < complex_objs_.count(); ++i) {
-      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i)));
+      (void)(pl::ObUserDefinedType::destruct_obj(complex_objs_.at(i), session_info_));
     }
   }
 
@@ -64,6 +65,7 @@ struct ObSPICursor
   int64_t cur_;
   common::ColumnsFieldArray fields_;
   ObArray<ObObj> complex_objs_;
+  sql::ObSQLSessionInfo* session_info_;
 };
 
 struct ObSPIOutParams
@@ -767,7 +769,7 @@ public:
                              int64_t &into_cnt,
                              bool &skip_locked,
                              common::ColumnsFieldArray *field_list = NULL);
-  static int force_refresh_schema(uint64_t tenant_id);
+  static int force_refresh_schema(uint64_t tenant_id, int64_t refresh_version = OB_INVALID_VERSION);
 
   static int spi_update_package_change_info(
     pl::ObPLExecCtx *ctx, uint64_t package_id, uint64_t var_idx);
@@ -792,6 +794,10 @@ public:
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
   static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
 
+  static int spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
+  static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
+
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,
@@ -811,7 +817,7 @@ public:
                                       ObIAllocator &allocator,
                                       ParamStore &params,
                                       ParamStore &exec_params,
-                                      ObObj &result,
+                                      ObObj *result,
                                       ObObj &tmp_result);
 #endif
 private:

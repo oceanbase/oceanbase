@@ -49,9 +49,12 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 1UL, 3UL),  // 4.2.1.3
   CALC_VERSION(4UL, 2UL, 1UL, 4UL),  // 4.2.1.4
   CALC_VERSION(4UL, 2UL, 1UL, 5UL),  // 4.2.1.5
+  CALC_VERSION(4UL, 2UL, 1UL, 6UL),  // 4.2.1.6
+  CALC_VERSION(4UL, 2UL, 1UL, 7UL),  // 4.2.1.7
   CALC_VERSION(4UL, 2UL, 2UL, 0UL),  // 4.2.2.0
   CALC_VERSION(4UL, 2UL, 2UL, 1UL),  // 4.2.2.1
-  CALC_VERSION(4UL, 2UL, 3UL, 0UL)   // 4.2.3.0
+  CALC_VERSION(4UL, 2UL, 3UL, 0UL),   // 4.2.3.0
+  CALC_VERSION(4UL, 2UL, 4UL, 0UL)   // 4.2.4.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -76,9 +79,12 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_1_3, DATA_VERSION_4_2_1_3)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_1_4, MOCK_DATA_VERSION_4_2_1_4)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_1_5, MOCK_DATA_VERSION_4_2_1_5)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_1_6, MOCK_DATA_VERSION_4_2_1_6)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_1_7, MOCK_DATA_VERSION_4_2_1_7)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_2_0, DATA_VERSION_4_2_2_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_2_1, DATA_VERSION_4_2_2_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_3_0, DATA_VERSION_4_2_3_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_2_4_0, DATA_VERSION_4_2_4_0)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
@@ -97,6 +103,14 @@ bool ObUpgradeChecker::check_data_version_exist(
     bret = (version == UPGRADE_PATH[i]);
   }
   return bret;
+}
+
+// TODO: should correspond to upgrade YML file.
+//       For now, just consider the valid upgrade path for 42x.
+bool ObUpgradeChecker::check_data_version_valid_for_backup(const uint64_t data_version)
+{
+  return (DATA_VERSION_4_2_1_0 <= data_version && data_version <= DATA_VERSION_4_2_1_2)
+         || (DATA_VERSION_4_2_2_0 <= data_version && data_version < DATA_VERSION_4_3_0_0);
 }
 
 //FIXME:(yanmu.ztl) cluster version should be discrete.
@@ -643,9 +657,12 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 3);
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 4);
     INIT_PROCESSOR_BY_VERSION(4, 2, 1, 5);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 1, 6);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 1, 7);
     INIT_PROCESSOR_BY_VERSION(4, 2, 2, 0);
     INIT_PROCESSOR_BY_VERSION(4, 2, 2, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }

@@ -14,6 +14,7 @@
 #define STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_IPP
 
 #include "lib/ob_errno.h"
+#include "storage/multi_data_source/mds_node.h"
 #ifndef STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_H_IPP
 #define STORAGE_MULTI_DATE_SOURCE_MDS_TABLE_HANDLE_H_IPP
 #include "mds_table_handle.h"
@@ -264,6 +265,30 @@ int MdsTableHandle::get_latest_committed(OP &&read_op) const
       if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
         MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(unit_id));
       }
+    }
+  }
+  return ret;
+}
+
+template <typename OP>
+struct GetTabletStatusNodeOpWrapper {
+  GetTabletStatusNodeOpWrapper(OP &op) : op_(op) {}
+  int operator()(void *tablet_status_node) {
+    return op_(*reinterpret_cast<const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData> *>(tablet_status_node));
+  }
+  OP &op_;
+};
+template <typename OP,
+          typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP,
+                   int(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData>&)), bool>::type>
+int MdsTableHandle::get_tablet_status_node(OP &&read_op, const int64_t read_seq) const
+{
+  int ret = OB_SUCCESS;
+  CHECK_MDS_TABLE_INIT();
+  ObFunction<int(void *)> function = GetTabletStatusNodeOpWrapper<OP>(read_op);
+  if (OB_FAIL(p_mds_table_base_->get_tablet_status_node(function, read_seq))) {
+    if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
+      MDS_LOG(WARN, "fail to call get_latest", KR(ret), K(read_seq));
     }
   }
   return ret;
@@ -918,171 +943,6 @@ inline int MdsTableHandle::forcely_reset_mds_table(const char (&reason)[N])
     p_mds_table_base_->forcely_reset_mds_table(reason);
   }
   return ret;
-}
-
-template <typename UnitKey, typename UnitValue>
-ObMdsKvRowScanIterator<UnitKey, UnitValue>::ObMdsKvRowScanIterator()
-: is_inited_(false),
-is_first_scan_(false),
-p_mds_unit_(nullptr) {}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsKvRowScanIterator<UnitKey, UnitValue>::init(mds::MdsTableHandle &mds_table_handle) {
-  #define PRINT_WRAPPER KR(ret), K(mds_table_handle), K(typeid(UnitKey).name()),\
-                        K(typeid(UnitValue).name())
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    MDS_LOG_NONE(WARN, "ObMdsKvRowScanIterator init twice");
-  } else if (!mds_table_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    MDS_LOG_NONE(WARN, "try iterate invalid mds table");
-  } else if (OB_FAIL(mds_table_handle.get_mds_unit(p_mds_unit_))) {
-    MDS_LOG_NONE(WARN, "fail to find unit in this mds table");
-  } else {
-    construct_lock_guard(unit_guard_, p_mds_unit_->lock_);// lock unit to make sure get kv_row safe
-    is_inited_ = true;
-    is_first_scan_ = true;
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsKvRowScanIterator<UnitKey, UnitValue>::get_next_kv_row(KvRow *&p_kv_row) {
-  #define PRINT_WRAPPER KR(ret), K(*this)
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    MDS_LOG_NONE(WARN, "ObMdsKvRowScanIterator not init");
-  } else if (is_first_scan_) {
-    is_first_scan_ = false;
-    kv_row_iter_ = p_mds_unit_->begin();
-  }
-  if (OB_SUCC(ret)) {
-    if (kv_row_iter_ == p_mds_unit_->end()) {
-      ret = OB_ITER_END;
-    } else {
-      p_kv_row = &(*(kv_row_iter_++));
-    }
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-template <typename UnitKey, typename UnitValue>
-ObMdsNodeScanIterator<UnitKey, UnitValue>::ObMdsNodeScanIterator()
-: is_inited_(false),
-is_first_scan_(true),
-p_mds_kv_row_(nullptr) {}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsNodeScanIterator<UnitKey, UnitValue>::init(KvRow *&p_kv_row) {
-  #define PRINT_WRAPPER KR(ret), K(*this), KP(p_kv_row)
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    MDS_LOG_NONE(WARN, "ObMdsNodeScanIterator init twice");
-  } else if (OB_ISNULL(p_kv_row)) {
-    ret = OB_INVALID_ARGUMENT;
-    MDS_LOG_NONE(WARN, "p_kv_row is NULL");
-  } else {
-    p_mds_kv_row_ = p_kv_row;
-    construct_lock_guard(row_guard_, p_mds_kv_row_->v_.lock_);// lock unit to make sure get kv_row safe
-    is_inited_ = true;
-    is_first_scan_ = true;
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsNodeScanIterator<UnitKey, UnitValue>::get_next_kv_node(UnitKey &key, mds::UserMdsNode<UnitKey, UnitValue> *&p_node) {
-  #define PRINT_WRAPPER KR(ret), K(*this)
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    MDS_LOG_NONE(WARN, "ObMdsNodeScanIterator not init");
-  } else if (is_first_scan_) {
-    is_first_scan_ = false;
-    node_iter_ = p_mds_kv_row_->v_.begin();
-  }
-  if (OB_SUCC(ret)) {
-    if (node_iter_ == p_mds_kv_row_->v_.end()) {
-      ret = OB_ITER_END;
-    } else {
-      key = p_mds_kv_row_->k_;
-      p_node = &(*node_iter_++);
-      MDS_LOG_NONE(TRACE, "scan node", K(*p_node));
-    }
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-template <typename UnitKey, typename UnitValue>
-bool ObMdsNodeScanIterator<UnitKey, UnitValue>::is_valid() const { return is_inited_; }
-
-template <typename UnitKey, typename UnitValue>
-void ObMdsNodeScanIterator<UnitKey, UnitValue>::reset() {
-  this->~ObMdsNodeScanIterator();
-  new (this) ObMdsNodeScanIterator();
-}
-
-template <typename UnitKey, typename UnitValue>
-ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::ObMdsUnitRowNodeScanIterator()
-: is_inited_(false),
-is_first_scan_(true) {}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::init(mds::MdsTableHandle &mds_table_handle) {
-  #define PRINT_WRAPPER KR(ret), K(*this), K(mds_table_handle)
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    MDS_LOG_NONE(WARN, "ObMdsUnitRowNodeScanIterator init twice");
-  } else if (!mds_table_handle.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    MDS_LOG_NONE(WARN, "mds_table_handle invalid");
-  } else {
-    mds_table_handle_ = mds_table_handle;
-    is_inited_ = true;
-    is_first_scan_ = true;
-  }
-  return ret;
-  #undef PRINT_WRAPPER
-}
-
-template <typename UnitKey, typename UnitValue>
-int ObMdsUnitRowNodeScanIterator<UnitKey, UnitValue>::get_next(UnitKey &key, mds::UserMdsNode<UnitKey, UnitValue> *&p_node) {
-  #define PRINT_WRAPPER KR(ret), K(*this)
-  int ret = OB_SUCCESS;
-  bool node_meet_end = false;
-  bool row_mmet_end = false;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    MDS_LOG_NONE(WARN, "ObMdsUnitRowNodeScanIterator not init");
-  } else if (is_first_scan_) {
-    is_first_scan_ = false;
-    if (OB_FAIL(row_scan_iter_.init(mds_table_handle_))) {
-      MDS_LOG_NONE(WARN, "fail to init row_scan_iter_");
-    }
-  }
-  while (OB_SUCC(ret) &&
-          (!node_scan_iter_.is_valid() || // first time to scan
-          OB_ITER_END == (ret = node_scan_iter_.get_next_kv_node(key, p_node)))) {// every time scan row end
-    node_scan_iter_.reset();
-    KvRow *p_kv_row = nullptr;
-    if (OB_FAIL(row_scan_iter_.get_next_kv_row(p_kv_row))) {
-      if (OB_UNLIKELY(OB_ITER_END != ret)) {
-        MDS_LOG_NONE(WARN, "fail to get kv row");
-      }
-    } else if (OB_FAIL(node_scan_iter_.init(p_kv_row))) {
-      MDS_LOG_NONE(WARN, "fail to init node_scan_iter_");
-    }
-  }
-  return ret;
-  #undef PRINT_WRAPPER
 }
 
 }

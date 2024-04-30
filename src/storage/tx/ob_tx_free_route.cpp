@@ -337,7 +337,11 @@ int ObTransService::txn_free_route__kill_session_(const uint32_t session_id)
   return ret;
 }
 
-int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObTxnFreeRouteAuditRecord &audit_record, ObTxDesc *&tx)
+int ObTransService::txn_free_route__handle_tx_exist_(
+    const ObTransID &tx_id,
+    ObTxnFreeRouteAuditRecord &audit_record,
+    ObTxDesc *&tx,
+    const bool is_update_extra)
 {
   int ret = OB_SUCCESS;
   ObTxDesc *tmp_tx = NULL;
@@ -353,7 +357,13 @@ int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObT
     uint32_t assoc_sess_id = tmp_tx->assoc_sess_id_;
     FLOG_WARN("tx found associate with other session, will kill the session",
               K(assoc_sess_id), K(tx_id));
-    if (OB_FAIL(txn_free_route__kill_session_(assoc_sess_id))) {
+    if (is_update_extra && OB_UNLIKELY(tmp_tx->is_tx_active() || !tmp_tx->is_clean())) {
+      ret = OB_ERR_UNEXPECTED;
+      ObSpinLockGuard guard(tmp_tx->lock_);
+      TRANS_LOG(WARN, "update extra exit trans should not be active",
+                K(ret), K(assoc_sess_id), KPC(tmp_tx));
+      tx_desc_mgr_.revert(*tmp_tx);
+    } else if (OB_FAIL(txn_free_route__kill_session_(assoc_sess_id))) {
       TRANS_LOG(WARN, "kill old session failed", K(ret), K(assoc_sess_id));
     } else if (OB_FAIL(release_tx(*tmp_tx))) {
       TRANS_LOG(WARN, "release tx failed", K(ret), K(assoc_sess_id), K(tx_id));
@@ -368,6 +378,9 @@ int ObTransService::txn_free_route__handle_tx_exist_(const ObTransID &tx_id, ObT
         tx_desc_mgr_.revert(*tmp_tx);
       }
     }
+  } else if (is_update_extra) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "XA-tx found when update extra state", K(ret), K_(self), K(tx_id), K_(tmp_tx->addr));
   } else if (tmp_tx->addr_ != self_) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "XA-tx found but not on the orignal", K(ret), K_(self), K(tx_id), K_(tmp_tx->addr));
@@ -415,7 +428,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     ret = txn_free_route__sanity_check_fallback_(tx, ctx);
   } else {
     if (OB_ISNULL(tx)) {
-      if (OB_FAIL(txn_free_route__handle_tx_exist_(header.tx_id_, audit_record, tx))) {
+      if (OB_FAIL(txn_free_route__handle_tx_exist_(header.tx_id_, audit_record, tx, false))) {
         TRANS_LOG(WARN, "handle tx exist fail", K(ret));
       } else if (OB_ISNULL(tx)) {
         audit_record.alloc_tx_ = true;
@@ -431,12 +444,23 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
     } else if (tx->tx_id_ != header.tx_id_) {
       // replace
       audit_record.replace_tx_ = true;
+      ObSpinLockGuard guard(tx->lock_);
       if (!tx->flags_.SHADOW_) {
-        tx_desc_mgr_.remove(*tx);
+        // sanity check:
+        //   the trx on current session isn't active and hasn't uncommitted extra state
+        if (TX_START_OR_RESUME_ADDR(tx) == GCONF.self_addr_ && tx->in_tx_or_has_extra_state_()) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(WARN, "try replace active tx on tx start node", K(ret), KPC(tx));
+          tx->print_trace_();
+        } else {
+          tx_desc_mgr_.remove(*tx);
+        }
       }
-      // reset tx to cleanup for new txn
-      reinit_tx_(*tx, session_id);
-      need_add_tx = true;
+      if (OB_SUCC(ret)) {
+        // reset tx to cleanup for new txn
+        reinit_tx_(*tx, session_id);
+        need_add_tx = true;
+      }
     } else {
       // update
       // NOTE: for XA join/resume will cause `static state` re-synced
@@ -466,6 +490,7 @@ int ObTransService::txn_free_route__update_static_state(const uint32_t session_i
         // mark as REPLICA_ for all temporary node
       } else if (FALSE_IT(tx->flags_.SHADOW_ = tx->is_xa_trans() && tx->addr_ != self_)) {
         // mark as SHADOW_ for XA's temporary node, exclude XA orig node
+      } else if (FALSE_IT(ctx.set_start_sessid(tx->sess_id_))) {
       }
       int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
@@ -656,6 +681,9 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
   } else if (header.flag_.is_fallback()) {
     audit_record.upd_fallback_ = true;
     ret = txn_free_route__sanity_check_fallback_(tx, ctx);
+  } else if (OB_ISNULL(tx) && // kill other session assoc `tx_id`
+             OB_FAIL(txn_free_route__handle_tx_exist_(header.tx_id_, audit_record, tx, true))) {
+    TRANS_LOG(WARN, "handle tx exist fail", K(ret), K(header.tx_id_));
   } else {
     bool add_tx = OB_ISNULL(tx);
     bool replace_tx = OB_NOT_NULL(tx) && tx->tx_id_ != header.tx_id_;
@@ -689,23 +717,22 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
         TRANS_LOG(WARN, "add tx to mgr fail", K(ret));
       } else if (FALSE_IT(tx->flags_.REPLICA_ = tx->addr_ != self_)) {
       }
-      if (OB_FAIL(ret) && add_tx) {
-        release_tx(*tx);
-        tx = NULL;
-      } else {
-        int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
-        ObTransTraceLog &tlog = tx->get_tlog();
-        REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_extra, OB_Y(ret),
-                            OB_ID(txid), header.tx_id_.get_id(),
-                            OB_ID(from), before_tx_id.get_id(),
-                            OB_ID(time_used), elapsed_us,
-                            OB_ID(logic_clock), logic_clock,
-                            OB_ID(length), len,
-                            OB_ID(tag1), add_tx,
-                            OB_ID(tag2), replace_tx,
-                            OB_ID(ref), tx->get_ref(),
-                            OB_ID(thread_id), GETTID());
-      }
+      int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
+      ObTransTraceLog &tlog = tx->get_tlog();
+      REC_TRANS_TRACE_EXT(&tlog, tx_free_route_update_extra, OB_Y(ret),
+                          OB_ID(txid), header.tx_id_.get_id(),
+                          OB_ID(from), before_tx_id.get_id(),
+                          OB_ID(time_used), elapsed_us,
+                          OB_ID(logic_clock), logic_clock,
+                          OB_ID(length), len,
+                          OB_ID(tag1), add_tx,
+                          OB_ID(tag2), replace_tx,
+                          OB_ID(ref), tx->get_ref(),
+                          OB_ID(thread_id), GETTID());
+    }
+    if (OB_FAIL(ret) && add_tx && tx) {
+      release_tx(*tx);
+      tx = NULL;
     }
   }
   if (OB_SUCC(ret)) {
@@ -1256,7 +1283,7 @@ int ObTransService::tx_free_route_check_alive(ObTxnFreeRouteCtx &ctx, const ObTx
     m.sender_ = self_;
     m.receiver_ = ctx.txn_addr_;
     m.req_sess_id_ = session_id;
-    m.tx_sess_id_ = tx.sess_id_;
+    m.tx_sess_id_ = ctx.get_start_session_id();
     ret = rpc_->post_msg(ctx.txn_addr_, m);
     bool print_log = OB_FAIL(ret);
 #ifndef NDEBUG

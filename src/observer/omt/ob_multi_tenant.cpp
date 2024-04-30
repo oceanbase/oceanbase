@@ -135,6 +135,7 @@
 #include "share/detect/ob_detect_manager.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "sql/dtl/ob_dtl_interm_result_manager.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
@@ -144,6 +145,7 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
+#include "observer/table/group/ob_table_tenant_group.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -164,6 +166,7 @@ using namespace oceanbase::archive;
 using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::table;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -520,7 +523,9 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(server_obj_pool_mtl_new<ObPartTransCtx>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObPartTransCtx>);
     MTL_BIND2(server_obj_pool_mtl_new<ObTableScanIterator>, nullptr, nullptr, nullptr, nullptr, server_obj_pool_mtl_destroy<ObTableScanIterator>);
     MTL_BIND2(ObDetectManager::mtl_new, ObDetectManager::mtl_init, nullptr, nullptr, nullptr, ObDetectManager::mtl_destroy);
-    MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_destroy);
+    MTL_BIND2(ObTenantSQLSessionMgr::mtl_new, ObTenantSQLSessionMgr::mtl_init, nullptr, nullptr, ObTenantSQLSessionMgr::mtl_wait, ObTenantSQLSessionMgr::mtl_destroy);
+    MTL_BIND2(mtl_new_default, ObDTLIntermResultManager::mtl_init, ObDTLIntermResultManager::mtl_start,
+    ObDTLIntermResultManager::mtl_stop, ObDTLIntermResultManager::mtl_wait, ObDTLIntermResultManager::mtl_destroy);
     if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread) {
       MTL_BIND2(nullptr, nullptr, start_mysql_queue, mtl_stop_default,
                 mtl_wait_default, mtl_destroy_default);
@@ -542,6 +547,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObCheckpointDiagnoseMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, table::ObTableGroupCommitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {
@@ -567,7 +573,7 @@ int ObMultiTenant::start()
   } else if (OB_FAIL(ObTenantNodeBalancer::get_instance().start())) {
     LOG_ERROR("start tenant node balancer thread failed", K(ret));
   // start memstore print timer.
-  } else if (OB_FAIL(printer.register_timer_task(lib::TGDefIDs::MemDumpTimer))) {
+  } else if (OB_FAIL(printer.register_timer_task(lib::TGDefIDs::ServerGTimer))) {
     LOG_ERROR("Fail to register timer task", K(ret));
   } else {
     LOG_INFO("succ to start multi tenant");
@@ -1277,6 +1283,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
+      if (tenant_config->enable_kv_group_commit && OB_TMP_FAIL(start_kv_group_commit_timer())) {
+        LOG_WARN("failed to start kv group commit timer", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1375,6 +1384,15 @@ int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMultiTenant::start_kv_group_commit_timer()
+{
+  int ret = OB_SUCCESS;
+  ObTableGroupCommitMgr *mgr = MTL(ObTableGroupCommitMgr*);
+  if (OB_FAIL(mgr->start_timer())) {
+    LOG_WARN("fail to start kv group commit timer", K(ret));
+  }
+  return ret;
+}
 
 int ObMultiTenant::get_tenant_unit(const uint64_t tenant_id, ObUnitInfoGetter::ObTenantConfig &unit)
 {
@@ -1733,11 +1751,6 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
       LOG_WARN("failed to delete_tenant_usage_stat", K(ret), K(tenant_id));
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(dtl::ObDTLIntermResultManager::getInstance().erase_tenant_interm_result_info(tenant_id))) {
-      LOG_WARN("failed to erase_tenant_interm_result_info", K(ret), K(tenant_id));
-    }
-  }
 
   if (OB_SUCC(ret)) {
     // only report event when ret = success
@@ -1750,6 +1763,12 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
   if (OB_SUCC(ret) && OB_NOT_NULL(GCTX.dblink_proxy_)) {
     if (OB_FAIL(GCTX.dblink_proxy_->clean_dblink_connection(tenant_id))) {
       LOG_WARN("failed to clean dblink connection", K(ret), K(tenant_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_NOT_NULL(GCTX.conn_res_mgr_)
+               && OB_FAIL(GCTX.conn_res_mgr_->erase_tenant_conn_res_map(tenant_id))) {
+      LOG_WARN("erase tenant conn res map failed", K(ret));
     }
   }
   return ret;

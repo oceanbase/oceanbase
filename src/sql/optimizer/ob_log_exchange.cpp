@@ -344,6 +344,13 @@ int ObLogExchange::print_annotation_keys(char *buf,
   return ret;
 }
 
+/* If using merge sort, then set local = False, range = False
+ * If using task sort and range order is True, then set local = False, range = False
+ * Otherwise,
+ * local,range    | inherit          | inherit          | True, False      | True, False |
+ * EXCHANGE IN    | LOCAL/REMOTE/ALL | DISTRUBUTE       | LOCAL/REMOTE/ALL | DISTRUBUTE  |
+ * EXCHANGE OUT   | LOCAL/REMOTE/ALL | LOCAL/REMOTE/ALL | DISTRUBUTE       | DISTRUBUTE  |
+*/
 int ObLogExchange::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
@@ -368,6 +375,9 @@ int ObLogExchange::compute_op_ordering()
         is_local_order_ = false;
         is_range_order_ = false;
       }
+    } else if (is_task_order_) {
+      is_local_order_ = false;
+      is_range_order_ = false;
     } else if (!get_op_ordering().empty() && child->is_distributed()) {
       is_local_order_ = true;
       is_range_order_ = false;
@@ -458,8 +468,9 @@ int ObLogExchange::do_re_est_cost(EstimateCostInfo &param, double &card, double 
     double child_cost = child->get_cost();
     const int64_t parallel = param.need_parallel_;
     param.need_parallel_ = ObGlobalHint::UNSET_PARALLEL;
-    if (is_block_op()) {
-      param.need_row_count_ = -1; //reset need row count
+    //forbit limit re estimate cost
+    if (is_producer() || is_block_op()) {
+      param.need_row_count_ = -1;
     }
     if (OB_FAIL(SMART_CALL(child->re_est_cost(param, child_card, child_cost)))) {
       LOG_WARN("failed to re est exchange cost", K(ret));
@@ -1032,4 +1043,15 @@ int ObLogExchange::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
              expr == partition_id_expr_ ||
              expr == random_expr_;
   return OB_SUCCESS;
+}
+
+int ObLogExchange::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (is_producer() || !is_merge_sort()) {
+    used = false;
+  }
+  return ret;
 }

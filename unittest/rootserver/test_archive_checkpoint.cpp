@@ -2184,6 +2184,260 @@ TEST_F(ArchiveCheckpointerTest, in_doing_06)
   ASSERT_EQ(g_call_cnt, 3);
 }
 
+TEST_F(ArchiveCheckpointerTest, in_doing_07)
+{
+  // old round's status is DOING.
+  ObTenantArchiveRoundAttr old_round;
+  fill_round(
+    ObArchiveRoundState::doing(),
+    "2022-01-01 00:00:00",   /* start time */
+    "2022-01-01 00:00:20",   /* checkpoint time */
+    "2022-01-01 00:00:30",   /* max time */
+    1,                       /* used piece id */
+    0,                       /* frozen_input_bytes */
+    0,                       /* frozen_output_bytes */
+    100,                     /* active_input_bytes */
+    10,                      /* active_output_bytes */
+    0,                       /* deleted_input_bytes */
+    0,                       /* deleted_output_bytes */
+    old_round);
+
+  // 2 log streams are archiving.
+  ObDestRoundSummary summary;
+  // log stream 1001 is archiving.
+  ObLSDestRoundSummary ls_1001;
+  ObArchiveLSPieceSummary piece_1001_1;
+  fill_archive_ls_piece(
+    1001,                           /* ls id */
+    false,                          /* is deleted */
+    1,                              /* piece id */
+    ObArchiveRoundState::doing(),   /* state */
+    "2022-01-01 00:00:00",          /* start time */
+    "2022-01-01 00:00:50",          /* checkpoint time */
+    0,                              /* min_lsn */
+    2000,                           /* max_lsn */
+    200,                            /* input_bytes */
+    20,                             /* output_bytes */
+    piece_1001_1);
+  ASSERT_EQ(ls_1001.add_one_piece(piece_1001_1), OB_SUCCESS);
+
+  // log stream 1002 is archiving.
+  ObLSDestRoundSummary ls_1002;
+  ObArchiveLSPieceSummary piece_1002_1;
+  fill_archive_ls_piece(
+    1002,                           /* ls id */
+    false,                          /* is deleted */
+    1,                              /* piece id */
+    ObArchiveRoundState::doing(),   /* state */
+    "2022-01-01 00:00:00",          /* start time */
+    "2022-01-01 00:00:40",          /* checkpoint time */
+    0,                              /* min_lsn */
+    1000,                           /* max_lsn */
+    100,                            /* input_bytes */
+    10,                             /* output_bytes */
+    piece_1002_1);
+
+  ObArchiveLSPieceSummary piece_1002_2;
+  fill_archive_ls_piece(
+    1002,                           /* ls id */
+    false,                          /* is deleted */
+    2,                              /* piece id */
+    ObArchiveRoundState::doing(),   /* state */
+    "2022-01-01 00:01:00",          /* start time */
+    "2022-01-01 00:01:30",          /* checkpoint time */
+    1000,                           /* min_lsn */
+    2000,                           /* max_lsn */
+    100,                            /* input_bytes */
+    10,                             /* output_bytes */
+    piece_1002_2);
+  ASSERT_EQ(ls_1002.add_one_piece(piece_1002_1), OB_SUCCESS);
+  ASSERT_EQ(ls_1002.add_one_piece(piece_1002_2), OB_SUCCESS);
+  ASSERT_EQ(summary.add_ls_dest_round_summary(ls_1001), OB_SUCCESS);
+  ASSERT_EQ(summary.add_ls_dest_round_summary(ls_1002), OB_SUCCESS);
+
+
+  // All log streams are archiving, the next status is DOING.
+  class MockRoundHandler final: public ObArchiveRoundHandler
+  {
+  public:
+    int checkpoint_to(
+      const ObTenantArchiveRoundAttr &old_round,
+      const ObTenantArchiveRoundAttr &new_round,
+      const common::ObIArray<ObTenantArchivePieceAttr> &pieces) override
+    {
+      int ret = OB_SUCCESS;
+      g_call_cnt++;
+      ArchiveCheckpointerTest test;
+      ObTenantArchiveRoundAttr expect_round;
+      test.fill_new_round(
+        old_round,
+        ObArchiveRoundState::doing(),   /* state */
+        "2022-01-01 00:00:40",          /* checkpoint_time */
+        "2022-01-01 00:01:30",          /* max_time */
+        2,                              /* used_piece_id */
+        0,                              /* frozen_input_bytes */
+        0,                              /* frozen_output_bytes */
+        400,                            /* active_input_bytes */
+        40,                             /* active_output_bytes */
+        0,                              /* deleted_input_bytes */
+        0,                              /* deleted_output_bytes */
+        expect_round);
+
+      ObTenantArchivePieceAttr expect_piece_1;
+      test.fill_piece(
+        old_round,
+        1,                                                    /* piece id */
+        "2022-01-01 00:00:40",                                /* checkpoint time */
+        "2022-01-01 00:00:50",                                /* max time */
+        300,                                                  /* input_bytes */
+        30,                                                   /* output_bytes */
+        ObArchivePieceStatus::active(),                       /* piece status */
+        ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,    /* file status */
+        expect_piece_1);
+
+      ObTenantArchivePieceAttr expect_piece_2;
+      test.fill_piece(
+        old_round,
+        2,                                                    /* piece id */
+        "2022-01-01 00:01:00",                                /* checkpoint time */
+        "2022-01-01 00:01:30",                                /* max time */
+        100,                                                  /* input_bytes */
+        10,                                                   /* output_bytes */
+        ObArchivePieceStatus::active(),                       /* piece status */
+        ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,   /* file status */
+        expect_piece_2);
+
+
+      ret = test.compare_two_rounds(new_round, expect_round);
+      if (OB_SUCC(ret)) {
+        if (pieces.count() != 2) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pieces count", K(ret), K(pieces));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObTenantArchivePieceAttr &piece_1 = pieces.at(0);
+        if (OB_FAIL(test.compare_two_pieces(piece_1, expect_piece_1))) {
+          LOG_WARN("not equal pieces", K(ret), K(piece_1), K(expect_piece_1));
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        const ObTenantArchivePieceAttr &piece_2 = pieces.at(1);
+        if (OB_FAIL(test.compare_two_pieces(piece_2, expect_piece_2))) {
+          LOG_WARN("not equal pieces", K(ret), K(piece_2), K(expect_piece_2));
+        }
+      }
+      return ret;
+    }
+  };
+
+  ObDestRoundCheckpointer::PieceGeneratedCb gen_piece_cb =
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObDestRoundCheckpointer::Result &result, const ObDestRoundCheckpointer::GeneratedPiece &piece)
+      {
+        int ret = OB_SUCCESS;
+        g_call_cnt++;
+        ArchiveCheckpointerTest test;
+        ObDestRoundCheckpointer::GeneratedPiece expect_piece;
+        if (piece.piece_info_.key_.piece_id_ == 1) {
+          test.fill_piece(
+            old_round,
+            1,
+            "2022-01-01 00:00:40",
+            "2022-01-01 00:00:50",
+            300,
+            30,
+            ObArchivePieceStatus::active(),
+            ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE,
+            expect_piece.piece_info_);
+
+          ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1001 = test.gen_checkpoint_ls_piece(
+            1001,
+            "2022-01-01 00:00:00",
+            "2022-01-01 00:00:50",
+            0,
+            2000,
+            200,
+            20);
+
+          ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
+            1002,
+            "2022-01-01 00:00:00",
+            "2022-01-01 00:00:40",
+            0,
+            1000,
+            100,
+            10);
+
+          expect_piece.ls_piece_list_.push_back(ls_piece_1001);
+          expect_piece.ls_piece_list_.push_back(ls_piece_1002);
+        } else {
+          test.fill_piece(
+            old_round,
+            2,
+            "2022-01-01 00:01:00",
+            "2022-01-01 00:01:30",
+            100,
+            10,
+            ObArchivePieceStatus::active(),
+            ObBackupFileStatus::STATUS::BACKUP_FILE_INCOMPLETE,
+            expect_piece.piece_info_);
+
+          ObDestRoundCheckpointer::GeneratedLSPiece ls_piece_1002 = test.gen_checkpoint_ls_piece(
+            1002,
+            "2022-01-01 00:01:00",
+            "2022-01-01 00:01:30",
+            1000,
+            2000,
+            100,
+            10);
+           expect_piece.ls_piece_list_.push_back(ls_piece_1002);
+        }
+
+        ret = test.compare_two_checkpoint_pieces(piece, expect_piece);
+        return ret;
+      };
+
+  ObDestRoundCheckpointer::RoundCheckpointCb round_cb =
+    [](common::ObISQLClient *proxy, const ObTenantArchiveRoundAttr &old_round, const ObTenantArchiveRoundAttr &new_round)
+      {
+        int ret = OB_SUCCESS;
+        g_call_cnt++;
+        ArchiveCheckpointerTest test;
+        ObTenantArchiveRoundAttr expect_round;
+        test.fill_new_round(
+          old_round,
+          ObArchiveRoundState::doing(),
+          "2022-01-01 00:00:40",
+          "2022-01-01 00:01:30",
+          2,
+          0,
+          0,
+          400,
+          40,
+          0,
+          0,
+          expect_round);
+
+        ret = test.compare_two_rounds(new_round, expect_round);
+        return ret;
+      };
+
+  int ret = OB_SUCCESS;
+  g_call_cnt = 0;
+  MockRoundHandler mock_handler;
+  ObDestRoundCheckpointer checkpointer;
+  share::SCN limit_scn;
+  (void)limit_scn.convert_for_logservice(convert_timestr_2_scn("2022-01-01 00:00:45"));
+  ret = checkpointer.init(&mock_handler, gen_piece_cb, round_cb, limit_scn);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = checkpointer.checkpoint(old_round, summary);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(g_call_cnt, 4);
+}
+
 
 TEST_F(ArchiveCheckpointerTest, in_stopping_01)
 {

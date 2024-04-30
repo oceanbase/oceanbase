@@ -189,6 +189,9 @@ public:
                                int64_t &memstore_limit,
                                int64_t &freeze_cnt,
                                const bool force_refresh = true);
+  // get the tenant memstore used
+  int get_tenant_memstore_used(int64_t &total_memstore_used,
+                               const bool force_refresh = true);
   // get the tenant memstore limit.
   int get_tenant_memstore_limit(int64_t &mem_limit);
   // get the memstore limit percentage
@@ -230,6 +233,12 @@ public:
   void get_freezer_stat_from_history(int64_t pos, ObTenantFreezerStat& stat);
 
 private:
+  int get_tenant_memstore_cond_(int64_t &active_memstore_used,
+                                int64_t &total_memstore_used,
+                                int64_t &memstore_freeze_trigger,
+                                int64_t &memstore_limit,
+                                int64_t &freeze_cnt,
+                                const bool force_refresh = true);
   int check_memstore_full_(bool &last_result,
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,

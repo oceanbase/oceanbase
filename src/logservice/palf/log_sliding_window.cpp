@@ -886,7 +886,7 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
   const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
-  if (OB_FAIL(mm_->get_children_list(children_list))) {
+  if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,
@@ -1501,10 +1501,18 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       // follower need send ack to leader
       const ObAddr &leader = (state_mgr_->get_leader().is_valid())? \
           state_mgr_->get_leader(): state_mgr_->get_broadcast_leader();
+      LogConfigVersion config_version;
+      (void) mm_->get_config_version(config_version);
       // flush op for different role
+      // migrating replicas do not send responses for reducing its impact on the leader
       if (!leader.is_valid()) {
         PALF_LOG(TRACE, "current leader is invalid, cannot send ack", K(ret), K_(palf_id), K_(self),
             K(flush_cb_ctx), K(log_end_lsn), K(leader));
+      } else if (OB_UNLIKELY(config_version.is_initial_version())) {
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          PALF_LOG(INFO, "migrating replicas do not send responses", K(ret), K_(palf_id), K_(self),
+              K(log_end_lsn), K(leader));
+        }
       } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn))) {
         PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(leader), K(flush_cb_ctx));
       } else {}

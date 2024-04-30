@@ -62,7 +62,6 @@ private:
                                        const ParamStore *param_store,
                                        ObSQLSessionInfo *session_info,
                                        ObIAllocator *allocator,
-                                       ObIArray<ObExprResType> &res_types,
                                        ObValuesTableDef *&table_def);
   int resolve_subquery_from_values_table(ObStmtFactory *stmt_factory,
                                          ObSQLSessionInfo *session_info,
@@ -72,7 +71,6 @@ private:
                                          ObValuesTableDef *table_def,
                                          const bool is_prepare_stmt,
                                          const int64_t column_cnt,
-                                         ObIArray<ObExprResType> &res_types,
                                          ObQueryRefRawExpr *query_ref);
   static int get_const_node_types(const ParseNode *node,
                                   const ParamStore *param_store,
@@ -82,26 +80,19 @@ private:
                                   const ObCollationType server_collation,
                                   DistinctObjMeta &param_type,
                                   bool &is_const);
-  static int get_datatype_node_equal_objtype(const ParseNode &node,
-                                             const ObCollationType connect_collation,
-                                             const ObCollationType nchar_collation,
-                                             const ObCollationType server_collation,
-                                             DistinctObjMeta &obj_meta);
-  int get_questionmark_node_params(const ParseNode *node,
-                                   const ParamStore *param_store,
-                                   ObSQLSessionInfo &session_info,
-                                   ObIAllocator &allocator,
-                                   const int64_t column_idx,
-                                   const int64_t row_idx,
-                                   ObIArray<ObExprResType> &res_types);
-  // used to resolve real params
-  int get_const_node_params(const ParseNode *node,
-                            ObSQLSessionInfo &session_info,
-                            ObIAllocator &allocator,
-                            const int64_t column_idx,
-                            const int64_t row_idx,
-                            ObIArray<ObExprResType> &res_types,
-                            ObIArray<ObObj> &obj_array);
+  int resolve_access_param_values_table(const ParseNode &in_list,
+                                        const int64_t column_cnt,
+                                        const int64_t row_cnt,
+                                        const ParamStore *param_store,
+                                        ObSQLSessionInfo *session_info,
+                                        ObIAllocator *allocator,
+                                        ObValuesTableDef &table_def);
+  int resolve_access_obj_values_table(const ParseNode &in_list,
+                                      const int64_t column_cnt,
+                                      const int64_t row_cnt,
+                                      ObSQLSessionInfo *session_info,
+                                      ObIAllocator *allocator,
+                                      ObValuesTableDef &table_def);
 private:
   ObDMLResolver *cur_resolver_;
 };

@@ -32,7 +32,7 @@
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "sql/optimizer/ob_access_path_estimation.h"
 #include "sql/optimizer/ob_sel_estimator.h"
-
+#include "sql/optimizer/ob_opt_est_utils.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
 namespace oceanbase
@@ -2416,7 +2416,7 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
     } else if (T_WIN_FUN_NTILE == win_expr->get_func_type()) {
       ObSEArray<ObRawExpr *, 4> param_exprs;
       ObRawExpr* const_expr = NULL;
-      ObObj result;
+      ObObj result,out_ptr;
       bool got_result = false;
       const ParamStore *params = ctx.get_params();
       if (OB_FAIL(param_exprs.assign(win_expr->get_func_params()))) {
@@ -2433,9 +2433,11 @@ int ObOptSelectivity::calculate_special_ndv(const OptTableMetas &table_metas,
           LOG_WARN("fail to calc_const_or_calculable_expr", K(ret));
         } else if (!got_result || result.is_null() || !ob_is_numeric_type(result.get_type())) {
           special_ndv = origin_rows/part_ndv;
+        } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_scalar_obj(&result, &out_ptr))) {
+          LOG_WARN("Failed to convert obj using old method", K(ret));
         } else {
-          double n = (double)ObOptEstObjToScalar::convert_obj_to_scalar(&result);
-          special_ndv = std::min(origin_rows/part_ndv, n);
+          double scalar = static_cast<double>(out_ptr.get_double());
+          special_ndv = std::min(origin_rows/part_ndv, scalar);
         }
       }
     } else if (T_FUN_MIN == win_expr->get_func_type()||

@@ -380,7 +380,7 @@ int ObDtlBasicChannel::mock_eof_buffer(int64_t timeout_ts)
       buffer->seq_no() = 1;
       buffer->pos() = 0;
       if (use_interm_result_) {
-        if (OB_FAIL(ObDTLIntermResultManager::process_interm_result(buffer, id_))) {
+        if (OB_FAIL(MTL(ObDTLIntermResultManager*)->process_interm_result(buffer, id_))) {
           LOG_WARN("fail to process internal result", K(ret));
         }
       } else {
@@ -663,30 +663,32 @@ int ObDtlBasicChannel::process1(
       ObDTLIntermResultKey key;
       key.channel_id_ = id_;
       key.batch_id_ = batch_id_;
-      if (channel_is_eof_) {
-        ret = OB_EAGAIN;
-      } else if (OB_FAIL(ObDTLIntermResultManager::getInstance().atomic_get_interm_result_info(
-            key, result_info_guard_))) {
-        if (is_px_channel()) {
+      MTL_SWITCH(tenant_id_) {
+        if (channel_is_eof_) {
           ret = OB_EAGAIN;
-        } else if (ignore_error()) {
-          ret = OB_SUCCESS;
+        } else if (OB_FAIL(MTL(ObDTLIntermResultManager*)->atomic_get_interm_result_info(
+              key, result_info_guard_))) {
+          if (is_px_channel()) {
+            ret = OB_EAGAIN;
+          } else if (ignore_error()) {
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to get row store", K(ret));
+          }
+          LOG_TRACE("fail to get row store", K(ret), K(key.batch_id_), K(key.channel_id_));
+        } else if (FALSE_IT(result_info = result_info_guard_.result_info_)) {
+        } else if (OB_SUCCESS != result_info->ret_) {
+          ret = result_info->ret_;
+          LOG_WARN("the interm result info meet a error", K(ret));
+        } else if (!result_info->is_store_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("there is no row store in internal result", K(ret));
+        } else if (OB_FAIL(DTL_IR_STORE_DO(*result_info, finish_add_row, true))) {
+          LOG_WARN("failed to finish add row", K(ret));
         } else {
-          LOG_WARN("fail to get row store", K(ret));
-        }
-        LOG_TRACE("fail to get row store", K(ret), K(key.batch_id_), K(key.channel_id_));
-      } else if (FALSE_IT(result_info = result_info_guard_.result_info_)) {
-      } else if (OB_SUCCESS != result_info->ret_) {
-        ret = result_info->ret_;
-        LOG_WARN("the interm result info meet a error", K(ret));
-      } else if (!result_info->is_store_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("there is no row store in internal result", K(ret));
-      } else if (OB_FAIL(DTL_IR_STORE_DO(*result_info, finish_add_row, true))) {
-        LOG_WARN("failed to finish add row", K(ret));
-      } else {
-        if (OB_FAIL(result_info->datum_store_->begin(datum_iter_))) {
-          LOG_WARN("begin iterator failed", K(ret));
+          if (OB_FAIL(result_info->datum_store_->begin(datum_iter_))) {
+            LOG_WARN("begin iterator failed", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret) && !channel_is_eof()) {
@@ -1061,7 +1063,8 @@ int ObDtlBasicChannel::inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
   } else if (OB_FAIL(msg_writer_->need_new_buffer(msg, eval_ctx, need_size, need_new))) {
     LOG_WARN("failed to judge need new buffer", K(ret));
   } else if (OB_UNLIKELY(need_new)) {
-    if (OB_FAIL(switch_buffer(need_size, is_eof, timeout_ts))) {
+    if (OB_FAIL(switch_buffer(need_size, is_eof, timeout_ts,
+                              eval_ctx))) {
       LOG_WARN("failed to switch buffer", K(ret));
     }
   }
@@ -1095,7 +1098,7 @@ int ObDtlBasicChannel::write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
 }
 
 int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
-    const int64_t timeout_ts)
+    const int64_t timeout_ts, ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
   if (write_buffer_ != nullptr && write_buffer_->pos() != 0) {
@@ -1129,6 +1132,20 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
         write_buffer_->set_dfo_key(dfc_->get_dfo_key());
         write_buffer_->set_sqc_id(dfc_->get_sender_sqc_info().sqc_id_);
         write_buffer_->set_dfo_id(dfc_->get_sender_sqc_info().dfo_id_);
+      }
+      if (OB_NOT_NULL(eval_ctx)) {
+        write_buffer_->set_dop(ObPxSqcUtil::get_actual_worker_count(&eval_ctx->exec_ctx_));
+        write_buffer_->set_plan_id(ObPxSqcUtil::get_plan_id(&eval_ctx->exec_ctx_));
+        write_buffer_->set_exec_id(ObPxSqcUtil::get_exec_id(&eval_ctx->exec_ctx_));
+        write_buffer_->set_session_id(ObPxSqcUtil::get_session_id(&eval_ctx->exec_ctx_));
+        ObPhysicalPlanCtx *plan_ctx = eval_ctx->exec_ctx_.get_physical_plan_ctx();
+        if (OB_NOT_NULL(plan_ctx) && OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+          write_buffer_->set_sql_id(plan_ctx->get_phy_plan()->get_sql_id());
+        }
+        ObSQLSessionInfo *sql_session = eval_ctx->exec_ctx_.get_my_session();
+        if (OB_NOT_NULL(sql_session)) {
+          write_buffer_->set_database_id(sql_session->get_database_id());
+        }
       }
       write_buffer_->timeout_ts() = timeout_ts;
       msg_writer_->write_msg_type(write_buffer_);

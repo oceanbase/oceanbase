@@ -104,6 +104,7 @@ public:
   virtual int get_next_row(ObNewRow *&row);
   virtual int get_next_row(ObNewRow *&row, common::ObIAllocator &allocator);
   virtual int close();
+  ObTableApiScanExecutor* get_scan_executor() { return scan_executor_; }
 private:
   ObTableApiScanExecutor *scan_executor_;
   common::ObArenaAllocator row_allocator_; // alloc the memory of result row

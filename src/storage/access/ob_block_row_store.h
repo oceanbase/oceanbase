@@ -69,6 +69,8 @@ public:
   OB_INLINE bool is_valid() const { return is_inited_; }
   OB_INLINE bool is_disabled() const { return disabled_; }
   OB_INLINE void disable() { disabled_ = true; }
+  OB_INLINE bool can_refresh() const { return !is_aggregated_in_prefetch_; }
+  OB_INLINE void set_aggregated_in_prefetch() { is_aggregated_in_prefetch_ = true; }
   // for blockscan
   OB_INLINE void reset_blockscan() { can_blockscan_ = false; filter_applied_ = false; }
   OB_INLINE bool can_blockscan() const { return can_blockscan_; }
@@ -91,7 +93,7 @@ public:
     UNUSEDx(block_reader, parent, filter, result_bitmap);
     return common::OB_NOT_SUPPORTED;
   }
-  VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied), K_(disabled));
+  VIRTUAL_TO_STRING_KV(K_(is_inited),  K_(can_blockscan), K_(filter_applied), K_(disabled), K_(is_aggregated_in_prefetch));
 protected:
   int filter_micro_block(
       const int64_t row_count,
@@ -105,6 +107,7 @@ private:
   bool can_blockscan_;
   bool filter_applied_;
   bool disabled_;
+  bool is_aggregated_in_prefetch_;
 };
 
 }

@@ -27,13 +27,13 @@
 #include "share/ob_ls_id.h"
 #include "share/restore/ob_log_restore_source.h"  // ObLogRestoreSourceType
 #include "ob_log_archive_piece_mgr.h"           // ObLogArchivePieceContext
+#include "ob_log_restore_define.h"
 namespace oceanbase
 {
 namespace logservice
 {
 using oceanbase::share::ObLogRestoreSourceType;
 //using oceanbase::share::DirArray;
-typedef common::ObSEArray<std::pair<share::ObBackupPathString, share::ObBackupPathString>, 1> DirArray;
 typedef share::ObRestoreSourceServiceAttr RestoreServiceAttr;
 // The management of remote log source, three types are supported, LOCATION/SERVICE/RAWPATH
 class ObRemoteLogParent
@@ -126,24 +126,17 @@ public:
   virtual ~ObRemoteRawPathParent();
 
 public:
-  void get(DirArray &array, share::SCN &end_scn);
-  int set(const int64_t cluster_id, const ObAddr &addr);
+  void get(ObLogRawPathPieceContext *&raw_piece_ctx, share::SCN &end_scn);
   int deep_copy_to(ObRemoteLogParent &other) override;
   bool is_valid() const override;
   int set(DirArray &array, const share::SCN &end_scn);
-  int update_locate_info(ObRemoteLogParent &source) override { UNUSED(source); return OB_NOT_SUPPORTED; }
-  void get_locate_info(int64_t &piece_index, int64_t &min_file_id, int64_t &max_file_id) const;
+  int update_locate_info(ObRemoteLogParent &source) override;
 
-  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id),
-      K_(upper_limit_scn), K_(to_end), K_(end_fetch_scn), K_(end_lsn),
-      K_(paths), K_(piece_index), K_(min_file_id), K_(max_file_id));
+  TO_STRING_KV("ObRemoteLogParent", get_source_type_str(type_), K_(ls_id), K_(upper_limit_scn), K_(to_end),
+      K_(end_fetch_scn), K_(end_lsn), K_(raw_piece_ctx));
 
 private:
-  DirArray paths_;
-
-  int64_t piece_index_;
-  int64_t min_file_id_;
-  int64_t max_file_id_;
+  ObLogRawPathPieceContext raw_piece_ctx_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRemoteRawPathParent);

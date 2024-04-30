@@ -280,6 +280,7 @@ void* Thread::__th_start(void *arg)
   ObActiveSessionGuard::get_stat().user_id_      = 0;
   ObActiveSessionGuard::get_stat().session_type_ = ObActiveSessionStatItem::SessionType::BACKGROUND;
   ObActiveSessionGuard::get_stat().session_id_   = ObBackgroundSessionIdGenerator::get_instance().get_next_sess_id();
+  ObTenantStatEstGuard stat_est_guard(ObActiveSessionGuard::get_stat().tenant_id_);
 
 #ifndef OB_USE_ASAN
   ObStackHeader *stack_header = ProtectedStackAllocator::stack_header(th->stack_addr_);
@@ -411,10 +412,10 @@ int Thread::get_cpu_time_inc(int64_t &cpu_time_inc)
     char *field_ptr = strtok_r(stat_content, " ", &save_ptr);
     while (field_ptr != NULL) {
       if (field_index == USER_TIME_FIELD_INDEX) {
-        cpu_time += std::stoul(field_ptr) * 1000000 / sysconf(_SC_CLK_TCK);
+        cpu_time += strtoul(field_ptr, NULL, 10) * 1000000 / sysconf(_SC_CLK_TCK);
       }
       if (field_index == SYSTEM_TIME_FIELD_INDEX) {
-        cpu_time += std::stoul(field_ptr) * 1000000 / sysconf(_SC_CLK_TCK);
+        cpu_time += strtoul(field_ptr, NULL, 10) * 1000000 / sysconf(_SC_CLK_TCK);
         break;
       }
       field_ptr = strtok_r(NULL, " ", &save_ptr);

@@ -578,20 +578,15 @@ explain basic WITH cte AS
 )
 SELECT col1, col2 FROM cte;
 Query Plan
-======================
-|ID|OPERATOR    |NAME|
-----------------------
-|0 |UNION ALL   |    |
-|1 |├─EXPRESSION|    |
-|2 |└─EXPRESSION|    |
-======================
+======================================
+|ID|OPERATOR           |NAME         |
+--------------------------------------
+|0 |VALUES TABLE ACCESS|VALUES_TABLE1|
+======================================
 Outputs & filters:
 -------------------------------------
-  0 - output([UNION([1])], [UNION([2])]), filter(nil), rowset=16
-  1 - output([1], [2]), filter(nil)
-      values({1, 2})
-  2 - output([3], [4]), filter(nil)
-      values({3, 4})
+  0 - output([VALUES_TABLE1.column_0], [VALUES_TABLE1.column_1]), filter(nil)
+      access([VALUES_TABLE1.column_0], [VALUES_TABLE1.column_1])
 
 WITH cte AS
 (

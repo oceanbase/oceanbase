@@ -85,7 +85,7 @@ TEST_F(TestTransferMdsCtx, start_transfer_mds_ctx)
   pos = 0;
   ret = de_start_ctx3.deserialize(buf, buf_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(ObStartTransferInMdsCtxVersion::START_TRANSFER_IN_MDS_CTX_VERSION_V2, de_start_ctx3.version_);
+  ASSERT_EQ(ObStartTransferInMdsCtxVersion::START_TRANSFER_IN_MDS_CTX_VERSION_V3, de_start_ctx3.version_);
 }
 
 

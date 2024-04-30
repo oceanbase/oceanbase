@@ -39,7 +39,7 @@ public:
 private:
 	int64_t avail_sort_memory_;
 	int64_t avail_memory_;
-	int64_t sort_task_count_;
+	int64_t chunk_count_;
   mutable lib::ObMutex mutex_;
   bool is_inited_;
 };

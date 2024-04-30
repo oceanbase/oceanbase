@@ -71,10 +71,12 @@ struct SchemaKey
   union {
     uint64_t user_id_;
     uint64_t grantee_id_;
+    uint64_t client_user_id_;
   };
   union {
     uint64_t database_id_;
     uint64_t grantor_id_;
+    uint64_t proxy_user_id_;
   };
   common::ObString database_name_;
   uint64_t tablegroup_id_;
@@ -159,7 +161,9 @@ struct SchemaKey
                K_(rls_group_id),
                K_(rls_context_id),
                K_(routine_type),
-               K_(column_priv_id));
+               K_(column_priv_id),
+               K_(client_user_id),
+               K_(proxy_user_id));
 
   SchemaKey()
     : tenant_id_(common::OB_INVALID_ID),
@@ -750,6 +754,7 @@ public:
   SCHEMA_KEYS_DEF(rls_policy, RlsPolicyKeys);
   SCHEMA_KEYS_DEF(rls_group, RlsGroupKeys);
   SCHEMA_KEYS_DEF(rls_context, RlsContextKeys);
+
   #undef SCHEMA_KEYS_DEF
   typedef common::hash::ObHashSet<SchemaKey, common::hash::NoPthreadDefendMode,
       db_priv_hash_func, db_priv_equal_to> DBPrivKeys;

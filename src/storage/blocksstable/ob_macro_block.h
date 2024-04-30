@@ -113,11 +113,11 @@ struct ObDataStoreDesc
   }
   bool is_store_type_valid() const;
   OB_INLINE bool is_major_merge() const { return storage::is_major_merge_type(merge_type_); }
-  OB_INLINE bool is_meta_major_merge() const { return storage::is_meta_major_merge(merge_type_); }
+  OB_INLINE bool is_major_or_meta_merge_type() const { return storage::is_major_or_meta_merge_type(merge_type_); }
   OB_INLINE bool is_use_pct_free() const { return macro_block_size_ != macro_store_size_; }
   int64_t get_logical_version() const
   {
-    return (is_major_merge() || is_meta_major_merge()) ? snapshot_version_ : end_scn_.get_val_for_tx();
+    return is_major_or_meta_merge_type() ? snapshot_version_ : end_scn_.get_val_for_tx();
   }
   const common::ObIArray<share::schema::ObColDesc> &get_rowkey_col_descs() const
   {
@@ -125,7 +125,7 @@ struct ObDataStoreDesc
   }
   const common::ObIArray<share::schema::ObColDesc> &get_full_stored_col_descs() const
   {
-    OB_ASSERT_MSG(is_major_merge(), "ObDataStoreDesc dose not promise a full stored col descs");
+    OB_ASSERT_MSG(is_major_or_meta_merge_type(), "ObDataStoreDesc dose not promise a full stored col descs");
     return col_desc_array_;
   }
   bool use_old_version_macro_header() const

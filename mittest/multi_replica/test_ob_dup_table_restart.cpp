@@ -53,7 +53,7 @@ OB_NOINLINE int oceanbase::transaction::ObLSDupTabletsMgr::process_prepare_ser_e
   return ret;
 }
 
-OB_NOINLINE int oceanbase::transaction::ObPartTransCtx::errism_submit_prepare_log_()
+OB_NOINLINE int oceanbase::transaction::ObPartTransCtx::errsim_submit_prepare_log_()
 {
   int ret = OB_SUCCESS;
 

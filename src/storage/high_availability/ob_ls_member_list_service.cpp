@@ -329,8 +329,7 @@ int ObLSMemberListService::check_ls_transfer_scn_(const share::SCN &transfer_scn
 int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> &addr_list)
 {
   int ret = OB_SUCCESS;
-  ObStorageHASrcProvider provider;
-  ObMigrationOpType::TYPE type = ObMigrationOpType::MIGRATE_LS_OP;
+  ObStorageHAGetMemberHelper get_member_helper;
   ObLSService *ls_svr = NULL;
   ObStorageRpc *storage_rpc = NULL;
   if (OB_ISNULL(ls_)) {
@@ -342,9 +341,9 @@ int ObLSMemberListService::get_ls_member_list_(common::ObIArray<common::ObAddr> 
   } else if (OB_ISNULL(storage_rpc = ls_svr->get_storage_rpc())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "storage rpc should not be NULL", K(ret), KP(storage_rpc));
-  } else if (OB_FAIL(provider.init(ls_->get_tenant_id(), type, storage_rpc))) {
-    STORAGE_LOG(WARN, "failed to init src provider", K(ret), KP_(ls));
-  } else if (OB_FAIL(provider.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), addr_list))) {
+  } else if (OB_FAIL(get_member_helper.init(storage_rpc))) {
+    STORAGE_LOG(WARN, "failed to init palf helper", K(ret), KP_(ls));
+  } else if (OB_FAIL(get_member_helper.get_ls_member_list(ls_->get_tenant_id(), ls_->get_ls_id(), addr_list))) {
     STORAGE_LOG(WARN, "failed to get ls member list", K(ret), KP_(ls));
   }
   return ret;

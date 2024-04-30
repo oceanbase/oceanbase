@@ -346,6 +346,14 @@ private:
       const ObTransferStatus &status,
       const bool find_by_src_ls,
       bool &task_exist) const;
+  int get_pre_transfer_ora_rowscn_(
+      const share::ObTransferTaskInfo &task_info,
+      share::SCN &row_scn);
+  int precheck_active_trans_before_lock_member_list_(
+      const share::ObTransferTaskInfo &task_info);
+  int get_ls_weak_read_ts_(
+      const share::ObLSID &ls_id,
+      share::SCN &weak_read_ts);
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
   static const int64_t KILL_TX_MAX_RETRY_TIMES = 3;

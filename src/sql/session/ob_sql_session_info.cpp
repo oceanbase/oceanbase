@@ -49,6 +49,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/sys_package/ob_pl_utl_file.h"
+#include "pl/ob_pl_profiler.h"
 #endif
 #include "lib/allocator/ob_mod_define.h"
 #include "lib/string/ob_hex_utils_base.h"
@@ -155,6 +156,7 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       plsql_exec_time_(0),
 #ifdef OB_BUILD_ORACLE_PL
       pl_debugger_(NULL),
+      pl_profiler_(NULL),
 #endif
 #ifdef OB_BUILD_SPM
       select_plan_type_(ObSpmCacheCtx::INVALID_TYPE),
@@ -203,7 +205,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       out_bytes_(0),
       current_dblink_sequence_id_(0),
       client_non_standard_(false),
-      executing_sql_stat_record_()
+      executing_sql_stat_record_(),
+      job_info_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -329,6 +332,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     plsql_exec_time_ = 0;
 #ifdef OB_BUILD_ORACLE_PL
     pl_debugger_ = NULL;
+    pl_profiler_ = NULL;
 #endif
     pl_attach_session_id_ = 0;
     pl_query_sender_ = NULL;
@@ -396,6 +400,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   dblink_sequence_schemas_.reset();
   MEMSET(sess_diag_info_index_, 0, SESSION_SYNC_MAX_TYPE * sizeof(int16_t));
   executing_sql_stat_record_.reset();
+  job_info_ = nullptr;
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -632,6 +637,17 @@ bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
   return bret;
 }
 
+bool ObSQLSessionInfo::enable_parallel_das_dml() const
+{
+  bool bret = false;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    bret = tenant_config->_enable_parallel_das_dml;
+  }
+  return bret;
+}
+
 void ObSQLSessionInfo::destroy(bool skip_sys_var)
 {
   if (is_inited_) {
@@ -719,6 +735,7 @@ void ObSQLSessionInfo::destroy(bool skip_sys_var)
 #ifdef OB_BUILD_ORACLE_PL
     // pl debug 功能, pl debug不支持分布式调试，但调用也不会有副作用
     reset_pl_debugger_resource();
+    reset_pl_profiler_resource();
 #endif
     // 非分布式需要的话，分布式也需要，用于清理package的全局变量值
     reset_all_package_state();
@@ -1093,8 +1110,9 @@ void ObSQLSessionInfo::update_show_warnings_buf()
   }
 }
 
-void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
+int ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const
 {
+  int ret = OB_SUCCESS;
   session_priv.tenant_id_ = get_priv_tenant_id();
   session_priv.user_id_ = get_priv_user_id();
   session_priv.user_name_ = get_user_name();
@@ -1102,7 +1120,12 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &s
   session_priv.db_ = get_database_name();
   session_priv.user_priv_set_ = user_priv_set_;
   session_priv.db_priv_set_ = db_priv_set_;
-  session_priv.enable_role_id_array_.assign(enable_role_array_);
+  if (OB_FAIL(session_priv.enable_role_id_array_.assign(enable_role_array_))) {
+    LOG_WARN("failed to assign enable role id array", K(ret));
+  } else if (OB_FAIL(get_security_version(session_priv.security_version_))) {
+    LOG_WARN("failed to get security version", K(ret));
+  }
+  return ret;
 }
 
 ObPlanCache *ObSQLSessionInfo::get_plan_cache()
@@ -1913,8 +1936,10 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   audit_record_.request_type_ = mode;
   audit_record_.session_id_ = get_sessid();
   audit_record_.proxy_session_id_ = get_proxy_sessid();
-  audit_record_.tenant_id_ = get_priv_tenant_id();
+  // sql audit don't distinguish between two tenant IDs
+  audit_record_.tenant_id_ = get_effective_tenant_id();
   audit_record_.user_id_ = get_user_id();
+  audit_record_.proxy_user_id_ = get_proxy_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
   if (EXECUTE_INNER == mode
       || EXECUTE_LOCAL == mode
@@ -1935,6 +1960,10 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     audit_record_.db_name_len_ = min(get_database_name().length(),
                                      OB_MAX_DATABASE_NAME_LENGTH);
 
+    audit_record_.proxy_user_name_ = const_cast<char *>(get_proxy_user_name().ptr());
+    audit_record_.proxy_user_name_len_ = min(get_proxy_user_name().length(),
+                                       OB_MAX_USER_NAME_LENGTH);
+
     if (EXECUTE_PS_EXECUTE == mode
         || EXECUTE_PS_SEND_PIECE == mode
         || EXECUTE_PS_GET_PIECE == mode
@@ -1948,7 +1977,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     } else {
       ObString sql = get_current_query_string();
       audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), OB_MAX_SQL_LENGTH);
+      audit_record_.sql_len_ = min(sql.length(), ObSQLUtils::get_query_record_size_limit(get_effective_tenant_id()));
       audit_record_.sql_cs_type_ = get_local_collation_connection();
     }
 
@@ -1979,6 +2008,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     // do nothing
   }
   audit_record_.flt_trace_id_[pos] = '\0';
+  audit_record_.stmt_type_ = get_stmt_type();
   return audit_record_;
 }
 
@@ -2129,7 +2159,64 @@ void ObSQLSessionInfo::reset_pl_debugger_resource()
 {
   free_pl_debugger();
 }
-#endif
+
+int ObSQLSessionInfo::alloc_pl_profiler(int32_t run_id)
+{
+  int ret = OB_SUCCESS;
+
+  ObPLProfiler *profiler = nullptr;
+
+  CK (OB_ISNULL(pl_profiler_));
+  CK (OB_LIKELY(run_id > 0));
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(
+                 profiler = OB_NEW(
+                     ObPLProfiler,
+                     ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_PROFILER)),
+                     *this))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("[DBMS_PROFILER] failed to allocate memory for pl profiler", K(ret));
+  } else if (OB_FAIL(profiler->init(run_id))) {
+    profiler->~ObPLProfiler();
+    ob_free(profiler);
+    profiler = nullptr;
+
+    LOG_WARN("[DBMS_PROFILER] failed to init pl profiler", K(ret));
+  } else {
+    pl_profiler_ = profiler;
+  }
+
+  return ret;
+}
+#endif // OB_BUILD_ORACLE_PL
+
+void ObSQLSessionInfo::reset_pl_profiler_resource()
+{
+#ifdef OB_BUILD_ORACLE_PL
+  if (pl_profiler_ != nullptr) {
+    if (OB_NOT_NULL(pl_context_)) {
+      for (int64_t i = pl_context_->get_exec_stack().count() - 1; i >= 0 ; --i) {
+        if (OB_NOT_NULL(pl_context_->get_exec_stack().at(i))
+              && OB_NOT_NULL(pl_context_->get_exec_stack().at(i)->get_profiler_time_stack())) {
+          int ret = OB_SUCCESS;
+
+          ObPLExecState &curr = *pl_context_->get_exec_stack().at(i);
+          if (OB_FAIL(curr.get_profiler_time_stack()->pop_all(*pl_profiler_))) {
+            LOG_WARN("[DBMS_PROFILER] failed to flush profiler time stack",
+                      K(ret), K(i), K(pl_context_->get_exec_stack().count()), K(lbt()));
+          }
+        }
+      }
+    }
+
+    pl_profiler_->~ObPLProfiler();
+    ob_free(pl_profiler_);
+    pl_profiler_ = nullptr;
+  }
+#endif // OB_BUILD_ORACLE_PL
+}
 
 void ObSQLSessionInfo::reset_all_package_changed_info()
 {
@@ -2429,6 +2516,7 @@ int ObSQLSessionInfo::get_sequence_value(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id ||
       OB_INVALID_ID == seq_id)) {
+    ret = OB_ERR_SEQ_NOT_EXIST;
     LOG_WARN("invalid args", K(tenant_id), K(seq_id), K(ret));
   } else if (OB_FAIL(sequence_currval_map_.get_refactored(seq_id, value))) {
     LOG_WARN("fail get seq", K(tenant_id), K(seq_id), K(ret));

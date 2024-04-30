@@ -144,6 +144,83 @@ public:
   const ObStorageDatumUtils *datum_utils_;
 };
 
+class ObMarkedRowkey
+{
+  public:
+  ObMarkedRowkey()
+      : row_mark_(0),
+        rowkey_()
+  {}
+  inline bool is_row_lock_checked() const
+  {
+    return row_lock_checked_;
+  }
+  inline bool is_row_exist_checked() const
+  {
+    return row_exist_checked_;
+  }
+  inline bool is_skipped() const
+  {
+    return checked_ || skipped_this_time_;
+  }
+  inline bool is_checked() const
+  {
+    return checked_;
+  }
+  inline bool is_row_bf_checked() const
+  {
+    return row_bf_checked_;
+  }
+  inline void mark_row_checked()
+  {
+    checked_ = 1;
+    row_exist_checked_ = 1;
+    row_lock_checked_ = 1;
+  };
+  inline void mark_row_lock_checked()
+  {
+    row_lock_checked_ = 1;
+  };
+  inline void mark_row_exist_checked()
+  {
+    row_exist_checked_ = 1;
+  };
+  inline void mark_row_non_existent()
+  {
+    skipped_this_time_ = 1;
+  };
+  inline void mark_row_bf_checked()
+  {
+    row_bf_checked_ = 1;
+  }
+  inline void clear_row_non_existent()
+  {
+    skipped_this_time_ = 0;
+    row_bf_checked_ = 0;
+  };
+  inline const ObDatumRowkey &get_rowkey() const
+  {
+    return rowkey_;
+  }
+  inline ObDatumRowkey &get_rowkey()
+  {
+    return rowkey_;
+  }
+  TO_STRING_KV(K_(row_mark), K_(rowkey));
+private:
+  union {
+    struct {
+      uint8_t row_lock_checked_  : 1;
+      uint8_t row_exist_checked_ : 1;
+      uint8_t row_bf_checked_    : 1;
+      uint8_t skipped_this_time_ : 1;
+      uint8_t checked_           : 1;
+      uint8_t reserved_          : 3;
+    };
+    uint8_t row_mark_;
+  };
+  ObDatumRowkey rowkey_;
+};
 
 /*
  *ObDatumRowkey

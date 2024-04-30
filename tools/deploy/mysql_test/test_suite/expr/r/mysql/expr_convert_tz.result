@@ -231,6 +231,8 @@ c1	c2	c1
 drop table t;
 create table t(c1 timestamp(0), c2 timestamp(3), c3 decimal(20,4));
 insert into t values('2020-01-01 12:00:00.123456', '2020-01-01 12:00:00.123456', '20200101120000.123456');
+Warnings:
+Warning	1265	Data truncated for column '"test"."t"."c3"' at row 1
 select c1, convert_tz(c1, '+00:00', '+08:00') from t;
 c1	convert_tz(c1, '+00:00', '+08:00')
 2020-01-01 12:00:00	2020-01-01 20:00:00

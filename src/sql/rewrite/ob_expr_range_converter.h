@@ -38,19 +38,22 @@ public:
                                  bool &is_precise);
   int generate_always_true_or_false_node(bool is_true, ObRangeNode *&range_node);
   int convert_const_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_basic_cmp_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
+  int convert_basic_cmp_expr(const ObRawExpr *expr,
+                             int64_t expr_depth,
+                             ObRangeNode *&range_node);
   int get_basic_range_node(const ObRawExpr *l_expr,
                            const ObRawExpr *r_expr,
                            ObItemType cmp_type,
                            const ObExprResType &result_type,
+                           int64_t expr_depth,
                            ObRangeNode *&range_node);
-  int convert_is_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
+  int convert_is_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
 
-  int convert_between_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_not_between_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_not_equal_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_like_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
-  int convert_in_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
+  int convert_between_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int convert_not_between_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int convert_not_equal_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int convert_like_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int convert_in_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
 
 
   int fill_range_node_for_basic_cmp(ObItemType cmp_type,
@@ -72,6 +75,10 @@ public:
 
   inline int64_t get_mem_used() const { return mem_used_; }
 
+  static int64_t get_expr_category(ObItemType type);
+
+  int sort_range_exprs(const ObIArray<ObRawExpr*> &range_exprs,
+                       ObIArray<ObRawExpr*> &out_range_exprs);
 private:
   ObExprRangeConverter();
   int alloc_range_node(ObRangeNode *&range_node);
@@ -80,11 +87,13 @@ private:
                           const ObRawExpr &r_expr,
                           ObItemType cmp_type,
                           const ObExprResType &result_type,
+                          int64_t expr_depth,
                           ObRangeNode *&range_node);
   int gen_row_column_cmp_node(const ObRawExpr &l_expr,
                               const ObRawExpr &r_expr,
                               ObItemType cmp_type,
                               const ObExprResType &result_type,
+                              int64_t expr_depth,
                               ObRangeNode *&range_node);
   int get_rowid_node(const ObRawExpr &l_expr,
                      const ObRawExpr &r_expr,
@@ -97,15 +106,30 @@ private:
   int get_single_in_range_node(const ObColumnRefRawExpr *column_expr,
                                const ObRawExpr *r_expr,
                                const ObExprResType &res_type,
+                               int64_t expr_depth,
                                ObRangeNode *&range_node);
   int get_row_in_range_ndoe(const ObRawExpr &l_expr,
                             const ObRawExpr &r_expr,
                             const ObExprResType &res_type,
+                            int64_t expr_depth,
                             ObRangeNode *&range_node);
   int get_single_rowid_in_range_node(const ObRawExpr &rowid_expr,
                                    const ObRawExpr &row_expr,
                                    ObRangeNode *&range_node);
-  int convert_not_in_expr(const ObRawExpr *expr, ObRangeNode *&range_node);
+  int convert_not_in_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int get_single_not_in_range_node(const ObColumnRefRawExpr *column_expr,
+                                   const ObRawExpr *r_expr,
+                                   const ObExprResType &res_type,
+                                   int64_t expr_depth,
+                                   ObRangeNode *&range_node);
+  int get_nvl_cmp_node(const ObRawExpr &l_expr,
+                       const ObRawExpr &r_expr,
+                       ObItemType cmp_type,
+                       const ObExprResType &result_type,
+                       int64_t expr_depth,
+                       ObRangeNode *&range_node);
+  int gen_is_null_range_node(const ObRawExpr *l_expr, int64_t expr_depth, ObRangeNode *&range_node);
+
   int check_escape_valid(const ObRawExpr *escape, char &escape_ch, bool &is_valid);
   int build_decode_like_expr(ObRawExpr *pattern, ObRawExpr *escape, char escape_ch,
                              ObRangeColumnMeta *column_meta, int64_t &start_val_idx, int64_t &end_val_idx);
@@ -113,10 +137,16 @@ private:
   int check_calculable_expr_valid(const ObRawExpr *expr, bool &is_valid, const bool ignore_error = true);
   int add_precise_constraint(const ObRawExpr *expr, bool is_precise);
   int add_prefix_pattern_constraint(const ObRawExpr *expr);
-  int get_final_expr_idx(const ObRawExpr *expr, int64_t &idx);
+  int get_final_expr_idx(const ObRawExpr *expr,
+                         const ObRangeColumnMeta *column_meta,
+                         int64_t &idx);
   int get_final_in_array_idx(InParam *&in_param, int64_t &idx);
   bool is_range_key(const uint64_t column_id, int64_t &key_idx);
   ObRangeColumnMeta* get_column_meta(int64_t idx);
+  int try_wrap_lob_with_substr(const ObRawExpr *expr,
+                               const ObRangeColumnMeta *column_meta,
+                               const ObRawExpr *&out_expr);
+  int set_column_flags(int64_t key_idx, ObItemType type);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;

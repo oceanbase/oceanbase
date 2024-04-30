@@ -5,14 +5,14 @@ include(cmake/Env.cmake)
 
 if(OB_BUILD_OPENSOURCE)
   project("OceanBase_CE"
-    VERSION 4.2.3.0
+    VERSION 4.2.4.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://open.oceanbase.com/"
     LANGUAGES CXX C ASM)
   message(STATUS "open source build enabled")
 else()
   project(OceanBase
-    VERSION 4.2.3.0
+    VERSION 4.2.4.0
     DESCRIPTION "OceanBase distributed database system"
     HOMEPAGE_URL "https://www.oceanbase.com/"
     LANGUAGES CXX C ASM)
@@ -93,6 +93,8 @@ if (ENABLE_FATAL_ERROR_HANG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DFATAL_ERROR_HANG")
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_500_MEMORY_LIMIT")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_500_MEMORY_LIMIT")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DENABLE_LIGHT_BACKTRACE")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_LIGHT_BACKTRACE")
 endif()
 
 if(OB_USE_ASAN)

@@ -86,7 +86,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     create_arg.is_alter_view_ = (1 == parse_tree.reserved_);
     table_schema.set_force_view(is_force_view);
     table_schema.set_tenant_id(session_info_->get_effective_tenant_id());
-    table_schema.set_tablegroup_id(OB_SYS_TABLEGROUP_ID);
+    // table_schema.set_tablegroup_id(OB_SYS_TABLEGROUP_ID);
     table_schema.set_define_user_id(session_info_->get_priv_user_id());
     table_schema.set_view_created_method_flag((ObViewCreatedMethodFlag)(create_arg.if_not_exist_ || is_force_view));
     ParseNode *table_id_node = parse_tree.children_[TABLE_ID_NODE];

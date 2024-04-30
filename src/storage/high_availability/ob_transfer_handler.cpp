@@ -413,11 +413,18 @@ int ObTransferHandler::check_self_is_leader_(bool &is_leader)
   ObRole role = ObRole::INVALID_ROLE;
   int64_t proposal_id = 0;
   const uint64_t tenant_id = MTL_ID();
+  bool is_primary_tenant = true;
   is_leader = false;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::check_is_primary_tenant(tenant_id, is_primary_tenant))) {
+    //Setting the tenant as the primary tenant from the standby tenant and changing the leader attribute of palf are not atomic.
+    //The attributes of palf will change first, and then the attributes of the tenant will change.
+    LOG_WARN("failed to check is primary tenant", K(ret), K(tenant_id));
+  } else if (!is_primary_tenant) {
+    is_leader = false;
   } else if (OB_FAIL(ls_->get_log_handler()->get_role(role, proposal_id))) {
     LOG_WARN("failed to get role", K(ret), KPC(ls_));
   } else if (is_strong_leader(role)) {
@@ -451,6 +458,12 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
         ObStorageHADiagTaskType::TRANSFER_START, start_ts, round_, false/*is_report*/);
   bool commit_succ = false;
   bool is_update_transfer_meta = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  ObSEArray<ObTabletID, 100> tablet_ids; // (0, 100], default 32, see ObTenantTransferService::get_tablet_count_threshold_(),
+  tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
+  if (tenant_config.is_valid()) {
+    enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
+  }
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -458,6 +471,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do with start status get invalid argument", K(ret), K(task_info));
+  } else if (!enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(task_info))) {
+    LOG_WARN("failed to prepare active trans before lock member list", K(ret), K(task_info));
   } else if (OB_FAIL(ObTransferUtils::get_gts(task_info.tenant_id_, gts_seq_))) {
     LOG_WARN("failed to get gts seq", K(ret), K(task_info));
   } else if (OB_FAIL(get_start_trans_timeout_(stmt_timeout))) {
@@ -482,12 +497,6 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
         task_info.task_id_, "START_TRANSFER_TRANS", task_info.src_ls_id_, task_info.dest_ls_id_);
 #endif
       DEBUG_SYNC(START_TRANSFER_TRANS);
-    }
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    ObSEArray<ObTabletID, 100> tablet_ids; // (0, 100], default 32, see ObTenantTransferService::get_tablet_count_threshold_(),
-    tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
-    if (tenant_config.is_valid()) {
-      enable_kill_trx = tenant_config->_enable_balance_kill_transaction;
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(lock_src_and_dest_ls_member_list_(task_info, task_info.src_ls_id_, task_info.dest_ls_id_))) {
@@ -3285,6 +3294,84 @@ int ObTransferHandler::inner_do_with_abort_status_before_4230_(
   if (OB_SUCC(ret)) {
     process_perf_diagnose_info_(ObStorageHACostItemName::TRANSFER_ABORT_END,
         ObStorageHADiagTaskType::TRANSFER_ABORT, start_ts, tmp_round, true/*is_report*/);
+  }
+  return ret;
+}
+
+int ObTransferHandler::get_pre_transfer_ora_rowscn_(
+    const share::ObTransferTaskInfo &task_info, share::SCN &row_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  row_scn.set_invalid();
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObTransferTaskOperator::get_pre_transfer_ora_rowscn(
+      *sql_proxy_, task_info.tenant_id_, task_info.task_id_, row_scn))) {
+    LOG_WARN("failed to get pre transfer ora rowscn", K(ret));
+  }
+  return ret;
+}
+
+int ObTransferHandler::precheck_active_trans_before_lock_member_list_(
+    const share::ObTransferTaskInfo &task_info)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t CHECK_ROW_SCN_INTERVAL = 10_ms;
+  static const int64_t TOTAL_CHECK_ROW_SCN_TIME = 30_s;
+  share::SCN ora_rowscn;
+  share::SCN weak_read_ts;
+  bool has_passed_rowscn = false;
+  if (OB_FAIL(get_pre_transfer_ora_rowscn_(task_info, ora_rowscn))) {
+    LOG_WARN("failed to get pre transfer ora rowscn", K(ret), K(task_info));
+  }
+
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const share::ObLSID &src_ls_id = task_info.src_ls_id_;
+  while (OB_SUCC(ret) && !has_passed_rowscn) {
+    if (OB_FAIL(get_ls_weak_read_ts_(src_ls_id, weak_read_ts))) {
+      LOG_WARN("failed to get ls weak read ts", K(ret), K(src_ls_id), K(weak_read_ts));
+    } else if (weak_read_ts >= ora_rowscn) {
+      has_passed_rowscn = true;
+      LOG_INFO("src ls weak read ts has passed row scn", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
+    } else if (ObTimeUtility::current_time() - start_ts > TOTAL_CHECK_ROW_SCN_TIME) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("precheck active trans before lock member list timeout", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
+      break;
+    } else {
+      LOG_WARN("src ls weak read ts has not passed row scn", K(weak_read_ts), K(ora_rowscn), K(src_ls_id));
+      ob_usleep(CHECK_ROW_SCN_INTERVAL);
+    }
+  }
+  if (OB_SUCC(ret) && has_passed_rowscn) {
+    if (OB_FAIL(check_src_ls_has_active_trans_(src_ls_id))) {
+      LOG_WARN("failed to check src ls has active trans", K(ret), K(src_ls_id));
+    }
+  }
+  return ret;
+}
+
+int ObTransferHandler::get_ls_weak_read_ts_(
+    const share::ObLSID &ls_id,
+    share::SCN &weak_read_ts)
+{
+  int ret = OB_SUCCESS;
+  weak_read_ts.reset();
+  ObLS *ls = NULL;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = NULL;
+  SCN max_decided_scn;
+  if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("fail to get log stream", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be NULL", KR(ret), KP(ls));
+  } else {
+    weak_read_ts = ls->get_ls_wrs_handler()->get_ls_weak_read_ts();
   }
   return ret;
 }

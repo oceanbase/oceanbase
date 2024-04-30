@@ -134,6 +134,7 @@ int ObPLCompiler::compile(
   FLTSpanGuard(pl_compile);
   bool use_jitted_expr = false;
   int64_t compile_start = ObTimeUtility::current_time();
+  uint64_t block_hash = OB_INVALID_ID;
   ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
 
   //Step 1：构造匿名块的ObPLFunctionAST
@@ -169,6 +170,11 @@ int ObPLCompiler::compile(
       }
     }
 
+    if (OB_SUCC(ret)) {
+      block_hash = murmurhash(block->str_value_, block->str_len_, 0);
+      func.set_profiler_unit_info(block_hash, STANDALONE_ANONYMOUS);
+    }
+
     // Process Prepare SQL Ref
     if (OB_SUCC(ret)) {
       func.set_proc_type(STANDALONE_ANONYMOUS);
@@ -190,7 +196,7 @@ int ObPLCompiler::compile(
                lib::is_oracle_mode()) {
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
-        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
+        uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
@@ -209,7 +215,8 @@ int ObPLCompiler::compile(
           } else if (!symbol->is_readonly()) {
             OZ (func.add_out_arg(i));
             if (OB_SUCC(ret)
-                && 0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_INOUT_ARG)) {
+                && (0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_INOUT_ARG)
+                  || 0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_SQL_ARG))) {
               OZ (func.add_in_arg(i));
             }
           } else {
@@ -420,6 +427,9 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         }
       }
     }
+
+    OX (func.set_profiler_unit_info(id, func.get_proc_type()));
+
     int64_t resolve_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Resolve Time: ", K(id), K(resolve_end - parse_end));
 
@@ -443,11 +453,11 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
                                         func_ast.get_id());
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
-        bool need_read_dll = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() &&
+        bool enable_persistent = GCONF._enable_persistent_compiled_routine && func_ast.get_can_cached() && !cg.get_profile_mode() &&
             !cg.get_debug_mode() && (!func_ast.get_is_all_sql_stmt() || !func_ast.get_obj_access_exprs().empty());
         OZ (cg.init());
         // Step 4: try to obtain dll from disk
-        if (need_read_dll) {
+        if (enable_persistent) {
           OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, func.get_exec_env(), func_ast, func, op));
         }
 
@@ -474,7 +484,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
           if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
             LOG_WARN("query or session is killed after get PL jit lock", K(ret));
           }
-          if (OB_SUCC(ret) && need_read_dll) {
+          if (OB_SUCC(ret) && enable_persistent) {
             OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, func.get_exec_env(), func_ast, func, op));
           }
           if (OB_FAIL(ret)) {
@@ -482,7 +492,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
             SET_FUNC;
           } else {
             OZ (cg.generate(func));
-            if (need_read_dll) {
+            if (enable_persistent) {
               OZ (routine_storage.process_storage_dll(allocator_, schema_guard_, func, op));
             }
           }
@@ -527,6 +537,23 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     int64_t final_end = ObTimeUtility::current_time();
     LOG_INFO(">>>>>>>>Final Time: ", K(id), K(final_end - cg_end));
     OX (func.get_stat_for_update().compile_time_ = final_end - init_start);
+    if (NULL != proc) {
+      ObErrorInfo error_info;
+      error_info.set_tenant_id(proc->get_tenant_id());
+      if (OB_SUCC(ret)) {
+        OZ (error_info.delete_error(proc));
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        if (NULL != db) {
+          LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "ROUTINE",
+                        db->get_database_name_str().length(), db->get_database_name_str().ptr(),
+                        proc->get_routine_name().length(), proc->get_routine_name().ptr());
+        }
+        if (OB_SUCCESS != (tmp_ret = error_info.handle_error_info(proc))) {
+          LOG_WARN("handler compile udt error failed", K(ret), KR(tmp_ret), KPC(proc));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -743,13 +770,16 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
                                         session_info_.get_database_id(),
                                         package.get_id());
       ObRoutinePersistentInfo::ObPLOperation op = ObRoutinePersistentInfo::ObPLOperation::NONE;
-      bool need_read_dll = GCONF._enable_persistent_compiled_routine && package_ast.get_can_cached();
+      bool enable_persistent = GCONF._enable_persistent_compiled_routine
+                                 && package_ast.get_can_cached()
+                                 && session_info_.get_pl_profiler() == nullptr
+                                 && (!session_info_.is_pl_debug_on() || get_tenant_id_by_object_id(package.get_id()) == OB_SYS_TENANT_ID);
       CK (package.is_inited());
       OZ (package.get_dependency_table().assign(package_ast.get_dependency_table()));
       OZ (generate_package_conditions(package_ast.get_condition_table(), package));
       OZ (generate_package_vars(package_ast, package_ast.get_symbol_table(), package));
       OZ (generate_package_types(package_ast.get_user_type_table(), package));
-      if (need_read_dll) {
+      if (enable_persistent) {
         sql::ObExecEnv env;
         OZ (env.init(exec_env));
         OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
@@ -760,7 +790,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
         ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
         OZ (ObPL::check_session_alive(session_info_));
         if (OB_SUCC(ret)) {
-          if (need_read_dll) {
+          if (enable_persistent) {
             sql::ObExecEnv env;
             OZ (env.init(exec_env));
             OZ (routine_storage.read_dll_from_disk(&session_info_, schema_guard_, env, package_ast, package, op));
@@ -769,7 +799,7 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
             //do nothing
           } else {
             OZ (generate_package_routines(exec_env, package_ast.get_routine_table(), package));
-            if (need_read_dll) {
+            if (enable_persistent) {
               OZ (routine_storage.process_storage_dll(allocator_, schema_guard_, package, op));
             }
           }
@@ -856,17 +886,38 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                                     package_info.get_package_id(),
                                     package_info.get_schema_version(),
                                     package_info.get_object_type()));
+  ObErrorInfo error_info;
+  error_info.set_tenant_id(package_info.get_tenant_id());
   if (OB_SUCC(ret)) {
-    ObErrorInfo error_info;
     if (package_info.is_for_trigger()) {
       CK (OB_NOT_NULL(trigger_info));
-      OZ (error_info.delete_error(trigger_info), ret);
+      OZ (error_info.delete_error(trigger_info));
     } else {
-      if (OB_FAIL(error_info.delete_error(&package_info))) {
-        LOG_WARN("delete error info failed", K(ret));
+      OZ (error_info.delete_error(&package_info));
+    }
+  } else {
+    int tmp_ret = ret;
+    ret = OB_SUCCESS;
+    const ObDatabaseSchema *db_schema = NULL;
+    OZ (schema_guard_.get_database_schema(package_info.get_tenant_id(), package_info.get_database_id(), db_schema));
+    CK (OB_NOT_NULL(db_schema));
+    if (OB_SUCC(ret)) {
+      if (package_info.is_for_trigger()) {
+        LOG_USER_WARN(OB_ERR_TRIGGER_COMPILE_ERROR, "TRIGGER",
+                      db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),
+                      package_info.get_package_name().length(), package_info.get_package_name().ptr());
+        CK (OB_NOT_NULL(trigger_info));
+        OZ (error_info.handle_error_info(trigger_info));
+      } else {
+        LOG_USER_WARN(OB_ERR_PACKAGE_COMPILE_ERROR, "PACKAGE",
+                      db_schema->get_database_name_str().length(), db_schema->get_database_name_str().ptr(),
+                      package_info.get_package_name().length(), package_info.get_package_name().ptr());
+        OZ (error_info.handle_error_info(&package_info));
       }
     }
+    ret = tmp_ret;
   }
+
   int64_t compile_end = ObTimeUtility::current_time();
   OX (package.get_stat_for_update().compile_time_ = compile_end - compile_start);
   OX (package.get_stat_for_update().type_ = ObPLCacheObjectType::PACKAGE_ROUTINE_TYPE);
@@ -1383,7 +1434,22 @@ int ObPLCompiler::generate_package_routines(
              K(package.get_db_name()),
              K(package.get_name()),
              K(ret));
-  } else { /*do nothing*/ }
+  } else {
+    uint64_t package_id = package.get_id();
+    if (ObTriggerInfo::is_trigger_package_id(package_id)) {
+      package_id = ObTriggerInfo::get_package_trigger_id(package_id);
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < package.get_routine_table().count(); ++i) {
+      if (OB_NOT_NULL(package.get_routine_table().at(i))) {
+        package.get_routine_table().at(i)->set_profiler_unit_info(
+            package_id, package.get_routine_table().at(i)->get_proc_type());
+
+        OZ (SMART_CALL(
+              ObPLCodeGenerator::set_profiler_unit_info_recursive(*package.get_routine_table().at(i))));
+      }
+    }
+  }
   return ret;
 }
 

@@ -8350,6 +8350,15 @@ DEF_TO_STRING(ObPrintPrivSet)
   if ((priv_set_ & OB_PRIV_CREATE_ROUTINE) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" CREATE ROUTINE,");
   }
+  if ((priv_set_ & OB_PRIV_CREATE_TABLESPACE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE TABLESPACE,");
+  }
+  if ((priv_set_ & OB_PRIV_SHUTDOWN) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" SHUTDOWN,");
+  }
+  if ((priv_set_ & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" RELOAD,");
+  }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
   }
@@ -8428,6 +8437,196 @@ OB_SERIALIZE_MEMBER(ObPriv,
                     priv_set_,
                     priv_array_);
 
+
+void ObProxyInfo::reset()
+{
+  user_id_ = OB_INVALID_ID;
+  proxy_flags_ = 0;
+  credential_type_ = 0;
+  role_ids_ = NULL;
+  role_id_cnt_ = 0;
+  role_id_capacity_ = 0;
+}
+int ObProxyInfo::assign(const ObProxyInfo &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    reset();
+    user_id_ = other.user_id_;
+    proxy_flags_ = other.proxy_flags_;
+    credential_type_ = other.credential_type_;
+    if (other.role_id_cnt_ != 0) {
+      if (OB_ISNULL(allocator_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else {
+        uint64_t tmp_role_id_capacity = 0;
+        uint64_t tmp_role_id_cnt = 0;
+        uint64_t *tmp_role_ids = static_cast<uint64_t*>(allocator_->alloc(sizeof(uint64_t) * other.role_id_cnt_));
+        if (NULL == tmp_role_ids) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("Fail to allocate memory for role_ids", K(ret));
+        } else {
+          MEMSET(tmp_role_ids, 0, sizeof(uint64_t) * other.role_id_cnt_);
+          tmp_role_id_capacity = other.role_id_cnt_;
+          for (int64_t i = 0; OB_SUCC(ret) && i < other.role_id_cnt_; ++i) {
+            uint64_t role_id = other.get_role_id_by_idx(i);
+            tmp_role_ids[tmp_role_id_cnt++] = role_id;
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          role_ids_ = tmp_role_ids;
+          role_id_capacity_ = tmp_role_id_capacity;
+          role_id_cnt_ = tmp_role_id_cnt;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObProxyInfo::add_role_id(const uint64_t role_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  }else if (0 == role_id_capacity_) {
+    if (NULL == (role_ids_ = static_cast<uint64_t*>(
+        allocator_->alloc(sizeof(uint64_t) * DEFAULT_ARRAY_CAPACITY)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate memory for array_.", K(ret));
+    } else {
+      role_id_capacity_ = DEFAULT_ARRAY_CAPACITY;
+      MEMSET(role_ids_, 0, sizeof(uint64_t*) * DEFAULT_ARRAY_CAPACITY);
+    }
+  } else if (role_id_cnt_ >= role_id_capacity_) {
+    int64_t tmp_size = 2 * role_id_capacity_;
+    uint64_t *tmp = NULL;
+    if (NULL == (tmp = static_cast<uint64_t*>(
+        allocator_->alloc(sizeof(uint64_t) * tmp_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("Fail to allocate memory for array_, ", K(tmp_size), K(ret));
+    } else {
+      MEMCPY(tmp, role_ids_, sizeof(uint64_t) * role_id_capacity_);
+      free(role_ids_);
+      role_ids_ = tmp;
+      role_id_capacity_ = tmp_size;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    role_ids_[role_id_cnt_++] = role_id;
+  }
+  return ret;
+}
+
+uint64_t ObProxyInfo::get_role_id_by_idx(const int64_t idx) const
+{
+  uint64_t role_id = OB_INVALID_ID;
+  if (idx < 0 || idx >= role_id_cnt_) {
+    role_id = OB_INVALID_ID;
+  } else {
+    role_id = role_ids_[idx];
+  }
+  return role_id;
+}
+
+OB_DEF_SERIALIZE(ObProxyInfo)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              user_id_,
+              proxy_flags_,
+              credential_type_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, role_id_cnt_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < role_id_cnt_; ++i) {
+      LST_DO_CODE(OB_UNIS_ENCODE, role_ids_[i]);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObProxyInfo)
+{
+  int ret = OB_SUCCESS;
+
+  LST_DO_CODE(OB_UNIS_DECODE,
+              user_id_,
+              proxy_flags_,
+              credential_type_);
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(role_id_cnt_);
+    if (OB_SUCC(ret)) {
+      if (role_id_cnt_ == 0) {
+        role_ids_ = NULL;
+        role_id_capacity_ = 0;
+      } else {
+        role_ids_ = static_cast<uint64_t*>(allocator_->alloc(sizeof(uint64_t) * role_id_cnt_));
+        if (NULL == role_ids_) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("Fail to allocate memory for role ids", K(ret));
+        } else {
+          MEMSET(role_ids_, 0, sizeof(uint64_t) * role_id_cnt_);
+          role_id_capacity_ = role_id_cnt_;
+          for (int64_t i = 0; OB_SUCC(ret) && i < role_id_cnt_; ++i) {
+            uint64_t role_id = OB_INVALID_ID;
+            LST_DO_CODE(OB_UNIS_DECODE, role_id);
+            role_ids_[i] = role_id;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObProxyInfo)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              user_id_,
+              proxy_flags_,
+              credential_type_,
+              role_id_cnt_);
+  len += role_id_cnt_ * sizeof(uint64_t);
+  return len;
+}
+
+int ObUserFlags::assign(const ObUserFlags &other)
+{
+  int ret = OB_SUCCESS;
+  if (!other.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("input ObUserFlags is invalid", K(ret), K(other));
+  } else {
+    flags_ = other.flags_;
+  }
+  return ret;
+}
+
+ObUserFlags& ObUserFlags::operator=(const ObUserFlags &other)
+{
+  if (this != &other) {
+    flags_ = other.flags_;
+  }
+  return *this;
+}
+
+bool ObUserFlags::is_valid() const
+{
+  bool bret = true;
+  if (OB_UNLIKELY(proxy_activated_flag_ < 0 || proxy_activated_flag_ >= PROXY_ACTIVATED_MAX)) {
+    bret = false;
+  }
+  return bret;
+}
+
+OB_SERIALIZE_MEMBER(ObUserFlags,flags_);
+
 //ObUserInfo
 ObUserInfo::ObUserInfo(ObIAllocator *allocator)
   : ObSchema(allocator), ObPriv(allocator),
@@ -8442,25 +8641,73 @@ ObUserInfo::ObUserInfo(ObIAllocator *allocator)
     role_id_option_array_(common::OB_MALLOC_NORMAL_BLOCK_SIZE,
                           common::ModulePageAllocator(*allocator)),
     max_connections_(0),
-    max_user_connections_(0)
+    max_user_connections_(0),
+    proxied_user_info_(NULL),
+    proxied_user_info_capacity_(0),
+    proxied_user_info_cnt_(0),
+    proxy_user_info_(NULL),
+    proxy_user_info_capacity_(0),
+    proxy_user_info_cnt_(0),
+    user_flags_()
 {
-}
-
-ObUserInfo::ObUserInfo(const ObUserInfo &other)
-  : ObSchema(), ObPriv()
-{
-  *this = other;
 }
 
 ObUserInfo::~ObUserInfo()
 {
 }
 
-ObUserInfo& ObUserInfo::operator=(const ObUserInfo &other)
+int ObUserInfo::assign_proxy_info_array_(ObProxyInfo **src_arr,
+                                        const uint64_t src_cnt,
+                                        const uint64_t src_capacity,
+                                        ObProxyInfo **&tar_arr,
+                                        uint64_t &tar_cnt,
+                                        uint64_t &tar_capacity)
+
 {
+  int ret = OB_SUCCESS;
+  UNUSED(src_capacity);
+  ObProxyInfo **tmp_arr = NULL;
+  uint64_t tmp_cnt = 0;
+  uint64_t tmp_capacity = 0;
+  if (src_cnt == 0) {
+    //do nothing
+  } else if (NULL == (tmp_arr = static_cast<ObProxyInfo**>(
+              alloc(sizeof(ObProxyInfo*) * src_cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("Fail to allocate memory for array_.", K(src_cnt), KR(ret));
+  } else {
+    MEMSET(tmp_arr, 0, sizeof(ObProxyInfo*) * src_cnt);
+    tmp_capacity = src_cnt;
+    for (int64_t i = 0; OB_SUCC(ret) && i < src_cnt; i++) {
+      const ObProxyInfo *src_info = src_arr[i];
+      ObProxyInfo *tar_info = NULL;
+      if (OB_ISNULL(src_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (OB_ISNULL(tar_info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator()))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
+      } else if (OB_FAIL(tar_info->assign(*src_info))) {
+        LOG_WARN("failed to assign proxy info", K(ret));
+      } else {
+        tmp_arr[tmp_cnt++] = tar_info;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      tar_arr = tmp_arr;
+      tar_capacity = tmp_capacity;
+      tar_cnt = tmp_cnt;
+    }
+  }
+  return ret;
+}
+
+int ObUserInfo::assign(const ObUserInfo &other)
+{
+  int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
-    int ret = OB_SUCCESS;
     error_ret_ = other.error_ret_;
     if (OB_FAIL(ObPriv::assign(other))) {
       LOG_WARN("assign failed", K(ret));
@@ -8492,17 +8739,130 @@ ObUserInfo& ObUserInfo::operator=(const ObUserInfo &other)
       password_last_changed_timestamp_ = other.password_last_changed_timestamp_;
       max_connections_ = other.max_connections_;
       max_user_connections_ = other.max_user_connections_;
+      if (OB_FAIL(assign_proxy_info_array_(other.proxied_user_info_,
+                                           other.proxied_user_info_cnt_,
+                                           other.proxied_user_info_capacity_,
+                                           proxied_user_info_,
+                                           proxied_user_info_cnt_,
+                                           proxied_user_info_capacity_))) {
+        LOG_WARN("assign proxy info array", K(ret));
+      } else if (OB_FAIL(assign_proxy_info_array_(other.proxy_user_info_,
+                                           other.proxy_user_info_cnt_,
+                                           other.proxy_user_info_capacity_,
+                                           proxy_user_info_,
+                                           proxy_user_info_cnt_,
+                                           proxy_user_info_capacity_))) {
+        LOG_WARN("assign proxy info array", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        user_flags_ = other.user_flags_;
+      }
     }
     if (OB_FAIL(ret)) {
       error_ret_ = ret;
     }
   }
-  return *this;
+  return ret;
 }
 
 bool ObUserInfo::is_valid() const
 {
   return ObSchema::is_valid() && ObPriv::is_valid();
+}
+
+int ObUserInfo::add_proxy_info_(ObProxyInfo **&arr, uint64_t &capacity, uint64_t &cnt, const ObProxyInfo &proxy_info)
+{
+  int ret = OB_SUCCESS;
+  if (0 == capacity) {
+    if (NULL == (arr = static_cast<ObProxyInfo**>(
+        alloc(sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory for array_.", KR(ret));
+    } else {
+      capacity = DEFAULT_ARRAY_CAPACITY;
+      MEMSET(arr, 0, sizeof(ObProxyInfo*) * DEFAULT_ARRAY_CAPACITY);
+    }
+  } else if (cnt >= capacity) {
+    int64_t tmp_size = 2 * capacity;
+    ObProxyInfo **tmp = NULL;
+    if (NULL == (tmp = static_cast<ObProxyInfo**>(
+        alloc(sizeof(ObProxyInfo*) * tmp_size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("Fail to allocate memory for array_, ", K(tmp_size), KR(ret));
+    } else {
+      MEMCPY(tmp, arr, sizeof(ObProxyInfo*) * capacity);
+      free(arr);
+      arr = tmp;
+      capacity = tmp_size;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator());
+    if (NULL == info) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
+    } else if (OB_FAIL(info->assign(proxy_info))) {
+      LOG_WARN("failed to assign proxy info", K(ret));
+    } else {
+      arr[cnt++] = info;
+    }
+  }
+  return ret;
+}
+
+int ObUserInfo::add_proxied_user_info(const ObProxyInfo& proxy_info)
+{
+  return add_proxy_info_(proxied_user_info_, proxied_user_info_capacity_, proxied_user_info_cnt_, proxy_info);
+}
+
+int ObUserInfo::add_proxy_user_info(const ObProxyInfo& proxy_info)
+{
+  return add_proxy_info_(proxy_user_info_, proxy_user_info_capacity_, proxy_user_info_cnt_, proxy_info);
+}
+
+const ObProxyInfo* ObUserInfo::get_proxied_user_info_by_idx(uint64_t idx) const
+{
+  const ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxied_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxied_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+ObProxyInfo* ObUserInfo::get_proxied_user_info_by_idx_for_update(uint64_t idx)
+{
+  ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxied_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxied_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+const ObProxyInfo* ObUserInfo::get_proxy_user_info_by_idx(uint64_t idx) const
+{
+  const ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxy_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxy_user_info_[idx];
+  }
+  return proxy_info;
+}
+
+ObProxyInfo* ObUserInfo::get_proxy_user_info_by_idx_for_update(uint64_t idx)
+{
+  ObProxyInfo *proxy_info = NULL;
+  if (idx < 0 || idx >= proxy_user_info_cnt_) {
+    proxy_info = NULL;
+  } else {
+    proxy_info = proxy_user_info_[idx];
+  }
+  return proxy_info;
 }
 
 void ObUserInfo::reset()
@@ -8519,10 +8879,17 @@ void ObUserInfo::reset()
   grantee_id_array_.reset();
   role_id_array_.reset();
   role_id_option_array_.reset();
+  proxied_user_info_ = NULL;
+  proxied_user_info_cnt_ = 0;
+  proxied_user_info_capacity_ = 0;
+  proxy_user_info_ = NULL;
+  proxy_user_info_cnt_ = 0;
+  proxy_user_info_capacity_ = 0;
   profile_id_ = OB_INVALID_ID;
   password_last_changed_timestamp_ = OB_INVALID_TIMESTAMP;
   max_connections_ = 0;
   max_user_connections_ = 0;
+  user_flags_.reset();
   ObSchema::reset();
   ObPriv::reset();
 }
@@ -8542,6 +8909,18 @@ int64_t ObUserInfo::get_convert_size() const
   convert_size += grantee_id_array_.get_data_size();
   convert_size += role_id_array_.get_data_size();
   convert_size += role_id_option_array_.get_data_size();
+  convert_size += proxied_user_info_cnt_ * sizeof(ObProxyInfo*);
+  convert_size += proxy_user_info_cnt_ * sizeof(ObProxyInfo*);
+  for (int64_t i = 0; i < proxied_user_info_cnt_; i++) {
+    if (OB_NOT_NULL(proxied_user_info_[i])) {
+      convert_size += proxied_user_info_[i]->get_convert_size();
+    }
+  }
+  for (int64_t i = 0; i < proxy_user_info_cnt_; i++) {
+    if (OB_NOT_NULL(proxy_user_info_[i])) {
+      convert_size += proxy_user_info_[i]->get_convert_size();
+    }
+  }
   return convert_size;
 }
 
@@ -8567,6 +8946,68 @@ OB_DEF_SERIALIZE(ObUserInfo)
               role_id_option_array_,
               max_connections_,
               max_user_connections_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, proxied_user_info_cnt_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < proxied_user_info_cnt_; ++i) {
+      if (OB_ISNULL(proxied_user_info_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        LST_DO_CODE(OB_UNIS_ENCODE, *proxied_user_info_[i]);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, proxy_user_info_cnt_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < proxy_user_info_cnt_; ++i) {
+      if (OB_ISNULL(proxy_user_info_[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else {
+        LST_DO_CODE(OB_UNIS_ENCODE, *proxy_user_info_[i]);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE, user_flags_);
+  }
+  return ret;
+}
+
+int ObUserInfo::deserialize_proxy_info_array_(ObProxyInfo **&arr, uint64_t &cnt, uint64_t &capacity,
+                                            const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("ProxyInfo");
+  OB_UNIS_DECODE(cnt);
+  if (OB_FAIL(ret)) {
+  } else if (cnt == 0) {
+    capacity = 0;
+    arr = NULL;
+  } else if (NULL == (arr = static_cast<ObProxyInfo**>(
+            alloc(sizeof(ObProxyInfo*) * cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("Fail to allocate memory for array_.", KR(ret));
+  } else {
+    MEMSET(arr, 0, sizeof(ObProxyInfo*) * cnt);
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
+      ObProxyInfo proxy_info(&tmp_allocator);
+      LST_DO_CODE(OB_UNIS_DECODE, proxy_info);
+      if (OB_SUCC(ret)) {
+        ObProxyInfo *info = OB_NEWx(ObProxyInfo, get_allocator(), get_allocator());
+        if (NULL == info) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret), K(get_allocator()));
+        } else if (OB_FAIL(info->assign(proxy_info))) {
+          LOG_WARN("failed to assign proxy info", K(ret));
+        } else {
+          arr[i] = info;
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -8620,6 +9061,19 @@ OB_DEF_DESERIALIZE(ObUserInfo)
         max_connections_,
         max_user_connections_);
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(deserialize_proxy_info_array_(proxied_user_info_, proxied_user_info_cnt_, proxied_user_info_capacity_,
+                                              buf, data_len, pos))) {
+      LOG_WARN("deserialize proxi info array failed", K(ret));
+    } else if (OB_FAIL(deserialize_proxy_info_array_(proxy_user_info_, proxy_user_info_cnt_, proxy_user_info_capacity_,
+                                              buf, data_len, pos))) {
+      LOG_WARN("deserialize proxi info array failed", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE, user_flags_);
+  }
 
   return ret;
 }
@@ -8645,6 +9099,19 @@ OB_DEF_SERIALIZE_SIZE(ObUserInfo)
   len += grantee_id_array_.get_serialize_size();
   len += role_id_array_.get_serialize_size();
   len += role_id_option_array_.get_serialize_size();
+  LST_DO_CODE(OB_UNIS_ADD_LEN, proxied_user_info_cnt_);
+  for (int64_t i = 0; i < proxied_user_info_cnt_; ++i) {
+    if (OB_NOT_NULL(proxied_user_info_[i])) {
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *proxied_user_info_[i]);
+    }
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, proxy_user_info_cnt_);
+  for (int64_t i = 0; i < proxy_user_info_cnt_; ++i) {
+    if (OB_NOT_NULL(proxy_user_info_[i])) {
+      LST_DO_CODE(OB_UNIS_ADD_LEN, *proxy_user_info_[i]);
+    }
+  }
+  LST_DO_CODE(OB_UNIS_ADD_LEN, user_flags_);
   return len;
 }
 
@@ -10331,6 +10798,7 @@ ObOutlineInfo &ObOutlineInfo::operator=(const ObOutlineInfo &src_info)
     compatible_ = src_info.compatible_;
     enabled_ = src_info.enabled_;
     format_ = src_info.format_;
+    format_outline_ = src_info.format_outline_;
     if (OB_FAIL(deep_copy_str(src_info.name_, name_))) {
       LOG_WARN("Fail to deep copy name", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.signature_, signature_))) {
@@ -10341,6 +10809,10 @@ ObOutlineInfo &ObOutlineInfo::operator=(const ObOutlineInfo &src_info)
       LOG_WARN("Fail to deep copy outline_content", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.sql_text_, sql_text_))) {
       LOG_WARN("Fail to deep copy sql_text", K(ret));
+    } else if (OB_FAIL(deep_copy_str(src_info.format_sql_text_, format_sql_text_))) {
+      LOG_WARN("Fail to deep copy sql_text", K(ret));
+    } else if (OB_FAIL(deep_copy_str(src_info.format_sql_id_, format_sql_id_))) {
+      LOG_WARN("Fail to deep copy signature", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.outline_target_, outline_target_))) {
       LOG_WARN("Fail to deep copy outline target", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.owner_, owner_))) {
@@ -10373,6 +10845,8 @@ void ObOutlineInfo::reset()
   reset_string(name_);
   reset_string(signature_);
   reset_string(sql_id_);
+  reset_string(format_sql_id_);
+  reset_string(format_sql_text_);
   reset_string(outline_content_);
   reset_string(sql_text_);
   reset_string(outline_target_);
@@ -10383,6 +10857,7 @@ void ObOutlineInfo::reset()
   enabled_ = true;
   format_ = HINT_NORMAL;
   outline_params_wrapper_.destroy();
+  format_outline_ = false;
   ObSchema::reset();
 }
 
@@ -10410,10 +10885,15 @@ bool ObOutlineInfo::is_valid() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
+  } else if (name_.empty()
              || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
+                  || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !(((format_sql_text_.empty() && is_sql_id_valid(format_sql_id_))
+                  || (!format_sql_text_.empty() && format_sql_id_.empty())))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_ || OB_INVALID_ID == outline_id_) {
     valid_ret = false;
@@ -10428,10 +10908,14 @@ bool ObOutlineInfo::is_valid_for_replace() const
   bool valid_ret = true;
   if (!ObSchema::is_valid()) {
     valid_ret = false;
-  } else if (name_.empty() || !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty())
-             || (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))
-             || owner_.empty() || version_.empty()
+  } else if (name_.empty() || owner_.empty() || version_.empty()
              || (outline_content_.empty() && !has_outline_params())) {
+    valid_ret = false;
+  } else if (!is_format() && !((!signature_.empty() && !sql_text_.empty() && sql_id_.empty()) ||
+                                (signature_.empty() && sql_text_.empty() && is_sql_id_valid(sql_id_)))) {
+    valid_ret = false;
+  } else if (is_format() && !((!signature_.empty() && !format_sql_text_.empty() && sql_id_.empty()) ||
+                             (signature_.empty() && format_sql_text_.empty() && is_sql_id_valid(format_sql_id_)))) {
     valid_ret = false;
   } else if (OB_INVALID_ID == tenant_id_ || OB_INVALID_ID == database_id_
              || OB_INVALID_ID == outline_id_) {
@@ -10449,6 +10933,8 @@ int64_t ObOutlineInfo::get_convert_size() const
   convert_size += sql_id_.length() + 1;
   convert_size += outline_content_.length() + 1;
   convert_size += sql_text_.length() + 1;
+  convert_size += format_sql_text_.length() + 1;
+  convert_size += format_sql_id_.length() + 1;
   convert_size += outline_target_.length() + 1;
   convert_size += owner_.length() + 1;
   convert_size += version_.length() + 1;
@@ -10561,7 +11047,7 @@ OB_DEF_SERIALIZE(ObOutlineInfo)
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, outline_content_, sql_text_, outline_target_, owner_,
               used_, version_, compatible_, enabled_, format_, outline_params_wrapper_,
-              sql_id_, owner_id_);
+              sql_id_, owner_id_, format_sql_text_, format_sql_id_, format_outline_);
   return ret;
 }
 
@@ -10577,6 +11063,8 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
   ObString outline_target;
   ObString owner;
   ObString version;
+  ObString format_sql_id;
+  ObString format_sql_text;
 
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name, signature, outline_content, sql_text, outline_target, owner, used_,
@@ -10592,6 +11080,7 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
     LOG_WARN("Fail to deep copy outline_content", K(ret));
   } else if (OB_FAIL(deep_copy_str(sql_text, sql_text_))) {
     LOG_WARN("Fail to deep copy sql_text", K(ret));
+
   } else if (OB_FAIL(deep_copy_str(outline_target, outline_target_))) {
     LOG_WARN("Fail to deep copy outline target", K(ret));
   } else if (OB_FAIL(deep_copy_str(owner, owner_))) {
@@ -10610,7 +11099,14 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
         LOG_WARN("Fail to deep copy sql_id", K(ret));
       } else {
         if (pos < data_len) {
-          LST_DO_CODE(OB_UNIS_DECODE, owner_id_);
+          LST_DO_CODE(OB_UNIS_DECODE, owner_id_, format_sql_text, format_sql_id, format_outline_);
+          if (OB_FAIL(ret)){
+            // do nothing
+          }else if (OB_FAIL(deep_copy_str(format_sql_text, format_sql_text_))) {
+            LOG_WARN("Fail to deep copy sql_text", K(ret));
+          } else if (OB_FAIL(deep_copy_str(format_sql_id, format_sql_id_))) {
+            LOG_WARN("Fail to deep copy sql_id", K(ret));
+          }
         } else {
           owner_id_ = OB_INVALID_ID;
         }
@@ -10626,7 +11122,8 @@ OB_DEF_SERIALIZE_SIZE(ObOutlineInfo)
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, sql_id_, outline_content_, sql_text_, outline_target_, owner_,
-              used_, version_, compatible_, enabled_, format_, outline_params_wrapper_, owner_id_);
+              used_, version_, compatible_, enabled_, format_, outline_params_wrapper_, owner_id_,
+              format_sql_text_, format_sql_id_, format_outline_);
   return len;
 }
 

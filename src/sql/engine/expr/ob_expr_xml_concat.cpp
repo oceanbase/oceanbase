@@ -81,7 +81,6 @@ int ObExprXmlConcat::eval_xml_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   common::ObArenaAllocator &allocator = tmp_alloc_g.get_allocator();
   ObStringBuffer res_xml_buf(&allocator);
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
   }
@@ -109,6 +108,7 @@ int ObExprXmlConcat::eval_xml_concat(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       LOG_WARN("failed to push back xml bin str", K(ret), K(xml_bin_str));
     }
   }
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
 
   OZ(ObXMLExprHelper::concat_xml_type_nodes(mem_ctx, xml_bin_str_vec, res_bin_str));
   OZ(ObXMLExprHelper::pack_binary_res(expr, ctx, res_bin_str, blob_locator));

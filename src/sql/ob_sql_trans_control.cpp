@@ -41,7 +41,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
-
+#include "sql/dblink/ob_tm_service.h"
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
 #else
@@ -356,7 +356,11 @@ int ObSqlTransControl::kill_tx(ObSQLSessionInfo *session, int cause)
   int ret = OB_SUCCESS;
   if (!session->get_is_deserialized() && session->is_in_transaction()) {
     auto session_id = session->get_sessid();
-    LOG_INFO("begin to kill tx", K(cause), K(session_id), KPC(session));
+    if (cause >= 0) {
+      LOG_INFO("begin to kill tx", "caused_by", transaction::ObTxAbortCauseNames::of(cause), K(cause), K(session_id), KPC(session));
+    } else {
+      LOG_INFO("begin to kill tx", "caused_by", common::ob_error_name(cause), K(cause), K(session_id), KPC(session));
+    }
     transaction::ObTxDesc *tx_desc = session->get_tx_desc();
     auto tx_tenant_id = tx_desc->get_tenant_id();
     const ObTransID tx_id = tx_desc->get_tx_id();
@@ -638,31 +642,41 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
                                           ObPhysicalPlanCtx *plan_ctx)
 {
   int ret = OB_SUCCESS;
-  auto current_consist_level = plan_ctx->get_consistency_level();
+  ObConsistencyLevel current_consist_level = plan_ctx->get_consistency_level();
   CK (current_consist_level != ObConsistencyLevel::INVALID_CONSISTENCY);
-  bool is_plain_select = plan->is_plain_select();
 
   // adjust stmt's consistency level
   if (OB_SUCC(ret)) {
     // Weak read statement with inner table should be converted to strong read.
     // For example, schema refresh statement;
     if (plan->is_contain_inner_table() ||
-       (!is_plain_select && current_consist_level != ObConsistencyLevel::STRONG)) {
+      (!plan->is_plain_select() && current_consist_level != ObConsistencyLevel::STRONG)) {
       plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
     }
   }
 
-  // check isolation with consistency type
   if (OB_SUCC(ret) && session->is_in_transaction()) {
+    // check consistency type volatile
+    ObConsistencyLevel current_consist_level = plan_ctx->get_consistency_level();
+    if (current_consist_level == ObConsistencyLevel::WEAK) {
+      // read write transaction
+      if (!session->get_tx_desc()->is_clean()) {
+        plan_ctx->set_consistency_level(ObConsistencyLevel::STRONG);
+      }
+    }
+
+    // check isolation with consistency type
     auto iso = session->get_tx_desc()->get_isolation_level();
     auto cl = plan_ctx->get_consistency_level();
-    if (ObConsistencyLevel::WEAK == cl && (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
+    if (ObConsistencyLevel::WEAK == cl &&
+      (iso == ObTxIsolationLevel::SERIAL || iso == ObTxIsolationLevel::RR)) {
       ret = OB_NOT_SUPPORTED;
       TRANS_LOG(ERROR, "statement of weak consistency is not allowed under SERIALIZABLE isolation",
                 KR(ret), "trans_id", session->get_tx_id(), "consistency_level", cl);
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "weak consistency under SERIALIZABLE and REPEATABLE-READ isolation level");
     }
   }
+
   return ret;
 }
 
@@ -817,6 +831,13 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
     LOG_WARN("current stmt is not allowed executed on txn tmp node", K(ret), \
              K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
+
+#define CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
+  if (OB_SUCC(ret) && (sp_name == DBLINK_DEFAULT_SAVEPOINT || sp_name == PL_DBLINK_DEFAULT_SAVEPOINT)) { \
+    ret = OB_ERR_INVALID_CHARACTER_STRING;                              \
+    LOG_WARN("this savepoint name is not allowed", K(ret), K(sp_name));             \
+  }
+
 int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
                                         const ObString &sp_name,
                                         const bool user_create)
@@ -829,6 +850,25 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   CHECK_TXN_FREE_ROUTE_ALLOWED();
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
+  // for dblink trans
+  // create savepoint before start stmt to avoid start stmt repeatly
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        // only check savepoint name in dblink trans
+        CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name);
+        OZ (ObTMService::tm_create_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session), user_create), sp_name);
@@ -957,6 +997,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
@@ -967,6 +1008,24 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  // for dblink trans
+  // rollback dblink remote savepoint after rollback savepoint in tx_desc
+  // to ensure savepoint 'first create last rollback'
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        OZ (ObTMService::tm_rollback_to_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1481,8 +1540,14 @@ int ObSqlTransControl::check_ls_readable(const uint64_t tenant_id,
   int ObSqlTransControl::cmp_txn_##name##_state(const char* cur_buf, int64_t cur_len, const char* last_buf, int64_t last_len) \
   { return transaction::ObTransService::txn_free_route__cmp_##name##_state(cur_buf, cur_len, last_buf, last_len); } \
   void ObSqlTransControl::display_txn_##name##_state(ObSQLSessionInfo &sess, const char* local_buf, const int64_t local_len, const char* remote_buf, const int64_t remote_len) \
-  { transaction::ObTransService::txn_free_route__display_##name##_state("LOAL", local_buf, local_len); \
-    transaction::ObTransService::txn_free_route__display_##name##_state("REMOTE", remote_buf, remote_len); }
+  {                                                                     \
+    transaction::ObTransService::txn_free_route__display_##name##_state("LOAL", local_buf, local_len); \
+    transaction::ObTransService::txn_free_route__display_##name##_state("REMOTE", remote_buf, remote_len); \
+    ObTxDesc *tx = sess.get_tx_desc();                                  \
+    if (OB_NOT_NULL(tx)) {                                              \
+      tx->print_trace();                                                \
+    }                                                                   \
+  }
 
 DELEGATE_TO_TXN(static);
 DELEGATE_TO_TXN(dynamic);

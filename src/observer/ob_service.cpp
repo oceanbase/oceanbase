@@ -1698,13 +1698,13 @@ int ObService::do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg)
       LOG_WARN("can not add ls which local ls is exist", KR(ret), K(arg), K(is_exist));
     } else {
       migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg.data_source_;
+      migration_op_arg.data_src_ = arg.force_data_source_;
       migration_op_arg.dst_ = arg.dst_;
       migration_op_arg.ls_id_ = arg.ls_id_;
       //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg.new_paxos_replica_number_;
-      migration_op_arg.src_ = arg.data_source_;
+      migration_op_arg.src_ = arg.dst_;
       migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
       if (OB_FAIL(ls_service->create_ls_for_ha(arg.task_id_, migration_op_arg))) {
         LOG_WARN("failed to create ls for ha", KR(ret), K(arg), K(migration_op_arg));
@@ -2132,15 +2132,20 @@ int ObService::set_tracepoint(const obrpc::ObAdminSetTPArg &arg)
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
   } else {
+    EventItem item;
+    item.error_code_ = arg.error_code_;
+    item.occur_ = arg.occur_;
+    item.trigger_freq_ = arg.trigger_freq_;
+    item.cond_ = arg.cond_;
     if (arg.event_name_.length() > 0) {
       ObSqlString str;
       if (OB_FAIL(str.assign(arg.event_name_))) {
         LOG_WARN("string assign failed", K(ret));
-      } else {
-        TP_SET_EVENT(str.ptr(), arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+      } else if (OB_FAIL(EventTable::instance().set_event(str.ptr(), item))) {
+        LOG_WARN("Failed to set tracepoint event, tp_name does not exist.", K(ret), K(arg.event_name_));
       }
-    } else {
-      TP_SET_EVENT(arg.event_no_, arg.error_code_, arg.occur_, arg.trigger_freq_, arg.cond_);
+    } else if (OB_FAIL(EventTable::instance().set_event(arg.event_no_, item))) {
+      LOG_WARN("Failed to set tracepoint event, tp_no does not exist.", K(ret), K(arg.event_no_));
     }
     LOG_INFO("set event", K(arg));
   }

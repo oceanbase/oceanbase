@@ -110,6 +110,11 @@ public:
       common::ObISQLClient &sql_client,
       const ObSchemaOperationType type);
 
+  virtual int update_user_proxy_info(const uint64_t tenant_id,
+                                      const common::ObArray<ObUserInfo> &user_infos,
+                                      const ObString *ddl_stmt_str,
+                                      ObISQLClient &sql_client);
+
 private:
   int drop_user_delete_role_grantee_map(
       const uint64_t tenant_id,
@@ -119,6 +124,27 @@ private:
       const ObString *ddl_stmt_str,
       ObISQLClient &sql_client,
       share::schema::ObSchemaGetterGuard &schema_guard);
+
+  int drop_user_delete_proxy_user_info(const uint64_t tenant_id,
+                                        const bool is_role,
+                                        const uint64_t new_schema_version,
+                                        const ObUserInfo &user,
+                                        const ObString *ddl_stmt_str,
+                                        ObISQLClient &sql_client,
+                                        ObSchemaGetterGuard &schema_guard);
+
+  int drop_proxy_role_info(ObISQLClient &sql_client,
+                            const uint64_t tenant_id,
+                            const uint64_t client_user_id,
+                            const uint64_t proxy_user_id,
+                            const uint64_t role_id,
+                            const uint64_t new_schema_version);
+
+  int drop_proxy_info(ObISQLClient &sql_client,
+                      const uint64_t tenant_id,
+                      const uint64_t client_user_id,
+                      const uint64_t proxy_user_id,
+                      const uint64_t new_schema_version);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObUserSqlService);
 };

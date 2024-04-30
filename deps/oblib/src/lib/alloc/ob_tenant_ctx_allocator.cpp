@@ -436,7 +436,8 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     is_errsim = true;
   }
 #endif
-
+  ObLightBacktraceGuard light_backtrace_guard(is_memleak_light_backtrace_enabled()
+      && ObCtxIds::GLIBC != attr.ctx_id_);
   if (OB_UNLIKELY(is_errsim)) {
   } else {
     BASIC_TIME_GUARD(time_guard, "ObMalloc");
@@ -473,6 +474,13 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
     SANITY_POISON((void*)upper_align((int64_t)obj->data_ + size, 8),
                                      alloc_size - size + sizeof(AOBJECT_TAIL_MAGIC_CODE));
   } else if (TC_REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+#ifdef FATAL_ERROR_HANG
+    if (g_alloc_failed_ctx().reach_limit_except_ctx() &&
+        REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+      ObMemoryDump::get_instance().generate_mod_stat_task();
+      sleep(1);
+    }
+#endif
     const char *msg = is_errsim ? "[ERRSIM] errsim inject memory error" : alloc_failed_msg();
     LOG_DBA_WARN(OB_ALLOCATE_MEMORY_FAILED, "[OOPS]", "alloc failed reason", KCSTRING(msg));
     _OB_LOG_RET(WARN, OB_ALLOCATE_MEMORY_FAILED, "oops, alloc failed, tenant_id=%ld, ctx_id=%ld, ctx_name=%s, ctx_hold=%ld, "
@@ -480,7 +488,6 @@ void* ObTenantCtxAllocator::common_realloc(const void *ptr, const int64_t size,
                 attr.tenant_id_, attr.ctx_id_,
                 get_global_ctx_info().get_ctx_name(attr.ctx_id_),
                 ta.get_hold(), ta.get_limit(), ta.get_tenant_hold(), ta.get_tenant_limit());
-    ObMallocAllocator::get_instance()->print_tenant_memory_usage(attr.tenant_id_);
     // 49 is the user defined signal to dump memory
     raise(49);
   }

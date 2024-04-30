@@ -589,6 +589,7 @@ int ObPxDistTransmitSpec::register_to_datahub(ObExecContext &ctx) const
             }
             if (OB_FAIL(ret) && nullptr != sample_store) {
               sample_store->~ObChunkDatumStore();
+              ctx.get_allocator().free(sample_store);
             }
           }
         }

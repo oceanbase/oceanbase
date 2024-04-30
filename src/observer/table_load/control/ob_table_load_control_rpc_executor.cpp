@@ -65,6 +65,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.avail_memory_ = arg_.avail_memory_;
     param.write_session_count_ = arg_.write_session_count_;
     param.exe_mode_ = arg_.exe_mode_;
+    param.compressor_type_ = arg_.compressor_type_;
     ObTableLoadDDLParam ddl_param;
     uint64_t data_version = 0;
     ddl_param.dest_table_id_ = arg_.dest_table_id_;

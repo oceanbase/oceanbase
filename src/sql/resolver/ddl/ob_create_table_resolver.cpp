@@ -488,7 +488,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
   CHECK_COMPATIBILITY_MODE(session_info_);
   if (OB_ISNULL(create_table_node)
       || T_CREATE_TABLE != create_table_node->type_
-      || (CREATE_TABLE_NUM_CHILD != create_table_node->num_child_ && CREATE_TABLE_AS_SEL_NUM_CHILD != create_table_node->num_child_)
+      || (CREATE_TABLE_NUM_CHILD != create_table_node->num_child_ &&
+          CREATE_TABLE_AS_SEL_NUM_CHILD != create_table_node->num_child_)
       || OB_ISNULL(create_table_node->children_)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_RESV_LOG(WARN, "invalid argument.", K(ret));
@@ -657,6 +658,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           } else {
             if (OB_FAIL(resolve_table_elements(table_element_list_node, index_node_position_list, foreign_key_node_position_list, table_level_constraint_list, RESOLVE_COL_ONLY))) {
               SQL_RESV_LOG(WARN, "resolve table elements col failed", K(ret));
+            } else if (OB_FAIL(resolve_insert_mode(&parse_tree))) {
+              SQL_RESV_LOG(WARN, "resolve ignore_or_replace flag failed", K(ret));
             } else if (OB_FAIL(resolve_table_elements_from_select(parse_tree))) {
               SQL_RESV_LOG(WARN, "resolve table elements from select failed", K(ret));
             } else if (OB_FAIL(resolve_table_elements(table_element_list_node, index_node_position_list, foreign_key_node_position_list, table_level_constraint_list, RESOLVE_NON_COL))) {
@@ -703,6 +706,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
             } else if (OB_FAIL(set_table_option_to_schema(table_schema))) {
               SQL_RESV_LOG(WARN, "set table option to schema failed", K(ret));
+            } else if (OB_FAIL(check_max_row_data_length(table_schema))) {
+              SQL_RESV_LOG(WARN, "check max row data length failed", K(ret));
             } else {
               table_schema.set_collation_type(collation_type_);
               table_schema.set_charset_type(charset_type_);
@@ -840,7 +845,7 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
       }
     }
     if (OB_SUCC(ret) && is_create_as_sel) {
-      if (OB_FAIL(resolve_hints(create_table_node->children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 1],
+      if (OB_FAIL(resolve_hints(create_table_node->children_[8],
                                *create_table_stmt,
                                create_table_stmt->get_create_table_arg().schema_))) {
         LOG_WARN("fail to resolve hint", K(ret));
@@ -1350,14 +1355,14 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                                           NULL == element->children_[1]))) {
             SQL_RESV_LOG(WARN, "failed to cast default value!", K(ret));
             // add dependency soon after check done
-          } else if (column.is_string_type()) {
+          } else if (column.is_string_type() || is_lob_storage(column.get_data_type())) {
             int64_t length = 0;
             if (OB_FAIL(column.get_byte_length(length, is_oracle_mode, false))) {
               SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
             } else if (ob_is_string_tc(column.get_data_type()) && length > OB_MAX_VARCHAR_LENGTH) {
               ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
               LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(), static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
-            } else if (ob_is_text_tc(column.get_data_type())) {
+            } else if (is_lob_storage(column.get_data_type())) {
               ObLength max_length = 0;
               max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length();
               if (length > max_length) {
@@ -1365,7 +1370,9 @@ int ObCreateTableResolver::resolve_table_elements(const ParseNode *node,
                 LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column.get_column_name(),
                     ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column.get_data_type()].get_length());
               } else {
-                length = min(length, table_schema.get_lob_inrow_threshold());
+                // table lob inrow theshold has not been parsed, so use handle length check
+                // will recheck after parsing table lob inrow theshold
+                length = min(length, OB_MAX_LOB_HANDLE_LENGTH);
               }
             }
             if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
@@ -1737,6 +1744,36 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
   }
   return ret;
 }
+int ObCreateTableResolver::resolve_insert_mode(const ParseNode *parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *flag_node = NULL;
+  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
+  ObExecContext *exec_ctx = NULL;
+  ObSqlCtx *sql_ctx = NULL;
+  bool is_support = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0;
+  if (OB_ISNULL(parse_tree) ||
+      OB_ISNULL(create_table_stmt) ||
+      OB_ISNULL(params_.query_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error",K(parse_tree), K(create_table_stmt), K(session_info_), K(exec_ctx), K(sql_ctx), K(ret));
+  } else if (lib::is_oracle_mode() || !is_support) {
+    create_table_stmt->set_insert_mode(0);
+  } else if (parse_tree->num_child_ != CREATE_TABLE_AS_SEL_NUM_CHILD){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child_num",K(parse_tree->num_child_), K(ret));
+  } else {
+    flag_node = parse_tree->children_[9];
+    if (flag_node == NULL) {
+      create_table_stmt->set_insert_mode(0);
+    } else if (flag_node->type_ == T_IGNORE) {
+      create_table_stmt->set_insert_mode(1);
+    } else if (flag_node->type_ == T_REPLACE) {
+      create_table_stmt->set_insert_mode(2);
+    }
+  }
+  return ret;
+}
 
 //解析column_list和查询, 然后根据建表语句中的opt_column_list(可能无)和查询, 设置新表的列名和数据类型
 int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &parse_tree)
@@ -1744,7 +1781,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
   int ret = OB_SUCCESS;
   ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt *>(stmt_);
   const ObTableSchema *base_table_schema = NULL;
-  ParseNode *sub_sel_node = parse_tree.children_[CREATE_TABLE_AS_SEL_NUM_CHILD - 2];
+  ParseNode *sub_sel_node = parse_tree.children_[7];
   ObSelectStmt *select_stmt = NULL;
   ObSelectResolver select_resolver(params_);
   select_resolver.params_.is_from_create_table_ = true;
@@ -2464,11 +2501,19 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
 
     if (OB_SUCC(ret)) {
       // if lob_inrow_threshold not set, used config default_lob_inrow_threshold
+      uint64_t tenant_data_version = 0;
       if (is_set_lob_inrow_threshold_) {
         table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       } else if (OB_ISNULL(session_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("session if NULL", K(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+        LOG_WARN("get tenant data version failed", K(ret));
+      } else if (tenant_data_version < CLUSTER_VERSION_4_2_1_2){
+        // lob_inrow_threshold is added in 421 bp2
+        // so need ensure lob_inrow_threshold is 4096 before 421 bp2 for compat
+        lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+        table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       } else if (OB_FALSE_IT((lob_inrow_threshold_ = session_info_->get_default_lob_inrow_threshold()))) {
       } else if (lob_inrow_threshold_ < OB_MIN_LOB_INROW_THRESHOLD || lob_inrow_threshold_ > OB_MAX_LOB_INROW_THRESHOLD) {
         ret = OB_INVALID_ARGUMENT;
@@ -2485,6 +2530,9 @@ int ObCreateTableResolver::set_table_option_to_schema(ObTableSchema &table_schem
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
       }
+    }
+    if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {
+      table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     }
   }
   return ret;
@@ -2738,13 +2786,14 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
             }
             if (OB_SUCC(ret)) {
               //column_order
-              if (NULL != index_column_node->children_[2]
+              if (is_oracle_mode && NULL != index_column_node->children_[2]
                   && T_SORT_DESC == index_column_node->children_[2]->type_) {
                 // sort_item.order_type_ = common::ObOrderType::DESC;
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("not support desc index now", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "desc index");
               } else {
+                //兼容mysql5.7, 降序索引不生效且不报错
                 sort_item.order_type_ = common::ObOrderType::ASC;
               }
               ObColumnNameHashWrapper column_key(column_name);
@@ -3077,7 +3126,7 @@ int ObCreateTableResolver::resolve_vertical_partition(const ParseNode *node)
   if (NULL == node || 2 != node->num_child_) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "node is null", K(ret));
-  } else if (table_mode_.mode_flag_ == TABLE_MODE_QUEUING) {
+  } else if (is_queuing_table_mode(static_cast<ObTableModeFlag>(table_mode_.mode_flag_))) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Vertical partition table cannot set queuing table mode");
     SQL_RESV_LOG(WARN, "Vertical partition table cannot set queuing table mode", K(ret));
@@ -3443,6 +3492,42 @@ int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
       OZ (generate_index_arg());
       OZ (create_table_stmt->get_index_arg_list().push_back(index_arg_));
       OZ (create_table_stmt->get_index_partition_resolve_results().push_back(ObPartitionResolveResult()));
+    }
+  }
+  return ret;
+}
+
+int ObCreateTableResolver::check_max_row_data_length(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  int64_t row_data_length = 0;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+    int64_t length = 0;
+    const ObColumnSchemaV2 *column = table_schema.get_column_schema_by_idx(i);
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column is null", K(ret), K(table_schema));
+    } else if (! column->is_string_type() && ! is_lob_storage(column->get_data_type()) ) { // skip non string or lob storage type
+    } else if (OB_FAIL(column->get_byte_length(length, is_oracle_mode, false))) {
+      SQL_RESV_LOG(WARN, "fail to get byte length of column", KR(ret), K(is_oracle_mode));
+    } else if (ob_is_string_tc(column->get_data_type()) && length > OB_MAX_VARCHAR_LENGTH) {
+      ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+      LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(), static_cast<int32_t>(OB_MAX_VARCHAR_LENGTH));
+    } else if (is_lob_storage(column->get_data_type())) {
+      ObLength max_length = 0;
+      max_length = ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length();
+      if (length > max_length) {
+        ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_COLUMN_LENGTH, column->get_column_name(),
+            ObAccuracy::MAX_ACCURACY2[is_oracle_mode][column->get_data_type()].get_length());
+      } else {
+        length = min(length, max(table_schema.get_lob_inrow_threshold(), OB_MAX_LOB_HANDLE_LENGTH));
+      }
+    }
+    if (OB_SUCC(ret) && (row_data_length += length) > OB_MAX_USER_ROW_LENGTH) {
+      ret = OB_ERR_TOO_BIG_ROWSIZE;
+      SQL_RESV_LOG(WARN, "too big rowsize", KR(ret), K(is_oracle_mode), K(i), K(row_data_length), K(length));
     }
   }
   return ret;

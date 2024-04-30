@@ -117,6 +117,13 @@ public:
 
   void set_err_code(int err_code) { rcode_.rcode_ = err_code; }
   int get_err_code() const { return rcode_.rcode_; }
+
+  void set_memstore_read_row_count(int64_t memstore_read_row_count) { memstore_read_row_count_ = memstore_read_row_count; }
+  int64_t get_memstore_read_row_count() const { return memstore_read_row_count_; }
+
+  void set_ssstore_read_row_count(int64_t ssstore_read_row_count) { ssstore_read_row_count_ = ssstore_read_row_count; }
+  int64_t get_ssstore_read_row_count() const { return ssstore_read_row_count_; }
+
   void log_user_error_and_warn() const;
   const transaction::ObTxExecResult &get_trans_result() const { return trans_result_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -159,7 +166,9 @@ public:
                K_(is_result_accurate),
                K_(trans_result),
                K_(implicit_cursors),
-               K_(rcode));
+               K_(rcode),
+               K_(memstore_read_row_count),
+               K_(ssstore_read_row_count));
 protected:
   ObRowStore row_store_;
   int64_t mem_size_limit_;  /**< memory size of row store */
@@ -186,6 +195,9 @@ protected:
   sql::ObChunkDatumStore datum_store_;
   obrpc::ObRpcResultCode rcode_;
   sql::ObExecFeedbackInfo fb_info_;
+  int64_t memstore_read_row_count_;
+  int64_t ssstore_read_row_count_;
+
 private:
   DISALLOW_COPY_AND_ASSIGN(ObScanner);
 };

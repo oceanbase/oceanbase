@@ -147,7 +147,7 @@ int ObDropRoleExecutor::execute(ObExecContext &ctx, ObDropRoleStmt &stmt)
       OZ (arg.users_.push_back(stmt.get_user_names().at(i)));
       OZ (arg.hosts_.push_back(stmt.get_host_names().at(i)));
     }
-    OZ (ObDropUserExecutor::drop_user(common_rpc_proxy, arg));
+    OZ (ObDropUserExecutor::drop_user(common_rpc_proxy, arg, false));
   }
 
   return ret;

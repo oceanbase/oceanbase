@@ -517,7 +517,8 @@ int ObRangeGenerator::formalize_standard_range(const ObRangeNode *node, ObTmpRan
   int ret = OB_SUCCESS;
   ObTmpRange *new_range = nullptr;
   bool not_consistent = false;
-  if (OB_UNLIKELY(node->contain_in_) || OB_NOT_NULL(node->or_next_)) {
+  if (OB_UNLIKELY(node->contain_in_) || OB_NOT_NULL(node->or_next_) ||
+      OB_UNLIKELY(node->is_not_in_node_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected range node in standard range", KPC(node));
   } else if (OB_FAIL(final_range_node(node, new_range, false))) {
@@ -559,12 +560,21 @@ int ObRangeGenerator::generate_complex_ranges(const ObRangeNode *node)
     LOG_WARN("failed to allocate memory for tmp range list");
   } else if (OB_FAIL(all_tmp_ranges_.prepare_allocate(pre_range_graph_->get_node_count()))) {
     LOG_WARN("failed to init fixed array size");
+  } else if (OB_FAIL(all_tmp_node_caches_.prepare_allocate(pre_range_graph_->get_node_count()))) {
+    LOG_WARN("failed to init fixed array size");
+  } else if (nullptr == always_false_tmp_range_ &&
+             OB_FAIL(generate_tmp_range(always_false_tmp_range_, pre_range_graph_->get_column_cnt()))) {
+    LOG_WARN("failed to generate tmp range");
   } else {
+    always_false_tmp_range_->set_always_false();
     for (int64_t i = 0; i < pre_range_graph_->get_node_count(); ++i) {
       all_tmp_ranges_.at(i) = nullptr;
     }
     for (int64_t i = 0; i < pre_range_graph_->get_column_cnt(); ++i) {
       new(tmp_range_lists_ + i)TmpRangeList();
+    }
+    for (int64_t i = 0; i < pre_range_graph_->get_node_count(); ++i) {
+      all_tmp_node_caches_.at(i) = nullptr;
     }
     if (OB_FAIL(formalize_complex_range(node))) {
       LOG_WARN("failed to formalize range");
@@ -587,7 +597,7 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
     add_last = false;
     // min_offset = -1 means current node is a const value node. After final node will become always true of false.
     pre_node_offset = cur_node->min_offset_ == -1 ? 0 : cur_node->min_offset_;
-    if (!cur_node->contain_in_) {
+    if (!cur_node->contain_in_ && !cur_node->is_not_in_node_) {
       ObTmpRange *new_range = nullptr;
       if (OB_FAIL(final_range_node(cur_node, new_range, true))) {
         LOG_WARN("failed to final range node");
@@ -613,7 +623,7 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
           LOG_WARN("failed to formalize range");
         }
       }
-    } else {
+    } else if (cur_node->contain_in_) {
       for (int64_t i = 0; OB_SUCC(ret) && i < cur_node->in_param_count_; ++i) {
         ObTmpRange *new_range = nullptr;
         if (pre_node_offset != -1 && add_last) {
@@ -636,6 +646,48 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
             add_last = true;
           }
           if (OB_FAIL(ret)) {
+          } else if (cur_node->and_next_ == nullptr) {
+            if (OB_FAIL(generate_one_complex_range())) {
+              LOG_WARN("faield to generate one range");
+            }
+          } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+            LOG_WARN("failed to formalize range");
+          }
+        }
+      }
+    } else if (cur_node->is_not_in_node_) {
+      bool always_false = false;
+      ObTmpInParam *tmp_in_param = nullptr;
+      if (OB_FAIL(generate_tmp_not_in_param(*cur_node, tmp_in_param))) {
+        LOG_WARN("failed to generate tmp not in param", K(ret));
+      } else if (OB_ISNULL(tmp_in_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(tmp_in_param));
+      } else if (tmp_in_param->always_false_) {
+        if (OB_FAIL(generate_one_range(*always_false_tmp_range_))) {
+          LOG_WARN("failed to generate one range", K(ret));
+        }
+      } else if (tmp_in_param->in_param_.empty()) {
+        if (cur_node->and_next_ == nullptr) {
+          if (OB_FAIL(generate_one_complex_range())) {
+            LOG_WARN("faield to generate one range");
+          }
+        } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+          LOG_WARN("failed to formalize range");
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_in_param->in_param_.count() + 1; ++i) {
+          ObTmpRange *new_range = nullptr;
+          if (pre_node_offset != -1 && add_last) {
+            tmp_range_lists_[pre_node_offset].remove_last();
+          }
+          add_last = false;
+          if (OB_FAIL(final_not_in_range_node(*cur_node, i, tmp_in_param, new_range))) {
+            LOG_WARN("failed to final in range node");
+          } else if (OB_UNLIKELY(!tmp_range_lists_[pre_node_offset].add_last(new_range))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add last to dlist", KPC(new_range));
+          } else if (OB_FALSE_IT(add_last = true)) {
           } else if (cur_node->and_next_ == nullptr) {
             if (OB_FAIL(generate_one_complex_range())) {
               LOG_WARN("faield to generate one range");
@@ -693,6 +745,9 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
     LOG_WARN("failed to generate tmp range");
   } else {
     bool always_false = false;
+    bool check_next = true;
+    int64_t truncated_key_idx_start = -1;
+    int64_t truncated_key_idx_end = -1;
     for (int64_t i = 0; OB_SUCC(ret) && !always_false && i < pre_range_graph_->get_column_cnt(); ++i) {
       int64_t start = node->start_keys_[i];
       int64_t end = node->end_keys_[i];
@@ -714,7 +769,12 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
         } else if (OB_FAIL(get_result_value(start, range->start_[i], is_valid, exec_ctx_))) {
           LOG_WARN("failed to get result vlaue", K(start));
         } else if (!is_valid) {
-          always_false = true;
+          const ObRangeMap::ExprFinalInfo& expr_info = range_map_.expr_final_infos_.at(start);
+          if (expr_info.is_not_first_col_in_row_ && -1 == truncated_key_idx_start) {
+            truncated_key_idx_start = i;
+          } else {
+            always_false = true;
+          }
         }
         if (OB_FAIL(ret) || always_false) {
         } else if (end == OB_RANGE_MIN_VALUE) {
@@ -726,8 +786,23 @@ int ObRangeGenerator::final_range_node(const ObRangeNode *node, ObTmpRange *&ran
         } else if (OB_FAIL(get_result_value(end, range->end_[i], is_valid, exec_ctx_))) {
           LOG_WARN("failed to get result vlaue", K(end));
         } else if (!is_valid) {
-          always_false = true;
+          const ObRangeMap::ExprFinalInfo& expr_info = range_map_.expr_final_infos_.at(end);
+          if (expr_info.is_not_first_col_in_row_ && -1 == truncated_key_idx_end) {
+            truncated_key_idx_end = i;
+          } else {
+            always_false = true;
+          }
         }
+      }
+    }
+    if (OB_SUCC(ret) && truncated_key_idx_start != -1) {
+      for (int64_t i = truncated_key_idx_start; i < pre_range_graph_->get_column_cnt(); ++i) {
+        range->start_[i].set_min_value();
+      }
+    }
+    if (OB_SUCC(ret) && truncated_key_idx_end != -1) {
+      for (int64_t i = truncated_key_idx_end; i < pre_range_graph_->get_column_cnt(); ++i) {
+        range->end_[i].set_max_value();
       }
     }
     if (OB_SUCC(ret)) {
@@ -754,8 +829,11 @@ int ObRangeGenerator::final_in_range_node(const ObRangeNode *node,
                                           const int64_t in_idx,
                                           ObTmpRange *&range) {
   int ret = OB_SUCCESS;
-  range = all_tmp_ranges_.at(node->node_id_);
-  if (range == nullptr && OB_FAIL(generate_tmp_range(range, pre_range_graph_->get_column_cnt()))) {
+  if (OB_UNLIKELY(node->node_id_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected node", K(node->node_id_));
+  } else if (OB_FALSE_IT(range = all_tmp_ranges_.at(node->node_id_))) {
+  } else if (range == nullptr && OB_FAIL(generate_tmp_range(range, pre_range_graph_->get_column_cnt()))) {
     LOG_WARN("failed to generate tmp range");
   } else {
     range->always_false_ = false;
@@ -1275,6 +1353,192 @@ int ObRangeGenerator::create_new_range(ObNewRange *&range, int64_t column_cnt)
     range->table_id_ = pre_range_graph_->get_table_id();
     range->start_key_.assign(starts, column_cnt);
     range->end_key_.assign(ends, column_cnt);
+  }
+  return ret;
+}
+
+struct InParamObjCmp
+{
+  inline bool operator()(const ObObj *left, const ObObj *right)
+  {
+    bool bret = false;
+    if (left != nullptr && right != nullptr) {
+      bret = (left->compare(*right) < 0);
+    }
+    return bret;
+  }
+};
+
+int ObRangeGenerator::generate_tmp_not_in_param(const ObRangeNode &node,
+                                                ObTmpInParam *&tmp_in_param)
+{
+  int ret = OB_SUCCESS;
+  InParam *in_param = nullptr;
+  ObObj* objs_ptr = nullptr;
+  const ObRangeColumnMeta *meta = nullptr;
+  if (OB_UNLIKELY(!node.is_not_in_node_ ||
+                  node.node_id_ < 0 ||
+                  node.node_id_ >= all_tmp_node_caches_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected not in node", K(node.node_id_), K(all_tmp_node_caches_.count()));
+  } else if (OB_NOT_NULL(tmp_in_param = static_cast<ObTmpInParam*>(all_tmp_node_caches_.at(node.node_id_)))) {
+    // do nothing
+  } else if (OB_UNLIKELY(node.min_offset_ < 0 ||
+                         node.min_offset_ >= pre_range_graph_->get_column_cnt() ||
+                         node.start_keys_[node.min_offset_] >= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range", K(node));
+  } else if (OB_ISNULL(meta = pre_range_graph_->get_column_meta(node.min_offset_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexecpted null", K(meta));
+  } else if (OB_ISNULL(in_param = range_map_.in_params_.at(-node.start_keys_[node.min_offset_] - 1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected in param", K(node.node_id_));
+  } else if (OB_ISNULL(tmp_in_param = (ObTmpInParam*)allocator_.alloc(sizeof(ObTmpInParam)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memeory failed", K(tmp_in_param));
+  } else if (OB_ISNULL(objs_ptr = (ObObj*)allocator_.alloc(sizeof(ObObj) * in_param->count()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memeory failed", K(objs_ptr));
+  } else if (OB_FALSE_IT(tmp_in_param = new(tmp_in_param) ObTmpInParam(allocator_))) {
+  } else if (OB_FAIL(tmp_in_param->in_param_.init(in_param->count()))) {
+     LOG_WARN("failed to init fixed array size", K(ret));
+  } else {
+    objs_ptr = new(objs_ptr) ObObj[in_param->count()];
+    bool always_false = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !always_false && i < in_param->count(); ++i) {
+      bool is_valid = false;
+      bool need_add = true;
+      int64_t cmp = 0;
+      if (OB_FAIL(get_result_value(in_param->at(i), objs_ptr[i], is_valid, exec_ctx_))) {
+        LOG_WARN("failed to get result vlaue", K(i));
+      } else if (!is_valid) {
+        always_false = true;
+        need_add = false;
+      } else if (OB_LIKELY(ObSQLUtils::is_same_type_for_compare(objs_ptr[i].get_meta(),
+                                                                meta->column_type_.get_obj_meta()))) {
+        objs_ptr[i].set_collation_type(meta->column_type_.get_collation_type());
+      } else if (!node.is_phy_rowid_ && OB_FAIL(try_cast_value(*meta, objs_ptr[i], cmp))) {
+        LOG_WARN("failed to cast value", K(meta), K(objs_ptr[i]));
+      } else if (cmp != 0) {
+        need_add = false;
+      } else {
+        objs_ptr[i].set_collation_type(meta->column_type_.get_collation_type());
+      }
+      if (OB_SUCC(ret) && need_add) {
+        if(OB_FAIL(tmp_in_param->in_param_.push_back(&objs_ptr[i]))) {
+          LOG_WARN("failed to push back in param", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FALSE_IT(all_tmp_node_caches_.at(node.node_id_) = tmp_in_param)) {
+    } else if (always_false) {
+      tmp_in_param->always_false_ = always_false;
+    } else {
+      std::sort(&tmp_in_param->in_param_.at(0),
+                &tmp_in_param->in_param_.at(0) + tmp_in_param->in_param_.count(),
+                InParamObjCmp());
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::final_not_in_range_node(const ObRangeNode &node,
+                                              const int64_t not_in_idx,
+                                              ObTmpInParam *tmp_in_param,
+                                              ObTmpRange *&range)
+{
+  int ret = OB_SUCCESS;
+  const ObRangeColumnMeta *meta = nullptr;
+  range = all_tmp_ranges_.at(node.node_id_);
+  if (range == nullptr) {
+    if (OB_FAIL(generate_tmp_range(range, pre_range_graph_->get_column_cnt()))) {
+      LOG_WARN("failed to generate tmp range");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    int64_t start_padding = OB_RANGE_MIN_VALUE;
+    int64_t end_padding = OB_RANGE_MAX_VALUE;
+    range->always_false_ = false;
+    if (OB_ISNULL(range)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (OB_ISNULL(tmp_in_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(tmp_in_param));
+    } else {
+      for (int64_t i = 0; i < node.min_offset_; ++i) {
+        range->start_[i].set_nop_value();
+        range->end_[i].set_nop_value();
+      }
+      range->min_offset_ = node.min_offset_;
+      range->max_offset_ = node.max_offset_;
+      range->include_start_ = false;
+      range->include_end_ = false;
+      range->is_phy_rowid_ = node.is_phy_rowid_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (0 == not_in_idx) {
+      if (lib::is_mysql_mode()) {
+        range->start_[range->min_offset_].set_null();
+        start_padding = OB_RANGE_MAX_VALUE;
+      } else {
+        range->start_[range->min_offset_].set_min_value();
+        start_padding = OB_RANGE_MIN_VALUE;
+      }
+      if (OB_FAIL(ob_write_obj(allocator_, *tmp_in_param->in_param_.at(not_in_idx),
+                                      range->end_[range->min_offset_]))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else {
+        end_padding = OB_RANGE_MIN_VALUE;
+      }
+    } else if (tmp_in_param->in_param_.count() <= not_in_idx) {
+      if (OB_FAIL(ob_write_obj(allocator_, *tmp_in_param->in_param_.at(not_in_idx - 1),
+                               range->start_[range->min_offset_]))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else {
+        if (lib::is_oracle_mode()) {
+          range->end_[range->min_offset_].set_null();
+          end_padding = OB_RANGE_MIN_VALUE;
+        } else {
+          range->end_[range->min_offset_].set_max_value();
+          end_padding = OB_RANGE_MAX_VALUE;
+        }
+        start_padding = OB_RANGE_MAX_VALUE;
+      }
+    } else {
+      if (OB_FAIL(ob_write_obj(allocator_, *tmp_in_param->in_param_.at(not_in_idx - 1),
+                               range->start_[range->min_offset_]))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else if (OB_FAIL(ob_write_obj(allocator_, *tmp_in_param->in_param_.at(not_in_idx),
+                                      range->end_[range->min_offset_]))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else {
+        start_padding = OB_RANGE_MAX_VALUE;
+        end_padding = OB_RANGE_MIN_VALUE;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      for (int64_t i = range->min_offset_ + 1; i < pre_range_graph_->get_column_cnt(); ++i) {
+        if (start_padding == OB_RANGE_MIN_VALUE) {
+          range->start_[i].set_min_value();
+        } else if (start_padding == OB_RANGE_MAX_VALUE) {
+          range->start_[i].set_max_value();
+        }
+        if (end_padding == OB_RANGE_MIN_VALUE) {
+          range->end_[i].set_min_value();
+        } else if (start_padding == OB_RANGE_MAX_VALUE) {
+          range->end_[i].set_max_value();
+        }
+      }
+      if (!node.is_phy_rowid_ && OB_FAIL(cast_value_type(*range))) {
+        LOG_WARN("cast value type failed", K(ret));
+      } else {
+        all_tmp_ranges_.at(node.node_id_) = range;
+      }
+    }
   }
   return ret;
 }

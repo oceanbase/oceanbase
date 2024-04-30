@@ -39,6 +39,7 @@ public:
   static int schedule_tablet_medium_merge(
       ObLS &ls,
       ObTablet &tablet,
+      bool &succ_create_dag,
       const int64_t major_frozen_scn = 0,
       const bool scheduler_called = false);
   /*
@@ -68,12 +69,17 @@ public:
     ObMultiVersionSchemaService &schema_service,
     const ObTablet &tablet,
     const int64_t schema_version,
+    const int64_t medium_compat_version,
     ObIAllocator &allocator,
-    ObMediumCompactionInfo &medium_info);
-
-  int schedule_next_medium_for_leader(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
+    storage::ObStorageSchema &storage_schema);
+  int schedule_next_medium_for_leader(
+    const int64_t major_snapshot,
+    const bool is_tombstone,
+    ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat,
+    bool &medium_clog_submitted);
   int decide_medium_snapshot(
-      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason);
+      const ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason,
+      bool &medium_clog_submitted);
 
   int check_medium_finish(const ObLSLocality &ls_locality);
 
@@ -146,12 +152,16 @@ protected:
       ObLS &ls,
       ObTablet &tablet,
       const int64_t schedule_scn,
-      const ObMediumCompactionInfo::ObCompactionType compaction_type);
-  int schedule_next_medium_primary_cluster(const int64_t major_snapshot, ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat);
+      const ObMediumCompactionInfo::ObCompactionType compaction_type,
+      bool &succ_create_dag);
+  int schedule_next_medium_primary_cluster(
+    const int64_t major_snapshot,
+    const bool is_tombstone,
+    ObTenantTabletScheduler::ObScheduleStatistics &schedule_stat,
+    bool &medium_clog_submitted);
   int choose_new_medium_snapshot(
       const int64_t max_reserved_snapshot,
-      ObMediumCompactionInfo &medium_info,
-      ObGetMergeTablesResult &result);
+      ObMediumCompactionInfo &medium_info);
   static int choose_medium_schema_version(
       common::ObArenaAllocator &allocator,
       const int64_t medium_snapshot,

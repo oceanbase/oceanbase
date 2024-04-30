@@ -99,6 +99,15 @@ public:
   static int eval_application_context(const ObExpr &expr, common::ObDatum &res,
                                       const common::ObString &arg1, const common::ObString &arg2,
                                       ObEvalCtx &ctx);
+  static int eval_proxy_user(const ObExpr &expr, ObDatum &res, const ObDatum &arg1,
+                                const ObDatum &arg2, ObEvalCtx &ctx);
+
+  static int eval_proxy_user_id(const ObExpr &expr, ObDatum &res,
+                                    const ObDatum &arg1, const ObDatum &arg2,
+                                    ObEvalCtx &ctx);
+
+  static int eval_auth_identity(const ObExpr &expr, ObDatum &res, const ObDatum &arg1,
+                                const ObDatum &arg2, ObEvalCtx &ctx);
   typedef int (*eval_fun)(const ObExpr &expr, common::ObDatum &res,
                           const common::ObDatum &arg1,
                           const common::ObDatum &arg2, ObEvalCtx &ctx);

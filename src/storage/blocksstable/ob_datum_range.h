@@ -81,12 +81,20 @@ struct ObDatumComparor
       const ObStorageDatumUtils &datum_utils,
       int &ret,
       bool reverse = false,
-      bool lower_bound = true)
-    : datum_utils_(datum_utils), ret_(ret), reverse_(reverse), lower_bound_(lower_bound)
+      bool lower_bound = true,
+      bool compare_datum_cnt = true)
+    : datum_utils_(datum_utils), ret_(ret), reverse_(reverse), lower_bound_(lower_bound),
+      compare_datum_cnt_(compare_datum_cnt)
   {}
   ObDatumComparor() = delete;
   ~ObDatumComparor() = default;
   OB_INLINE bool operator()(const T &left, const T &right)
+  {
+    return compare<T>(left, right);
+  }
+private:
+  template <typename DataType>
+  OB_INLINE bool compare(const DataType &left, const DataType &right)
   {
     int &ret = ret_;
     bool bret = false;
@@ -105,14 +113,34 @@ struct ObDatumComparor
     }
     return bret;
   }
+
+  template <>
+  OB_INLINE bool compare<ObDatumRowkey>(const ObDatumRowkey &left, const ObDatumRowkey &right)
+  {
+    int &ret = ret_;
+    bool bret = false;
+    int cmp_ret = 0;
+    if (OB_FAIL(ret)) {
+    } else if (lower_bound_ || reverse_) {
+      if (OB_FAIL(left.compare(right, datum_utils_, cmp_ret, compare_datum_cnt_))) {
+        STORAGE_LOG(WARN, "Failed to compare datum rowkey or range", K(ret), K(left), K(right));
+      } else {
+        bret = reverse_ ? cmp_ret > 0 : cmp_ret < 0;
+      }
+    } else if (OB_FAIL(right.compare(left, datum_utils_, cmp_ret, compare_datum_cnt_))) {
+      STORAGE_LOG(WARN, "Failed to compare datum rowkey or range", K(ret), K(left), K(right));
+    } else {
+      bret = cmp_ret > 0;
+    }
+    return bret;
+  }
 private:
   const ObStorageDatumUtils &datum_utils_;
   int &ret_;
   bool reverse_;
   bool lower_bound_;
+  bool compare_datum_cnt_;
 };
-
-
 
 OB_INLINE void ObDatumRange::reset()
 {

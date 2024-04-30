@@ -101,7 +101,7 @@ public:
 class ObS2Adapter final
 {
 public:
-  ObS2Adapter(ObIAllocator *allocator, bool is_geog)
+  ObS2Adapter(ObIAllocator *allocator, bool is_geog, bool is_query_window = false)
     : allocator_(allocator),
       visitor_(NULL),
       geo_(NULL),
@@ -109,9 +109,15 @@ public:
       need_buffer_(false),
       distance_()
   {
-    options_.set_max_cells(OB_GEO_S2REGION_OPTION_MAX_CELL);
-    options_.set_max_level(OB_GEO_S2REGION_OPTION_MAX_LEVEL);
-    options_.set_level_mod(OB_GEO_S2REGION_OPTION_LEVEL_MOD);
+    if (!is_query_window) {
+      options_.set_max_cells(OB_GEO_S2REGION_OPTION_MAX_CELL);
+      options_.set_max_level(OB_GEO_S2REGION_OPTION_MAX_LEVEL);
+      options_.set_level_mod(OB_GEO_S2REGION_OPTION_LEVEL_MOD);
+    } else {
+      options_.set_max_cells(50);
+      options_.set_max_level(30);
+      options_.set_level_mod(OB_GEO_S2REGION_OPTION_LEVEL_MOD);
+    }
   }
   ObS2Adapter(ObIAllocator *allocator, bool is_geog, double distance)
     : allocator_(allocator),
@@ -131,6 +137,7 @@ public:
   int64_t get_ancestors(uint64_t cell, ObS2Cellids &cells);
   int64_t init(const ObString &wkb, const ObSrsBoundsItem *bound = NULL);
   int64_t get_cellids(ObS2Cellids &cells, bool is_query);
+  int64_t get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors);
   int64_t get_inner_cover_cellids(ObS2Cellids &cells);
   int64_t get_mbr(ObSpatialMBR &mbr);
 private:

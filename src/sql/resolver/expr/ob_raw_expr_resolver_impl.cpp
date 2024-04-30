@@ -398,10 +398,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                     uint64_t dep_obj_id = ctx_.view_ref_id_;
                     if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
                       LOG_WARN("failed to add global dependency", K(ret));
-                    } else if (stmt->add_ref_obj_version(dep_obj_id, db_id,
-                                                         ObObjectType::VIEW,
-                                                         udt_schema_version,
-                                                         ctx_.expr_factory_.get_allocator())) {
+                    } else if (OB_FAIL(stmt->add_ref_obj_version(dep_obj_id, db_id,
+                                                             ObObjectType::VIEW, udt_schema_version,
+                                                             ctx_.expr_factory_.get_allocator()))) {
                       LOG_WARN("failed to add ref obj version", K(ret));
                     }
                   }
@@ -427,6 +426,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                 } else {
                   coll_type = ObCharset::get_default_collation(charset_type);
                 }
+              } else if (ctx_.is_in_system_view_) {
+                //for mysql system view, cast char type always has default collation
+                coll_type = ObCharset::get_system_collation();
               } else {
                 // use connection_collation. for cast('a' as char)
                 if (OB_ISNULL(ctx_.session_info_)) {
@@ -519,12 +521,24 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         break;
       }
       case T_OP_AND:
-      case T_OP_OR:
+      case T_OP_OR: {
+        ObOpRawExpr *m_expr = NULL;
+        if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
+          LOG_WARN("fail to process node with children", K(ret), K(node));
+        } else if (OB_ISNULL(ctx_.session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session_info_ is NULL", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
+          LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
+        } else {
+          expr = m_expr;
+        }
+        break;
+      }
       case T_OP_XOR: {
         ObOpRawExpr *m_expr = NULL;
         int64_t num_child = 2;
-        if (OB_FAIL(process_node_with_children(node, num_child, m_expr,
-                                               node->type_ == T_OP_XOR ? false : is_root_expr))) {
+        if (OB_FAIL(process_node_with_children(node, num_child, m_expr, false))) {
           LOG_WARN("fail to process node with children", K(ret), K(node));
         } else if (OB_ISNULL(ctx_.session_info_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -2632,6 +2646,21 @@ int ObRawExprResolverImpl::process_pseudo_column_node(const ParseNode &node, ObR
   } else if (OB_UNLIKELY(false == is_pseudo_column_valid_scope(ctx_.current_scope_))) {
     ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
     LOG_WARN("pseudo column at invalid scope", K(ctx_.current_scope_), K(ret));
+  } else if (T_START_WITH_SCOPE == ctx_.current_scope_) {
+    // Oracle supports LEVEL column in START WITH, and the value of LEVEL is 0.
+    // But, other pseudo columns in START WITH scope are not allowed.
+    ObConstRawExpr *c_expr = NULL;
+    if (OB_UNLIKELY(T_LEVEL != pseudo_column_node->type_)) {
+      ret = OB_ERR_CBY_PSEUDO_COLUMN_NOT_ALLOWED;
+      LOG_WARN("invalid pseudo column at START WITH scope", K(pseudo_column_node->type_), K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_const_number_expr(ctx_.expr_factory_,
+                                                               ObObjType::ObNumberType,
+                                                               number::ObNumber::get_zero(),
+                                                               c_expr))) {
+      LOG_WARN("failed to create const number expr", K(ret));
+    } else {
+      expr = c_expr;
+    }
   } else if (OB_FAIL(check_pseudo_column_exist(pseudo_column_node->type_, pseudo_column_expr))) {
     LOG_WARN("fail to check pseudo column exist", K(ret));
   } else if (pseudo_column_expr != NULL) {
@@ -2827,12 +2856,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   const ObSQLSessionInfo *session_info = ctx_.session_info_;
   int64_t server_collation = CS_TYPE_INVALID;
   ObCollationType nation_collation = OB_NOT_NULL(ctx_.session_info_) ? ctx_.session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
-  if (lib::is_oracle_mode() && nullptr == session_info) {
+  ObCompatType compat_type = COMPAT_MYSQL57;
+  if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_FAIL(ObResolverUtils::resolve_const(&node,
                         // stmt_type is only used in oracle mode
                         lib::is_oracle_mode() ? session_info->get_stmt_type() : stmt::T_NONE,
@@ -2844,6 +2876,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              static_cast<ObCollationType>(server_collation),
                                              &(ctx_.parents_expr_info_),
                                              session_info->get_sql_mode(),
+                                             compat_type,
                                              nullptr != ctx_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
@@ -3069,8 +3102,12 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           T_QUESTIONMARK == c_expr->get_expr_type() &&
           c_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type())) {
+           pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_ASSOCIATIVE_ARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_REF_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_OPAQUE_TYPE == c_expr->get_result_type().get_extend_type())) {
         ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
       }
     }
@@ -3840,6 +3877,7 @@ int ObRawExprResolverImpl::process_between_node(const ParseNode *node, ObRawExpr
         if (OB_FAIL(recursive_resolve(node->children_[0], btw_params[BTW_PARAM_NUM]))) {
           SQL_RESV_LOG(WARN, "resolve child expr failed", K(ret), K(BTW_PARAM_NUM));
         } else if (OB_ISNULL(btw_params[BTW_PARAM_NUM])) {
+          ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret), K(BTW_PARAM_NUM));
         }
       }
@@ -4304,6 +4342,9 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
           LOG_WARN("fail to recursive resolver", K(ret), K(when_node->children_[0]));
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(when_node->children_[1], then_expr)))) {
           LOG_WARN("fail to recursive resolve", K(ret), K(when_node->children_[1]));
+        } else if (T_REF_QUERY == then_expr->get_expr_type() && static_cast<ObQueryRefRawExpr*>(then_expr)->is_cursor()) {
+          ret = OB_ERR_INVALID_CURSOR_EXPR;
+          LOG_WARN("CURSOR expression not allowed in then.", K(ret));
         } else if (OB_FAIL(case_expr->add_when_param_expr(when_expr))) {
           LOG_WARN("Add when expression failed", K(ret));
         } else if (OB_FAIL(case_expr->add_then_param_expr(then_expr))) {
@@ -4335,6 +4376,9 @@ int ObRawExprResolverImpl::process_case_node(const ParseNode *node, ObRawExpr *&
         }
       } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[2], default_expr)))) {
         LOG_WARN("fail to recursive resolve", K(ret), K(node->children_[2]));
+      } else if (T_REF_QUERY == default_expr->get_expr_type() && static_cast<ObQueryRefRawExpr*>(default_expr)->is_cursor()) {
+        ret = OB_ERR_INVALID_CURSOR_EXPR;
+        LOG_WARN("CURSOR expression not allowed in else.", K(ret));
       }
       if (OB_SUCC(ret)){
         if (T_QUESTIONMARK == default_expr->get_expr_type()) {
@@ -8316,7 +8360,9 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool exist = false;
   bool is_internal = false;
   if (OB_FAIL(ret)) {
-  } else if (ctx_.session_info_->is_inner()) {
+  } else if (ctx_.session_info_->is_inner()
+            || is_sys_view(ctx_.view_ref_id_)
+            || ctx_.is_from_show_resolver_) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {
   } else if (exist && is_internal) {
@@ -8436,7 +8482,6 @@ int ObRawExprResolverImpl::process_odbc_time_literals(const ObItemType dst_time_
   }
   return ret;
 }
-
 
 } //namespace sql
 } //namespace oceanbase

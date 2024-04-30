@@ -364,8 +364,12 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_decode_trace_id.h"
 #include "ob_expr_priv_st_geohash.h"
 #include "ob_expr_priv_st_makepoint.h"
+#include "ob_expr_password.h"
+#include "ob_expr_inner_table_option_printer.h"
+#include "ob_expr_transaction_id.h"
 
 namespace oceanbase
 {
@@ -1126,15 +1130,15 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprXmlConcat::eval_xml_concat,                                   /* 662 */
   ObExprXmlForest::eval_xml_forest,                                   /* 663 */
   ObExprExistsNodeXml::eval_existsnode_xml,                           /* 664 */
-  NULL, //ObExprPassword::eval_password,                              /* 665 */
+  ObExprPassword::eval_password,                                      /* 665 */
   NULL, //ObExprDocID::generate_doc_id,                               /* 666 */
   NULL, //ObExprWordSegment::generate_fulltext_column,                /* 667 */
   NULL, //ObExprWordCount::generate_word_count,                       /* 668 */
   NULL, //ObExprBM25::eval_bm25_relevance_expr,                       /* 669 */
-  NULL, //ObExprTransactionId::eval_transaction_id,                   /* 670 */
-  NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 671 */
-  NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 672 */
-  NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
+  ObExprTransactionId::eval_transaction_id,                           /* 670 */
+  ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
+  ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 673 */
   NULL, //ObExprInnerRowCmpVal::eval_inner_row_cmp_val,               /* 674 */
   NULL, //ObExprIs::json_is_true,                                     /* 675 */
   NULL, //ObExprIs::json_is_false,                                    /* 676 */
@@ -1261,7 +1265,20 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObExprJoinFilter::eval_in_filter_batch,                             /* 113 */
   calc_sqrt_expr_mysql_in_batch,                                      /* 114 */
   calc_sqrt_expr_oracle_double_in_batch,                              /* 115 */
-  calc_sqrt_expr_oracle_number_in_batch                               /* 116 */
+  calc_sqrt_expr_oracle_number_in_batch,                              /* 116 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObDecimalIntTC>,   /* 117 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObDecimalIntTC>,   /* 118 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObIntTC, ObDecimalIntTC>,          /* 119 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObIntTC, ObDecimalIntTC>,          /* 120 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObUIntTC, ObDecimalIntTC>,         /* 121 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObUIntTC, ObDecimalIntTC>,         /* 122 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObIntTC>,          /* 123 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObIntTC>,          /* 124 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 125 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 126 */
+  NULL, //ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
+  NULL, //ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

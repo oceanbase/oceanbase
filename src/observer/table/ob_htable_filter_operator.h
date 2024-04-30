@@ -224,6 +224,7 @@ public:
                          ObTableQueryResult *&out_result);
   ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
   void set_max_version(int32_t max_version) { max_version_ = max_version; }
+  void init_table_group_value();
 private:
   int next_cell();
   int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells,
@@ -232,6 +233,8 @@ private:
   int seek_or_skip_to_next_col(const ObHTableCell &cell);
   bool reach_batch_limit() const;
   bool reach_size_limit() const;
+  int append_family(const ObNewRow &row);
+  int add_new_row(const ObNewRow &row, ObTableQueryResult *&out_result);
 private:
   table::ObTableApiScanRowIterator *child_op_;
   const table::ObHTableFilter &htable_filter_;
@@ -257,6 +260,9 @@ private:
   int32_t count_per_row_;
   bool has_more_cells_;
   bool is_first_result_;
+  bool is_table_group_inited_;
+  bool is_table_group_req_;
+  ObString family_name_;
 };
 
 // entry class

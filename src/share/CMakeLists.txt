@@ -180,6 +180,7 @@ ob_set_subtarget(ob_share common
   ob_throttling_utils.cpp
   ob_storage_ha_diagnose_struct.cpp
   ob_storage_ha_diagnose_operator.cpp
+  ob_compatibility_control.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -261,6 +262,7 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_ttl_util.cpp
   table/ob_table_config_util.cpp
   table/ob_table_util.cpp
+  table/ob_table_object.cpp
   scheduler/ob_dag_scheduler.cpp
   scheduler/ob_sys_task_stat.cpp
   scheduler/ob_dag_warning_history_mgr.cpp

@@ -1616,7 +1616,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           } else if (ob_is_oracle_datetime_tc(from_type) || ob_is_interval_tc(from_type)
                      || ob_is_float_tc(from_type) || ob_is_double_tc(from_type)) {
             keep_from_type = true;
-          } else if (ob_is_oracle_numeric_type(from_type)) {
+          } else if (ob_is_oracle_numeric_type(from_type) || ob_is_null(from_type)) {
             keep_from_type = false;
           } else {
             ret = OB_ERR_ARGUMENT_SHOULD_NUMERIC_DATE_DATETIME_TYPE;
@@ -2471,16 +2471,10 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         result_type.set_accuracy(ObAccuracy::MAX_ACCURACY[ObIntType]);
       }
       expr.set_result_type(result_type);
+    } else if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
+      LOG_WARN("deduce type failed", K(ret));
     } else {
-      // agg函数func_params也为空，此时需要置成agg的result_type
-      if (expr.get_agg_expr()->get_result_type().is_invalid()) {
-        if (OB_FAIL(expr.get_agg_expr()->deduce_type(my_session_))) {
-          LOG_WARN("deduce type failed", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        expr.set_result_type(expr.get_agg_expr()->get_result_type());
-      }
+      expr.set_result_type(expr.get_agg_expr()->get_result_type());
     }
   //here pl_agg_udf_expr_ in win_expr must be null, defensive check!!!
   } else if (OB_UNLIKELY(expr.get_pl_agg_udf_expr() != NULL)) {

@@ -495,13 +495,13 @@ int ObPartitionMerger::get_base_iter_curr_macro_block(const blocksstable::ObMacr
   return ret;
 }
 
-template <typename T> T *ObPartitionMerger::alloc_merge_helper()
+template <typename T, typename... Args> T *ObPartitionMerger::alloc_merge_helper(Args... args)
 {
   void *buf = nullptr;
   T *merge_iter = nullptr;
   if (OB_ISNULL(buf = allocator_.alloc(sizeof(T)))) {
   } else {
-    merge_iter = new (buf) T();
+    merge_iter = new (buf) T(args...);
   }
   return merge_iter;
 }
@@ -583,9 +583,9 @@ int ObPartitionMajorMerger::init_partition_fuser(const ObMergeParameter &merge_p
   partition_fuser_ = nullptr;
 
   if (is_meta_major_merge(merge_param.merge_type_)) {
-    partition_fuser_ = alloc_merge_helper<ObMetaPartitionMergeFuser>();
+    partition_fuser_ = alloc_merge_helper<ObMetaPartitionMergeFuser>(data_store_desc_.major_working_cluster_version_);
   } else {
-    partition_fuser_ = alloc_merge_helper<ObMajorPartitionMergeFuser>();
+    partition_fuser_ = alloc_merge_helper<ObMajorPartitionMergeFuser>(data_store_desc_.major_working_cluster_version_);
   }
   if (OB_ISNULL(partition_fuser_)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -821,6 +821,7 @@ int ObPartitionMajorMerger::reuse_base_sstable(ObPartitionMajorMergeHelper &merg
         // flush all row in curr macro block
         while (OB_SUCC(ret) && base_iter->is_macro_block_opened()) {
           if (OB_ISNULL(base_iter->get_curr_row())) {
+            ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "curr row is unexpected null", K(ret), KPC(base_iter));
           } else if (OB_FAIL(process(*base_iter->get_curr_row()))) {
             STORAGE_LOG(WARN, "Failed to process row", K(ret), K(*partition_fuser_->get_result_row()));
@@ -1753,6 +1754,7 @@ void ObPartitionMergeDumper::print_error_info(const int err_no,
     for (int idx = 0; OB_SUCC(ret) && idx < ctx.tables_handle_.get_count(); ++idx) {
       ObITable *table = ctx.tables_handle_.get_table(idx);
       if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "The store is NULL", K(idx), K(ctx.tables_handle_));
       } else if (OB_FAIL(compaction::ObPartitionMergeDumper::judge_disk_free_space(dump_table_dir,
                          table))) {

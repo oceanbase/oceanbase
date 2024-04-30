@@ -626,7 +626,8 @@ ObTableModifySpec::ObTableModifySpec(common::ObIAllocator &alloc,
   : ObOpSpec(alloc, type),
     expr_frame_info_(NULL),
     ab_stmt_id_(nullptr),
-    flags_(0)
+    flags_(0),
+    das_dop_(0)
 {
 }
 
@@ -636,6 +637,7 @@ OB_DEF_SERIALIZE(ObTableModifySpec)
   BASE_SER((ObTableModifySpec, ObOpSpec));
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(ab_stmt_id_);
+  OB_UNIS_ENCODE(das_dop_);
   return ret;
 }
 
@@ -645,6 +647,7 @@ OB_DEF_DESERIALIZE(ObTableModifySpec)
   BASE_DESER((ObTableModifySpec, ObOpSpec));
   OB_UNIS_DECODE(flags_);
   OB_UNIS_DECODE(ab_stmt_id_);
+  OB_UNIS_DECODE(das_dop_);
   return ret;
 }
 
@@ -654,6 +657,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableModifySpec)
   BASE_ADD_LEN((ObTableModifySpec, ObOpSpec));
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(ab_stmt_id_);
+  OB_UNIS_ADD_LEN(das_dop_);
   return len;
 }
 
@@ -675,6 +679,7 @@ ObTableModifyOp::ObTableModifyOp(ObExecContext &ctx,
     execute_single_row_(false),
     err_log_rt_def_(),
     dml_modify_rows_(ctx.get_allocator()),
+    last_store_row_(),
     saved_session_(NULL)
 {
   obj_print_params_ = CREATE_OBJ_PRINT_PARAM(ctx_.get_my_session());
@@ -731,6 +736,33 @@ void ObTableModifyOp::clear_dml_evaluated_flag()
   }
 }
 
+ObDasParallelType ObTableModifyOp::check_das_parallel_type()
+{
+  ObDasParallelType type = DAS_SERIALIZATION;
+  ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
+  if (MY_SPEC.is_pdml_) {
+    type = DAS_SERIALIZATION;
+  } else if (!is_user_tenant(MTL_ID())) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("not user tenant, can't submit task parallel", K(MTL_ID()));
+  } else if (execute_single_row_) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("execute_single_row is true, can't submit task parallel", K(execute_single_row_));
+  } else if (session->is_inner()) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("session is inner, can't submit task parallel", K(session->is_inner()));
+  } else if (MY_SPEC.plan_->has_nested_sql()) {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("has nested sql, can't submit task parallel", K(MY_SPEC.plan_->has_nested_sql()));
+  } else if (MY_SPEC.plan_->get_das_dop() > 1 && MY_SPEC.das_dop_ > 1) {
+    type = DAS_STREAMING_PARALLEL;
+  } else {
+    type = DAS_SERIALIZATION;
+    LOG_TRACE("das dop not larger than 1", K(MY_SPEC.plan_->get_das_dop()), K(MY_SPEC.das_dop_));
+  }
+  return type;
+}
+
 OB_INLINE int ObTableModifyOp::init_das_dml_ctx()
 {
   ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
@@ -758,6 +790,11 @@ OB_INLINE int ObTableModifyOp::init_das_dml_ctx()
                                         : &MY_SPEC.plan_->get_expr_frame_info());
   dml_rtctx_.das_ref_.set_mem_attr(memattr);
   dml_rtctx_.das_ref_.set_execute_directly(!MY_SPEC.use_dist_das_);
+  dml_rtctx_.das_ref_.get_das_parallel_ctx().set_das_parallel_type(check_das_parallel_type());
+  dml_rtctx_.das_ref_.get_das_parallel_ctx().set_das_dop(ctx_.get_das_ctx().get_real_das_dop());
+  if (check_das_parallel_type() != DAS_SERIALIZATION) {
+    LOG_TRACE("this sql use das parallel submit", K(check_das_parallel_type()));
+  }
   return OB_SUCCESS;
 }
 
@@ -1123,14 +1160,10 @@ int ObTableModifyOp::submit_all_dml_task()
 int ObTableModifyOp::discharge_das_write_buffer()
 {
   int ret = OB_SUCCESS;
-  int64_t simulate_buffer_size = - EVENT_CALL(EventTable::EN_DAS_DML_BUFFER_OVERFLOW);
-  int64_t buffer_size_limit = is_meta_tenant(tenant_id_) ? das::OB_DAS_MAX_META_TENANT_PACKET_SIZE : das::OB_DAS_MAX_TOTAL_PACKET_SIZE;
-  if (OB_UNLIKELY(simulate_buffer_size > 0)) {
-    buffer_size_limit = simulate_buffer_size;
-  }
-  if (dml_rtctx_.get_row_buffer_size() >= buffer_size_limit) {
+  if (dml_rtctx_.need_submit_all_tasks()) {
     LOG_INFO("DASWriteBuffer full, now to write storage",
-             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(), K(dml_rtctx_.get_row_buffer_size()));
+             "buffer memory", dml_rtctx_.das_ref_.get_das_alloc().used(),
+             K(dml_rtctx_.get_das_task_memory_size()), K(dml_rtctx_.get_das_parallel_task_size()));
     ret = submit_all_dml_task();
   } else if (execute_single_row_) {
     if (REACH_COUNT_INTERVAL(100)) { // print log per 100 times.

@@ -27,6 +27,7 @@
 #include "share/ls/ob_ls_table_operator.h"//lst_operator->get
 #include "share/transfer/ob_transfer_task_operator.h"//get_history_task
 #include "share/rpc/ob_async_rpc_proxy.h"//wait_all
+#include "share/location_cache/ob_location_service.h"//get_leader
 #include "rootserver/ob_tenant_transfer_service.h"//transfer
 #include "rootserver/balance/ob_ls_all_part_builder.h"   // ObLSAllPartBuilder
 #include "rootserver/ob_root_utils.h"//get_rs_default_timeout_ctx
@@ -581,6 +582,12 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
     share::ObLSAttr ls_info;
     share::ObLSFlag flag;
     SCN create_scn;
+    share::ObLSAttr src_ls_info;
+    // when ls_group_id of split task is 0, it means creating a duplicate ls
+    // TODO: add new task type like split_dup_ls
+    if (0 == task.get_ls_group_id()) {
+      flag.set_duplicate();
+    }
     if (OB_FAIL(wait_can_create_new_ls_(create_scn))) {
       LOG_WARN("failed to wait create new ls", KR(ret), K(tenant_id_));
       if (OB_NEED_WAIT == ret && !task_comment_.empty()) {
@@ -589,12 +596,14 @@ int ObBalanceTaskExecuteService::process_init_task_(const ObBalanceTask &task,
         ret = OB_SUCCESS;
         skip_next_status = true;
       }
-    } else if (OB_FAIL(ls_info.init(task.get_dest_ls_id(), task.get_ls_group_id(), flag,
+    } else if (OB_FAIL(ls_op.get_ls_attr(task.get_src_ls_id(), false, trans, src_ls_info))) {
+      LOG_WARN("failed to get ls attr", KR(ret), K(task));
+    } else if (OB_FAIL(ls_info.init(task.get_dest_ls_id(), src_ls_info.get_ls_group_id(), flag,
                              share::OB_LS_CREATING, share::OB_LS_OP_CREATE_PRE, create_scn))) {
       LOG_WARN("failed to init new operation", KR(ret), K(create_scn), K(task),
           K(skip_next_status), K(task_comment_));
       //TODO msy164651
-    } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans))) {
+    } else if (OB_FAIL(ls_op.insert_ls(ls_info, share::NORMAL_SWITCHOVER_STATUS, &trans, true/*skip_dup_ls_check*/))) {
       LOG_WARN("failed to insert new operation", KR(ret), K(ls_info));
     }
     ISTAT("create new ls", KR(ret), K(ls_info), K(task));
@@ -763,32 +772,32 @@ int ObBalanceTaskExecuteService::execute_transfer_in_trans_(
 
   // if transfer is not finished and transfer task not executing, generate new task
   if (OB_SUCC(ret) && !all_part_transferred && !transfer_task_executing) {
-    ObTransferTaskID transfer_id;
+    ObTransferTask transfer_task;
     if (OB_FAIL(transfer_service->generate_transfer_task(
         trans,
         task.get_src_ls_id(),
         task.get_dest_ls_id(),
         to_do_part_list,
         task.get_balance_task_id(),
-        transfer_id))) {
+        transfer_task))) {
       LOG_WARN("failed to generate task id", KR(ret), K(to_do_part_list), K(task));
     } else if (OB_FAIL(ObBalanceTaskTableOperator::start_transfer_task(
         tenant_id_,
         task.get_balance_task_id(),
-        transfer_id,
+        transfer_task.get_task_id(),
         trans))) {
-      LOG_WARN("failed to generate new transfer task", KR(ret), K(tenant_id_), K(task), K(transfer_id));
+      LOG_WARN("failed to generate new transfer task", KR(ret), K(tenant_id_), K(task), K(transfer_task));
     } else {
       transfer_service->wakeup();
       if (job.get_job_type().is_transfer_partition()) {
-        if (OB_FAIL(try_start_transfer_partition_task_(job, to_do_part_list,
-                 transfer_id, task.get_dest_ls_id(), trans))) {
+        if (OB_FAIL(try_start_transfer_partition_task_(job, transfer_task.get_part_list(),
+                transfer_task.get_task_id(), task.get_dest_ls_id(), trans))) {
           LOG_WARN("failed to start transfer partition task", KR(ret),
-           K(transfer_id), K(to_do_part_list), K(task), K(job));
+           K(to_do_part_list), K(task), K(job), K(transfer_task));
         }
       }
     }
-    ISTAT("generate new transfer task", KR(ret), K(transfer_id), K(to_do_part_list), K(task), K(task_comment_));
+    ISTAT("generate new transfer task", KR(ret), K(transfer_task), K(to_do_part_list), K(task), K(task_comment_));
   }
 
   // double check for merge task to make sure that all partitions on src_ls have been transferred
@@ -858,7 +867,7 @@ int ObBalanceTaskExecuteService::get_and_update_merge_ls_part_list_(
     all_part_transferred = true;
     ISTAT("there is no partition on src ls, no need update part list", K(task),
         K(all_part_transferred), K(part_list));
-  } else if (OB_FAIL(ObBalanceTaskTableOperator::update_merge_ls_part_list(
+  } else if (OB_FAIL(ObBalanceTaskTableOperator::update_task_part_list(
       tenant_id_,
       task.get_balance_task_id(),
       part_list,

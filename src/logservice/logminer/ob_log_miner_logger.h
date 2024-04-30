@@ -23,8 +23,6 @@ namespace oblogminer
 ::oceanbase::oblogminer::LogMinerLogger::get_logminer_logger_instance().log_stdout_v(__VA_ARGS__)
 #define LOGMINER_LOGGER \
 ::oceanbase::oblogminer::LogMinerLogger::get_logminer_logger_instance()
-#define PB_STR ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>"
-#define PB_WIDTH 50
 class LogMinerLogger {
 public:
   LogMinerLogger();
@@ -35,9 +33,16 @@ public:
   void log_stdout(const char *format, ...);
   void log_stdout_v(const char *format, ...);
   int log_progress(int64_t record_num, int64_t current_ts, int64_t begin_ts, int64_t end_ts);
+private:
+  int get_terminal_width();
 
 private:
+  static const int MIN_PB_WIDTH = 5;
+  // 68: 20->datatime, 2->[], 7->percentage, 19->", written records: ", 20->the length of INT64_MAX
+  static const int FIXED_TERMINAL_WIDTH = 68;
+  static const int MAX_SCREEN_WIDTH = 4096;
   bool verbose_;
+  char pb_str_[MAX_SCREEN_WIDTH];
 };
 
 }

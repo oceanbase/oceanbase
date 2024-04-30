@@ -7740,7 +7740,13 @@ int ObLogPlan::get_minimal_cost_candidate(const ObIArray<CandidatePlan> &candida
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
-    candidate = candidates.at(ObRandom::rand(0, candidates.count() - 1));
+    ObQueryCtx* query_ctx;
+    if (OB_ISNULL(query_ctx = get_optimizer_context().get_query_ctx())) {
+      LOG_WARN("unexpected null value", K(query_ctx));
+      candidate = candidates.at(0);
+    } else {
+      candidate = candidates.at(query_ctx->rand_gen_.get(0, candidates.count() - 1));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates.count(); i++) {
       if (OB_ISNULL(candidates.at(i).plan_tree_)) {
@@ -7824,10 +7830,8 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     LOG_WARN("invalid argument", K(ret));
   } else if (FALSE_IT(need_limit = get_stmt()->has_limit())) {
     /*do nothing*/
-  } else if (OB_FAIL(get_stmt()->get_order_exprs(candi_subquery_exprs))) {
-    LOG_WARN("failed to get exprs", K(ret));
-  } else if (OB_FAIL(candi_allocate_subplan_filter(candi_subquery_exprs))) {
-    LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
+  } else if (OB_FAIL(candi_allocate_subplan_filter_for_order_by())) {
+    LOG_WARN("failed to get select exprs", K(ret));
   } else if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan)) {
@@ -7887,6 +7891,41 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
   return ret;
 }
 
+/* allocate subplan filter for subquerys in order by
+ * 1. Query has no limit, if select_item also has subquery, then allocate subquery together.
+ * 2. Query has limit, don't allocate subqery in select_item.
+*/
+int ObLogPlan::candi_allocate_subplan_filter_for_order_by()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> candi_exprs;
+  ObSEArray<ObQueryRefRawExpr *, 4> candi_subquery_exprs;
+  const ObDMLStmt *stmt = NULL;
+  if (OB_ISNULL(stmt = get_stmt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(stmt->get_order_exprs(candi_exprs))) {
+    LOG_WARN("failed to get exprs", K(ret));
+  } else if (!get_stmt()->has_limit() && stmt->is_select_stmt()) {
+    for (int64_t i = 0; OB_SUCC(ret) && candi_subquery_exprs.empty() && i < candi_exprs.count(); ++i) {
+      if (OB_FAIL(ObTransformUtils::extract_query_ref_expr(candi_exprs.at(i),
+                                                           candi_subquery_exprs,
+                                                           false))) {
+        LOG_WARN("failed to extract query ref exprs", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && !candi_subquery_exprs.empty() &&
+        OB_FAIL(static_cast<const ObSelectStmt *>(stmt)->get_select_exprs(candi_exprs))) {
+      LOG_WARN("failed to get select exprts", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) &&
+      OB_FAIL(candi_allocate_subplan_filter(candi_exprs))) {
+    LOG_WARN("failed to allocate subplan filter for exprs", K(ret));
+  } else { /* do nothing */ }
+  return ret;
+}
+
 int ObLogPlan::create_order_by_plan(ObLogicalOperator *&top,
                                     const ObIArray<OrderItem> &order_items,
                                     ObRawExpr *topn_expr,
@@ -7920,7 +7959,7 @@ int ObLogPlan::create_order_by_plan(ObLogicalOperator *&top,
                                                        topn_expr,
                                                        is_fetch_with_ties))) {
     LOG_WARN("failed to allocate sort as top", K(ret));
-  } else { /*do nothing*/ }
+  }
   return ret;
 }
 
@@ -8344,7 +8383,8 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
     }
 
     // allocate push down sort if necessary
-    if ((exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
+    if (OB_SUCC(ret) &&
+        (exch_info.is_pq_local() || !exch_info.need_exchange()) && !sort_keys.empty() &&
         (need_sort || is_local_order)) {
       int64_t real_prefix_pos = need_sort && !is_local_order ? prefix_pos : 0;
       bool real_local_order = need_sort ? false : is_local_order;
@@ -9764,7 +9804,7 @@ int ObLogPlan::check_if_subplan_filter_match_repart(ObLogicalOperator *top,
                                                        right_keys,
                                                        null_safe_info))) {
         LOG_WARN("failed to get equal join key", K(ret));
-      } else if (child->get_strong_sharding()->get_all_partition_keys(target_part_keys, true)) {
+      } else if (OB_FAIL(child->get_strong_sharding()->get_all_partition_keys(target_part_keys, true))) {
         LOG_WARN("failed to get partition keys", K(ret));
       } else if (OB_FAIL(ObShardingInfo::check_if_match_repart_or_rehash(input_esets,
                                                                           left_keys,
@@ -10750,8 +10790,10 @@ int ObLogPlan::prune_and_keep_best_plans(ObIArray<CandidatePlan> &candidate_plan
   ObSEArray<CandidatePlan, 8> best_plans;
   OPT_TRACE_TITLE("prune and keep best plans");
   if (OB_UNLIKELY(get_optimizer_context().generate_random_plan())) {
+    ObQueryCtx* query_ctx = get_optimizer_context().get_query_ctx();
     for (int64_t i = 0; OB_SUCC(ret) && i < candidate_plans.count(); i++) {
-      if (ObRandom::rand(0,1) == 1 && OB_FAIL(best_plans.push_back(candidate_plans.at(i)))) {
+      bool random_flag = !OB_ISNULL(query_ctx) && query_ctx->rand_gen_.get(0, 1) == 1;
+      if (random_flag && OB_FAIL(best_plans.push_back(candidate_plans.at(i)))) {
         LOG_WARN("failed to push back random candi plan", K(ret));
       }
     }
@@ -11347,6 +11389,7 @@ bool ObLogPlan::need_consistent_read() const
 int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
                                               ObLogicalOperator &top,
                                               const ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                              bool use_parallel_das,
                                               bool &is_multi_part_dml,
                                               bool &is_result_local)
 {
@@ -11358,6 +11401,9 @@ int ObLogPlan::check_need_multi_partition_dml(const ObDMLStmt &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index dml info is empty", K(ret));
   } else if (stmt.has_instead_of_trigger()) {
+    is_multi_part_dml = true;
+    is_result_local = true;
+  } else if (use_parallel_das) {
     is_multi_part_dml = true;
     is_result_local = true;
   } else if (OB_FAIL(check_stmt_need_multi_partition_dml(stmt,
@@ -13123,6 +13169,10 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
                                           ObIArray<uint64_t> &sfu_table_list)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < sfu_table_list.count(); ++i) {
     ObSEArray<uint64_t, 1> need_alloc_list;
     if (table_is_allocated_for_update(sfu_table_list.at(i))) {
@@ -13141,11 +13191,21 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
       ObSEArray<IndexDMLInfo*, 1> index_dml_infos;
       for (int64_t j = 0; OB_SUCC(ret) && j < need_alloc_list.count(); ++j) {
         IndexDMLInfo *index_dml_info = NULL;
-        if (OB_FAIL(get_table_for_update_info(need_alloc_list.at(j),
-                                              index_dml_info,
-                                              wait_ts,
-                                              skip_locked))) {
-          LOG_WARN("failed to get for update info", K(ret));
+        bool is_hierarchical = false;
+        if (OB_FAIL(is_hierarchical_for_update(is_hierarchical))) {
+          LOG_WARN("failed to check hierarchical query", K(ret));
+        } else if (is_hierarchical) {
+          if (OB_FAIL(get_table_for_update_info_for_hierarchical(need_alloc_list.at(j),
+                                                                 index_dml_infos,
+                                                                 wait_ts,
+                                                                 skip_locked))) {
+            LOG_WARN("failed to get table for update info for hierarchical", K(ret), KPC(get_stmt()));
+          }
+        } else if (OB_FAIL(get_table_for_update_info(need_alloc_list.at(j),
+                                                     index_dml_info,
+                                                     wait_ts,
+                                                     skip_locked))) {
+          LOG_WARN("failed to get for update info", K(ret), KPC(get_stmt()));
         } else if (OB_ISNULL(index_dml_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(index_dml_info));
@@ -13180,6 +13240,37 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
         LOG_TRACE("succced to allocate for update as top", K(sfu_table_list), K(alloc_sfu_list_));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::is_hierarchical_for_update(bool &is_hierarchical)
+{
+  int ret = OB_SUCCESS;
+  is_hierarchical = false;
+  const TableItem *table = NULL;
+  const ObSelectStmt *ref_view = NULL;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (get_stmt()->is_hierarchical_query()) {
+    is_hierarchical = true;
+  } else if (get_stmt()->get_table_size() != 1) {
+    is_hierarchical = false;
+  } else if (OB_ISNULL(table = get_stmt()->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is NULL", K(ret));
+  } else if (!table->for_update_ || !table->is_generated_table()) {
+    is_hierarchical = false;
+  } else if (OB_UNLIKELY(static_cast<const ObSelectStmt*>(get_stmt())->get_for_update_dml_infos().count() == 0)) {
+    // For "select * from (select c1 from t1 connect by xxx) view1 where xxx for update;"
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("for update dml info is null", K(ret), KPC(static_cast<const ObSelectStmt*>(get_stmt())));
+  } else if (OB_ISNULL(ref_view = table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret));
+  } else if (ref_view->is_hierarchical_query()) {
+    is_hierarchical = true;
   }
   return ret;
 }
@@ -13325,6 +13416,148 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
   return ret;
 }
 
+int ObLogPlan::get_table_for_update_info_for_hierarchical(const uint64_t table_id,
+                                                          ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                                          int64_t &wait_ts,
+                                                          bool &skip_locked)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = NULL;
+  const TableItem *table = NULL;
+  skip_locked = false;
+  wait_ts = 0;
+  if (OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table = get_stmt()->get_table_item_by_id(table_id)) ||
+      OB_UNLIKELY(!table->for_update_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(get_stmt()), KPC(table));
+  } else if (OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is not a select stmt", K(ret), KPC(get_stmt()));
+  } else if (OB_FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(get_stmt()))) {
+  } else if (table->is_generated_table()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_for_update_dml_infos().count(); ++i) {
+      const ForUpdateDMLInfo *for_update_info = NULL;
+      IndexDMLInfo *index_dml_info = NULL;
+      const TableItem *base_table = NULL;
+      if (OB_ISNULL(for_update_info = select_stmt->get_for_update_dml_infos().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("for update info is null", K(ret), KPC(select_stmt));
+      } else if (table_id != for_update_info->table_id_) {
+        // do nothing
+      } else if (OB_ISNULL(index_dml_info = static_cast<IndexDMLInfo *>(
+                        get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for index dml info", K(ret));
+      } else if (OB_ISNULL(table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref query is null", K(ret), KPC(table));
+      } else if (OB_FAIL(check_hierarchical_for_update(table, for_update_info->base_table_id_))) {
+        LOG_WARN("failed to check hierarchical for update", K(ret), KPC(for_update_info));
+      } else {
+        index_dml_info = new (index_dml_info) IndexDMLInfo();
+        index_dml_info->table_id_ = for_update_info->table_id_;
+        index_dml_info->loc_table_id_ = for_update_info->base_table_id_;
+        index_dml_info->ref_table_id_ = for_update_info->ref_table_id_;
+        index_dml_info->distinct_algo_ = T_DISTINCT_NONE;
+        index_dml_info->rowkey_cnt_ = for_update_info->rowkey_cnt_;
+        index_dml_info->need_filter_null_ = for_update_info->is_nullable_;
+        index_dml_info->is_primary_index_ = true;
+        skip_locked = for_update_info->skip_locked_;
+        wait_ts = for_update_info->for_update_wait_us_;
+        for (int64_t j = 0; OB_SUCC(ret) && j < for_update_info->unique_column_ids_.count(); ++j) {
+          ObColumnRefRawExpr *col_expr = select_stmt->get_column_expr_by_id(for_update_info->table_id_,
+                                                              for_update_info->unique_column_ids_.at(j));
+          if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column expr is null", K(ret));
+          } else if (OB_FAIL(index_dml_info->column_exprs_.push_back(col_expr))) {
+            LOG_WARN("failed to push back column expr", K(ret));
+          } else {
+            col_expr->set_explicited_reference();
+          }
+        }
+
+        if (OB_FAIL(ret)){
+          // do nothing
+        } else if (OB_SUCC(ret) && OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          LOG_TRACE("Succeed to get table for update info for hierarchical", K(table_id), K(for_update_info),
+                    KPC(index_dml_info), K(wait_ts), K(skip_locked));
+        }
+      }
+    }
+  } else if (table->is_basic_table()) {
+    IndexDMLInfo *index_dml_info = NULL;
+    if (OB_FAIL(get_table_for_update_info(table_id,
+                                          index_dml_info,
+                                          wait_ts,
+                                          skip_locked))) {
+      LOG_WARN("failed to get for update info", K(ret));
+    } else if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(index_dml_info));
+    } else if (OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table table type", K(ret), KPC(table));
+  }
+  return ret;
+}
+
+int ObLogPlan::check_hierarchical_for_update(const TableItem *table,
+                                             uint64_t base_tid)
+{
+  int ret = OB_SUCCESS;
+  TableItem *base_table = NULL;
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(table));
+  } else if (OB_UNLIKELY(!table->is_generated_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is not a generated table", K(ret), KPC(table));
+  } else if (OB_ISNULL(table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret));
+  } else if (get_stmt()->is_hierarchical_query()) {
+    base_table = table->ref_query_->get_table_item_by_id(base_tid);
+  } else if (table->ref_query_->is_hierarchical_query()) {
+    for (int i = 0; OB_SUCC(ret) && i < table->ref_query_->get_table_size(); ++i) {
+      TableItem *mocked_join_table = table->ref_query_->get_table_item(i);
+      if(OB_ISNULL(mocked_join_table)
+          || OB_UNLIKELY(!mocked_join_table->is_generated_table())
+          || OB_ISNULL(mocked_join_table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected mocked join table", K(ret), KPC(mocked_join_table));
+      } else {
+        base_table = mocked_join_table->ref_query_->get_table_item_by_id(base_tid);
+        if (base_table != NULL) {
+          break;
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not a hierarchical query", K(ret), KPC(get_stmt()));
+  }
+  // check base table
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(base_table)) {
+    // base table is not in hierarchical query mocked view, maybe in the
+    // inner generated table which not be merged.
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("base table is not in hierarchical query mocked view", K(ret), KPC(table->ref_query_), K(base_tid));
+  } else if (OB_UNLIKELY(!base_table->is_basic_table() || is_virtual_table(base_table->ref_id_))) {
+    // invalid usage
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("base table is not basic table", K(ret), KPC(base_table));
+  }
+  return ret;
+}
+
 int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
                                       const ObIArray<IndexDMLInfo *> &index_dml_infos,
                                       int64_t wait_ts,
@@ -13341,6 +13574,7 @@ int ObLogPlan::create_for_update_plan(ObLogicalOperator *&top,
   } else if (OB_FAIL(check_need_multi_partition_dml(*get_stmt(),
                                                     *top,
                                                     index_dml_infos,
+                                                    false,
                                                     is_multi_part_dml,
                                                     is_result_local))) {
     LOG_WARN("failed to check need multi-partition dml", K(ret));

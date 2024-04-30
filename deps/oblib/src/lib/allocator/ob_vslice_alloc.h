@@ -100,23 +100,11 @@ public:
     return ret;
   }
   void destroy() {
-    for(int i = MAX_ARENA_NUM - 1; i >= 0; i--) {
-      Arena& arena = arena_[i];
-      Block* old_blk = arena.clear();
-      if (NULL != old_blk) {
-        int64_t old_pos = INT64_MAX;
-        if (old_blk->freeze(old_pos)) {
-          arena.sync();
-          if (old_blk->retire(old_pos)) {
-            destroy_block(old_blk);
-          } else {
-            // can not monitor all leak !!!
-            LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "there was memory leak", K(old_blk->ref_));
-          }
-        }
-      }
-    }
+    purge_extra_cached_block(0, true);
     bsize_ = 0;
+  }
+  void purge() {
+    purge_extra_cached_block(0);
   }
   void set_nway(int nway) {
     if (nway <= 0) {
@@ -225,7 +213,7 @@ public:
 
 #endif
   }
-  void purge_extra_cached_block(int keep) {
+  void purge_extra_cached_block(int keep, bool need_check = false) {
     for(int i = MAX_ARENA_NUM - 1; i >= keep; i--) {
       Arena& arena = arena_[i];
       arena.ref(1);
@@ -237,6 +225,9 @@ public:
           arena.sync();
           if (old_blk->retire(old_pos)) {
             destroy_block(old_blk);
+          } else if (need_check) {
+            // can not monitor all leak !!!
+            LIB_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "there was memory leak", K(old_blk->ref_));
           }
         } else {
           arena.ref(-1);

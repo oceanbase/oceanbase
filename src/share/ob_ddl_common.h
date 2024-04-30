@@ -60,6 +60,7 @@ enum ObDDLType
   DDL_CREATE_MLOG = 8,
   DDL_DROP_MLOG = 9,
   DDL_CREATE_PARTITIONED_LOCAL_INDEX = 10,
+  DDL_DROP_LOB = 11,
   ///< @note Drop schema, and refuse concurrent trans.  
   DDL_DROP_SCHEMA_AVOID_CONCURRENT_TRANS = 500,
   DDL_DROP_DATABASE = 501,
@@ -91,6 +92,7 @@ enum ObDDLType
   DDL_NORMAL_TYPE = 10001,
   DDL_ADD_COLUMN_ONLINE = 10002, // only add trailing columns
   DDL_CHANGE_COLUMN_NAME = 10003,
+  DDL_DROP_COLUMN_INSTANT = 10004,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
@@ -295,7 +297,11 @@ public:
   ObColumnNameMap() {}
   ~ObColumnNameMap() {}
   int init(const schema::ObTableSchema &orig_table_schema,
+           const schema::ObTableSchema &new_table_schema,
            const schema::AlterTableSchema &alter_table_arg);
+  int init_xml_hidden_column_name_map(
+      const schema::ObTableSchema &orig_table_schema,
+      const schema::ObTableSchema &new_table_schema);
   int assign(const ObColumnNameMap &other);
   int set(const ObString &orig_column_name, const ObString &new_column_name);
   int get(const ObString &orig_column_name, ObString &new_column_name) const;

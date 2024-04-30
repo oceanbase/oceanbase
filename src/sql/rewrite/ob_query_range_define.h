@@ -37,6 +37,8 @@ static const int64_t OB_RANGE_NULL_VALUE = INT64_MAX - 3;
 static const int64_t OB_RANGE_EXTEND_VALUE = INT64_MAX - 4;
 #define PHYSICAL_ROWID_IDX UINT8_MAX
 
+static const uint32_t OB_FINAL_EXPR_WITH_LOB_TRUNCATE = 1;
+
 class ObPreRangeGraph;
 typedef common::ObIArray<ObExprConstraint> ExprConstrantArray;
 
@@ -75,7 +77,8 @@ public:
       uint32_t contain_in_:     1;
       uint32_t is_phy_rowid_:   1;
       uint32_t is_geo_node_:    1;
-      uint32_t reserved_:      25;
+      uint32_t is_not_in_node_: 1;
+      uint32_t reserved_:      24;
     };
   };
   int64_t column_cnt_;
@@ -115,7 +118,8 @@ public:
          *  255   : current final info is physical rowid
         */
         uint32_t rowid_idx_:      8;
-        uint32_t reserved_:      20;
+        uint32_t is_not_first_col_in_row_: 1;
+        uint32_t reserved_:      19;
       };
     };
     union {
@@ -162,13 +166,16 @@ struct ObQueryRangeCtx
       cur_is_precise_(false),
       phy_rowid_for_table_loc_(false),
       ignore_calc_failure_(false),
+      refresh_max_offset_(false),
       exec_ctx_(exec_ctx),
       expr_constraints_(nullptr),
       params_(nullptr),
       expr_factory_(nullptr),
       session_info_(nullptr),
       max_mem_size_(128*1024*1024),
-      enable_not_in_range_(true) {}
+      enable_not_in_range_(true),
+      optimizer_features_enable_version_(0),
+      index_prefix_(-1) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -176,7 +183,8 @@ struct ObQueryRangeCtx
            const ParamStore *params,
            ObRawExprFactory *expr_factory,
            const bool phy_rowid_for_table_loc,
-           const bool ignore_calc_failure);
+           const bool ignore_calc_failure,
+           const int64_t index_prefix);
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -185,18 +193,24 @@ struct ObQueryRangeCtx
   bool cur_is_precise_;
   bool phy_rowid_for_table_loc_;
   bool ignore_calc_failure_;
+  bool refresh_max_offset_;
   ObExecContext *exec_ctx_;
   ExprConstrantArray *expr_constraints_;
   const common::ParamStore *params_;
   ObRawExprFactory *expr_factory_;
   ObSQLSessionInfo *session_info_;
   common::ObSEArray<const ObRawExpr *, 16> final_exprs_;
+  common::ObSEArray<uint32_t, 16> final_exprs_flag_;
   common::ObSEArray<InParam*, 4> in_params_;
   common::ObSEArray<int64_t, 16> null_safe_value_idxs_;
   common::ObSEArray<ObRangeColumnMeta*, 4> column_metas_;
   common::ObSEArray<std::pair<int64_t, int64_t>, 16> rowid_idxs_;
+  common::ObSEArray<int64_t, 4> column_flags_;
+  common::ObSEArray<int64_t, 16> non_first_in_row_value_idxs_;
   int64_t max_mem_size_;
   bool enable_not_in_range_;
+  uint64_t optimizer_features_enable_version_;
+  int64_t index_prefix_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -219,7 +233,9 @@ public:
     range_map_(alloc),
     skip_scan_offset_(-1),
     range_exprs_(alloc),
-    ss_range_exprs_(alloc) {}
+    ss_range_exprs_(alloc),
+    unprecise_range_exprs_(alloc),
+    total_range_sizes_(alloc) {}
 
   virtual ~ObPreRangeGraph() { reset(); }
 
@@ -240,7 +256,8 @@ public:
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamStore *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
-                                      const bool ignore_calc_failure = true);
+                                      const bool ignore_calc_failure = true,
+                                      const int64_t index_prefix = -1);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,
                                 ObQueryRangeArray &ranges,
@@ -276,9 +293,11 @@ public:
   virtual bool is_contain_geo_filters() const { return false; }
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
+  virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
                               bool &contain_always_false) const;
+  virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
   int get_prefix_info(const ObRangeNode *range_node,
                       bool* equals,
                       int64_t &equal_prefix_count) const;
@@ -309,6 +328,7 @@ public:
   void set_skip_scan_offset(int64_t v) { skip_scan_offset_ = v; }
   int set_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return range_exprs_.assign(range_exprs); }
   int set_ss_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return ss_range_exprs_.assign(range_exprs); }
+  int set_unprecise_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return unprecise_range_exprs_.assign(range_exprs); }
 
   int serialize_range_graph(ObRangeNode *range_node, char *buf,
                             int64_t buf_len, int64_t &pos) const;
@@ -318,6 +338,7 @@ public:
   DECLARE_TO_STRING;
   int64_t range_graph_to_string(char *buf, const int64_t buf_len,
                                 ObRangeNode *range_node) const;
+  int64_t set_total_range_sizes(uint64_t* total_range_sizes, int64_t count);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreRangeGraph);
@@ -343,6 +364,8 @@ private:
   // only used by optimizer, don't need to serialize it
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> range_exprs_;
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ss_range_exprs_;
+  common::ObFixedArray<ObRawExpr*, common::ObIAllocator> unprecise_range_exprs_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> total_range_sizes_;
 };
 
 } // namespace sql

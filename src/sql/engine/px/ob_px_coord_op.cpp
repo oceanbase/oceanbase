@@ -1121,7 +1121,7 @@ int ObPxCoordOp::erase_dtl_interm_result()
         key.channel_id_ = ci.chid_;
         for (int j = 0; j < last_px_batch_rescan_size_; ++j) {
           key.batch_id_ = j;
-          if (OB_FAIL(ObDTLIntermResultManager::getInstance().erase_interm_result_info(key))) {
+          if (OB_FAIL(MTL(ObDTLIntermResultManager*)->erase_interm_result_info(key))) {
             LOG_TRACE("fail to release recieve internal result", K(ret));
           }
         }

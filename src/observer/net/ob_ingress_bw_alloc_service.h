@@ -20,7 +20,6 @@
 
 namespace oceanbase
 {
-using namespace obrpc;
 namespace rootserver
 {
 class ObNetEndpointIngressManager
@@ -32,15 +31,15 @@ public:
   int init();
   void reset();
   void destroy();
-  int register_endpoint(const ObNetEndpointKey &endpoint_key, const int64_t expire_time);
-  int collect_predict_bw(ObNetEndpointKVArray &update_kvs);
-  int update_ingress_plan(ObNetEndpointKVArray &update_kvs);
-  int commit_bw_limit_plan(ObNetEndpointKVArray &update_kvs);
+  int register_endpoint(const obrpc::ObNetEndpointKey &endpoint_key, const int64_t expire_time);
+  int collect_predict_bw(obrpc::ObNetEndpointKVArray &update_kvs);
+  int update_ingress_plan(obrpc::ObNetEndpointKVArray &update_kvs);
+  int commit_bw_limit_plan(obrpc::ObNetEndpointKVArray &update_kvs);
   int set_total_bw_limit(int64_t total_bw_limit);
   int64_t get_map_size();
 
 private:
-  typedef common::hash::ObHashMap<ObNetEndpointKey, ObNetEndpointValue *> ObIngressPlanMap;
+  typedef common::hash::ObHashMap<obrpc::ObNetEndpointKey, obrpc::ObNetEndpointValue *> ObIngressPlanMap;
   ObIngressPlanMap ingress_plan_map_;
   int64_t total_bw_limit_;
   ObSpinLock lock_;

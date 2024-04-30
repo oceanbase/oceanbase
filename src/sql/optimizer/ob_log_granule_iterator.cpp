@@ -143,16 +143,7 @@ int ObLogGranuleIterator::set_range_order()
 {
   int ret = OB_SUCCESS;
   common::ObIArray<OrderItem> &op_ordering = get_op_ordering();
-  if (!op_ordering.empty()) {
-    // Suppose (range) partition order is asc, so first order is same partition order
-    bool is_asc_order = is_ascending_direction(op_ordering.at(0).order_type_);
-    if (is_asc_order) {
-      add_flag(GI_ASC_ORDER);
-    } else {
-      add_flag(GI_DESC_ORDER);
-    }
-    LOG_TRACE("partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
-  } else if (affinitize()) {
+  if (affinitize()) {
     ObLogicalOperator *child = get_child(first_child);
     if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
@@ -169,6 +160,20 @@ int ObLogGranuleIterator::set_range_order()
       }
       LOG_TRACE("affinitize partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
     }
+  } else if (!op_ordering.empty()) {
+    // Suppose (range) partition order is asc, so first order is same partition order
+    bool is_asc_order = is_ascending_direction(op_ordering.at(0).order_type_);
+    bool used = true;
+    if (OB_FAIL(check_op_orderding_used_by_parent(used))) {
+      LOG_WARN("failed to check op ordering used by parent", K(ret));
+    } else if (!used) {
+      //do nothing
+    } else if (is_asc_order) {
+      add_flag(GI_ASC_ORDER);
+    } else {
+      add_flag(GI_DESC_ORDER);
+    }
+    LOG_TRACE("partition order", K(is_asc_order), K(gi_attri_flag_), K(ret));
   }
   return ret;
 }

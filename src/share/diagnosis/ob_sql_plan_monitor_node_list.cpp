@@ -201,6 +201,18 @@ int ObPlanMonitorNodeList::ObMonitorNodeTraverseCall::operator() (
   return ret;
 }
 
+void ObMonitorNode::update_memory(int64_t delta_size)
+{
+  workarea_mem_ += delta_size;
+  workarea_max_mem_ = MAX(workarea_mem_, workarea_max_mem_);
+}
+
+void ObMonitorNode::update_tempseg(int64_t delta_size)
+{
+  workarea_tempseg_ += delta_size;
+  workarea_max_tempseg_ = MAX(workarea_tempseg_, workarea_max_tempseg_);
+}
+
 void ObSqlPlanMonitorRecycleTask::runTimerTask()
 {
   if (node_list_) {

@@ -152,6 +152,27 @@ OB_DEF_DESERIALIZE(ObBatchUnbindTabletArg)
   return ret;
 }
 
+ObBatchUnbindLobTabletArg::ObBatchUnbindLobTabletArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    data_tablet_ids_()
+{
+}
+
+int ObBatchUnbindLobTabletArg::assign(const ObBatchUnbindLobTabletArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(data_tablet_ids_.assign(other.data_tablet_ids_))) {
+    LOG_WARN("failed to assign data tablet ids", K(ret));
+  } else {
+    tenant_id_ = other.tenant_id_;
+    ls_id_ = other.ls_id_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObBatchUnbindLobTabletArg, tenant_id_, ls_id_, data_tablet_ids_);
+
 int ObTabletBindingHelper::get_ls(const ObLSID &ls_id, ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
@@ -175,7 +196,8 @@ int ObTabletBindingHelper::get_tablet_for_new_mds(const ObLS &ls, const ObTablet
   const ObTabletMapKey key(ls.get_ls_id(), tablet_id);
   const bool for_replay = replay_scn.is_valid();
   if (for_replay) {
-    if (OB_FAIL(ls.replay_get_tablet_no_check(tablet_id, replay_scn, handle))) {
+    const bool replay_allow_tablet_not_exist = true;
+    if (OB_FAIL(ls.replay_get_tablet_no_check(tablet_id, replay_scn, replay_allow_tablet_not_exist, handle))) {
       if (OB_OBSOLETE_CLOG_NEED_SKIP == ret) {
         ret = OB_NO_NEED_UPDATE;
         LOG_WARN("clog is obsolete, should skip replay", K(ret));
@@ -331,7 +353,11 @@ int ObTabletBindingHelper::modify_tablet_binding_new_mds(
       }
     } else {
       if (CLICK_FAIL(ls.get_tablet_svr()->set_ddl_info(tablet_id, std::move(data), user_ctx, 0/*lock_timeout_us*/))) {
-        LOG_WARN("failed to save tablet binding info", K(ret));
+        if (OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+          ret = OB_EAGAIN;
+        } else {
+          LOG_WARN("failed to save tablet binding info", K(ret));
+        }
       }
     }
   }
@@ -472,6 +498,55 @@ int ObTabletUnbindMdsHelper::modify_tablet_binding_for_unbind(const ObBatchUnbin
         LOG_WARN("failed to set redefined versions", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObTabletUnbindLobMdsHelper::modify_tablet_binding_for_unbind_lob_(const ObBatchUnbindLobTabletArg &arg, const share::SCN &replay_scn, mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  if (OB_FAIL(ObTabletBindingHelper::get_ls(arg.ls_id_, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret));
+  } else {
+    ObLS &ls = *ls_handle.get_ls();
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg.data_tablet_ids_.count(); i++) {
+      const ObTabletID &data_tablet_id = arg.data_tablet_ids_.at(i);
+      if (OB_FAIL(ObTabletBindingHelper::modify_tablet_binding_new_mds(ls, data_tablet_id,
+              replay_scn, ctx, false, ClearLobTabletId()))) {
+        LOG_WARN("failed to modify tablet binding", K(ret), K(data_tablet_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTabletUnbindLobMdsHelper::on_register(const char* buf, const int64_t len, mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObBatchUnbindLobTabletArg arg;
+  if (OB_FAIL(arg.deserialize(buf, len, pos))) {
+    LOG_WARN("failed to deserialize arg", K(ret));
+  } else if (OB_FAIL(modify_tablet_binding_for_unbind_lob_(arg, SCN::invalid_scn(), ctx))) {
+    LOG_WARN("failed to modify_tablet_binding_for_unbind_lob", K(ret));
+  } else {
+    LOG_INFO("register unbind lob success", K(arg), K(ctx));
+  }
+  return ret;
+}
+
+int ObTabletUnbindLobMdsHelper::on_replay(const char* buf, const int64_t len, const share::SCN &scn, mds::BufferCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObBatchUnbindLobTabletArg arg;
+  if (OB_FAIL(arg.deserialize(buf, len, pos))) {
+    LOG_WARN("failed to deserialize arg", K(ret));
+  } else if (OB_FAIL(modify_tablet_binding_for_unbind_lob_(arg, scn, ctx))) {
+    LOG_WARN("failed to modify_tablet_binding_for_unbind_lob", K(ret));
+  } else {
+    LOG_INFO("replay unbind lob success", K(arg), K(ctx));
   }
   return ret;
 }

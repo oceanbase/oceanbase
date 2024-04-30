@@ -94,7 +94,8 @@ int ObTransferTaskOperator::get_task_with_time(
         } else {
           LOG_WARN("get next result failed", KR(ret), K(sql), K(tenant_id), K(task_id));
         }
-      } else if (OB_FAIL(parse_sql_result_(sql_proxy, tenant_id, *res, with_time, task, create_time, finish_time))) {
+      } else if (OB_FAIL(parse_sql_result_(sql_proxy, tenant_id, *res, with_time,
+          task, create_time, finish_time))) {
         LOG_WARN("parse sql result failed", KR(ret), K(tenant_id), K(task_id), K(task));
       } else if (OB_FAIL(res->next())) {
         if (OB_ITER_END == ret) {
@@ -1555,6 +1556,25 @@ int ObTransferTaskOperator::convert_data_version_(
   } else if (OB_FAIL(ObClusterVersion::get_version(data_version_str, data_version))) {
     LOG_WARN("get version failed", KR(ret), K(data_version_str), K(data_version));
   }
+  return ret;
+}
+
+int ObTransferTaskOperator::get_pre_transfer_ora_rowscn(common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id, const ObTransferTaskID task_id, share::SCN &row_scn)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  row_scn.set_invalid();
+  if (OB_INVALID_ID == tenant_id || !task_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(sql.assign_fmt("SELECT ORA_ROWSCN FROM %s WHERE task_id = %ld",
+                                    OB_ALL_TRANSFER_TASK_TNAME, task_id.id()))) {
+    LOG_WARN("assign sql failed", KR(ret), K(task_id));
+  } else if (OB_FAIL(ObShareUtil::get_ora_rowscn(sql_proxy, tenant_id, sql, row_scn))) {
+    LOG_WARN("fail to get target_data_version_ora_rowscn", KR(ret), K(tenant_id), K(task_id), K(sql));
+  }
+
   return ret;
 }
 

@@ -32,6 +32,8 @@ public:
   int visit(ObGeometry *geo) override { UNUSED(geo); return OB_SUCCESS; }
   int visit(ObGeographPoint *geo);
   int visit(ObIWkbGeogPoint *geo);
+  int visit(ObCartesianPoint *geo);
+  int visit(ObIWkbGeomPoint *geo);
   uint32_t get_zoom_in_value() { return zoom_in_value_; }
   void set_zoom_in_value(uint32_t zoom_in_value) { zoom_in_value_ = zoom_in_value;}
   void set_is_calc_zoom(bool is_calc_zoom) { is_calc_zoom_ = is_calc_zoom;}

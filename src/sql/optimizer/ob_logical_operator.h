@@ -1151,9 +1151,9 @@ public:
    * get cur_op's expected_ordering
    */
   inline void set_is_local_order(bool is_local_order) { is_local_order_ = is_local_order; }
-  inline bool get_is_local_order() { return is_local_order_; }
+  inline bool get_is_local_order() const { return is_local_order_; }
   inline void set_is_range_order(bool is_range_order) { is_range_order_ = is_range_order; }
-  inline bool get_is_range_order() { return is_range_order_; }
+  inline bool get_is_range_order() const { return is_range_order_; }
 
   inline void set_is_at_most_one_row(bool is_at_most_one_row) { is_at_most_one_row_ = is_at_most_one_row; }
   inline bool get_is_at_most_one_row() { return is_at_most_one_row_; }
@@ -1717,6 +1717,8 @@ protected:
   static int explain_print_partitions(const ObIArray<ObLogicalOperator::PartInfo> &part_infos,
                                       const bool two_level, char *buf,
                                       int64_t &buf_len, int64_t &pos);
+
+  int check_op_orderding_used_by_parent(bool &used);
 protected:
 
   void add_dist_flag(uint64_t &flags, DistAlgo method) const {
@@ -1834,6 +1836,7 @@ private:
   int need_alloc_material_for_push_down_wf(ObLogicalOperator &curr_op, bool &need_alloc);
   int check_need_parallel_valid(int64_t need_parallel) const;
   virtual int get_card_without_filter(double &card);
+  virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index);
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator

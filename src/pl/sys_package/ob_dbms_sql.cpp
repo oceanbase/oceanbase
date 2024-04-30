@@ -1619,7 +1619,9 @@ int ObPLDbmsSql::fill_dbms_cursor(ObSQLSessionInfo *session,
   OZ (session->get_tmp_table_size(size));
   OZ (new_cursor->prepare_spi_cursor(spi_cursor,
                                 session->get_effective_tenant_id(),
-                                size));
+                                size,
+                                false,
+                                session));
   OV (OB_NOT_NULL(spi_cursor));
 
   if OB_FAIL(ret) {

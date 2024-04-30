@@ -1073,6 +1073,9 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
     }
   } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
     //the updated row may be moved across partitions
+    if (dml_rtctx.das_ref_.get_parallel_type() == DAS_STREAMING_PARALLEL) {
+      dml_rtctx.das_ref_.get_das_parallel_ctx().set_das_parallel_type(DAS_BLOCKING_PARALLEL);
+    }
     if (upd_ctdef.dupd_ctdef_.is_ignore_) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "Cross-partition update ignore");
@@ -1681,6 +1684,64 @@ int ObDMLService::init_lock_rtdef(ObDMLRtCtx &dml_rtctx,
   return init_das_dml_rtdef(dml_rtctx, lock_ctdef.das_ctdef_, lock_rtdef.das_rtdef_, loc_meta);
 }
 
+int ObDMLService::check_agg_task_state(ObDMLRtCtx &dml_rtctx, ObIDASTaskOp *das_op, int64_t row_size, bool &reach_mem_limit)
+{
+  int ret = OB_SUCCESS;
+  ObDasAggregatedTask *agg_task = nullptr;
+  reach_mem_limit = false;
+  int64_t simulate_buffer_size = - EVENT_CALL(EventTable::EN_DAS_SIMULATE_AGG_TASK_BUFF_LIMIT);
+  int64_t buffer_size_limit = is_meta_tenant(MTL_ID()) ? das::OB_DAS_MAX_META_TENANT_PACKET_SIZE : das::OB_DAS_MAX_PACKET_SIZE;
+  if (OB_UNLIKELY(simulate_buffer_size > 0)) {
+    buffer_size_limit = simulate_buffer_size;
+  }
+  if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+    if (OB_ISNULL(agg_task = das_op->get_agg_task())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret), KPC(das_op));
+    } else if (FALSE_IT(agg_task->add_mem_used(row_size))) {
+      // do nothing
+    } else if (agg_task->get_mem_used() >= buffer_size_limit) {
+      agg_task->start_status_ = DAS_AGG_TASK_REACH_MEM_LIMIT;
+      reach_mem_limit = true;
+      LOG_TRACE("this agg_task buff is reach memory limit", K(agg_task->get_mem_used()), K(buffer_size_limit));
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::parallel_submit_das_task(ObDMLRtCtx &dml_rtctx, ObDasAggregatedTask *agg_task)
+{
+  int ret = OB_SUCCESS;
+  if (dml_rtctx.das_ref_.get_parallel_type() == DAS_SERIALIZATION) {
+    // not support parallel_submit
+    LOG_TRACE("can't parallel submit", K(dml_rtctx.das_ref_.get_parallel_type()));
+  } else if (dml_rtctx.das_ref_.get_parallel_type() == DAS_STREAMING_PARALLEL) {
+    if (dml_rtctx.das_ref_.get_submitted_task_count() >= dml_rtctx.das_ref_.get_das_dop()) {
+      LOG_INFO("submitted tasks reach dop", "submitted_cnt", dml_rtctx.das_ref_.get_submitted_task_count(),
+          "das_dop", dml_rtctx.das_ref_.get_das_dop());
+    } else if (OB_FAIL(dml_rtctx.das_ref_.parallel_submit_agg_task(agg_task))) {
+      LOG_WARN("fail to parallel exec this agg_task", K(ret));
+    } else {
+      dml_rtctx.add_das_parallel_task_size(agg_task->get_mem_used());
+      dml_rtctx.das_ref_.get_das_parallel_ctx().add_submitted_task_count(1);
+      LOG_TRACE("succeed parallel submit one agg_task", K(agg_task), K(agg_task->get_start_status()),
+              K(dml_rtctx.get_das_task_memory_size()), K(dml_rtctx.get_das_parallel_task_size()));
+    }
+  } else if (dml_rtctx.das_ref_.get_parallel_type() == DAS_BLOCKING_PARALLEL) {
+    // 阻塞性提交，暂时不真正提交，但是会等到足够并行度的task数量才会真正全量提交
+    if (dml_rtctx.das_ref_.get_submitted_task_count() >= dml_rtctx.das_ref_.get_das_dop()) {
+      LOG_INFO("submitted tasks reach dop", "submitted_cnt", dml_rtctx.das_ref_.get_submitted_task_count(),
+          "das_dop", dml_rtctx.das_ref_.get_das_dop());
+    } else {
+      dml_rtctx.add_das_parallel_task_size(agg_task->get_mem_used());
+      dml_rtctx.das_ref_.get_das_parallel_ctx().add_submitted_task_count(1);
+      LOG_TRACE("block parallel submit one agg_task", K(agg_task), K(agg_task->get_start_status()),
+              K(dml_rtctx.get_das_task_memory_size()), K(dml_rtctx.get_das_parallel_task_size()));
+    }
+  }
+  return ret;
+}
+
 template <int N>
 int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
                                       ObDASDMLBaseRtDef &rtdef,
@@ -1727,27 +1788,47 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
       }
     }
     //2. try add row to das dml buffer
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
-        LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
-      } else if (!buffer_full &&
-          OB_NOT_NULL(trans_info_expr) &&
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
+      LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+    } else if (!buffer_full) {
+      bool reach_agg_mem_limit = false;
+      dml_rtctx.add_das_task_memory_size(stored_row->row_size_);
+      if (OB_ISNULL(stored_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr", K(ret));
+      } else if (OB_NOT_NULL(trans_info_expr) &&
           OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
         LOG_WARN("fail to add trans info datum", K(ret));
-      } else if (OB_NOT_NULL(stored_row)) {
-        dml_rtctx.add_cached_row_size(stored_row->row_size_);
-        LOG_DEBUG("write row to das op", K(ret), K(buffer_full),
-            "op_type", N, "table_id", ctdef.table_id_, "index_tid", ctdef.index_tid_,
-            "row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), row), "row_size", stored_row->row_size_);
+      } else if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+        if (OB_FAIL(check_agg_task_state(dml_rtctx, dml_op, stored_row->row_size_, reach_agg_mem_limit))) {
+          LOG_WARN("fail to check agg_task state", K(ret), K(stored_row->row_size_));
+        } else if (!reach_agg_mem_limit) {
+          LOG_TRACE("not reach agg_task memory limit");
+        } else if (OB_FAIL(parallel_submit_das_task(dml_rtctx, dml_op->get_agg_task()))) {
+          // 并发提交该任务
+          LOG_WARN("fail to parallel submit this agg_task", K(ret));
+        } else {
+          dml_rtctx.das_ref_.clear_task_map();
+        }
+      } else {
+        // serialize submit
       }
-    }
-    //3. if buffer is full, frozen node, create a new das op to add row
-    if (OB_SUCC(ret) && buffer_full) {
+    } else if (buffer_full) {
+      // make this task can't write
       need_retry = true;
-      if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.get_row_buffer_size()));
+      dml_op->set_write_buff_full(true);
+      dml_rtctx.das_ref_.clear_task_map();
+      if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+        dml_op->get_agg_task()->start_status_ = DAS_AGG_TASK_REACH_MEM_LIMIT;
+        if (OB_FAIL(parallel_submit_das_task(dml_rtctx, dml_op->get_agg_task()))) {
+          LOG_WARN("fail to parallel submit this agg_task", K(ret));
+        }
       }
-      dml_rtctx.das_ref_.set_frozen_node();
+      if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
+        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.get_das_task_memory_size()));
+      }
     }
   } while (OB_SUCC(ret) && need_retry);
   return ret;
@@ -2206,9 +2287,14 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
   const ObDmlEventType t_insert = ObDmlEventType::DE_INSERTING;
   const ObDmlEventType t_update = ObDmlEventType::DE_UPDATING;
   const ObDmlEventType t_delete = ObDmlEventType::DE_DELETING;
-  if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op)) {
+  if (OB_ISNULL(dml_modify_rows) || OB_ISNULL(dml_op) || OB_ISNULL(dml_op->get_child())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dml operator or modify rows list is null", K(dml_modify_rows), K(dml_op));
+  } else if (OB_ISNULL(dml_op->last_store_row_.get_store_row()) &&
+    OB_FAIL(dml_op->last_store_row_.init(dml_op->get_exec_ctx().get_allocator(), dml_op->get_child()->get_spec().output_.count()))) {
+    LOG_WARN("failed to init shadow stored row", K(ret));
+  } else if (OB_FAIL(dml_op->last_store_row_.shadow_copy(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+    LOG_WARN("failed to backup the datum ptr of child operator", K(ret));
   } else {
     ObDMLModifyRowsList::iterator row_iter = dml_modify_rows->begin();
     for (; OB_SUCC(ret) && row_iter != dml_modify_rows->end(); row_iter++) {
@@ -2268,8 +2354,12 @@ int ObDMLService::handle_after_processing_multi_row(ObDMLModifyRowsList *dml_mod
     }
 
     // check the result of batch foreign key check results
-    if (OB_SUCC(ret) && dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
-      LOG_WARN("failed to perform batch foreign key check", K(ret));
+    if (OB_SUCC(ret)) {
+      if (dml_op->get_spec().check_fk_batch_ && OB_FAIL(dml_op->perform_batch_fk_check())) {
+        LOG_WARN("failed to perform batch foreign key check", K(ret));
+      } else if (OB_FAIL(dml_op->last_store_row_.restore(dml_op->get_child()->get_spec().output_, dml_op->get_eval_ctx()))) {
+        LOG_WARN("failed to restore the datum ptr", K(ret));
+      }
     }
   }
   return ret;

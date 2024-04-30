@@ -310,7 +310,7 @@ bool ObBlockMetaTree::CompareFunctor::operator ()(const IndexItem &item,
                                                   const blocksstable::ObDatumRowkey &rowkey)
 {
   int cmp_ret = 0;
-  item.rowkey_->compare(rowkey, datum_utils_, cmp_ret);
+  item.rowkey_->compare(rowkey, datum_utils_, cmp_ret, need_compare_datum_cnt_);
   return cmp_ret < 0;
 }
 
@@ -318,7 +318,7 @@ bool ObBlockMetaTree::CompareFunctor::operator ()(const blocksstable::ObDatumRow
                                                   const IndexItem &item)
 {
   int cmp_ret = 0;
-  item.rowkey_->compare(rowkey, datum_utils_, cmp_ret);
+  item.rowkey_->compare(rowkey, datum_utils_, cmp_ret, need_compare_datum_cnt_);
   return cmp_ret > 0;
 }
 
@@ -365,6 +365,21 @@ int ObBlockMetaTree::locate_range(const blocksstable::ObDatumRange &range,
   if (OB_FAIL(ret)) {
     begin_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
     end_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  }
+  return ret;
+}
+
+int ObBlockMetaTree::skip_to_next_valid_position(const ObDatumRowkey &rowkey,
+                                                 const blocksstable::ObStorageDatumUtils &datum_utils,
+                                                 int64_t &current_pos)
+{
+  int ret = OB_SUCCESS;
+  CompareFunctor cmp(datum_utils, false);
+  const int64_t found_idx = std::lower_bound(sorted_rowkeys_.begin() + current_pos, sorted_rowkeys_.end(), rowkey, cmp) - sorted_rowkeys_.begin();
+  if (found_idx == sorted_rowkeys_.count()) {
+    ret = OB_ITER_END;
+  } else {
+    current_pos = found_idx;
   }
   return ret;
 }

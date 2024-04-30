@@ -559,6 +559,7 @@ struct ObPlanStat
   uint64_t  db_id_;
   common::ObString constructed_sql_;
   common::ObString sql_id_;
+  common::ObString format_sql_id_;
   ObEvolutionStat evolution_stat_; //baseline相关统计信息
   //******** for spm end ******
   // ***** for acs
@@ -660,6 +661,7 @@ struct ObPlanStat
       db_id_(common::OB_INVALID_ID),
       constructed_sql_(),
       sql_id_(),
+      format_sql_id_(),
       is_bind_sensitive_(false),
       is_bind_aware_(false),
       plan_sel_info_str_len_(0),
@@ -1024,6 +1026,7 @@ public:
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
     enable_var_assign_use_das_(false),
+    enable_parallel_das_dml_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1067,6 +1070,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
   bool enable_var_assign_use_das_;
+  bool enable_parallel_das_dml_;
 
 private:
   // current cluster config version_

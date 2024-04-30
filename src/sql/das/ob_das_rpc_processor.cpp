@@ -95,8 +95,8 @@ int ObDASBaseAccessP<pcode>::process()
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASTaskResp &task_resp = RpcProcessor::result_;
   SQL_INFO_GUARD(ObString("DAS REMOTE PROCESS"), task.get_remote_info()->sql_id_);
-  const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task.get_task_ops();
-  common::ObSEArray<ObIDASTaskResult*, 2> &task_results = task_resp.get_op_results();
+  const ObIArray<ObIDASTaskOp*> &task_ops = task.get_task_ops();
+  ObIArray<ObIDASTaskResult*> &task_results = task_resp.get_op_results();
   ObDASTaskFactory *das_factory = ObDASBaseAccessP<pcode>::get_das_factory();
   ObIDASTaskResult *op_result = nullptr;
   ObIDASTaskOp *task_op = nullptr;
@@ -211,7 +211,6 @@ template<obrpc::ObRpcPacketCode pcode>
 void ObDASBaseAccessP<pcode>::cleanup()
 {
   ObActiveSessionGuard::get_stat().in_das_remote_exec_ = false;
-  ObActiveSessionGuard::get_stat().reuse();
   ObActiveSessionGuard::get_stat().session_id_ = bkgd_ash_stat_sess_id_;
   das_factory_.cleanup();
   ObDASBaseAccessP<pcode>::get_das_factory() = nullptr;
@@ -258,7 +257,7 @@ void ObRpcDasAsyncAccessCallBack::on_timeout()
   LOG_WARN("das async task timeout", KR(ret), K(get_task_ops()));
   result_.set_err_code(ret);
   result_.get_op_results().reuse();
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
 }
 
 void ObRpcDasAsyncAccessCallBack::on_invalid()
@@ -268,7 +267,7 @@ void ObRpcDasAsyncAccessCallBack::on_invalid()
   LOG_WARN("das async task invalid", K(get_task_ops()));
   result_.set_err_code(OB_INVALID_ERROR);
   result_.get_op_results().reuse();
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
 }
 
 void ObRpcDasAsyncAccessCallBack::set_args(const Request &arg)
@@ -286,7 +285,7 @@ int ObRpcDasAsyncAccessCallBack::process()
     result_.get_op_results().reuse();
     LOG_WARN("das async rpc execution failed", K(get_rcode()), K_(result));
   }
-  context_->get_das_ref().inc_concurrency_limit_with_signal();
+  context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
   return ret;
 }
 
@@ -297,10 +296,10 @@ oceanbase::rpc::frame::ObReqTransport::AsyncCB *ObRpcDasAsyncAccessCallBack::clo
       static_cast<const rpc::frame::ObReqTransport::AsyncCB * const>(this));
 }
 
-int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr)
+int ObDasAsyncRpcCallBackContext::init(const ObMemAttr &attr, const ObIArray<ObIDASTaskOp*> &task_ops)
 {
   alloc_.set_attr(attr);
-  return task_ops_.get_copy_assign_ret();
+  return task_ops_.assign(task_ops);
 };
 
 int ObDASSyncFetchP::process()

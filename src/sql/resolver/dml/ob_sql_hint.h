@@ -301,6 +301,7 @@ struct LogTableHint
                            const ObQueryHint &query_hint,
                            const ObJoinFilterHint &hint);
   int allowed_skip_scan(const uint64_t index_id, bool &allowed) const;
+  int get_index_prefix(const uint64_t index_id, int64_t &index_prefix) const;
 
   TO_STRING_KV(K_(table), K_(index_list), K_(index_hints),
                K_(parallel_hint), K_(use_das_hint),
@@ -456,6 +457,9 @@ struct ObLogPlanHint
   int get_valid_pq_subquery_hint(const ObIArray<ObString> &sub_qb_names,
                                     const ObPQSubqueryHint *&explicit_hint,
                                     const ObPQSubqueryHint *&implicit_hint) const;
+  int get_index_prefix(const uint64_t table_id,
+                                          const uint64_t index_id,
+                                          int64_t &index_prefix) const;
   DistAlgo get_valid_pq_subquery_dist_algo(const ObIArray<ObString> &sub_qb_names,
                                            const bool implicit_allowed) const;
 
@@ -476,7 +480,7 @@ struct ObLogPlanHint
 
   TO_STRING_KV(K_(is_outline_data), K_(join_order),
                K_(table_hints), K_(join_hints),
-               K_(normal_hints));
+               K_(normal_hints), K_(enable_index_prefix));
 
   bool is_outline_data_;
 #ifdef OB_BUILD_SPM
@@ -486,6 +490,7 @@ struct ObLogPlanHint
   common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
   common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
   common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
+  bool enable_index_prefix_;
 };
 
 }

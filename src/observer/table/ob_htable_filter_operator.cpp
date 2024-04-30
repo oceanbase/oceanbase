@@ -205,7 +205,7 @@ int ObHTableExplicitColumnTracker::check_versions(const ObHTableCell &cell, ObHT
   LOG_DEBUG("[yzfdebug] check versions", K(count), K_(max_versions), K(timestamp),
             K_(min_versions), K_(oldest_stamp), "is_expired", is_expired(timestamp));
   // in reverse scan, check the cell timeout condition with ttl. Kick off the timeout cell from res.
-  if(ObQueryFlag::Reverse == tracker_scan_order_) {
+  if (ObQueryFlag::Reverse == tracker_scan_order_) {
     match_code = check_version(cell.get_timestamp());
   } else {
     if (count >= max_versions_
@@ -622,6 +622,7 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       max_result_size_(query.get_max_result_size()),
       batch_size_(query.get_batch()),
       time_to_live_(0),
+      max_version_(0),
       curr_cell_(),
       allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       column_tracker_(NULL),
@@ -633,7 +634,10 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       cell_count_(0),
       count_per_row_(0),
       has_more_cells_(true),
-      is_first_result_(true)
+      is_first_result_(true),
+      is_table_group_inited_(false),
+      is_table_group_req_(false),
+      family_name_()
 {}
 
 ObHTableRowIterator::~ObHTableRowIterator()
@@ -714,7 +718,7 @@ int ObHTableRowIterator::add_same_kq_to_res(ObIArray<ObNewRow> &same_kq_cells, O
       }
 
       if (OB_SUCC(ret) && ObHTableMatchCode::INCLUDE == match_code) {
-        if (OB_FAIL(out_result->add_row(tmp))) {
+        if (OB_FAIL(add_new_row(tmp, out_result))) {
           LOG_WARN("failed to add row to result", K(ret));
         } else {
           ++cell_count_;
@@ -829,7 +833,7 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
           }
           // whether skip offset
           if (count_per_row_ > offset_per_row_per_cf_) {
-            if(OB_SUCC(ret) && ObQueryFlag::Reverse == scan_order_) {
+            if (OB_SUCC(ret) && ObQueryFlag::Reverse == scan_order_) {
               // reverse scan if the current cell has the same key and qualifier with the last, match_code = INCLUDE; else match_code = DONE_REVERSE_SCAN;
               // INCELUDE: put current cell into result vector
               // DONE_REVERSE_SCAN: end this round scan, choose cell to return
@@ -860,7 +864,7 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
                 const_cast<ObNewRow*>(curr_cell_.get_ob_row())->get_cell(ObHTableConstants::COL_IDX_T).set_int(-timestamp);
               }
               if (OB_SUCC(ret)) {
-                if (OB_FAIL(out_result->add_row(*(curr_cell_.get_ob_row())))) {
+                if (OB_FAIL(add_new_row(*(curr_cell_.get_ob_row()), out_result))) {
                   LOG_WARN("failed to add row to result", K(ret));
                 } else {
                   ++cell_count_;
@@ -962,6 +966,54 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   return ret;
 }
 
+void ObHTableRowIterator::init_table_group_value()
+{
+  if (is_table_group_inited_) {
+    // has inited, do nothing
+  } else {
+    is_table_group_inited_ = true;
+    is_table_group_req_ = child_op_->get_scan_executor()->get_table_ctx().is_tablegroup_req();
+    // get family name
+    ObString table_name = child_op_->get_scan_executor()->get_table_ctx().get_table_name();
+    family_name_ = table_name.after('$');
+  }
+}
+
+int ObHTableRowIterator::add_new_row(const ObNewRow &row, ObTableQueryResult *&out_result)
+{
+  int ret = OB_SUCCESS;
+  // append family into qualifier
+  if (is_table_group_req_ && OB_FAIL(append_family(row))) {
+    LOG_WARN("append family failed", K(ret));
+  } else if (OB_FAIL(out_result->add_row(row))) {
+    LOG_WARN("failed to add row to result", K(ret));
+  }
+  return ret;
+}
+
+int ObHTableRowIterator::append_family(const ObNewRow &row)
+{
+  int ret = OB_SUCCESS;
+  // qualifier obj
+  ObNewRow& row_op = const_cast<ObNewRow&>(row);
+  ObObj &qualifier = row_op.get_cell(ObHTableConstants::COL_IDX_Q);
+  // get length and create buffer
+  int64_t sep_pos = family_name_.length() + 1;
+  int64_t buf_size = sep_pos + qualifier.get_data_length();
+  char* buf = nullptr;
+  if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc family and qualifier buffer", K(ret));
+  } else {
+    MEMCPY(buf, family_name_.ptr(), family_name_.length());
+    buf[family_name_.length()] = '\0';
+    MEMCPY(buf + sep_pos, qualifier.get_data_ptr(), qualifier.get_data_length());
+    ObString family_qualifier(buf_size, buf);
+    qualifier.set_varbinary(family_qualifier);
+  }
+  return ret;
+}
+
 /// Seek the scanner at or after the specified KeyValue.
 int ObHTableRowIterator::seek(const ObHTableCell &key)
 {
@@ -1053,6 +1105,7 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
   bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
   next_result = one_result_;
   ObTableQueryResult *htable_row = nullptr;
+  row_iterator_.init_table_group_value();
   // ObNewRow first_entity;
   // ObObj first_entity_cells[4];
   // first_entity.cells_ = first_entity_cells;

@@ -346,14 +346,22 @@ int ObTableApiTTLExecutor::update_row_to_das()
       // current_datum_row_ 当前更新的新行
       if (NULL != constraint_value.baseline_datum_row_ &&
           NULL != constraint_value.current_datum_row_) {
-        OZ(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
-                               get_primary_table_upd_old_row(),
-                               eval_ctx_));
-        OZ(delete_upd_old_row_to_das());
-        OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
-                            ttl_spec_.get_ctdefs().at(0)->upd_ctdef_));
-        clear_evaluated_flag();
-        OZ(insert_upd_new_row_to_das());
+        if (OB_FAIL(stored_row_to_exprs(*constraint_value.baseline_datum_row_,
+                                      get_primary_table_upd_old_row(),
+                                      eval_ctx_))) {
+          LOG_WARN("fail to load row to old row exprs", K(ret), KPC(constraint_value.baseline_datum_row_));
+        } else if (OB_FAIL(to_expr_skip_old(*constraint_value.current_datum_row_,
+                                            ttl_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
+          LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
+        } else {
+          for (int i = 0; i < ttl_rtdefs_.count() && OB_SUCC(ret); i++) {
+            const ObTableUpdCtDef &upd_ctdef = ttl_spec_.get_ctdefs().at(i)->upd_ctdef_;
+            ObTableUpdRtDef &upd_rtdef = ttl_rtdefs_.at(i).upd_rtdef_;
+            if (OB_FAIL(ObTableApiModifyExecutor::update_row_to_das(upd_ctdef, upd_rtdef, dml_rtctx_))) {
+              LOG_WARN("fail to update row", K(ret));
+            }
+          }
+        }
       } else if (NULL == constraint_value.baseline_datum_row_ &&
                  NULL != constraint_value.current_datum_row_) { // 单单是唯一索引冲突的时候，会走这个分支
         OZ(to_expr_skip_old(*constraint_value.current_datum_row_,
@@ -457,8 +465,15 @@ int ObTableApiTTLExecutor::process_expire()
           LOG_WARN("fail to check expired", K(ret));
         } else if (is_expired_) { // 过期，删除旧行，写入新行
           LOG_DEBUG("row is expired", K(ret));
+          // Notice: here need to clear the evaluated flag, cause the new_row used in try_insert is the same as old_row in do_delete
+          //  and if we don't clear the evaluated flag, the generated columns in old_row won't refresh and will use the new_row result
+          //  which will cause 4377 when do_delete
+          clear_evaluated_flag();
           if (OB_FAIL(do_delete())) {
             LOG_WARN("fail to delete expired old row", K(ret));
+          }
+          clear_evaluated_flag();
+          if (OB_FAIL(ret)) {
           } else if (OB_FAIL(do_insert())) {
             LOG_WARN("fail to insert new row", K(ret));
           } else if (OB_FAIL(execute_das_task(dml_rtctx_, true/* del_task_ahead */))) {
@@ -579,6 +594,9 @@ int ObTableApiTTLExecutor::close()
     ret = OB_SUCCESS == ret ? close_ret : ret;
     // close dml das tasks
     close_ret = ObTableApiModifyExecutor::close();
+    // reset the new row datum ptr
+    const ObExprPtrIArray &new_row_exprs = get_primary_table_insert_row();
+    reset_new_row_datum(new_row_exprs);
   }
 
   return (OB_SUCCESS == ret) ? close_ret : ret;

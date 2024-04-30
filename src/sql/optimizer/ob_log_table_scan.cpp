@@ -112,11 +112,13 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
   int64_t offset_count = 0;
   double index_back_cost = 0.0;
   ObOptimizerContext *opt_ctx = NULL;
+  const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(access_path_)) {  // table scan create from CteTablePath
     card = get_card();
     op_cost = get_op_cost();
     cost = get_cost();
   } else if (OB_ISNULL(get_plan()) || OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context())
+             || OB_ISNULL(stmt = get_plan()->get_stmt()) || OB_ISNULL(stmt->get_query_ctx())
              || OB_ISNULL(est_cost_info_) || OB_UNLIKELY(1 > param.need_parallel_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected params", K(ret), K(opt_ctx), K(est_cost_info_), K(param));
@@ -125,14 +127,30 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
     LOG_WARN("failed to get limit offset value", K(ret));
   } else {
     card = get_card();
+    int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
     double limit_count_double = static_cast<double>(limit_count);
     double offset_count_double = static_cast<double>(offset_count);
-    param.need_row_count_ = 0 > param.need_row_count_ ? card : param.need_row_count_;
     if (0 <= limit_count) {
-      param.need_row_count_ = std::min(param.need_row_count_, limit_count_double * param.need_parallel_);
+      if (!use_das()) {
+        limit_count_double *= part_count;
+        offset_count_double *= part_count;
+      }
+      double need_row_count = limit_count_double + offset_count_double;
+      need_row_count = std::min(need_row_count, card);
+      if (param.need_row_count_ < 0) {
+        param.need_row_count_ = need_row_count;
+      } else {
+        param.need_row_count_ = std::min(param.need_row_count_, need_row_count);
+      }
     }
-    param.need_row_count_ = std::min(param.need_row_count_, card);
-    param.need_row_count_ += offset_count_double;
+    if (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
+        range_conds_.empty() &&
+        (!est_cost_info_->postfix_filters_.empty() ||
+        !est_cost_info_->table_filters_.empty() ||
+        !est_cost_info_->ss_postfix_range_filters_.empty())) {
+      //full scan with table filters
+      param.need_row_count_ = -1;
+    }
     if (OB_FAIL(AccessPath::re_estimate_cost(param, *est_cost_info_, sample_info_,
                                              *opt_ctx,
                                              phy_query_range_row_count_,
@@ -141,7 +159,6 @@ int ObLogTableScan::do_re_est_cost(EstimateCostInfo &param, double &card, double
       LOG_WARN("failed to re estimate cost", K(ret));
     } else {
       cost = op_cost;
-      card = std::min(param.need_row_count_ - offset_count_double, card);
     }
   }
   return ret;
@@ -704,9 +721,7 @@ int ObLogTableScan::extract_virtual_gen_access_exprs(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is null", K(ret), K(expr));
       } else if (T_ORA_ROWSCN == expr->get_expr_type()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("rowscan not supported", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "rowscan not supported");
+        // keep orign expr
       } else if (OB_ISNULL(mapping_expr = get_real_expr(expr))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mapping expr is null", K(ret), KPC(expr));
@@ -912,8 +927,9 @@ int ObLogTableScan::add_mapping_columns_for_vt(ObIArray<ObRawExpr*> &access_expr
     LOG_DEBUG("debug mapping columns for virtual table", K(first_col_expr->get_table_id()), K(ref_table_id_));
     if (share::is_oracle_mapping_real_virtual_table(ref_table_id_)) {
       for (int64_t i = 0; OB_SUCC(ret) && i < access_exprs.count(); ++i) {
-        ObRawExpr *real_expr = NULL;
-        if (OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
+        ObRawExpr *real_expr = access_exprs.at(i);
+        if (T_ORA_ROWSCN != access_exprs.at(i)->get_expr_type()
+            && OB_FAIL(add_mapping_column_for_vt(static_cast<ObColumnRefRawExpr *>(access_exprs.at(i)),
                                               real_expr))) {
           LOG_WARN("failed to add mapping column for vt", K(ret));
         } else if (OB_FAIL(real_expr_map_.push_back(
@@ -930,6 +946,7 @@ int ObLogTableScan::add_mapping_column_for_vt(ObColumnRefRawExpr *col_expr,
                                               ObRawExpr *&real_expr)
 {
   int ret = OB_SUCCESS;
+  real_expr = nullptr;
   int64_t mapping_table_id = share::schema::ObSchemaUtils::get_real_table_mappings_tid(ref_table_id_);
   if (OB_INVALID_ID == mapping_table_id) {
     ret = OB_ERR_UNEXPECTED;
@@ -1818,20 +1835,8 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   TableItem *table_item = NULL;
   ObString qb_name;
   const ObString *index_name = NULL;
+  int64_t index_prefix = -1;
   ObItemType index_type = T_INDEX_HINT;
-  if (is_skip_scan()) {
-    index_type = T_INDEX_SS_HINT;
-    if (ref_table_id_ == index_table_id_) {
-      index_name = &ObIndexHint::PRIMARY_KEY;
-    } else {
-      index_name = &get_index_name();
-    }
-  } else if (ref_table_id_ == index_table_id_) {
-    index_type = T_FULL_HINT;
-  } else {
-    index_type = T_INDEX_HINT;
-    index_name = &get_index_name();
-  }
   const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1848,6 +1853,29 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     temp_hint.get_table().set_table(*table_item);
     if (OB_FAIL(temp_hint.print_hint(plan_text))) {
       LOG_WARN("failed to print table parallel hint", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_skip_scan()) {
+    index_type = T_INDEX_SS_HINT;
+    if (ref_table_id_ == index_table_id_) {
+      index_name = &ObIndexHint::PRIMARY_KEY;
+    } else {
+      index_name = &get_index_name();
+    }
+  } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id_,
+                                                  index_table_id_,
+                                                  index_prefix))) {
+    LOG_WARN("failed to get index prefix", K(table_id_), K(index_table_id_), K(index_prefix), K(ret));
+  } else if (ref_table_id_ == index_table_id_ && index_prefix < 0) {
+    index_type = T_FULL_HINT;
+    index_name = &ObIndexHint::PRIMARY_KEY;
+  } else {
+    index_type = T_INDEX_HINT;
+    if (ref_table_id_ == index_table_id_) {
+      index_name = &ObIndexHint::PRIMARY_KEY;
+    } else {
+      index_name = &get_index_name();
     }
   }
 
@@ -1867,6 +1895,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     ObIndexHint index_hint(index_type);
     index_hint.set_qb_name(qb_name);
     index_hint.get_table().set_table(*table_item);
+    index_hint.get_index_prefix() = index_prefix;
     if (NULL != index_name) {
       index_hint.get_index_name().assign_ptr(index_name->ptr(), index_name->length());
     }
@@ -1958,12 +1987,37 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
   limit_offset_expr_ = offset;
   EstimateCostInfo param;
   param.need_parallel_ = get_parallel();
-  if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
-    LOG_WARN("failed to re est cost error", K(ret));
+
+  double limit_percent = -1.0;
+  int64_t limit_count = -1;
+  int64_t offset_count = 0;
+  double index_back_cost = 0.0;
+  if (OB_ISNULL(est_cost_info_)) {
+    //fake cte path
+  } else if (OB_FAIL(get_limit_offset_value(NULL, limit_count_expr_, limit_offset_expr_,
+                                            limit_percent, limit_count, offset_count))) {
+    LOG_WARN("failed to get limit offset value", K(ret));
   } else {
-    set_op_cost(op_cost);
-    set_cost(cost);
-    set_card(card);
+    int64_t part_count = est_cost_info_->index_meta_info_.index_part_count_;
+    double limit_count_double = static_cast<double>(limit_count);
+    double offset_count_double = static_cast<double>(offset_count);
+    if (0 <= limit_count) {
+      if (!use_das()) {
+        limit_count_double *= part_count;
+        offset_count_double *= part_count;
+      }
+      param.need_row_count_ = limit_count_double + offset_count_double;
+      param.need_row_count_ = std::min(param.need_row_count_, get_card());
+    }
+    if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
+      LOG_WARN("failed to re est cost error", K(ret));
+    } else {
+      card = std::min(card, static_cast<double>(limit_count_double));
+      set_op_cost(op_cost);
+      set_cost(cost);
+      set_card(card);
+      LOG_TRACE("push limit into table scan", K(param), K(limit_count_double), K(part_count), K(card));
+    }
   }
   return ret;
 }
@@ -2032,7 +2086,8 @@ int ObLogTableScan::allocate_granule_post(AllocGIContext &ctx)
     ctx.hash_part_ = table_schema->is_hash_part() || table_schema->is_hash_subpart()
                      || table_schema->is_key_subpart() || table_schema->is_key_subpart();
     //Before GI is adapted to the real agent table, block gi cannot be assigned to it
-    if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())) {
+    if (share::is_oracle_mapping_real_virtual_table(table_schema->get_table_id())
+        || table_schema->is_spatial_index()) {
       ctx.set_force_partition();
     }
   } else { /*do nothing*/ }

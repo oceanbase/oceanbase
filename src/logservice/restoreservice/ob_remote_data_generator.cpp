@@ -25,6 +25,7 @@
 #include "ob_log_restore_rpc.h"                           // proxy
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_archive_path.h"           // ObArchivePathUtil
+#include "src/share/backup/ob_archive_store.h"      // ObArchiveStore
 
 namespace oceanbase
 {
@@ -90,6 +91,44 @@ int RemoteDataGenerator::update_next_fetch_lsn_(const palf::LSN &lsn)
   }
   return ret;
 }
+
+int RemoteDataGenerator::read_file_(const ObString &base,
+    const share::ObBackupStorageInfo *storage_info,
+    const share::ObLSID &id,
+    const int64_t file_id,
+    const int64_t offset,
+    char *data,
+    const int64_t data_len,
+    int64_t &data_size)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath path;
+  if (OB_FAIL(ObArchivePathUtil::build_restore_path(base.ptr(), id, file_id, path))) {
+    LOG_WARN("build restore path failed", K(ret));
+  } else {
+    ObString uri(path.get_obstr());
+    char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
+    int64_t real_size = 0;
+    common::ObObjectStorageInfo storage_info_base;
+    if (OB_FAIL(storage_info_base.assign(*storage_info))) {
+      OB_LOG(WARN, "fail to assign storage info base!", K(ret), KP(storage_info));
+    } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
+      LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
+    } else {
+      ObString storage_info_ob_str(storage_info_cstr);
+      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, offset, data, data_len, real_size))) {
+        LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
+      } else if (0 == real_size) {
+        ret = OB_ITER_END;
+        LOG_INFO("read no data, need retry", K(ret), K(uri), K(storage_info), K(offset), K(real_size));
+      } else {
+        data_size = real_size;
+      }
+    }
+  }
+  return ret;
+}
+
 // only handle orignal buffer without compression or encryption
 // only to check incomplete LogGroupEntry
 // compression and encryption will be supported in the future
@@ -455,43 +494,6 @@ void LocationDataGenerator::cal_read_size_(const int64_t dest_id,
   }
 }
 
-int LocationDataGenerator::read_file_(const ObString &base,
-    const share::ObBackupStorageInfo *storage_info,
-    const share::ObLSID &id,
-    const int64_t file_id,
-    const int64_t offset,
-    char *data,
-    const int64_t data_len,
-    int64_t &data_size)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupPath path;
-  if (OB_FAIL(ObArchivePathUtil::build_restore_path(base.ptr(), id, file_id, path))) {
-    LOG_WARN("build restore path failed", K(ret));
-  } else {
-    ObString uri(path.get_obstr());
-    char storage_info_cstr[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = {'\0'};
-    int64_t real_size = 0;
-    common::ObObjectStorageInfo storage_info_base;
-    if (OB_FAIL(storage_info_base.assign(*storage_info))) {
-      OB_LOG(WARN, "fail to assign storage info base!", K(ret), KP(storage_info));
-    } else if (OB_FAIL(storage_info_base.get_storage_info_str(storage_info_cstr, OB_MAX_BACKUP_STORAGE_INFO_LENGTH))) {
-      LOG_WARN("get_storage_info_str failed", K(ret), K(uri), K(storage_info));
-    } else {
-      ObString storage_info_ob_str(storage_info_cstr);
-      if (OB_FAIL(log_ext_handler_->pread(uri, storage_info_ob_str, offset, data, data_len, real_size))) {
-        LOG_WARN("read file failed", K(ret), K(uri), K(storage_info));
-      } else if (0 == real_size) {
-        ret = OB_ITER_END;
-        LOG_INFO("read no data, need retry", K(ret), K(uri), K(storage_info), K(offset), K(real_size));
-      } else {
-        data_size = real_size;
-      }
-    }
-  }
-  return ret;
-}
-
 bool LocationDataGenerator::FileDesc::is_valid() const
 {
   return dest_id_ > 0
@@ -597,29 +599,21 @@ RawPathDataGenerator::RawPathDataGenerator(const uint64_t tenant_id,
     const ObLSID &id,
     const LSN &start_lsn,
     const LSN &end_lsn,
-    const DirArray &array,
+    ObLogRawPathPieceContext *rawpath_ctx,
     const SCN &end_scn,
-    const int64_t piece_index,
-    const int64_t min_file_id,
-    const int64_t max_file_id,
     ObLogExternalStorageHandler *log_ext_handler) :
   RemoteDataGenerator(tenant_id, id, start_lsn, end_lsn, end_scn, log_ext_handler),
-  array_(array),
+  rawpath_ctx_(rawpath_ctx),
   data_len_(0),
-  file_id_(0),
-  base_lsn_(),
-  index_(piece_index),
-  min_file_id_(min_file_id),
-  max_file_id_(max_file_id)
+  base_lsn_()
 {
 }
 
 RawPathDataGenerator::~RawPathDataGenerator()
 {
-  array_.reset();
+  rawpath_ctx_ = NULL;
   data_len_ = 0;
   base_lsn_.reset();
-  index_ = 0;
 }
 
 int RawPathDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_size)
@@ -631,11 +625,42 @@ int RawPathDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_s
   } else if (is_fetch_to_end()) {
     ret = OB_ITER_END;
   } else if (OB_FAIL(fetch_log_from_dest_())) {
-    LOG_WARN("fetch log from dest failed", K(ret), KPC(this));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fetch log from dest failed", K(ret), KPC(this));
+    }
   } else {
     lsn = base_lsn_;
     buf = data_ + ARCHIVE_FILE_HEADER_SIZE;
     buf_size = data_len_ - ARCHIVE_FILE_HEADER_SIZE;
+    LOG_TRACE("after next_buffer", K(lsn), K(buf_size));
+  }
+  return ret;
+}
+
+int RawPathDataGenerator::advance_step_lsn(const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((NULL == rawpath_ctx_) || ! rawpath_ctx_->is_valid())) {
+    LOG_TRACE("rawpath_ctx is invalid");
+  } else if (OB_FAIL(RemoteDataGenerator::update_next_fetch_lsn_(lsn))) {
+    LOG_WARN("update_next_fetch_lsn_ failed", K(lsn), KPC(this));
+  } else {
+    rawpath_ctx_->update_max_lsn(lsn);
+    LOG_TRACE("advance_step_lsn succ", KPC(this));
+  }
+  return ret;
+}
+
+int RawPathDataGenerator::update_max_lsn(const palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY((NULL == rawpath_ctx_) || ! rawpath_ctx_->is_valid())) {
+    LOG_TRACE("rawpath_ctx is invalid");
+  } else if (OB_FAIL(RemoteDataGenerator::update_next_fetch_lsn_(lsn))) {
+    LOG_WARN("update_next_fetch_lsn_ failed", K(lsn), KPC(this));
+  } else {
+    rawpath_ctx_->update_max_lsn(lsn);
+    LOG_TRACE("update_file_info succ", K_(*rawpath_ctx));
   }
   return ret;
 }
@@ -643,39 +668,44 @@ int RawPathDataGenerator::next_buffer(palf::LSN &lsn, char *&buf, int64_t &buf_s
 int RawPathDataGenerator::fetch_log_from_dest_()
 {
   int ret = OB_SUCCESS;
-  ObString uri(array_[index_].first.ptr());
-  share::ObBackupStorageInfo storage_info;
-  if (OB_FAIL(storage_info.set(uri.ptr(), array_[index_].second.ptr()))) {
-    LOG_WARN("failed to set storage info", K(ret));
-  } else if (FALSE_IT(cal_lsn_to_file_id_(start_lsn_))) {
-  } else if (OB_FAIL(locate_precise_piece_())) {
-    LOG_WARN("locate precise piece failed", K(ret), KPC(this));
-  } else if (OB_FAIL(read_file_(uri, &storage_info, file_id_))) {
-    LOG_WARN("read file failed", K(ret), K_(id), K_(file_id));
-  } else if (OB_FAIL(extract_archive_file_header_())) {
-    LOG_WARN("extract archive file header failed", K(ret));
-  }
-  return ret;
-}
-
-// 为加速定位起点文件，依赖LSN -> file_id 规则
-int RawPathDataGenerator::cal_lsn_to_file_id_(const LSN &lsn)
-{
-  file_id_ = cal_archive_file_id(lsn, palf::PALF_BLOCK_SIZE);
-  return OB_SUCCESS;
-}
-
-int RawPathDataGenerator::list_dir_files_(const ObString &base,
-    const share::ObBackupStorageInfo *storage_info,
-    int64_t &min_file_id,
-    int64_t &max_file_id)
-{
-  int ret = OB_SUCCESS;
-  share::ObBackupPath prefix;
-  if (OB_FAIL(ObArchivePathUtil::build_restore_prefix(base.ptr(), id_, prefix))) {
+  if (OB_UNLIKELY((NULL == rawpath_ctx_) || ! rawpath_ctx_->is_valid())) {
+    LOG_WARN("rawpath_ctx_ is invalid");
   } else {
-    ObString uri(prefix.get_obstr());
-    ret = ObArchiveFileUtils::get_file_range(uri, storage_info, min_file_id, max_file_id);
+    char uri_str[OB_MAX_BACKUP_DEST_LENGTH + 1] = { 0 };
+    char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
+    share::ObBackupStorageInfo storage_info;
+    int64_t file_id = 0;
+
+    if (OB_FAIL(rawpath_ctx_->cal_lsn_to_file_id(next_fetch_lsn_))) {     // locate file_id_ by next_fetch_lsn_
+      LOG_WARN("fail to cal lsn to file id", K(ret), K_(id), K_(next_fetch_lsn));
+    } else if (OB_FAIL(rawpath_ctx_->locate_precise_piece(next_fetch_lsn_))) {
+      if (OB_ITER_END == ret) {
+        LOG_INFO("locate precise piece to end", K(ret), K_(id), KPC(this));
+      } else {
+        LOG_WARN("locate precise piece failed", K(ret), KPC(this));
+      }
+    } else if (OB_FAIL(rawpath_ctx_->get_file_id(file_id))) {
+      LOG_WARN("fail to get file id", KPC(this));
+    } else if (OB_FAIL(rawpath_ctx_->get_cur_uri(uri_str, sizeof(uri_str)))) {
+      LOG_WARN("fail to get cur uri ptr", K(ret));
+    } else if (OB_FAIL(rawpath_ctx_->get_cur_storage_info(storage_info_str, sizeof(storage_info_str)))) {
+      LOG_WARN("fail to get storage info ptr", K(ret));
+    } else if (OB_FAIL(storage_info.set(uri_str, storage_info_str))) {
+      LOG_WARN("failed to set storage info", K(ret));
+    } else if (OB_FAIL(read_file_(uri_str, &storage_info, file_id))) {
+      if (OB_ITER_END == ret) {
+        LOG_TRACE("read end of file", K(ret));
+      } else {
+        LOG_WARN("read file failed", K(ret), K_(id), K(file_id));
+      }
+    } else if (OB_FAIL(extract_archive_file_header_())) {
+      LOG_WARN("extract archive file header failed", K(ret));
+    }
+  }
+
+  if ((OB_SUCC(ret) && base_lsn_ > next_fetch_lsn_) || OB_ERR_OUT_OF_LOWER_BOUND == ret) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read file base_lsn bigger than next_fetch_lsn", K(base_lsn_), K(next_fetch_lsn_));
   }
   return ret;
 }
@@ -723,47 +753,11 @@ int RawPathDataGenerator::extract_archive_file_header_()
     LOG_ERROR("invalid file header", K(ret), K(pos), K(file_header), KPC(this));
   } else {
     base_lsn_ = LSN(file_header.start_lsn_);
+    rawpath_ctx_->update_min_lsn(base_lsn_);
     LOG_INFO("extract_archive_file_header_ succ", K(pos), K(file_header), KPC(this));
   }
   return ret;
 }
 
-int RawPathDataGenerator::locate_precise_piece_()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(0 == array_.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dest array count is 0", K(ret), KPC(this));
-  } else if (piece_index_match_()) {
-  } else {
-    int64_t min_file_id = 0;
-    int64_t max_file_id = 0;
-    bool locate = false;
-    for (int64_t i = 0; i < array_.count(); i++) {
-      ObString uri(array_[i].first.ptr());
-      share::ObBackupStorageInfo storage_info;
-      if (OB_FAIL(storage_info.set(uri.ptr(), array_[i].second.ptr()))) {
-        LOG_WARN("failed to set storage info", K(ret), KPC(this));
-      } else if (OB_FAIL(list_dir_files_(uri, &storage_info, min_file_id, max_file_id))) {
-        LOG_WARN("list dir files failed", K(ret), KPC(this));
-      } else if (file_id_ >= min_file_id && file_id_ <= max_file_id) {
-        locate = true;
-        index_ = i;
-        min_file_id_ = min_file_id;
-        max_file_id_ = max_file_id;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && ! locate) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
-bool RawPathDataGenerator::piece_index_match_() const
-{
-  return index_ > 0 && min_file_id_ <= file_id_ && max_file_id_ >= file_id_;
-}
 } // namespace logservice
 } // namespace oceanbase

@@ -44,7 +44,8 @@ public:
   static const int64_t TRP_TASK_STATUS_DOING = 2;
   static const int64_t TRP_TASK_STATUS_COMPLETED = 3;
   static const int64_t TRP_TASK_STATUS_FAILED = 4;
-  static const int64_t TRP_TASK_STATUS_MAX = 5;
+  static const int64_t TRP_TASK_STATUS_CANCELED = 5;
+  static const int64_t TRP_TASK_STATUS_MAX = 6;
   ObTransferPartitionTaskStatus(const int64_t value = TRP_TASK_STATUS_INVALID) : val_(value) {}
   ObTransferPartitionTaskStatus(const ObString &str);
   ~ObTransferPartitionTaskStatus() {reset(); }
@@ -69,10 +70,11 @@ public:
   IS_TRANSFER_PARTITION_TASK(TRP_TASK_STATUS_DOING, doing)
   IS_TRANSFER_PARTITION_TASK(TRP_TASK_STATUS_COMPLETED, completed)
   IS_TRANSFER_PARTITION_TASK(TRP_TASK_STATUS_FAILED, failed)
+  IS_TRANSFER_PARTITION_TASK(TRP_TASK_STATUS_CANCELED, canceled)
 #undef IS_TRANSFER_PARTITION_TASK
   bool is_finish_status() const
   {
-    return is_completed() || is_failed();
+    return is_completed() || is_failed() || is_canceled();
   }
   TO_STRING_KV(K_(val), "job_status", to_str());
 private:
@@ -276,6 +278,21 @@ public:
                          const ObTransferPartList &part_list,
                          ObIArray<ObTransferPartitionTask> &task_array,
                          ObMySQLTransaction &trans);
+  /*
+   * 获取指定分区的transfer partition task
+   * @description: get transfer partition task of part
+   * @param[in] tenant_id : user_tenant_id
+   * @param[in] part_info : table_id and part_object_id
+   * @param[out] task : transfer partition task
+   * @param[in] sql_client: trans or sql_client
+   * return OB_SUCCESS if success,
+   *        OB_ENTRY_NOT_EXIST if task not exist
+   *        otherwise failed
+   * */
+  static int get_transfer_partition_task(const uint64_t tenant_id,
+      const ObTransferPartInfo &part_info,
+      ObTransferPartitionTask &task,
+      ObISQLClient &sql_client);
 private:
   static int fill_dml_splicer_(share::ObDMLSqlSplicer &dml,
                               const ObTransferPartitionTask &task);

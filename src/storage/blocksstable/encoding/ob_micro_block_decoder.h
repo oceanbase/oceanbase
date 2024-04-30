@@ -209,12 +209,12 @@ public:
       const int64_t row_idx,
       const int64_t schema_rowkey_cnt,
       const ObRowHeader *&row_header,
-      int64_t &version,
+      int64_t &trans_version,
       int64_t &sql_sequence);
   int compare_rowkey(
       const ObDatumRowkey &rowkey,
       const int64_t index,
-      int32_t &compare_result);
+      int32_t &compare_result) override;
   int compare_rowkey(
       const ObDatumRange &range,
       const int64_t index,

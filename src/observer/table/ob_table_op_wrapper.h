@@ -26,13 +26,12 @@ namespace table
 class ObTableOpWrapper
 {
 public:
-  // dml操作模板函数
   template<int TYPE>
   static int process_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
   {
     int ret = OB_SUCCESS;
     ObTableApiSpec *spec = nullptr;
-    observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
+    observer::ObReqTimeGuard req_timeinfo_guard; // if refer to cache must use ObReqTimeGuard
     ObTableApiCacheGuard cache_guard;
     if (OB_FAIL(get_or_create_spec<TYPE>(tb_ctx, cache_guard, spec))) {
       SERVER_LOG(WARN, "fail to get or create spec", K(ret), K(TYPE));
@@ -44,7 +43,7 @@ public:
 
     return ret;
   }
-  // 生成/匹配计划
+
   template<int TYPE>
   static int get_or_create_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec)
   {
@@ -63,9 +62,7 @@ public:
     }
     return ret;
   }
-  // 根据执行计划驱动executor执行
   static int process_op_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObTableOperationResult &op_result);
-  // get特有的逻辑，单独处理
   static int process_get(ObTableCtx &tb_ctx, ObNewRow *&row);
   static int process_get_with_spec(ObTableCtx &tb_ctx, ObTableApiSpec *spec, ObNewRow *&row);
   static int get_insert_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
@@ -82,13 +79,12 @@ private:
 class ObTableApiUtil
 {
 public:
-  // schema序的ObNewRow组装成ObTableEntity
   static int construct_entity_from_row(ObIAllocator &allocator,
                                        ObNewRow *row,
-                                       const ObTableSchema *table_schema,
+                                       ObKvSchemaCacheGuard &schema_cache_guard,
                                        const ObIArray<ObString> &cnames,
                                        ObITableEntity *entity);
-  static int expand_all_columns(const ObTableSchema *table_schema,
+  static int expand_all_columns(const ObIArray<ObTableColumnInfo *>& col_info_array,
                                 ObIArray<ObString> &cnames);
   static void replace_ret_code(int &ret)
   {

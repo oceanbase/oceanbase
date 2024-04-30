@@ -814,7 +814,6 @@ public:
       ret = OB_IO_ERROR;
       LOG_WARN("epoll_create fail", K(ret), K(errno));
     } else {
-      int ret = OB_SUCCESS;
       if ((lfd_ = listen_create(!oceanbase::lib::use_ipv6() ? AF_INET : AF_INET6, port, need_monopolize)) < 0) {
         ret = OB_SERVER_LISTEN_ERROR;
         LOG_WARN("listen create fail", K(ret), K(port), K(errno), KERRNOMSG(errno));
@@ -899,7 +898,7 @@ public:
       LOG_DEBUG("revert_sock: sock still readable", K(*s));
       int ret = OB_SUCCESS;
       if (OB_FAIL(handler_.on_readable(s->sess_))) {
-        LOG_TRACE("push to omt queue fail", K(ret), K(*s));
+        LOG_WARN("push to omt queue fail, will close socket", K(ret), K(*s));
         push_close_req(s);
         s->disable_may_handling_flag();
       }

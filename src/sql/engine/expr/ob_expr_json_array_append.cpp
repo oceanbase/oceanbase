@@ -15,6 +15,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_expr_json_array_append.h"
 #include "share/ob_json_access_utils.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 using namespace oceanbase::common;
@@ -96,7 +97,6 @@ int ObExprJsonArrayAppend::eval_json_array_append(const ObExpr &expr, ObEvalCtx 
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObIJsonBase *j_base = NULL;
   bool is_null = false;
   ObJsonSeekResult hit;

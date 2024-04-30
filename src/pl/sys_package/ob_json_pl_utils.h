@@ -17,7 +17,7 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/session/ob_sql_session_info.h"
-#include "pl/ob_pl_json_type.h"
+#include "pl/opaque/ob_pl_json_type.h"
 
 namespace oceanbase
 {

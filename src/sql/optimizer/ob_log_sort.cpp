@@ -470,3 +470,14 @@ int ObLogSort::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
   }
   return ret;
 }
+
+int ObLogSort::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = -1;
+  if (!is_prefix_sort() && !is_local_merge_sort()) {
+    used = false;
+  }
+  return ret;
+}

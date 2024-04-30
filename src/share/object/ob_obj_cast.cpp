@@ -568,11 +568,13 @@ int real_range_check_only(const ObAccuracy &accuracy, Type value)
   if (OB_LIKELY(precision > 0) &&
       OB_LIKELY(scale >= 0) &&
       OB_LIKELY(precision >= scale)) {
-    Type integer_part = static_cast<Type>(pow(10.0, static_cast<double>(precision - scale)));
-    Type decimal_part = static_cast<Type>(pow(10.0, static_cast<double>(scale)));
-    Type max_value = integer_part - 1 / decimal_part;
-    Type min_value = -max_value;
-    if (OB_FAIL(numeric_range_check(value, min_value, max_value, value))) {
+    // Because double type represents a larger width, use double type instead of float to check
+    // result range.
+    double integer_part = static_cast<double>(pow(10.0, static_cast<double>(precision - scale)));
+    double decimal_part = static_cast<double>(pow(10.0, static_cast<double>(scale)));
+    double max_value = integer_part - 1 / decimal_part;
+    double min_value = -max_value;
+    if (OB_FAIL(numeric_range_check(static_cast<double>(value), min_value, max_value, value))) {
     }
   }
   return ret;
@@ -12490,11 +12492,16 @@ int number_range_check_v2(ObObjCastParams &params, const ObAccuracy &accuracy,
       } else {
         if (OB_FAIL(out_val.from(in_val, allocator))) {
         } else if (OB_FAIL(out_val.round(scale))) {
-        } else if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode) &&
-          in_val.compare(out_val) != 0) {
-          ret = OB_OPERATE_OVERFLOW;
-          LOG_WARN("input value is out of range.", K(scale), K(in_val));
-        } else {
+        } else if (!in_val.is_equal(out_val)) {
+          if (CM_IS_ERROR_ON_SCALE_OVER(cast_mode)) {
+            ret = OB_OPERATE_OVERFLOW;
+            LOG_WARN("input value is out of range.", K(ret), K(scale), K(in_val));
+          } else if (lib::is_mysql_mode()) {
+            // MySQL emits warnings for decimal column truncation, regardless of sql_mode settings.
+            params.warning_ = OB_ERR_DATA_TOO_LONG;
+          }
+        }
+        if (OB_SUCC(ret)) {
           buf_obj.set_number(obj.get_type(), out_val);
         }
       }

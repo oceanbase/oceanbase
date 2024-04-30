@@ -90,6 +90,27 @@ int ObTableComparator::compare_to(const ObIArray<ObString> &select_columns,
           cmp_ret = src_v == dest_v ? 0 :
                     (src_v > dest_v ? 1 : -1);
         }
+      } else if (ob_is_uint_tc(column_type)) {
+        // support uint8, uint16, uint24, uint32, uint64.
+        if (!is_numeric(comparator_value_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("comparator value is not a number", K(ret), K_(comparator_value));
+        } else {
+          // has a border problem
+          // if comparator_value is bigger than UINT64_MAX, strtoul() will return ULONG_MAX(UINT64_MAX)
+          // so `< comparator_value` will filter the UINT64_MAX
+          // also when comparator_value = UINT64_MIN
+          char *endptr = nullptr;
+          uint64_t src_v = strtoul(comparator_value_.ptr(), &endptr, 10);
+          if (OB_ISNULL(endptr) || *endptr != '\0') {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("comparator value is not a valid number", K(ret), K_(comparator_value));
+          } else {
+            uint64_t dest_v = cell.get_uint64();
+            cmp_ret = src_v == dest_v ? 0 :
+                      (src_v > dest_v ? 1 : -1);
+          }
+        }
       } else if (ob_is_string_tc(column_type)) {
         // support varchar, char, varbinary, binary
         ObObj compare_obj;

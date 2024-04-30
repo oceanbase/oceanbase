@@ -587,7 +587,7 @@ bool ObDupTableLSLeaseMgr::check_follower_lease_serving(const bool is_election_l
 {
   SpinRLockGuard guard(lease_lock_);
   bool follower_lease_serving = false;
-  if (is_election_leader) {
+  if (is_election_leader && is_master()) {
     follower_lease_serving = true;
     DUP_TABLE_LOG(INFO, "no need to check follower serving on a leader", K(is_election_leader),
                   K(max_replayed_scn));
@@ -595,8 +595,8 @@ bool ObDupTableLSLeaseMgr::check_follower_lease_serving(const bool is_election_l
     follower_lease_serving = false;
     DUP_TABLE_LOG(INFO, "dup table lease has been expired", K(follower_lease_serving),
                   K(is_election_leader), K(max_replayed_scn), K(follower_lease_info_));
-  } else if (follower_lease_info_.lease_acquire_scn_.is_valid()
-             || follower_lease_info_.lease_acquire_scn_ <= max_replayed_scn) {
+  } else if (follower_lease_info_.lease_acquire_scn_.is_valid_and_not_min()
+             && follower_lease_info_.lease_acquire_scn_ <= max_replayed_scn) {
     follower_lease_serving = true;
   }
   return follower_lease_serving;

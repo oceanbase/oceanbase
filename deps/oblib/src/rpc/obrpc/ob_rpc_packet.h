@@ -27,7 +27,7 @@ namespace oceanbase
 namespace obrpc
 {
 
-#define OB_LOG_LEVEL_MASK (0xf)
+#define OB_LOG_LEVEL_MASK (0x7)
 
 enum ObRpcPriority
 {

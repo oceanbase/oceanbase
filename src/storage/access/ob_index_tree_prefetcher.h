@@ -28,6 +28,7 @@ namespace oceanbase {
 using namespace blocksstable;
 namespace storage {
 class ObAggregatedStore;
+class ObRowsInfo;
 
 struct ObSSTableRowState {
   enum ObSSTableRowStateEnum {
@@ -103,6 +104,7 @@ public:
   union {
     const blocksstable::ObDatumRowkey *rowkey_;
     const blocksstable::ObDatumRange *range_;
+    const ObRowsInfo *rows_info_;
     const void *query_range_;
   };
   ObRowValueHandle row_handle_;
@@ -151,7 +153,10 @@ public:
   VIRTUAL_TO_STRING_KV(K_(data_version), K_(index_scanner));
 protected:
   int init_index_scanner(ObIndexBlockRowScanner &index_scanner);
-  int check_bloom_filter(const ObMicroIndexInfo &index_info, ObSSTableReadHandle &read_handle);
+  int check_bloom_filter(
+      const ObMicroIndexInfo &index_info,
+      const bool is_multi_check,
+      ObSSTableReadHandle &read_handle);
   int prefetch_block_data(
       ObMicroIndexInfo &index_block_info,
       ObMicroBlockDataHandle &micro_handle,
@@ -362,6 +367,10 @@ public:
          cur_micro_data_fetch_idx_ > current_read_handle().micro_end_idx_);
 
   }
+  OB_INLINE bool is_multi_check()
+  {
+    return ObStoreRowIterator::IteratorType::IteratorMultiRowLockCheck == iter_type_;
+  }
   int refresh_blockscan_checker(const int64_t start_micro_idx, const blocksstable::ObDatumRowkey &rowkey);
   int check_blockscan(bool &can_blockscan);
   int check_row_lock(
@@ -465,10 +474,12 @@ private:
         index_block_read_handles_[i].reset();
       }
     }
-    OB_INLINE int get_next_data_row(ObMicroIndexInfo &block_info)
+    OB_INLINE int get_next_data_row(
+        const bool is_multi_check,
+        ObMicroIndexInfo &block_info)
     {
       int ret = OB_SUCCESS;
-      if (OB_FAIL(index_scanner_.get_next(block_info))) {
+      if (OB_FAIL(index_scanner_.get_next(block_info, is_multi_check))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
         }
@@ -481,17 +492,17 @@ private:
       return ret;
     }
     OB_INLINE int get_next_index_row(
-        const blocksstable::ObDatumRowkey &border_rowkey,
+        const bool has_lob_out,
         ObMicroIndexInfo &block_info,
-        const bool has_lob_out)
+        ObIndexTreeMultiPassPrefetcher &prefetcher)
     {
       int ret = OB_SUCCESS;
       while (OB_SUCC(ret)) {
-        if (OB_FAIL(index_scanner_.get_next(block_info))) {
+        if (OB_FAIL(index_scanner_.get_next(block_info, prefetcher.is_multi_check()))) {
           if (OB_UNLIKELY(OB_ITER_END != ret)) {
             STORAGE_LOG(WARN, "Fail to get_next index row", K(ret), K_(index_scanner));
           } else if (fetch_idx_ < prefetch_idx_) {
-            if (OB_FAIL(forward(border_rowkey, has_lob_out))) {
+            if (OB_FAIL(forward(prefetcher, has_lob_out))) {
               STORAGE_LOG(WARN, "Fail to forward index tree handle", K(ret));
             }
           }
@@ -516,11 +527,10 @@ private:
       return index_block_read_handles_[fetch_idx_ % INDEX_TREE_PREFETCH_DEPTH];
     }
     int prefetch(
-        const blocksstable::ObDatumRowkey &border_rowkey,
         const int64_t level,
         ObIndexTreeMultiPassPrefetcher &prefetcher);
     int forward(
-        const blocksstable::ObDatumRowkey &border_rowkey,
+        ObIndexTreeMultiPassPrefetcher &prefetcher,
         const bool has_lob_out);
     OB_INLINE int check_blockscan(const blocksstable::ObDatumRowkey &border_rowkey)
     {
@@ -571,6 +581,7 @@ private:
     const common::ObIArray<blocksstable::ObDatumRowkey> *rowkeys_; // for multi get/multi exist/single exist
     const blocksstable::ObDatumRange *range_; // for scan
     const common::ObIArray<blocksstable::ObDatumRange> *ranges_; // for multi scan
+    const ObRowsInfo *rows_info_; // for row lock multi check
     const void *query_range_;
   };
   blocksstable::ObDatumRowkey border_rowkey_;

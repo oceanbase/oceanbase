@@ -35,7 +35,10 @@ namespace observer
 struct ObTableQueryAsyncCtx
 {
   explicit ObTableQueryAsyncCtx(common::ObIAllocator &allocator)
-      : tb_ctx_(allocator),
+      : table_id_(OB_INVALID_ID),
+        schema_version_(OB_INVALID_SCHEMA_VERSION),
+        sess_guard_(),
+        tb_ctx_(allocator),
         expr_frame_info_(allocator),
         spec_(nullptr),
         executor_(nullptr)
@@ -47,12 +50,34 @@ struct ObTableQueryAsyncCtx
       spec_->destroy_executor(executor_);
     }
   }
+
+  uint64_t table_id_;
+  int64_t schema_version_;
+  table::ObTableApiSessGuard sess_guard_;
   table::ObTableCtx tb_ctx_;
   ObExprFrameInfo expr_frame_info_;
   table::ObTableApiSpec *spec_;
   table::ObTableApiScanExecutor *executor_;
   table::ObTableApiScanRowIterator row_iter_;
 };
+
+/**
+ * ---------------------------------------- ObTableQueryAsyncEntifyDestroyGuard ----------------------------------------
+ */
+class ObTableQueryAsyncEntifyDestroyGuard
+  {
+  public:
+    ObTableQueryAsyncEntifyDestroyGuard(lib::MemoryContext &entity) : ref_(entity) {}
+    ~ObTableQueryAsyncEntifyDestroyGuard()
+    {
+      if (OB_NOT_NULL(ref_)) {
+        DESTROY_CONTEXT(ref_);
+        ref_ = NULL;
+      }
+    }
+  private:
+    lib::MemoryContext &ref_;
+  };
 
 /**
  * ---------------------------------------- ObTableQueryAsyncSession ----------------------------------------
@@ -65,14 +90,16 @@ public:
   explicit ObTableQueryAsyncSession()
     : in_use_(true),
       timeout_ts_(10000000),
+      iterator_mementity_(nullptr),
+      iterator_mementity_destroy_guard_(iterator_mementity_),
+      allocator_("TbAQueryP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tenant_id_(MTL_ID()),
       query_(),
+      select_columns_(),
       result_iterator_(nullptr),
-      allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      query_ctx_(allocator_),
-      iterator_mementity_(nullptr)
+      query_ctx_(allocator_)
   {}
-  ~ObTableQueryAsyncSession();
+  ~ObTableQueryAsyncSession() {}
 
   void set_result_iterator(table::ObTableQueryResultIterator* iter);
   table::ObTableQueryResultIterator *get_result_iter() { return result_iterator_; };
@@ -82,9 +109,13 @@ public:
 
   void set_timout_ts(uint64_t timeout_ts) { timeout_ts_ = timeout_ts; }
   table::ObTableQueryResultIterator *get_result_iterator() { return result_iterator_; }
+  lib::MemoryContext &get_memory_ctx() { return iterator_mementity_; }
   ObArenaAllocator *get_allocator() {return &allocator_;}
   common::ObObjectID get_tenant_id() { return tenant_id_; }
   table::ObTableQuery &get_query() { return query_; }
+  common::ObIArray<common::ObString> &get_select_columns() { return select_columns_; }
+  int deep_copy_select_columns(const common::ObIArray<common::ObString> &query_cols_names_,
+                               const common::ObIArray<common::ObString> &tb_ctx_cols_names_);
   ObTableQueryAsyncCtx &get_query_ctx() { return query_ctx_; }
 public:
   sql::TransState* get_trans_state() {return &trans_state_;}
@@ -93,12 +124,14 @@ public:
 private:
   bool in_use_;
   uint64_t timeout_ts_;
+  lib::MemoryContext iterator_mementity_;
+  ObTableQueryAsyncEntifyDestroyGuard iterator_mementity_destroy_guard_;
+  ObArenaAllocator allocator_;
   common::ObObjectID tenant_id_;
   table::ObTableQuery query_; // deep copy from arg_.query_
+  ObSEArray<ObString, 16> select_columns_; // deep copy from tb_ctx or query, which includes all the actual col names the user acquired
   table::ObTableQueryResultIterator *result_iterator_;
-  ObArenaAllocator allocator_;
   ObTableQueryAsyncCtx query_ctx_;
-  lib::MemoryContext iterator_mementity_;
 
 private:
   // txn control
@@ -187,19 +220,20 @@ public:
   explicit ObTableQueryAsyncP(const ObGlobalContext &gctx);
   virtual ~ObTableQueryAsyncP() {}
   virtual int deserialize() override;
+  virtual int before_process() override;
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
-  virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
-
+  int init_query_ctx(const ObString &arg_table_name);
 
 private:
   int process_query_start();
   int process_query_next();
   int destory_query_session(bool need_rollback_trans);
+  int init_schema_cache_guard();
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 
 private:
@@ -212,6 +246,12 @@ private:
   int check_query_type();
   int init_tb_ctx(table::ObTableCtx &ctx);
   int execute_query();
+  int start_trans(bool is_readonly,
+                  const table::ObTableConsistencyLevel consistency_level,
+                  const share::ObLSID &ls_id,
+                  int64_t timeout_ts,
+                  bool need_global_snapshot,
+                  sql::TransState *trans_state);
 
 private:
   int64_t result_row_count_;

@@ -246,12 +246,30 @@ int ObTableDirectLoadBeginExecutor::check_need_online_gather(const uint64_t tena
   return ret;
 }
 
+int ObTableDirectLoadBeginExecutor::get_compressor_type(const uint64_t tenant_id,
+                                                        const uint64_t table_id,
+                                                        const int64_t parallel,
+                                                        ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObCompressorType table_compressor_type = ObCompressorType::NONE_COMPRESSOR;
+  if (OB_FAIL(
+        ObTableLoadSchema::get_table_compressor_type(tenant_id, table_id, table_compressor_type))) {
+    LOG_WARN("fail to get table compressor type", KR(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_compressor_type, parallel,
+                                                             compressor_type))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  }
+  return ret;
+}
+
 int ObTableDirectLoadBeginExecutor::create_table_ctx()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = client_task_->tenant_id_;
   const uint64_t table_id = client_task_->table_id_;
   bool online_opt_stat_gather = false;
+  ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
   ObTableLoadDDLParam ddl_param;
   ObTableLoadParam param;
   // start redef table
@@ -279,11 +297,10 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
   }
   // init param
   if (OB_SUCC(ret)) {
-    ObTenant *tenant = nullptr;
-    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+    if (OB_FAIL(check_need_online_gather(tenant_id, online_opt_stat_gather))) {
       LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(check_need_online_gather(tenant_id, online_opt_stat_gather))) {
-      LOG_WARN("fail to get tenant", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(get_compressor_type(tenant_id, table_id, arg_.parallel_, compressor_type))) {
+      LOG_WARN("fail to get compressor type", KR(ret));
     } else {
       param.tenant_id_ = tenant_id;
       param.table_id_ = table_id;
@@ -296,6 +313,7 @@ int ObTableDirectLoadBeginExecutor::create_table_ctx()
       param.px_mode_ = false;
       param.online_opt_stat_gather_ = online_opt_stat_gather;
       param.dup_action_ = arg_.dup_action_;
+      param.compressor_type_ = compressor_type;
       if (OB_FAIL(param.normalize())) {
         LOG_WARN("fail to normalize param", KR(ret));
       }

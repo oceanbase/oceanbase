@@ -22,6 +22,7 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "sql/plan_cache/ob_plan_cache.h"
 #include "ob_table_op_wrapper.h"
+#include "group/ob_table_group_service.h"
 
 namespace oceanbase
 {
@@ -36,40 +37,46 @@ public:
   virtual ~ObTableApiExecuteP() = default;
 
   virtual int deserialize() override;
+  virtual int before_process() override;
   virtual int process() override;
   virtual int response(const int retcode) override;
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
-  table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
   virtual int before_response(int error_code) override;
 
 private:
   int init_tb_ctx();
+  int init_group_ctx(table::ObTableGroupCtx &ctx);
+  ObTableProccessType get_stat_event_type();
   int check_arg2() const;
-  int get_tablet_id(uint64_t table_id, const ObRowkey &rowkey, common::ObTabletID &tablet_id);
+  int process_group_commit();
+  int init_group_key();
   template<int TYPE>
   int process_dml_op()
   {
     int ret = OB_SUCCESS;
-    if (OB_FAIL(start_trans(false, /* is_readonly */
-                            sql::stmt::T_INSERT,
+    table::ObTableExecuteCreateCbFunctor functor;
+
+    if (OB_FAIL(start_trans(false,
                             arg_.consistency_level_,
                             tb_ctx_.get_ls_id(),
                             get_timeout_ts(),
                             tb_ctx_.need_dist_das()))) {
-      SERVER_LOG(WARN, "fail to start trans", K(ret));
+      SERVER_LOG(WARN, "fail to start transaction", K(ret), K_(tb_ctx));
     } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       SERVER_LOG(WARN, "fail to init trans", K(ret));
     } else if (OB_FAIL(table::ObTableOpWrapper::process_op<TYPE>(tb_ctx_, result_))) {
       SERVER_LOG(WARN, "fail to process op", K(ret));
+    } else if (OB_FAIL(functor.init(req_, &result_, arg_.table_operation_.type()))) {
+      SERVER_LOG(WARN, "fail to init create execute callback functor", K(ret));
     }
 
     int tmp_ret = ret;
-    if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+    if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, &functor))) {
       SERVER_LOG(WARN, "fail to end trans", K(ret));
     }
 
@@ -78,6 +85,16 @@ private:
   }
   int process_get();
   int process_insert()
+  {
+    int ret = OB_SUCCESS;
+    if (!tb_ctx_.is_ttl_table()) {
+      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>();
+    } else {
+      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
+    }
+    return ret;
+  }
+  int process_put()
   {
     int ret = OB_SUCCESS;
     if (!tb_ctx_.is_ttl_table()) {
@@ -102,9 +119,9 @@ private:
   table::ObTableEntity result_entity_;
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
-  table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;
-  bool need_rollback_trans_;
-  int64_t query_timeout_ts_;
+  bool is_group_commit_;
+  bool is_group_trigger_;
+  table::ObTableGroupCommitSingleOp *group_single_op_;
 };
 
 

@@ -867,7 +867,7 @@ int ObPartTransCtx::commit(const ObLSArray &parts,
   REC_TRANS_TRACE_EXT2(tlog_, commit, OB_ID(ret), ret,
                        OB_ID(tid), GETTID(),
                        OB_ID(ref), get_ref());
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_EAGAIN != ret && OB_TRANS_COMMITED != ret) {
     TRANS_LOG(WARN, "trx commit failed", KR(ret), KPC(this));
   }
   return ret;
@@ -1164,10 +1164,10 @@ bool ObPartTransCtx::has_persisted_log_() const
   return exec_info_.max_applying_log_ts_.is_valid();
 }
 
-int ObPartTransCtx::gts_callback_interrupted(const int errcode)
+int ObPartTransCtx::gts_callback_interrupted(const int errcode,
+    const share::ObLSID target_ls_id)
 {
   int ret = OB_SUCCESS;
-  UNUSED(errcode);
 
   bool need_revert_ctx = false;
   {
@@ -1175,15 +1175,19 @@ int ObPartTransCtx::gts_callback_interrupted(const int errcode)
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(ERROR, "ObPartTransCtx not inited", K(ret));
-    } else if (OB_UNLIKELY(!is_exiting_)) {
-      // at this time, ObTxCtxMgr should already be stopped,
-      // so ObPartTransCtx should already be killed
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "ObPartTransCtx is not exiting", K(ret));
+    } else if (OB_LS_OFFLINE == errcode) {
+      if (target_ls_id != ls_id_) {
+        ret = OB_EAGAIN;
+      } else {
+        need_revert_ctx = true;
+        sub_state_.clear_gts_waiting();
+        TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), K(errcode), "context", *this);
+      }
     } else {
+      // for OB_TENANT_NOT_EXIST
       need_revert_ctx = true;
       sub_state_.clear_gts_waiting();
-      TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), "context", *this);
+      TRANS_LOG(INFO, "transaction is interruputed gts callback", KR(ret), K(errcode), "context", *this);
     }
   }
   if (need_revert_ctx) {
@@ -3259,7 +3263,7 @@ int ObPartTransCtx::submit_prepare_log_()
 
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(errism_submit_prepare_log_())) {
+    if (OB_FAIL(errsim_submit_prepare_log_())) {
       TRANS_LOG(WARN, "errsim for submit prepare log", K(ret), KPC(this));
     }
   }
@@ -6620,7 +6624,7 @@ ERRSIM_POINT_DEF(EN_DUP_TABLE_REDO_SYNC)
 ERRSIM_POINT_DEF(EN_SUBMIT_TX_PREPARE_LOG)
 #endif
 
-int ObPartTransCtx::errism_dup_table_redo_sync_()
+int ObPartTransCtx::errsim_dup_table_redo_sync_()
 {
 
   int ret = OB_SUCCESS;
@@ -6631,7 +6635,7 @@ int ObPartTransCtx::errism_dup_table_redo_sync_()
   return ret;
 }
 
-OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
+OB_NOINLINE int ObPartTransCtx::errsim_submit_prepare_log_()
 {
 
   int ret = OB_SUCCESS;
@@ -6644,7 +6648,21 @@ OB_NOINLINE int ObPartTransCtx::errism_submit_prepare_log_()
 
 #ifdef ERRSIM
   ret = EN_SUBMIT_TX_PREPARE_LOG;
+  if(OB_TRANS_NEED_ROLLBACK == ret) {
+    sub_state_.set_force_abort();
+  }
 #endif
+
+  return ret;
+}
+
+OB_NOINLINE int ObPartTransCtx::errsim_do_pre_commit_without_root_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim in do pre_commit", K(ret));
+  }
 
   return ret;
 }
@@ -6949,7 +6967,7 @@ int ObPartTransCtx::dup_table_tx_redo_sync_(const bool need_retry_by_task)
   } else if (is_follower_()) {
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "can not execute redo sync on a follower", KPC(this));
-  } else if (OB_FAIL(errism_dup_table_redo_sync_())) {
+  } else if (OB_FAIL(errsim_dup_table_redo_sync_())) {
     TRANS_LOG(WARN, "errsim for dup table redo sync", K(ret), KPC(this));
   } else {
     if (is_dup_table_redo_sync_completed_()) {
@@ -8952,7 +8970,7 @@ void ObPartTransCtx::handle_trans_ask_state_(const SCN &snapshot)
 {
   if (snapshot > lastest_snapshot_) {
     build_and_post_collect_state_msg_(snapshot);
-  } else if (snapshot <= lastest_snapshot_ && standby_part_collected_.num_members() != state_info_array_.count()) {
+  } else if (snapshot <= lastest_snapshot_) {
     if (refresh_state_info_interval_.reach()) {
       build_and_post_collect_state_msg_(snapshot);
     }
@@ -9040,7 +9058,10 @@ int ObPartTransCtx::handle_trans_ask_state_resp(const ObAskStateRespMsg &msg)
         }
       } else if (state_info_array_.at(j-1).need_update(msg.state_info_array_.at(i))) {
         state_info_array_.at(j-1) = msg.state_info_array_.at(i);
+      } else {
+        state_info_array_.at(j - 1).snapshot_version_ = msg.state_info_array_.at(i).snapshot_version_;
       }
+
     }
   }
   TRANS_LOG(INFO, "handle trans ask state resp", K(ret), K(msg), KPC(this));
@@ -9142,6 +9163,8 @@ int ObPartTransCtx::handle_trans_collect_state_resp(const ObCollectStateRespMsg 
       TRANS_LOG(WARN, "state info array has wrong participiants", K(ret), K(msg), KPC(this));
     } else if (state_info_array_.at(i-1).need_update(msg.state_info_)) {
       state_info_array_.at(i-1) = msg.state_info_;
+    } else {
+      state_info_array_.at(i-1).snapshot_version_.inc_update(msg.state_info_.snapshot_version_);
     }
     if (OB_SUCC(ret)) {
       standby_part_collected_.add_member(i-1);

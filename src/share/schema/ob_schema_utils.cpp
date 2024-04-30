@@ -509,7 +509,8 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
     const ObTimeoutCtx &ctx,
     sql::ObSQLSessionInfo *session,
     const uint64_t tenant_id,
-    const int64_t schema_version)
+    const int64_t schema_version,
+    const bool skip_consensus)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -547,7 +548,8 @@ int ObSchemaUtils::try_check_parallel_ddl_schema_in_sync(
                 && consensus_schema_version >= schema_version) {
       break;
     } else if (refreshed_schema_version >= schema_version
-                && ObTimeUtility::current_time() - start_time >= consensus_timeout) {
+                && (skip_consensus
+                    || ObTimeUtility::current_time() - start_time >= consensus_timeout)) {
       break;
     } else {
       if (REACH_TIME_INTERVAL(1000 * 1000L)) { // 1s
@@ -786,7 +788,8 @@ const char* DDLType[]
 {
   "TRUNCATE_TABLE",
   "SET_COMMENT",
-  "CREATE_INDEX"
+  "CREATE_INDEX",
+  "CREATE_VIEW"
 };
 
 int ObParallelDDLControlMode::string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type)
@@ -857,6 +860,12 @@ int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool
       is_parallel = false;
     } else if (value == ObParallelDDLControlParser::MODE_ON) {
       is_parallel = true;
+    } else if (value == ObParallelDDLControlParser::MODE_DEFAULT) {
+      if (TRUNCATE_TABLE == type) {
+        is_parallel = true;
+      } else {
+        is_parallel = false;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid value unexpected", KR(ret), K(value));
@@ -881,6 +890,22 @@ int ObParallelDDLControlMode::is_parallel_ddl_enable(const ObParallelDDLType ddl
     LOG_WARN("init mode failed", KR(ret));
   } else if (OB_FAIL(cfg.is_parallel_ddl(ddl_type, is_parallel))) {
     LOG_WARN("fail to check is parallel ddl", KR(ret), K(ddl_type));
+  }
+  return ret;
+}
+
+int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(ObSqlString &config_value)
+{
+  int ret = OB_SUCCESS;
+  int ddl_type_size = ARRAYSIZEOF(DDLType);
+  for (int i = 0; OB_SUCC(ret) && i < (ddl_type_size - 1); ++i) {
+    if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
+      LOG_WARN("fail to append fmt", KR(ret), K(i));
+    }
+  }
+  if ((ddl_type_size > 0)
+      && FAILEDx(config_value.append_fmt("%s:ON", DDLType[ddl_type_size - 1]))) {
+    LOG_WARN("fail to append fmt", KR(ret), K(ddl_type_size));
   }
   return ret;
 }

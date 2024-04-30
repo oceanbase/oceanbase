@@ -44,7 +44,7 @@ int ObLSMigrationHandlerStatusHelper::check_can_change_status(
   if (!is_valid(curr_status) || !is_valid(change_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check can change status get invalid argument", K(ret), K(curr_status), K(change_status));
-  }else {
+  } else {
     switch (curr_status) {
     case ObLSMigrationHandlerStatus::INIT: {
       if (ObLSMigrationHandlerStatus::INIT == change_status
@@ -164,7 +164,8 @@ ObLSMigrationHandler::ObLSMigrationHandler()
     lock_(),
     status_(ObLSMigrationHandlerStatus::INIT),
     result_(OB_SUCCESS),
-    is_stop_(false)
+    is_stop_(false),
+    is_cancel_(false)
 {
 }
 
@@ -297,6 +298,7 @@ void ObLSMigrationHandler::reuse_()
   task_list_.reset();
   status_ = ObLSMigrationHandlerStatus::INIT;
   result_ = OB_SUCCESS;
+  is_cancel_ = false;
 }
 
 void ObLSMigrationHandler::wakeup_()
@@ -320,14 +322,8 @@ int ObLSMigrationHandler::get_ls_migration_task_(ObLSMigrationTask &task)
     LOG_WARN("ls migration handler do not init", K(ret));
   } else {
     common::SpinRLockGuard guard(lock_);
-    if (task_list_.empty()) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("migration task is empty", K(ret), KPC(ls_));
-    } else if (task_list_.count() > 1) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ls migration task count should not more than 1", K(ret), K(task_list_), KPC(ls_));
-    } else {
-      task = task_list_.at(0);
+    if (OB_FAIL(get_ls_migration_task_with_nolock_(task))) {
+      LOG_WARN("failed to get ls migration task", K(ret));
     }
   }
   return ret;
@@ -419,30 +415,15 @@ int ObLSMigrationHandler::add_ls_migration_task(
 int ObLSMigrationHandler::switch_next_stage(const int32_t result)
 {
   int ret = OB_SUCCESS;
-  ObLSMigrationHandlerStatus next_status = ObLSMigrationHandlerStatus::MAX_STATUS;
-  bool can_change = false;
-  int32_t new_result = OB_SUCCESS;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls migration handler do not init", K(ret));
   } else {
     common::SpinWLockGuard guard(lock_);
-    new_result = OB_SUCCESS != result_ ? result_ : result;
-
-    if (OB_FAIL(ObLSMigrationHandlerStatusHelper::get_next_change_status(status_, new_result, next_status))) {
-      LOG_WARN("failed to get next change status", K(ret), K(status_), K(result), K(new_result));
-    } else if (OB_FAIL(ObLSMigrationHandlerStatusHelper::check_can_change_status(status_, next_status, can_change))) {
-      LOG_WARN("failed to check can change status", K(ret), K(status_), K(next_status));
-    } else if (!can_change) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("can not change ls migration handler status", K(ret), K(status_), K(next_status));
-    } else {
-      FLOG_INFO("report result", K(result), K(new_result), K(result_), K(status_), K(next_status));
-      result_ = new_result;
-      status_ = next_status;
+    if (OB_FAIL(switch_next_stage_with_nolock_(result))) {
+      LOG_WARN("failed to switch next stage", K(ret), K(result));
     }
-    wakeup_();
   }
   return ret;
 }
@@ -541,6 +522,43 @@ int ObLSMigrationHandler::process()
   return ret;
 }
 
+int ObLSMigrationHandler::cancel_task(const share::ObTaskId &task_id, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = nullptr;
+  is_exist = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handle do not init", K(ret));
+  } else if (!task_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (OB_FAIL(check_task_exist_with_nolock_(task_id, is_exist))) {
+      LOG_WARN("fail to check task exist", K(ret), K(task_id));
+    } else if (!is_exist) {
+      LOG_INFO("task is not exist in migration task", K(task_id));
+    } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("failed to get ObTenantDagScheduler from MTL", K(ret));
+    }
+    // If task not exist, cancel_dag_net return OB_SUCCESS
+    else if (OB_FAIL(scheduler->cancel_dag_net(task_id))) {
+      LOG_WARN("failed to cancel dag net", K(ret), K(this), K(task_id));
+    } else {
+      is_cancel_ = true;
+    }
+  }
+  return ret;
+}
+
+bool ObLSMigrationHandler::is_cancel() const
+{
+  common::SpinRLockGuard guard(lock_);
+  return is_cancel_;
+}
+
 int ObLSMigrationHandler::do_init_status_()
 {
   int ret = OB_SUCCESS;
@@ -555,6 +573,9 @@ int ObLSMigrationHandler::do_init_status_()
     LOG_WARN("ls migration handler do not init", K(ret));
   } else if (is_migration_failed_()) {
     //do nothing
+  } else if (is_cancel()) {
+    ret = OB_CANCELED;
+    LOG_WARN("task is canceled", K(ret));
   } else {
     // this lock make sure the ls creating is not scheduled to migrate.
     ObLSLockGuard lock_ls(ls_, true /* read lock */);
@@ -740,23 +761,29 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule build ls dag net get invalid argument", K(ret), K(task));
   } else {
+    const int32_t cancel_result = OB_CANCELED;
     DEBUG_SYNC(BEFORE_BUILD_LS_MIGRATION_DAG_NET);
-    ObTenantDagScheduler *scheduler = nullptr;
-    ObMigrationDagNetInitParam param;
-    param.arg_ = task.arg_;
-    param.task_id_ = task.task_id_;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
-    param.sql_proxy_ = sql_proxy_;
-
-    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
-    } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObMigrationDagNet>(&param))) {
-      LOG_WARN("failed to create and add migration dag net", K(ret), K(task), KPC(ls_));
+    common::SpinWLockGuard guard(lock_);
+    if (is_cancel_ && OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
+      LOG_WARN("failed to swicth next stage cancel", K(ret));
     } else {
-      LOG_INFO("success to create migration dag net", K(ret), K(task));
+      ObTenantDagScheduler *scheduler = nullptr;
+      ObMigrationDagNetInitParam param;
+      param.arg_ = task.arg_;
+      param.task_id_ = task.task_id_;
+      param.bandwidth_throttle_ = bandwidth_throttle_;
+      param.storage_rpc_ = storage_rpc_;
+      param.svr_rpc_proxy_ = svr_rpc_proxy_;
+      param.sql_proxy_ = sql_proxy_;
+
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+      } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObMigrationDagNet>(&param))) {
+        LOG_WARN("failed to create and add migration dag net", K(ret), K(task), KPC(ls_));
+      } else {
+        LOG_INFO("success to create migration dag net", K(ret), K(task));
+      }
     }
   }
   return ret;
@@ -792,18 +819,24 @@ int ObLSMigrationHandler::schedule_prepare_ls_dag_net_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule prepare ls dag net get invalid argument", K(ret), K(task));
   } else {
-    ObTenantDagScheduler *scheduler = nullptr;
-    ObLSPrepareMigrationParam param;
-    param.arg_ = task.arg_;
-    param.task_id_ = task.task_id_;
-
-    if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
-    } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObLSPrepareMigrationDagNet>(&param))) {
-      LOG_WARN("failed to create and add migration dag net", K(ret), K(task), KPC(ls_));
+    const int32_t cancel_result = OB_CANCELED;
+    common::SpinWLockGuard guard(lock_);
+    if (is_cancel_ && OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
+      LOG_WARN("failed to swicth next stage cancel", K(ret));
     } else {
-      LOG_INFO("success to create ls prepare migration dag net", K(ret), K(task));
+      ObTenantDagScheduler *scheduler = nullptr;
+      ObLSPrepareMigrationParam param;
+      param.arg_ = task.arg_;
+      param.task_id_ = task.task_id_;
+
+      if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret), KP(scheduler));
+      } else if (OB_FAIL(scheduler->create_and_add_dag_net<ObLSPrepareMigrationDagNet>(&param))) {
+        LOG_WARN("failed to create and add migration dag net", K(ret), K(task), KPC(ls_));
+      } else {
+        LOG_INFO("success to create ls prepare migration dag net", K(ret), K(task));
+      }
     }
   }
   return ret;
@@ -1169,7 +1202,69 @@ void ObLSMigrationHandler::wait(bool &wait_finished)
   }
 }
 
+int ObLSMigrationHandler::get_ls_migration_task_with_nolock_(ObLSMigrationTask &task) const
+{
+  int ret = OB_SUCCESS;
+  task.reset();
+  if (task_list_.empty()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("migration task is empty", K(ret), KPC(ls_));
+  } else if (task_list_.count() > 1) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration task count should not more than 1", K(ret), K(task_list_), KPC(ls_));
+  } else {
+    task = task_list_.at(0);
+  }
+  return ret;
+}
 
+int ObLSMigrationHandler::check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const
+{
+  int ret = OB_SUCCESS;
+  is_exist = false;
+  ObLSMigrationTask task;
+  if (task_id.is_invalid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(task_id));
+  } else if (OB_FAIL(get_ls_migration_task_with_nolock_(task))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      is_exist = false;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+    }
+  } else if (task_id == task.task_id_) {
+    is_exist = true;
+  } else {
+    is_exist = false;
+  }
+  return ret;
+}
+
+int ObLSMigrationHandler::switch_next_stage_with_nolock_(const int32_t result)
+{
+  int ret = OB_SUCCESS;
+  ObLSMigrationHandlerStatus next_status = ObLSMigrationHandlerStatus::MAX_STATUS;
+  bool can_change = false;
+  int32_t new_result = OB_SUCCESS;
+
+  new_result = OB_SUCCESS != result_ ? result_ : result;
+
+  if (OB_FAIL(ObLSMigrationHandlerStatusHelper::get_next_change_status(status_, new_result, next_status))) {
+    LOG_WARN("failed to get next change status", K(ret), K(status_), K(result), K(new_result));
+  } else if (OB_FAIL(ObLSMigrationHandlerStatusHelper::check_can_change_status(status_, next_status, can_change))) {
+    LOG_WARN("failed to check can change status", K(ret), K(status_), K(next_status));
+  } else if (!can_change) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("can not change ls migration handler status", K(ret), K(status_), K(next_status));
+  } else {
+    FLOG_INFO("report result", K(result), K(new_result), K(result_), K(status_), K(next_status));
+    result_ = new_result;
+    status_ = next_status;
+  }
+  wakeup_();
+  return ret;
+}
 
 }
 }

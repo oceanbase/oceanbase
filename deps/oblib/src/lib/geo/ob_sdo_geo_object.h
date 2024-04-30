@@ -78,7 +78,10 @@ public:
       : gtype_(gtype), srid_(srid),
       elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
       ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))
-  {}
+  {
+    elem_info_.assign(elem_info);
+    ordinates_.assign(ordinates);
+  }
   ObSdoGeoObject(ObIAllocator &allocator) : gtype_(ObGeoType::GEOTYPEMAX), srid_(UINT32_MAX),
     elem_info_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR)),
     ordinates_(DEFAULT_PAGE_SIZE_ORDINATES, ModulePageAllocator(allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR))

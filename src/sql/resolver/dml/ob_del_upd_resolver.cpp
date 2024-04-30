@@ -1102,6 +1102,70 @@ int ObDelUpdResolver::check_same_base_table(const TableItem &table_item,
   return ret;
 }
 
+
+int ObDelUpdResolver::add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col) {
+  int ret = OB_SUCCESS;
+  bool found_in_select = false;
+  FOREACH_CNT_X(si, select_stmt.get_select_items(), !found_in_select) {
+    if (si->expr_ == col.expr_) {
+      found_in_select = true;
+    }
+  }
+  if (!found_in_select) {
+    SelectItem select_item;
+    select_item.implicit_filled_ = true;
+    select_item.expr_ = col.expr_;
+    // concat column's table name and column name as select item's alias name
+    const int32_t size = col.expr_->get_table_name().length()
+        + 1 // "."
+        + col.expr_->get_column_name().length();
+    char *buf = static_cast<char *>(allocator_->alloc(size));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret), K(size));
+    } else {
+      char *p = buf;
+      MEMCPY(p, col.expr_->get_table_name().ptr(), col.expr_->get_table_name().length());
+      p += col.expr_->get_table_name().length();
+      *p = '.';
+      p++;
+      MEMCPY(p, col.expr_->get_column_name().ptr(), col.expr_->get_column_name().length());
+      select_item.alias_name_.assign_ptr(buf, size);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(select_stmt.add_select_item(select_item))) {
+        LOG_WARN("add select item failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDelUpdResolver::select_items_has_pk(const ObSelectStmt& select_stmt, bool &has_pk) {
+  int ret = OB_SUCCESS;
+  has_pk = false;
+
+  for (int64_t i = 0; i < select_stmt.get_select_items().count() && !has_pk && OB_SUCC(ret); ++i) {
+    const SelectItem &si = select_stmt.get_select_items().at(i);
+    ObSEArray<uint64_t, 2> used_column_ids;
+    if (OB_ISNULL(si.expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("select item expr is null", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(si.expr_, used_column_ids))) {
+      LOG_WARN("failed to extract column ids", K(ret));
+    } else {
+      for (int64_t idx = 0; idx < used_column_ids.count() && !has_pk; ++idx) {
+        if (used_column_ids.at(idx) == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+          has_pk = true;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
+
 int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
                                                        const TableItem &table_item,
                                                        const bool &has_need_fired_tg_on_view)
@@ -1129,47 +1193,23 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    auto add_select_item_func = [&](ObSelectStmt &select_stmt, ColumnItem &col) {
-      int ret = OB_SUCCESS;
-      bool found_in_select = false;
-      FOREACH_CNT_X(si, select_stmt.get_select_items(), !found_in_select) {
-        if (si->expr_ == col.expr_) {
-          found_in_select = true;
-        }
-      }
-      if (!found_in_select) {
-        SelectItem select_item;
-        select_item.implicit_filled_ = true;
-        select_item.expr_ = col.expr_;
-        // concat column's table name and column name as select item's alias name
-        const int32_t size = col.expr_->get_table_name().length()
-            + 1 // "."
-            + col.expr_->get_column_name().length();
-        char *buf = static_cast<char *>(allocator_->alloc(size));
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("allocate memory failed", K(ret), K(size));
-        } else {
-          char *p = buf;
-          MEMCPY(p, col.expr_->get_table_name().ptr(), col.expr_->get_table_name().length());
-          p += col.expr_->get_table_name().length();
-          *p = '.';
-          p++;
-          MEMCPY(p, col.expr_->get_column_name().ptr(), col.expr_->get_column_name().length());
-          select_item.alias_name_.assign_ptr(buf, size);
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(select_stmt.add_select_item(select_item))) {
-            LOG_WARN("add select item failed", K(ret));
-          }
-        }
-      }
-      return ret;
-    };
     ColumnItem *col_item = NULL;
     if (table_item.is_basic_table() || table_item.is_link_table()) {
+      bool has_pk = false;
+      if (stmt::T_SELECT == stmt.get_stmt_type()) {
+        // select_items_has_pk must happend before add_select_item_func
+        if (OB_FAIL(select_items_has_pk(static_cast<ObSelectStmt &>(stmt), has_pk))) {
+          LOG_WARN("failed to extract pk", K(ret));
+        } else if (has_pk) {
+          ret = OB_ERR_BAD_FIELD_ERROR;
+          LOG_WARN("view has hidden pk in modify stmt", K(ret));
+        }
+      }
+
       const ObTableSchema *table_schema = NULL;
-      if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_FAIL(schema_checker_->get_table_schema(params_.session_info_->get_effective_tenant_id(), table_item.ref_id_, table_schema, table_item.is_link_table()))) {
         LOG_WARN("get table schema failed", K(ret));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -3075,7 +3115,8 @@ int ObDelUpdResolver::generate_autoinc_params(ObInsertTableInfo &table_info)
           param.autoinc_first_part_num_ = table_schema->get_first_part_num();
           param.autoinc_table_part_num_ = table_schema->get_all_part_num();
           param.autoinc_col_id_ = column_id;
-          param.auto_increment_cache_size_ = auto_increment_cache_size;
+          param.auto_increment_cache_size_ = get_auto_increment_cache_size(
+            table_schema->get_auto_increment_cache_size(), auto_increment_cache_size);
           param.part_level_ = table_schema->get_part_level();
           ObObjType column_type = table_schema->get_column_schema(column_id)->get_data_type();
           param.autoinc_col_type_ = column_type;

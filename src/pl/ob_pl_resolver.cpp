@@ -62,6 +62,7 @@ int ObPLResolver::init(ObPLFunctionAST &func_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     func_ast.set_body(current_block_);
     arg_cnt_ = func_ast.get_arg_count();
     question_mark_cnt_ = 0;
@@ -169,13 +170,20 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
     const ParseNode *default_node = NULL;
     ObRawExpr *default_expr = NULL;
     ObString default_value = param.get_default_value();
+    bool is_for_trigger = false;
+    if (resolve_ctx_.session_info_.is_for_trigger_package()
+        && lib::is_oracle_mode()
+        && ObTriggerInfo::is_trigger_body_package_id(func_ast.get_package_id())) {
+      is_for_trigger = true;
+    }
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_dtc_params(), default_value));
     OZ (ObRawExprUtils::parse_default_expr_from_str(
       default_value,
       resolve_ctx_.session_info_.get_charsets4parser(),
       resolve_ctx_.allocator_,
-      default_node));
+      default_node,
+      is_for_trigger));
     CK (OB_NOT_NULL(default_node));
     OZ (resolve_expr(default_node, func_ast, default_expr,
          combine_line_and_col(default_node->stmt_loc_), true, &expected_type));
@@ -359,11 +367,15 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_IF: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_IF, resolve_if, ObPLIfStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CASE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CASE, resolve_case, ObPLCaseStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_ITERATE: {
@@ -375,31 +387,43 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       }
         break;
       case T_SP_WHILE: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_WHILE, resolve_while, ObPLWhileStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FOR_LOOP, resolve_for_loop, ObPLForLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_CURSOR_FOR_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_CURSOR_FOR_LOOP, resolve_cursor_for_loop, ObPLCursorForLoopStmt);
-        if (!func.is_modifies_sql_data()) {
+        OX (--current_level_);
+        if (OB_SUCC(ret) && !func.is_modifies_sql_data()) {
           func.set_reads_sql_data();
         }
       }
         break;
       case T_SP_FORALL: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_FORALL, resolve_forall, ObPLForAllStmt);
-        func.set_modifies_sql_data();
+        OX (--current_level_);
+        OX (func.set_modifies_sql_data());
       }
         break;
       case T_SP_REPEAT: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_REPEAT, resolve_repeat, ObPLRepeatStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_LOOP: {
+        OX (++current_level_);
         RESOLVE_STMT(PL_LOOP, resolve_loop, ObPLLoopStmt);
+        OX (--current_level_);
       }
         break;
       case T_SP_RETURN: {
@@ -860,6 +884,7 @@ int ObPLResolver::init(ObPLPackageAST &package_ast)
     LOG_WARN("failed to make block", K(current_block_), K(ret));
   } else {
     current_level_ = 0;
+    current_block_->set_level(current_level_);
     package_ast.set_body(current_block_);
     external_ns_.set_dependency_table(&package_ast.get_dependency_table());
     current_block_->get_namespace().set_explicit_block();
@@ -2482,7 +2507,6 @@ int ObPLResolver::fill_record_type(
         view_schema->get_table_name_str().length(), view_schema->get_table_name_str().ptr()));  \
     }   \
     OZ (parser.parse(select_sql.string(), parse_result));  \
-    OZ (schema_checker.init(ctx.schema_guard_, ctx.session_info_.get_sessid()));  \
                                                   \
     OX (resolver_ctx.allocator_ = &(alloc));      \
     OX (resolver_ctx.schema_checker_ = &schema_checker);     \
@@ -2491,9 +2515,11 @@ int ObPLResolver::fill_record_type(
     OX (resolver_ctx.stmt_factory_ = &stmt_factory);         \
     OX (resolver_ctx.sql_proxy_ = &(ctx.sql_proxy_));        \
     CK (OB_NOT_NULL(resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx()));    \
+    OX (resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(&ctx.schema_guard_)); \
     OX (resolver_ctx.query_ctx_->question_marks_count_                           \
           = static_cast<int64_t>(parse_result.question_mark_ctx_.count_));       \
-                                                                                 \
+    OZ (resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_,    \
+                                           ctx.session_info_.get_sessid()));              \
     CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));\
     CK (T_SELECT == select_stmt_node->type_);                                    \
     ObSelectResolver select_resolver(resolver_ctx);                              \
@@ -2772,7 +2798,12 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
       OZ (guard.get_table_schema(tenant_id, access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
-      OX (extern_type_info->type_owner_ = table->get_database_id());
+      if (OB_FAIL(ret)) {
+      } else if (ObCharset::case_compat_mode_equal(extern_type_info->type_subname_, table->get_table_name_str())) {
+        OX (extern_type_info->type_owner_ = table->get_database_id());
+      } else {
+        OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      }
     }
     OZ (fill_schema_obj_version(guard,
                                 ObParamExternType::SP_EXTERN_TAB_COL,
@@ -2808,7 +2839,7 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       OX (package_id = access_idxs.at(0).var_index_);
       OX (type = access_idxs.at(0).access_type_);
     } else {
-      OZ(resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
       OX (package_id = current_block_->get_namespace().get_package_id());
       OX (type = ObObjAccessIdx::IS_PKG_NS);
     }
@@ -2833,6 +2864,12 @@ int ObPLResolver::resolve_extern_type_info(ObSchemaGetterGuard &guard,
       OZ (guard.get_table_schema(tenant_id, access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
       OX (extern_type_info->type_owner_ = table->get_database_id());
+      if (OB_FAIL(ret)) {
+      } else if (ObCharset::case_compat_mode_equal(extern_type_info->type_name_, table->get_table_name_str())) {
+        OX (extern_type_info->type_owner_ = table->get_database_id());
+      } else {
+        OZ (resolve_ctx_.session_info_.get_database_id(extern_type_info->type_owner_));
+      }
     }
     OZ (fill_schema_obj_version(guard,
                                 ObParamExternType::SP_EXTERN_TAB,
@@ -3000,206 +3037,367 @@ int ObPLResolver::resolve_sp_row_type(const ParseNode *sp_data_type_node,
   CK (OB_NOT_NULL(sp_data_type_node),
       OB_LIKELY(T_SP_TYPE == sp_data_type_node->type_
                 || T_SP_ROWTYPE == sp_data_type_node->type_),
-      OB_LIKELY(1 == sp_data_type_node->num_child_),
+      OB_LIKELY(2 == sp_data_type_node->num_child_),
       OB_NOT_NULL(sp_data_type_node->children_[0]),
       OB_LIKELY(T_SP_OBJ_ACCESS_REF == sp_data_type_node->children_[0]->type_));
-
-  OZ (resolve_obj_access_idents(*(sp_data_type_node->children_[0]), obj_access_idents, func));
-  CK (obj_access_idents.count() > 0);
-  OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
-  if (OB_SUCC(ret)) {
-    ObPLSwitchDatabaseGuard switch_db_guard(resolve_ctx_.session_info_,
-                                            resolve_ctx_.schema_guard_,
-                                            func,
-                                            ret,
-                                            with_rowid);
-    ObArray<ObObjAccessIdx> access_idxs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
-      OZ (resolve_access_ident(obj_access_idents.at(i),
-                               current_block_->get_namespace(),
-                               expr_factory_,
-                               &resolve_ctx_.session_info_,
-                               access_idxs,
-                               func,
-                               false,
-                               true));
-      if (OB_ERR_SP_UNDECLARED_VAR == ret && is_data_type_name(obj_access_idents.at(i).access_name_)) {
-        ret  = OB_ERR_TYPE_DECL_ILLEGAL;
-        LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL, obj_access_idents.at(i).access_name_.length(),
-                                                 obj_access_idents.at(i).access_name_.ptr());
+  if (OB_FAIL(ret)) {
+  } else if (NULL == sp_data_type_node->children_[1]) {
+    OZ (resolve_obj_access_idents(*(sp_data_type_node->children_[0]), obj_access_idents, func));
+    CK (obj_access_idents.count() > 0);
+    OX (obj_access_idents.at(obj_access_idents.count() - 1).has_brackets_ = false);
+    if (OB_SUCC(ret)) {
+      ObPLSwitchDatabaseGuard switch_db_guard(resolve_ctx_.session_info_,
+                                              resolve_ctx_.schema_guard_,
+                                              func,
+                                              ret,
+                                              with_rowid);
+      ObArray<ObObjAccessIdx> access_idxs;
+      for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
+        OZ (resolve_access_ident(obj_access_idents.at(i),
+                                current_block_->get_namespace(),
+                                expr_factory_,
+                                &resolve_ctx_.session_info_,
+                                access_idxs,
+                                func,
+                                false,
+                                true));
+        if (OB_ERR_SP_UNDECLARED_VAR == ret && is_data_type_name(obj_access_idents.at(i).access_name_)) {
+          ret  = OB_ERR_TYPE_DECL_ILLEGAL;
+          LOG_USER_ERROR(OB_ERR_TYPE_DECL_ILLEGAL, obj_access_idents.at(i).access_name_.length(),
+                                                  obj_access_idents.at(i).access_name_.ptr());
+        }
       }
-    }
-    // 创建package的时候可能依赖的外部类型还没有创建, 记录下外部类型的name信息, 执行的时候重新解析
-    if (OB_NOT_NULL(extern_type_info)
-        && is_object_not_exist_error(ret)
-        && obj_access_idents.count() >= 1) {
-      LOG_USER_WARN(OB_ERR_SP_UNDECLARED_TYPE,
-                    obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
-                    obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
-      record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
-      ObPL::insert_error_msg(ret);
-      ret = OB_SUCCESS;
-      CK (T_SP_ROWTYPE == sp_data_type_node->type_ || T_SP_TYPE == sp_data_type_node->type_);
-      OZ (resolve_extern_type_info(T_SP_ROWTYPE == sp_data_type_node->type_,
-                                   resolve_ctx_.schema_guard_,
-                                   resolve_ctx_.session_info_,
-                                   obj_access_idents,
-                                   extern_type_info));
-    } else if (OB_FAIL(ret)) {
-      // do nothing ...
-    } else {
-      int64_t idx_cnt = access_idxs.count();
-      CK (OB_LIKELY(idx_cnt != 0));
-      if (T_SP_TYPE == sp_data_type_node->type_) {
-        if (ObObjAccessIdx::is_table_column(access_idxs)
-            || ObObjAccessIdx::is_local_variable(access_idxs)
-            || ObObjAccessIdx::is_package_variable(access_idxs)
-            || ObObjAccessIdx::is_subprogram_variable(access_idxs)) {
-          OZ (pl_type.deep_copy(resolve_ctx_.allocator_,
-                                ObObjAccessIdx::get_final_type(access_idxs)));
-          OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
-          OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
-          OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
-          if (OB_SUCC(ret) && ObObjAccessIdx::is_table_column(access_idxs)) {
-            ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
-            const ObTableSchema* table_schema = NULL;
-            const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
-            CK (idx_cnt > 1);
-            OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 2).var_index_, table_schema));
-            CK (OB_NOT_NULL(table_schema));
-            OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
-            OZ (func.add_dependency_objects(dep_schemas));
+      // 创建package的时候可能依赖的外部类型还没有创建, 记录下外部类型的name信息, 执行的时候重新解析
+      if (OB_NOT_NULL(extern_type_info)
+          && is_object_not_exist_error(ret)
+          && obj_access_idents.count() >= 1) {
+        LOG_USER_WARN(OB_ERR_SP_UNDECLARED_TYPE,
+                      obj_access_idents.at(obj_access_idents.count() - 1).access_name_.length(),
+                      obj_access_idents.at(obj_access_idents.count() - 1).access_name_.ptr());
+        record_error_line(sp_data_type_node, resolve_ctx_.session_info_);
+        ObPL::insert_error_msg(ret);
+        ret = OB_SUCCESS;
+        CK (T_SP_ROWTYPE == sp_data_type_node->type_ || T_SP_TYPE == sp_data_type_node->type_);
+        OZ (resolve_extern_type_info(T_SP_ROWTYPE == sp_data_type_node->type_,
+                                    resolve_ctx_.schema_guard_,
+                                    resolve_ctx_.session_info_,
+                                    obj_access_idents,
+                                    extern_type_info));
+      } else if (OB_FAIL(ret)) {
+        // do nothing ...
+      } else if (ObObjAccessIdx::is_dblink_table(access_idxs)
+                 || ObObjAccessIdx::is_dblink_table_column(access_idxs)) {
+        OZ (resolve_dblink_row_type_with_synonym(resolve_ctx_, access_idxs,
+                                                 pl_type, T_SP_ROWTYPE == sp_data_type_node->type_));
+        OX (func.set_can_cached(false));
+      } else {
+        int64_t idx_cnt = access_idxs.count();
+        CK (OB_LIKELY(idx_cnt != 0));
+        if (T_SP_TYPE == sp_data_type_node->type_) {
+          if (ObObjAccessIdx::is_table_column(access_idxs)
+              || ObObjAccessIdx::is_local_variable(access_idxs)
+              || ObObjAccessIdx::is_package_variable(access_idxs)
+              || ObObjAccessIdx::is_subprogram_variable(access_idxs)) {
+            OZ (pl_type.deep_copy(resolve_ctx_.allocator_,
+                                  ObObjAccessIdx::get_final_type(access_idxs)));
+            OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
+            OX (pl_type.set_type_from(PL_TYPE_ATTR_TYPE));
+            OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+            if (OB_SUCC(ret) && ObObjAccessIdx::is_table_column(access_idxs)) {
+              ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
+              const ObTableSchema* table_schema = NULL;
+              const uint64_t tenant_id = resolve_ctx_.session_info_.get_effective_tenant_id();
+              CK (idx_cnt > 1);
+              OZ (resolve_ctx_.schema_guard_.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 2).var_index_, table_schema));
+              CK (OB_NOT_NULL(table_schema));
+              OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
+              OZ (func.add_dependency_objects(dep_schemas));
+            }
+          } else {
+            ret = OB_ERR_TYPE_DECL_ILLEGAL;
+            LOG_WARN("PLS-00206: %TYPE must be applied to a variable, column, field or attribute",
+                    K(ret), K(access_idxs));
           }
         } else {
-          ret = OB_ERR_TYPE_DECL_ILLEGAL;
-          LOG_WARN("PLS-00206: %TYPE must be applied to a variable, column, field or attribute",
-                   K(ret), K(access_idxs));
-        }
-      } else {
-        if (ObObjAccessIdx::is_table(access_idxs)) {
-          ObSQLSessionInfo &session_info = resolve_ctx_.session_info_;
-          ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
-          uint64_t db_id = OB_INVALID_ID;
-          const ObTableSchema* table_schema = NULL;
-          ObRecordType *record_type = NULL;
-          ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
-          ObSEArray<ObDataType, 8> types;
-          const uint64_t tenant_id = session_info.get_effective_tenant_id();
-          OZ (session_info.get_database_id(db_id));
-          OZ (schema_guard.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 1).var_index_, table_schema));
-          CK (OB_NOT_NULL(table_schema));
-          if (OB_FAIL(ret)) {
-          } else if (with_rowid) {
-            // with_rowid的情况只可能是oracle模式下的trigger
-            // 将trigger package中routine的参数类型设置为 PL_TYPE_PACKAGE, 并加入到包头的type_table_中
-            ObSqlString record_name;
-            ObString record_name_str;
-            char* name_buf = NULL;
-            bool is_dup = false;
-            const void *dup_type = NULL;
-            const ObPLBlockNS *pre_ns = NULL;
-            CK (OB_NOT_NULL(current_block_));
-            CK (OB_NOT_NULL(pre_ns = current_block_->get_namespace().get_pre_ns()));
-            CK (access_idxs.count() > 0);
-            OZ (record_name.append_fmt(
-                "__trigger_param_type_%.*s",
-                access_idxs.at(0).var_name_.length(), access_idxs.at(0).var_name_.ptr()));
-            if (access_idxs.count() >= 2) {
-              OZ (record_name.append_fmt("_%.*s",
-                access_idxs.at(1).var_name_.length(), access_idxs.at(1).var_name_.ptr()));
-            }
+          if (ObObjAccessIdx::is_table(access_idxs)) {
+            ObSQLSessionInfo &session_info = resolve_ctx_.session_info_;
+            ObSchemaGetterGuard &schema_guard = resolve_ctx_.schema_guard_;
+            uint64_t db_id = OB_INVALID_ID;
+            const ObTableSchema* table_schema = NULL;
+            ObRecordType *record_type = NULL;
+            ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
+            ObSEArray<ObDataType, 8> types;
+            const uint64_t tenant_id = session_info.get_effective_tenant_id();
+            OZ (session_info.get_database_id(db_id));
+            OZ (schema_guard.get_table_schema(tenant_id, access_idxs.at(idx_cnt - 1).var_index_, table_schema));
+            CK (OB_NOT_NULL(table_schema));
             if (OB_FAIL(ret)) {
-            } else if (OB_ISNULL(name_buf = static_cast<char*>(resolve_ctx_.allocator_.alloc(record_name.length() + 1)))) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to allocate record name", K(ret));
-            } else {
-              record_name.to_string(name_buf, record_name.length() + 1);
-              record_name_str.assign_ptr(name_buf, record_name.length());
-              if (OB_FAIL(pre_ns->check_dup_type(record_name_str, is_dup, dup_type))) {
-                LOG_WARN("check dup type failed", K(record_name_str), K(is_dup), K(ret));
-              } else if (is_dup) {
-                if (OB_ISNULL(dup_type)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("dup type is NULL", K(ret));
-                } else if (OB_SUCC(ret) && is_dup) {
-                  record_type = static_cast<ObRecordType *>(const_cast<void *>(dup_type));
-                  OV (OB_NOT_NULL(record_type));
+            } else if (with_rowid) {
+              // with_rowid的情况只可能是oracle模式下的trigger
+              // 将trigger package中routine的参数类型设置为 PL_TYPE_PACKAGE, 并加入到包头的type_table_中
+              ObSqlString record_name;
+              ObString record_name_str;
+              char* name_buf = NULL;
+              bool is_dup = false;
+              const void *dup_type = NULL;
+              const ObPLBlockNS *pre_ns = NULL;
+              CK (OB_NOT_NULL(current_block_));
+              CK (OB_NOT_NULL(pre_ns = current_block_->get_namespace().get_pre_ns()));
+              CK (access_idxs.count() > 0);
+              OZ (record_name.append_fmt(
+                  "__trigger_param_type_%.*s",
+                  access_idxs.at(0).var_name_.length(), access_idxs.at(0).var_name_.ptr()));
+              if (access_idxs.count() >= 2) {
+                OZ (record_name.append_fmt("_%.*s",
+                  access_idxs.at(1).var_name_.length(), access_idxs.at(1).var_name_.ptr()));
+              }
+              if (OB_FAIL(ret)) {
+              } else if (OB_ISNULL(name_buf = static_cast<char*>(resolve_ctx_.allocator_.alloc(record_name.length() + 1)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("failed to allocate record name", K(ret));
+              } else {
+                record_name.to_string(name_buf, record_name.length() + 1);
+                record_name_str.assign_ptr(name_buf, record_name.length());
+                if (OB_FAIL(pre_ns->check_dup_type(record_name_str, is_dup, dup_type))) {
+                  LOG_WARN("check dup type failed", K(record_name_str), K(is_dup), K(ret));
+                } else if (is_dup) {
+                  if (OB_ISNULL(dup_type)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("dup type is NULL", K(ret));
+                  } else if (OB_SUCC(ret) && is_dup) {
+                    record_type = static_cast<ObRecordType *>(const_cast<void *>(dup_type));
+                    OV (OB_NOT_NULL(record_type));
+                    OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
+                    OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
+                    OZ (func.add_dependency_objects(dep_schemas));
+                  }
+                } else {
+                  OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid, &dep_schemas));
+                  CK (OB_NOT_NULL(record_type));
+                  OX (record_type->set_name(record_name_str));
+                  OZ (pre_ns->expand_data_type(record_type, types));
+                  OZ (const_cast<ObPLBlockNS *>(pre_ns)->add_type(record_type));
+                  OX (record_type->set_type_from(PL_TYPE_PACKAGE));
                   OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
-                  OZ (collect_dep_info_by_schema(resolve_ctx_, table_schema, dep_schemas));
+                  OZ (pl_type.get_all_depended_user_type(resolve_ctx_, *pre_ns));
                   OZ (func.add_dependency_objects(dep_schemas));
                 }
-              } else {
-                OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid, &dep_schemas));
-                CK (OB_NOT_NULL(record_type));
-                OX (record_type->set_name(record_name_str));
-                OZ (pre_ns->expand_data_type(record_type, types));
-                OZ (const_cast<ObPLBlockNS *>(pre_ns)->add_type(record_type));
-                OX (record_type->set_type_from(PL_TYPE_PACKAGE));
-                OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
-                OZ (pl_type.get_all_depended_user_type(resolve_ctx_, *pre_ns));
-                OZ (func.add_dependency_objects(dep_schemas));
+              }
+              OX (pl_type.set_type_from(PL_TYPE_PACKAGE));
+              OX (pl_type.set_type_from_orgin(PL_TYPE_PACKAGE));
+            } else {
+              OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid, &dep_schemas));
+              CK (OB_NOT_NULL(record_type));
+              CK (OB_NOT_NULL(current_block_));
+              CK (OB_NOT_NULL(current_block_->get_namespace().get_type_table()));
+              OZ (current_block_->get_namespace().expand_data_type(record_type, types));
+              OZ (current_block_->get_namespace().get_type_table()->add_external_type(record_type));
+              OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
+              OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
+              OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
+              OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
+              OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
+              OZ (func.add_dependency_objects(dep_schemas));
+            }
+          } else if (ObObjAccessIdx::is_local_cursor_variable(access_idxs)
+                    || ObObjAccessIdx::is_local_refcursor_variable(access_idxs)
+                    || ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)
+                    || ObObjAccessIdx::is_package_cursor_variable(access_idxs)) {
+            const ObUserDefinedType* user_type = NULL;
+            const ObRecordType *record_type = NULL;
+            OX (pl_type.set_user_type_id(
+              PL_RECORD_TYPE, ObObjAccessIdx::get_final_type(access_idxs).get_user_type_id()));
+            CK (OB_NOT_NULL(current_block_));
+            OZ (current_block_->
+              get_namespace().get_pl_data_type_by_id(pl_type.get_user_type_id(), user_type));
+            CK (OB_NOT_NULL(user_type));
+            if (OB_SUCC(ret)) {
+              if (user_type->is_cursor_type() || user_type->is_sys_refcursor_type()) {
+                const ObRefCursorType *type = static_cast<const ObRefCursorType*>(user_type);
+                CK (OB_NOT_NULL(type));
+                OX (user_type = NULL);
+                OZ (current_block_->get_namespace().get_pl_data_type_by_id(type->get_return_type_id(), user_type));
+                CK (OB_NOT_NULL(user_type));
+                OX (pl_type.set_user_type_id(PL_RECORD_TYPE, type->get_return_type_id()));
               }
             }
-            OX (pl_type.set_type_from(PL_TYPE_PACKAGE));
-            OX (pl_type.set_type_from_orgin(PL_TYPE_PACKAGE));
-          } else {
-            OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, with_rowid, &dep_schemas));
-            CK (OB_NOT_NULL(record_type));
-            CK (OB_NOT_NULL(current_block_));
+            CK (user_type->is_record_type());
+            CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType*>(user_type)));
             CK (OB_NOT_NULL(current_block_->get_namespace().get_type_table()));
-            OZ (current_block_->get_namespace().expand_data_type(record_type, types));
+            OX ((const_cast<ObRecordType*>(record_type))->set_type_from(PL_TYPE_ATTR_ROWTYPE));
             OZ (current_block_->get_namespace().get_type_table()->add_external_type(record_type));
-            OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
             OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
             OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
             OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
-            OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
-            OZ (func.add_dependency_objects(dep_schemas));
-          }
-        } else if (ObObjAccessIdx::is_local_cursor_variable(access_idxs)
-                   || ObObjAccessIdx::is_local_refcursor_variable(access_idxs)
-                   || ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)
-                   || ObObjAccessIdx::is_package_cursor_variable(access_idxs)) {
-          const ObUserDefinedType* user_type = NULL;
-          const ObRecordType *record_type = NULL;
-          OX (pl_type.set_user_type_id(
-            PL_RECORD_TYPE, ObObjAccessIdx::get_final_type(access_idxs).get_user_type_id()));
-          CK (OB_NOT_NULL(current_block_));
-          OZ (current_block_->
-            get_namespace().get_pl_data_type_by_id(pl_type.get_user_type_id(), user_type));
-          CK (OB_NOT_NULL(user_type));
-          if (OB_SUCC(ret)) {
-            if (user_type->is_cursor_type() || user_type->is_sys_refcursor_type()) {
-              const ObRefCursorType *type = static_cast<const ObRefCursorType*>(user_type);
-              CK (OB_NOT_NULL(type));
-              OX (user_type = NULL);
-              OZ (current_block_->get_namespace().get_pl_data_type_by_id(type->get_return_type_id(), user_type));
-              CK (OB_NOT_NULL(user_type));
-              OX (pl_type.set_user_type_id(PL_RECORD_TYPE, type->get_return_type_id()));
+            if (!ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)) {
+              OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
             }
+          } else {
+            ret = OB_ERR_WRONG_ROWTYPE;
+            LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE,
+                          static_cast<int>(sp_data_type_node->str_len_), sp_data_type_node->str_value_);
+            LOG_WARN("PLS-00310: with %ROWTYPE attribute, ident must name a table, cursor or cursor-variable",
+                    K(ret), K(access_idxs));
           }
-          CK (user_type->is_record_type());
-          CK (OB_NOT_NULL(record_type = static_cast<const ObRecordType*>(user_type)));
-          CK (OB_NOT_NULL(current_block_->get_namespace().get_type_table()));
-          OX ((const_cast<ObRecordType*>(record_type))->set_type_from(PL_TYPE_ATTR_ROWTYPE));
-          OZ (current_block_->get_namespace().get_type_table()->add_external_type(record_type));
-          OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
-          OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
-          OZ (pl_type.get_all_depended_user_type(resolve_ctx_, current_block_->get_namespace()));
-          if (!ObObjAccessIdx::is_subprogram_cursor_variable(access_idxs)) {
-            OZ (resolve_extern_type_info(resolve_ctx_.schema_guard_, access_idxs, extern_type_info));
-          }
-        } else {
-          ret = OB_ERR_WRONG_ROWTYPE;
-          LOG_USER_ERROR(OB_ERR_WRONG_ROWTYPE,
-                         static_cast<int>(sp_data_type_node->str_len_), sp_data_type_node->str_value_);
-          LOG_WARN("PLS-00310: with %ROWTYPE attribute, ident must name a table, cursor or cursor-variable",
-                   K(ret), K(access_idxs));
         }
       }
     }
+  } else {
+    CK (T_DBLINK_NAME == sp_data_type_node->children_[1]->type_);
+    CK (1 == sp_data_type_node->children_[1]->num_child_);
+    CK (OB_NOT_NULL(sp_data_type_node->children_[1]->children_[0]));
+    OZ (resolve_dblink_row_type_node(*sp_data_type_node->children_[0],
+                                     *sp_data_type_node->children_[1]->children_[0],
+                                     pl_type,
+                                     T_SP_ROWTYPE == sp_data_type_node->type_));
+    OX (func.set_can_cached(false));
   }
   CANCLE_LOG_CHECK_MODE();
+  return ret;
+}
+
+int ObPLResolver::resolve_dblink_row_type_node(const ParseNode &access_node,
+                                               const ParseNode &dblink_node,
+                                               ObPLDataType &pl_type,
+                                               bool is_row_type)
+{
+  int ret = OB_SUCCESS;
+  const ParseNode *name_node = NULL;
+  ObString name_0;
+  ObString name_1;
+  ObString name_2;
+  ObString dblink_name;
+  CK (OB_LIKELY(T_SP_OBJ_ACCESS_REF == access_node.type_));
+  CK (OB_LIKELY(T_USER_VARIABLE_IDENTIFIER == dblink_node.type_));
+  CK (2 == access_node.num_child_);
+  if (OB_SUCC(ret) && NULL != access_node.children_[1]) {
+    ret = OB_ERR_PARSER_SYNTAX;
+    LOG_WARN("parse node error", K(ret));
+  }
+  CK (NULL != (name_node = access_node.children_[0]));
+  CK (T_SP_ACCESS_NAME == name_node->type_);
+  if (OB_SUCC(ret) && NULL != name_node->children_[0]) {
+    CK (T_IDENT == name_node->children_[0]->type_);
+    OX (name_0.assign_ptr(name_node->children_[0]->str_value_, (int32_t)(name_node->children_[0]->str_len_)));
+  }
+  if (OB_SUCC(ret) && NULL != name_node->children_[1]) {
+    CK (T_IDENT == name_node->children_[1]->type_);
+    OX (name_1.assign_ptr(name_node->children_[1]->str_value_, (int32_t)(name_node->children_[1]->str_len_)));
+  }
+  if (OB_SUCC(ret) && NULL != name_node->children_[2]) {
+    CK (T_IDENT == name_node->children_[2]->type_);
+    OX (name_2.assign_ptr(name_node->children_[2]->str_value_, (int32_t)(name_node->children_[2]->str_len_)));
+  }
+  OX (dblink_name.assign_ptr(dblink_node.str_value_, (int32_t)(dblink_node.str_len_)));
+  if (OB_SUCC(ret)) {
+    if (is_row_type) {
+      CK (name_0.empty());
+      OZ (resolve_dblink_row_type(name_1, name_2, name_0, dblink_name, pl_type, true));
+    } else {
+      OZ (resolve_dblink_row_type(name_0, name_1, name_2, dblink_name, pl_type, false));
+    }
+  }
+  return ret;
+}
+
+int ObPLResolver::resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_ctx,
+                                                       const common::ObIArray<ObObjAccessIdx> &access_idxs,
+                                                       ObPLDataType &pl_type,
+                                                       bool is_row_type)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  ObString db_name;
+  ObString table_name;
+  ObString dblink_name;
+  ObSchemaChecker checker;
+  uint64_t syn_id = OB_INVALID_ID;
+  ObString empty_str;
+  int64_t cnt = access_idxs.count();
+  int64_t syn_idx = cnt - (is_row_type ? 1 : 2);
+  OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
+  OV (is_row_type ? cnt >= 1 : cnt >= 2, OB_ERR_UNEXPECTED, K(is_row_type), K(cnt));
+  OX (syn_id = static_cast<uint64_t>(access_idxs.at(syn_idx).var_index_));
+  OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
+                                                 resolve_ctx.session_info_.get_effective_tenant_id(),
+                                                 resolve_ctx.session_info_.get_database_name(),
+                                                 syn_id, dblink_name, db_name, table_name));
+  OZ (resolve_dblink_row_type(db_name, table_name,
+                              is_row_type ? empty_str : access_idxs.at(cnt-1).var_name_, /*col name*/
+                              dblink_name, pl_type, is_row_type));
+#endif
+  return ret;
+}
+
+int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
+                                          const ObString &table_name,
+                                          const ObString &col_name,
+                                          const ObString &dblink_name,
+                                          ObPLDataType &pl_type,
+                                          bool is_row_type)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = NULL;
+  if (!is_row_type) {
+    CK (!col_name.empty());
+  }
+  CK (!table_name.empty());
+  if (OB_SUCC(ret)) {
+    if (db_name.empty()) {
+      ObString default_dblink_user;
+      OZ (resolve_ctx_.schema_guard_.get_dblink_user(resolve_ctx_.session_info_.get_effective_tenant_id(),
+                                                    dblink_name,
+                                                    default_dblink_user,
+                                                    resolve_ctx_.allocator_));
+      OZ (resolve_ctx_.package_guard_.dblink_guard_.get_dblink_table_by_name(
+            resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+            dblink_name, default_dblink_user, table_name, table_schema));
+    } else {
+      OZ (resolve_ctx_.package_guard_.dblink_guard_.get_dblink_table_by_name(
+            resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+            dblink_name, db_name, table_name, table_schema));
+    }
+    CK (OB_NOT_NULL(table_schema));
+    if (OB_SUCC(ret)) {
+      ObSqlString record_name;
+      ObString record_name_str;
+      char* name_buf = NULL;
+      ObRecordType *record_type = NULL;
+      ObSEArray<ObSchemaObjVersion, 4> dep_schemas;
+      OZ (record_name.append_fmt("__dblink_param_type_%.*s_%.*s",
+            table_schema->get_link_database_name().length(), table_schema->get_link_database_name().ptr(),
+            table_schema->get_table_name_str().length(), table_schema->get_table_name_str().ptr()));
+      OV (OB_NOT_NULL(name_buf = static_cast<char*>(resolve_ctx_.allocator_.alloc(record_name.length() + 1))),
+          OB_ALLOCATE_MEMORY_FAILED);
+      OX (record_name.to_string(name_buf, record_name.length() + 1));
+      OX (record_name_str.assign_ptr(name_buf, record_name.length()));
+      OZ (build_record_type_by_schema(resolve_ctx_, table_schema, record_type, false, &dep_schemas));
+      CK (OB_NOT_NULL(record_type));
+      OX (record_type->set_name(record_name_str));
+      OX (record_type->set_user_type_id(
+          common::combine_pl_type_id(table_schema->get_dblink_id() | common::OB_MOCK_DBLINK_UDT_ID_MASK,
+                                      table_schema->get_table_id())));
+      if (OB_FAIL(ret)) {
+      } else if (is_row_type) {
+        CK (OB_NOT_NULL(current_block_));
+        CK (OB_NOT_NULL(current_block_->get_namespace().get_type_table()));
+        OZ (current_block_->get_namespace().get_type_table()->add_external_type(record_type));
+        OX (pl_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id()));
+        OX (pl_type.set_type_from_orgin(pl_type.get_type_from()));
+        OX (pl_type.set_type_from(PL_TYPE_ATTR_ROWTYPE));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); i++) {
+          const ObString *mem_name = record_type->get_record_member_name(i);
+          CK (OB_NOT_NULL(mem_name));
+          if (OB_SUCC(ret) && 0 == mem_name->case_compare(col_name)) {
+            CK (OB_NOT_NULL(record_type->get_record_member_type(i)));
+            OX (pl_type = *(record_type->get_record_member_type(i)));
+            break;
+          }
+        } // end for
+      } // end if
+    }
+  }
   return ret;
 }
 
@@ -3315,12 +3513,13 @@ int ObPLResolver::resolve_dblink_type(const ParseNode *node,
   CK (T_SP_ACCESS_NAME == access_node->type_);
   // access_node must be a package type.
   CK (3 == access_node->num_child_);
-  CK (OB_NOT_NULL(access_node->children_[1]) && OB_NOT_NULL(access_node->children_[2]))
   if (OB_SUCC(ret)) {
     dblink_name.assign_ptr(node->children_[1]->str_value_,
                            static_cast<int32_t>(node->children_[1]->str_len_));
-    pkg_name.assign_ptr(access_node->children_[1]->str_value_,
-                        static_cast<int32_t>(access_node->children_[1]->str_len_));
+    if (OB_NOT_NULL(access_node->children_[1])) {
+      pkg_name.assign_ptr(access_node->children_[1]->str_value_,
+                          static_cast<int32_t>(access_node->children_[1]->str_len_));
+    }
     udt_name.assign_ptr(access_node->children_[2]->str_value_,
                         static_cast<int32_t>(access_node->children_[2]->str_len_));
     if (OB_NOT_NULL(access_node->children_[0])) {
@@ -4267,6 +4466,9 @@ int ObPLResolver::resolve_when(const ObStmtNodeTree *parse_tree, ObRawExpr *case
 
       OZ (func.add_expr(expr));
       OZ (expr->formalize(&resolve_ctx_.session_info_));
+      if (!is_bool_stmt && lib::is_mysql_mode()) {
+        OZ (set_cm_warn_on_fail(expr));
+      }
       OZ (stmt->add_when_clause(func.get_expr_count() - 1, body));
     }
   }
@@ -4894,7 +5096,8 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
         && sql_stmt->get_stmt_type() != stmt::T_INSERT
         && sql_stmt->get_stmt_type() != stmt::T_SELECT
         && sql_stmt->get_stmt_type() != stmt::T_DELETE
-        && sql_stmt->get_stmt_type() != stmt::T_UPDATE) {
+        && sql_stmt->get_stmt_type() != stmt::T_UPDATE
+        && sql_stmt->get_stmt_type() != stmt::T_MERGE) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("forall support dml sql only", K(ret), K(sql_stmt->get_stmt_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not dml sql in forall");
@@ -4914,6 +5117,9 @@ int ObPLResolver::check_forall_sql_and_modify_params(ObPLForAllStmt &stmt, ObPLF
       }
       ObSEArray<int64_t, 16> need_modify_exprs;
       bool can_array_binding = true;
+      if (sql_stmt->get_stmt_type() == stmt::T_MERGE) {
+        can_array_binding = false;
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
         ObRawExpr* exec_param = func.get_expr(params.at(i));
         bool need_modify = false;
@@ -5491,6 +5697,7 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_TABLEGROUPS:
     case stmt::T_HELP:
     case stmt::T_SHOW_RECYCLEBIN:
+    case stmt::T_SHOW_PROFILE:
     case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_TENANT:
     case stmt::T_SHOW_SEQUENCES:
@@ -5501,6 +5708,8 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_PRIVILEGES:
     case stmt::T_SHOW_CREATE_PROCEDURE:
     case stmt::T_SHOW_CREATE_FUNCTION:
+    case stmt::T_SHOW_PROCEDURE_CODE:
+    case stmt::T_SHOW_FUNCTION_CODE:
     case stmt::T_SHOW_PROCEDURE_STATUS:
     case stmt::T_SHOW_FUNCTION_STATUS:
     case stmt::T_SHOW_CREATE_TABLEGROUP:
@@ -9261,14 +9470,15 @@ int ObPLResolver::is_static_relation_expr(const ObRawExpr *expr, bool &is_static
     OZ (check_static_bool_expr(child, is_static_relation_expr));
   } else if (T_OP_AND == expr->get_expr_type()
           || T_OP_OR == expr->get_expr_type()) {
-    const ObRawExpr *left = NULL;
-    const ObRawExpr *right = NULL;
-    CK (2 == expr->get_param_count());
-    CK (OB_NOT_NULL(left = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(0))));
-    CK (OB_NOT_NULL(right = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(1))));
-    OZ (check_static_bool_expr(left, is_static_relation_expr));
-    OZ (is_static_relation_expr
-      ? check_static_bool_expr(right, is_static_relation_expr) : OB_SUCCESS);
+    bool is_all_static = true;
+    for (int64_t i = 0; OB_SUCC(ret) && is_all_static && i < expr->get_param_count(); i++) {
+      const ObRawExpr *child_param = NULL;
+      CK (OB_NOT_NULL(child_param = ObRawExprUtils::skip_implicit_cast(expr->get_param_expr(i))));
+      OZ (check_static_bool_expr(child_param, is_all_static));
+    }
+    if (OB_SUCC(ret)) {
+      is_static_relation_expr = is_all_static;
+    }
   } else if (T_OP_IS == expr->get_expr_type()
             || T_OP_IS_NOT == expr->get_expr_type()) {
     const ObRawExpr *child = NULL;
@@ -9705,6 +9915,22 @@ int ObPLResolver::analyze_expr_type(ObRawExpr *&expr,
   return ret;
 }
 
+int ObPLResolver::set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr)) {
+    if (expr->is_udf_expr()) {
+      ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
+      udf_expr->set_loc(line_number);
+    } else {
+      for (int64_t i = 0; i < expr->get_children_count(); ++i) {
+        OZ (SMART_CALL(set_udf_expr_line_number(expr->get_param_expr(i), line_number)));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_expr(const ParseNode *node,
                                ObPLCompileUnitAST &unit_ast,
                                ObRawExpr *&expr,
@@ -9759,11 +9985,10 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
   if (OB_SUCC(ret) && lib::is_oracle_mode()) {
     OZ (add_pl_integer_checker_expr(expr_factory_, expr, need_replace));
   }
-  if (OB_SUCC(ret) && expr->is_udf_expr()) {
-    ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
-    udf_expr->set_loc(line_number);
+  if (OB_SUCC(ret)) {
+    OZ (set_udf_expr_line_number(expr, line_number));
   }
-  if (is_mysql_mode()) {
+  if (OB_SUCC(ret) && is_mysql_mode()) {
     ObRawExprWrapEnumSet enum_set_wrapper(expr_factory_, &resolve_ctx_.session_info_);
     OZ (enum_set_wrapper.analyze_expr(expr));
   }
@@ -11118,6 +11343,7 @@ int ObPLResolver::resolve_dblink_routine(ObPLResolveCtx &resolve_ctx,
 
 int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ctx,
                                                       const uint64_t pkg_syn_id,
+                                                      const ObString &cur_db_name,
                                                       const ObString &routine_name,
                                                       const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                       const ObIRoutineInfo *&routine_info)
@@ -11131,7 +11357,8 @@ int ObPLResolver::resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ct
   OZ (checker.init(resolve_ctx.schema_guard_, resolve_ctx.session_info_.get_sessid()));
   OZ (ObPLDblinkUtil::separate_name_from_synonym(checker, resolve_ctx.allocator_,
                                                  resolve_ctx.session_info_.get_effective_tenant_id(),
-                                                 resolve_ctx.session_info_.get_database_name(),
+                                                 cur_db_name.empty() ?
+                                                    resolve_ctx.session_info_.get_database_name() : cur_db_name,
                                                  pkg_syn_id, dblink_name, db_name, pkg_name));
   OZ (ObPLResolver::resolve_dblink_routine(resolve_ctx, dblink_name, db_name, pkg_name,
                                            routine_name, expr_params, routine_info),
@@ -11453,6 +11680,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
     OX (expr = udf_info.ref_expr_);
     // if cant find user define construtor, try default construct
     if ((OB_SUCCESS == ret && use_buildin_default_constructor)
+     || OB_ERR_CALL_WRONG_ARG == ret
      || OB_ERR_SP_WRONG_ARG_NUM == ret
      || OB_ERR_FUNCTION_UNKNOWN == ret
      || OB_ERR_SP_UNDECLARED_VAR == ret
@@ -13824,7 +14052,7 @@ int ObPLResolver::resolve_routine(ObObjAccessIdent &access_ident,
       } else {
         OZ (ObPLResolver::resolve_dblink_routine_with_synonym(resolve_ctx_,
                                 static_cast<uint64_t>(access_idxs.at(access_idxs.count()-1).var_index_),
-                                routine_name, expr_params, routine_info));
+                                database_name, routine_name, expr_params, routine_info));
       }
       if (OB_SUCC(ret)
           && NULL != routine_info
@@ -14034,6 +14262,11 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
   if (OB_FAIL(ret)) {
+  } else if (user_type->is_udt_type()) {
+    ObString database_name, udt_name;
+    OZ (get_udt_names(resolve_ctx_.schema_guard_, user_type_id, database_name, udt_name));
+    OX (access_ident.udf_info_.udf_name_ = udt_name);
+    OX (access_ident.udf_info_.udf_database_ = database_name);
   } else if (access_idxs.count() > 0) {
     OZ (get_names_by_access_ident(access_ident,
                                   access_idxs,
@@ -14067,26 +14300,16 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   return ret;
 }
 
-int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
-                                              const ObPLBlockNS &ns,
-                                              ObIArray<ObObjAccessIdx> &access_idxs,
-                                              ObPLCompileUnitAST &func)
+int ObPLResolver::build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns)
 {
   int ret = OB_SUCCESS;
   const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
-
-  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
-      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
-      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
-
-    ObObjAccessIdx self_access_idx;
-    ObObjAccessIdx elem_access_idx;
-
-    const ObUserDefinedType *self_user_type = NULL;
+  CK (OB_NOT_NULL(udt_routine_ns));
+  CK (OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param()));
+  if (OB_SUCC(ret)) {
     const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
     ObPLDataType self_data_type = self_var->get_type();
     int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
-    uint64_t user_type_id = udt_routine_ns->get_package_id();
 
     // Construct A Self AccessIdx
     new (&self_access_idx) ObObjAccessIdx(self_data_type,
@@ -14110,6 +14333,32 @@ int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
                                                    self_access_idx.get_sysfunc_,
                                                    &resolve_ctx_.session_info_));
     }
+  }
+  return ret;
+}
+
+int ObPLResolver::resolve_self_element_access(ObObjAccessIdent &access_ident,
+                                              const ObPLBlockNS &ns,
+                                              ObIArray<ObObjAccessIdx> &access_idxs,
+                                              ObPLCompileUnitAST &func)
+{
+  int ret = OB_SUCCESS;
+  const ObPLBlockNS *udt_routine_ns = ns.get_udt_routine_ns();
+
+  if (0 == access_idxs.count() // Element Access Without Prefix [SELF.]
+      && OB_NOT_NULL(udt_routine_ns) // In UDT Routine Namepspace
+      && OB_NOT_NULL(udt_routine_ns->get_symbol_table()->get_self_param())) {
+
+    ObObjAccessIdx self_access_idx;
+    ObObjAccessIdx elem_access_idx;
+
+    const ObUserDefinedType *self_user_type = NULL;
+    const ObPLVar *self_var = udt_routine_ns->get_symbol_table()->get_self_param();
+    ObPLDataType self_data_type = self_var->get_type();
+    int64_t self_index = udt_routine_ns->get_symbol_table()->get_self_param_idx();
+    uint64_t user_type_id = udt_routine_ns->get_package_id();
+
+    OZ (build_self_access_idx(self_access_idx, ns));
     OZ (ns.get_pl_data_type_by_id(self_data_type.get_user_type_id(), self_user_type));
     CK (OB_NOT_NULL(self_user_type));
     OZ (self_user_type->get_all_depended_user_type(resolve_ctx_, ns));
@@ -14439,10 +14688,16 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
           ? reinterpret_cast<uint64_t>(access_idxs.at(cnt - 1).label_ns_)
             : access_idxs.at(cnt - 1).label_ns_->get_package_id());
     } else if (0 != cnt
-               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(cnt-1).access_type_ && !is_routine) {
-      OZ (resolve_dblink_type_with_synonym(parent_id, access_ident.access_name_, func, pl_data_type));
-      OX (type = ObPLExternalNS::PKG_TYPE);
-      OX (var_index = pl_data_type.get_user_type_id());
+               && ObObjAccessIdx::IS_DBLINK_PKG_NS == access_idxs.at(cnt-1).access_type_
+               && (!is_routine || is_resolve_rowtype)) {
+      if (!is_routine && !is_resolve_rowtype) {
+        OZ (resolve_dblink_type_with_synonym(parent_id, access_ident.access_name_, func, pl_data_type));
+        OX (type = ObPLExternalNS::PKG_TYPE);
+        OX (var_index = pl_data_type.get_user_type_id());
+      } else {
+        type = ObPLExternalNS::TABLE_COL;
+        var_index = 1; // set var_index value, and resolve type in `resolve_dblink_row_type_with_synonym`
+      }
     } else {
       if (access_ident.is_pl_var() && access_ident.access_name_.empty()) { // questionmark variable
         const ObPLSymbolTable *sym_tbl = ns.get_symbol_table();
@@ -14492,6 +14747,7 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
       }
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
+               || (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && is_routine)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
@@ -14499,8 +14755,22 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
                || (ObPLExternalNS::PKG_NS == type && is_routine)
                || (ObPLExternalNS::DBLINK_PKG_NS == type && is_routine)) {
       if (is_routine) {
-        OZ (resolve_routine(access_ident, ns, access_idxs, func),
-          K(access_ident), K(access_idxs));
+        if (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && access_idxs.empty()) {
+          ObObjAccessIdx self_access_idx;
+          ObSEArray<ObObjAccessIdx, 4> tmp_access_idxs;
+          OZ (build_self_access_idx(self_access_idx, ns));
+          OZ (tmp_access_idxs.push_back(self_access_idx));
+          OZ (resolve_routine(access_ident, ns, tmp_access_idxs, func));
+          if (OB_SUCC(ret)) {
+            int64_t i = (tmp_access_idxs.at(0) == self_access_idx) ? 1 : 0;
+            for (; OB_SUCC(ret) && i < tmp_access_idxs.count(); ++i) {
+              OZ (access_idxs.push_back(tmp_access_idxs.at(i)));
+            }
+          }
+        } else {
+          OZ (resolve_routine(access_ident, ns, access_idxs, func),
+            K(access_ident), K(access_idxs));
+        }
       } else { // [self.]element, user can access element without self prefix, handle it in here.
         OZ (resolve_self_element_access(access_ident, ns, access_idxs, func),
           K(access_ident), K(access_idxs), K(type), K(is_routine));
@@ -16088,6 +16358,7 @@ int ObPLResolver::make_block(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to static cast", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&func.get_symbol_table());
     block->get_namespace().set_label_table(&func.get_label_table());
     block->get_namespace().set_type_table(&func.get_user_type_table());
@@ -16149,6 +16420,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to allocate block", K(block), K(ret));
   } else {
+    block->set_level(current_level_);
     block->get_namespace().set_symbol_table(&package_ast.get_symbol_table());
     block->get_namespace().set_label_table(&package_ast.get_label_table());
     block->get_namespace().set_type_table(&package_ast.get_user_type_table());

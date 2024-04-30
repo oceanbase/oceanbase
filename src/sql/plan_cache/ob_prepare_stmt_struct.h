@@ -389,6 +389,7 @@ public:
   void inc_ref_count() { ref_cnt_++; }
   void dec_ref_count() { ref_cnt_--; }
   bool need_erase() { return 0 == ref_cnt_; }
+  inline int64_t get_ref_cnt() { return ref_cnt_; }
 
   inline void set_inner_stmt_id(ObPsStmtId id) { inner_stmt_id_ = id; }
   inline ObPsStmtId get_inner_stmt_id() { return inner_stmt_id_; }

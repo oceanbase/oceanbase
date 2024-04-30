@@ -200,13 +200,14 @@ int ObCreateIndexResolver::resolve_index_column_node(
 
       // 索引排序方式
       if (OB_FAIL(ret)) {
-      } else if (col_node->children_[2]
-          && col_node->children_[2]->type_ == T_SORT_DESC) {
+      } else if (is_oracle_mode() && col_node->children_[2]
+                 && col_node->children_[2]->type_ == T_SORT_DESC) {
         // sort_item.order_type_ = common::ObOrderType::DESC;
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support desc index now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "create desc index");
       } else {
+        //兼容mysql5.7, 降序索引不生效且不报错
         sort_item.order_type_ = common::ObOrderType::ASC;
       }
 

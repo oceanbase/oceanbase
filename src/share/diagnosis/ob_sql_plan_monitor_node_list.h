@@ -68,7 +68,6 @@ public:
       output_row_count_(0),
       db_time_(0),
       block_time_(0),
-      memory_used_(0),
       disk_read_count_(0),
       otherstat_1_value_(0),
       otherstat_2_value_(0),
@@ -81,7 +80,11 @@ public:
       otherstat_3_id_(0),
       otherstat_4_id_(0),
       otherstat_5_id_(0),
-      otherstat_6_id_(0)
+      otherstat_6_id_(0),
+      workarea_mem_(0),
+      workarea_max_mem_(0),
+      workarea_tempseg_(0),
+      workarea_max_tempseg_(0)
   {
     TraceId* trace_id = common::ObCurTraceId::get_trace_id();
     if (NULL != trace_id) {
@@ -109,6 +112,8 @@ public:
   int64_t get_thread_id() { return thread_id_; }
   int64_t get_rt_node_id() { return rt_node_id_;}
   int add_rt_monitor_node(ObMonitorNode *node);
+  void update_memory(int64_t delta_size);
+  void update_tempseg(int64_t delta_size);
   TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
 public:
   int64_t tenant_id_;
@@ -131,7 +136,6 @@ public:
   int64_t output_row_count_;
   uint64_t db_time_; // rdtsc cpu cycles spend on this op, include cpu instructions & io
   uint64_t block_time_; // rdtsc cpu cycles wait for network, io etc
-  int64_t memory_used_;
   int64_t disk_read_count_;
   // 各个算子特有的信息
   int64_t otherstat_1_value_;
@@ -146,6 +150,10 @@ public:
   int16_t otherstat_4_id_;
   int16_t otherstat_5_id_;
   int16_t otherstat_6_id_;
+  int64_t workarea_mem_;
+  int64_t workarea_max_mem_;
+  int64_t workarea_tempseg_;
+  int64_t workarea_max_tempseg_;
 };
 
 

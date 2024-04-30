@@ -149,7 +149,7 @@ int ObSimpleServerReplica::simple_init()
             + ",memory_limit=" + std::string(memory_limit_)
             + ",cache_wash_threshold=1G,net_thread_count=4,cpu_count=16,schema_history_expire_time="
               "1d,workers_per_cpu_quota=10,datafile_disk_percentage=2,__min_full_resource_pool_"
-              "memory=1073741824,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_"
+              "memory=2147483648,system_memory=5G,trace_log_slow_query_watermark=100ms,datafile_"
               "size=10G,stack_size=512K";
   opts.optstr_ = optstr_.c_str();
   // opts.devname_ = "eth0";

@@ -119,6 +119,12 @@ public:
       const uint64_t tenant_id,
       const bool only_for_display,
       int64_t &acc_dr_task);
+  int do_add_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_remove_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_migrate_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_modify_ls_replica_type_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_modify_ls_paxos_replica_num_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_cancel_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
   static int check_tenant_locality_match(
       const uint64_t tenant_id,
       ObZoneManager &zone_mgr,
@@ -129,6 +135,133 @@ public:
       common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan);
 
 private:
+
+  // add task in queue in mgr and execute task
+  // @param [in] task, the task to execute
+  int add_task_in_queue_and_execute_(const ObDRTask &task);
+  // check ls exist and init dr_ls_info
+  // @param [in] arg, task info
+  // @param [out] dr_ls_info, target dr_ls_info to init
+  int check_and_init_info_for_alter_ls_(
+      const obrpc::ObAdminAlterLSReplicaArg& arg,
+      DRLSInfo& dr_ls_info);
+  // check ls exist and get ls_info and ls_status_info
+  // @param [in] ls_id, which ls to check
+  // @param [in] tenant_id, which user does the ls to check belong to
+  // @param [out] ls_info, target ls_info
+  // @param [out] ls_status_info, target ls_status_info
+  int check_ls_exist_and_get_ls_info_(
+      const share::ObLSID& ls_id,
+      const int64_t tenant_id,
+      share::ObLSInfo& ls_info,
+      share::ObLSStatusInfo& ls_status_info);
+  // check unit exist and get unit
+  // @param [in] task_execute_server, the unit in which server
+  // @param [in] tenant_id, which user does the unit to check belong to
+  // @param [in] is_migrate_source_valid, is unit migration valid on the source server
+  // @param [out] unit, target unit
+  int check_unit_exist_and_get_unit_(
+      const common::ObAddr &task_execute_server,
+      const uint64_t tenant_id,
+      const bool is_migrate_source_valid,
+      share::ObUnit& unit);
+  // check task execute server status
+  // @param [in] task_execute_server, the task execute in which server
+  // @param [in] need_check_can_migrate_in, if need to check can_migrate_in flag
+  int check_task_execute_server_status_(
+      const common::ObAddr &task_execute_server,
+      const bool need_check_can_migrate_in);
+  // get replica type by leader
+  // @param [in] server_addr, the replica in which server
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] replica_type, the replica_type of replica in server_addr
+  int get_replica_type_by_leader_(
+      const common::ObAddr& server_addr,
+      const DRLSInfo &dr_ls_info,
+      common::ObReplicaType& replica_type);
+  // build a add replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] add_replica_task, target task
+  int build_add_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const DRLSInfo &dr_ls_info,
+      ObAddLSReplicaTask &add_replica_task);
+  // build a remove replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] remove_replica_task, target task
+  int build_remove_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObRemoveLSReplicaTask &remove_replica_task);
+  // build a modify replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] modify_replica_task, target task
+  int build_modify_replica_type_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObLSTypeTransformTask &modify_replica_task);
+  // build a migrate replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] migrate_replica_task, target task
+  int build_migrate_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const DRLSInfo &dr_ls_info,
+      ObMigrateLSReplicaTask &migrate_replica_task);
+  // build a modify paxos_replica_num task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] modify_paxos_replica_number_task, target task
+  int build_modify_paxos_replica_num_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObLSModifyPaxosReplicaNumberTask &modify_paxos_replica_number_task);
+  // check if provide data source available and init data_source
+  // @param [in] arg, the task info
+  // @param [in] replica_type, source replica type
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] data_source, target data_source
+  int check_data_source_available_and_init_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const common::ObReplicaType &replica_type,
+      const DRLSInfo &dr_ls_info,
+      ObReplicaMember &data_source);
+  // if provided paxos_replica_num is valid, check it. otherwise generate new paxos_replica_num
+  // @param [in] arg, the task info
+  // @param [in] replica_type, target replica's type
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] new_p, new paxos_replica_num
+  int check_and_generate_new_paxos_replica_num_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const common::ObReplicaType &replica_type,
+      const DRLSInfo &dr_ls_info,
+      int64_t &new_p);
+  // check whether the values of member list count and new paxs_replica_num are legal in alter full replica
+  // @param [in] member_list_count, count of leader member list after alter full replica
+  // @param [in] new_p, new paxos_replica_num
+  int check_for_alter_full_replica_(
+      const int64_t member_list_count,
+      const int64_t new_p);
+  // check if majority is satisfied when remove replica
+  // @param [in] server_addr, target replica to remove in which server
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [in] new_p, new paxos_replica_num
+  int check_majority_for_remove_(
+      const common::ObAddr& server_addr,
+      const DRLSInfo &dr_ls_info,
+      const int64_t new_p);
+  // check the count of inactive server except desti_server_addr
+  // @param [in] desti_server_addr, except desti_server_addr
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] other_inactive_server_count, except desti_server_addr inactive server count
+  int check_other_inactive_server_count_(
+      const common::ObAddr& desti_server_addr,
+      const DRLSInfo &dr_ls_info,
+      int64_t& other_inactive_server_count);
+
   struct TaskCountStatistic
   {
   public:
@@ -161,15 +294,6 @@ private:
       const MemberChangeType member_change_type,
       int64_t &new_paxos_replica_number,
       bool &found);
-
-  static int choose_disaster_recovery_data_source(
-      ObZoneManager *zone_mgr,
-      DRLSInfo &dr_ls_info,
-      const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
-      ObReplicaMember &data_source,
-      int64_t &transmit_data_size);
-
   enum LATaskType
   {
     RemovePaxos = 0,
@@ -659,9 +783,6 @@ private:
       ObZoneManager &zone_mgr,
       bool &locality_is_matched);
 
-  int try_assign_unit(
-      DRLSInfo &dr_ls_info);
-
   int start();
 
   void statistic_remain_dr_task();
@@ -765,14 +886,11 @@ private:
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       share::ObTaskId &task_id,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
-      bool &skip_change_member_list,
       int64_t &old_paxos_replica_number);
 
   int generate_replicate_to_unit_and_push_into_task_manager(
@@ -781,7 +899,6 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t &data_size,
-      const bool &skip_change_member_list,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
       const ObReplicaMember &data_source,
@@ -858,15 +975,12 @@ private:
       const DRUnitStatInfo &unit_stat_info,
       const DRUnitStatInfo &unit_in_group_stat_info,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       const bool &is_unit_in_group_related,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       share::ObTaskId &task_id,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
-      bool &skip_change_member_list,
       int64_t &old_paxos_replica_number);
 
   int generate_migrate_to_unit_task(
@@ -875,10 +989,9 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t &data_size,
-      const bool &skip_change_member_list,
+      const ObReplicaMember &data_source,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
-      const ObReplicaMember &data_source,
       const int64_t &old_paxos_replica_number,
       const bool is_unit_in_group_related,
       int64_t &acc_dr_task);
@@ -956,6 +1069,16 @@ private:
       const bool &only_for_display,
       int64_t &acc_dr_task);
 
+  // migrate replica to a certain unit
+  int try_migrate_replica_for_migrate_to_unit_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica *ls_replica,
+      const DRUnitStatInfo *unit_stat_info,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool is_unit_in_group_related,
+      const bool only_for_display,
+      int64_t &acc_dr_task);
+
   // If unit is deleting and a F-replica of duplicate log stream is on it,
   // we have to type transform another valid R-replica to F-replica
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
@@ -968,11 +1091,29 @@ private:
       const bool &only_for_display,
       int64_t &acc_dr_task);
 
+  // do type tranfrom for duplicate ls when it needs to migrate to a certain unit
+  int try_type_transform_for_migrate_to_unit_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool only_for_display,
+      int64_t &acc_dr_task);
+
+  int try_gen_type_transform_task_(
+      DRLSInfo &dr_ls_info,
+      const share::ObLSReplica &ls_replica,
+      const DRUnitStatInfo *unit_in_group_stat_info,
+      const bool only_for_display,
+      const ObString &comment,
+      int64_t &acc_dr_task,
+      bool &find_a_valid_readonly_replica);
+
   // When need to type transform a R-replica to F-replica,
   // use this function to get a valid R-replica
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[in]  exclude_replica, excluded replica
   // @params[in]  target_zone, which zone to scan
+  // @params[in]  specified_unit_in_group, dest unit for transform, can be null
   // @params[out] replica, the expected valid R-replica
   // @params[out] unit_id, which unit does this replica belongs to
   // @params[out] unit_group_id, which unit group does this replica belongs to
@@ -981,6 +1122,7 @@ private:
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &exclude_replica,
       const ObZone &target_zone,
+      const DRUnitStatInfo *specified_unit_in_group,
       share::ObLSReplica &replica,
       uint64_t &unit_id,
       uint64_t &unit_group_id,
@@ -990,14 +1132,12 @@ private:
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[in]  ls_replica, which replica to do type transform
   // @params[in]  dst_member, dest replica
-  // @params[in]  src_member, source replica
   // @params[in]  target_unit_id, dest replica belongs to whcih unit
   // @params[in]  target_unit_group_id, dest replica belongs to which unit group
   // @params[out] task_id, the unique task key
   // @params[out] tenant_id, which tenant's task
   // @params[out] ls_id, which log stream's task
   // @params[out] leader_addr, leader replica address
-  // @params[out] data_source, data source replica
   // @params[out] data_size, data_size of this replica
   // @params[out] dst_replica, dest replica infos
   // @params[out] old_paxos_replica_number, previous number of F-replica count
@@ -1006,14 +1146,12 @@ private:
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
       const ObReplicaMember &dst_member,
-      const ObReplicaMember &src_member,
       const uint64_t &target_unit_id,
       const uint64_t &target_unit_group_id,
       share::ObTaskId &task_id,
       uint64_t &tenant_id,
       share::ObLSID &ls_id,
       common::ObAddr &leader_addr,
-      ObReplicaMember &data_source,
       int64_t &data_size,
       ObDstReplica &dst_replica,
       int64_t &old_paxos_replica_number,
@@ -1025,11 +1163,12 @@ private:
   // @params[in]  ls_id, which log stream's task
   // @params[in]  task_id, the id of this task
   // @params[in]  data_size, data_size of this replica
+  // @params[in]  data_source, data_source of this task
   // @params[in]  dst_replica, dest replica
   // @params[in]  src_member, source member
-  // @params[in]  data_source, data source replica
   // @params[in]  old_paxos_replica_number, previous number of F-replica count
   // @params[in]  new_paxos_replica_number, new number of F-replica count
+  // @params[in]  comment, comment on task generation
   // @params[out] acc_dr_task, accumulated disaster recovery task count
   int generate_type_transform_task_(
       const ObDRTaskKey &task_key,
@@ -1037,11 +1176,12 @@ private:
       const share::ObLSID &ls_id,
       const share::ObTaskId &task_id,
       const int64_t data_size,
+      const ObReplicaMember &data_source,
       const ObDstReplica &dst_replica,
       const ObReplicaMember &src_member,
-      const ObReplicaMember &data_source,
       const int64_t old_paxos_replica_number,
       const int64_t new_paxos_replica_number,
+      const ObString &comment,
       int64_t &acc_dr_task);
 
 private:

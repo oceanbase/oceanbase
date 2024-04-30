@@ -19,6 +19,7 @@
 #include "share/ob_errno.h"
 #include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
 #include "storage/multi_data_source/mds_table_base.h"
+#include "storage/multi_data_source/mds_table_impl.h"
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #include "mds_table_impl.h"
@@ -580,6 +581,26 @@ int MdsTableImpl<MdsTableType>::get_latest(int64_t unit_id,
     }
   }
   return ret;
+}
+
+// only normal mds table support this method, and only for transfer
+template <typename MdsTableType>
+int MdsTableImpl<MdsTableType>::get_tablet_status_node(ObFunction<int(void *)> &op, const int64_t read_seq) const
+{
+  return OB_NOT_SUPPORTED;
+}
+struct GetTabletSetusNodeOpWrapper {
+  GetTabletSetusNodeOpWrapper(ObFunction<int(void *)> &op) : op_(op) {}
+  int operator()(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData> &node) {
+    return op_((void *)&node);
+  }
+  ObFunction<int(void *)> &op_;
+};
+template <>
+inline int MdsTableImpl<NormalMdsTable>::get_tablet_status_node(ObFunction<int(void *)> &op, const int64_t read_seq) const
+{
+  return const_cast<NormalMdsTable &>(unit_tuple_).element<MdsUnit<DummyKey, ObTabletCreateDeleteMdsUserData>>().
+         get_latest(GetTabletSetusNodeOpWrapper(op), read_seq);
 }
 
 template <typename MdsTableImpl>

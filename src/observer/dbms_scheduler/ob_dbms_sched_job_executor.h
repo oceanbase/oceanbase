@@ -16,6 +16,7 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "lib/allocator/ob_mod_define.h"
 #include "share/schema/ob_multi_version_schema_service.h"
+#include "sql/session/ob_sql_session_mgr.h"
 
 namespace oceanbase
 {
@@ -43,8 +44,11 @@ private:
     share::schema::ObSchemaGetterGuard &schema_guard,
     const common::ObString &tenant_name, uint64_t tenant_id,
     const common::ObString &database_name, uint64_t database_id,
-    const share::schema::ObUserInfo* user_info);
+    const share::schema::ObUserInfo* user_info,
+    ObDBMSSchedJobInfo &job_info);
   int init_env(ObDBMSSchedJobInfo &job_info, sql::ObSQLSessionInfo &session);
+  int create_session(const uint64_t tenant_id, sql::ObFreeSessionCtx &free_session_ctx, sql::ObSQLSessionInfo *&session_info);
+  int destroy_session(sql::ObFreeSessionCtx &free_session_ctx, sql::ObSQLSessionInfo *session_info);
   int run_dbms_sched_job(uint64_t tenant_id, ObDBMSSchedJobInfo &job_info);
 
   bool inited_;

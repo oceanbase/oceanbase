@@ -72,13 +72,16 @@ typedef common::LinkHashValue<ObTenantUserKey> ObConnectResHashValue;
 class ObConnectResource : public ObConnectResHashValue {
 public:
   ObConnectResource()
-      : rwlock_(), cur_connections_(0), history_connections_(0), start_time_(0)
+      : rwlock_(), cur_connections_(0), history_connections_(0), start_time_(0),
+        tenant_id_(OB_SERVER_TENANT_ID)
   {
   }
-  ObConnectResource(uint64_t cur_connections, uint64_t history_connections, int64_t cur_time)
+  ObConnectResource(uint64_t cur_connections, uint64_t history_connections, int64_t cur_time,
+                    int64_t tenant_id)
       : rwlock_(), cur_connections_(cur_connections),
         history_connections_(history_connections),
-        start_time_(cur_time)
+        start_time_(cur_time),
+        tenant_id_(tenant_id)
   {
   }
   virtual ~ObConnectResource()
@@ -96,6 +99,7 @@ public:
   // number of connections from this time, and don't have to record 1:10 or 1:20.
   int64_t start_time_;
   // TODO: count of update and query in one hour.
+  int64_t tenant_id_;
 };
 
 class ObConnectResAlloc {
@@ -130,7 +134,7 @@ public:
       const uint64_t user_id,
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
-      ObConnectResource *&user_res, bool &has_insert, bool &user_conn_increased);
+      ObConnectResource *&user_res);
   int increase_user_connections_count(
       const uint64_t max_user_connections,
       const uint64_t max_connections_per_hour,
@@ -146,19 +150,32 @@ public:
                       const uint64_t max_global_connections,
                       ObSQLSessionInfo& session);
   int on_user_disconnect(ObSQLSessionInfo &session);
+  int erase_tenant_conn_res_map(int64_t tenant_id);
 private:
+  struct EraseTenantMapFunc
+  {
+    EraseTenantMapFunc(int64_t tenant_id)
+      : tenant_id_(tenant_id), erase_cnt_(0) {}
+    ~EraseTenantMapFunc() {}
+    bool operator()(const ObTenantUserKey &key, const ObConnectResource *value) {
+      bool res = key.tenant_id_ == tenant_id_;
+      erase_cnt_ += res ? 1 : 0;
+      return res;
+    }
+    int64_t tenant_id_;
+    int64_t erase_cnt_;
+  };
   class CleanUpConnResourceFunc
   {
   public:
     CleanUpConnResourceFunc(share::schema::ObSchemaGetterGuard &schema_guard,
-      ObConnResMap &conn_res_map, const bool is_user)
-    : schema_guard_(schema_guard), conn_res_map_(conn_res_map), is_user_(is_user)
+      ObConnResMap &conn_res_map)
+    : schema_guard_(schema_guard), conn_res_map_(conn_res_map)
     {}
     bool operator() (ObTenantUserKey key, ObConnectResource *user_res);
   private:
     share::schema::ObSchemaGetterGuard &schema_guard_;
     ObConnResMap &conn_res_map_;
-    const bool is_user_;
   };
   class ConnResourceCleanUpTask : public common::ObTimerTask
   {

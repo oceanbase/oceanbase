@@ -32,11 +32,11 @@ public:
   virtual ~ObTableQueryP() {}
 
   virtual int deserialize() override;
+  virtual int before_process() override;
 protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
-  virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
 

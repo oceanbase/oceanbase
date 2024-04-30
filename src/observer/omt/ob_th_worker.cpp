@@ -305,6 +305,7 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
   int64_t wait_end_time = 0;
   procor_.th_created();
   blocking_ts_ = &Thread::blocking_ts_;
+  ObActiveSessionGuard::get_stat().group_id_ = get_group_id();
 
   ObTLTaGuard ta_guard(tenant_->id());
   ObMemVersionNodeGuard mem_version_node_guard;

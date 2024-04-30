@@ -28,14 +28,18 @@ CREATE OR REPLACE PACKAGE dbms_workload_repository AUTHID CURRENT_USER AS
                        SQL_ID        IN VARCHAR2  DEFAULT NULL,
                        TRACE_ID      IN VARCHAR2  DEFAULT NULL,
                        WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
-                       REPORT_TYPE   IN VARCHAR2  DEFAULT 'text'
+                       REPORT_TYPE   IN VARCHAR2  DEFAULT 'text',
+                       SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                       SVR_PORT      IN NUMBER    DEFAULT NULL
                      );
 
   FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
                            L_ETIME       IN DATE,
                            SQL_ID        IN VARCHAR2  DEFAULT NULL,
                            TRACE_ID      IN VARCHAR2  DEFAULT NULL,
-                           WAIT_CLASS    IN VARCHAR2  DEFAULT NULL
+                           WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
+                           SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                           SVR_PORT      IN NUMBER    DEFAULT NULL
                           )
   RETURN awrrpt_text_type_table;
 

@@ -121,7 +121,7 @@ public:
     OB_INLINE bool is_lock_memtable() const { return ObITable::is_lock_memtable(table_type_); }
     OB_INLINE bool is_minor_sstable() const { return ObITable::is_minor_sstable(table_type_); }
     OB_INLINE bool is_mini_sstable() const { return ObITable::is_mini_sstable(table_type_); }
-    OB_INLINE bool is_major_sstable() const { return ObITable::is_major_sstable(table_type_); }
+    OB_INLINE bool is_major_sstable() const { return ObITable::is_major_sstable(table_type_) || ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_meta_major_sstable() const { return ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_multi_version_table() const { return ObITable::is_multi_version_table(table_type_); }
     OB_INLINE bool is_ddl_sstable() const { return ObITable::is_ddl_sstable(table_type_); }
@@ -226,7 +226,8 @@ public:
 
   // TODO @hanhui so many table type judgement
   virtual bool is_sstable() const { return is_sstable(key_.table_type_); }
-  virtual bool is_major_sstable() const { return is_major_sstable(key_.table_type_); }
+  virtual bool is_meta_major_sstable() const { return is_meta_major_sstable(key_.table_type_); }
+  virtual bool is_major_sstable() const { return is_major_sstable(key_.table_type_) || is_meta_major_sstable(key_.table_type_); }
   virtual bool is_minor_sstable() const { return is_minor_sstable(key_.table_type_); }
   virtual bool is_mini_sstable() const { return is_mini_sstable(key_.table_type_); }
   virtual bool is_multi_version_minor_sstable() const { return is_multi_version_minor_sstable(key_.table_type_); }
@@ -239,7 +240,6 @@ public:
   virtual bool is_lock_memtable() const { return is_lock_memtable(key_.table_type_); }
   virtual bool is_frozen_memtable() const { return false; }
   virtual bool is_active_memtable() const { return false; }
-  virtual bool is_meta_major_sstable() const { return is_meta_major_sstable(key_.table_type_); }
   OB_INLINE bool is_table_with_scn_range() const { return is_table_with_scn_range(key_.table_type_); }
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }

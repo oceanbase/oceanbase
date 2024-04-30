@@ -51,6 +51,20 @@ struct RangeNodeCmp
   }
 };
 
+struct RangeNodeConnectInfo
+{
+  RangeNodeConnectInfo()
+    : inited_(false),
+      data_(nullptr),
+      node_count_(0),
+      per_node_info_len_(0) {
+  }
+  bool inited_;
+  uint8_t* data_;
+  uint64_t node_count_;
+  uint64_t per_node_info_len_;
+};
+
 class ObRangeGraphGenerator
 {
 public:
@@ -110,14 +124,15 @@ private:
   static int and_link_range_node(ObRangeNode *&l_node, ObRangeNode *&r_node);
   static int get_and_tails(ObRangeNode *range_node, ObIArray<ObRangeNode*> &and_tails);
 
-  int formalize_final_range_node(ObRangeNode *range_node);
+  int formalize_final_range_node(ObRangeNode *&range_node);
   int collect_graph_infos(ObRangeNode *range_node,
                           uint64_t *total_range_sizes,
                           uint64_t *range_sizes,
-                          bool &start_from_zero);
+                          bool &start_from_zero,
+                          int64_t &min_offset);
   int check_skip_scan_valid(ObRangeNode *range_node,
                             ObRangeNode *&ss_head);
-  int generate_node_id(ObRangeNode *range_node, uint64_t &node_count);
+  static int generate_node_id(ObRangeNode *range_node, uint64_t &node_count);
 
   int check_graph_type(ObRangeNode *range_node);
 
@@ -136,7 +151,8 @@ private:
   bool is_strict_equal_node(const ObRangeNode *range_node) const;
   bool is_equal_node(const ObRangeNode *range_node) const;
 
-  int fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise_exprs);
+  int fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise_exprs,
+                       ObIArray<ObPriciseExprItem> &unpricise_exprs);
   int generate_expr_final_info();
 
   inline void update_max_precise_offset(int64_t offset) { max_precise_offset_ = std::min(max_precise_offset_, offset); }
@@ -146,6 +162,25 @@ private:
     return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx;
   }
   int relink_standard_range_if_needed(ObRangeNode *&range_node);
+  static int crop_final_range_node(ObRangeNode *&range_node, int64_t crop_offset);
+  static int crop_final_range_node(ObRangeNode *&range_node, int64_t crop_offset,
+                                   RangeNodeConnectInfo &connect_info,
+                                   common::hash::ObHashMap<uint64_t, ObRangeNode*> &refined_ranges,
+                                   common::hash::ObHashSet<uint64_t> &shared_ranges);
+  static int check_crop_range_node_valid(ObRangeNode *range_node,
+                                         ObRangeNode *next_range_node,
+                                         RangeNodeConnectInfo &connect_info);
+  static int reset_node_id(ObRangeNode *range_node);
+  static int generate_range_node_connect_info(ObIAllocator &allocator,
+                                              ObRangeNode *range_node,
+                                              uint64_t node_count,
+                                              RangeNodeConnectInfo &connect_info);
+  static int collect_range_node_connect_info(ObRangeNode *range_node,
+                                      RangeNodeConnectInfo &connect_info);
+
+  static int get_max_offset(const ObRangeNode *range_node, int64_t &max_offset);
+
+  static int get_start_from_zero(const ObRangeNode *range_node, bool &start_from_zero);
 private:
   ObRangeGraphGenerator();
 private:

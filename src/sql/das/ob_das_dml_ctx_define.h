@@ -450,6 +450,8 @@ private:
 class ObDASDMLIterator : public common::ObNewRowIterator
 {
 public:
+  static const int64_t DEFAULT_BATCH_SIZE = 256;
+public:
   ObDASDMLIterator(const ObDASDMLBaseCtDef *das_ctdef,
                    ObDASWriteBuffer &write_buffer,
                    common::ObIAllocator &alloc)
@@ -458,20 +460,24 @@ public:
       row_projector_(nullptr),
       allocator_(alloc),
       cur_row_(nullptr),
+      cur_rows_(nullptr),
       main_ctdef_(das_ctdef),
       spat_rows_(nullptr),
       spatial_row_idx_(0)
   {
     set_ctdef(das_ctdef);
+    batch_size_ = MIN(write_buffer_.get_row_cnt(), DEFAULT_BATCH_SIZE);
   }
   virtual ~ObDASDMLIterator();
   virtual int get_next_row(common::ObNewRow *&row) override;
   virtual int get_next_row() override;
+  virtual int get_next_rows(ObNewRow *&rows, int64_t &row_count);
   ObDASWriteBuffer &get_write_buffer() { return write_buffer_; }
   virtual void reset() override { }
   int rewind(const ObDASDMLBaseCtDef *das_ctdef)
   {
     cur_row_ = nullptr;
+    cur_rows_ = nullptr;
     spatial_row_idx_ = 0;
     set_ctdef(das_ctdef);
     return common::OB_SUCCESS;
@@ -496,9 +502,11 @@ private:
   ObDASWriteBuffer::Iterator write_iter_;
   common::ObIAllocator &allocator_;
   common::ObNewRow *cur_row_;
+  common::ObNewRow *cur_rows_;
   const ObDASDMLBaseCtDef *main_ctdef_;
   ObSpatIndexRow *spat_rows_;
   uint32_t spatial_row_idx_;
+  int64_t batch_size_;
 };
 }  // namespace sql
 }  // namespace oceanbase

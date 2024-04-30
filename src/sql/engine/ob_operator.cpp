@@ -995,9 +995,12 @@ int ObOperator::setup_op_feedback_info()
     int64_t &total_db_time = fb_info.get_total_db_time();
     total_db_time +=  op_monitor_info_.db_time_;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
+      uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
       node.block_time_ = op_monitor_info_.block_time_;
+      node.block_time_ /= cpu_khz;
       node.db_time_ = op_monitor_info_.db_time_;
+      node.db_time_ /= cpu_khz;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
       node.op_last_row_time_ = op_monitor_info_.last_row_time_;
@@ -1018,6 +1021,23 @@ int ObOperator::submit_op_monitor_node()
     // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
+
+    // exclude time cost in children, but px receive have no real children in exec view
+    int64_t db_time = total_time_; // use temp var to avoid dis-order close
+    if (!spec_.is_receive()) {
+      for (int64_t i = 0; i < child_cnt_; i++) {
+        db_time -= children_[i]->total_time_;
+      }
+    }
+    if (db_time < 0) {
+      db_time = 0;
+    }
+    // exclude io time cost
+    // Change to divide by cpu_khz when generating the virtual table.
+    // Otherwise, the unit of this field is inconsistent during SQL execution and after SQL execution is completed.
+    op_monitor_info_.db_time_ = 1000 * db_time;
+    op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
+
     if (list && spec_.plan_) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
           || (ctx_.get_my_session()->is_user_session()
@@ -1025,18 +1045,6 @@ int ObOperator::submit_op_monitor_node()
                   || (op_monitor_info_.close_time_
                       - ctx_.get_plan_start_time()
                       > MONITOR_RUNNING_TIME_THRESHOLD)))) {
-        // exclude time cost in children, but px receive have no real children in exec view
-        uint64_t db_time = total_time_; // use temp var to avoid dis-order close
-        if (!spec_.is_receive()) {
-          for (int64_t i = 0; i < child_cnt_; i++) {
-            db_time -= children_[i]->total_time_;
-          }
-        }
-        // exclude io time cost
-        uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
-        op_monitor_info_.db_time_ = 1000 * db_time / cpu_khz;
-        op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_ / cpu_khz;
-
         IGNORE_RETURN list->submit_node(op_monitor_info_);
         LOG_DEBUG("debug monitor", K(spec_.id_));
       }
@@ -1119,10 +1127,6 @@ int ObOperator::get_next_row()
         }
       } else if (OB_ITER_END == ret) {
         row_reach_end_ = true;
-        int tmp_ret = do_drain_exch();
-        if (OB_SUCCESS != tmp_ret) {
-          LOG_WARN("drain exchange data failed", K(tmp_ret));
-        }
         if (got_first_row_) {
           op_monitor_info_.last_row_time_ = oceanbase::common::ObClockGenerator::getClock();
         }
@@ -1143,6 +1147,12 @@ int ObOperator::get_next_row()
       }
     }
   }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = do_drain_exch();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("drain exchange data failed", K(tmp_ret));
+    }
+  }
   end_ash_line_id_reg();
   end_cpu_time_counting();
   return ret;
@@ -1151,6 +1161,7 @@ int ObOperator::get_next_row()
 int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&batch_rows)
 {
   int ret = OB_SUCCESS;
+  bool need_drain = false;
   begin_cpu_time_counting();
   begin_ash_line_id_reg();
 
@@ -1259,10 +1270,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
           got_first_row_ = true;
         }
         if (brs_.end_) {
-          int tmp_ret = do_drain_exch();
-          if (OB_SUCCESS != tmp_ret) {
-            LOG_WARN("drain exchange data failed", K(tmp_ret));
-          }
+          need_drain = true;
           op_monitor_info_.last_row_time_ = ObClockGenerator::getClock();
         }
       }
@@ -1283,6 +1291,12 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
     }
   }
 
+  if (need_drain || OB_FAIL(ret)) {
+    int tmp_ret = do_drain_exch();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("drain exchange data failed", K(tmp_ret));
+    }
+  }
   end_ash_line_id_reg();
   end_cpu_time_counting();
   return ret;

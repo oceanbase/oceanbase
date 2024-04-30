@@ -76,10 +76,15 @@ public:
                                         common::ObIArray<common::ObString> &dst_users,
                                         common::ObIArray<common::ObString> &dst_hosts);
   static int drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                       const obrpc::ObDropUserArg &arg);
+                       const obrpc::ObDropUserArg &arg,
+                       bool if_exists);
   int execute(ObExecContext &ctx, ObDropUserStmt &stmt);
 
 private:
+  static int build_fail_msg_for_one(const ObString &user,
+                                                        const ObString &host,
+                                                        common::ObSqlString &msg);
+
   DISALLOW_COPY_AND_ASSIGN(ObDropUserExecutor);
 };
 
@@ -108,6 +113,18 @@ public:
   int execute(ObExecContext &ctx, ObAlterUserProfileStmt &stmt);
 
   DISALLOW_COPY_AND_ASSIGN(ObAlterUserProfileExecutor);
+};
+
+class ObAlterUserProxyStmt;
+class ObAlterUserProxyExecutor
+{
+private:
+public:
+  ObAlterUserProxyExecutor() {}
+  virtual ~ObAlterUserProxyExecutor() {}
+  int execute(ObExecContext &ctx, ObAlterUserProxyStmt &stmt);
+
+  DISALLOW_COPY_AND_ASSIGN(ObAlterUserProxyExecutor);
 };
 
 class ObRenameUserStmt;

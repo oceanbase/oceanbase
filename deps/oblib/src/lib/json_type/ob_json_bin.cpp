@@ -1815,7 +1815,7 @@ int ObJsonBin::get_raw_binary_v0(ObString &buf, ObIAllocator *allocator) const
   ObJsonBinUpdateCtx *update_ctx = get_update_ctx();
   bool is_rebuild = true;
   if (node_type == ObJsonNodeType::J_ARRAY || node_type == ObJsonNodeType::J_OBJECT) {
-    if (cursor_->get_data(buf)) {
+    if (OB_FAIL(cursor_->get_data(buf))) {
       LOG_WARN("cursor get_data fail", K(ret));
     } else {
       buf.assign_ptr(buf.ptr() + pos_, buf.length() - pos_);
@@ -2061,7 +2061,7 @@ int ObJsonBin::get_parent(ObIJsonBase *& parent) const
   } else if (node_stack_.size() <= 0) {
   } else if (OB_FAIL(create_new_binary(nullptr, parent_bin))) {
     LOG_WARN("create_new_binary fail", K(ret));
-  } else if (parent_bin->node_stack_.copy(this->node_stack_)) {
+  } else if (OB_FAIL(parent_bin->node_stack_.copy(this->node_stack_))) {
     LOG_WARN("copy node stack fail", K(ret));
   } else if (OB_FAIL(parent_bin->move_parent_iter())) {
     LOG_WARN("move parent fail", K(ret));
@@ -5370,6 +5370,7 @@ ObJsonBinCtx::~ObJsonBinCtx()
 {
   if (OB_NOT_NULL(update_ctx_) && is_update_ctx_alloc_) {
     update_ctx_->~ObJsonBinUpdateCtx();
+    update_ctx_ = nullptr;
   }
 }
 

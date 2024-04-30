@@ -380,6 +380,8 @@ private:
                        ObLobPieceInfo& piece_info,
                        ObString& data);
 
+  int batch_delete(ObLobAccessParam& param, ObLobMetaScanIter &iter);
+  int batch_insert(ObLobAccessParam& param, ObLobMetaWriteIter &iter);
   int erase_one_piece(ObLobAccessParam& param,
                       ObLobCtx& lob_ctx,
                       ObLobMetaInfo& meta_info,
@@ -398,12 +400,12 @@ private:
                          bool &need_out_row);
   int init_out_row_ctx(ObLobAccessParam& param, uint64_t len, ObLobDataOutRowCtx::OpType op);
   int check_handle_size(ObLobAccessParam& param);
-  int erase_process_meta_info(ObLobAccessParam& param, ObLobMetaScanIter &meta_iter, ObLobQueryResult &result, ObString &tmp_buff);
+  int erase_process_meta_info(ObLobAccessParam& param, const int64_t store_chunk_size, ObLobMetaScanIter &meta_iter, ObLobQueryResult &result, ObString &tmp_buff);
   int prepare_for_write(ObLobAccessParam& param,
                         ObString &old_data,
                         bool &need_out_row);
-  int prepare_write_buffers(ObLobAccessParam& param, ObString &remain_buf, ObString &tmp_buf);
   int replace_process_meta_info(ObLobAccessParam& param,
+                                const int64_t store_chunk_size,
                                 ObLobMetaScanIter &meta_iter,
                                 ObLobQueryResult &result,
                                 ObLobQueryIter *iter,
@@ -416,7 +418,6 @@ private:
   int query_remote(ObLobAccessParam& param, ObString& data);
   int getlength_remote(ObLobAccessParam& param, common::ObAddr& dst_addr, uint64_t &len);
   int do_delete_one_piece(ObLobAccessParam& param, ObLobQueryResult &result, ObString &tmp_buff);
-  int prepare_erase_buffer(ObLobAccessParam& param, ObString &tmp_buff);
   int fill_zero(char *ptr, uint64_t length, bool is_char,
                 const ObCollationType coll_type, uint32_t byte_len, uint32_t byte_offset, uint32_t &char_len);
   int prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside);
@@ -427,6 +428,16 @@ private:
               int64_t& result);
   int load_all(ObLobAccessParam &param, ObLobPartialData &partial_data);
   void transform_lob_id(uint64_t src, uint64_t &dst);
+  int append_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, int64_t append_lob_len, ObString& ori_inrow_data);
+  int append_outrow(ObLobAccessParam& param, bool ori_is_inrow, ObString &data);
+  int fill_outrow_with_zero(ObLobAccessParam& param);
+  int do_fill_outrow_with_zero(
+      ObLobAccessParam& param,
+      const int64_t store_chunk_size,
+      ObLobMetaScanIter &meta_iter,
+      ObLobQueryResult &result,
+      ObString &write_data_buffer);
+
 private:
   static const int64_t DEFAULT_LOB_META_BUCKET_CNT = 1543;
   static const int64_t LOB_IN_ROW_MAX_LENGTH = 4096; // 4K

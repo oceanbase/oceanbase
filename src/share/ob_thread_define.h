@@ -140,7 +140,6 @@ TG_DEF(CDCService, CDCSrv, THREAD_POOL, 1)
 TG_DEF(LogUpdater, LogUpdater, TIMER)
 TG_DEF(HeartBeatCheckTask, HeartBeatCheckTask, TIMER)
 TG_DEF(RedefHeartBeatTask, RedefHeartBeatTask, TIMER)
-TG_DEF(MemDumpTimer, MemDumpTimer, TIMER)
 TG_DEF(SSTableDefragment, SSTableDefragment, TIMER)
 TG_DEF(TenantMetaMemMgr, TenantMetaMemMgr, TIMER)
 TG_DEF(IngressService, IngressService, TIMER)
@@ -168,4 +167,5 @@ TG_DEF(SvrStartupHandler, SvrStartupHandler, QUEUE_THREAD,
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
 #endif

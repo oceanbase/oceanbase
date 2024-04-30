@@ -1490,7 +1490,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -1894,7 +1894,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -2273,7 +2273,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -17039,7 +17039,7 @@ question_mask_size: 0
               "children": [
                  {
                   "type":"T_EXPR_LIST",
-                  "int_val":9223372036854775807,
+                  "int_val":2,
                   "str_len":0,
                   "str_val":"",
                   "children": [
@@ -17312,7 +17312,7 @@ question_mask_size: 0
               "children": [
                  {
                   "type":"T_EXPR_LIST",
-                  "int_val":9223372036854775807,
+                  "int_val":2,
                   "str_len":0,
                   "str_val":"",
                   "children": [
@@ -20103,7 +20103,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20236,7 +20242,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20364,7 +20376,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20492,7 +20510,13 @@ question_mask_size: 0
              { }
           ]
         },
-         { }
+         { },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
+        }
       ]
     }
   ]
@@ -20705,6 +20729,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -20918,6 +20948,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -21137,6 +21173,12 @@ question_mask_size: 0
              { },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -21172,6 +21214,12 @@ question_mask_size: 0
             },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -21212,6 +21260,12 @@ question_mask_size: 0
             },
              { }
           ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":0,
+          "str_len":0,
+          "str_val":""
         }
       ]
     }
@@ -23815,6 +23869,1200 @@ question_mask_size: 0
             }
           ]
         }
+      ]
+    }
+  ]
+}
+**************   Case 196   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TRANSFER_PARTITION_TO_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PARTITION_INFO",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 197   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TRANSFER_PARTITION_TO_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_PARTITION_INFO",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                },
+                 {
+                  "type":"T_INT",
+                  "int_val":1,
+                  "str_len":1,
+                  "str_val":"1"
+                }
+              ]
+            },
+             {
+              "type":"T_INT",
+              "int_val":1001,
+              "str_len":4,
+              "str_val":"1001"
+            }
+          ]
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 198   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_PARTITION_INFO",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 199   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_PARTITION_INFO",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            },
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            }
+          ]
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 200   ***************
+alter system cancel transfer partition ALL;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALL",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":""
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 201   ***************
+alter system cancel transfer partition ALL tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_TRANSFER_PARTITION",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALL",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":""
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 202   ***************
+alter system cancel balance job;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_BALANCE_JOB",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 203   ***************
+alter system cancel balance job tenant 'mysql';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_BALANCE_JOB",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":5,
+              "str_val":"mysql"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 204   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ADD_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5001"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 205   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ADD_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5001"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 206   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ADD_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5001"
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 207   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_ADD_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         { },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 208   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_REMOVE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 209   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_REMOVE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 210   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_REMOVE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 211   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MODIFY_LS_REPLICA_TYPE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 212   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MODIFY_LS_REPLICA_TYPE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 213   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MODIFY_LS_REPLICA_TYPE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":1,
+          "str_val":"F"
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 214   ***************
+alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MODIFY_LS_PAXOS_REPLICA_NUM",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 215   ***************
+alter system modify ls=100 paxos_replica_num=3;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MODIFY_LS_PAXOS_REPLICA_NUM",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_INT",
+          "int_val":3,
+          "str_len":1,
+          "str_val":"3"
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 216   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MIGRATE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5001"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 217   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MIGRATE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5001"
+        },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 218   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MIGRATE_LS_REPLICA",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_LS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":100,
+              "str_len":3,
+              "str_val":"100"
+            }
+          ]
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":19,
+          "str_val":"100.88.107.212:5000"
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
+**************   Case 219   ***************
+alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_LS_REPLICA_TASK",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":3,
+          "str_val":"xxx"
+        },
+         {
+          "type":"T_TENANT_NAME",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_VARCHAR",
+              "int_val":9223372036854775807,
+              "str_len":12,
+              "str_val":"mysql_tenant"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+**************   Case 220   ***************
+alter system cancel replica task task_id = 'xxx';
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_CANCEL_LS_REPLICA_TASK",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_VARCHAR",
+          "int_val":9223372036854775807,
+          "str_len":3,
+          "str_val":"xxx"
+        },
+         { }
       ]
     }
   ]

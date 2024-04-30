@@ -683,6 +683,16 @@ int ObWindowFunctionOp::NonAggrCellLeadOrLag::eval(RowsReader &row_reader,
         LOG_WARN("invalid param", K(ret));
       } else if (OB_FAIL(params.at(j)->eval(op_.eval_ctx_, result))) {
         LOG_WARN("fail to calc result row", K(ret));
+      } else if (j == DEFAULT_VALUE && !result->is_null()) {
+        char *buf = NULL;
+        int64_t buf_size = result->get_deep_copy_size();
+        int64_t pos = 0;
+        if (OB_ISNULL(buf = wf_info_.expr_->get_str_res_mem(op_.eval_ctx_, buf_size))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc", K(buf), K(ret));
+        } else if (OB_FAIL(lead_lag_params[j].deep_copy(*result, buf, buf_size, pos))) {
+          LOG_WARN("failed to deep copy datum", K(ret));
+        }
       } else {
         lead_lag_params[j] = *result;
         is_lead_lag_offset_used |= (j == OFFSET);
@@ -2671,7 +2681,8 @@ int ObWindowFunctionOp::get_whole_msg(bool is_end,
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(proxy.get_dh_msg(MY_SPEC.id_,
+      // Synchronization is requested here.
+      if (OB_FAIL(proxy.get_dh_msg_sync(MY_SPEC.id_,
           dtl::DH_WINBUF_WHOLE_MSG,
           piece,
           temp_whole_msg,

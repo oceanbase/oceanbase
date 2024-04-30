@@ -27,6 +27,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -393,6 +394,7 @@ int ObAlterTableResolver::set_table_options()
     alter_table_schema.set_tablespace_id(tablespace_id_);
     alter_table_schema.set_dop(table_dop_);
     alter_table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
+    alter_table_schema.set_auto_increment_cache_size(auto_increment_cache_size_);
     //deep copy
     if (OB_FAIL(ret)) {
       //do nothing
@@ -1060,7 +1062,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ObSEArray<ObString, 8> ttl_columns;
         if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
           LOG_WARN("fail to get table schema", K(ret));
-        } else if (OB_FAIL(get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
+        } else if (OB_FAIL(ObTTLUtil::get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
           LOG_WARN("fail to get ttl column", K(ret));
         } else if (ttl_columns.empty()) {
           // do nothing
@@ -1073,7 +1075,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             if (OB_ISNULL(column)) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("unexpected null alter column", K(ret));
-            } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+            } else if (ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
@@ -1266,13 +1268,14 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
         //column_order
         if (OB_FAIL(ret)) {
           //do nothing
-        } else if (sort_column_node->children_[2] &&
-            T_SORT_DESC == sort_column_node->children_[2]->type_) {
+        } else if (is_oracle_mode() && sort_column_node->children_[2]
+                   && T_SORT_DESC == sort_column_node->children_[2]->type_) {
           // sort_item.order_type_ = common::ObOrderType::DESC;
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not support desc index now", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Desc index");
         } else {
+          //兼容mysql5.7, 降序索引不生效且不报错
           sort_item.order_type_ = common::ObOrderType::ASC;
         }
 
@@ -5340,22 +5343,8 @@ int ObAlterTableResolver::resolve_change_column(const ParseNode &node)
             && alter_column_schema.is_set_nullable_) {
           ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
           LOG_WARN("can't set primary key nullable", K(ret));
-        } else if (ObGeometryType == origin_col_schema->get_data_type()
-                   && ObGeometryType == alter_column_schema.get_data_type()
-                   && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
-                   && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
-                   && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-          ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
-          LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
-          LOG_WARN("can't not change geometry type", K(ret), K(origin_col_schema->get_geo_type()),
-                  K(alter_column_schema.get_geo_type()));
-        } else if (ObGeometryType == origin_col_schema->get_data_type()
-                   && ObGeometryType == alter_column_schema.get_data_type()
-                   && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "not support alter srid");
-          LOG_WARN("not support alter srid now", K(ret),
-                  K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+        } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
+          LOG_WARN("modify geo column not allowed", K(ret));
         }
       }
       if (OB_SUCC(ret)) {
@@ -5472,6 +5461,36 @@ int ObAlterTableResolver::check_modify_column_allowed(
         SQL_RESV_LOG(WARN, "failed to check_column_in_foreign_key", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::check_alter_geo_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                                         const share::schema::ObColumnSchemaV2 &origin_col_schema)
+{
+  int ret = OB_SUCCESS;
+  if (ObGeometryType != origin_col_schema.get_data_type()) {
+    // do nothing
+  } else if (origin_col_schema.is_spatial_index_column()
+            && ObGeometryType != alter_column_schema.get_data_type()) {
+    ret = OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL;
+    LOG_USER_ERROR(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL);
+    LOG_WARN("can't not alter geometry col with spatial index", K(ret), K(origin_col_schema.get_geo_type()),
+            K(alter_column_schema.get_geo_type()));
+  } else if (ObGeometryType == alter_column_schema.get_data_type()
+              && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+              && origin_col_schema.get_geo_type() != common::ObGeoType::GEOMETRY
+              && origin_col_schema.get_geo_type() != alter_column_schema.get_geo_type()) {
+    ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
+    LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
+    LOG_WARN("can't not alter geometry type", K(ret), K(origin_col_schema.get_geo_type()),
+            K(alter_column_schema.get_geo_type()));
+  } else if (ObGeometryType == alter_column_schema.get_data_type()
+            && origin_col_schema.get_srid() != alter_column_schema.get_srid()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter geometry srid");
+    LOG_WARN("can't not alter geometry srid", K(ret),
+            K(origin_col_schema.get_srid()), K(alter_column_schema.get_srid()));
   }
   return ret;
 }
@@ -5623,22 +5642,8 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
               && alter_column_schema.is_set_nullable_) {
             ret = OB_ERR_PRIMARY_CANT_HAVE_NULL;
             LOG_WARN("can't set primary key nullable", K(ret));
-          } else if (ObGeometryType == origin_col_schema->get_data_type()
-                     && ObGeometryType == alter_column_schema.get_data_type()
-                     && alter_column_schema.get_geo_type() != common::ObGeoType::GEOMETRY
-                     && origin_col_schema->get_geo_type() != common::ObGeoType::GEOMETRY
-                     && origin_col_schema->get_geo_type() != alter_column_schema.get_geo_type()) {
-            ret = OB_ERR_CANT_CREATE_GEOMETRY_OBJECT;
-            LOG_USER_ERROR(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT);
-            LOG_WARN("can't not modify geometry type", K(ret), K(origin_col_schema->get_geo_type()),
-                    K(alter_column_schema.get_geo_type()));
-          } else if (ObGeometryType == origin_col_schema->get_data_type()
-                     && ObGeometryType == alter_column_schema.get_data_type()
-                     && origin_col_schema->get_srid() != alter_column_schema.get_srid()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify geometry srid");
-            LOG_WARN("can't not modify geometry srid", K(ret),
-                    K(origin_col_schema->get_srid()), K(alter_column_schema.get_srid()));
+          } else if (OB_FAIL(check_alter_geo_column_allowed(alter_column_schema, *origin_col_schema))) {
+            LOG_WARN("modify geo column not allowed", K(ret));
           }
         }
       }
@@ -6006,17 +6011,6 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
     }
   }
   return ret;
-}
-
-bool ObAlterTableResolver::is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns)
-{
-  bool bret = false;
-  for (int64_t i = 0; i < ttl_columns.count() && !bret; i++) {
-    if (orig_column_name.case_compare(ttl_columns.at(i)) == 0) {
-      bret = true;
-    }
-  }
-  return bret;
 }
 
 int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alter_column_schema,

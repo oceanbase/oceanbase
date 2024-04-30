@@ -36,8 +36,28 @@ public:
 };
 typedef common::ObList<DmlRowkeyDistCtx, common::ObIAllocator> DASDelCtxList;
 
+struct GroupRescanParam
+{
+public:
+  GroupRescanParam()
+    : param_idx_(common::OB_INVALID_ID),
+      gr_param_(nullptr)
+  { }
+  GroupRescanParam(int64_t param_idx, ObSqlArrayObj *gr_param)
+  : param_idx_(param_idx),
+    gr_param_(gr_param)
+  { }
+  TO_STRING_KV(K_(param_idx),
+               KPC_(gr_param));
+  int64_t param_idx_;
+  ObSqlArrayObj *gr_param_; //group rescan param
+};
+
+typedef common::ObArrayWrap<GroupRescanParam> GroupParamArray;
 class ObDASCtx
 {
+  friend class DASGroupScanMarkGuard;
+  friend class GroupParamBackupGuard;
   OB_UNIS_VERSION(1);
 public:
   ObDASCtx(common::ObIAllocator &allocator)
@@ -52,7 +72,10 @@ public:
       savepoint_(),
       del_ctx_list_(allocator),
       same_tablet_addr_(),
-      jump_read_group_id_(-1),
+      real_das_dop_(0),
+      group_params_(nullptr),
+      skip_scan_group_id_(-1),
+      group_rescan_cnt_(-1),
       flags_(0)
   {
     is_fk_cascading_ = 0;
@@ -111,6 +134,9 @@ public:
   int build_related_tablet_loc(ObDASTabletLoc &tablet_loc);
   int build_related_table_loc(ObDASTableLoc &table_loc);
   int rebuild_tablet_loc_reference();
+  const GroupParamArray* get_group_params() { return group_params_; }
+  int64_t get_skip_scan_group_id() const { return skip_scan_group_id_; }
+  int64_t get_group_rescan_cnt() const { return group_rescan_cnt_; }
   void clear_all_location_info()
   {
     table_locs_.clear();
@@ -129,12 +155,18 @@ public:
       uint64_t table_loc_id, uint64_t ref_table_id, common::ObIArray<ObAddr> &locations);
   int build_related_tablet_map(const ObDASTableLocMeta &loc_meta);
   const ObAddr &same_tablet_addr() const { return same_tablet_addr_; }
+  int64_t get_real_das_dop() { return real_das_dop_; }
+  void set_real_das_dop(int64_t v) { real_das_dop_ = v; }
+
+  int find_group_param_by_param_idx(int64_t param_idx,
+                                    bool &exist, uint64_t &array_idx);
 
   TO_STRING_KV(K_(table_locs),
                K_(external_table_locs),
                K_(is_fk_cascading),
                K_(snapshot),
-               K_(savepoint));
+               K_(savepoint),
+               K_(real_das_dop));
 private:
   int check_same_server(const ObDASTabletLoc *tablet_loc);
 private:
@@ -154,8 +186,11 @@ private:
   //@todo: save snapshot version
   DASDelCtxList del_ctx_list_;
   ObAddr same_tablet_addr_;
+  int64_t real_das_dop_; // das并发写真实可用的并行度
+  const GroupParamArray *group_params_; //only allowed to be modified by GroupParamBackupGuard
+  int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
+  int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
 public:
-  int64_t jump_read_group_id_;
   union {
     uint64_t flags_;
     struct {
@@ -163,9 +198,61 @@ public:
       uint64_t need_check_server_               : 1; //need to check if partitions hit the same server
       uint64_t same_server_                     : 1; //if partitions hit the same server, could be local or remote
       uint64_t iter_uncommitted_row_            : 1; //iter uncommitted row in fk_checker
-      uint64_t reserved_                        : 60;
+      uint64_t in_das_group_scan_               : 1; //the current execution in das group scan
+      uint64_t reserved_                        : 59;
     };
   };
+};
+
+class GroupParamBackupGuard
+{
+public:
+  GroupParamBackupGuard(ObDASCtx &ctx)
+  : ctx_(ctx)
+  {
+    current_group_ = ctx.skip_scan_group_id_;
+    group_rescan_cnt_ = ctx.group_rescan_cnt_;
+    group_params_ = ctx.get_group_params();
+  }
+
+  void bind_batch_rescan_params(int64_t current_group,
+                                int64_t group_rescan_cnt,
+                                const GroupParamArray *group_params)
+  {
+    ctx_.skip_scan_group_id_ = current_group;
+    ctx_.group_rescan_cnt_ = group_rescan_cnt;
+    ctx_.group_params_ = group_params;
+  }
+
+  ~GroupParamBackupGuard() {
+    ctx_.skip_scan_group_id_ = current_group_;
+    ctx_.group_rescan_cnt_ = group_rescan_cnt_;
+    ctx_.group_params_ = group_params_;
+  }
+
+private:
+  ObDASCtx &ctx_;
+  int64_t current_group_;
+  int64_t group_rescan_cnt_;
+  const GroupParamArray *group_params_;
+};
+
+class DASGroupScanMarkGuard
+{
+public:
+  DASGroupScanMarkGuard(ObDASCtx &das_ctx, bool in_das_group_scan)
+    : das_ctx_(das_ctx)
+  {
+    in_das_group_scan_ = das_ctx.in_das_group_scan_;
+    das_ctx.in_das_group_scan_ = in_das_group_scan;
+  }
+  ~DASGroupScanMarkGuard()
+  {
+    das_ctx_.in_das_group_scan_ = in_das_group_scan_;
+  }
+private:
+  bool in_das_group_scan_;
+  ObDASCtx &das_ctx_;
 };
 }  // namespace sql
 }  // namespace oceanbase

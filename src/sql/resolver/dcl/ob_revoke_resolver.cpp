@@ -348,7 +348,7 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
           ignore_priv_not_exist = NULL != node->children_[4];
           ignore_user_not_exist = NULL != node->children_[5];
           //resolve priv_level
-          if (OB_ISNULL(priv_level_node)) {
+          if (OB_ISNULL(priv_level_node) || OB_ISNULL(allocator_)) {
             ret = OB_ERR_PARSE_SQL;
             LOG_WARN("Priv level node should not be NULL", K(ret));
           } else {
@@ -361,7 +361,8 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
                         params_.session_info_->get_database_name(), 
                         db, 
                         table, 
-                        grant_level))) {
+                        grant_level,
+                        *allocator_))) {
               LOG_WARN("Resolve priv_level node error", K(ret));
             } else if (priv_object_node != NULL) {
               uint64_t compat_version = 0;
@@ -439,13 +440,20 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
             LOG_WARN("Resolve priv set error", K(ret));
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("fail to get data version", K(tenant_id));
-          } else if (compat_version < DATA_VERSION_4_2_2_0) {
-            if ((priv_set & OB_PRIV_EXECUTE) != 0 ||
-                (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
-                (priv_set & OB_PRIV_CREATE_ROUTINE) != 0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
-            }
+          } else if (compat_version < DATA_VERSION_4_2_2_0
+                     && ((priv_set & OB_PRIV_EXECUTE) != 0 ||
+                         (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
+                         (priv_set & OB_PRIV_CREATE_ROUTINE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke execute/alter routine/create routine privilege");
+          } else if (compat_version < DATA_VERSION_4_2_3_0
+                     && ((priv_set & OB_PRIV_CREATE_TABLESPACE) != 0 ||
+                         (priv_set & OB_PRIV_SHUTDOWN) != 0 ||
+                         (priv_set & OB_PRIV_RELOAD) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke create tablespace/shutdown/reload privilege");
           }
           if (OB_FAIL(ret)) {
           } else {

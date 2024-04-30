@@ -150,6 +150,8 @@ public:
   virtual int get_latest_committed(int64_t unit_id,
                                    void *key,
                                    ObFunction<int(void *)> &op) const = 0;
+  virtual int get_tablet_status_node(ObFunction<int(void *)> &op,
+                                     const int64_t read_seq) const = 0;
   virtual int get_snapshot(int64_t unit_id,
                            void *key,
                            ObFunction<int(void *)> &op,

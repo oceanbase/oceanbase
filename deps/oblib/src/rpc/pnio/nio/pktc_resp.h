@@ -71,7 +71,7 @@ static void pktc_resp_cb_on_msg(pktc_t* io, pktc_msg_t* msg) {
   }
 }
 
-static void pktc_resp_cb_on_terminate(pktc_t* io, uint32_t id) {
+static void pktc_resp_cb_on_terminate(pktc_t* io, uint64_t id) {
   link_t* hlink = ihash_del(&io->cb_map, &id);
   if (hlink) {
     pktc_cb_t* cb = structof(hlink, pktc_cb_t, hash_link);
@@ -80,7 +80,7 @@ static void pktc_resp_cb_on_terminate(pktc_t* io, uint32_t id) {
     cb->errcode = PNIO_PKT_TERMINATE;
     pktc_do_cb_exception(io, cb);
   } else {
-    rk_info("resp cb not found: packet_id=%u", id);
+    rk_info("resp cb not found: packet_id=%lu", id);
   }
 }
 

@@ -28,6 +28,9 @@
 #include "lib/geo/ob_geo_longtitude_correct_visitor.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
 #include "lib/geo/ob_geo_reverse_coordinate_visitor.h"
+#include "lib/geo/ob_geo_segment_collect_visitor.h"
+#include "lib/geo/ob_geo_vertex_collect_visitor.h"
+#include "lib/geo/ob_geo_cache.h"
 #include "lib/geo/ob_srs_info.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_sdo_geo_func_to_wkb.h"
@@ -5322,6 +5325,7 @@ TEST_F(TestGeoBin, sdo_point_3d) {
     geo_3d.set_data(wkb2);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5389,6 +5393,7 @@ TEST_F(TestGeoBin, sdo_linestring_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5484,6 +5489,7 @@ TEST_F(TestGeoBin, sdo_polygon_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5551,6 +5557,7 @@ TEST_F(TestGeoBin, sdo_multipoint_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5634,6 +5641,7 @@ TEST_F(TestGeoBin, sdo_multilinestring_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5739,6 +5747,7 @@ TEST_F(TestGeoBin, sdo_multipolygon_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -5857,6 +5866,7 @@ TEST_F(TestGeoBin, sdo_collection_3d) {
     geo_3d.set_data(wkb);
     ObSdoGeoObject geo3(allocator);
     ASSERT_EQ(OB_SUCCESS, geo_3d.to_sdo_geometry(geo3));
+    geo3.set_srid(geo.get_srid());
     ASSERT_EQ(geo == geo3, true);
 
     ObString geo_json;
@@ -6084,28 +6094,28 @@ TEST_F(TestGeoBin, elevation_visitor) {
     ObArenaAllocator allocator(ObModIds::TEST);
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(-1 11, 11 11, 0 10, 5 10, 10 10, 0 5, 5 5, 10 5, 0 0, 5 0, 10 0, -1 -1, 5 -1, 11 -1)",
-        "MULTIPOINT Z (-1 11 5,11 11 10,0 10 5,5 10 5,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 5,10 0 5,-1 -1 0,5 -1 5,11 -1 5)");
+        "MULTIPOINT Z ((-1 11 5),(11 11 10),(0 10 5),(5 10 5),(10 10 10),(0 5 5),(5 5 5),(10 5 5),(0 0 0),(5 0 5),(10 0 5),(-1 -1 0),(5 -1 5),(11 -1 5))");
     elevation_visitor_checker(allocator, "POLYGON Z ((1 6 50, 9 6 60, 9 4 50, 1 4 40, 1 6 50))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 4,5 4,10 4,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 50,5 10 50,10 10 60,0 5 50,5 5 50,10 5 50,0 4 40,5 4 50,10 4 50,0 0 40,5 0 50,10 0 50)");
+        "MULTIPOINT Z ((0 10 50),(5 10 50),(10 10 60),(0 5 50),(5 5 50),(10 5 50),(0 4 40),(5 4 50),(10 4 50),(0 0 40),(5 0 50),(10 0 50))");
     elevation_visitor_checker(allocator, "MULTILINESTRING Z ((0 0 0, 10 10 8), (1 2 2, 9 8 6))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
-        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+        "MULTIPOINT Z ((-1 11 4),(11 11 7),(0 10 4),(5 10 4),(10 10 7),(0 5 4),(5 5 4),(10 5 4),(0 0 1),(5 0 4),(10 0 4),(-1 -1 1),(5 -1 4),(11 -1 4))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 8)", "LINESTRING Z (1 2 2, 9 8 6)",
         "MULTIPOINT(-1 11,11 11,0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0,-1 -1,5 -1,11 -1)",
-        "MULTIPOINT Z (-1 11 4,11 11 7,0 10 4,5 10 4,10 10 7,0 5 4,5 5 4,10 5 4,0 0 1,5 0 4,10 0 4,-1 -1 1,5 -1 4,11 -1 4)");
+        "MULTIPOINT Z ((-1 11 4),(11 11 7),(0 10 4),(5 10 4),(10 10 7),(0 5 4),(5 5 4),(10 5 4),(0 0 1),(5 0 4),(10 0 4),(-1 -1 1),(5 -1 4),(11 -1 4))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 5 0, 10 5 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 0,5 10 5,10 10 10,0 5 0,5 5 5,10 5 10,0 0 0,5 0 5,10 0 10)");
+        "MULTIPOINT Z ((0 10 0),(5 10 5),(10 10 10),(0 5 0),(5 5 5),(10 5 10),(0 0 0),(5 0 5),(10 0 10))");
     elevation_visitor_checker(allocator, "LINESTRING Z (5 0 0, 5 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 10,5 10,10 10,0 5,5 5,10 5,0 0,5 0,10 0)",
-        "MULTIPOINT Z (0 10 10,5 10 10,10 10 10,0 5 5,5 5 5,10 5 5,0 0 0,5 0 0,10 0 0)");
+        "MULTIPOINT Z ((0 10 10),(5 10 10),(10 10 10),(0 5 5),(5 5 5),(10 5 5),(0 0 0),(5 0 0),(10 0 0))");
     elevation_visitor_checker(allocator, "POINT Z (5 5 5)", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
-        "MULTIPOINT Z (0 9 5,5 9 5,9 9 5,0 5 5,5 5 5,9 5 5,0 0 5,5 0 5,9 0 5)");
+        "MULTIPOINT Z ((0 9 5),(5 9 5),(9 9 5),(0 5 5),(5 5 5),(9 5 5),(0 0 5),(5 0 5),(9 0 5))");
     elevation_visitor_checker(allocator, "MULTIPOINT Z ((5 5 5), (5 5 9))", "GEOMETRYCOLLECTION Z EMPTY",
         "MULTIPOINT(0 9,5 9,9 9,0 5,5 5,9 5,0 0,5 0,9 0)",
-        "MULTIPOINT Z (0 9 7,5 9 7,9 9 7,0 5 7,5 5 7,9 5 7,0 0 7,5 0 7,9 0 7)");
+        "MULTIPOINT Z ((0 9 7),(5 9 7),(9 9 7),(0 5 7),(5 5 7),(9 5 7),(0 0 7),(5 0 7),(9 0 7))");
     elevation_visitor_checker(allocator, "LINESTRING Z (0 0 0, 10 10 10)", "GEOMETRYCOLLECTION Z EMPTY",
         "LINESTRING (1 1, 9 9)",
         "LINESTRING Z (1 1 0,9 9 10)");
@@ -6113,6 +6123,121 @@ TEST_F(TestGeoBin, elevation_visitor) {
         "POLYGON ((1 9, 9 9, 9 1, 1 1, 1 9))",
         "POLYGON Z ((1 9 5,9 9 10,9 1 5,1 1 0,1 9 5))");
 }
+TEST_F(TestGeoBin, collect_visitor_poly)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON));
+    uint32_t ring_num = 2;
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, ring_num));
+    for (uint32_t i = 0; i < ring_num; i++) {
+        ASSERT_EQ(OB_SUCCESS, append_uint32(data, 3));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 181));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 90));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 10));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 20));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 30));
+        ASSERT_EQ(OB_SUCCESS, append_double(data, 40));
+    }
+
+    ObIWkbGeogPolygon iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObVertexes vertexes;
+    ObGeoVertexCollectVisitor vertex_visitor(vertexes);
+    ObLineSegments segments;
+    ObGeoSegmentCollectVisitor seg_visitor(&segments);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(vertex_visitor));
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(seg_visitor));
+
+    ASSERT_EQ(6, vertexes.size());
+    for (uint32_t i = 0; i < ring_num; i++) {
+      ASSERT_EQ(181, vertexes[i * 3].x);
+      ASSERT_EQ(90, vertexes[i * 3].y);
+      ASSERT_EQ(10, vertexes[i * 3 + 1].x);
+      ASSERT_EQ(20, vertexes[i * 3 + 1].y);
+      ASSERT_EQ(30, vertexes[i * 3 + 2].x);
+      ASSERT_EQ(40, vertexes[i * 3 + 2].y);
+    }
+    for (uint32_t i = 0; i < segments.segs_.size(); i++) {
+      uint32_t start_idx = segments.segs_[i].begin;
+      uint32_t end_idx = segments.segs_[i].end;
+      std::cout << "linestring(" << i << ": ";
+      for (; start_idx <= end_idx; start_idx++) {
+        std::cout << segments.verts_[start_idx].x << " " <<  segments.verts_[start_idx].y << ",";
+      }
+      std::cout << ")" << std::endl;
+    }
+}
+
+
+TEST_F(TestGeoBin, linesegments_collect_visitor_poly)
+{
+    ObArenaAllocator allocator(ObModIds::TEST);
+    ObJsonBuffer data(&allocator);
+
+    /*POLYGON((121.48017238084356 31.227565780172494,
+               121.48388535915394 31.22429103925363,
+               121.48462793947535 31.221579898137527,
+               121.48242817125481 31.21807789724289,
+               121.47703361713795 31.222376670115178,
+               121.48017238084356 31.227565780172494),
+              (121.479 31.223,
+               121.480 31.2233,
+               121.48088 31.2238,
+               121.48098 31.2234,
+               121.4813 31.223,
+               121.479 31.223))*/
+
+    ASSERT_EQ(OB_SUCCESS, append_bo(data));
+    ASSERT_EQ(OB_SUCCESS, append_type(data, ObGeoType::POLYGON));
+    uint32_t ring_num = 2;
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, ring_num));
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 6));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48017238084356));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.227565780172494));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48388535915394));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.22429103925363));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48462793947535));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.221579898137527));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48242817125481));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.21807789724289));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.47703361713795));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.222376670115178));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48017238084356));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.227565780172494));
+
+    ASSERT_EQ(OB_SUCCESS, append_uint32(data, 6));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.479));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.223));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.480));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.2233));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48088));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.2238));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.48098));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.2234));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.4813));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.223));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 121.479));
+    ASSERT_EQ(OB_SUCCESS, append_double(data, 31.223));
+
+    ObIWkbGeogPolygon iwkb_geog;
+    iwkb_geog.set_data(data.string());
+    ObLineSegments segments;
+    ObGeoSegmentCollectVisitor seg_visitor(&segments);
+    ASSERT_EQ(OB_SUCCESS, iwkb_geog.do_visit(seg_visitor));
+    for (uint32_t i = 0; i < segments.segs_.size(); i++) {
+      uint32_t start_idx = segments.segs_[i].begin;
+      uint32_t end_idx = segments.segs_[i].end;
+      std::cout << "linestring(" << i << ": ";
+      for (; start_idx <= end_idx; start_idx++) {
+        std::cout << segments.verts_[start_idx].x << " " <<  segments.verts_[start_idx].y << ",";
+      }
+      std::cout << ")" << std::endl;
+    }
+}
+
 } // namespace common
 } // namespace oceanbase
 

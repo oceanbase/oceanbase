@@ -36,33 +36,37 @@ int ObSpatialMBR::filter(const ObSpatialMBR &other, ObGeoRelationType type, bool
     } else if (OB_FAIL(other.generate_latlng_rect(other_rect))) {
       LOG_WARN("fail to generate other latlng rectangle", K(ret));
     } else {
-      switch (type) {
-        case ObGeoRelationType::T_COVERS: {
-          pass_through = !other_rect.Contains(this_rect);
-          break;
-        }
+      if (is_point_ && other.is_point_ && this_rect.ApproxEquals(other_rect)) {
+        pass_through = false;
+      } else {
+       switch (type) {
+          case ObGeoRelationType::T_COVERS: {
+            pass_through = !other_rect.Contains(this_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_DWITHIN:
-        case ObGeoRelationType::T_INTERSECTS: {
-          pass_through = !this_rect.Intersects(other_rect);
-          break;
-        }
+          case ObGeoRelationType::T_DWITHIN:
+          case ObGeoRelationType::T_INTERSECTS: {
+            pass_through = !this_rect.Intersects(other_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_COVEREDBY: {
-          pass_through = !this_rect.Contains(other_rect);
-          break;
-        }
+          case ObGeoRelationType::T_COVEREDBY: {
+            pass_through = !this_rect.Contains(other_rect);
+            break;
+          }
 
-        case ObGeoRelationType::T_DFULLYWITHIN: {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support within geo relation type", K(ret), K(type));
-          break;
-        }
+          case ObGeoRelationType::T_DFULLYWITHIN: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support within geo relation type", K(ret), K(type));
+            break;
+          }
 
-        default: {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("undefined geo relation type", K(ret), K(type));
-          break;
+          default: {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("undefined geo relation type", K(ret), K(type));
+            break;
+          }
         }
       }
     }
@@ -238,6 +242,15 @@ int64_t ObS2Adapter::get_cellids(ObS2Cellids &cells, bool is_query)
 {
   INIT_SUCC(ret);
   if(OB_FAIL(visitor_->get_cellids(cells, is_query, need_buffer_, distance_))) {
+    LOG_WARN("fail to get cellid from visitor", K(ret));
+  }
+  return ret;
+}
+
+int64_t ObS2Adapter::get_cellids_and_unrepeated_ancestors(ObS2Cellids &cells, ObS2Cellids &ancestors)
+{
+  INIT_SUCC(ret);
+  if(OB_FAIL(visitor_->get_cellids_and_unrepeated_ancestors(cells, ancestors, need_buffer_, distance_))) {
     LOG_WARN("fail to get cellid from visitor", K(ret));
   }
   return ret;

@@ -200,7 +200,8 @@ int ObTxBigSegmentBuf::split_one_part(char *part_buf,
     TRANS_LOG(DEBUG, "init part header for split_one_part", K(ret), K(part_header), KPC(this));
 
     tmp_pos = part_buf_pos;
-    if (OB_FAIL(part_header.serialize(part_buf, part_buf_len, tmp_pos))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(part_header.serialize(part_buf, part_buf_len, tmp_pos))) {
       TRANS_LOG(WARN, "serialize part header failed", K(ret), KP(part_buf), K(part_buf_len),
                 K(tmp_pos), KPC(this));
     } else if (tmp_pos + part_header.part_length_ > part_buf_len

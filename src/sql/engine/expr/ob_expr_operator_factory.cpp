@@ -63,6 +63,7 @@
 #include "sql/engine/expr/ob_expr_agg_param_list.h"
 #include "sql/engine/expr/ob_expr_is_serving_tenant.h"
 #include "sql/engine/expr/ob_expr_hex.h"
+#include "sql/engine/expr/ob_expr_password.h"
 #include "sql/engine/expr/ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_not_in.h"
 #include "sql/engine/expr/ob_expr_int2ip.h"
@@ -433,8 +434,11 @@
 #include "sql/engine/expr/ob_expr_st_symdifference.h"
 #include "sql/engine/expr/ob_expr_priv_st_asmvtgeom.h"
 #include "sql/engine/expr/ob_expr_priv_st_makevalid.h"
+#include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_priv_st_geohash.h"
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
+#include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
+#include "sql/engine/expr/ob_expr_transaction_id.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -670,6 +674,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprGreaterThan);
     REG_OP(ObExprGreatest);
     REG_OP(ObExprHex);
+    REG_OP(ObExprPassword);
     REG_OP(ObExprIn);
     REG_OP(ObExprNotIn);
     REG_OP(ObExprInt2ip);
@@ -1058,7 +1063,11 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprPrivSTMakeValid);
     REG_OP(ObExprPrivSTGeoHash);
     REG_OP(ObExprPrivSTMakePoint);
+    REG_OP(ObExprInnerTableOptionPrinter);
+    REG_OP(ObExprInnerTableSequenceGetter);
     REG_OP(ObExprCurrentRole);
+    REG_OP(ObExprDecodeTraceId);
+    REG_OP(ObExprTransactionId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1380,6 +1389,10 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerIsTrue);
   REG_OP_ORCL(ObExprInnerDecodeLike);
   REG_OP_ORCL(ObExprJsonObjectStar);
+  REG_OP_ORCL(ObExprInnerTableOptionPrinter);
+  REG_OP_ORCL(ObExprInnerTableSequenceGetter);
+  REG_OP_ORCL(ObExprDecodeTraceId);
+  REG_OP_ORCL(ObExprTransactionId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

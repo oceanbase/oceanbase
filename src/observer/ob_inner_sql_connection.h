@@ -265,10 +265,6 @@ public:
                            SavedValue &saved_conn, bool skip_cur_stmt_tables);
   int end_nested_session(sql::ObSQLSessionInfo::StmtSavedValue &saved_session,
                          SavedValue &saved_conn);
-  int set_foreign_key_cascade(bool is_cascade);
-  int get_foreign_key_cascade(bool &is_cascade) const;
-  int set_foreign_key_check_exist(bool is_check_exist);
-  int get_foreign_key_check_exist(bool &is_check_exist) const;
   bool is_extern_session() const { return NULL != extern_session_; }
   bool is_inner_session() const { return NULL == extern_session_; }
   bool is_spi_conn() const { return is_spi_conn_; }
@@ -448,6 +444,7 @@ private:
   bool prev_is_bkgd_active_;
   ObWaitEventDesc *prev_max_wait_;
   ObWaitEventStat *prev_total_wait_;
+  bool has_finish_switch_di_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

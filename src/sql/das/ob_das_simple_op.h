@@ -34,6 +34,8 @@ public:
   virtual int decode_task_result(ObIDASTaskResult *task_result) = 0;
 
   virtual int release_op() override;
+  virtual int record_task_result_to_rtdef() override { return OB_SUCCESS; }
+  virtual int assign_task_result(ObIDASTaskOp *other) override { return OB_SUCCESS; }
   virtual int init_task_info(uint32_t row_extend_size) override;
   virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) override;
 };
@@ -147,4 +149,4 @@ public:
 
 }  // namespace sql
 }  // namespace oceanbase
-#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_DELETE_OP_H_ */
+#endif /* OBDEV_SRC_SQL_DAS_OB_DAS_SIMPLE_OP_H */

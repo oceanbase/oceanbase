@@ -213,7 +213,7 @@ int ObExprObjAccess::calc_result(ObObj &result,
                                  const ObObj *objs_stack,
                                  int64_t param_num,
                                  const ParamStore &param_store,
-                                 ObEvalCtx *ctx) const
+                                 ObEvalCtx &ctx) const
 {
   return info_.calc(result,
                     get_result_type(),
@@ -373,12 +373,14 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
                                      const ParamStore &param_store,
                                      const common::ObObj *params,
                                      int64_t param_num,
-                                     ObEvalCtx *ctx) const
+                                     ObEvalCtx &ctx) const
 {
   int ret = OB_SUCCESS;
   typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *);
   GetAttr get_attr = reinterpret_cast<GetAttr>(get_attr_func_);
-  ParamArray param_array;
+
+  ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ParamArray param_array(alloc_guard.get_allocator());
   OZ (init_param_array(param_store, params, param_num, param_array));
 
   if (OB_SUCC(ret)) {
@@ -387,8 +389,7 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
     if (OB_NOT_NULL(get_attr)) {
       OZ (get_attr(param_array.count(), param_ptr, &attr_addr));
     } else {
-      CK (OB_NOT_NULL(ctx));
-      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx));
+      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, ctx));
     }
     if (OB_FAIL(ret)) {
       if (OB_ERR_COLLECION_NULL == ret && pl::ObCollectionType::EXISTS_PROPERTY == property_type_) {
@@ -581,7 +582,7 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
                 param_store,
                 params,
                 expr.arg_cnt_,
-                &ctx));
+                ctx));
 
   OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
   if (is_lob_storage(result.get_type())) {

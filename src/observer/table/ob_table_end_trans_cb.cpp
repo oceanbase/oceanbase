@@ -15,6 +15,149 @@
 #include "storage/tx/ob_trans_service.h"
 using namespace oceanbase::common;
 using namespace oceanbase::table;
+using namespace oceanbase::rpc;
+
+int ObTableExecuteCreateCbFunctor::init(ObRequest *req,
+                                        const ObTableOperationResult *result,
+                                        ObTableOperationType::Type op_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    if (OB_ISNULL(req)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("request is null", K(ret));
+    } else if (OB_ISNULL(result)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      req_ = req;
+      result_ = result;
+      op_type_ = op_type;
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+ObTableAPITransCb* ObTableExecuteCreateCbFunctor::new_callback()
+{
+  ObTableExecuteEndTransCb *cb = nullptr;
+  if (is_inited_) {
+    cb = OB_NEW(ObTableExecuteEndTransCb,
+                ObMemAttr(MTL_ID(), "TbExuTnCb"),
+                req_,
+                op_type_);
+    if (NULL != cb) {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else if (OB_FAIL(cb->assign_execute_result(*result_))) {
+        LOG_WARN("fail to assign result", K(ret));
+        cb->~ObTableExecuteEndTransCb();
+        cb = NULL;
+        ob_free(cb);
+      }
+    }
+  }
+  return cb;
+}
+
+int ObTableBatchExecuteCreateCbFunctor::init(ObRequest *req,
+                                             const ObTableBatchOperationResult *result,
+                                             ObTableOperationType::Type op_type)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    if (OB_ISNULL(req)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("request is null", K(ret));
+    } else if (OB_ISNULL(result)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      req_ = req;
+      result_ = result;
+      op_type_ = op_type;
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+ObTableAPITransCb* ObTableBatchExecuteCreateCbFunctor::new_callback()
+{
+  ObTableBatchExecuteEndTransCb *cb = nullptr;
+  if (is_inited_) {
+    cb = OB_NEW(ObTableBatchExecuteEndTransCb,
+                ObMemAttr(MTL_ID(), "TbBchExuTnCb"),
+                req_,
+                op_type_);
+    if (NULL != cb) {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else if (OB_FAIL(cb->assign_batch_execute_result(*result_))) {
+        LOG_WARN("fail to assign result", K(ret));
+        cb->~ObTableBatchExecuteEndTransCb();
+        cb = NULL;
+        ob_free(cb);
+      }
+    }
+  }
+  return cb;
+}
+
+int ObTableLSExecuteCreateCbFunctor::init(ObRequest *req,
+                                          const ObTableLSOpResult *result)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    if (OB_ISNULL(req)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("request is null", K(ret));
+    } else if (OB_ISNULL(result)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("result is null", K(ret));
+    } else {
+      req_ = req;
+      result_ = result;
+      is_inited_ = true;
+    }
+  }
+
+  return ret;
+}
+
+ObTableAPITransCb* ObTableLSExecuteCreateCbFunctor::new_callback()
+{
+  ObTableLSExecuteEndTransCb *cb = nullptr;
+  if (is_inited_) {
+    cb = OB_NEW(ObTableLSExecuteEndTransCb,
+                ObMemAttr(MTL_ID(), "TbLsExuTnCb"),
+                req_);
+    if (NULL != cb) {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(result_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret));
+      } else if (OB_FAIL(cb->assign_ls_execute_result(*result_))) {
+        LOG_WARN("fail to assign result", K(ret));
+        cb->~ObTableLSExecuteEndTransCb();
+        cb = NULL;
+        ob_free(cb);
+      }
+    }
+  }
+  return cb;
+}
+
 ObTableAPITransCb::ObTableAPITransCb()
     : tx_desc_(nullptr),
       lock_handle_(nullptr),
@@ -68,7 +211,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
               K(has_set_need_rollback_),
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
-    LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
   } else if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
@@ -87,7 +230,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param)
   if (OB_FAIL(response_sender_.response(cb_param))) {
     LOG_WARN("failed to send response", K(ret), K(cb_param));
   } else {
-    LOG_INFO("async send execute response", K(cb_param));
+    LOG_DEBUG("async send execute response", K(cb_param));
   }
 
   this->destroy_cb_if_no_ref();
@@ -101,7 +244,7 @@ void ObTableExecuteEndTransCb::callback(int cb_param, const transaction::ObTrans
 
 // when the operation is append/increment and returning_affected_entity is true, we will return the
 // new values after append/increment to the client, so we need to deep copy the entity_result here.
-int ObTableExecuteEndTransCb::assign_execute_result(ObTableOperationResult &result)
+int ObTableExecuteEndTransCb::assign_execute_result(const ObTableOperationResult &result)
 {
   int ret = OB_SUCCESS;
   const ObITableEntity *src_entity = NULL;
@@ -126,7 +269,7 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param)
               K(has_set_need_rollback_),
               K(is_need_rollback_));
   } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
-    LOG_ERROR("end trans type is invalid", K(cb_param), K(end_trans_type_));
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
   } else if (OB_NOT_NULL(tx_desc_)) {
     MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
     tx_desc_ = NULL;
@@ -165,7 +308,7 @@ void ObTableBatchExecuteEndTransCb::callback(int cb_param, const transaction::Ob
   this->callback(cb_param);
 }
 
-int ObTableBatchExecuteEndTransCb::assign_batch_execute_result(ObTableBatchOperationResult &result)
+int ObTableBatchExecuteEndTransCb::assign_batch_execute_result(const ObTableBatchOperationResult &result)
 {
   int ret = OB_SUCCESS;
   result_.reset();
@@ -178,6 +321,98 @@ int ObTableBatchExecuteEndTransCb::assign_batch_execute_result(ObTableBatchOpera
       LOG_WARN("failed to deep copy result", K(ret));
     } else if (OB_FAIL(result_.push_back(dest_result))) {
       LOG_WARN("failed to push back", K(ret));
+    }
+  } // end for
+  return ret;
+}
+
+void ObTableLSExecuteEndTransCb::callback(int cb_param)
+{
+  int ret = OB_SUCCESS;
+  check_callback_timeout();
+  if (OB_UNLIKELY(!has_set_need_rollback_)) {
+    LOG_ERROR("is_need_rollback_ has not been set",
+              K(has_set_need_rollback_),
+              K(is_need_rollback_));
+  } else if (OB_UNLIKELY(ObExclusiveEndTransCallback::END_TRANS_TYPE_INVALID == end_trans_type_)) {
+    LOG_WARN("end trans type is invalid", K(cb_param), K(end_trans_type_));
+  } else if (OB_NOT_NULL(tx_desc_)) {
+    MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    tx_desc_ = NULL;
+  }
+  if (lock_handle_ != nullptr) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle_);
+  }
+  this->handin();
+  CHECK_BALANCE("[table ls execute async callback]");
+  if (cb_param != OB_SUCCESS) {
+    result_.reset();
+  }
+  if (result_.empty()) {
+    ObTableTabletOpResult tablet_result;
+    ObTableSingleOpResult single_op_result;
+    single_op_result.set_entity(result_entity_);
+    single_op_result.set_errno(cb_param);
+    if (OB_FAIL(tablet_result.push_back(single_op_result))) {
+      LOG_WARN("failed to add single result", K(ret));
+    } else if (OB_FAIL(result_.push_back(tablet_result))) {
+      LOG_WARN("failed to add tablet result", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(response_sender_.response(cb_param))) {
+      LOG_WARN("failed to send response", K(ret), K(cb_param));
+    } else {
+      LOG_DEBUG("send ls execute response", K(cb_param));
+    }
+  }
+  this->destroy_cb_if_no_ref();
+}
+
+void ObTableLSExecuteEndTransCb::callback(int cb_param, const transaction::ObTransID &trans_id)
+{
+  UNUSED(trans_id);
+  this->callback(cb_param);
+}
+
+int ObTableLSExecuteEndTransCb::assign_ls_execute_result(const ObTableLSOpResult &result)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t tablet_result_cnt = result.count();
+
+  if (OB_FAIL(result_.assign_rowkey_names(result.get_rowkey_names()))) {
+    LOG_WARN("fail to assign rowkey names", K(ret), "rowkey names", result_.get_rowkey_names());
+  } else if (OB_FAIL(result_.assign_properties_names(result.get_properties_names()))) {
+    LOG_WARN("fail to assign property names", K(ret), "properties_names", result_.get_properties_names());
+  } else if (OB_FAIL(result_.prepare_allocate(tablet_result_cnt))) {
+    LOG_WARN("fail to prepare allocate tablet op result", K(ret), K(tablet_result_cnt));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < result.count(); i++) {
+    const ObTableTabletOpResult &src_tablet_result = result.at(i);
+    ObTableTabletOpResult &dst_tablet_result = result_.at(i);
+    int64_t single_res_cnt = src_tablet_result.count();
+    if (OB_FAIL(dst_tablet_result.prepare_allocate(single_res_cnt))) {
+      LOG_WARN("fail to prepare allocatate single op result", K(ret), K(i), K(single_res_cnt));
+    } else {
+      dst_tablet_result.assign_properties_names(&result_.get_properties_names());
+      dst_tablet_result.set_all_rowkey_names(&result_.get_rowkey_names());
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < single_res_cnt; j++) {
+      const ObTableSingleOpResult &src_single_result = src_tablet_result.at(j);
+      ObTableSingleOpResult &dst_single_result = dst_tablet_result.at(j);
+      if (OB_FAIL(dst_single_result.deep_copy(allocator_, entity_factory_, src_single_result))) {
+        LOG_WARN("failed to deep copy result", K(ret));
+      } else {
+        ObITableEntity *entity = dst_single_result.get_entity();
+        if (OB_ISNULL(entity)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("entity is null", K(ret));
+        } else {
+          entity->set_properties_names(&result_.get_rowkey_names());
+          entity->set_rowkey_names(&result_.get_properties_names());
+        }
+      }
     }
   } // end for
   return ret;

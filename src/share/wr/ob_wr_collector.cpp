@@ -32,6 +32,7 @@ namespace share
 {
 
 #define WR_INSERT_BATCH_SIZE 5000
+#define WR_ASH_INSERT_BATCH_SIZE 1000
 #define WR_INSERT_SQL_STAT_BATCH_SIZE 16
 
 ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
@@ -180,7 +181,7 @@ int ObWrCollector::collect_ash()
     const char *ASH_VIEW_SQL_422 = "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, sample_id, session_id, "
                    "time_to_usec(sample_time) as sample_time, "
                    "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, time_waited, "
-                   "p1, p2, p3, sql_plan_line_id, time_model, module, action, "
+                   "p1, p2, p3, sql_plan_line_id, group_id, time_model, module, action, "
                    "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, tm_delta_db_time, "
                    "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, plsql_object_id, "
                    "plsql_subprogram_id, plsql_subprogram_name  from "
@@ -233,6 +234,7 @@ int ObWrCollector::collect_ash()
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p2", ash.p2_, int64_t, skip_null_error, skip_column_error, default_value);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p3", ash.p3_, int64_t, skip_null_error, skip_column_error, default_value);
           EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sql_plan_line_id", ash.sql_plan_line_id_, int64_t, skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "group_id", ash.group_id_, int64_t, skip_null_error, skip_column_error, default_value);
           EXTRACT_UINT_FIELD_MYSQL(*result, "time_model", ash.time_model_, uint64_t);
           EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "program", ash.program_, sizeof(ash.program_), tmp_real_str_len);
           EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_time", ash.tm_delta_time_, int64_t);
@@ -240,10 +242,8 @@ int ObWrCollector::collect_ash()
           EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_db_time", ash.tm_delta_db_time_, int64_t);
           EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "module", ash.module_, sizeof(ash.module_), tmp_real_str_len);
           // ash not implement this for now.
-          // EXTRACT_STRBUF_FIELD_MYSQL(*result, "action", ash.action_,
-          // sizeof(ash.action_), tmp_real_str_len);
-          // EXTRACT_STRBUF_FIELD_MYSQL(*result,
-          // "client_id", ash.client_id_, sizeof(ash.client_id_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "action", ash.action_, sizeof(ash.action_), tmp_real_str_len);
+          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "client_id", ash.client_id_, sizeof(ash.client_id_), tmp_real_str_len);
           EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
               *result, "backtrace", ash.backtrace_, sizeof(ash.backtrace_), tmp_real_str_len);
           EXTRACT_INT_FIELD_MYSQL(*result, "plan_id", ash.plan_id_, int64_t);
@@ -316,15 +316,23 @@ int ObWrCollector::collect_ash()
             } else if (ash.sql_plan_line_id_ >= 0 &&
                        OB_FAIL(dml_splicer.add_column("sql_plan_line_id", ash.sql_plan_line_id_))) {
               LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
+            } else if (ash.group_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "group_id"))) {
+              LOG_WARN("failed to add column group_id", KR(ret), K(ash));
+            } else if (ash.group_id_ >= 0 && OB_FAIL(dml_splicer.add_column("group_id", ash.group_id_))) {
+              LOG_WARN("failed to add column group_id", KR(ret), K(ash));
             } else if (OB_FAIL(dml_splicer.add_column("time_model", ash.time_model_))) {
               LOG_WARN("failed to add column time_model", KR(ret), K(ash));
             } else if (ash.module_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "module"))) {
               LOG_WARN("failed to add column module", KR(ret), K(ash));
             } else if (ash.module_[0] != '\0' && OB_FAIL(dml_splicer.add_column("module", ash.module_))) {
               LOG_WARN("failed to add column module", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column(true, "action"))) {
+            } else if (ash.action_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "action"))) {
               LOG_WARN("failed to add column action", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column(true, "client_id"))) {
+            } else if (ash.action_[0] != '\0' && OB_FAIL(dml_splicer.add_column("action", ash.action_))) {
+              LOG_WARN("failed to add column action", KR(ret), K(ash));
+            } else if (ash.client_id_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "client_id"))) {
+              LOG_WARN("failed to add column client_id", KR(ret), K(ash));
+            } else if (ash.client_id_[0] != '\0' && OB_FAIL(dml_splicer.add_column("client_id", ash.client_id_))) {
               LOG_WARN("failed to add column client_id", KR(ret), K(ash));
             } else if (ash.backtrace_[0] == '\0' &&
                        OB_FAIL(dml_splicer.add_column(true, "backtrace"))) {
@@ -393,7 +401,7 @@ int ObWrCollector::collect_ash()
             }
           }
         }
-        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_INSERT_BATCH_SIZE) {
+        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
           collected_ash_row_count += dml_splicer.get_row_count();
           if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
             LOG_WARN("failed to batch write to wr", KR(ret));

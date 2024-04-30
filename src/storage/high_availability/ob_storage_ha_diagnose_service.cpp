@@ -154,6 +154,7 @@ void ObStorageHADiagService::run1()
 #ifdef ERRSIM
       wait_time_ms = GCONF.errsim_transfer_diagnose_server_wait_time / 1000;
 #endif
+      ObBKGDSessInActiveGuard inactive_guard;
       thread_cond_.wait(wait_time_ms);
     }
   }

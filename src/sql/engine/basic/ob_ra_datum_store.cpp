@@ -353,7 +353,7 @@ ObRADatumStore::ObRADatumStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), tenant_id_(0), label_(nullptr), ctx_id_(0), mem_limit_(0),
     idx_blk_(NULL), save_row_cnt_(0), row_cnt_(0), fd_(-1), dir_id_(-1), file_size_(0),
     inner_reader_(*this), mem_hold_(0), allocator_(NULL == alloc ? &inner_allocator_ : alloc),
-    row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL)
+    row_extend_size_(0), mem_stat_(NULL), io_observer_(NULL), inmemory_rows_(0)
 {
 }
 
@@ -412,6 +412,7 @@ void ObRADatumStore::reset()
 
   save_row_cnt_ = 0;
   row_cnt_ = 0;
+  inmemory_rows_ = 0;
   inner_reader_.reset();
 
   if (is_file_open()) {
@@ -443,6 +444,7 @@ void ObRADatumStore::reuse()
   int ret = OB_SUCCESS;
   save_row_cnt_ = 0;
   row_cnt_ = 0;
+  inmemory_rows_ = 0;
   inner_reader_.reset();
   if (is_file_open()) {
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(fd_))) {
@@ -758,6 +760,7 @@ int ObRADatumStore::dump(const bool all_dump, const int64_t target_dump_size)
         is_ib = false;
         blk = static_cast<Block *>(mem);
         row_id = blk->row_id_;
+        inmemory_rows_ -= blk->rows_;
       } else if (is_index_block(mem)) {
         is_ib = true;
         idx_blk = static_cast<IndexBlock *>(mem);
@@ -903,6 +906,7 @@ int ObRADatumStore::add_row(const common::ObIArray<ObExpr*> &exprs,
         LOG_WARN("add row to block failed", K(ret), K(exprs), K(row_size));
       } else {
         row_cnt_++;
+        inmemory_rows_++;
       }
     }
   }
@@ -942,6 +946,7 @@ int ObRADatumStore::add_row(const common::ObIArray<ObDatum> &datums,
         LOG_WARN("add row to block failed", K(ret), K(datums), K(row_size));
       } else {
         row_cnt_++;
+        inmemory_rows_++;
       }
     }
   }
@@ -969,6 +974,7 @@ int ObRADatumStore::add_row(const StoredRow &src_stored_row, StoredRow **stored_
         LOG_WARN("add row to block failed", K(ret), K(src_stored_row), K(row_size));
       } else {
         row_cnt_++;
+        inmemory_rows_++;
       }
     }
   }

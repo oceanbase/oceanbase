@@ -123,6 +123,7 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
   stmt::StmtType stmt_type = stmt::T_NONE;
   CHECK_COMPATIBILITY_MODE(session_info_);
   ObUserProfileStmt *create_profile_stmt = NULL;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (2 != parse_tree.num_child_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expect 2 child, create profile type",
@@ -133,6 +134,8 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
              || OB_ISNULL(schema_checker_->get_schema_guard())) {
     ret = OB_NOT_INIT;
     LOG_WARN("params not init", K(ret), KP(params_.allocator_), KP(params_.session_info_));
+  } else if (OB_FAIL(params_.session_info_->get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (!lib::is_oracle_mode()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "create profile except Oracle mode");
@@ -252,7 +255,8 @@ int ObUserProfileResolver::resolve(const ParseNode &parse_tree)
                                                          length_semantics,
                                                          dtc_params.nls_collation_,
                                                          NULL,
-                                                         params_.session_info_->get_sql_mode()))) {
+                                                         params_.session_info_->get_sql_mode(),
+                                                         compat_type))) {
                 LOG_WARN("fail to resolve const", K(ret));
               } else if (OB_FAIL(fill_arg(param_type->value_, numeric_value, arg))) {
                 LOG_WARN("fail to fill arg", K(ret), K(param_type->value_));

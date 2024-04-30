@@ -513,6 +513,71 @@ int ObPLDbLinkGuard::get_dblink_type_by_name(const uint64_t dblink_id,
   return ret;
 }
 
+int ObPLDbLinkGuard::get_dblink_table_by_name(sql::ObSQLSessionInfo &session_info,
+                                              share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const common::ObString &dblink_name,
+                                              const common::ObString &db_name,
+                                              const common::ObString &table_name,
+                                              const ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  ret = OB_NOT_SUPPORTED;
+  LOG_USER_ERROR(OB_NOT_SUPPORTED, "PL dblink");
+#else
+  const uint64_t tenant_id = MTL_ID();
+  uint64_t dblink_id = OB_INVALID_ID;
+  const share::schema::ObDbLinkSchema *dblink_schema = NULL;
+  const ObPLDbLinkInfo *dblink_info = NULL;
+  CK (!table_name.empty());
+  CK (!dblink_name.empty());
+  OZ (schema_guard.get_dblink_schema(tenant_id, dblink_name, dblink_schema));
+  OV (OB_NOT_NULL(dblink_schema), OB_DBLINK_NOT_EXIST_TO_ACCESS, dblink_name);
+  OV (OB_INVALID_ID != (dblink_id = dblink_schema->get_dblink_id()), OB_DBLINK_NOT_EXIST_TO_ACCESS, dblink_id);
+  for (uint64_t i = 0; OB_SUCC(ret) && OB_ISNULL(table_schema) && i < table_schemas_.count(); i++) {
+    const ObTableSchema *t = table_schemas_.at(i);
+    OV (OB_NOT_NULL(t));
+    if (OB_SUCC(ret)
+        && t->get_dblink_id() == dblink_id
+        && db_name.compare(t->get_link_database_name())
+        && table_name.compare(t->get_table_name_str())) {
+      table_schema = t;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(table_schema)) {
+    ObTableSchema *tmp_schema = NULL;
+    uint64_t *scn = NULL;
+    OZ (schema_guard.get_link_table_schema(tenant_id,
+                                           dblink_id,
+                                           db_name,
+                                           table_name,
+                                           alloc_,
+                                           tmp_schema,
+                                           &session_info,
+                                           dblink_name,
+                                           false/*is_reverse_link*/,
+                                           scn));
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(tmp_schema)) {
+        ObSqlString object_name;
+        OZ (object_name.append_fmt("%.*s@%.*s",
+                                   table_name.length(), table_name.ptr(),
+                                   dblink_name.length(), dblink_name.ptr()));
+        ret = OB_ERR_SP_UNDECLARED_VAR;
+        LOG_WARN("dblink table not exist", K(ret));
+        LOG_USER_ERROR(OB_ERR_SP_UNDECLARED_VAR, object_name.string().length(), object_name.string().ptr());
+      } else {
+        tmp_schema->set_table_id(next_link_object_id_++);
+        tmp_schema->set_link_table_id(tmp_schema->get_table_id());
+        table_schema = tmp_schema;
+        OZ (table_schemas_.push_back(tmp_schema));
+      }
+    }
+  }
+#endif
+  return ret;
+}
+
 #ifdef OB_BUILD_ORACLE_PL
 int ObPLDbLinkGuard::get_dblink_info(const uint64_t dblink_id,
                                      const ObPLDbLinkInfo *&dblink_info)

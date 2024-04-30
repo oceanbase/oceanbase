@@ -123,7 +123,7 @@ int ObTx##name##P::process()                                            \
     const int64_t cur_ts = ObTimeUtility::current_time();               \
     total_rt = total_rt + (cur_ts - run_ts);                            \
     total_process++;                                                    \
-    if (OB_FAIL(ret)) {                                                 \
+    if (OB_FAIL(ret) && OB_TRANS_COMMITED != ret) {                     \
       TRANS_LOG(WARN, "handle txn message fail", KR(ret), "msg", arg_); \
     }                                                                   \
   }                                                                     \

@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace storage
+{
+class ObRowsInfo;
+}
 namespace blocksstable
 {
 
@@ -129,31 +133,47 @@ struct ObEmptyReadCell
     hashcode_ = 0;
     build_time_ = 0;
   }
-  void set(const uint64_t hashcode)
+  void set(
+      const uint64_t hashcode,
+      const int64_t inc_val)
   {
     state_ = IDLE;
-    count_ = 1;
+    count_ = static_cast<int32_t>(inc_val);
     hashcode_ = hashcode;
     build_time_ = ObTimeUtility::current_time();
+  }
+  void set(const uint64_t hashcode)
+  {
+    set(hashcode, 1);
   }
   bool is_valid() const
   {
     return build_time_ > 0 && count_ > 0;
   }
-  int inc_and_fetch(const uint64_t hashcode, uint64_t &cur_cnt)
+  int inc_and_fetch(
+      const uint64_t hashcode,
+      const int64_t inc_val,
+      uint64_t &cur_cnt)
   {
     int ret = OB_SUCCESS;
     if(hashcode_ != hashcode) {
       if(ObTimeUtility::current_time() - ELIMINATE_TIMEOUT_US >  build_time_){
-        set(hashcode);
+        set(hashcode, inc_val);
       } else {
       //bucket is in use recently,ignore in 2min
       }
       cur_cnt = 1;
     } else {
-      cur_cnt = ++count_;
+      count_ += inc_val;
+      cur_cnt = count_;
     }
     return ret;
+  }
+  int inc_and_fetch(
+      const uint64_t hashcode,
+      uint64_t &cur_cnt)
+  {
+    return inc_and_fetch(hashcode, 1, cur_cnt);
   }
   bool check_timeout()
   {
@@ -220,6 +240,14 @@ public:
       const ObDatumRowkey &rowkey,
       const ObStorageDatumUtils &datum_utils,
       bool &is_contain);
+  int may_contain(
+      const uint64_t tenant_id,
+      const MacroBlockId &macro_block_id,
+      const storage::ObRowsInfo *rows_info,
+      const int64_t rowkey_begin_idx,
+      const int64_t rowkey_end_idx,
+      const ObStorageDatumUtils &datum_utils,
+      bool &is_contain);
   /**
    * inc empty read count of the macro block, then try build build bloom filter for it if it is
    * necessary
@@ -233,7 +261,8 @@ public:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const MacroBlockId &macro_id,
-      const int64_t empty_read_prefix);
+      const int64_t empty_read_prefix,
+      const int64_t empty_read_cnt = 1);
   int get_sstable_bloom_filter(
       const uint64_t tenant_id,
       const MacroBlockId &macro_block_id,

@@ -231,9 +231,10 @@ struct ObValuesTableDef {
   int64_t column_cnt_;
   int64_t row_cnt_;
   TableAccessType access_type_;
+  common::ObArray<ObExprResType, common::ModulePageAllocator, true> column_types_;
   virtual TO_STRING_KV(K(column_cnt_), K(row_cnt_), K(access_exprs_), K(start_param_idx_),
                        K(end_param_idx_), K(access_objs_), K(column_ndvs_), K(column_nnvs_),
-                       K(access_type_));
+                       K(access_type_), K(column_types_));
 };
 
 struct TableItem
@@ -561,7 +562,8 @@ struct JoinedTable : public TableItem
     left_table_(NULL),
     right_table_(NULL),
     single_table_ids_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
-    join_conditions_(common::OB_MALLOC_NORMAL_BLOCK_SIZE)
+    join_conditions_(common::OB_MALLOC_NORMAL_BLOCK_SIZE),
+    is_straight_join_(false)
   {
   }
 
@@ -573,6 +575,7 @@ struct JoinedTable : public TableItem
   bool is_left_join() const { return LEFT_OUTER_JOIN == joined_type_; }
   bool is_right_join() const { return RIGHT_OUTER_JOIN == joined_type_; }
   bool is_full_join() const { return FULL_OUTER_JOIN == joined_type_; }
+  bool is_straight_join() const { return is_inner_join() && is_straight_join_; }
   virtual bool has_for_update() const
   {
     return (left_table_ != NULL &&  left_table_->has_for_update())
@@ -585,13 +588,15 @@ struct JoinedTable : public TableItem
                N_JOIN_TYPE, ob_join_type_str(joined_type_),
                N_LEFT_TABLE, left_table_,
                N_RIGHT_TABLE, right_table_,
-               "join_condition", join_conditions_);
+               "join_condition", join_conditions_,
+               "is_straight_join", is_straight_join_);
 
   ObJoinType joined_type_;
   TableItem *left_table_;
   TableItem *right_table_;
   common::ObSEArray<uint64_t, 16, common::ModulePageAllocator, true> single_table_ids_;
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> join_conditions_;
+  bool is_straight_join_; // In MySQL mode, mark INNER JOIN as STRAIGHT_JOIN.
 };
 
 class SemiInfo
@@ -724,6 +729,7 @@ public:
   virtual int init_stmt(TableHashAllocator &table_hash_alloc, ObWrapperAllocator &wrapper_alloc) override;
 
   bool is_hierarchical_query() const;
+  int is_hierarchical_for_update(bool &is_hsfu) const;
 
   int replace_relation_exprs(const common::ObIArray<ObRawExpr *> &other_exprs,
                              const common::ObIArray<ObRawExpr *> &new_exprs);
@@ -770,6 +776,7 @@ public:
   int remove_from_item(uint64_t tid, bool *remove_happened = NULL);
   int remove_joined_table_item(const ObIArray<JoinedTable*> &tables);
   int remove_joined_table_item(const JoinedTable *joined_table);
+  int remove_joined_table_item(uint64_t tid, bool *remove_happened = NULL);
 
   TableItem *create_table_item(common::ObIAllocator &allocator);
   int merge_from_items(const ObDMLStmt &stmt);
@@ -934,6 +941,8 @@ public:
   TableItem *get_table_item(int64_t index) { return table_items_.at(index); }
   int remove_table_item(const TableItem *ti);
   int remove_table_item(const ObIArray<TableItem *> &table_items);
+  int remove_table_item(const uint64_t tid, bool *remove_happened = NULL);
+  int remove_table_item(const ObIArray<uint64_t> &tids, bool *remove_happened = NULL);
   int remove_table_info(const TableItem *table);
   int remove_table_info(const ObIArray<TableItem *> &table_items);
   TableItem *get_table_item(const FromItem item);
@@ -951,6 +960,8 @@ public:
   int get_from_tables(ObRelIds &table_set) const;
   int get_from_tables(ObSqlBitSet<> &table_set) const;
   int get_from_tables(common::ObIArray<TableItem*>& from_tables) const;
+  int get_from_tables(common::ObIArray<int64_t>& table_ids) const;
+  int get_from_table(int64_t from_idx, TableItem* &from_table) const;
 
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item);
   int add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item, bool &have_same_table_name);
@@ -992,6 +1003,8 @@ public:
   int update_column_item_rel_id();
   common::ObIArray<TableItem*> &get_table_items() { return table_items_; }
   const common::ObIArray<TableItem*> &get_table_items() const { return table_items_; }
+  int get_from_item_rel_ids(int64_t from_idx, ObSqlBitSet<> &rel_ids) const;
+  int get_table_items(common::ObIArray<int64_t> &table_ids) const;
   int get_CTE_table_items(ObIArray<TableItem *> &cte_table_items) const;
   int get_all_CTE_table_items_recursive(ObIArray<TableItem *> &cte_table_items) const;
   const common::ObIArray<uint64_t> &get_nextval_sequence_ids() const { return nextval_sequence_ids_; }

@@ -34,19 +34,22 @@ public:
 	ObCharsets4Parser charsets4parser_;
 	ObSQLMode sql_mode_;
 	QuestionMarkDefNameCtx *def_name_ctx_;
+  bool is_format_;
 
 	FPContext()
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
 			sql_mode_(0),
-			def_name_ctx_(nullptr)
+			def_name_ctx_(nullptr),
+      is_format_(false)
 	{}
 	FPContext(ObCharsets4Parser charsets4parser)
 		: enable_batched_multi_stmt_(false),
 			is_udr_mode_(false),
 			charsets4parser_(charsets4parser),
 			sql_mode_(0),
-			def_name_ctx_(nullptr)
+			def_name_ctx_(nullptr),
+      is_format_(false)
 	{}
 };
 
@@ -616,8 +619,17 @@ protected:
 
 	int check_is_on_duplicate_key(ObRawSql &raw_sql, bool &is_on_duplicate_key);
 	bool skip_space(ObRawSql &raw_sql);
-
+  void skip_invalid_charactar(int64_t& pos, int& token_len, ObRawSql &raw_sql);
+  bool is_invalid_character(ObRawSql &raw_sql, int64_t pos, int64_t& skip_len);
+  int extend_alloc_sql_buffer();
+	int process_format_token();
 protected:
+  enum FoundInsertTokenStatus
+  {
+    NOT_FOUND_INSERT_TOKEN,
+    FOUND_INSERT_TOKEN_ONCE, // find one insert token
+    INVALID_TOKEN_STATUS,  // find insert token more than one time
+  };
 	ObRawSql raw_sql_;
 	char *no_param_sql_;
 	int64_t no_param_sql_len_;
@@ -632,17 +644,22 @@ protected:
 	char *tmp_buf_;
 	int64_t tmp_buf_len_;
 	int64_t last_escape_check_pos_;
-	ParamList *param_node_list_;
+public:
+  ParamList *param_node_list_;
 	ParamList *tail_param_node_;
 	TokenType cur_token_type_;
 	ObQuestionMarkCtx question_mark_ctx_;
 	common::ObIAllocator &allocator_;
 	common::ObCharsetType charset_type_;
 	const ObCharsetInfo *charset_info_;
-	bool get_insert_;
+	FoundInsertTokenStatus found_insert_status_;
 	int64_t values_token_pos_;
 	ParseNextTokenFunc parse_next_token_func_;
 	ProcessIdfFunc process_idf_func_;
+  bool is_format_;
+  bool need_caseup_;
+  int alloc_len_;
+	common::ObCollationType col_type_;
 
 private:
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserBase);
@@ -680,6 +697,7 @@ private:
 	int process_string(const char quote);
 	int process_zero_identifier();
 	int process_identifier_begin_with_n();
+	int process_identifier_begin_with_backslash();
 private:
 	ObSEArray<ObValuesTokenPos, 4> values_tokens_;
 	DISALLOW_COPY_AND_ASSIGN(ObFastParserMysql);

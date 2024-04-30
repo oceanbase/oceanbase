@@ -1241,6 +1241,76 @@ int ObAdminMigrateUnit::execute(const ObAdminMigrateUnitArg &arg)
   return ret;
 }
 
+int ObAdminAlterLSReplica::execute(const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  FLOG_INFO("execute alter ls replica request", K(arg));
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!ctx_.is_inited())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_ISNULL(ctx_.root_balancer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_balancer_ is null", KR(ret), K(arg), KP(ctx_.root_balancer_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    switch (arg.get_alter_task_type().get_type()) {
+      case ObAlterLSReplicaTaskType::AddLSReplicaTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_add_ls_replica_task(arg))) {
+          LOG_WARN("add ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      case ObAlterLSReplicaTaskType::RemoveLSReplicaTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_remove_ls_replica_task(arg))) {
+          LOG_WARN("remove ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      case ObAlterLSReplicaTaskType::MigrateLSReplicaTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_migrate_ls_replica_task(arg))) {
+          LOG_WARN("migrate ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      case ObAlterLSReplicaTaskType::ModifyLSReplicaTypeTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_modify_ls_replica_type_task(arg))) {
+          LOG_WARN("modify ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      case ObAlterLSReplicaTaskType::ModifyLSPaxosReplicaNumTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_modify_ls_paxos_replica_num_task(arg))) {
+          LOG_WARN("modify ls paxos_replica_num task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      case ObAlterLSReplicaTaskType::CancelLSReplicaTask: {
+        if (OB_FAIL(ctx_.root_balancer_->get_disaster_recovery_worker()
+                        .do_cancel_ls_replica_task(arg))) {
+          LOG_WARN("cancel ls replica task failed", KR(ret), K(arg));
+        }
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task type unexpected", KR(ret), K(arg));
+        break;
+      }
+    }
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("execute alter ls replica request over", KR(ret), K(arg), K(cost_time));
+  return ret;
+}
+
 int ObAdminUpgradeVirtualSchema::execute()
 {
   int ret = OB_SUCCESS;
@@ -1848,7 +1918,7 @@ int ObAdminRefreshIOCalibration::execute(const obrpc::ObAdminRefreshIOCalibratio
       }
       if (server_list.count() != succ_count) {
         ret = OB_PARTIAL_FAILED;
-        LOG_USER_ERROR(OB_PARTIAL_FAILED);
+        LOG_USER_ERROR(OB_PARTIAL_FAILED, "Partial failed");
       }
     }
   }

@@ -26,13 +26,14 @@ using namespace oceanbase::sql::log_op_def;
 
 const char *ObLogSet::get_name() const
 {
-  static const char *set_op_all[ObSelectStmt::SET_OP_NUM] =
+  static const char *set_op_all[ObSelectStmt::SET_OP_NUM + 1] =
   {
     "NONE",
     "UNION ALL",
     "INTERSECT ALL",
     "EXCEPT ALL",
     "RECURSIVE UNION ALL",
+    "RECURSIVE UNION DISTINCT",
   };
   static const char *merge_set_op_distinct[ObSelectStmt::SET_OP_NUM] =
   {
@@ -54,7 +55,7 @@ const char *ObLogSet::get_name() const
     ret_char = !is_distinct_ ? set_op_all[set_op_] :
                (HASH_SET == set_algo_ ? hash_set_op_distinct[set_op_] : merge_set_op_distinct[set_op_]);
     if (is_recursive_union_) {
-      ret_char = set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
+      ret_char = is_distinct_ ? set_op_all[ObSelectStmt::SetOperator::RECURSIVE + 1] : set_op_all[ObSelectStmt::SetOperator::RECURSIVE];
     }
   } else { /* Do nothing */ }
   return ret_char;
@@ -216,15 +217,34 @@ int ObLogSet::compute_fd_item_set()
   } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
     LOG_WARN("failed to push back fd item", K(ret));
   } else if ((ObSelectStmt::INTERSECT == set_op_ || ObSelectStmt::EXCEPT == set_op_) &&
-             OB_FAIL(append(*fd_item_set, left_child->get_fd_item_set()))) {
+             OB_FAIL(append_child_fd_item_set(*fd_item_set, left_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (ObSelectStmt::INTERSECT == set_op_ &&
-             OB_FAIL(append(*fd_item_set, right_child->get_fd_item_set()))) {
+             OB_FAIL(append_child_fd_item_set(*fd_item_set, right_child->get_fd_item_set()))) {
     LOG_WARN("failed to append fd item set", K(ret));
   } else if (OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
     LOG_WARN("falied to deduce fd item set", K(ret));
   } else {
     set_fd_item_set(fd_item_set);
+  }
+  return ret;
+}
+
+// just ignore table fd item now
+// todo: adjust log set fd, convert child fd set to currnet level stmt
+int ObLogSet::append_child_fd_item_set(ObFdItemSet &all_fd_item_set, const ObFdItemSet &child_fd_item_set)
+{
+  int ret = OB_SUCCESS;
+  ObFdItem *fd_item = NULL;
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_fd_item_set.count(); ++i) {
+    if (OB_ISNULL(fd_item = child_fd_item_set.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (fd_item->is_table_fd_item()) {
+      /* do nothing */
+    } else if (OB_FAIL(all_fd_item_set.push_back(fd_item))) {
+      LOG_WARN("failed to push back fd item", K(ret));
+    }
   }
   return ret;
 }
@@ -454,6 +474,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       }
       child_cost += cur_child_cost;
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       double cur_child_ndv = child_ndv_.at(i);
       if (need_scale_ndv) {
         cur_child_ndv = std::min(
@@ -463,7 +484,7 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
       if (0 == i) {
         card = cur_child_ndv;
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, cur_child_ndv, set_type);
       }
       child_cost += cur_child_cost;
     }
@@ -898,12 +919,30 @@ int ObLogSet::get_card_without_filter(double &card)
         card = ObOptSelectivity::get_set_stmt_output_count(card, child->get_card(), set_type);
       }
     } else {
+      ObSelectStmt::SetOperator set_type = is_recursive_union() ? ObSelectStmt::RECURSIVE : get_set_op();
       if (0 == i) {
         card = child_ndv_.at(i);
       } else {
-        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), get_set_op());
+        card = ObOptSelectivity::get_set_stmt_output_count(card, child_ndv_.at(i), set_type);
       }
     }
+  }
+  return ret;
+}
+
+int ObLogSet::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = true;
+  inherit_child_ordering_index = first_child;
+  if (HASH_SET == get_algo()) {
+    inherit_child_ordering_index = -1;
+    used = false;
+  } else if (!is_set_distinct()) {
+    used = false;
+  }
+  if (is_recursive_union()) {
+    inherit_child_ordering_index = -1;
   }
   return ret;
 }

@@ -135,7 +135,7 @@ TEST_F(TestLockMemtable, lock)
   ObOBJLock *obj_lock = NULL;
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
 
   MyTxCtx default_ctx;
   ObStoreCtx store_ctx;
@@ -163,7 +163,7 @@ TEST_F(TestLockMemtable, lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 1.4 check lock at lock map
   LOG_INFO("TestLockMemtable::lock 1.4");
@@ -181,7 +181,7 @@ TEST_F(TestLockMemtable, lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 1.7 remove lock op at memctx.
   LOG_INFO("TestLockMemtable::lock 1.7");
@@ -191,7 +191,7 @@ TEST_F(TestLockMemtable, lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
 
   // 2.1 lock
@@ -210,7 +210,7 @@ TEST_F(TestLockMemtable, lock)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 2.3 unlock not complete lock
   LOG_INFO("TestLockMemtable::lock 2.3");
@@ -283,7 +283,7 @@ TEST_F(TestLockMemtable, lock)
 TEST_F(TestLockMemtable, replay)
 {
   LOG_INFO("TestLockMemtable::replay");
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
   int64_t expired_time = ObClockGenerator::getClock() + 1 * 1000 * 1000;
@@ -331,7 +331,7 @@ TEST_F(TestLockMemtable, replay)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 1.3 check lock at lock map
   LOG_INFO("TestLockMemtable::replay 1.3");
@@ -349,7 +349,7 @@ TEST_F(TestLockMemtable, replay)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 1.6 remove lock op at memctx.
   LOG_INFO("TestLockMemtable::replay 1.6");
@@ -359,7 +359,7 @@ TEST_F(TestLockMemtable, replay)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
   // 2. REPLAY LOCK
   // 2.1 replay lock
@@ -376,7 +376,7 @@ TEST_F(TestLockMemtable, replay)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 2.3 unlock not complete lock
   LOG_INFO("TestLockMemtable::replay 2.3");
@@ -538,7 +538,7 @@ TEST_F(TestLockMemtable, recover)
 TEST_F(TestLockMemtable, pre_check_lock)
 {
   LOG_INFO("TestLockMemtable::pre_check_lock");
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   int ret = OB_SUCCESS;
   bool is_try_lock = true;
   bool lock_exist = false;
@@ -593,7 +593,7 @@ TEST_F(TestLockMemtable, pre_check_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
   // 1.8 remove lock op at memctx.
   LOG_INFO("TestLockMemtable::pre_check_lock 1.8");
@@ -603,7 +603,7 @@ TEST_F(TestLockMemtable, pre_check_lock)
                                   DEFAULT_IN_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_IN_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
 }
 
@@ -722,7 +722,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
   share::SCN commit_version = share::SCN::min_scn();
   share::SCN commit_scn = share::SCN::min_scn();
   ObMemtableCtx *mem_ctx = NULL;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
   ObTableLockOp lock_op = DEFAULT_OUT_TRANS_LOCK_OP;
   ObTableLockOp unlock_op = DEFAULT_OUT_TRANS_UNLOCK_OP;
   unlock_op.create_trans_id_ = TRANS_ID2;
@@ -749,7 +749,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 1.3 check exist at multi source
@@ -770,7 +770,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 2.3 check exist at multi source
@@ -793,7 +793,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   // 3.2 notify ON_COMMIT/ON_ABORT
@@ -805,7 +805,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
   ret = default_ctx.tx_ctx_.notify_data_source_(NotifyType::ON_ABORT, scn, is_replay, mds_array);
@@ -815,7 +815,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, false);
 
@@ -830,7 +830,7 @@ TEST_F(TestLockMemtable, out_trans_multi_source)
                                   lock_op.lock_mode_,
                                   lock_op.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(lock_exist, true);
 
@@ -996,7 +996,7 @@ TEST_F(TestLockMemtable, test_lock_retry)
   bool lock_exist = false;
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
 
   ObTableLockOp lock_op = DEFAULT_OUT_TRANS_LOCK_OP;
   min_commited_scn.set_min();
@@ -1036,7 +1036,7 @@ TEST_F(TestLockMemtable, test_lock_retry)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, false);
 
   // 3.3 check lock at part ctx
@@ -1072,7 +1072,7 @@ TEST_F(TestLockMemtable, test_lock_retry)
                                   DEFAULT_OUT_TRANS_LOCK_OP.lock_mode_,
                                   DEFAULT_OUT_TRANS_LOCK_OP.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
 
   // 6.3 check lock at part ctx
@@ -1156,7 +1156,7 @@ TEST_F(TestLockMemtable, test_lock_retry_lock_conflict)
   bool lock_exist = false;
   share::SCN min_commited_scn;
   share::SCN flushed_scn;
-  unsigned char lock_mode_in_same_trans = 0x0;
+  uint64_t lock_mode_cnt_in_same_trans[TABLE_LOCK_MODE_COUNT] = {0, 0, 0, 0, 0};
 
   ObTableLockOp lock_first = DEFAULT_OUT_TRANS_LOCK_OP; // RX, owner 0
   ObTableLockOp lock_second = DEFAULT_OUT_TRANS_LOCK_OP;
@@ -1256,7 +1256,7 @@ TEST_F(TestLockMemtable, test_lock_retry_lock_conflict)
                                   lock_second.lock_mode_,
                                   lock_second.op_type_,
                                   lock_exist,
-                                  lock_mode_in_same_trans);
+                                  lock_mode_cnt_in_same_trans);
   ASSERT_EQ(lock_exist, true);
 
   // 6. clean

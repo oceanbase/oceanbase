@@ -242,6 +242,7 @@ OB_SERIALIZE_MEMBER(
     create_commit_version_,
     delete_commit_scn_,
     delete_commit_version_,
-    start_transfer_commit_version_)
+    start_transfer_commit_version_  // FARM COMPAT WHITELIST
+    )
 } // namespace storage
 } // namespace oceanbase

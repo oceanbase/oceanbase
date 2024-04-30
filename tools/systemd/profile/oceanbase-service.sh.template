@@ -1,0 +1,302 @@
+#!/bin/bash
+
+DATE=`date '+%Y-%m-%d %H:%M:%S'`
+cnf_file='/etc/oceanbase.cnf'
+ip=`hostname -I | awk '/^[0-9]/ {print $1; exit}'`
+port=2886
+url="http://localhost"
+prefix=@CPACK_PACKAGING_INSTALL_PREFIX@
+unix_socket="$prefix/run/obshell.sock"
+obshell="$prefix/bin/obshell"
+etc_folder="$prefix/etc"
+current_user=`whoami`
+report=3
+
+function prepare_config_json {
+  json_pre_file="$prefix/profile/oceanbase-pre.json"
+  json_file="$prefix/profile/oceanbase.json"
+  rm -rf $json_file
+  cp $json_pre_file $json_file
+  local temp_file=$(mktemp)
+
+  while IFS='=' read -r key value; do
+    # delete empty and comment line
+    if [[ ! $key || $key =~ ^[[:space:]]*# ]]; then
+        continue
+    fi
+    key=$(echo "$key" | awk '{$1=$1};1')
+    value=$(echo "$value" | awk '{$1=$1};1')
+    value=$(echo "$value" | sed 's/^"//' | sed 's/"$//')
+    if [[ -n "$key" && ! "$key" =~ ^\; ]]; then
+      if [[ $key == *"ip"* ]]; then
+        ip=$value
+      elif [[ $key == *"obshell_port"* ]]; then
+        port=$value
+      elif [[ $key == *"root_pwd"* ]]; then
+        key="rootPwd"
+        jq --arg parent "oceanbase_ce" --arg child "cluster" --arg key "$key" --arg value "$value" '.[$parent][$child][$key] = $value' "$json_file" > "$temp_file"
+        mv "$temp_file" "$json_file"
+      else
+        jq --arg parent "oceanbase_ce" --arg child "server" --arg grandchild "observerConfig" --arg key "$key" --arg value "$value" '.[$parent][$child][$grandchild][$key] = $value' "$json_file" > "$temp_file"
+        mv "$temp_file" "$json_file"
+      fi
+    fi
+  done < "$cnf_file"
+  sed -i "s|2886|${port}|g" $json_file
+  sed -i "s|HOSTIP|${ip}|g" $json_file
+}
+
+function prepare_env {
+  echo "change etc owner to ${current_user}"
+  chown $current_user:$current_user "${etc_folder}"
+}
+
+function do_reload_observer {
+  echo "Not support reload now"
+}
+
+function check_daemon_process {
+  if [ -f $prefix/run/daemon.pid ]; then
+    pid=$(cat $prefix/run/daemon.pid)
+    if kill -0 $pid >/dev/null 2>&1; then
+        echo "daemon process with PID $pid is running."
+        return 0
+    else
+        echo "daemon process with PID $pid is not running."
+        return 1
+    fi
+  else
+    echo "daemon PID file not found."
+    return 1
+  fi
+}
+
+function check_obagent_process {
+  if [ -f $prefix/run/obshell.pid ]; then
+    pid=$(cat $prefix/run/obshell.pid)
+    if kill -0 $pid >/dev/null 2>&1; then
+        echo "obshell process with PID $pid is running."
+    else
+        echo "obshell process with PID $pid is not running."
+        $obshell admin start --ip $ip --port $port
+        if [ $? -ne 0 ]; then
+          echo "start ob_shell failed"
+          exit 1
+        fi
+    fi
+  else
+    echo "obshell PID file not found."
+    exit
+  fi
+}
+
+function check_response {
+  local response=$1
+  successful=$(echo "$response" | jq -r '.successful')
+  if [ "x$successful" = "xfalse" ]; then
+      echo "send request failed"
+      exit 1
+  fi
+}
+
+function check_trace {
+  local dag_trace=$1
+  local content=$2
+  local max_retries=$3
+  local delay=$4
+  local count=0
+  echo "the $content trace id is $dag_trace"
+  while true; do
+    response=$(curl --silent -XGET --unix-socket $unix_socket $url/api/v1/task/dag/$dag_trace)
+    state=$(echo "$response" | jq -r '.data.state')
+    echo "the response state is $state"
+    if [ "x$state" = "xSUCCEED" ]; then
+      echo "$content request successfully"
+      break
+    elif [ "x$state" = "xFAILED" ]; then
+      echo "$content request failed"
+      exit 1
+    else
+      count=$((count + 1))
+      if [ $count -eq $max_retries ]; then
+          echo "maximum retries reached and then exit"
+          exit 1
+      fi
+      echo "wait ${delay}s and the retry"
+      sleep $delay
+    fi
+  done
+}
+
+function start_obshell {
+  $obshell admin start --ip $ip --port $port > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "start ob_shell failed"
+    exit 1
+  fi
+}
+
+function do_config_observer {
+  # join agent
+  obagent_configuration=`jq '.obshell' $json_file`
+  obagent_cmd="curl --silent -H \"Content-Type: application/json\" -X POST -d '${obagent_configuration}' --unix-socket $unix_socket $url/api/v1/agent/join"
+  response=$(eval "$obagent_cmd")
+  echo $response
+  successful=$(echo "$response" | jq -r '.successful')
+  if [ "x$successful" = "xfalse" ]; then
+      echo "send request failed"
+      exit 1
+  fi
+  trace=$(echo "$response" | jq -r '.data.id')
+  check_trace $trace "join agent" 3 3
+
+  # config cluster
+  cluster_configuration=`jq '.oceanbase_ce.cluster' $json_file`
+  cluster_cmd="curl --silent -H \"Content-Type: application/json\" -X PUT -d '${cluster_configuration}' --unix-socket $unix_socket $url/api/v1/obcluster/config"
+  response=$(eval "$cluster_cmd")
+  echo $response
+  successful=$(echo "$response" | jq -r '.successful')
+  if [ "x$successful" = "xfalse" ]; then
+      echo "send request failed"
+      exit 1
+  fi
+  trace=$(echo "$response" | jq -r '.data.id')
+  check_trace $trace "config cluster" 3 3
+
+  # config observer
+  observer_configuration=`jq '.oceanbase_ce.server' $json_file`
+  observer_cmd="curl --silent -H \"Content-Type: application/json\" -X PUT -d '${observer_configuration}' --unix-socket $unix_socket $url/api/v1/observer/config"
+  response=$(eval "$observer_cmd")
+  echo $response
+  successful=$(echo "$response" | jq -r '.successful')
+  if [ "x$successful" = "xfalse" ]; then
+      echo "send request failed"
+      exit 1
+  fi
+  trace=$(echo "$response" | jq -r '.data.id')
+  check_trace $trace "config observer" 3 3
+}
+
+function do_start_observer {
+  # check observer status
+  response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
+  identity=$(echo "$response" | jq -r '.data.agent.identity')
+  if [ "x$identity" = "xCLUSTER AGENT" ]; then
+    echo "The observer is already bootstrap, please start it immediately"
+    response=$(curl --silent -H "Content-Type: application/json" -X POST -d '{
+      "scope":
+        {
+          "type":"global",
+          "target":[]
+        },
+      "force": true
+    }' --unix-socket $unix_socket $url/api/v1/ob/start)
+    successful=$(echo "$response" | jq -r '.successful')
+    if [ "x$successful" = "xfalse" ]; then
+        echo "send request failed"
+        exit 1
+    fi
+    trace=$(echo "$response" | jq -r '.data.id')
+    check_trace $trace "start observer" 20 6
+    if [ $? -eq 0 ]; then
+      /bin/bash $prefix/profile/telemetry.sh $report "12" >/dev/null 2>&1
+    fi
+  elif [ "x$identity" = "xSINGLE" ]; then
+    # do config observer first
+    do_config_observer
+    echo "The observer has not bootstrap, please init it firstly"
+    response=$(curl --silent -X POST --unix-socket $unix_socket $url/api/v1/ob/init)
+    successful=$(echo "$response" | jq -r '.successful')
+    if [ "x$successful" = "xfalse" ]; then
+        echo "send request failed"
+        exit 1
+    fi
+    trace=$(echo "$response" | jq -r '.data.id')
+    check_trace $trace "start observer" 40 6
+    if [ $? -eq 0 ]; then
+      /bin/bash $prefix/profile/telemetry.sh $report "11" >/dev/null 2>&1
+    fi
+  else
+    # status is UNIDENTIFIED
+    echo "The observer has been installed before"
+  fi
+
+  if [ -f $prefix/run/observer.pid ]; then
+    pid=$(cat $prefix/run/observer.pid)
+    if [ ! -d "/proc/$pid" ]; then
+        echo "Observer process with PID $pid has exited."
+        break
+    fi
+
+    # check observer state
+    response=$(curl --silent -H "Content-Type: application/json" -X GET --unix-socket $unix_socket $url/api/v1/status)
+    ob_state=$(echo "$response" | jq -r '.data.obState')
+    if [ "x$ob_state" = "x1" ]; then
+        echo "The agent dose not know the observer password"
+        echo "1. Please set environment: export OB_ROOT_PASSWORD={root_passowrd}"
+        echo "2. Kill all the obshell process"
+        echo "3. Restart the agent process: $prefix/bin/obshell admin start --ip $ip --port $port"
+    fi
+  else
+    echo "observer PID file not found."
+    exit 1
+  fi
+}
+
+function start_observer {
+  /bin/bash $prefix/profile/telemetry.sh $report "10" >/dev/null 2>&1
+  prepare_config_json
+  prepare_env
+  if check_daemon_process; then
+    echo "The agent service is exist"
+  else
+    start_obshell
+  fi
+  do_start_observer
+}
+
+function stop_observer {
+  check_obagent_process
+  response=$(curl --silent -H "Content-Type: application/json" -X POST -d '{
+			"scope":
+		{
+		"type":"global",
+		"target":[]
+         },
+      "force": true
+    }' --unix-socket $unix_socket $url/api/v1/ob/stop)
+  successful=$(echo "$response" | jq -r '.successful')
+  if [ "x$successful" = "xfalse" ]; then
+      echo "send request failed"
+      exit 1
+  fi
+  trace=$(echo "$response" | jq -r '.data.id')
+  check_trace $trace "stop observer" 20 6
+}
+
+function reload_observer {
+  check_obagent_process
+  prepare_config_json
+  do_reload_observer
+}
+
+if [ "x$1" = "xstart" ]; then
+  echo "oceanbase service started at ${DATE}"
+  start_observer
+elif [ "x$1" = "xstop" ]; then
+  echo "oceanbase service stopped at ${DATE}"
+  stop_observer
+elif [ "x$1" = "xreload" ]; then
+  echo "oceanbase service reloaded at ${DATE}"
+  reload_observer
+elif [ "x$1" = "xdestroy" ]; then
+  # rpm uninstall logic, run systemctl stop oceanbase firstly
+  echo "oceanbase service destroyed at ${DATE}"
+  $obshell admin stop > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+    echo "stop obshell failed"
+    exit 1
+  fi
+fi
+
+exit 0

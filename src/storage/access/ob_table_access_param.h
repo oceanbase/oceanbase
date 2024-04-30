@@ -86,7 +86,7 @@ public:
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
   const ObITableReadInfo *get_read_info(const bool is_get = false) const
   {
-	  return is_get ? rowkey_read_info_ : read_info_;
+    return is_get ? rowkey_read_info_ : read_info_;
   }
   OB_INLINE int64_t get_out_col_cnt() const
   {

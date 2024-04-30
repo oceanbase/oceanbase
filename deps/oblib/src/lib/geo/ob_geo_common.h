@@ -68,6 +68,14 @@ enum class ObGeoRelationType
   T_DFULLYWITHIN = 5
 };
 
+// sort from inside to outside, the order cannot be changed
+enum class ObPointLocation {
+  INTERIOR = 0,
+  BOUNDARY = 1,
+  EXTERIOR = 2,
+  INVALID = 3,
+};
+
 class ObGeoWkbByteOrderUtil
 {
 public:
@@ -75,6 +83,7 @@ public:
   // NOTE: ensure data is readble/writable before use
   template<typename T>
   static T read(const char* data, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);
+  static double read_double(const char* data, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);
 
   template<typename T>
   static void write(char* data, T val, ObGeoWkbByteOrder bo = ObGeoWkbByteOrder::LittleEndian);

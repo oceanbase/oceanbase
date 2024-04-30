@@ -179,7 +179,8 @@ int ObMajorPartitionMergeFuser::inner_check_merge_param(const ObMergeParameter &
 int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
 {
   int ret = OB_SUCCESS;
-
+  const bool need_trim_default_row = major_working_cluster_version_ >= MOCK_DATA_VERSION_4_2_1_5
+                 && (major_working_cluster_version_ >= DATA_VERSION_4_2_3_0 || major_working_cluster_version_ < DATA_VERSION_4_2_2_0);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "ObIPartitionMergeFuser init twice", K(ret));
@@ -187,7 +188,7 @@ int ObMajorPartitionMergeFuser::inner_init(const ObMergeParameter &merge_param)
     STORAGE_LOG(WARN, "Failed to get column ids", K(ret));
   } else if (OB_FAIL(default_row_.init(allocator_, multi_version_column_ids_.count()))) {
     STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
-  } else if (OB_FAIL(merge_param.merge_schema_->get_orig_default_row(multi_version_column_ids_, default_row_))) {
+  } else if (OB_FAIL(merge_param.merge_schema_->get_orig_default_row(multi_version_column_ids_, need_trim_default_row, default_row_))) {
     STORAGE_LOG(WARN, "Failed to get default row from table schema", K(ret));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator_, multi_version_column_ids_, default_row_))) {
     STORAGE_LOG(WARN, "fail to fill lob header for default row", K(ret));
@@ -420,6 +421,11 @@ int ObFlatMinorPartitionMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
         if (OB_FAIL(fuse_delete_row(macro_row_iters.at(0), result_row_, multi_version_rowkey_column_cnt_))) {
           STORAGE_LOG(WARN, "Failed to fuse delete row", K(ret), K_(multi_version_rowkey_column_cnt));
         } else {
+          result_row_.row_flag_.reset();
+          result_row_.row_flag_ = macro_row_iters.at(0)->get_curr_row()->row_flag_;
+          for (int64_t i = 1; i < macro_row_iters_cnt; ++i) {
+            result_row_.row_flag_.fuse_flag(macro_row_iters.at(i)->get_curr_row()->row_flag_);
+          }
           STORAGE_LOG(DEBUG, "success to fuse delete row", K(ret), K(*macro_row_iters.at(i)->get_curr_row()),
               K(result_row_), K(macro_row_iters_cnt));
           final_result = true;
@@ -482,7 +488,6 @@ int ObFlatMinorPartitionMergeFuser::fuse_delete_row(
       row.storage_datums_[i].set_nop();
     }
     if (OB_SUCC(ret)) {
-      row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
       row.mvcc_row_flag_ = del_row->mvcc_row_flag_;
       STORAGE_LOG(DEBUG, "fuse delete row", K(ret), K(*del_row), K(row));
     }

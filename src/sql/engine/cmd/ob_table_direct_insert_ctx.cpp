@@ -56,9 +56,9 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
       load_exec_ctx_->exec_ctx_ = exec_ctx;
       uint64_t sql_mode = 0;
       ObSEArray<int64_t, 16> store_column_idxs;
-      omt::ObTenant *tenant = nullptr;
-      if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
-        LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
+      ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
+      if (OB_FAIL(get_compressor_type(MTL_ID(), table_id, parallel, compressor_type))) {
+        LOG_WARN("fail to get compressor type", KR(ret));
       } else if (OB_FAIL(init_store_column_idxs(MTL_ID(), table_id, store_column_idxs))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(exec_ctx->get_my_session()->get_sys_variable(SYS_VAR_SQL_MODE, sql_mode))) {
@@ -78,6 +78,7 @@ int ObTableDirectInsertCtx::init(ObExecContext *exec_ctx,
         param.dup_action_ = sql::ObLoadDupActionType::LOAD_STOP_ON_DUP;
         param.sql_mode_ = sql_mode;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
+        param.compressor_type_ = compressor_type;
         if (OB_FAIL(table_load_instance_->init(param, store_column_idxs, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {
@@ -163,6 +164,29 @@ int ObTableDirectInsertCtx::init_store_column_idxs(const uint64_t tenant_id,
     }
   }
 
+  return ret;
+}
+
+int ObTableDirectInsertCtx::get_compressor_type(const uint64_t tenant_id,
+                                                const uint64_t table_id,
+                                                const int64_t parallel,
+                                                ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
+                                                                                  schema_guard))) {
+    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
+                                                             parallel, compressor_type))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  }
   return ret;
 }
 

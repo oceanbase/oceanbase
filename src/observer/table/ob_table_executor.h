@@ -24,7 +24,7 @@ class ObTableApiExecutor
 public:
   ObTableApiExecutor(ObTableCtx &ctx)
       : tb_ctx_(ctx),
-        allocator_(ObModIds::TABLE_PROC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        allocator_("TbExecutor", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         exec_ctx_(ctx.get_exec_ctx()),
         eval_ctx_(exec_ctx_),
         parent_(nullptr),

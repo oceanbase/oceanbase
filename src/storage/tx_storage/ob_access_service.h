@@ -200,6 +200,9 @@ public:
       int64_t &memtable_row_count) const;
 protected:
   int check_tenant_out_of_memstore_limit_(bool &is_out_of_mem);
+  int check_data_disk_full_(
+      const share::ObLSID &ls_id,
+      bool &is_full);
 
   int get_write_store_ctx_guard_(
       const share::ObLSID &ls_id,
@@ -226,11 +229,6 @@ protected:
       transaction::ObTxDesc &tx_desc,
       ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);
-  int audit_tablet_opt_dml_stat(
-      const ObDMLBaseParam &dml_param,
-      const common::ObTabletID &tablet_id,
-      const common::ObOptDmlStatType dml_stat_type,
-      const int64_t affected_rows);
   int get_source_ls_tx_table_guard_(
       const ObTabletHandle &tablet_handle,
       ObStoreCtxGuard &ctx_guard);

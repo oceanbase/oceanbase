@@ -20,6 +20,10 @@
 #include "lib/container/ob_array.h"
 
 #define ASH_PROGRAM_STR_LEN 64
+#define ASH_MODULE_STR_LEN 32
+#define ASH_CLIENT_ID_STR_LEN 32
+#define ASH_ACTION_STR_LEN 32
+#define ASH_BACKTRACE_STR_LEN 256
 #define WR_ASH_SAMPLE_INTERVAL 10
 
 namespace oceanbase
@@ -58,7 +62,8 @@ public:
         is_wr_sample_(false),
         delta_time_(0),
         delta_cpu_time_(0),
-        delta_db_time_(0)
+        delta_db_time_(0),
+        group_id_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -69,6 +74,8 @@ public:
 #endif
     program_[0] = '\0';
     module_[0] = '\0';
+    action_[0] = '\0';
+    client_id_[0] = '\0';
   }
   ~ObActiveSessionStatItem() = default;
   void reuse()
@@ -91,8 +98,11 @@ public:
     delta_time_ = 0;
     delta_cpu_time_ = 0;
     delta_db_time_ = 0;
+    group_id_ = 0;
     program_[0] = '\0';
     module_[0] = '\0';
+    action_[0] = '\0';
+    client_id_[0] = '\0';
   }
 public:
   enum SessionType
@@ -148,16 +158,20 @@ public:
   int64_t delta_time_;
   int64_t delta_cpu_time_;
   int64_t delta_db_time_;
+  int32_t group_id_;
   char program_[ASH_PROGRAM_STR_LEN];
-  char module_[64];
+  char module_[ASH_MODULE_STR_LEN];
+  char action_[ASH_ACTION_STR_LEN];
+  char client_id_[ASH_CLIENT_ID_STR_LEN];
 #ifndef NDEBUG
-  char bt_[256];
+  char bt_[ASH_BACKTRACE_STR_LEN];
 #endif
   TO_STRING_KV(K_(tenant_id), K_(session_id), "event id", OB_WAIT_EVENTS[event_no_].event_id_,
       "event", OB_WAIT_EVENTS[event_no_].event_name_, K_(wait_time), K_(time_model), K_(trace_id),
       K_(plan_line_id), K_(sql_id), K_(top_level_sql_id), K_(plsql_entry_subprogram_name),
       K_(plsql_subprogram_name), K_(session_type), K_(is_wr_sample), K_(delta_time),
-      K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module));
+      K_(delta_cpu_time), K_(delta_db_time), K_(program), K_(module), K_(action), K_(client_id),
+      K_(group_id));
 };
 
 // record run-time stat for each OB session
@@ -174,10 +188,8 @@ public:
         prev_non_idle_wait_time_(0),
         total_cpu_time_(0),
         tid_(0),
-        di_(nullptr),
         is_bkgd_active_(true),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
-        is_remote_inner_sql_(false),
         pcode_(0),
         bkgd_elapse_time_(0),
         prev_inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
@@ -204,7 +216,6 @@ public:
     prev_non_idle_wait_time_ = 0;
     total_cpu_time_ = 0;
     tid_ = 0;
-    di_ = nullptr;
     fixup_index_ = -1;
     // NOTICE: reset of fixup_ash_buffer_ is in ObActiveSessionStat::fixup_last_stat
     // fixup_ash_buffer_.reset();
@@ -233,10 +244,14 @@ public:
   void set_bkgd_sess_active();
   void set_bkgd_sess_inactive();
   void accumulate_elapse_time();
-  static void calc_db_time_for_background_session(ObActiveSessionStat &stat, const int64_t sample_time);
   static void calc_db_time(ObActiveSessionStat &stat, const int64_t sample_time);
   // timestamp for last ash sample taken place. could be optimized to rdtsc()
   // FIXME:but should check rdtsc_is_supported on bootstrap.
+  void set_ash_waiting(const int64_t event_no,
+                       const int64_t p1 = 0 ,
+                       const int64_t p2 = 0,
+                       const int64_t p3 = 0);
+  void finish_ash_waiting();
   int64_t last_ts_;
   int64_t wait_event_begin_ts_;
   uint64_t total_idle_wait_time_; // idle wait time in total
@@ -245,11 +260,9 @@ public:
   uint64_t prev_non_idle_wait_time_;
   uint64_t total_cpu_time_;  // total cpu time since last ash sample. for cpu-time verification.
   int64_t tid_;  // record current tid for cpu time verification
-  common::ObDiagnoseSessionInfo *di_;
   bool is_bkgd_active_; // Identifies whether the status of the background session is active.
                         // Inactive background thread session will not be collected in ASH.
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;
-  bool is_remote_inner_sql_;
   int pcode_;
   int64_t bkgd_elapse_time_; // for backgorund elapse time.
   ObInnerSqlWaitTypeId prev_inner_sql_wait_type_id_;
@@ -257,7 +270,7 @@ public:
   INHERIT_TO_STRING_KV("ObActiveSessionStatItem", ObActiveSessionStatItem, K_(last_ts),
       K_(wait_event_begin_ts), K_(total_idle_wait_time), K_(total_non_idle_wait_time),
       K_(prev_idle_wait_time), K_(prev_non_idle_wait_time), K_(total_cpu_time),
-      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(is_remote_inner_sql), K_(pcode),
+      K_(is_bkgd_active), K_(inner_sql_wait_type_id), K_(pcode),
       K_(bkgd_elapse_time), K_(prev_inner_sql_wait_type_id), K_(fixup_index), K_(fixup_ash_buffer));
 
 private:
@@ -319,10 +332,11 @@ private:
 class ObRPCActiveGuard
 {
 public:
-  ObRPCActiveGuard(int pcode);
+  ObRPCActiveGuard(int pcode, int64_t tenant_id);
   ~ObRPCActiveGuard();
 private:
   bool prev_is_bkgd_active_;
+  int64_t prev_tenant_id_;
 };
 
 #define DEF_ASH_FLAGS_SETTER_GUARD(ash_flag_type)                                                  \

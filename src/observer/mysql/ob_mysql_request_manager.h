@@ -154,7 +154,7 @@ public:
   void clear_queue()
   {
     (void)release_old(INT64_MAX);
-    allocator_.destroy();
+    allocator_.purge();
   }
 
   uint64_t get_tenant_id() const

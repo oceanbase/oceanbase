@@ -222,7 +222,7 @@ namespace sql
     int print_join_tables_in_hint(const ObDMLStmt &stmt,
                                   PlanText &plan_text,
                                   const ObRelIds &table_set);
-
+    virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   private:
     // all join predicates
     common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> join_conditions_; //equal join condition, for merge-join

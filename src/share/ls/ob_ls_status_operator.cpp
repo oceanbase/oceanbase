@@ -664,14 +664,18 @@ int ObLSStatusOperator::get_duplicate_ls_status_info(
   } else if (OB_FAIL(ls_flag.flag_to_str(flag_str))) {
     LOG_WARN("failed to get flag str", K(ret), K(ls_flag));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "SELECT * FROM %s where tenant_id = %lu and flag like \"%%%s%%\"",
+                 "select * from %s where tenant_id = %lu and flag like \"%%%s%%\" order by ls_id limit 1",
                  OB_ALL_LS_STATUS_TNAME, tenant_id,
                  flag_str.ptr()))) {
       LOG_WARN("failed to assign sql", KR(ret), K(sql));
   } else if (OB_FAIL(inner_get_ls_status_(sql, get_exec_tenant_id(tenant_id), need_member_list,
                                           client, member_list, status_info, arb_member, learner_list, group_id))) {
-    LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
-             get_exec_tenant_id(tenant_id), K(need_member_list));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("tenant does not have duplicate ls", KR(ret), K(tenant_id));
+    } else {
+      LOG_WARN("fail to inner get ls status info", KR(ret), K(sql), K(tenant_id), "exec_tenant_id",
+          get_exec_tenant_id(tenant_id), K(need_member_list));
+    }
   }
   return ret;
 }

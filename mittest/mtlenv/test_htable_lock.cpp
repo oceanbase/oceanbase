@@ -176,14 +176,13 @@ TEST_F(TestHTableLock, lock_different_keys)
   ASSERT_EQ(fake_table_id, lock_handle->lock_nodes_->lock_key_->table_id_);
   ASSERT_EQ(fake_key1, lock_handle->lock_nodes_->lock_key_->key_);
   // check lock map
-  ASSERT_EQ(1, HTABLE_LOCK_MGR->lock_map_.size());
-  ObHTableLockMgr::ObHTableLockMap::const_iterator it = HTABLE_LOCK_MGR->lock_map_.begin();
-  tmp_lock_key = it->first;
+  ASSERT_EQ(1, HTABLE_LOCK_MGR->lock_map_.count());
+  ObHTableLockMgr::ObHTableLockMap::BlurredIterator it(HTABLE_LOCK_MGR->lock_map_);
+  ASSERT_EQ(OB_SUCCESS, it.next(tmp_lock_key, tmp_lock));
   ASSERT_TRUE(tmp_lock_key != nullptr);
   ASSERT_EQ(lock_key1, *tmp_lock_key);
   ASSERT_TRUE(tmp_lock_key->key_.ptr() != fake_key1.ptr()); // ensure it's deep copy
   ASSERT_EQ(lock_handle->lock_nodes_->lock_key_->key_.ptr(), tmp_lock_key->key_.ptr());
-  tmp_lock = it->second;
   ASSERT_TRUE(tmp_lock->is_locked());
   ASSERT_TRUE(tmp_lock->is_rdlocked());
   ASSERT_TRUE(tmp_lock->can_escalate_lock());
@@ -200,15 +199,15 @@ TEST_F(TestHTableLock, lock_different_keys)
   ASSERT_EQ(fake_key1, lock_handle->lock_nodes_->next_->lock_key_->key_);
   // check lock map
   tmp_lock = nullptr;
-  ASSERT_EQ(2, HTABLE_LOCK_MGR->lock_map_.size());
-  ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_map_.get_refactored(&lock_key1, tmp_lock));
+  ASSERT_EQ(2, HTABLE_LOCK_MGR->lock_map_.count());
+  ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_map_.get(&lock_key1, tmp_lock));
   ASSERT_TRUE(tmp_lock != nullptr);
   ASSERT_TRUE(tmp_lock->is_locked());
   ASSERT_TRUE(tmp_lock->is_rdlocked());
   ASSERT_TRUE(tmp_lock->can_escalate_lock());
   ASSERT_TRUE(!tmp_lock->is_wrlocked());
   tmp_lock = nullptr;
-  ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_map_.get_refactored(&lock_key2, tmp_lock));
+  ASSERT_EQ(OB_SUCCESS, HTABLE_LOCK_MGR->lock_map_.get(&lock_key2, tmp_lock));
   ASSERT_TRUE(tmp_lock != nullptr);
   ASSERT_TRUE(tmp_lock->is_locked());
   ASSERT_TRUE(!tmp_lock->is_rdlocked());

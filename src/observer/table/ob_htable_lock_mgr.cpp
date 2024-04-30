@@ -41,11 +41,12 @@ int ObHTableLockMgr::init()
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
-  } else if (OB_FAIL(lock_map_.create(DEFAULT_BUCKET_NUM, ObModIds::TABLE_PROC, ObModIds::TABLE_PROC, MTL_ID()))) {
+  } else if (OB_FAIL(lock_map_.init("HTableLockMap", MTL_ID()))) {
     LOG_WARN("fail to create htable lock map", K(ret));
   } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
     LOG_WARN("fail to init allocator", K(ret));
   } else {
+    lock_map_.set_load_factor_lmt(0.01, 0.7);
     is_inited_ = true;
   }
   return ret;
@@ -157,15 +158,15 @@ int ObHTableLockMgr::internal_lock_row(const uint64_t table_id, const common::Ob
     LOG_WARN("fail to alloc lock node", K(ret), K(lock_mode));
   } else {
     // suppose the lock exists firstly, try to get and add shared/exclusive lock
-    if (OB_FAIL(lock_map_.atomic_refactored(&tmp_lock_key, lock_op))) {
-      if (ret == OB_HASH_NOT_EXIST) {
+    if (OB_FAIL(lock_map_.operate(&tmp_lock_key, lock_op))) {
+      if (ret == OB_ENTRY_NOT_EXIST) {
         // lock not exists, try to add a new lock or use the lock added by others
         ret = OB_SUCCESS;
         if (OB_FAIL(alloc_lock_key(table_id, key, new_lock_key))) {
           LOG_WARN("fail to alloc new lock key", K(ret));
         } else if (OB_FAIL(alloc_lock(lock_mode, new_lock))) {
           LOG_WARN("fail to alloc new lock", K(ret));
-        } else if (OB_FAIL(lock_map_.set_or_update(new_lock_key, new_lock, lock_op))) {
+        } else if (OB_FAIL(lock_map_.insert_or_operate(new_lock_key, new_lock, lock_op))) {
           LOG_WARN("fail to set or update lock", K(ret));
         }
       } else {
@@ -287,36 +288,37 @@ int ObHTableLockMgr::alloc_lock(ObHTableLockMode lock_mode, ObHTableLock *&lock)
   return ret;
 }
 
-void ObHTableLockOp::operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry)
+bool ObHTableLockOp::operator() (ObHTableLockKey *&key, ObHTableLock *&value)
 {
   int ret = OB_SUCCESS;
   is_called_ = true;
   lock_success_ = false;
-  if (OB_ISNULL(entry.second)) {
+  if (OB_ISNULL(value)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null lock key", K(ret));
   } else {
     if (lock_mode_ == ObHTableLockMode::SHARED) {
-      if (OB_FAIL(entry.second->try_rdlock())) {
+      if (OB_FAIL(value->try_rdlock())) {
         LOG_WARN("fail to add read lock", K(ret));
       }
     } else {
-      if (OB_FAIL(entry.second->try_wrlock())) {
+      if (OB_FAIL(value->try_wrlock())) {
         LOG_WARN("fail to add write lock", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    old_lock_key_ = entry.first;
+    old_lock_key_ = key;
     lock_success_ = true;
   }
   ret_code_ = ret;
+  return true;
 }
 
-void ObHTableRd2WrLockOp::operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry)
+bool ObHTableRd2WrLockOp::operator() (ObHTableLockKey *&key, ObHTableLock *&value)
 {
   int ret = OB_SUCCESS;
-  ObHTableLock *lock = entry.second;
+  ObHTableLock *lock = value;
   if (OB_ISNULL(lock)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected null lock key", K(ret));
@@ -330,13 +332,14 @@ void ObHTableRd2WrLockOp::operator() (common::hash::HashMapPair<ObHTableLockKey 
   } else {/* do nothing*/}
 
   ret_code_ = ret;
+  return true;
 }
 
-bool ObHTableUnLockOpPred::operator() (common::hash::HashMapPair<ObHTableLockKey *, ObHTableLock *> &entry)
+bool ObHTableUnLockOpPred::operator() (ObHTableLockKey *&key, ObHTableLock *&value)
 {
   bool need_erase = false;
   int ret = OB_SUCCESS;
-  ObHTableLock *lock = entry.second;
+  ObHTableLock *lock = value;
   if (OB_ISNULL(lock)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected null lock key", K(ret));
@@ -344,6 +347,7 @@ bool ObHTableUnLockOpPred::operator() (common::hash::HashMapPair<ObHTableLockKey
     LOG_ERROR("fail to unlock", K(ret));
   } else if (!lock->is_locked()) {
     need_erase = true;
+    lock_ = lock;
   }
   ret_code_ = ret;
   return need_erase;
@@ -365,7 +369,7 @@ int ObHTableLockMgr::rd2wrlock(ObHTableLockNode &lock_node)
     LOG_WARN("invalid argument", K(ret));
   } else {
     ObHTableRd2WrLockOp rd2wrlockop;
-    if (OB_FAIL(lock_map_.atomic_refactored(lock_node.get_lock_key(), rd2wrlockop))) {
+    if (OB_FAIL(lock_map_.operate(lock_node.get_lock_key(), rd2wrlockop))) {
       LOG_WARN("fail to escalate read lock to write lock", K(ret));
     } else {
       ret = rd2wrlockop.get_ret();
@@ -395,7 +399,6 @@ int ObHTableLockMgr::release_node(ObHTableLockNode &lock_node)
   int ret = OB_SUCCESS;
   ObHTableUnLockOpPred unlock_op_pred;
   ObHTableLockKey *lock_key = lock_node.lock_key_;
-  ObHTableLock *lock = nullptr;
   bool is_erased = false;
   if (OB_ISNULL(lock_key)) {
     ret = OB_ERR_UNEXPECTED;
@@ -403,21 +406,27 @@ int ObHTableLockMgr::release_node(ObHTableLockNode &lock_node)
   } else if (!lock_key->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(ret), KPC(lock_key));
-  } else if (OB_FAIL(lock_map_.erase_if(lock_key, unlock_op_pred, is_erased, &lock))) {
-    LOG_ERROR("fail to erase lock", K(ret), "unlock_op_pred.ret_code_", unlock_op_pred.get_ret());
+  } else if (OB_FAIL(lock_map_.erase_if(lock_key, unlock_op_pred))) {
+    // OB_EAGAIN means no need to erase the lock, should be someone else hold the lock
+    if (ret == OB_EAGAIN) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_ERROR("fail to erase lock", K(ret), "unlock_op_pred.ret_code_", unlock_op_pred.get_ret());
+    }
   } else if (OB_FAIL(unlock_op_pred.get_ret())) {
     LOG_ERROR("fail to unlock", K(ret));
-  } else if (is_erased) {
-    allocator_.free(lock_key->key_.ptr());
-    allocator_.free(lock_key);
-    if (OB_ISNULL(lock)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("unexpected null lock", K(ret));
-    } else {
+  } else {
+    ObHTableLock *lock = unlock_op_pred.get_lock();
+    if (OB_NOT_NULL(lock)) {
       allocator_.free(lock);
     }
-  } else {/* do nothing */}
-
+    if (OB_NOT_NULL(lock_key)) {
+      if (lock_key->is_valid()) {
+        allocator_.free(lock_key->key_.ptr());
+      }
+      allocator_.free(lock_key);
+    }
+  }
   allocator_.free(&lock_node);
   return ret;
 }

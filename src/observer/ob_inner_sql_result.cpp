@@ -21,6 +21,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "observer/ob_req_time_service.h"
 #include "omt/ob_tenant.h"
+#include "observer/ob_inner_sql_connection.h"
 
 namespace oceanbase
 {
@@ -45,7 +46,7 @@ inline int ObInnerSQLResult::check_extend_value(const common::ObObj &obj)
   return ret;
 }
 
-ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
+ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session, bool is_inner_session)
     : column_map_created_(false), column_indexed_(false), column_map_(),
       mem_context_(nullptr),
       mem_context_destroy_guard_(mem_context_),
@@ -59,7 +60,8 @@ ObInnerSQLResult::ObInnerSQLResult(ObSQLSessionInfo &session)
       iter_end_(false),
       is_read_(true),
       has_tenant_resource_(true),
-      tenant_(nullptr)
+      tenant_(nullptr),
+      is_inner_session_(is_inner_session)
 
 {
   sql_ctx_.exec_type_ = InnerSql;
@@ -179,10 +181,6 @@ int ObInnerSQLResult::open()
 int ObInnerSQLResult::close()
 {
   int ret = OB_SUCCESS;
-  ObWaitEventGuard wait_guard(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
-                              0, /* timeout */
-                              ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_,
-                              session_.get_sessid());
   // close can be executed too if result set not open.
   if (opened_) {
     // opened=true imply is_inited=true
@@ -234,10 +232,7 @@ int ObInnerSQLResult::inner_close()
 int ObInnerSQLResult::next()
 {
   int ret = OB_SUCCESS;
-  ObWaitEventGuard wait_guard(ObWaitEventIds::INNER_SQL_EXEC_WAIT,
-                              0, /* timeout */
-                              ObActiveSessionGuard::get_stat().inner_sql_wait_type_id_,
-                              session_.get_sessid());
+  ObInnerSqlWaitGuard guard(is_inner_session(), &session_);
   MAKE_TENANT_SWITCH_SCOPE_GUARD(tenant_guard);
   LOG_DEBUG("compat_mode_", K(ret), K(compat_mode_), K(lbt()));
   if (!opened_) {

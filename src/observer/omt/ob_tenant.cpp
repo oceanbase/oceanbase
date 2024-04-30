@@ -269,6 +269,7 @@ void ObPxPool::set_px_thread_name()
 void ObPxPool::run(int64_t idx)
 {
   ATOMIC_INC(&active_threads_);
+  ObBKGDSessInActiveGuard inactive_guard;
   set_thread_idx(idx);
   // Create worker for current thread.
   ObPxWorker worker;
@@ -1116,8 +1117,9 @@ void ObTenant::destroy()
     DESTROY_ENTITY(ctx_);
     ctx_ = nullptr;
   }
-  if (cgroup_ctrl_.is_valid()
-      && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.remove_tenant_cgroup(id_))) {
+  if (cgroup_ctrl_.is_valid() &&
+      OB_TMP_FAIL(cgroup_ctrl_.remove_both_cgroup(
+          id_, OB_INVALID_GROUP_ID, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
     LOG_WARN_RET(tmp_ret, "remove tenant cgroup failed", K(tmp_ret), K_(id));
   }
   group_map_.destroy_group();
@@ -1154,36 +1156,14 @@ void ObTenant::set_unit_max_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_max_cpu_ = cpu;
-  int32_t cfs_period_us = 0;
-  int32_t cfs_period_us_new = 0;
   if (!cgroup_ctrl_.is_valid() || is_meta_tenant(id_)) {
     // do nothing
-  } else if (is_sys_tenant(id_)) {
-    int32_t sys_cfs_quota_us = -1;
-    if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(sys_cfs_quota_us, id_))) {
-      LOG_WARN_RET(tmp_ret, "set sys tennat cpu cfs quota failed", K(tmp_ret), K_(id), K(sys_cfs_quota_us));
-    }
-  } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
-    LOG_WARN_RET(tmp_ret, "fail get cpu cfs period", K_(id));
-  } else {
-    uint32_t loop_times = 0;
-    // to avoid kernel scaling cfs_period_us after get cpu_cfs_period,
-    // we should check whether cfs_period_us has been changed after set cpu_cfs_quota.
-    while (OB_SUCCESS == tmp_ret && cfs_period_us_new != cfs_period_us) {
-      cfs_period_us = cfs_period_us_new;
-      int32_t cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
-      if (OB_TMP_FAIL(cgroup_ctrl_.set_cpu_cfs_quota(cfs_quota_us, id_))) {
-        LOG_WARN_RET(tmp_ret, "set cpu cfs quota failed", K_(id), K(cfs_quota_us));
-      } else if (OB_TMP_FAIL(cgroup_ctrl_.get_cpu_cfs_period(cfs_period_us_new, id_, INT64_MAX))) {
-        LOG_ERROR_RET(tmp_ret, "fail get cpu cfs period", K_(id));
-      } else {
-        loop_times++;
-        if (loop_times > 3) {
-          tmp_ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR_RET(tmp_ret, "cpu_cfs_period has been always changing, thread may be hung", K_(id), K(cfs_period_us), K(cfs_period_us_new), K(cfs_quota_us));
-        }
-      }
-    }
+  } else if (OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_cfs_quota(
+                 id_,
+                 is_sys_tenant(id_) ? -1 : cpu,
+                 OB_INVALID_GROUP_ID,
+                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu cfs quota failed", K(tmp_ret), K_(id));
   }
 }
 
@@ -1191,11 +1171,13 @@ void ObTenant::set_unit_min_cpu(double cpu)
 {
   int tmp_ret = OB_SUCCESS;
   unit_min_cpu_ = cpu;
-  const double default_cpu_shares = 1024.0;
-  int32_t cpu_shares = static_cast<int32_t>(default_cpu_shares * cpu);
-  if (cgroup_ctrl_.is_valid()
-      && OB_SUCCESS != (tmp_ret = cgroup_ctrl_.set_cpu_shares(cpu_shares, id_))) {
-    LOG_WARN_RET(tmp_ret, "set cpu shares failed", K(tmp_ret), K_(id), K(cpu_shares));
+  if (cgroup_ctrl_.is_valid() &&
+      OB_TMP_FAIL(cgroup_ctrl_.set_both_cpu_shares(
+          id_,
+          cpu,
+          OB_INVALID_GROUP_ID,
+          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN_RET(tmp_ret, "set tenant cpu shares failed", K(tmp_ret), K_(id), K(cpu));
   }
 }
 

@@ -171,7 +171,7 @@ void build_obj_double(double num, ObArenaAllocator &allocator, ObObj &res) {
   double_to_number(num, allocator, nmb);
   res.set_number(nmb);
 }
-
+#ifdef OB_BUILD_ORACLE_PL
 void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator &ctx_allocator, common::ObObj &result)
 {
 #ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
@@ -306,7 +306,7 @@ TEST_F(TestGeoCommon, sql_udt_to_wkt)
   ASSERT_EQ(ObGeoTypeUtil::sql_geo_obj_to_ewkt(map2, allocator, ewkt2), OB_SUCCESS);
   ASSERT_EQ(ewkt2 == "SRID=NULL;POINT(9.87 6.54)", true) << ewkt2.ptr();
 }
-
+#endif
 } // namespace common
 } // namespace oceanbase
 

@@ -23,7 +23,6 @@ constexpr int OB_LAST_ERROR_CODE = -38105;
 constexpr int OB_ERR_SQL_START = -5000;
 constexpr int OB_ERR_SQL_END = -5999;
 constexpr int OB_PACKET_NOT_SENT = -4011;
-constexpr int OB_PARTIAL_FAILED = -4025;
 constexpr int OB_SCHEMA_ERROR = -4029;
 constexpr int OB_TENANT_OUT_OF_MEM = -4030;
 constexpr int OB_UNKNOWN_OBJ = -4031;
@@ -875,6 +874,8 @@ constexpr int OB_JSON_PROCESSING_ERROR = -5514;
 constexpr int OB_ERR_TABLE_WITHOUT_ALIAS = -5515;
 constexpr int OB_ERR_DEPRECATED_SYNTAX = -5516;
 constexpr int OB_ERR_NON_STRING_NOT_SUPPORT = -5517;
+constexpr int OB_ERR_DEPRECATED_SYNTAX_NO_REP = -5518;
+constexpr int OB_ERR_INVALID_IDENTIFIER_JSON_TABLE = -5522;
 constexpr int OB_ERR_SP_ALREADY_EXISTS = -5541;
 constexpr int OB_ERR_SP_DOES_NOT_EXIST = -5542;
 constexpr int OB_ERR_SP_UNDECLARED_VAR = -5543;
@@ -1383,6 +1384,8 @@ constexpr int OB_TABLE_LOCK_SPLIT_TWICE = -6326;
 constexpr int OB_TABLE_LOCK_IS_SPLITTING = -6327;
 constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
 constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
+constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
+constexpr int OB_ARB_DEGRADE = -6331;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1550,6 +1553,7 @@ constexpr int OB_NO_SUCH_FILE_OR_DIRECTORY = -9100;
 constexpr int OB_FILE_OR_DIRECTORY_EXIST = -9101;
 constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
 constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
+constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
@@ -1806,6 +1810,7 @@ constexpr int OB_ERR_SEQUENCE_NOT_DEFINE = -9753;
 constexpr int OB_ERR_DEBUG_ID_NOT_EXIST = -9754;
 constexpr int OB_ERR_CLIENT_LOCAL_FILES_DISABLED = -9762;
 constexpr int OB_ERR_NOT_FUNC_NAME = -9765;
+constexpr int OB_ERR_INVALID_CURSOR_EXPR = -9766;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -1833,6 +1838,8 @@ constexpr int OB_ERR_NO_GRANT_DEFINED_FOR_USER = -11008;
 constexpr int OB_ERR_USER_ALREADY_EXISTS = -11009;
 constexpr int OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR = -11010;
 constexpr int OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED = -11011;
+constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
+constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
@@ -1871,7 +1878,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__USER_ERROR_MSG "Item not set"
 #define OB_EAGAIN__USER_ERROR_MSG "Try again"
 #define OB_BUF_NOT_ENOUGH__USER_ERROR_MSG "Buffer not enough"
-#define OB_PARTIAL_FAILED__USER_ERROR_MSG "Partial failed"
+#define OB_PARTIAL_FAILED__USER_ERROR_MSG "%s"
 #define OB_READ_NOTHING__USER_ERROR_MSG "No data - zero rows fetched, selected, or processed"
 #define OB_FILE_NOT_EXIST__USER_ERROR_MSG "File not exist"
 #define OB_DISCONTINUOUS_LOG__USER_ERROR_MSG "Log entry not continuous"
@@ -2890,6 +2897,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_WITHOUT_ALIAS__USER_ERROR_MSG "Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__USER_ERROR_MSG "%s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__USER_ERROR_MSG "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
+#define OB_ERR_DEPRECATED_SYNTAX_NO_REP__USER_ERROR_MSG "%s is deprecated and will be removed in a future release"
+#define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__USER_ERROR_MSG "invalid identifier used for path expression in JSON_TABLE"
 #define OB_ERR_SESSION_VAR_CHANGED__USER_ERROR_MSG "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__USER_ERROR_MSG "%s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__USER_ERROR_MSG "%s %.*s.%.*s does not exist"
@@ -3459,6 +3468,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_IS_SPLITTING__USER_ERROR_MSG "table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__USER_ERROR_MSG "table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
+#define OB_USER_OUTOF_DATA_DISK_SPACE__USER_ERROR_MSG "user data disk is almost full"
+#define OB_ARB_DEGRADE__USER_ERROR_MSG "logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3746,6 +3757,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FILE_OR_DIRECTORY_EXIST__USER_ERROR_MSG "file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__USER_ERROR_MSG "file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__USER_ERROR_MSG "too many open files"
+#define OB_DIRECT_LOAD_COMMIT_ERROR__USER_ERROR_MSG "fail to commit direct load"
 #define OB_S3_ERROR__USER_ERROR_MSG "S3 error"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__USER_ERROR_MSG "Tenant snapshot \'%.*s\' already exist"
@@ -3760,6 +3772,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PERMISSION_DENIED__USER_ERROR_MSG "no I/O operation permission of the object storage"
 #define OB_S3_REGION_MISMATCH__USER_ERROR_MSG "the specified s3_region does not match the endpoint"
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__USER_ERROR_MSG "object storage endpoint is invalid"
+#define OB_RESTORE_SOURCE_NOT_ENOUGH__USER_ERROR_MSG "%s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4017,6 +4030,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEBUG_ID_NOT_EXIST__USER_ERROR_MSG "debug_session_id = %u does not exist"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__USER_ERROR_MSG "Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_NOT_FUNC_NAME__USER_ERROR_MSG "object '%.*s' must be of type function or array to be used this way"
+#define OB_ERR_INVALID_CURSOR_EXPR__USER_ERROR_MSG "CURSOR expression not allowed"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -4044,6 +4058,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_ALREADY_EXISTS__USER_ERROR_MSG "Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__USER_ERROR_MSG "Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__USER_ERROR_MSG "query range memory exhausted"
+#define OB_CANNOT_USER_IF_EXISTS__USER_ERROR_MSG "User %.*s does not exist"
+#define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
@@ -4082,7 +4098,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ITEM_NOT_SETTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4022, Item not set"
 #define OB_EAGAIN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4023, Try again"
 #define OB_BUF_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4024, Buffer not enough"
-#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, Partial failed"
+#define OB_PARTIAL_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4025, %s"
 #define OB_READ_NOTHING__ORA_USER_ERROR_MSG "ORA-01403: no data found"
 #define OB_FILE_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4027, File not exist"
 #define OB_DISCONTINUOUS_LOG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4028, Log entry not continuous"
@@ -5101,6 +5117,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_TABLE_WITHOUT_ALIAS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5515, Every table function must have an alias"
 #define OB_ERR_DEPRECATED_SYNTAX__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5516, %s is deprecated and will be removed in a future release. Please use \'%s\' instead"
 #define OB_ERR_NON_STRING_NOT_SUPPORT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5517, This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'"
+#define OB_ERR_DEPRECATED_SYNTAX_NO_REP__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5518, %s is deprecated and will be removed in a future release"
+#define OB_ERR_INVALID_IDENTIFIER_JSON_TABLE__ORA_USER_ERROR_MSG "ORA-40680: invalid identifier used for path expression in JSON_TABLE"
 #define OB_ERR_SESSION_VAR_CHANGED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5540, System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s)."
 #define OB_ERR_SP_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5541, %s %.*s already exists"
 #define OB_ERR_SP_DOES_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5542, %s %.*s.%.*s does not exist"
@@ -5670,6 +5688,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TABLE_LOCK_IS_SPLITTING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6327, table lock is being splitted, can not be splitted again"
 #define OB_TABLE_LOCK_SPLIT_FAIL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6328, table lock splitting failed"
 #define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
+#define OB_USER_OUTOF_DATA_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6330, user data disk is almost full"
+#define OB_ARB_DEGRADE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6331, logstream has been degraded due to error"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -5957,6 +5977,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_FILE_OR_DIRECTORY_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9101, file or directory already exist"
 #define OB_FILE_OR_DIRECTORY_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9102, file or directory permission denied"
 #define OB_TOO_MANY_OPEN_FILES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9103, too many open files"
+#define OB_DIRECT_LOAD_COMMIT_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9104, fail to commit direct load"
 #define OB_S3_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9105, S3 error"
 #define OB_TENANT_SNAPSHOT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9106, Tenant snapshot \'%.*s\' does not exist"
 #define OB_TENANT_SNAPSHOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9107, Tenant snapshot \'%.*s\' already exist"
@@ -5971,6 +5992,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OBJECT_STORAGE_PERMISSION_DENIED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9116, no I/O operation permission of the object storage"
 #define OB_S3_REGION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9117, the specified s3_region does not match the endpoint"
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9118, object storage endpoint is invalid"
+#define OB_RESTORE_SOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9119, %s"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6228,6 +6250,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DEBUG_ID_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9754, debug_session_id = %u does not exist"
 #define OB_ERR_CLIENT_LOCAL_FILES_DISABLED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9762, Loading local data is disabled; this must be enabled on both the client and server sides"
 #define OB_ERR_NOT_FUNC_NAME__ORA_USER_ERROR_MSG "PLS-00224: object '%.*s' must be of type function or array to be used this way"
+#define OB_ERR_INVALID_CURSOR_EXPR__ORA_USER_ERROR_MSG "ORA-22902: CURSOR expression not allowed"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10502, TTL column '%.*s' not exists"
@@ -6255,6 +6278,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_USER_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11009, Authorization ID '%.*s'@'%.*s' already exists"
 #define OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR__ORA_USER_ERROR_MSG "ORA-30497: Argument should be a constant or a function of expressions in GROUP BY."
 #define OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11011, query range memory exhausted"
+#define OB_CANNOT_USER_IF_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11012, User %.*s does not exist"
+#define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -6266,7 +6291,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2207];
+extern int g_all_ob_errnos[2216];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

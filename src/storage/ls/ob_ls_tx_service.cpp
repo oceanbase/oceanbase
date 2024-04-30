@@ -737,6 +737,9 @@ int ObLSTxService::offline()
     TRANS_LOG(WARN, "block all failed", K_(ls_id));
   } else if (OB_FAIL(mgr_->kill_all_tx(graceful, unused_is_all_tx_clean_up))) {
     TRANS_LOG(WARN, "kill_all_tx failed", K_(ls_id));
+  } else if (OB_FAIL(MTL(ObTransService *)->get_ts_mgr()->interrupt_gts_callback_for_ls_offline(MTL_ID(),
+        ls_id_))) {
+    TRANS_LOG(WARN, "interrupt gts callback failed", KR(ret), K_(ls_id));
   } else if (mgr_->get_tx_ctx_count() > 0) {
     ret = OB_EAGAIN;
     if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {

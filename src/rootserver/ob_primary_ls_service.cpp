@@ -18,6 +18,8 @@
 #include "share/ls/ob_ls_life_manager.h"//ObLSLifeAgentManager
 #include "share/ls/ob_ls_table_operator.h"//ls_opt
 #include "share/ob_share_util.h"//ObShareUtil
+#include "share/ob_srv_rpc_proxy.h" // ObSrvRpcProxy
+#include "share/location_cache/ob_location_service.h" //ObLocationService
 #include "observer/ob_server_struct.h"//GCTX
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle
@@ -551,5 +553,111 @@ int ObPrimaryLSService::create_duplicate_ls()
   LOG_INFO("[LS_MGR] create duplicate ls", KR(ret), K(new_ls));
   return ret;
 }
+
+int ObDupLSCreateHelper::init(
+    const uint64_t tenant_id,
+    common::ObISQLClient *sql_proxy,
+    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+    share::ObLocationService *location_service)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
+      || OB_ISNULL(sql_proxy)
+      || OB_ISNULL(srv_rpc_proxy)
+      || OB_ISNULL(location_service)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), KP(sql_proxy), KP(srv_rpc_proxy), KP(location_service));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("duplicate ls can be only created in user tenant", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+    sql_proxy_ = sql_proxy;
+    srv_rpc_proxy_ = srv_rpc_proxy;
+    location_service_ = location_service;
+    inited_ = true;
+  }
+  return ret;
+}
+
+int ObDupLSCreateHelper::check_and_create_duplicate_ls_if_needed(
+    share::ObLSID &dup_ls_id)
+{
+  int ret = OB_SUCCESS;
+  dup_ls_id.reset();
+  ObTimeoutCtx ctx;
+  if (OB_UNLIKELY(!inited_)
+      || OB_ISNULL(sql_proxy_)
+      || OB_ISNULL(srv_rpc_proxy_)
+      || OB_ISNULL(location_service_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
+    LOG_WARN("failed to set default timeout", KR(ret), K(ctx));
+  } else {
+    ObLSStatusOperator ls_status_operator;
+    ObLSStatusInfo duplicate_ls_status_info;
+    obrpc::ObCreateDupLSArg arg;
+    obrpc::ObCreateDupLSResult result;
+    ObAddr dup_ls_leader;
+    while (OB_SUCC(ret) && !ctx.is_timeouted()) {
+      int tmp_ret = OB_SUCCESS;
+      duplicate_ls_status_info.reset();
+      if (OB_TMP_FAIL(ls_status_operator.get_duplicate_ls_status_info(
+          tenant_id_,
+          *sql_proxy_,
+          duplicate_ls_status_info))) {
+        if (OB_ENTRY_NOT_EXIST == tmp_ret) {
+          LOG_INFO("duplicate ls not exist, need create one", K_(tenant_id));
+          tmp_ret = OB_SUCCESS;
+          // create duplicate ls
+          ObAddr sys_ls_leader;
+          const int64_t timeout = ctx.get_timeout();
+          if (OB_TMP_FAIL(location_service_->get_leader(
+              GCONF.cluster_id,
+              tenant_id_,
+              SYS_LS,
+              false/*force_renew*/,
+              sys_ls_leader))) {
+            LOG_WARN("failed to get leader", KR(tmp_ret), K_(tenant_id));
+          } else if (OB_TMP_FAIL(arg.init(tenant_id_))) {
+            LOG_WARN("failed to init arg", KR(ret), K_(tenant_id));
+          } else if (OB_TMP_FAIL(srv_rpc_proxy_->to(sys_ls_leader).timeout(timeout).notify_create_duplicate_ls(arg, result))) {
+            LOG_WARN("failed to create tenant duplicate ls", KR(tmp_ret), K_(tenant_id), K(sys_ls_leader), K(arg), K(timeout));
+          }
+        } else {
+          LOG_WARN("fail to get duplicate log stream from table", KR(tmp_ret), K_(tenant_id));
+        }
+      } else if (!duplicate_ls_status_info.ls_is_normal()) { // need wait
+        LOG_INFO("duplicate ls is not in normal status, need wait", K(duplicate_ls_status_info));
+      } else if (OB_TMP_FAIL(location_service_->get_leader_with_retry_until_timeout(
+          GCONF.cluster_id,
+          tenant_id_,
+          duplicate_ls_status_info.get_ls_id(),
+          dup_ls_leader,
+          ctx.get_abs_timeout()))) {
+        LOG_WARN("get_leader_with_retry_until_timeout failed", KR(tmp_ret),
+            K_(tenant_id), K(duplicate_ls_status_info), K(ctx));
+      } else if (dup_ls_leader.is_valid()) {
+        dup_ls_id = duplicate_ls_status_info.get_ls_id();
+        break;
+      }
+      ob_usleep(500 * 1000); // 500ms
+    } // end while
+    if (OB_FAIL(ret)) {
+    } else if (ctx.is_timeouted()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wait creating duplicate ls timeout", KR(ret), K_(tenant_id), K(ctx));
+    } else if (OB_UNLIKELY(!dup_ls_id.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid dup_ls_id", KR(ret), K_(tenant_id), K(ctx), K(dup_ls_id), K(dup_ls_leader));
+    }
+  }
+  return ret;
+}
+
 }//end of rootserver
 }

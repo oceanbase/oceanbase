@@ -473,6 +473,9 @@ public:
 
   static int get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &timeout_ts);
 
+public:
+  uint64_t tenant_id;
+
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
@@ -491,6 +494,7 @@ public:
 
   int init(ObJsonBin *j_bin);
   int init(ObIAllocator *allocator, ObLobLocatorV2 locator, int64_t query_timeout_ts);
+  void reset();
 
   int64_t get_partial_data_serialize_size() const;
   int64_t get_lob_diff_serialize_size() const;

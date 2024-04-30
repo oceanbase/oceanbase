@@ -27,6 +27,11 @@ public:
   virtual ~ObSetCommentResolver();
   virtual int resolve(const ParseNode &parse_tree);
   ObAlterTableStmt *get_alter_table_stmt() { return static_cast<ObAlterTableStmt*>(stmt_); };
+  int get_table_schema(const ParseNode *db_node,
+                       const uint64_t tenant_id,
+                       ObString &database_name,
+                       ObString &table_name,
+                       const ObTableSchema *&table_schema);
 private:
   share::schema::ObTableSchema table_schema_;
   common::ObCollationType collation_type_;

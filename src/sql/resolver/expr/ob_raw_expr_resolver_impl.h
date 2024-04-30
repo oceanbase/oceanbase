@@ -314,7 +314,8 @@ inline bool ObRawExprResolverImpl::is_pseudo_column_valid_scope(ObStmtScope scop
       || scope == T_ORDER_SCOPE
       || scope == T_CONNECT_BY_SCOPE
       || scope == T_WITH_CLAUSE_SEARCH_SCOPE
-      || scope == T_WITH_CLAUSE_CYCLE_SCOPE;
+      || scope == T_WITH_CLAUSE_CYCLE_SCOPE
+      || scope == T_START_WITH_SCOPE;
 }
 
 

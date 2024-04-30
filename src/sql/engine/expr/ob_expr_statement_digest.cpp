@@ -95,7 +95,7 @@ int calc_digest_text(ObIAllocator &allocator,
                                                                     charsets4parser))) {
           LOG_WARN("fail to parameterize syntax tree", K(sql_str), K(ret));
         } else {
-          digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_;
+          digest_str = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.format_sql_;
         }
       } else {
         digest_str = queries.at(i);

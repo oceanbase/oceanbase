@@ -56,7 +56,7 @@ enum SelectParserOffset
   PARSE_SELECT_LIMIT,
   PARSE_SELECT_FOR_UPD,
   PARSE_SELECT_HINTS,
-  PARSE_SELECT_WHEN,
+  PARSE_SELECT_WHEN, // I find that it is no longer used.
   PARSE_SELECT_FETCH,
   PARSE_SELECT_FETCH_TEMP, //use to temporary store fetch clause in parser
   PARSE_SELECT_WITH_CHECK_OPTION,
@@ -384,6 +384,7 @@ extern int64_t str_remove_space(char *buff, int64_t len);
 extern ParseNode *new_node(void *malloc_pool, ObItemType type, int num);
 extern ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num, ...);
 extern ParseNode *new_terminal_node(void *malloc_pool, ObItemType type);
+extern ParseNode *new_list_node(void *malloc_pool, ObItemType node_tag, int capacity, int num, ...);
 
 extern int obpl_parser_check_stack_overflow();
 
@@ -410,6 +411,10 @@ extern bool parsenode_equal(const ParseNode *node1, const ParseNode *node2, int 
 
 extern int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char *name);
 extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name);
+extern int64_t get_need_reserve_capacity(int64_t n);
+extern ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *node);
+extern ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node);
+extern ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

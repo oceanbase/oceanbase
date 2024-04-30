@@ -38,6 +38,7 @@ constexpr int OB_SUCCESS                             = 0;
 constexpr int OB_INVALID_ARGUMENT                    = -4002;
 constexpr int OB_INIT_TWICE                          = -4005;
 constexpr int OB_ALLOCATE_MEMORY_FAILED              = -4013;
+constexpr int OB_ERR_UNEXPECTED                      = -4016;
 constexpr int OB_SIZE_OVERFLOW                       = -4019;
 constexpr int OB_CHECKSUM_ERROR                      = -4103;
 constexpr int OB_BACKUP_FILE_NOT_EXIST               = -9011;
@@ -327,6 +328,15 @@ int ObCosWrapper::create_cos_handle(
       custom_mem.customFree(custom_mem.opaque, ctx);
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to create cos http controller, ret=%d\n", ret);
+      // A separate instance of ctl->options is now allocated for each request,
+      // ensuring that disabling CRC checks is a request-specific action
+      // and does not impact the global setting for COS request options.
+    } else if (NULL ==
+        (ctx->options->ctl->options = cos_http_request_options_create(ctx->options->pool))) {
+      cos_pool_destroy(ctx->mem_pool);
+      custom_mem.customFree(custom_mem.opaque, ctx);
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      cos_warn_log("[COS]fail to create cos http request options, ret=%d\n", ret);
     } else {
       *h = reinterpret_cast<Handle *>(ctx);
 
@@ -911,20 +921,15 @@ int ObCosWrapper::pread(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to make cos headers, ret=%d\n", ret);
     } else {
-      if (is_range_read) {
-        // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
-        // But what we except is [10, 100) which does not include the end.
-        // So we subtract 1 from the end.
-        int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
-        if (0 >= n || COS_RANGE_SIZE <= n) {
-          ret = OB_SIZE_OVERFLOW;
-          cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
-        } else {
-          apr_table_set(headers, COS_RANGE_KEY, range_size);
-        }
+      // Cos read range of [10, 100] include the start offset 10 and the end offset 100.
+      // But what we except is [10, 100) which does not include the end.
+      // So we subtract 1 from the end.
+      int n = snprintf(range_size, COS_RANGE_SIZE, "bytes=%ld-%ld", offset, offset + buf_size - 1);
+      if (0 >= n || COS_RANGE_SIZE <= n) {
+        ret = OB_SIZE_OVERFLOW;
+        cos_warn_log("[COS]fail to format range size,n=%d, ret=%d\n", n, ret);
       } else {
-        // support crc checksum when reading entire object
-        ctx->options->ctl->options->enable_crc = true;
+        apr_table_set(headers, COS_RANGE_KEY, range_size);
       }
 
       if (OB_SUCCESS != ret) {
@@ -1564,6 +1569,7 @@ int ObCosWrapper::complete_multipart_upload(
     ret = OB_INVALID_ARGUMENT;
     cos_warn_log("[COS]upload_id is null, ret=%d\n", ret);
   } else {
+    int64_t total_parts = 0;
     cos_string_t bucket;
     cos_string_t object;
     cos_string_t upload_id;
@@ -1604,6 +1610,12 @@ int ObCosWrapper::complete_multipart_upload(
               cos_str_set(&complete_part->etag, part_content->etag.data);
               cos_list_add_tail(&complete_part->node, &complete_part_list);
             }
+
+            if (OB_SUCCESS != ret) {
+              break;
+            } else {
+              total_parts++;
+            }
           }
 
           if (OB_SUCCESS == ret && COS_TRUE == params->truncated) {
@@ -1628,7 +1640,14 @@ int ObCosWrapper::complete_multipart_upload(
       } while (OB_SUCCESS == ret && COS_TRUE == params->truncated);
 
       if (OB_SUCCESS == ret) {
-        if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object, &upload_id, &complete_part_list, NULL, &resp_headers))
+        if (total_parts == 0) {
+          // If 'complete' without uploading any data, COS will return the error
+          // 'MalformedXML, The XML you provided was not well-formed or did not validate against our published schema'
+          ret = OB_ERR_UNEXPECTED;
+          cos_warn_log("[COS]no parts have been uploaded, ret=%d, upload_id=%s\n", ret, upload_id.data);
+        } else if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object,
+                                                                    &upload_id, &complete_part_list,
+                                                                    NULL, &resp_headers))
             || !cos_status_is_ok(cos_ret)) {
           convert_io_error(cos_ret, ret);
           cos_warn_log("[COS]fail to complete multipart upload, ret=%d\n", ret);
@@ -1755,6 +1774,10 @@ int ObCosWrapper::del_unmerged_parts(
           } else {
             cos_info_log("[COS]succeed to abort multipart upload, bucket=%s, object=%s, upload_id=%s\n",
                 bucket_name.data_, content->key.data, content->upload_id.data);
+          }
+
+          if (OB_SUCCESS != ret) {
+            break;
           }
         }
       }

@@ -154,6 +154,7 @@ int ObServerReloadConfig::operator()()
 #endif
     ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                      GCONF._min_malloc_sample_interval);
+    enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
     if (!is_arbitration_mode) {
       ObIOConfig io_config;
       int64_t cpu_cnt = GCONF.cpu_count;

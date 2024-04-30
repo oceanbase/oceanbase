@@ -472,6 +472,15 @@ public:
                                        ObTableSchema &new_table_schema,
                                        ObDDLOperator &ddl_operator,
                                        ObMySQLTransaction &trans);
+
+  int alter_table_auto_increment(const ObTableSchema &orig_table_schema,
+                                 const AlterTableSchema &alter_table_schema,
+                                 const obrpc::ObAlterTableArg &alter_table_arg,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 ObTableSchema &new_table_schema,
+                                 ObDDLOperator &ddl_operator,
+                                 ObMySQLTransaction &trans);
+
   int get_tablets(
       const uint64_t tenant_id,
       const ObArray<common::ObTabletID> &tablet_ids,
@@ -836,6 +845,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
 
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
   int alter_user_default_role(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg);
   int get_all_users_in_tenant_with_profile(const uint64_t tenant_id,
                                            const uint64_t profile_id,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
@@ -965,7 +975,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                              common::ObIArray<share::schema::ObDependencyInfo> &dep_infos,
                              const common::ObString *ddl_stmt_str);
   virtual int alter_package(share::schema::ObSchemaGetterGuard &schema_guard,
-                            const ObPackageInfo &package_info,
+                            ObPackageInfo &package_info,
                             ObIArray<ObRoutineInfo> &public_routine_infos,
                             share::schema::ObErrorInfo &error_info,
                             const common::ObString *ddl_stmt_str);
@@ -979,7 +989,8 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                              ObSchemaGetterGuard &schema_guard,
                              obrpc::ObCreateTriggerRes *res);
   virtual int drop_trigger(const obrpc::ObDropTriggerArg &arg);
-  virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg);
+  virtual int alter_trigger(const obrpc::ObAlterTriggerArg &arg,
+                            obrpc::ObRoutineDDLRes *res = nullptr);
   //----End of functions for managing trigger----
 
   //----Functions for managing sequence----
@@ -2044,6 +2055,7 @@ public:
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const common::ObIArray<common::ObConfigPairs> &init_configs,
              const common::ObIArray<common::ObAddr> &addrs);
+
 #ifdef OB_BUILD_TDE_SECURITY
   int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
   int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,
@@ -2610,6 +2622,11 @@ private:
 
   int fix_local_idx_part_name_for_add_subpart_(const ObSimpleTableSchemaV2 &ori_table_schema,
                                           ObSimpleTableSchemaV2 &inc_table_schema);
+  // this function is used for add extra tenant config init during create excepet data version
+  // The addition of new configuration items requires the addition or modification of related test cases to ensure their effectiveness.
+  int add_extra_tenant_init_config_(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
 
 private:
   int check_locality_compatible_(ObTenantSchema &schema);

@@ -42,6 +42,7 @@ public:
       const common::ObAddr &inner_sql_exec_addr);
   int init(
       const ObTableSchema &orig_table_schema,
+      const ObTableSchema &hidden_table_schema,
       const AlterTableSchema &alter_table_schema,
       const ObTimeZoneInfoWrap &tz_info_wrap);
   ObDDLTaskID get_ddl_task_id() { return ObDDLTaskID(tenant_id_, task_id_); }
@@ -202,6 +203,7 @@ protected:
 
   int sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                   const ObTableSchema &data_table_schema,
+                                  const ObTableSchema &new_table_schema,
                                   const bool need_sync_history = true);
   int sync_partition_level_stats_info(common::ObMySQLTransaction &trans,
                                       const ObTableSchema &data_table_schema,
@@ -214,6 +216,7 @@ protected:
                                    const bool need_sync_history = true);
   int sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                              const ObTableSchema &data_table_schema,
+                                             const ObTableSchema &new_table_schema,
                                              const uint64_t old_col_id,
                                              const uint64_t new_col_id,
                                              const bool need_sync_history = true);

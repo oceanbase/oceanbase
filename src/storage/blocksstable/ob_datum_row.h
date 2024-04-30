@@ -377,6 +377,7 @@ public:
   OB_INLINE const ObNewRow &get_new_row() const { return old_row_; }
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
   OB_INLINE int64_t get_column_count() const { return count_; }
+  OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
   OB_INLINE bool is_valid() const { return nullptr != storage_datums_ && get_capacity() > 0; }
   /*
    *multi version row section

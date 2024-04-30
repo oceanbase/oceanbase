@@ -27,6 +27,8 @@ namespace storage
 class ObAllMicroBlockRangeIterator;
 struct ObTabletCreateSSTableParam;
 class ObStoreRowIterator;
+class ObSSTableRowLockMultiChecker;
+class ObRowState;
 }
 namespace blocksstable
 {
@@ -96,10 +98,10 @@ public:
       ObStoreRowIterator *&row_iter) override;
   virtual int exist(
       const ObTableIterParam &param,
-	  ObTableAccessContext &context,
-	  const blocksstable::ObDatumRowkey &rowkey,
-	  bool &is_exist,
-	  bool &has_found) override;
+	    ObTableAccessContext &context,
+	    const blocksstable::ObDatumRowkey &rowkey,
+	    bool &is_exist,
+	    bool &has_found) override;
   virtual int exist(
       ObRowsInfo &rows_info,
       bool &is_exist,
@@ -132,13 +134,19 @@ public:
   // For transaction
   int check_row_locked(
       const ObTableIterParam &param,
-      ObTableAccessContext &context,
       const blocksstable::ObDatumRowkey &rowkey,
-      ObStoreRowLockState &lock_state);
-
+      ObTableAccessContext &context,
+      ObStoreRowLockState &lock_state,
+      ObRowState &row_state,
+      bool check_exist);
+  int check_rows_locked(
+      const bool check_exist,
+      storage::ObTableAccessContext &context,
+      share::SCN &max_trans_version,
+      ObRowsInfo &rows_info);
   int set_upper_trans_version(
-      const int64_t upper_trans_version,
-      const bool force_update);
+      common::ObArenaAllocator &allocator,
+      const int64_t upper_trans_version);
   virtual int64_t get_upper_trans_version() const override
   {
     return upper_trans_version_;
@@ -180,6 +188,8 @@ public:
   OB_INLINE bool is_valid() const { return valid_for_reading_; }
   OB_INLINE bool is_loaded() const { return nullptr != meta_; }
   int get_meta(ObSSTableMetaHandle &meta_handle, common::ObSafeArenaAllocator *allocator = nullptr) const;
+  // load sstable meta bypass. Lifetime is guaranteed by allocator, which should cover this sstable
+  int bypass_load_meta(common::ObArenaAllocator &allocator);
   int set_status_for_read(const ObSSTableStatus status);
 
   // TODO: get_index_tree_root and get_last_rowkey now required sstable to be loaded
@@ -221,6 +231,12 @@ public:
   int deserialize_post_work(
       common::ObIAllocator *allocator);
   int assign_meta(ObSSTableMeta *dest);
+  int build_multi_row_lock_checker(
+      ObRowsInfo &rows_info,
+      ObSSTableRowLockMultiChecker *&iter);
+  static void destroy_multi_row_lock_checker(
+      ObRowsInfo &rows_info,
+      ObSSTableRowLockMultiChecker *iter);
 
   INHERIT_TO_STRING_KV("ObITable", ObITable, KP(this), K_(addr), K_(upper_trans_version),
       K_(max_merged_trans_version), K_(data_macro_block_count), K_(nested_size),
@@ -240,7 +256,7 @@ private:
       const ObDatumRowkey &rowkey,
       ObTableAccessContext &access_context,
       ObStoreRowIterator *&iter);
-  int build_multi_exist_iterator(ObRowsInfo &rows_info, ObStoreRowIterator *&iter);
+  int build_multi_exist_iterator(const common::ObIArray<ObDatumRowkey> &rowkeys, ObRowsInfo &rows_info, ObStoreRowIterator *&iter);
   int init_sstable_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
   int get_last_rowkey(const ObDatumRowkey *&sstable_endkey);
   int serialize_fixed_struct(char *buf, const int64_t buf_len, int64_t &pos) const;

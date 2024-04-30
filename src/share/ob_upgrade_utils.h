@@ -168,12 +168,13 @@ class ObUpgradeChecker
 {
 public:
   static bool check_data_version_exist(const uint64_t version);
+  static bool check_data_version_valid_for_backup(const uint64_t data_version);
   static bool check_cluster_version_exist(const uint64_t version);
   static int get_data_version_by_cluster_version(
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 14;
+  static const int64_t DATA_VERSION_NUM = 17;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -227,6 +228,8 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 2)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 3)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 4)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 5)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 6)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 7)
 
 class ObUpgradeFor4220Processor : public ObBaseUpgradeProcessor
 {
@@ -240,6 +243,7 @@ private:
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

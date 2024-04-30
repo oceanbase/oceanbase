@@ -1610,7 +1610,7 @@ int ObTxDescMgr::get(const ObTransID &tx_id, ObTxDesc *&tx_desc)
   if (OB_SUCC(ret)) {
     ret = map_.get(tx_id, tx_desc);
   }
-  TRANS_LOG(TRACE, "txDescMgr.get trans", K(tx_id), KPC(tx_desc));
+  TRANS_LOG(TRACE, "txDescMgr.get trans", K(tx_id), KP(tx_desc));
   return ret;
 }
 

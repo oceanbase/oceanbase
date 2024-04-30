@@ -79,6 +79,10 @@ private:
                                        const common::ObIArray<sql::ObExpr *> &delta_row,
                                        const ObTableEntity &entity);
 
+  static int build_refresh_values(ObTableCtx &ctx,
+                                  const ObTableEntity &entity,
+                                  ObIArray<const ObObj*>& refresh_value_array);
+
   static int generate_assignments(ObTableCtx &ctx);
 
   static int generate_filter_exprs(ObTableCtx &ctx);

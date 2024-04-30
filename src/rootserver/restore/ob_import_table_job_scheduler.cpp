@@ -867,6 +867,7 @@ int ObImportTableTaskScheduler::wait_import_ddl_task_finish_(bool &is_finish)
       LOG_WARN("failed to set result", K(ret), K(error_message));
     } else {
       import_task_->set_result(result);
+      import_task_->set_completion_ts(ObTimeUtility::current_time());
       is_finish = true;
       LOG_INFO("[IMPORT_TABLE]import table failed", KPC_(import_task), K(error_message));
     }

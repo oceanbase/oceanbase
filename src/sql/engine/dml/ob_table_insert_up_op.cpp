@@ -118,6 +118,11 @@ int ObTableInsertUpOp::check_need_exec_single_row()
   return ret;
 }
 
+ObDasParallelType ObTableInsertUpOp::check_das_parallel_type()
+{
+  return DAS_SERIALIZATION;
+}
+
 int ObTableInsertUpOp::inner_open()
 {
   int ret = OB_SUCCESS;
@@ -173,6 +178,13 @@ int ObTableInsertUpOp::inner_open_with_das()
      upd_rtctx_.das_ref_.set_expr_frame_info(expr_frame_info);
      upd_rtctx_.das_ref_.set_mem_attr(mem_attr);
      upd_rtctx_.das_ref_.set_execute_directly(!MY_SPEC.use_dist_das_);
+     ObDasParallelType type = ObTableModifyOp::check_das_parallel_type();
+     if (DAS_SERIALIZATION != type) {
+       type = DAS_BLOCKING_PARALLEL;
+       LOG_TRACE("this sql use das parallel submit for insert_up", K(check_das_parallel_type()));
+     }
+     upd_rtctx_.das_ref_.get_das_parallel_ctx().set_das_parallel_type(type);
+     upd_rtctx_.das_ref_.get_das_parallel_ctx().set_das_dop(ctx_.get_das_ctx().get_real_das_dop());
   }
   return ret;
 }
@@ -460,7 +472,7 @@ int ObTableInsertUpOp::insert_row_to_das(const ObInsCtDef &ins_ctdef,
 {
   int ret = OB_SUCCESS;
   ObChunkDatumStore::StoredRow* stored_row = nullptr;
-  if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, dml_rtctx_, stored_row))) {
+  if (OB_FAIL(ObDMLService::insert_row(ins_ctdef, ins_rtdef, tablet_loc, upd_rtctx_, stored_row))) {
     LOG_WARN("insert row with das failed", K(ret));
   } else {
     LOG_TRACE("insert one row", KPC(tablet_loc),
@@ -536,7 +548,7 @@ int ObTableInsertUpOp::lock_one_row_to_das(const ObUpdCtDef &upd_ctdef,
                                                   allocator,
                                                   upd_rtdef.dlock_rtdef_))) {
       LOG_WARN("create das lock rtdef failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::init_das_dml_rtdef(dml_rtctx_,
+    } else if (OB_FAIL(ObDMLService::init_das_dml_rtdef(upd_rtctx_,
                                                         *upd_ctdef.dlock_ctdef_,
                                                         *upd_rtdef.dlock_rtdef_,
                                                         nullptr))) {
@@ -548,7 +560,7 @@ int ObTableInsertUpOp::lock_one_row_to_das(const ObUpdCtDef &upd_ctdef,
   } else if (OB_ISNULL(upd_rtdef.dlock_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dlock_rtdef_ is null", K(ret));
-  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(dml_rtctx_,
+  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(upd_rtctx_,
                                                              *tablet_loc,
                                                              upd_ctdef.old_row_,
                                                              upd_ctdef,
@@ -631,7 +643,7 @@ int ObTableInsertUpOp::delete_one_upd_old_row_das(const ObUpdCtDef &upd_ctdef,
     ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
     ObIAllocator &allocator = ctx_.get_allocator();
     uint64_t tenant_id = my_session->get_effective_tenant_id();
-    if (OB_FAIL(ObDMLService::init_das_del_rtdef_for_update(dml_rtctx_, upd_ctdef, upd_rtdef))) {
+    if (OB_FAIL(ObDMLService::init_das_del_rtdef_for_update(upd_rtctx_, upd_ctdef, upd_rtdef))) {
       LOG_WARN("init das dml rtdef failed", K(ret), K(upd_ctdef), K(upd_rtdef));
     }
   }
@@ -641,7 +653,7 @@ int ObTableInsertUpOp::delete_one_upd_old_row_das(const ObUpdCtDef &upd_ctdef,
   } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddel_rtdef is null", K(ret));
-  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(dml_rtctx_,
+  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(upd_rtctx_,
                                                              *tablet_loc,
                                                              upd_ctdef.old_row_,
                                                              upd_ctdef,
@@ -673,7 +685,7 @@ int ObTableInsertUpOp::insert_one_upd_new_row_das(const ObUpdCtDef &upd_ctdef,
     ObSQLSessionInfo *my_session = GET_MY_SESSION(ctx_);
     ObIAllocator &allocator = ctx_.get_allocator();
     uint64_t tenant_id = my_session->get_effective_tenant_id();
-    if (OB_FAIL(ObDMLService::init_das_ins_rtdef_for_update(dml_rtctx_, upd_ctdef, upd_rtdef))) {
+    if (OB_FAIL(ObDMLService::init_das_ins_rtdef_for_update(upd_rtctx_, upd_ctdef, upd_rtdef))) {
       LOG_WARN("init das dml rtdef failed", K(ret), K(upd_ctdef), K(upd_rtdef));
     }
   }
@@ -683,7 +695,7 @@ int ObTableInsertUpOp::insert_one_upd_new_row_das(const ObUpdCtDef &upd_ctdef,
   } else if (OB_ISNULL(upd_rtdef.dins_rtdef_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dins_rtdef is null", K(ret));
-  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(dml_rtctx_,
+  } else if (OB_FAIL(ObDMLService::check_dml_tablet_validity(upd_rtctx_,
                                                              *tablet_loc,
                                                              upd_ctdef.new_row_,
                                                              upd_ctdef,
@@ -863,7 +875,7 @@ int ObTableInsertUpOp::do_insert_up()
     } else if (!check_is_duplicated()) {
       insert_rows_ += insert_rows;
       LOG_TRACE("try insert is not duplicated", K(ret), K(insert_rows_));
-    } else if (OB_FAIL(fetch_conflict_rowkey())) {
+    } else if (OB_FAIL(fetch_conflict_rowkey(insert_up_row_store_.get_row_cnt()))) {
       LOG_WARN("fail to fetch conflict row", K(ret));
     } else if (OB_FAIL(reset_das_env())) {
       // 这里需要reuse das 相关信息
@@ -879,8 +891,6 @@ int ObTableInsertUpOp::do_insert_up()
     } else if (!is_ignore_ && OB_FAIL(prepare_final_insert_up_task())) {
       LOG_WARN("fail to prepare final das task", K(ret));
     } else if (OB_FAIL(post_all_dml_das_task(upd_rtctx_, true))) {
-      LOG_WARN("do insert rows post process failed", K(ret));
-    } else if (OB_FAIL(post_all_dml_das_task(dml_rtctx_, false))) {
       LOG_WARN("do insert rows post process failed", K(ret));
     } else if (OB_FAIL(ObDMLService::handle_after_row_processing(this, &dml_modify_rows_))) {
       LOG_WARN("try insert is duplicated, failed to process foreign key handle", K(ret));
@@ -901,17 +911,17 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
 {
   int ret = OB_SUCCESS;
   is_iter_end = false;
-  int64_t row_cnt = 0;
+  bool reach_mem_limit = false;
   ObPhysicalPlanCtx *plan_ctx = ctx_.get_physical_plan_ctx();
-  int64_t simulate_batch_row_cnt = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
-  int64_t default_row_batch_cnt = simulate_batch_row_cnt > 0 ?
-                                  simulate_batch_row_cnt : INT64_MAX;
-  if (is_ignore_ || execute_single_row_) {
-    // If it is ignore mode or need excute row by row, degenerate into single line execution
-    default_row_batch_cnt = 1;
+  int64_t default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT;
+  int64_t simulate_batch_mem_limit = - EVENT_CALL(EventTable::EN_TABLE_INSERT_UP_BATCH_ROW_COUNT);
+  default_row_store_mem_limit = simulate_batch_mem_limit > 0 ?
+                                simulate_batch_mem_limit : default_row_store_mem_limit;
+  if (upd_rtctx_.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+    default_row_store_mem_limit = OB_DEFAULT_INSERT_UP_MEMORY_LIMIT * 5; // 10M
   }
-  LOG_DEBUG("simulate lookup row batch count", K(simulate_batch_row_cnt), K(default_row_batch_cnt));
-  while (OB_SUCC(ret) && ++row_cnt <= default_row_batch_cnt) {
+
+  while (OB_SUCC(ret) && !reach_mem_limit) {
     if (OB_FAIL(get_next_row_from_child())) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to load next row from child", K(ret));
@@ -925,9 +935,12 @@ int ObTableInsertUpOp::load_batch_insert_up_rows(bool &is_iter_end, int64_t &ins
     } else {
       plan_ctx->record_last_insert_id_cur_stmt();
       insert_rows++;
-      if (insert_up_row_store_.get_mem_used() >= OB_DEFAULT_INSERT_UP_MEMORY_LIMIT) {
-        LOG_INFO("insert up rows used memory over limit", K(ret), K(row_cnt), K(insert_rows));
-        break;
+      if (insert_up_row_store_.get_mem_used() >= default_row_store_mem_limit ||
+          is_ignore_ ||
+          execute_single_row_) {
+        LOG_TRACE("insert up rows used memory over limit", K(ret),
+            K(insert_rows), K(default_row_store_mem_limit), K(is_ignore_), K(execute_single_row_));
+        reach_mem_limit = true;
       }
     }
   }
@@ -1019,12 +1032,17 @@ int ObTableInsertUpOp::get_next_conflict_rowkey(DASTaskIter &task_iter)
   return ret;
 }
 
-int ObTableInsertUpOp::fetch_conflict_rowkey()
+int ObTableInsertUpOp::fetch_conflict_rowkey(int64_t row_cnt)
 {
   int ret = OB_SUCCESS;
   bool got_row = false;
   NG_TRACE_TIMES(2, insert_up_start_lookup);
   DASTaskIter task_iter = dml_rtctx_.das_ref_.begin_task_iter();
+  if (row_cnt > ObConflictCheckerCtdef::MIN_ROW_COUNT_USE_HASHSET_DO_DISTICT) {
+    if (OB_FAIL(conflict_checker_.create_rowkey_check_hashset(row_cnt))) {
+      LOG_WARN("fail to create conflict_checker hash_set", K(ret), K(row_cnt));
+    }
+  }
   while (OB_SUCC(ret) && !task_iter.is_end()) {
     // 不需要clear rowkey表达式的eval_flag，因为主键使用的是column_ref表达式，不存在eval_fun
     if (OB_FAIL(get_next_conflict_rowkey(task_iter))) {
@@ -1144,7 +1162,7 @@ int ObTableInsertUpOp::do_update_with_ignore()
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("ignore not supported", K(ret), KPC(old_tablet_loc), KPC(new_tablet_loc));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Do update with ignore under inconsistent tablet loc");
-  } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, dml_rtctx_,
+  } else if (OB_FAIL(ObDMLService::update_row(*upd_ctdef, upd_rtdef, old_tablet_loc, new_tablet_loc, upd_rtctx_,
                                              modify_row.old_row_, modify_row.new_row_, modify_row.full_row_))) {
     LOG_WARN("fail to insert update_row to das", K(ret));
   } else if (need_after_row_process(*upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {

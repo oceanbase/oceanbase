@@ -103,7 +103,7 @@ int ObDataBlockCachePreWarmer::update_and_put_kvpair(const blocksstable::ObMicro
                          || !cache_handle_.is_valid() || nullptr == kvpair_)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Invalid argument", K(ret), K(micro_block_desc), K(inst_handle_), K(cache_handle_), K(kvpair_));
-  } else if (cache_->get_cache(kvcache)) {
+  } else if (OB_FAIL(cache_->get_cache(kvcache))) {
     COMMON_LOG(WARN, "Fail to get block kvcache", K(ret));
   } else if (FALSE_IT(static_cast<blocksstable::ObMicroBlockCacheKey *>(kvpair_->key_)->set(
                       MTL_ID(),

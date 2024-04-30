@@ -37,7 +37,6 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
   ObKillSessionArg arg;
   ObAddr addr;
   ObSQLSessionMgr &session_mgr = OBSERVER.get_sql_session_mgr();
-
   if (OB_FAIL(arg.init(ctx, stmt))) {
     LOG_WARN("fail to init kill_session arg", K(ret), K(arg), K(ctx), K(stmt));
   } else if (OB_FAIL(kill_session(arg, session_mgr))) {
@@ -76,6 +75,9 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
   } else if (OB_ISNULL(sess_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is NULL", K(ret), K(arg));
+  } else if (sess_info->is_real_inner_session()) {
+    ret = OB_ERR_KILL_DENIED;
+    LOG_WARN("It is not allowed to close the inner session", K(ret), K(arg));
   } else if ((OB_SYS_TENANT_ID == arg.tenant_id_)
              || ((arg.tenant_id_ == sess_info->get_priv_tenant_id())
                  && (arg.has_user_super_privilege_ || arg.user_id_ == sess_info->get_user_id()))) {

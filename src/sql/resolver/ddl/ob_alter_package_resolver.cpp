@@ -159,6 +159,10 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                           package_guard,
                           *(params_.sql_proxy_));
     bool has_error = false;
+    char buf[OB_MAX_PROC_ENV_LENGTH];
+    int64_t pos = 0;
+    OZ (ObExecEnv::gen_exec_env(*session_info_, buf, OB_MAX_PROC_ENV_LENGTH, pos));
+    OZ (ob_write_string(*allocator_, ObString(pos, buf), pkg_arg.exec_env_));
     OZ (package_guard.init());
     OZ (schema_checker_->get_package_info(session_info_->get_effective_tenant_id(),
                                           db_name,
@@ -231,8 +235,12 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
     if (OB_FAIL(ret)) {
     } else if (!collect_package_body_info) {
       COLLECT_PACKAGE_INFO(pkg_arg, package_spec_info);
+      if (OB_SUCC(ret) && !has_error) {
+        share::schema::ObErrorInfo error_info;
+        OZ (error_info.delete_error(package_spec_info));
+      }
     } else {
-      bool has_error = false;
+      bool body_has_error = false;
       OZ (package_body_ast.init(db_name,
                                 package_name,
                                 PL_PACKAGE_BODY,
@@ -241,33 +249,55 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                                 OB_INVALID_VERSION,
                                 &package_spec_ast));
       OZ (analyze_package(compiler, &(package_spec_ast.get_body()->get_namespace()),
-                          package_body_ast, db_name, package_body_info, error_info, has_error));
-      if (OB_SUCC(ret) && !has_error) {
-        // if has_error, don't need to update routine route sql
+                          package_body_ast, db_name, package_body_info, error_info, body_has_error));
+      if (OB_SUCC(ret)) {
         ObArray<const ObRoutineInfo *> routine_infos;
-        ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
-        ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
-        ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
         OZ (schema_checker_->get_schema_guard()->get_routine_infos_in_package(
-            session_info_->get_effective_tenant_id(),
-            package_spec_info->get_package_id(),
-            routine_infos));
-        if (OB_SUCC(ret) && routine_infos.empty() && spec_routine_table.get_count() > 1) {
-          OZ (ObCreatePackageResolver::resolve_functions_spec(
-            *package_spec_info, routine_spec_infos, spec_routine_table));
-          CK (routine_spec_infos.count() > 0);
-          for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
-            OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+              session_info_->get_effective_tenant_id(),
+              package_spec_info->get_package_id(),
+              routine_infos));
+        if (OB_FAIL(ret)) {
+        } else if (!body_has_error) {
+          // if has_error, don't need to update routine route sql
+          ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
+          ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
+          ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
+          if (OB_SUCC(ret) && routine_infos.empty() && spec_routine_table.get_count() > 1) {
+            OZ (ObCreatePackageResolver::resolve_functions_spec(
+              *package_spec_info, routine_spec_infos, spec_routine_table));
+            CK (routine_spec_infos.count() > 0);
+            for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
+              OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+            }
+          }
+          OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
+                                                                    *session_info_,
+                                                                    pkg_arg.public_routine_infos_,
+                                                                    spec_routine_table,
+                                                                    body_routine_table,
+                                                                    routine_infos));
+          if (OB_FAIL(ret)) {
+            pkg_arg.public_routine_infos_.reset();
+          } else {
+            share::schema::ObErrorInfo error_info;
+            if (!has_error) {
+              OZ (error_info.delete_error(package_spec_info));
+            }
+            OZ (error_info.delete_error(package_body_info));
+          }
+        } else if (0 != package_body_info->get_exec_env().case_compare(pkg_arg.exec_env_)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < routine_infos.count(); ++i) {
+            OZ (pkg_arg.public_routine_infos_.push_back(*routine_infos.at(i)));
           }
         }
-        OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
-                                                                  *session_info_,
-                                                                  pkg_arg.public_routine_infos_,
-                                                                  spec_routine_table,
-                                                                  body_routine_table,
-                                                                  routine_infos));
-        if (OB_FAIL(ret)) {
-          pkg_arg.public_routine_infos_.reset();
+        // TODO:actually，“alter package compile” should replace package spec and package body
+        // but if we will alter package body, it only send package body info rpc, so we can only collect package body dep
+        if (OB_SUCC(ret)) {
+          ObString dep_attr;
+          OZ (ObDependencyInfo::collect_dep_infos(package_body_ast.get_dependency_table(),
+                                                  pkg_arg.dependency_infos_,
+                                                  ObObjectType::PACKAGE_BODY,
+                                                  0, dep_attr, dep_attr));
         }
       }
       COLLECT_PACKAGE_INFO(pkg_arg, package_body_info);

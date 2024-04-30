@@ -3458,8 +3458,9 @@ namespace memtable
 int ObMemtable::lock_row_on_frozen_stores_(
     const storage::ObTableIterParam &,
     const ObTxNodeArg &,
-    storage::ObTableAccessContext &,
     const ObMemtableKey *,
+    const bool check_exist,
+    storage::ObTableAccessContext &,
     ObMvccRow *,
     ObMvccWriteResult &)
 {

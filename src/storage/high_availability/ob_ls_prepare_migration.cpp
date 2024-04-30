@@ -832,6 +832,7 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
     const int64_t wait_replay_start_ts = ObTimeUtility::current_time();
     int64_t last_replay_ts = 0;
     int64_t current_ts = 0;
+    ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret) && !wait_log_replay_success) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
@@ -839,11 +840,15 @@ int ObStartPrepareMigrationTask::wait_log_replay_sync_()
       } else if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
-      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
-        STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-      } else if (is_cancel) {
+      } else if (OB_ISNULL(this->get_dag())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+      } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
+        LOG_WARN("task is cancelled", K(ret), K(*this));
       } else if (OB_FAIL(ls->get_max_decided_scn(current_replay_scn))) {
         LOG_WARN("failed to get current replay log scn", K(ret), KPC(ctx_));
       } else if (current_replay_scn >= ctx_->log_sync_scn_) {
@@ -1077,7 +1082,6 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
   SCN checkpoint_scn;
   const int64_t MAX_WAIT_INTERVAL_BY_CHECKPOINT_BY_FLUSH = GCONF._advance_checkpoint_timeout;
   const int64_t MAX_SLEEP_INTERVAL_MS = 5 * 1000 * 1000; //5s
-  bool is_cancel = false;
   ObLSSavedInfo saved_info;
 
   if (!is_inited_) {
@@ -1094,6 +1098,7 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
     LOG_INFO("saved info is not empty, no need wait ls checkpoint ts push", K(saved_info), KPC(ctx_));
   } else {
     const int64_t wait_checkpoint_push_start_ts = ObTimeUtility::current_time();
+    ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret)) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
@@ -1101,11 +1106,15 @@ int ObStartPrepareMigrationTask::wait_ls_checkpoint_scn_push_()
       } else if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
-      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
-        STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-      } else if (is_cancel) {
+      } else if (OB_ISNULL(this->get_dag())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+      } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
+        LOG_WARN("task is cancelled", K(ret), K(*this));
       } else if (FALSE_IT(checkpoint_scn = ls->get_clog_checkpoint_scn())) {
       } else if (checkpoint_scn >= ctx_->log_sync_scn_) {
         const int64_t cost_ts = ObTimeUtility::current_time() - wait_checkpoint_push_start_ts;
@@ -1226,11 +1235,22 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
   } else if (OB_FAIL(ls->build_tablet_iter(tablet_iterator))) {
     LOG_WARN("failed to build ls tablet iter", K(ret), KPC(ctx_));
   } else {
+    DEBUG_SYNC(BEFORE_WAIT_TRANSFER_OUT_TABLET_READY);
+    ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret)) {
       ObTabletHandle tablet_handle;
       ObTablet *tablet = nullptr;
       user_data.reset();
-      if (OB_FAIL(tablet_iterator.get_next_tablet(tablet_handle))) {
+      if (OB_ISNULL(this->get_dag())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+      } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
+        ret = OB_CANCELED;
+        LOG_WARN("task is cancelled", K(ret), K(*this));
+      } else if (OB_FAIL(tablet_iterator.get_next_tablet(tablet_handle))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -1295,6 +1315,7 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
     LOG_WARN("tablet status is unexpected", K(ret), K(user_data), KPC(tablet));
   } else {
     const int64_t wait_transfer_tablet_ready_ts = ObTimeUtility::current_time();
+    ObIDagNet *dag_net = nullptr;
     while (OB_SUCC(ret)) {
       if (ctx_->is_failed()) {
         ret = OB_CANCELED;
@@ -1302,11 +1323,15 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
       } else if (ls->is_stopped()) {
         ret = OB_NOT_RUNNING;
         LOG_WARN("ls is not running, stop migration dag net", K(ret), K(ctx_));
-      } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
-        STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-      } else if (is_cancel) {
+      } else if (OB_ISNULL(this->get_dag())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+      } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
         ret = OB_CANCELED;
-        STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
+        LOG_WARN("task is cancelled", K(ret), K(*this));
       } else if (OB_FAIL(ObStorageHADagUtils::get_ls(user_data.transfer_ls_id_, dest_ls_handle))) {
         if (OB_LS_NOT_EXIST == ret) {
           ret = OB_SUCCESS;

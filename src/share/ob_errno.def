@@ -131,7 +131,7 @@ DEFINE_ERROR_DEP(OB_CONFLICT_VALUE, -4021, -1, "HY000", "Conflict value");
 DEFINE_ERROR_DEP(OB_ITEM_NOT_SETTED, -4022, -1, "HY000", "Item not set");
 DEFINE_ERROR_DEP(OB_EAGAIN, -4023, -1, "HY000", "Try again");
 DEFINE_ERROR_DEP(OB_BUF_NOT_ENOUGH, -4024, -1, "HY000", "Buffer not enough");
-DEFINE_ERROR(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed");
+DEFINE_ERROR_EXT_DEP(OB_PARTIAL_FAILED, -4025, -1, "HY000", "Partial failed", "%s");
 DEFINE_ORACLE_ERROR_DEP(OB_READ_NOTHING, -4026, ER_SP_FETCH_NO_DATA, "02000", "No data - zero rows fetched, selected, or processed", 1403, "no data found");
 DEFINE_ERROR_DEP(OB_FILE_NOT_EXIST, -4027, ER_FILE_NOT_FOUND, "HY000", "File not exist");
 DEFINE_ERROR_DEP(OB_DISCONTINUOUS_LOG, -4028, -1, "HY000", "Log entry not continuous");
@@ -1209,10 +1209,13 @@ DEFINE_ORACLE_ERROR(OB_ERR_UNSUPPORTED_FK_SET_NULL_ON_GENERATED_COLUMN, -5513, E
 DEFINE_ORACLE_ERROR(OB_JSON_PROCESSING_ERROR, -5514, -1, "42000", " JSON processing error", 40444, " JSON processing error");
 DEFINE_ERROR(OB_ERR_TABLE_WITHOUT_ALIAS, -5515, ER_TF_MUST_HAVE_ALIAS, "42000", "Every table function must have an alias");
 DEFINE_ERROR(OB_ERR_NON_STRING_NOT_SUPPORT, -5517, ER_NOT_SUPPORTED_YET, "42000", "This version of MySQL doesn't yet support 'non-string DEFAULT value for a column in a JSON_TABLE expression'");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_IDENTIFIER_JSON_TABLE, -5522, -1, "22000", "invalid identifier used for path expression in JSON_TABLE", 40680, "invalid identifier used for path expression in JSON_TABLE");
+
 //for changed solidify session vars of generated cols
 DEFINE_ERROR_EXT_DEP(OB_ERR_SESSION_VAR_CHANGED, -5540, -1, "HY000", "System variables are different from the old values solidified.", "System variable '%.*s' is different from the old value solidified for '%.*s'(old value:%.*s).");
 
 DEFINE_ERROR_EXT(OB_ERR_DEPRECATED_SYNTAX, -5516, ER_WARN_DEPRECATED_SYNTAX, "HY000", "This syntax is deprecated and will be removed in a future release", "%s is deprecated and will be removed in a future release. Please use \'%s\' instead");
+DEFINE_ERROR_EXT(OB_ERR_DEPRECATED_SYNTAX_NO_REP, -5518, ER_WARN_DEPRECATED_SYNTAX_NO_REPLACEMENT, "HY000", "This syntax is deprecated and will be removed in a future release", "%s is deprecated and will be removed in a future release");
 
 DEFINE_ERROR_EXT(OB_ERR_SP_ALREADY_EXISTS, -5541, ER_SP_ALREADY_EXISTS, "42000", "procedure/function already exists", "%s %.*s already exists");
 DEFINE_ERROR_EXT(OB_ERR_SP_DOES_NOT_EXIST, -5542, ER_SP_DOES_NOT_EXIST, "42000", "procedure/function does not exist", "%s %.*s.%.*s does not exist");
@@ -1835,6 +1838,8 @@ DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_TWICE, -6326, -1, "HY000", "table lock has been
 DEFINE_ERROR(OB_TABLE_LOCK_IS_SPLITTING, -6327, -1, "HY000", "table lock is being splitted, can not be splitted again")
 DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_FAIL, -6328, -1, "HY000", "table lock splitting failed")
 DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need retry under sequence number reorder")
+DEFINE_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, -6330, -1, "HY000", "user data disk is almost full")
+DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2241,6 +2246,7 @@ DEFINE_ERROR(OB_NO_SUCH_FILE_OR_DIRECTORY, -9100, -1, "HY000", "no such file or 
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory already exist");
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, -9102, -1, "HY000", "file or directory permission denied");
 DEFINE_ERROR(OB_TOO_MANY_OPEN_FILES, -9103, -1, "HY000", "too many open files");
+DEFINE_ERROR(OB_DIRECT_LOAD_COMMIT_ERROR, -9104, -1, "HY000", "fail to commit direct load");
 DEFINE_ERROR_DEP(OB_S3_ERROR, -9105, -1, "HY000", "S3 error");
 
 // For tenant snapshot
@@ -2258,6 +2264,7 @@ DEFINE_ERROR(OB_STORAGE_DEST_NOT_CONNECT, -9115, -1, "HY000", "can not connect t
 DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/O operation permission of the object storage");
 DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_region does not match the endpoint");
 DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
+DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
 
 // 余留位置，在该行之前继续添加storage错误码
 
@@ -2547,6 +2554,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_SEQUENCE_NOT_DEFINE, -9753, -1, "HY000", "sequence is
 DEFINE_ERROR_EXT(OB_ERR_DEBUG_ID_NOT_EXIST, -9754, -1, "HY000", "debug_session_id does not exist", "debug_session_id = %u does not exist");
 DEFINE_ERROR(OB_ERR_CLIENT_LOCAL_FILES_DISABLED, -9762, ER_CLIENT_LOCAL_FILES_DISABLED, "42000", "Loading local data is disabled; this must be enabled on both the client and server sides");
 DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way", 224, "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way");
+DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR_EXPR, -9766, -1, "HY000", "CURSOR expression not allowed", 22902, "CURSOR expression not allowed");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2605,9 +2613,10 @@ DEFINE_ERROR(OB_ERR_QUERY_RANGE_MEMORY_EXHAUSTED, -11011, -1, "HY000", "query ra
 DEFINE_ERROR_EXT(OB_ERR_UNKNOWN_AUTHID, -11007, ER_UNKNOWN_AUTHID, "HY000", "Unknown authorization ID", "Unknown authorization ID `%.*s`@`%.*s`");
 DEFINE_ERROR_EXT(OB_ERR_NO_GRANT_DEFINED_FOR_USER, -11008, ER_NONEXISTING_GRANT, "42000", "There is no such grant defined for user", "There is no such grant defined for user '%.*s' on host '%.*s'");
 DEFINE_ERROR_EXT(OB_ERR_USER_ALREADY_EXISTS, -11009, ER_USER_ALREADY_EXISTS, "HY000", "Authorization ID already exists", "Authorization ID '%.*s'@'%.*s' already exists");
-
+DEFINE_ERROR_EXT(OB_CANNOT_USER_IF_EXISTS, -11012, ER_CANNOT_USER_IF_EXISTS, "HY000", "User operation failed", "User %.*s does not exist");
 
 DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "HY000", "Argument should be a constant or a function of expressions in GROUP BY.", 30497, "Argument should be a constant or a function of expressions in GROUP BY.");
+DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
 DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
 
 // 余留位置

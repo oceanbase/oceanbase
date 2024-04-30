@@ -73,6 +73,10 @@ inline bool is_meta_major_merge(const ObMergeType &merge_type)
 {
   return META_MAJOR_MERGE == merge_type;
 }
+inline bool is_major_or_meta_merge_type(const ObMergeType &merge_type)
+{
+  return is_major_merge_type(merge_type) || is_meta_major_merge(merge_type);
+}
 
 inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
 {

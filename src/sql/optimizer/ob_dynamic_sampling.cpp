@@ -529,6 +529,9 @@ int ObDynamicSampling::estimte_rowcount(int64_t max_ds_timeout,
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
     }
+    if (OB_NOT_NULL(session_value)) {
+      session_value->reset();
+    }
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
             K(raw_sql_str), K(max_ds_timeout), K(start_time), K(ObTimeUtility::current_time() - start_time));
@@ -1359,7 +1362,8 @@ int ObDynamicSamplingUtils::check_ds_can_use_filter(const ObRawExpr *filter,
              filter->get_expr_type() == T_FUN_ENUM_TO_STR ||
              filter->get_expr_type() == T_OP_GET_PACKAGE_VAR ||
              (filter->get_expr_type() >= T_FUN_SYS_IS_JSON &&
-              filter->get_expr_type() <= T_FUN_SYS_TREAT)) {
+              filter->get_expr_type() <= T_FUN_SYS_TREAT) ||
+             filter->get_expr_type() == T_FUN_GET_TEMP_TABLE_SESSID) {
     no_use = true;
   } else if (filter->get_expr_type() == T_FUN_SYS_LNNVL) {
     const ObRawExpr *real_expr = NULL;

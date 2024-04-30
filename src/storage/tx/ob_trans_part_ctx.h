@@ -147,7 +147,7 @@ public:
   int get_prepare_version_if_prepared(bool &is_prepared, share::SCN &prepare_version);
   const share::SCN get_commit_version() const { return ctx_tx_data_.get_commit_version(); }
   uint64_t hash() const { return trans_id_.hash(); }
-  int gts_callback_interrupted(const int errcode);
+  int gts_callback_interrupted(const int errcode, const share::ObLSID target_ls_id);
   int get_gts_callback(const MonotonicTs srr, const share::SCN &gts, const MonotonicTs receive_gts_ts);
   int gts_elapse_callback(const MonotonicTs srr, const share::SCN &gts);
   MonotonicTs get_stc() const { return stc_; }
@@ -332,6 +332,7 @@ public:
   // ========================================================
   // newly added for 4.0
 
+  bool is_decided() const { return ctx_tx_data_.is_decided(); }
   int retry_dup_trx_before_prepare(
       const share::SCN &before_prepare_version,
       const ObDupTableBeforePrepareRequest::BeforePrepareScnSrc before_prepare_src);
@@ -602,8 +603,9 @@ private:
 
   int prepare_mul_data_source_tx_end_(bool is_commit);
 
-  int errism_dup_table_redo_sync_();
-  int errism_submit_prepare_log_();
+  int errsim_dup_table_redo_sync_();
+  int errsim_submit_prepare_log_();
+  int errsim_do_pre_commit_without_root_();
 protected:
   virtual int get_gts_(share::SCN &gts);
   virtual int wait_gts_elapse_commit_version_(bool &need_wait);

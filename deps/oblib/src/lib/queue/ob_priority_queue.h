@@ -109,6 +109,15 @@ public:
       ;
   }
 
+  ObLinkQueue* get_queue(const int i)
+  {
+    return &queue_[i];
+  }
+
+  int64_t get_prio_cnt() const
+  {
+    return PRIO_CNT;
+  }
 private:
   SimpleCond sem_;
   ObLinkQueue queue_[PRIO_CNT];
@@ -131,6 +140,14 @@ public:
   int64_t queue_size(const int i) const
   {
     return queue_[i].size();
+  }
+  int64_t get_prio_cnt() const
+  {
+    return PRIO_CNT;
+  }
+  ObLinkQueue* get_queue(const int i)
+  {
+    return &queue_[i];
   }
   int64_t to_string(char *buf, const int64_t buf_len) const
   {

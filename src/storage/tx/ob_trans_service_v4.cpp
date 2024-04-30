@@ -976,7 +976,10 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
 {
   int ret = OB_SUCCESS;
   ObLSID ls_id = store_ctx.ls_id_;
-  if (!ls_id.is_valid() || !snapshot.valid_) {
+  if (OB_UNLIKELY(store_ctx.timeout_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "store_ctx.timeout_ is invalid", K(ret), K(store_ctx), K(lbt()));
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || !snapshot.valid_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid ls_id or invalid snapshot store_ctx", K(ret), K(snapshot), K(store_ctx), K(lbt()));
   } else if (snapshot.is_special()) {
@@ -1047,6 +1050,14 @@ int ObTransService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
               "ls_weak_read_ts", store_ctx.ls_->get_ls_wrs_handler()->get_ls_weak_read_ts());
     }
   }
+
+if (OB_SUCC(ret)) {
+  if (snapshot.snapshot_ls_role_ == common::ObRole::FOLLOWER
+      && snapshot.snapshot_acquire_addr_ != GCTX.self_addr()) {
+    TRANS_LOG(INFO, "get read store_ctx by a follower's max_commit_ts", K(ret), K(snapshot),
+              K(ls_id), K(store_ctx));
+  }
+}
 
   // setup tx_table_guard
   ObTxTableGuard tx_table_guard;
@@ -1124,9 +1135,12 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
-  } else if (!snapshot.valid_) {
+  } else if (OB_UNLIKELY(!snapshot.valid_)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot));
+    TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot), K(lbt()));
+  } else if (OB_UNLIKELY(store_ctx.timeout_ < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "store_ctx.timeout_ is invalid", K(ret), K(store_ctx), K(lbt()));
   } else if (snapshot.is_none_read()
              && OB_FAIL(acquire_local_snapshot_(ls_id,
                                                 snap.version_,
@@ -1914,7 +1928,7 @@ int ObTransService::handle_trans_commit_request(ObTxCommitMsg &msg,
 #ifndef NDEBUG
   TRANS_LOG(INFO, "handle trans commit request", K(ret), K(msg));
 #else
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && OB_TRANS_COMMITED != ret) {
     TRANS_LOG(WARN, "handle trans commit request failed", K(ret), K(msg));
   }
 #endif
@@ -2777,6 +2791,19 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
   tx.lock_.lock();
   ret = update_user_savepoint_(tx, savepoints);
   tx.lock_.unlock();
+  return ret;
+}
+
+int ObTransService::update_savepoint_with_sessid(ObTxDesc &tx, const uint32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(tx.lock_);
+  ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
+    ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
+    if (it.is_savepoint()) {
+      it.session_id_ = session_id;
+    }
+  }
   return ret;
 }
 

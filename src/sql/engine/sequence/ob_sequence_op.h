@@ -76,6 +76,8 @@ class ObLocalSequenceExecutor : public ObSequenceExecutor {
     virtual void reset() override;
     virtual void destroy() override;
     virtual int get_nextval(ObExecContext &ctx) override;
+    int handle_gais_request(const ObGAISNextSequenceValReq &request,
+                                  obrpc::ObGAISNextSequenceValRpcResult &result);
   private:
     // sequence 暴露给用户层的是一个 cache
     // cache 底层负责做 sequence 的缓存更新以及全局的协调

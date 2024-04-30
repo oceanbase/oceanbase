@@ -113,7 +113,7 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
       *dblink_name_len = static_cast<int32_t>(node->children_[2]->children_[0]->str_len_);
     }
   }
-  if (OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
@@ -152,7 +152,8 @@ int ObStmtResolver::resolve_table_relation_node_v2(const ParseNode *node,
           CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
           OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                              session_info_,
-                                             db_name));
+                                             db_name,
+                                             allocator_));
         }
       }
       if (OB_SUCCESS == ret && (OB_ERR_TOO_LONG_IDENT == tmp_ret || OB_WRONG_TABLE_NAME == tmp_ret)) {

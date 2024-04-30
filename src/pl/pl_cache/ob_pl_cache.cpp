@@ -76,46 +76,61 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
   } else {
-    void *obj_buf = nullptr;
-    ObPLTableColumnInfo *column_info = nullptr;
-    column_cnt_ = schema->get_column_count();
-    column_infos_.set_allocator(inner_alloc_);
-    if (OB_FAIL(column_infos_.init(column_cnt_))) {
-      LOG_WARN("failed to init column_infos", K(ret));
-    } else {
-      ObTableSchema::const_column_iterator cs_iter = schema->column_begin();
-      ObTableSchema::const_column_iterator cs_iter_end = schema->column_end();
-      for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
-        const ObColumnSchemaV2 &column_schema = **cs_iter;
-        if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret));
-        } else if (FALSE_IT(column_info = new(obj_buf)ObPLTableColumnInfo(inner_alloc_))) {
-          // do nothing
-        } else {
-          column_info->column_id_ = column_schema.get_column_id();
-          column_info->meta_type_ = column_schema.get_meta_type();
-          column_info->charset_type_ = column_schema.get_charset_type();
-          column_info->accuracy_ = column_schema.get_accuracy();
-          OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
-
-          if (OB_SUCC(ret)) {
-            char *name_buf = NULL;
-            const ObString &column_name = column_schema.get_column_name_str();
-            if (OB_ISNULL(name_buf =
-                static_cast<char*>(inner_alloc_->alloc(column_name.length() + 1)))) {
+    ObTableSchema::const_column_iterator cs_iter = schema->column_begin();
+    ObTableSchema::const_column_iterator cs_iter_end = schema->column_end();
+    int64_t real_column_cnt = 0;
+    for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+      const ObColumnSchemaV2 &column_schema = **cs_iter;
+      if (!column_schema.is_hidden()) {
+        real_column_cnt++;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      column_cnt_ = real_column_cnt;
+      column_infos_.set_allocator(inner_alloc_);
+      if (OB_FAIL(column_infos_.init(column_cnt_))) {
+        LOG_WARN("failed to init column_infos", K(ret));
+      } else {
+        void *obj_buf = nullptr;
+        ObPLTableColumnInfo *column_info = nullptr;
+        cs_iter = schema->column_begin();
+        cs_iter_end = schema->column_end();
+        for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+          const ObColumnSchemaV2 &column_schema = **cs_iter;
+          if (column_schema.is_hidden()) {
+            // do nothing
+          } else {
+            if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to alloc column name buf", K(ret), K(column_name));
+              LOG_WARN("failed to allocate memory", K(ret));
+            } else if (FALSE_IT(column_info = new(obj_buf)ObPLTableColumnInfo(inner_alloc_))) {
+              // do nothing
             } else {
-              MEMCPY(name_buf, column_name.ptr(), column_name.length());
-              ObString deep_copy_name(column_name.length(), name_buf);
-              column_info->column_name_ = deep_copy_name;
-              OZ (column_infos_.push_back(column_info));
+              column_info->column_id_ = column_schema.get_column_id();
+              column_info->meta_type_ = column_schema.get_meta_type();
+              column_info->charset_type_ = column_schema.get_charset_type();
+              column_info->accuracy_ = column_schema.get_accuracy();
+              OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
+
+              if (OB_SUCC(ret)) {
+                char *name_buf = NULL;
+                const ObString &column_name = column_schema.get_column_name_str();
+                if (OB_ISNULL(name_buf =
+                    static_cast<char*>(inner_alloc_->alloc(column_name.length() + 1)))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc column name buf", K(ret), K(column_name));
+                } else {
+                  MEMCPY(name_buf, column_name.ptr(), column_name.length());
+                  ObString deep_copy_name(column_name.length(), name_buf);
+                  column_info->column_name_ = deep_copy_name;
+                  OZ (column_infos_.push_back(column_info));
+                }
+              }
             }
           }
         }
+        CK (column_cnt_ == column_infos_.count());
       }
-      CK (column_cnt_ == column_infos_.count());
     }
   }
 
@@ -253,8 +268,10 @@ void ObPLObjectKey::reset()
   db_id_ = common::OB_INVALID_ID;
   key_id_ = common::OB_INVALID_ID;
   sessid_ = 0;
+  mode_ = ObjectMode::NORMAL;
   name_.reset();
   namespace_ = ObLibCacheNameSpace::NS_INVALID;
+  sys_vars_str_.reset();
 }
 
 int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &other)
@@ -263,10 +280,13 @@ int ObPLObjectKey::deep_copy(ObIAllocator &allocator, const ObILibCacheKey &othe
   const ObPLObjectKey &key = static_cast<const ObPLObjectKey&>(other);
   if (OB_FAIL(common::ob_write_string(allocator, key.name_, name_))) {
     LOG_WARN("failed to deep copy name", K(ret), K(name_));
+  } else if (OB_FAIL(common::ob_write_string(allocator, key.sys_vars_str_, sys_vars_str_))) {
+    LOG_WARN("failed to deep copy name", K(ret), K(name_));
   } else {
     db_id_ = key.db_id_;
     key_id_ = key.key_id_;
     sessid_ = key.sessid_;
+    mode_ = key.mode_;
     namespace_ = key.namespace_;
   }
   return ret;
@@ -277,6 +297,9 @@ void ObPLObjectKey::destory(common::ObIAllocator &allocator)
   if (nullptr != name_.ptr()) {
     allocator.free(const_cast<char *>(name_.ptr()));
   }
+  if (nullptr != sys_vars_str_.ptr()) {
+    allocator.free(const_cast<char *>(sys_vars_str_.ptr()));
+  }
 }
 
 uint64_t ObPLObjectKey::hash() const
@@ -284,8 +307,10 @@ uint64_t ObPLObjectKey::hash() const
   uint64_t hash_ret = murmurhash(&db_id_, sizeof(uint64_t), 0);
   hash_ret = murmurhash(&key_id_, sizeof(uint64_t), hash_ret);
   hash_ret = murmurhash(&sessid_, sizeof(uint32_t), hash_ret);
+  hash_ret = murmurhash(&mode_, sizeof(mode_), hash_ret);
   hash_ret = name_.hash(hash_ret);
   hash_ret = murmurhash(&namespace_, sizeof(ObLibCacheNameSpace), hash_ret);
+  hash_ret = sys_vars_str_.hash(hash_ret);
   return hash_ret;
 }
 
@@ -295,8 +320,10 @@ bool ObPLObjectKey::is_equal(const ObILibCacheKey &other) const
   bool cmp_ret = db_id_ == key.db_id_ &&
                  key_id_ == key.key_id_ &&
                  sessid_ == key.sessid_ &&
+                 mode_ == key.mode_ &&
                  name_ == key.name_ &&
-                 namespace_ == key.namespace_;
+                 namespace_ == key.namespace_ &&
+                 sys_vars_str_ == key.sys_vars_str_;
   return cmp_ret;
 }
 
@@ -388,13 +415,17 @@ int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard 
     ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
     for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
       const ObColumnSchemaV2 &column_schema = **cs_iter;
-      column_info.column_id_ = column_schema.get_column_id();
-      column_info.meta_type_ = column_schema.get_meta_type();
-      column_info.charset_type_ = column_schema.get_charset_type();
-      column_info.accuracy_ = column_schema.get_accuracy();
-      OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
-      OX (column_info.column_name_ = column_schema.get_column_name_str());
-      OZ (column_infos.push_back(column_info));
+      if (column_schema.is_hidden()) {
+        // do nothing
+      } else {
+        column_info.column_id_ = column_schema.get_column_id();
+        column_info.meta_type_ = column_schema.get_meta_type();
+        column_info.charset_type_ = column_schema.get_charset_type();
+        column_info.accuracy_ = column_schema.get_accuracy();
+        OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
+        OX (column_info.column_name_ = column_schema.get_column_name_str());
+        OZ (column_infos.push_back(column_info));
+      }
     }
   }
 
@@ -968,6 +999,9 @@ int ObPLObjectValue::match_param_info(const ObPlParamInfo &param_info,
       is_same = false;
     } else {
       is_same = (param.get_scale() == param_info.scale_);
+      if (is_same && param.is_number() && PL_INTEGER_TYPE == param_info.pl_type_) {
+        is_same = param.get_number().is_valid_int();
+      }
     }
   }
   if (is_same && param_info.flag_.need_to_check_bool_value_) {

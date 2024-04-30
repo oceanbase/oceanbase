@@ -50,7 +50,7 @@ struct PartitionInfo
 
 enum NUMCHILD {
   CREATE_TABLE_NUM_CHILD = 7,
-  CREATE_TABLE_AS_SEL_NUM_CHILD = 9,
+  CREATE_TABLE_AS_SEL_NUM_CHILD = 10,
   COLUMN_DEFINITION_NUM_CHILD = 4,
   COLUMN_DEF_NUM_CHILD = 3,
   INDEX_NUM_CHILD = 5,
@@ -878,8 +878,6 @@ protected:
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
 
-  int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
-
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();
@@ -944,6 +942,7 @@ protected:
   ObNameGeneratedType name_generated_type_;
   bool is_set_lob_inrow_threshold_;
   int64_t lob_inrow_threshold_;
+  int64_t auto_increment_cache_size_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

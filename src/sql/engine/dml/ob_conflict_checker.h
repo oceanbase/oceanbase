@@ -114,6 +114,8 @@ public:
   {}
   virtual ~ObConflictCheckerCtdef() = default;
   TO_STRING_KV(K_(cst_ctdefs), K_(das_scan_ctdef), KPC_(calc_part_id_expr));
+
+  static const int64_t MIN_ROW_COUNT_USE_HASHSET_DO_DISTICT = 50;
   // must constraint_infos_.count() == conflict_map_array_.count()
   // constraint_infos_ 用于生成ObConflictRowMap的key
   ObRowkeyCstCtdefArray cst_ctdefs_;
@@ -149,6 +151,8 @@ public:
 
   //初始conflict_map
   int create_conflict_map(int64_t replace_row_cnt);
+
+  int create_rowkey_check_hashset(int64_t replace_row_cnt);
 
   // 检查当前的主键是否冲突
   int check_duplicate_rowkey(const ObChunkDatumStore::StoredRow *replace_row,
@@ -190,6 +194,8 @@ public:
   // todo @kaizhan.dkz 构建回表的das scan task
   int build_primary_table_lookup_das_task();
 
+  int add_lookup_range_no_dup(storage::ObTableScanParam &scan_param, ObNewRange &lookup_range);
+
   //会被算子的inner_close函数调用
   int close();
 
@@ -221,6 +227,8 @@ private:
 
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
 public:
+  static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 128 * 1024;
+
   common::ObArrayWrap<ObConflictRowMapCtx> conflict_map_array_;
   ObEvalCtx &eval_ctx_; // 用于表达式的计算
   const ObConflictCheckerCtdef &checker_ctdef_;
@@ -234,6 +242,7 @@ public:
   ObDASTabletLoc *local_tablet_loc_;
   ObDASTableLoc *table_loc_;
   lib::MemoryContext tmp_mem_ctx_;
+  SeRowkeyDistCtx *se_rowkey_dist_ctx_;
 };
 }  // namespace sql
 }  // namespace oceanbase

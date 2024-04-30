@@ -2242,6 +2242,7 @@ int ObOraSysChecker::check_ora_ddl_priv(
         DEFINE_PUB_CHECK_CMD(PRIV_ID_CREATE_USER);
         break;
       }
+      case stmt::T_ALTER_USER_PROXY:
       case stmt::T_ALTER_USER_PROFILE:
       case stmt::T_ALTER_USER_PRIMARY_ZONE: 
       case stmt::T_ALTER_USER: {

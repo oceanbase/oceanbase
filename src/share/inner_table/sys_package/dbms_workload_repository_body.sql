@@ -42,7 +42,9 @@ FUNCTION ASH_REPORT_TEXT(L_BTIME       IN DATE,
                          L_ETIME       IN DATE,
                          SQL_ID        IN VARCHAR2  DEFAULT NULL,
                          TRACE_ID      IN VARCHAR2  DEFAULT NULL,
-                         WAIT_CLASS    IN VARCHAR2  DEFAULT NULL
+                         WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
+                         SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                         SVR_PORT      IN NUMBER       DEFAULT NULL
                         )
 RETURN awrrpt_text_type_table
 IS
@@ -172,6 +174,8 @@ BEGIN
   EXECUTE IMMEDIATE DYN_SQL
   INTO  ASH_BEGIN_TIME, ASH_END_TIME
   USING L_BTIME, L_ETIME,
+        SVR_IP, SVR_IP,
+        SVR_PORT, SVR_PORT,
         L_BTIME, L_ETIME,
         SQL_ID, SQL_ID,
         TRACE_ID, TRACE_ID,
@@ -184,6 +188,8 @@ BEGIN
              'FROM   (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -239,6 +245,8 @@ BEGIN
   DYN_SQL := 'SELECT /*+ MONITOR */ EVENT,  WAIT_CLASS, COUNT(1) EVENT_CNT FROM (' || DBMS_ASH_INTERNAL.ASH_VIEW_SQL || ') top_event ' || 'GROUP BY EVENT, WAIT_CLASS ORDER BY EVENT_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -274,6 +282,8 @@ BEGIN
              'GROUP BY EVENT, WAIT_CLASS ORDER BY 2 DESC) WHERE ROWNUM < 10';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -378,6 +388,8 @@ BEGIN
              ' ) ORDER BY SAMPLES_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -424,6 +436,8 @@ BEGIN
              'LEFT JOIN SYS.GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) v1 WHERE ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -469,6 +483,8 @@ BEGIN
              'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -500,6 +516,8 @@ BEGIN
              'LEFT JOIN GV$OB_PLAN_CACHE_PLAN_STAT pc ON ash.sql_id = pc.sql_id AND ash.plan_id = pc.plan_id ORDER BY EVENT_CNT DESC) WHERE QUERY_SQL IS NOT NULL AND ROWNUM < 20';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -541,6 +559,8 @@ BEGIN
                   'LEFT JOIN ALL_OBJECTS obj ON ash.plsql_entry_object_id = obj.object_id ORDER BY ENTRY_CNT DESC) v1 WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           NULL_CHAR, NULL_CHAR,
           NULL_CHAR, NULL_CHAR,
@@ -573,6 +593,8 @@ BEGIN
              'LEFT JOIN ALL_OBJECTS obj ON ash.plsql_object_id = obj.object_id ORDER BY SUB_CNT DESC) v1 WHERE ROWNUM < 100';
     OPEN sub_event_cv FOR SUB_DYN_SQL
     USING   ASH_BEGIN_TIME, ASH_END_TIME,
+            SVR_IP, SVR_IP,
+            SVR_PORT, SVR_PORT,
             ASH_BEGIN_TIME, ASH_END_TIME,
             NULL_CHAR, NULL_CHAR,
             NULL_CHAR, NULL_CHAR,
@@ -609,6 +631,8 @@ BEGIN
     EXECUTE IMMEDIATE SUB_DYN_SQL
     INTO  SUB_PLSQL_CNT
     USING   ASH_BEGIN_TIME, ASH_END_TIME,
+            SVR_IP, SVR_IP,
+            SVR_PORT, SVR_PORT,
             ASH_BEGIN_TIME, ASH_END_TIME,
             NULL_CHAR, NULL_CHAR,
             NULL_CHAR, NULL_CHAR,
@@ -646,6 +670,8 @@ BEGIN
              ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID ORDER BY SAMPLE_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -690,6 +716,8 @@ BEGIN
              ' LEFT JOIN SYS.ALL_USERS u ON u.USERID = ash.USER_ID ORDER BY SAMPLE_CNT DESC';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -729,6 +757,8 @@ BEGIN
              ' WHERE wait_class_id = 104 AND SUBSTR(event, 0, 6) = ''latch:'' GROUP BY EVENT ORDER BY SAMPLE_CNT DESC) WHERE ROWNUM < 100';
   OPEN top_event_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -762,6 +792,8 @@ BEGIN
              'GROUP BY SVR_IP, SVR_PORT';
   OPEN node_load_cv FOR DYN_SQL
   USING   ASH_BEGIN_TIME, ASH_END_TIME,
+          SVR_IP, SVR_IP,
+          SVR_PORT, SVR_PORT,
           ASH_BEGIN_TIME, ASH_END_TIME,
           SQL_ID, SQL_ID,
           TRACE_ID, TRACE_ID,
@@ -796,14 +828,16 @@ PROCEDURE ASH_REPORT(BTIME         IN DATE,
                      SQL_ID        IN VARCHAR2  DEFAULT NULL,
                      TRACE_ID      IN VARCHAR2  DEFAULT NULL,
                      WAIT_CLASS    IN VARCHAR2  DEFAULT NULL,
-                     REPORT_TYPE   IN VARCHAR2  DEFAULT 'text'
+                     REPORT_TYPE   IN VARCHAR2  DEFAULT 'text',
+                     SVR_IP        IN VARCHAR2  DEFAULT NULL,
+                     SVR_PORT      IN NUMBER       DEFAULT NULL
                    )
 IS
   -- REPORT_TYPE is reserved for 'text'/'html', currently only 'text' supported
   res AWRRPT_TEXT_TYPE_TABLE;
 BEGIN
   DBMS_OUTPUT.ENABLE(NULL);
-  res := DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME, SQL_ID, WAIT_CLASS);
+  res := DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME, SQL_ID, TRACE_ID, WAIT_CLASS, SVR_IP, SVR_PORT);
   for i in res.first .. res.last loop
     DBMS_OUTPUT.put_line(res(i));
   end loop;

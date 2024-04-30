@@ -24,6 +24,9 @@ insert into t1 values(1, 2,
     7.5, 8.5,
     '2019-12-01 12:00:00', '2019-12-03 06:00:00', 
     '9.5', '10.5');
+Warnings:
+Warning	1265	Data truncated for column '"oceanbase"."t1"."c17"' at row 1
+Warning	1265	Data truncated for column '"oceanbase"."t1"."c18"' at row 1
 
 select @var1, @var2;
 +-------+-------+

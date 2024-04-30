@@ -244,6 +244,7 @@ public:
   int on_piece_msg(ObExecContext &ctx, const ObOptStatsGatherPieceMsg &pkt);
   void clean_dtl_interm_result(ObExecContext &ctx);
   // end DATAHUB msg processing
+  void log_warn_sqc_fail(int ret, const ObPxFinishSqcResultMsg &pkt, ObPxSqcMeta *sqc);
 private:
   int do_cleanup_dfo(ObDfo &dfo);
   int fast_dispatch_sqc(ObExecContext &exec_ctx,

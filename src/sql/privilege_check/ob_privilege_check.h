@@ -14,6 +14,7 @@
 #define OCEANBASE_SQL_PRIVILEGE_CHECK_OB_PRIVILEGE_CHECK_
 
 #include "share/schema/ob_schema_struct.h"
+#include "share/ob_compatibility_control.h"
 #include "sql/resolver/ob_stmt_type.h"
 namespace oceanbase {
 namespace sql {
@@ -86,6 +87,10 @@ public:
   static int get_stmt_need_privs(const share::schema::ObSessionPrivInfo &session_priv,
                                  const ObStmt *basic_stmt,
                                  common::ObIArray<share::schema::ObNeedPriv> &stmt_need_priv);
+  // check privilege version for upgrade compatibility
+  static int get_priv_need_check(const share::schema::ObSessionPrivInfo &session_priv,
+                                 const share::ObCompatFeatureType feature_type,
+                                 bool &need_check);
 
 
   static int check_priv_in_roles(const uint64_t tenant_id,

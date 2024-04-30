@@ -346,6 +346,7 @@ public:
   int replay_get_tablet_no_check(
       const common::ObTabletID &tablet_id,
       const share::SCN &scn,
+      const bool replay_allow_tablet_not_exist,
       ObTabletHandle &tablet_handle) const;
 
   int flush_if_need(const bool need_flush);
@@ -809,6 +810,8 @@ public:
   DELEGATE_WITH_RET(tx_table_, get_tx_table_guard, int);
   DELEGATE_WITH_RET(tx_table_, get_upper_trans_version_before_given_scn, int);
   DELEGATE_WITH_RET(tx_table_, generate_virtual_tx_data_row, int);
+  DELEGATE_WITH_RET(tx_table_, get_uncommitted_tx_min_start_scn, int);
+  DELEGATE_WITH_RET(tx_table_, update_min_start_scn_info, void);
   DELEGATE_WITH_RET(tx_table_, dump_single_tx_data_2_text, int);
 
   // ObCheckpointExecutor interface:
@@ -844,7 +847,9 @@ public:
       const common::ObTabletID &tablet_id,
       const int64_t mds_construct_sequence,
       const share::SCN &flush_scn);
-  int try_update_uppder_trans_version();
+  int check_ls_migration_status(
+      bool &ls_is_migration,
+      int64_t &rebuild_seq);
   int diagnose(DiagnoseInfo &info) const;
 
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, replay_reserved_snapshot_log, int);
@@ -857,7 +862,6 @@ public:
   DELEGATE_WITH_RET(ls_meta_, cleanup_transfer_meta_info, int);
 
   int set_ls_migration_gc(bool &allow_gc);
-
 private:
   // StorageBaseUtil
   // table manager: create, remove and guard get.

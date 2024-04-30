@@ -27,7 +27,9 @@ int ObSqlMemMgrProcessor::init(
   int64_t cache_size,
   const ObPhyOperatorType op_type,
   const uint64_t op_id,
-  ObExecContext *exec_ctx)
+  ObExecContext *exec_ctx,
+  dtl::ObDtlLinkedBuffer *buffer,
+  bool outside_op)
 {
   int ret = OB_SUCCESS;
   bool tmp_enable_auto_mem_mgr = false;
@@ -43,11 +45,22 @@ int ObSqlMemMgrProcessor::init(
     LOG_WARN("unexpected cache size got", K(lbt()), K(cache_size), K(op_id), K(op_type));
     cache_size = DEFAULT_CACHE_SIZE;
   }
-  if (OB_ISNULL(exec_ctx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get exec ctx", K(ret));
-  } else if (OB_FAIL(profile_.set_exec_info(*exec_ctx))) {
-    LOG_WARN("failed to set exec info", K(ret));
+  if (!outside_op) {
+    if (OB_ISNULL(exec_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get exec ctx", K(ret));
+    } else if (OB_FAIL(profile_.set_exec_info(*exec_ctx))) {
+      LOG_WARN("failed to set exec info", K(ret));
+    }
+  } else {
+    if (OB_ISNULL(buffer)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get ObDtlLinkedBuffer", K(ret));
+    } else if (OB_FAIL(profile_.set_exec_info(*buffer))) {
+      LOG_WARN("failed to set exec info", K(ret), KPC(buffer));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
@@ -178,6 +191,9 @@ int ObSqlMemMgrProcessor::update_used_mem_size(int64_t used_size)
 {
   int ret = OB_SUCCESS;
   int64_t delta_size = used_size - profile_.mem_used_;
+  if(OB_NOT_NULL(op_monitor_info_)) {
+    op_monitor_info_->update_memory(delta_size);
+  }
   if (delta_size > 0) {
     if (OB_NOT_NULL(sql_mem_mgr_) && OB_NOT_NULL(mem_callback_)) {
       mem_callback_->alloc(delta_size);

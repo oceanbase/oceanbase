@@ -61,6 +61,7 @@ ObDDLRedefinitionSSTableBuildTask::ObDDLRedefinitionSSTableBuildTask(
 
 int ObDDLRedefinitionSSTableBuildTask::init(
     const ObTableSchema &orig_table_schema,
+    const ObTableSchema &hidden_table_schema,
     const AlterTableSchema &alter_table_schema,
     const ObTimeZoneInfoWrap &tz_info_wrap)
 {
@@ -72,7 +73,7 @@ int ObDDLRedefinitionSSTableBuildTask::init(
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(tz_info_wrap_.deep_copy(tz_info_wrap))) {
     LOG_WARN("fail to copy time zone info wrap", K(ret), K(tz_info_wrap));
-  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, alter_table_schema))) {
+  } else if (OB_FAIL(col_name_map_.init(orig_table_schema, hidden_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     is_inited_ = true;
@@ -554,7 +555,7 @@ int ObDDLRedefinitionTask::get_validate_checksum_columns_id(const ObTableSchema 
     ObColumnNameMap col_name_map;
     if (OB_FAIL(data_table_schema.get_column_ids(column_ids))) {
       LOG_WARN("get column ids failed", K(ret), K(object_id_));
-    } else if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_arg_.alter_table_schema_))) {
+    } else if (OB_FAIL(col_name_map.init(data_table_schema, dest_table_schema, alter_table_arg_.alter_table_schema_))) {
       LOG_WARN("failed to build column name map", K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
@@ -1141,7 +1142,7 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
         param.autoinc_desired_count_ = 0;
         param.autoinc_increment_ = 1;
         param.autoinc_offset_ = 1;
-        param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+        param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
         param.autoinc_mode_is_order_ = dest_table_schema->is_order_auto_increment_mode();
         param.autoinc_auto_increment_ = dest_table_schema->get_auto_increment();
         param.autoinc_version_ = dest_table_schema->get_truncate_version();
@@ -1213,7 +1214,7 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
     } else if (OB_ISNULL(orig_table_schema) || OB_ISNULL(new_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schemas should not be null", K(ret), K(orig_table_schema), K(new_table_schema));
-    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, alter_table_schema))) {
+    } else if (OB_FAIL(col_name_map.init(*orig_table_schema, *new_table_schema, alter_table_schema))) {
       LOG_WARN("failed to init column name map", K(ret));
     } else if (!is_update_autoinc_end && update_autoinc_job_time_ == 0) {
       ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
@@ -1286,7 +1287,8 @@ int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status
       param.autoinc_increment_ = 1;
       param.autoinc_offset_ = 1;
       param.global_value_to_sync_ = autoinc_val - 1;
-      param.auto_increment_cache_size_ = 1; // TODO(shuangcan): should we use the sysvar on session?
+      param.auto_increment_cache_size_ = 0; // set cache size to 0 to disable prefetch
+      param.autoinc_mode_is_order_ = new_table_schema->is_order_auto_increment_mode();
       param.autoinc_version_ = new_table_schema->get_truncate_version();
       if (OB_FAIL(auto_inc_service.sync_insert_value_global(param))) {
         LOG_WARN("fail to clear autoinc cache", K(ret), K(param));
@@ -1637,7 +1639,7 @@ int ObDDLRedefinitionTask::sync_stats_info_in_same_tenant(common::ObMySQLTransac
     LOG_WARN("error sys, root service must not be nullptr", K(ret));
   } else if (OB_FAIL(trans.start(&root_service->get_sql_proxy(), dst_tenant_id_))) {
     LOG_WARN("fail to start transaction", K(ret));
-  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, need_sync_history))) {
+  } else if (OB_FAIL(sync_table_level_stats_info(trans, data_table_schema, new_table_schema, need_sync_history))) {
     LOG_WARN("fail to sync table level stats", K(ret));
   } else if (DDL_ALTER_PARTITION_BY != task_type_
               && OB_FAIL(sync_partition_level_stats_info(trans,
@@ -1972,6 +1974,7 @@ int ObDDLRedefinitionTask::sync_column_stats_info_accross_tenant(common::ObMySQL
 
 int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransaction &trans,
                                                        const ObTableSchema &data_table_schema,
+                                                       const ObTableSchema &new_table_schema,
                                                        const bool need_sync_history/*default true*/)
 {
   int ret = OB_SUCCESS;
@@ -1979,13 +1982,9 @@ int ObDDLRedefinitionTask::sync_table_level_stats_info(common::ObMySQLTransactio
   ObSqlString history_sql_string;
   int64_t affected_rows = 0;
   // for partitioned table, table-level stat is -1, for non-partitioned table, table-level stat is table id
-  int64_t partition_id = -1;
-  int64_t target_partition_id = -1;
+  int64_t partition_id = data_table_schema.is_partitioned_table() ? -1 : object_id_;
+  int64_t target_partition_id = new_table_schema.is_partitioned_table() ? -1 : target_object_id_;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
-  if (!data_table_schema.is_partitioned_table()) {
-    partition_id = object_id_;
-    target_partition_id = target_object_id_;
-  }
   if (OB_FAIL(sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld",
       OB_ALL_TABLE_STAT_TNAME, target_object_id_, target_partition_id,
@@ -2072,7 +2071,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
   int ret = OB_SUCCESS;
   AlterTableSchema &alter_table_schema = alter_table_arg_.alter_table_schema_;
   ObColumnNameMap col_name_map;
-  if (OB_FAIL(col_name_map.init(data_table_schema, alter_table_schema))) {
+  if (OB_FAIL(col_name_map.init(data_table_schema, new_table_schema, alter_table_schema))) {
     LOG_WARN("failed to init column name map", K(ret));
   } else {
     ObTableSchema::const_column_iterator iter = data_table_schema.column_begin();
@@ -2109,6 +2108,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
       } else if (!is_offline) {
         if (OB_FAIL(sync_one_column_table_level_stats_info(trans,
                                                            data_table_schema,
+                                                           new_table_schema,
                                                            col->get_column_id(),
                                                            new_col->get_column_id(),
                                                            need_sync_history))) {
@@ -2130,6 +2130,7 @@ int ObDDLRedefinitionTask::sync_column_level_stats_info(common::ObMySQLTransacti
 
 int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQLTransaction &trans,
                                                                   const ObTableSchema &data_table_schema,
+                                                                  const ObTableSchema &new_table_schema,
                                                                   const uint64_t old_col_id,
                                                                   const uint64_t new_col_id,
                                                                   const bool need_sync_history/*default true*/)
@@ -2141,13 +2142,9 @@ int ObDDLRedefinitionTask::sync_one_column_table_level_stats_info(common::ObMySQ
   ObSqlString histogram_history_sql_string;
   int64_t affected_rows = 0;
   // for partitioned table, table-level stat is -1, for non-partitioned table, table-level stat is table id
-  int64_t partition_id = -1;
-  int64_t target_partition_id = -1;
+  int64_t partition_id = data_table_schema.is_partitioned_table() ? -1 : object_id_;
+  int64_t target_partition_id = new_table_schema.is_partitioned_table() ? -1 : target_object_id_;
   const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(dst_tenant_id_);
-  if (!data_table_schema.is_partitioned_table()) {
-    partition_id = object_id_;
-    target_partition_id = target_object_id_;
-  }
   if (OB_FAIL(column_sql_string.assign_fmt("UPDATE %s SET table_id = %ld, partition_id = %ld, column_id = %ld"
       " WHERE tenant_id = %ld and table_id = %ld and partition_id = %ld and column_id = %ld",
       OB_ALL_COLUMN_STAT_TNAME, target_object_id_, target_partition_id, new_col_id,

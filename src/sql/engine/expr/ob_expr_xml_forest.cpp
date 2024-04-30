@@ -113,7 +113,7 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObString res_bin_str;
   ObString blob_locator;
   ObMulModeMemCtx* mem_ctx = nullptr;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "XMLModule"));
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
 
   CK(OB_NOT_NULL(ctx.exec_ctx_.get_my_session()));
   OZ(ObXmlUtil::create_mulmode_tree_context(&allocator, mem_ctx));
@@ -130,6 +130,12 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     // value
     if (OB_FAIL(expr.args_[i * 3]->eval(ctx, value_datum))) {
       LOG_WARN("value expr args failed", K(ret), K(expr.args_[i * 3]));
+    } else if (OB_FAIL(expr.args_[i * 3 + 1]->eval(ctx, tag_datum))) {
+      LOG_WARN("tag expr args failed", K(ret), K(expr.args_[i * 3 + 1]));
+    }
+
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObXMLExprHelper::construct_element_value(
                           allocator,
                           expr.args_[i * 3],
@@ -137,11 +143,6 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
                           true,
                           value_vec))) {
       LOG_WARN("construct_element_valuev failed", K(ret));
-    }
-    // tag
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(expr.args_[i * 3 + 1]->eval(ctx, tag_datum))) {
-      LOG_WARN("tag expr args failed", K(ret), K(expr.args_[i * 3 + 1]));
     } else if(expr.args_[i * 3 + 1]->datum_meta_.type_ == ObNumberType) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, "Character", "-");
@@ -163,6 +164,7 @@ int ObExprXmlForest::eval_xml_forest(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     }
   }
 
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   OZ(ObXMLExprHelper::concat_xml_type_nodes(mem_ctx, xml_bin_str_vec, res_bin_str));
   OZ(ObXMLExprHelper::pack_binary_res(expr, ctx, res_bin_str, blob_locator));
   OX(res.set_string(blob_locator.ptr(), blob_locator.length()));

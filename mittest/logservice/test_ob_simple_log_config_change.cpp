@@ -407,9 +407,12 @@ TEST_F(TestObSimpleLogClusterConfigChange, test_basic_config_change_for_migratio
       PALF_LOG(INFO, "CASE1: replicate an FULL replica", K(id));
       common::ObMember added_member = ObMember(addr3, 1);
       added_member.set_migrating();
+      LogLearnerList learners;
+      learners.add_learner(LogLearner(added_member.get_server(), 1));
       EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->add_learner(added_member, CONFIG_CHANGE_TIMEOUT));
       EXPECT_TRUE(leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.learnerlist_.contains(added_member));
       EXPECT_EQ(3, leader.palf_handle_impl_->config_mgr_.log_ms_meta_.curr_.config_.log_sync_replica_num_);
+      EXPECT_UNTIL_EQ(true, check_children_valid(palf_list, learners));
 
       // clean
       EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->remove_learner(added_member, CONFIG_CHANGE_TIMEOUT));

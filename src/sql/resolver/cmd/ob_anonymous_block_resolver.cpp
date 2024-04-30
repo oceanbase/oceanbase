@@ -133,7 +133,7 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
     for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_dependency_table().count(); ++i) {
       OZ (stmt.add_global_dependency_table(func_ast.get_dependency_table().at(i)));
     }
-    
+
     const pl::ObPLSymbolTable &symbol_table = func_ast.get_symbol_table();
     for (int64_t i = 0;
         OB_SUCC(ret) && resolve_inout_param && i < func_ast.get_arg_count(); ++i) {

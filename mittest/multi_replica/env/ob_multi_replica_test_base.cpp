@@ -582,7 +582,7 @@ int ObMultiReplicaTestBase::init_test_replica_(const int zone_id)
 int ObMultiReplicaTestBase::read_cur_json_document_(rapidjson::Document &json_doc)
 {
   int ret = OB_SUCCESS;
-  FILE *fp = fopen(event_file_path_.c_str(), "r");
+  FILE *fp = fopen(event_file_path_.c_str(), "rb");
   if (fp == NULL) {
     if (json_doc.IsObject()) {
       fprintf(stdout, "Fail to open file! file_path = %s\n", event_file_path_.c_str());
@@ -591,10 +591,17 @@ int ObMultiReplicaTestBase::read_cur_json_document_(rapidjson::Document &json_do
     return ret;
   }
 
-  char read_buffer[2 * 1024 * 1024];
+  char read_buffer[4 * 1024];
   rapidjson::FileReadStream rs(fp, read_buffer, sizeof(read_buffer));
 
   json_doc.ParseStream(rs);
+
+  if (json_doc.HasParseError()) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "[ObMultiReplicaTestBase] Parse EVENT JSON ERROR", K(ret),
+               K(json_doc.GetParseError()));
+    fprintf(stdout, "Parse Event Json Error\n");
+  }
 
   fclose(fp);
 
@@ -643,7 +650,7 @@ int ObMultiReplicaTestBase::wait_event_finish(const std::string &event_name,
         ret = OB_TIMEOUT;
         break;
       } else {
-        ob_usleep(retry_interval_ms * 1000);
+        usleep(retry_interval_ms * 1000);
       }
     } else {
       break;
@@ -670,7 +677,7 @@ int ObMultiReplicaTestBase::finish_event(const std::string &event_name,
 
   if (OB_SUCC(ret)) {
     FILE *fp = fopen(event_file_path_.c_str(), "w");
-    char write_buffer[2 * 1024 * 1024];
+    char write_buffer[4 * 1024];
     rapidjson::FileWriteStream file_w_stream(fp, write_buffer, sizeof(write_buffer));
     rapidjson::PrettyWriter<rapidjson::FileWriteStream> prettywriter(file_w_stream);
     json_doc.AddMember(rapidjson::StringRef(event_name.c_str(), event_name.size()),
@@ -680,8 +687,8 @@ int ObMultiReplicaTestBase::finish_event(const std::string &event_name,
     fclose(fp);
   }
 
-        fprintf(stdout, "[WAIT EVENT] write target event : EVENT_KEY = %s; EVENT_VAL = %s\n",
-                event_name.c_str(), event_content.c_str());
+  fprintf(stdout, "[WAIT EVENT] write target event : EVENT_KEY = %s; EVENT_VAL = %s\n",
+          event_name.c_str(), event_content.c_str());
   SERVER_LOG(INFO, "[ObMultiReplicaTestBase] [WAIT EVENT] write target event",
              K(event_name.c_str()), K(event_content.c_str()));
   return ret;
@@ -898,7 +905,7 @@ int ::oceanbase::omt::ObWorkerProcessor::process_err_test()
 
   if (ATOMIC_LOAD(&::oceanbase::unittest::ObMultiReplicaTestBase::block_msg_)) {
     ret = OB_EAGAIN;
-    SERVER_LOG(INFO, "[ObMultiReplicaTestBase] block msg process", K(ret));
+    SERVER_LOG(INFO, "[ERRSIM] block msg process", K(ret));
   }
 
   return ret;

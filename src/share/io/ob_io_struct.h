@@ -152,6 +152,7 @@ public:
   void record_request_finish(ObIORequest &req);
   bool is_request_doing(const int64_t index) const;
   int64_t get_io_usage_num() const;
+  ObSEArray<int64_t, GROUP_START_NUM> group_throttled_time_us_;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 private:
   ObSEArray<ObSEArray<ObIOStat, GROUP_START_NUM>, 2> io_stats_;

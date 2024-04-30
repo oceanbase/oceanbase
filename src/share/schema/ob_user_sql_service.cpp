@@ -87,7 +87,6 @@ int ObUserSqlService::replace_user(
     if (OB_FAIL(gen_user_dml(exec_tenant_id, user, dml, false))) {
       LOG_WARN("gen_user_dml failed", K(ret));
     }
-
     // insert into __all_user
     if (FAILEDx(exec.exec_replace(OB_ALL_USER_TNAME, dml, affected_rows))) {
       LOG_WARN("execute insert failed", K(ret));
@@ -172,11 +171,8 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(
       } else if (NULL == tmp_user) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("user info is null", K(ret), K(id));
-      } else {
-        const ObUserInfo user_info = *tmp_user;
-        if (OB_FAIL(user_infos.push_back(user_info))) {
-          LOG_WARN("fail to push back", K(ret), K(user_info));
-        }
+      } else if (OB_FAIL(user_infos.push_back(*tmp_user))) {
+        LOG_WARN("fail to push back", K(ret), KPC(tmp_user));
       }
 
       // generate delete sql stmt
@@ -196,7 +192,8 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(
         }
       }
       const int64_t is_deleted = 1;
-      if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)", 
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(insert_sql.append_fmt("(now(6), now(6), %lu, %lu, %lu, %ld, %ld, %lu, %lu)",
           ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id), 
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? id : user_id), 
           ObSchemaUtils::get_extract_schema_id(exec_tenant_id, is_role ? user_id : id),
@@ -236,6 +233,194 @@ int ObUserSqlService::drop_user_delete_role_grantee_map(
         sql_client)))) {
       LOG_WARN("Failed to grant or revoke user", K(exec_tenant_id), K(ret));
     }
+  }
+  return ret;
+}
+
+int ObUserSqlService::drop_proxy_info(ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const uint64_t client_user_id,
+                                      const uint64_t proxy_user_id,
+                                      const uint64_t new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  int64_t affected_rows = 0;
+  if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
+      || OB_FAIL(dml.add_pk_column("client_user_id", client_user_id))
+      || OB_FAIL(dml.add_pk_column("proxy_user_id", proxy_user_id))) {
+    LOG_WARN("add pk column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_delete(OB_ALL_USER_PROXY_INFO_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec delete failed", K(ret));
+  } else if (OB_UNLIKELY(affected_rows > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expected to be less than 2", K(affected_rows), K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+            || OB_FAIL(dml.add_column("is_deleted", 1))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_insert(OB_ALL_USER_PROXY_INFO_HISTORY_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec insert failed", K(ret));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expected to be one", K(affected_rows), K(ret));
+  }
+  return ret;
+}
+
+int ObUserSqlService::drop_proxy_role_info(ObISQLClient &sql_client,
+                                      const uint64_t tenant_id,
+                                      const uint64_t client_user_id,
+                                      const uint64_t proxy_user_id,
+                                      const uint64_t role_id,
+                                      const uint64_t new_schema_version)
+{
+  int ret = OB_SUCCESS;
+  ObDMLSqlSplicer dml;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  ObDMLExecHelper exec(sql_client, exec_tenant_id);
+  int64_t affected_rows = 0;
+  if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
+      || OB_FAIL(dml.add_pk_column("client_user_id", client_user_id))
+      || OB_FAIL(dml.add_pk_column("proxy_user_id", proxy_user_id))
+      || OB_FAIL(dml.add_pk_column("role_id", role_id))) {
+    LOG_WARN("add pk column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_delete(OB_ALL_USER_PROXY_ROLE_INFO_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec delete failed", K(ret));
+  } else if (OB_UNLIKELY(affected_rows > 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expected to be less than 2", K(affected_rows), K(ret));
+  } else if (OB_FAIL(dml.add_pk_column("schema_version", new_schema_version))
+            || OB_FAIL(dml.add_column("is_deleted", 1))) {
+    LOG_WARN("add column failed", K(ret));
+  } else if (OB_FAIL(exec.exec_insert(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TNAME, dml, affected_rows))) {
+    LOG_WARN("exec insert failed", K(ret));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expected to be one", K(affected_rows), K(ret));
+  }
+  return ret;
+}
+
+int ObUserSqlService::drop_user_delete_proxy_user_info(const uint64_t tenant_id,
+                                                        const bool is_role,
+                                                        const uint64_t new_schema_version,
+                                                        const ObUserInfo &user,
+                                                        const ObString *ddl_stmt_str,
+                                                        ObISQLClient &sql_client,
+                                                        ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  common::ObArray<ObUserInfo> user_infos_to_update;
+  if (is_role) { //drop role
+    common::ObSEArray<uint64_t, 8> schema_id_array = user.get_grantee_id_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < schema_id_array.count(); i++) {
+      const ObUserInfo *grantee = NULL;
+      if (OB_FAIL(schema_guard.get_user_info(tenant_id, schema_id_array.at(i), grantee))) {
+        LOG_WARN("get user info failed", K(ret));
+      } else if (OB_ISNULL(grantee)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (grantee->is_role()) {
+        //do nothing
+      } else {
+        for (int64_t j = 0; OB_SUCC(ret) && j < grantee->get_proxied_user_info_cnt(); j++) {
+          const ObProxyInfo *proxy_info = grantee->get_proxied_user_info_by_idx(j);
+          bool found = false;
+          if (OB_ISNULL(proxy_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected error", K(ret));
+          }
+          for (int64_t k = 0; OB_SUCC(ret) && !found && k < proxy_info->role_id_cnt_; k++) {
+            uint64_t role_id = proxy_info->get_role_id_by_idx(k);
+            if (user.get_user_id() == proxy_info->get_role_id_by_idx(k)) {
+              found = true;
+              OZ (drop_proxy_role_info(sql_client, tenant_id, grantee->get_user_id(),
+                                                  proxy_info->user_id_, user.get_user_id(), new_schema_version));
+            }
+            if (OB_SUCC(ret) && found) {
+              const ObUserInfo *user_info = NULL;
+              if (OB_FAIL(schema_guard.get_user_info(tenant_id, proxy_info->user_id_, user_info))) {
+                LOG_WARN("get user info failed", K(ret));
+              } else if (OB_ISNULL(user_info)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error", K(ret));
+              } else if (OB_FAIL(user_infos_to_update.push_back(*user_info))) {
+                LOG_WARN("push back failed", K(ret));
+              }
+            }
+          }
+        }
+      }
+    }
+  } else { //drop user
+    for (int64_t i = 0; OB_SUCC(ret) && i < user.get_proxy_user_info_cnt(); i++) {
+      const ObProxyInfo *proxy_info = user.get_proxy_user_info_by_idx(i);
+      if (OB_ISNULL(proxy_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, proxy_info->user_id_,
+                                                                user.get_user_id(), new_schema_version))) {
+        LOG_WARN("drop proxy info failed", K(ret));
+      } else {
+        const ObUserInfo *user_info = NULL;
+        if (proxy_info->user_id_ == user.get_user_id()) { //u1 proxy u1, when droping u1, do not update u1
+          //do nothing
+        } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, proxy_info->user_id_, user_info))) {
+          LOG_WARN("get user info failed", K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (OB_FAIL(user_infos_to_update.push_back(*user_info))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < proxy_info->role_id_cnt_; j++) {
+          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, proxy_info->user_id_, user.get_user_id(),
+                                                          proxy_info->get_role_id_by_idx(j), new_schema_version))) {
+            LOG_WARN("drop proxy role info failed", K(ret));
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < user.get_proxied_user_info_cnt(); i++) {
+      const ObProxyInfo *proxy_info = user.get_proxied_user_info_by_idx(i);
+      if (OB_ISNULL(proxy_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error", K(ret));
+      } else if (user.get_user_id() == proxy_info->user_id_) {
+        //alread dropped before
+      } else if (OB_FAIL(drop_proxy_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_,
+                                                                 new_schema_version))) {
+        LOG_WARN("drop proxy info failed", K(ret));
+      } else {
+        const ObUserInfo *user_info = NULL;
+        if (proxy_info->user_id_ == user.get_user_id()) { //u1 proxy u1, when droping u1, do not update u1
+          //do nothing
+        } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, proxy_info->user_id_, user_info))) {
+          LOG_WARN("get user info failed", K(ret));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else if (OB_FAIL(user_infos_to_update.push_back(*user_info))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < proxy_info->role_id_cnt_; j++) {
+          if (OB_FAIL(drop_proxy_role_info(sql_client, tenant_id, user.get_user_id(), proxy_info->user_id_,
+                                                            proxy_info->get_role_id_by_idx(j), new_schema_version))) {
+            LOG_WARN("drop proxy role info failed", K(ret));
+          }
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (user_infos_to_update.empty()) {
+  } else if (OB_FAIL(update_user_proxy_info(tenant_id,
+                                                user_infos_to_update,
+                                                NULL,
+                                                sql_client))) {
+    LOG_WARN("Failed to grant or revoke user", K(ret));
   }
   return ret;
 }
@@ -326,6 +511,9 @@ int ObUserSqlService::drop_user(
       OZ (drop_user_delete_role_grantee_map(tenant_id, false, new_schema_version,
                                             user, ddl_stmt_str, sql_client, schema_guard));
     }
+
+    OZ (drop_user_delete_proxy_user_info(tenant_id, is_role, new_schema_version,
+                                          *user, NULL, sql_client, schema_guard));
   }
 
   return ret;
@@ -884,6 +1072,9 @@ int ObUserSqlService::gen_user_dml(
     if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= 1; }
     if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= 2; }
     if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= 4; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_TABLESPACE) != 0) { priv_others |= 8; }
+    if ((user.get_priv_set() & OB_PRIV_SHUTDOWN) != 0) { priv_others |= 16; }
+    if ((user.get_priv_set() & OB_PRIV_RELOAD) != 0) { priv_others |= 32; }
   }
   if (OB_FAIL(ret)) {
   } else if (compat_version < DATA_VERSION_4_2_2_0) {
@@ -894,6 +1085,42 @@ int ObUserSqlService::gen_user_dml(
   } else if (OB_FAIL(dml.add_column("PRIV_OTHERS", priv_others))) {
     LOG_WARN("add PRIV_OTHERS column failed", K(priv_others), K(ret));
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (compat_version < DATA_VERSION_4_2_3_0) {
+    if (user.get_flags() != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0", K(ret), K(user.get_flags()));
+    }
+  } else if (OB_FAIL(dml.add_column("flags", user.get_flags()))) {
+    LOG_WARN("add flags column failed", K(user.get_flags()), K(ret));
+  }
+  return ret;
+}
+
+int ObUserSqlService::update_user_proxy_info(const uint64_t tenant_id,
+                                              const common::ObArray<ObUserInfo> &user_infos,
+                                              const ObString *ddl_stmt_str,
+                                              ObISQLClient &sql_client)
+{
+  int ret = OB_SUCCESS;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid arguments", K(tenant_id), K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < user_infos.count(); i++) {
+      const ObUserInfo &user_info = user_infos.at(i);
+      if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, OB_INVALID_VERSION, new_schema_version))) {
+        LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
+      } else if (OB_FAIL(replace_user(user_info, new_schema_version, ddl_stmt_str, sql_client, OB_DDL_GRANT_REVOKE_USER))) {
+        LOG_WARN("update user failed failed", K(user_info), K(new_schema_version), K(ret));
+      } else {
+        ddl_stmt_str = NULL;
+      }
+    }
+  }
+
   return ret;
 }
 

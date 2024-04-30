@@ -34,6 +34,7 @@ enum ObTableProccessType
   TABLE_API_SINGLE_REPLACE,
   TABLE_API_SINGLE_INCREMENT,
   TABLE_API_SINGLE_APPEND,
+  TABLE_API_SINGLE_PUT,
 
   // table batch mutate
   TABLE_API_MULTI_INSERT,
@@ -46,6 +47,7 @@ enum ObTableProccessType
   TABLE_API_MULTI_APPEND,
   TABLE_API_BATCH_RETRIVE,
   TABLE_API_BATCH_HYBRID,
+  TABLE_API_MULTI_PUT,
 
   // hbase mutate
   TABLE_API_HBASE_DELETE,
@@ -130,6 +132,11 @@ public:
         EVENT_ADD(TABLEAPI_INSERT_OR_UPDATE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_insert_or_update);
         break;
+      case ObTableProccessType::TABLE_API_SINGLE_PUT:
+        EVENT_INC(TABLEAPI_PUT_COUNT);
+        EVENT_ADD(TABLEAPI_PUT_TIME, elapsed_us);
+        SET_AUDIT_SQL_STRING(single_put);
+        break;
       case ObTableProccessType::TABLE_API_SINGLE_REPLACE:
         EVENT_INC(TABLEAPI_REPLACE_COUNT);
         EVENT_ADD(TABLEAPI_REPLACE_TIME, elapsed_us);
@@ -176,6 +183,12 @@ public:
         EVENT_ADD(TABLEAPI_MULTI_INSERT_OR_UPDATE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_INSERT_OR_UPDATE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_insert_or_update);
+        break;
+      case ObTableProccessType::TABLE_API_MULTI_PUT:
+        EVENT_INC(TABLEAPI_MULTI_PUT_COUNT);
+        EVENT_ADD(TABLEAPI_MULTI_PUT_TIME, elapsed_us);
+        EVENT_ADD(TABLEAPI_MULTI_PUT_ROW, rows);
+        SET_AUDIT_SQL_STRING(multi_put);
         break;
       case ObTableProccessType::TABLE_API_MULTI_REPLACE:
         EVENT_INC(TABLEAPI_MULTI_REPLACE_COUNT);

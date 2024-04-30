@@ -144,10 +144,8 @@ int ObGroupRowHashTable::add_hashval_to_llc_map(LlcEstimate &llc_est)
     for (int64_t i = 0; i < get_bucket_num(); ++i) {
       ObGroupRowItem *item = buckets_->at(i).item_;
       while (NULL != item) {
-        for (int64_t j = 0; j < item->cnt_; ++j) {
-          ObAggregateProcessor::llc_add_value(item->hash_, llc_est.llc_map_);
-           ++llc_est.est_cnt_;
-        }
+        ObAggregateProcessor::llc_add_value(item->hash_, llc_est.llc_map_);
+        llc_est.est_cnt_ += item->cnt_;
         item = item->next();
       }
     }
@@ -1386,8 +1384,8 @@ void ObHashGroupByOp::calc_avg_group_mem()
     int64_t part_cnt = detect_part_cnt(row_cnt);
     int64_t data_size = get_actual_mem_used_size();
     int64_t est_extra_size = data_size + part_cnt * ObHashGroupByOp::FIX_SIZE_PER_PART;
-    double data_ratio = data_size * 1.0 / est_extra_size;
-    llc_est_.avg_group_mem_ = data_size * data_ratio / row_cnt;
+    double data_ratio = (0 == est_extra_size) ? 0 : (data_size * 1.0 / est_extra_size);
+    llc_est_.avg_group_mem_ = (0 == row_cnt || 0 == data_ratio) ? 128 : (data_size * data_ratio / row_cnt);
   }
 }
 
@@ -3182,8 +3180,6 @@ int ObHashGroupByOp::bypass_add_llc_map(uint64_t hash_val, bool ready_to_check_n
       if (OB_ISNULL(last_child_row_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null ptr", K(ret), K(llc_est_.est_cnt_), K(bypass_ctrl_.scaled_llc_est_ndv_));
-      } else {
-        last_child_row_->reset();
       }
     }
   }
@@ -3198,8 +3194,6 @@ int ObHashGroupByOp::bypass_add_llc_map_batch(bool ready_to_check_ndv) {
   if ((llc_est_.est_cnt_ - llc_est_.last_est_cnt_) > LlcEstimate::ESTIMATE_MOD_NUM_ && ready_to_check_ndv) {
     if (OB_FAIL(check_llc_ndv())) {
       LOG_WARN("failed to check llc ndv", K(ret));
-    } else if (0 < bypass_ctrl_.scaled_llc_est_ndv_) { // means state of bypass_ctrl_ go to INSERT from BYPASS
-      by_pass_brs_holder_.reset();
     }
   }
   return ret;

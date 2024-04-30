@@ -361,7 +361,8 @@ static void* ob_malloc_openssl(size_t nbyte, const char *, int)
   attr.ctx_id_ = ObCtxIds::GLIBC;
   attr.label_ = ObModIds::OB_BUFFER;
   SET_IGNORE_MEM_VERSION(attr);
-  return ob_malloc(nbyte, attr);
+  lib::ObMallocHookAttrGuard guard(attr);
+  return malloc(nbyte);
 }
 
 static void* ob_realloc_openssl(void *ptr, size_t nbyte, const char *, int)
@@ -370,12 +371,13 @@ static void* ob_realloc_openssl(void *ptr, size_t nbyte, const char *, int)
   attr.ctx_id_ = ObCtxIds::GLIBC;
   attr.label_ = ObModIds::OB_BUFFER;
   SET_IGNORE_MEM_VERSION(attr);
-  return ob_realloc(ptr, nbyte, attr);
+  lib::ObMallocHookAttrGuard guard(attr);
+  return realloc(ptr, nbyte);
 }
 
 static void ob_free_openssl(void *ptr, const char *, int)
 {
-  ob_free(ptr);
+  free(ptr);
 }
 
 int ObEncryptionUtil::init_ssl_malloc()

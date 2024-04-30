@@ -309,6 +309,8 @@ public:
   OB_INLINE virtual int64_t get_trans_col_index() const override
   { return schema_rowkey_cnt_; }
   virtual int64_t get_request_count() const override;
+  OB_INLINE virtual int64_t get_group_idx_col_index() const override
+  { return OB_INVALID_INDEX; }
   int deep_copy(char *buf, const int64_t buf_len, ObRowkeyReadInfo *&value) const;
   int64_t get_deep_copy_size() const;
   int deserialize(

@@ -421,7 +421,7 @@ protected:
   int push_back_send_list();
   int wait_unblocking();
   int switch_buffer(const int64_t min_size, const bool is_eof,
-      const int64_t timeout_ts);
+      const int64_t timeout_ts, ObEvalCtx *eval_ctx);
   int write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx, bool is_eof);
   int inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts, ObEvalCtx *eval_ctx, bool is_eof);

@@ -305,6 +305,8 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     need_barrier_(false),
     is_first_dml_op_(false),
     table_location_uncertain_(false),
+    is_pdml_update_split_(false),
+    das_dop_(0),
     pdml_partition_id_expr_(NULL),
     pdml_is_returning_(false),
     err_log_define_(),
@@ -834,7 +836,7 @@ int ObLogDelUpd::compute_sharding_info()
   } else if (OB_ISNULL(get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (!is_pdml()) {
+  } else if (!(is_pdml() || get_das_dop() > 0)) {
     is_partition_wise_ = !is_multi_part_dml_ && !child->is_exchange_allocated() &&
                          get_sharding()->is_distributed() &&
                          NULL != get_sharding()->get_phy_table_location_info();
@@ -1664,5 +1666,13 @@ int ObLogDelUpd::is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed)
       LOG_WARN("failed to check is new row expr", K(ret));
     }
   }
+  return ret;
+}
+
+int ObLogDelUpd::check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)
+{
+  int ret = OB_SUCCESS;
+  used = false;
+  inherit_child_ordering_index = -1;
   return ret;
 }

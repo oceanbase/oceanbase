@@ -801,10 +801,10 @@ Query Plan
 |2 |│ └─EXCHANGE OUT DISTR        |:EX10000|5       |10          |
 |3 |│   └─PX BLOCK ITERATOR       |        |5       |10          |
 |4 |│     └─TABLE FULL SCAN       |t2      |5       |10          |
-|5 |└─LIMIT                       |        |1       |10          |
-|6 |  └─PX COORDINATOR MERGE SORT |        |1       |10          |
-|7 |    └─EXCHANGE OUT DISTR      |:EX20000|1       |10          |
-|8 |      └─TOP-N SORT            |        |1       |10          |
+|5 |└─LIMIT                       |        |1       |11          |
+|6 |  └─PX COORDINATOR MERGE SORT |        |2       |11          |
+|7 |    └─EXCHANGE OUT DISTR      |:EX20000|2       |10          |
+|8 |      └─TOP-N SORT            |        |2       |10          |
 |9 |        └─PX BLOCK ITERATOR   |        |5       |10          |
 |10|          └─TABLE FULL SCAN   |t1      |5       |10          |
 ==================================================================

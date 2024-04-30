@@ -15,6 +15,10 @@
 #include "share/rc/ob_tenant_base.h"  // MTL_ID
 #include "ob_log_fetch_stream_container_mgr.h"
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOGFETCHER_ALLOC_FSC_FAILED);
+#endif
+
 namespace oceanbase
 {
 namespace logfetcher
@@ -111,6 +115,10 @@ int ObFsContainerMgr::add_fsc(const FetchStreamType stype,
     ret = OB_INVALID_ERROR;
     LOG_ERROR("invalid argument", KR(ret), K(stype), K(rpc_), K(stream_worker_),
         K(progress_controller_));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOGFETCHER_ALLOC_FSC_FAILED)) {
+    LOG_ERROR("ERRSIM: failed to alloc fsc");
+#endif
   } else if (OB_FAIL(fsc_pool_.alloc(fsc))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate fsc from pool failed", KR(ret), K(tls_id), K(fsc));
@@ -146,14 +154,22 @@ int ObFsContainerMgr::remove_fsc(const logservice::TenantLSID &tls_id)
     ret = OB_NOT_INIT;
     LOG_ERROR("ObFsContainerMgr has not be inited");
   } else if (OB_FAIL(get_fsc(tls_id, fsc))) {
-    LOG_ERROR("ObFsContainerMgr get_fsc failed", KR(ret));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("ObFsContainerMgr get_fsc failed", KR(ret));
+    } else {
+      LOG_WARN("tls_id not in fsc", K(tls_id));
+    }
   // explicitly call FetchStreamContainer::reset because ObSmallObjPool may not invoke the destructor of the object,
   // which cause incorrect destruct order of objects.
   } else if (FALSE_IT(fsc->reset())) {
   } else if (OB_FAIL(fsc_pool_.free(fsc))) {
     LOG_ERROR("fsc_pool_ free failed", KR(ret), K(tls_id), KPC(fsc));
   } else if (OB_FAIL(fsc_map_.erase(tls_id))) {
-    LOG_ERROR("fsc_map_ erase failed", KR(ret), K(tls_id));
+    if (OB_ENTRY_NOT_EXIST != ret) {
+      LOG_ERROR("fsc_map_ erase failed", KR(ret), K(tls_id));
+    } else {
+      LOG_WARN("tls_id not in fsc_map", K(tls_id));
+    }
   } else {}
 
   return ret;

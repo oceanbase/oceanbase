@@ -1090,13 +1090,14 @@ int ObXACtx::xa_start_for_dblink(const ObXATransID &xid,
 // @param[out] client
 int ObXACtx::get_dblink_client(const DblinkDriverProto dblink_type,
                                ObISQLConnection *dblink_conn,
+                               ObDBLinkTransStatistics *dblink_statistics,
                                ObDBLinkClient *&client)
 {
   int ret = OB_SUCCESS;
   ObLatchWGuard guard(lock_, common::ObLatchIds::XA_CTX_LOCK);
-  if (OB_ISNULL(dblink_conn)) {
+  if (OB_ISNULL(dblink_conn) || OB_ISNULL(dblink_statistics)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), KP(dblink_conn));
+    TRANS_LOG(WARN, "invalid argument", K(ret), KP(dblink_conn), KP(dblink_statistics));
   } else if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "xa ctx not inited", K(ret), K(*this));
@@ -1105,7 +1106,7 @@ int ObXACtx::get_dblink_client(const DblinkDriverProto dblink_type,
     TRANS_LOG(WARN, "xa trans is exiting", K(ret), K(*this));
   } else {
     ObDBLinkClient *tmp_client = NULL;
-    if (OB_FAIL(get_dblink_client_(dblink_type, dblink_conn, tmp_client))) {
+    if (OB_FAIL(get_dblink_client_(dblink_type, dblink_conn, dblink_statistics, tmp_client))) {
       TRANS_LOG(WARN, "fail to get dblink client", K(ret), K(*this));
     } else if (NULL == tmp_client) {
       ret = OB_ERR_UNEXPECTED;
@@ -1124,6 +1125,7 @@ int ObXACtx::get_dblink_client(const DblinkDriverProto dblink_type,
 // @param[out] dblink_client
 int ObXACtx::get_dblink_client_(const DblinkDriverProto dblink_type,
                                 ObISQLConnection *dblink_conn,
+                                ObDBLinkTransStatistics *dblink_statistics,
                                 ObDBLinkClient *&dblink_client)
 {
   int ret = OB_SUCCESS;
@@ -1151,7 +1153,7 @@ int ObXACtx::get_dblink_client_(const DblinkDriverProto dblink_type,
       client = new(ptr) ObDBLinkClient();
       const int64_t timeout_us = tx_desc_->get_timeout_us();
       if (OB_FAIL(client->init(client_max_index + 1, dblink_type, timeout_us,
-              dblink_conn))) {
+              dblink_conn, dblink_statistics))) {
         TRANS_LOG(WARN, "fail to init dblink client", K(ret), K(*this));
       } else if (OB_FAIL(dblink_client_array_.push_back(client))) {
         TRANS_LOG(WARN, "fail to push dblink client to array", K(ret), K(*this));
@@ -1578,6 +1580,8 @@ int ObXACtx::xa_start_remote_first_(const ObXATransID &xid,
     tx_desc_->set_xid(xid);
     tx_desc_->set_xa_ctx(this);
     tx_desc = tx_desc_;
+    // for statistics
+    XA_STAT_ADD_XA_START_REMOTE_COUNT();
   }
 
   notify_xa_start_complete_(ret);
@@ -1658,6 +1662,8 @@ int ObXACtx::xa_start_remote_second_(const ObXATransID &xid,
     ++xa_ref_count_;
     // set tx_desc in session
     tx_desc = tx_desc_;
+    // for statistics
+    XA_STAT_ADD_XA_START_REMOTE_COUNT();
   }
   return ret;
 }
@@ -2208,6 +2214,10 @@ int ObXACtx::xa_end_loose_remote_(const ObXATransID &xid,
       ret = result;
     }
   }
+  // for statistics
+  if (OB_SUCC(ret)) {
+    XA_STAT_ADD_XA_END_REMOTE_COUNT();
+  }
 
   return ret;
 }
@@ -2269,6 +2279,10 @@ int ObXACtx::xa_end_tight_remote_(const ObXATransID &xid,
     if (OB_SUCC(ret)) {
       ret = result;
     }
+  }
+  // for statistics
+  if (OB_SUCC(ret)) {
+    XA_STAT_ADD_XA_END_REMOTE_COUNT();
   }
 
   return ret;
@@ -2346,7 +2360,7 @@ int ObXACtx::set_exiting_()
       }
       tx_desc_ = NULL;
     }
-    if (OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
+    if (OB_SUCC(ret) && OB_FAIL(xa_ctx_mgr_->erase_xa_ctx(trans_id_))) {
       TRANS_LOG(WARN, "erase xa ctx failed", K(ret), K_(xid), K(*this));
     }
   }
@@ -2869,6 +2883,7 @@ int ObXACtx::xa_prepare_(const ObXATransID &xid, const int64_t timeout_us, bool 
           uint64_t data_version = 0;
           if (OB_FAIL(MTL(ObTransService*)->prepare_tx_coord(*tx_desc_, coord))) {
             if (OB_ERR_READ_ONLY_TRANSACTION == ret) {
+              XA_STAT_ADD_XA_READ_ONLY_TRANS_TOTAL_COUNT();
               TRANS_LOG(INFO, "xa is read only", K(ret), K(*this));
             } else {
               TRANS_LOG(WARN, "fail to prepare tx coord", K(ret), K(*this));

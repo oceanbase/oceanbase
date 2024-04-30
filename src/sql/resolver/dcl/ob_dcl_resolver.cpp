@@ -27,7 +27,7 @@ int ObDCLResolver::check_and_convert_name(ObString &db, ObString &table)
 {
   int ret = OB_SUCCESS;
   ObNameCaseMode mode = OB_NAME_CASE_INVALID;
-  if (OB_ISNULL(session_info_)) {
+  if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("Session info is not inited", K(ret));
   } else if (OB_FAIL(session_info_->get_name_case_mode(mode))) {
@@ -53,7 +53,8 @@ int ObDCLResolver::check_and_convert_name(ObString &db, ObString &table)
         CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
         OZ (ObSQLUtils::cvt_db_name_to_org(*schema_checker_->get_schema_guard(),
                                            session_info_,
-                                           db));
+                                           db,
+                                           allocator_));
       }
     }
   }

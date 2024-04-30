@@ -495,7 +495,10 @@ typedef enum ObItemType
 
   T_FUN_SYS_CURRENT_USER_PRIV = 766,
   T_FUN_SYS_CURRENT_ROLE = 767,
+  T_FUN_SYS_PASSWORD = 773,
   ///< @note add new mysql only function type before this line
+
+
   T_MYSQL_ONLY_SYS_MAX_OP = 800,
 
   // system function for oracle only
@@ -854,6 +857,10 @@ typedef enum ObItemType
   T_FUN_SYS_RANDSTR = 1807,
   T_FUNC_SYS_INNER_IS_TRUE = 1808,
   T_FUN_SYS_INNER_DECODE_LIKE = 1809,
+  T_FUN_SYS_TRANSACTION_ID = 1813,
+  T_FUN_SYS_INNER_TABLE_OPTION_PRINTER = 1814,
+  T_FUN_SYS_INNER_TABLE_SEQUENCE_GETTER = 1815,
+  T_FUN_SYS_DECODE_TRACE_ID = 1816,
   T_FUN_SYS_END = 2000,
   T_FUN_SYS_ALIGN_DATE4CMP = 2010,
 
@@ -1183,7 +1190,7 @@ typedef enum ObItemType
   T_ZONE_ACTION,
   T_IP_PORT,
 
-  T_SHOW_TABLES, //新增show类型请添加在T_SHOW_TABLES后面
+  T_SHOW_TABLES,
   T_SHOW_DATABASES,
   T_SHOW_VARIABLES,
   T_SHOW_COLUMNS,
@@ -1217,7 +1224,7 @@ typedef enum ObItemType
   T_SHOW_CREATE_TRIGGER,
   T_SHOW_QUERY_RESPONSE_TIME,
   T_SHOW_SEQUENCES,
-  T_SHOW_GRANTS, //新增show类型请添加在T_SHOW_GRANTS前面
+  T_SHOW_GRANTS,
 
   T_SHOW_LIMIT,
   T_CREATE_USER,
@@ -2396,15 +2403,14 @@ typedef enum ObItemType
   T_COALESCE_AGGR,
   T_NO_COALESCE_AGGR,
   T_AUTO_INCREMENT_CACHE_SIZE,
-
   T_IGNORE_UNKNOWN_USER,
   T_SHOW_PROFILE,
   T_ALTER_TABLE_FORCE,
   T_SHOW_PROCEDURE_CODE,
   T_SHOW_FUNCTION_CODE,
+
   T_CHANGE_EXTERNAL_STORAGE_DEST,
   T_ALTER_USER_PROXY,
-
   T_PARALLEL_DAS_DML,
   T_DISABLE_PARALLEL_DAS_DML,
   T_ENABLE_LOB_PREFETCH,
@@ -2439,6 +2445,15 @@ typedef enum ObContextType {
     ACCESSED_GLOBALLY = 2,
     INITIALIZED_GLOBALLY = 3,
   }ObContextType;
+
+typedef enum ObOutlineType
+{
+  OUTLINE_TYPE_INVALID = -1, //Attention: add a new type after CACHE_TYPE_INVALID
+  OUTLINE_TYPE_NORMAL,
+  OUTLINE_TYPE_FORMAT,
+  OUTLINE_TYPE_MAX //Attention: add a new type before CACHE_TYPE_MAX
+} ObOutlineType;
+
 
 #define IS_BOOL_OP(op) \
   (((op) >= T_OP_EQ && (op) <= T_OP_NOT_IN && (op) != T_OP_POW) \

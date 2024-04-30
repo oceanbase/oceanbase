@@ -590,6 +590,7 @@ public:
                                     const ObIRoutineInfo *&routine_info);
   static int resolve_dblink_routine_with_synonym(ObPLResolveCtx &resolve_ctx,
                                                  const uint64_t pkg_syn_id,
+                                                 const ObString &cur_db_name,
                                                  const ObString &routine_name,
                                                  const common::ObIArray<sql::ObRawExpr *> &expr_params,
                                                  const ObIRoutineInfo *&routine_info);
@@ -638,6 +639,20 @@ private:
                           ObPLDataType &pl_type,
                           ObPLExternTypeInfo *extern_type_info = NULL,
                           bool with_rowid = false);
+  int resolve_dblink_row_type_node(const ParseNode &access_node,
+                                   const ParseNode &dblink_node,
+                                   ObPLDataType &pl_type,
+                                   bool is_row_type);
+  int resolve_dblink_row_type(const ObString &db_name,
+                              const ObString &table_name,
+                              const ObString &col_name,
+                              const ObString &dblink_name,
+                              ObPLDataType &pl_type,
+                              bool is_row_type);
+  int resolve_dblink_row_type_with_synonym(ObPLResolveCtx &resolve_ctx,
+                                           const common::ObIArray<ObObjAccessIdx> &access_idxs,
+                                           ObPLDataType &pl_type,
+                                           bool is_row_type);
   int resolve_dblink_type(const ParseNode *node,
                           ObPLCompileUnitAST &func,
                           ObPLDataType &pl_type);
@@ -742,6 +757,7 @@ private:
   int set_cm_warn_on_fail(ObRawExpr *&expr);
   int analyze_expr_type(ObRawExpr *&expr,
                         ObPLCompileUnitAST &unit_ast);
+  int set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number);
   int resolve_expr(const ParseNode *node, ObPLCompileUnitAST &unit_ast,
                    sql::ObRawExpr *&expr, uint64_t line_number = 0, /* where this expr called */
                    bool need_add = true, const ObPLDataType *expected_type = NULL,
@@ -1145,6 +1161,7 @@ private:
                                   ObIArray<ObObjAccessIdx> &access_idxs,
                                   ObPLCompileUnitAST &func);
 
+  int build_self_access_idx(ObObjAccessIdx &self_access_idx, const ObPLBlockNS &ns);
   int build_current_access_idx(uint64_t parent_id,
                                ObObjAccessIdx &access_idx,
                                ObObjAccessIdent &access_ident,

@@ -1064,8 +1064,6 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
                      && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_info.param_.tablet_id_))) {
             LOG_WARN("failed to push sys tablet id into array", K(ret), "array count", ctx_->sys_tablet_id_array_.count());
           } else if (!tablet_info.param_.is_empty_shell() && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
-          } else if (OB_FAIL(reset_multi_version_start_(tablet_info.param_))) {
-            LOG_WARN("failed to reset multi version start", K(ret), K(tablet_info));
           } else if (OB_FAIL(create_tablet_(tablet_info.param_, ls))) {
             LOG_WARN("failed to create tablet", K(ret));
           } else {
@@ -1180,21 +1178,6 @@ int ObStartLSRestoreTask::generate_tablets_restore_dag_()
         sys_tablets_restore_dag = nullptr;
       }
     }
-  }
-  return ret;
-}
-
-int ObStartLSRestoreTask::reset_multi_version_start_(ObMigrationTabletParam &param)
-{
-  int ret = OB_SUCCESS;
-  if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("param is not valid", K(ret), K(param));
-  } else {
-    // We reset the multi version start of the tablet migration parameter that is backup in backup consistent SCN stage.
-    // This stage does not have any SSTables and only serves as a placeholder.
-    // So the multi version start can be reset to 0 and then pushed up in the restore minor stage and restore major stage.
-    param.multi_version_start_ = 0;
   }
   return ret;
 }
@@ -1365,10 +1348,17 @@ int ObSysTabletsRestoreTask::process()
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret));
-  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets(dag_net))) {
     LOG_WARN("failed to create or update tablets", K(ret), KPC(ctx_));
   }
   return ret;
@@ -1377,11 +1367,17 @@ int ObSysTabletsRestoreTask::create_or_update_tablets_()
 int ObSysTabletsRestoreTask::build_tablets_sstable_info_()
 {
   int ret = OB_SUCCESS;
-
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info(dag_net))) {
     LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_));
   }
   return ret;

@@ -221,8 +221,11 @@
 #include "observer/virtual_table/ob_all_virtual_sql_stat.h"
 #include "observer/virtual_table/ob_all_virtual_kv_connection.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+#include "observer/virtual_table/ob_all_virtual_session_ps_info.h"
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
-
+#include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
+#include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1025,6 +1028,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_SESSION_PS_INFO_TID: {
+            ObAllVirtualSessionPsInfo *session_ps_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSessionPsInfo, session_ps_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSessionPsInfo construct failed", K(ret));
+            } else if (OB_ISNULL(session_ps_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "session_ps_info init failed", K(ret));
+            } else {
+              // init code
+              vt_iter = static_cast<ObAllVirtualSessionPsInfo *>(session_ps_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_PROXY_PARTITION_INFO_TID: {
             ObAllVirtualProxyPartitionInfo *pi = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualProxyPartitionInfo, pi))) {
@@ -1188,8 +1204,11 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowGrants, show_grants))) {
               show_grants->set_tenant_id(real_tenant_id);
               show_grants->set_user_id(session->get_user_id());
-              session->get_session_priv_info(show_grants->get_session_priv());
-              vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              if (OB_FAIL(session->get_session_priv_info(show_grants->get_session_priv()))) {
+                SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              }
             }
             break;
           }
@@ -2460,6 +2479,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             }
             break;
           }
+          case OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID: {
+            ObAllTracepointInfo *tp_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllTracepointInfo, tp_info))) {
+              SERVER_LOG(ERROR, "failed to init ObAllTracepointInfo", K(ret));
+            } else {
+              tp_info->set_addr(addr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(tp_info);
+            }
+            break;
+          }
           case OB_ALL_VIRTUAL_DTL_INTERM_RESULT_MONITOR_TID: {
             ObAllDtlIntermResultMonitor *dtl_interm_result_monitor = NULL;
             if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllDtlIntermResultMonitor, dtl_interm_result_monitor))) {
@@ -2640,6 +2669,25 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObInfoSchemaEnableRolesTable *enable_roles = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaEnableRolesTable, enable_roles))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(enable_roles);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_COMPATIBILITY_CONTROL_TID: {
+            ObVirtualCompatibilityConflictControl *compatibility_control = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualCompatibilityConflictControl, compatibility_control))) {
+              SERVER_LOG(ERROR, "ObVirtualCompatibilityConflictControl construct fail", K(ret));
+            } else {
+              compatibility_control->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(compatibility_control);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TID:
+          {
+            ObAllVirtualTenantSchedulerRunningJob *running_job = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSchedulerRunningJob, running_job))) {
+              running_job->set_session_mgr(GCTX.session_mgr_);
+              vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
             }
             break;
           }

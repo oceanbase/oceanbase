@@ -105,7 +105,11 @@ private:
     OUTPUT_BATCHES, // for batch
     SKIPPED_ROWS_COUNT, // for batch
     DB_TIME,
-    USER_IO_WAIT_TIME
+    USER_IO_WAIT_TIME,
+    WORKAREA_MEM,
+    WORKAREA_MAX_MEM,
+    WORKAREA_TEMPSEG,
+    WORKAREA_MAX_TEMPSEG
   };
   DISALLOW_COPY_AND_ASSIGN(ObVirtualSqlPlanMonitor);
 

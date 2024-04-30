@@ -29,7 +29,6 @@
 #include "sql/parser/parse_malloc.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "share/schema/ob_table_schema.h"
-#include "sql/resolver/expr/ob_raw_expr_canonicalizer_impl.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/resolver/dml/ob_default_value_utils.h"
@@ -420,6 +419,9 @@ int ObMultiModeDMLResolver::multimode_table_resolve_column_name_and_path(const P
     } else if (((table_type == OB_ORA_JSON_TABLE_TYPE && *path_node->str_value_ != '$' && path_node->value_ != 1))
                 && OB_FAIL(ObMultiModeDMLResolver::json_table_make_json_path(*path_node, dml_resolver->allocator_, col_def->col_base_info_.path_, table_type))) {
       LOG_WARN("failed to make json path", K(ret));
+    } else if (table_type == OB_ORA_JSON_TABLE_TYPE && path_node->type_ == T_IDENT && path_node->is_input_quoted_ == 1) {
+      ret = OB_ERR_INVALID_IDENTIFIER_JSON_TABLE;
+      LOG_WARN("invalid identifier used for path expression in JSON_TABLE", K(ret), K(path_node->type_));
     }
   } else if (path_node->type_ == T_NULL
              && OB_FAIL(ObMultiModeDMLResolver::json_table_make_json_path(*name_node, dml_resolver->allocator_, col_def->col_base_info_.path_, table_type))) {
@@ -1317,6 +1319,7 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
     ObCollationType nation_collation = OB_NOT_NULL(session_info) ? session_info->get_nls_collation_nation() : CS_TYPE_INVALID;
     ObCollationType collation_connection = CS_TYPE_INVALID;
     ObCharsetType character_set_connection = CHARSET_INVALID;
+    ObCompatType compat_type = COMPAT_MYSQL57;
     if (OB_ISNULL(dml_resolver->params_.expr_factory_) || OB_ISNULL(dml_resolver->params_.session_info_)) {
       ret = OB_NOT_INIT;
       LOG_WARN("resolve status is invalid", K_(dml_resolver->params_.expr_factory), K_(dml_resolver->params_.session_info));
@@ -1327,6 +1330,8 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
     } else if (lib::is_oracle_mode() && nullptr == session_info) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session info is null", K(ret));
+    } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+      LOG_WARN("failed to get compat type", K(ret));
     } else if (lib::is_oracle_mode() && OB_FAIL(
       session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
       LOG_WARN("get sys variables failed", K(ret));
@@ -1341,6 +1346,7 @@ int ObMultiModeDMLResolver::json_table_resolve_str_const(const ParseNode &parse_
                                                     static_cast<ObCollationType>(server_collation),
                                                     &parents_expr_info,
                                                     session_info->get_sql_mode(),
+                                                    compat_type,
                                                     nullptr != dml_resolver->params_.secondary_namespace_))) {
       LOG_WARN("failed to resolve const", K(ret));
     } else if (val.get_string().length() == 0) {

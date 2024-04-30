@@ -30,7 +30,7 @@ namespace share
 {
 static const char* TRP_TASK_STATUS_ARRAY[] =
 {
-  "WAITING", "INIT", "DOING", "COMPLETED", "FAILED"
+  "WAITING", "INIT", "DOING", "COMPLETED", "FAILED", "CANCELED"
 };
 
 const char* ObTransferPartitionTaskStatus::to_str() const
@@ -665,6 +665,39 @@ int ObTransferPartitionTaskTableOperator::load_part_list_task(
   }
   return ret;
 }
+int ObTransferPartitionTaskTableOperator::get_transfer_partition_task(
+      const uint64_t tenant_id,
+      const ObTransferPartInfo &part_info,
+      ObTransferPartitionTask &task,
+      ObISQLClient &sql_client)
+{
+   int ret = OB_SUCCESS;
+   ObSEArray<ObTransferPartitionTask, 1> task_array;
+   ObSqlString sql;
+   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+                  || !part_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(part_info));
+  } else if (OB_FAIL(sql.assign_fmt("select * from %s where table_id = %ld "
+                                "and object_id = %ld",
+                                OB_ALL_TRANSFER_PARTITION_TASK_TNAME,
+                                part_info.table_id(), part_info.part_object_id()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(sql), K(part_info));
+  } else if (OB_FAIL(get_tasks_(tenant_id, sql, task_array, sql_client))) {
+    LOG_WARN("failed to get tasks", KR(ret), K(tenant_id), K(sql));
+  } else if (0 == task_array.count()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("part not in transfer partition", KR(ret), K(part_info), K(tenant_id));
+  } else if (1 != task_array.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), K(part_info), K(task_array));
+  } else if (OB_FAIL(task.assign(task_array.at(0)))) {
+    LOG_WARN("failed to assin transfer partition task", KR(ret), K(task_array));
+  }
+  return ret;
+
+}
+
 
 }//end of share
 }//end of ob

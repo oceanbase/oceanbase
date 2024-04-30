@@ -39,7 +39,12 @@ public:
                              sorter_(allocator),
                              is_sorted_(false),
                              is_whole_range_(false),
-                             is_inited_(false) {}
+                             is_inited_(false),
+                             mbr_filter_cnt_(0),
+                             index_back_cnt_(0),
+                             max_rowkey_cnt_(-1),
+                             allocator_(&allocator),
+                             obj_ptr_(nullptr) {}
   virtual ~ObSpatialIndexLookupOp();
 
   int init(const ObDASScanCtDef *lookup_ctdef,
@@ -59,7 +64,7 @@ private:
   int save_rowkeys();
 private:
   static const int64_t SORT_MEMORY_LIMIT = 32L * 1024L * 1024L;
-  static const int64_t MAX_NUM_PER_BATCH = 1000;
+  static const int64_t MAX_NUM_PER_BATCH = 10000;
 
   const ObMbrFilterArray *mbr_filters_;
   int cmp_ret_;
@@ -69,6 +74,11 @@ private:
   bool is_sorted_;
   bool is_whole_range_;
   bool is_inited_;
+  int64_t mbr_filter_cnt_;
+  int64_t index_back_cnt_;
+  int64_t max_rowkey_cnt_;
+  ObIAllocator* allocator_;
+  ObObj *obj_ptr_;
 };
 
 }  // namespace sql

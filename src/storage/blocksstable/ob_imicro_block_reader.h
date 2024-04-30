@@ -308,14 +308,26 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int64_t get_column_count() const = 0;
-
-protected:
   virtual int find_bound(
       const ObDatumRowkey &key,
       const bool lower_bound,
       const int64_t begin_idx,
       int64_t &row_idx,
       bool &equal) = 0;
+  virtual int find_bound_through_linear_search(
+      const ObDatumRowkey &rowkey,
+      const int64_t begin_idx,
+      int64_t &row_idx)
+  {
+    UNUSEDx(rowkey, begin_idx, row_idx);
+    return OB_NOT_SUPPORTED;
+  }
+  virtual int compare_rowkey(
+      const ObDatumRowkey &rowkey,
+      const int64_t index,
+      int32_t &compare_result) = 0;
+
+protected:
   virtual int find_bound(const ObDatumRange &range,
       const int64_t begin_idx,
       int64_t &row_idx,

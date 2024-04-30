@@ -82,6 +82,8 @@ struct DupTableInterfaceStat
   int64_t dup_table_lease_log_sync_total_time_;
   int64_t dup_table_tablet_log_sync_total_time_;
 
+  int64_t dup_table_ls_leader_takeover_ts_;
+
   void reset()
   {
     dup_table_follower_read_succ_cnt_ = 0;
@@ -101,6 +103,8 @@ struct DupTableInterfaceStat
     dup_table_log_deser_total_time_ = 0;
     dup_table_lease_log_sync_total_time_ = 0;
     dup_table_tablet_log_sync_total_time_ = 0;
+
+    dup_table_ls_leader_takeover_ts_ = 0;
   }
 
   TO_STRING_KV(K(dup_table_follower_read_succ_cnt_),
@@ -115,7 +119,8 @@ struct DupTableInterfaceStat
                K(dup_table_log_replay_total_time_),
                K(dup_table_log_deser_total_time_),
                K(dup_table_lease_log_sync_total_time_),
-               K(dup_table_tablet_log_sync_total_time_));
+               K(dup_table_tablet_log_sync_total_time_),
+               K(dup_table_ls_leader_takeover_ts_));
 };
 
 #define DUP_LEASE_LIFE_PREFIX "[DupLeaseLife] "

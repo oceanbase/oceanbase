@@ -25,11 +25,11 @@ set(BITCODE_TO_ELF_LIST "")
 
 # systemd define on package
 if (OB_BUILD_OPENSOURCE)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/oceanbase-service.sh
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase-service.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/oceanbase-service.sh
                 @ONLY)
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/telemetry.sh.template
-                ${CMAKE_CURRENT_SOURCE_DIR}/tools/rpm/systemd/profile/telemetry.sh
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh.template
+                ${CMAKE_CURRENT_SOURCE_DIR}/tools/systemd/profile/telemetry.sh
                 @ONLY)
 endif()
 
@@ -74,11 +74,11 @@ install(
 
 if (OB_BUILD_OPENSOURCE)
 install(FILES
-  tools/rpm/systemd/profile/oceanbase.cnf
-  tools/rpm/systemd/profile/oceanbase-pre.json
-  tools/rpm/systemd/profile/oceanbase.service
-  tools/rpm/systemd/profile/oceanbase-service.sh
-  tools/rpm/systemd/profile/telemetry.sh
+  tools/systemd/profile/oceanbase.cnf
+  tools/systemd/profile/oceanbase-pre.json
+  tools/systemd/profile/oceanbase.service
+  tools/systemd/profile/oceanbase-service.sh
+  tools/systemd/profile/telemetry.sh
   DESTINATION profile
   COMPONENT server)
 endif()

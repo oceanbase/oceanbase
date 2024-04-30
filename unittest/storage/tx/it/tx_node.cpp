@@ -144,6 +144,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
                &schema_service_,
                &server_tracer_));
   tenant_.set(&txs_);
+  OZ(fake_opt_stat_mgr_.init(tenant_id_));
+  tenant_.set(&fake_opt_stat_mgr_);
   OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;

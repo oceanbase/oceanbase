@@ -20,8 +20,7 @@
 #include "rpc/obrpc/ob_rpc_result_code.h"
 
 #define DAS_SCAN_OP(_task_op) \
-    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() && \
-        ::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
+    (::oceanbase::sql::DAS_OP_TABLE_SCAN != (_task_op)->get_type() ? \
         nullptr : static_cast<::oceanbase::sql::ObDASScanOp*>(_task_op))
 #define DAS_GROUP_SCAN_OP(_task_op) \
     (::oceanbase::sql::DAS_OP_TABLE_BATCH_SCAN != (_task_op)->get_type() ? \
@@ -59,6 +58,10 @@ const int64_t OB_DAS_MAX_PACKET_SIZE = 2 * 1024 * 1024l - 8 * 1024;
  */
 const int64_t OB_DAS_MAX_TOTAL_PACKET_SIZE = 1 * OB_DAS_MAX_PACKET_SIZE;
 const int64_t OB_DAS_MAX_META_TENANT_PACKET_SIZE = 1 * 1024 * 1024l - 8 * 1024;
+
+// offset of das parallel thread_pool group_id
+static const int32_t OB_DAS_PARALLEL_POOL_MARK = 1 << 30;
+
 }  // namespace das
 
 enum class ObDasTaskStatus: uint8_t

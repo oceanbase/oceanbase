@@ -2201,7 +2201,7 @@ inline int ObNumber::decode(const char *buf, const int64_t buf_size, int64_t &po
       const int64_t copy_size = d_.len_ * static_cast<int64_t>(sizeof(uint32_t));
       if (OB_UNLIKELY(buf_size - pos < copy_size)) {
         ret = OB_BUF_NOT_ENOUGH;
-        LIB_LOG(ERROR, "buff is not enough", K(copy_size), K(buf_size - pos), K(buf_size), K(pos), K(ret));
+        LIB_LOG(WARN, "buff is not enough", K(copy_size), K(buf_size - pos), K(buf_size), K(pos), K(ret));
       } else {
         digits_ = (uint32_t *)(buf + pos);
         pos += copy_size;

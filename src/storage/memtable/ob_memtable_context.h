@@ -488,7 +488,7 @@ public:
                        const ObTableLockMode mode,
                        const ObTableLockOpType op_type,
                        bool &is_exist,
-                       ObTableLockMode &lock_mode_in_same_trans) const;
+                       uint64_t lock_mode_cnt_in_same_trans[]) const;
   int check_modify_schema_elapsed(const common::ObTabletID &tablet_id,
                                   const int64_t schema_version);
   int check_modify_time_elapsed(const common::ObTabletID &tablet_id,

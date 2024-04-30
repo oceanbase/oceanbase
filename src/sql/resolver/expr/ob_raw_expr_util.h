@@ -217,7 +217,8 @@ public:
   static int parse_default_expr_from_str(const common::ObString &expr_str,
                                          ObCharsets4Parser expr_str_cs_type,
                                          common::ObIAllocator &allocator,
-                                         const ParseNode *&node);
+                                         const ParseNode *&node,
+                                         bool is_for_trigger = false);
   static int parse_expr_list_node_from_str(const common::ObString &expr_str,
                                            ObCharsets4Parser expr_str_cs_type,
                                            common::ObIAllocator &allocator,
@@ -422,6 +423,9 @@ public:
   static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
                                   int64_t table_id,
                                   common::ObIArray<ObRawExpr *> &column_exprs);
+  static int extract_column_exprs(const common::ObIArray<ObRawExpr*> &exprs,
+                                  const common::ObIArray<int64_t> &table_ids,
+                                  common::ObIArray<ObRawExpr *> &column_exprs);
   // no need to add cast.
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);
@@ -434,6 +438,7 @@ public:
   static int extract_contain_exprs(ObRawExpr *raw_expr,
                                    const common::ObIArray<ObRawExpr*> &src_exprs,
                                    common::ObIArray<ObRawExpr *> &contain_exprs);
+  static int extract_invalid_sequence_expr(ObRawExpr *raw_expr, ObRawExpr *&sequence_expr);
   static int mark_column_explicited_reference(ObRawExpr &expr);
   static int extract_column_ids(const ObIArray<ObRawExpr*> &exprs, common::ObIArray<uint64_t> &column_ids);
   static int extract_column_ids(const ObRawExpr *raw_expr, common::ObIArray<uint64_t> &column_ids);
@@ -740,6 +745,7 @@ public:
   static int build_null_expr(ObRawExprFactory &expr_factory, ObRawExpr *&expr);
   static int build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnItem *column_item, ObRawExpr *&expr);
   static int build_nvl_expr(ObRawExprFactory &expr_factory, const ColumnItem *column_item, ObRawExpr *&expr1, ObRawExpr *&expr2);
+  static int build_nvl_expr(ObRawExprFactory &expr_factory, ObRawExpr *param_expr1, ObRawExpr *param_expr2, ObRawExpr *&expr);
   static int build_lnnvl_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *param_expr,
                               ObRawExpr *&lnnvl_expr);

@@ -60,7 +60,12 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
   // create the delete stmt
   ObDeleteStmt *delete_stmt = NULL;
   bool is_multi_table_delete = false;
-  if (NULL == (delete_stmt = create_stmt<ObDeleteStmt>())) {
+  uint64_t compat_version = 0;
+  bool disable_limit_offset = false;
+  if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_ISNULL(delete_stmt = create_stmt<ObDeleteStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create delete stmt failed", K(ret));
   } else if (OB_UNLIKELY(parse_tree.type_ != T_DELETE) || OB_UNLIKELY(parse_tree.num_child_ < 2)) {
@@ -69,6 +74,11 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(parse_tree.children_[TABLE])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_node is null", K(ret));
+  } else if (OB_FAIL(session_info_->get_compatibility_version(compat_version))) {
+    LOG_WARN("failed to get compatibility version", K(ret));
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                      ObCompatFeatureType::UPD_LIMIT_OFFSET, disable_limit_offset))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = delete_stmt;
     if (OB_FAIL(resolve_outline_data_hints())) {
@@ -108,7 +118,7 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("resolve delete where clause failed", K(ret));
       } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
         LOG_WARN("resolve delete order clause failed", K(ret));
-      } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT]))) {
+      } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
         LOG_WARN("resolve delete limit clause failed", K(ret));
       } else if (OB_FAIL(resolve_returning(parse_tree.children_[RETURNING]))) {
         LOG_WARN("resolve returning failed", K(ret));

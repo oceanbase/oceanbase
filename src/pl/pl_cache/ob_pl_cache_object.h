@@ -88,6 +88,7 @@ struct PLCacheObjStat
   uint64_t slowest_exec_usec_;    // execution slowest usec
   int64_t schema_version_;
   int64_t ps_stmt_id_;//prepare stmt id
+  common::ObString sys_vars_str_;
 
   PLCacheObjStat()
     : pl_schema_id_(OB_INVALID_ID),
@@ -104,7 +105,8 @@ struct PLCacheObjStat
       slowest_exec_time_(0),
       slowest_exec_usec_(0),
       schema_version_(OB_INVALID_ID),
-      ps_stmt_id_(OB_INVALID_ID)
+      ps_stmt_id_(OB_INVALID_ID),
+      sys_vars_str_()
   {
     sql_id_[0] = '\0';
   }
@@ -131,6 +133,7 @@ struct PLCacheObjStat
     slowest_exec_usec_ = 0;
     schema_version_ = OB_INVALID_ID;
     ps_stmt_id_ = OB_INVALID_ID;
+    sys_vars_str_.reset();
   }
 
   TO_STRING_KV(K_(pl_schema_id),
@@ -141,7 +144,8 @@ struct PLCacheObjStat
                K_(name),
                K_(compile_time),
                K_(type),
-               K_(schema_version));
+               K_(schema_version),
+               K_(sys_vars_str));
 };
 
 class ObPLCacheObject : public sql::ObILibCacheObject
@@ -175,7 +179,7 @@ public:
   inline const sql::DependenyTableStore &get_dependency_table() const { return dependency_tables_; }
   int init_dependency_table_store(int64_t dependency_table_cnt) { return dependency_tables_.init(dependency_table_cnt); }
   inline sql::DependenyTableStore &get_dependency_table() { return dependency_tables_; }
-  int set_params_info(const ParamStore &params);
+  int set_params_info(const ParamStore &params, bool is_anonymous = false);
   const common::Ob2DArray<ObPlParamInfo,
                           common::OB_MALLOC_BIG_BLOCK_SIZE,
                           common::ObWrapperAllocator, false> &get_params_info() const { return params_info_; }

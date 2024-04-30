@@ -19,6 +19,7 @@
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/rewrite/ob_transform_rule.h"
 #include "sql/optimizer/ob_fd_item.h"
+#include "sql/rewrite/ob_union_find.h"
 
 namespace oceanbase {
 namespace share {
@@ -433,7 +434,8 @@ public:
 
   static int flatten_expr(ObRawExpr *expr,
                           common::ObIArray<ObRawExpr*> &flattened_exprs);
-
+  static int flatten_and_or_xor(ObTransformerCtx *ctx, ObIArray<ObRawExpr*> &conditions, bool *trans_happened = NULL);
+  static int flatten_and_or_xor(ObRawExpr* expr, bool *trans_happened = NULL);
   static int find_not_null_expr(const ObDMLStmt &stmt,
                                 ObRawExpr *&not_null_expr,
                                 bool &is_valid,
@@ -594,6 +596,18 @@ public:
                                 const TableItem *table_item,
                                 ObIArray<uint64_t> &index_ids);
 
+  static int get_range_column_items_by_ids(const ObDMLStmt *stmt,
+                                           uint64_t table_id,
+                                           const ObIArray<uint64_t> &column_ids,
+                                           ObIArray<ColumnItem> &column_items);
+
+  static int check_index_extract_query_range(const ObDMLStmt *stmt,
+                                             uint64_t table_id,
+                                             const ObIArray<uint64_t> &index_cols,
+                                             const ObIArray<ObRawExpr *> &predicate_exprs,
+                                             ObTransformerCtx *ctx,
+                                             bool &is_match);
+
   static int is_match_index(ObSqlSchemaGuard *schema_guard,
                             const ObDMLStmt *stmt,
                             const ObColumnRefRawExpr *col_expr,
@@ -601,7 +615,9 @@ public:
                             EqualSets *equal_sets = NULL,
                             ObIArray<ObRawExpr*> *const_exprs = NULL,
                             ObIArray<ObColumnRefRawExpr*> *col_exprs = NULL,
-                            const bool need_match_col_exprs = false);
+                            const bool need_match_col_exprs = false,
+                            const bool need_check_query_range = false,
+                            ObTransformerCtx *ctx = NULL);
 
   static int is_match_index(const ObDMLStmt *stmt,
                             const ObIArray<uint64_t> &index_cols,
@@ -1045,7 +1061,8 @@ public:
   static int generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
                                                  ObDMLStmt *stmt,
                                                  TableItem *item,
-                                                 ObIArray<ObRawExpr *> &unique_keys);
+                                                 ObIArray<ObRawExpr *> &unique_keys,
+                                                 int64_t *rowkey_count = NULL);
 
   static int check_loseless_join(ObDMLStmt *stmt,
                                  ObTransformerCtx *ctx,
@@ -1250,6 +1267,19 @@ public:
                                   ObRawExpr *default_expr,
                                   ObRawExpr *&out_expr,
                                   ObTransformerCtx *ctx);
+  static int build_case_when_expr(ObTransformerCtx *ctx,
+                                  ObIArray<ObRawExpr*> &when_exprs,
+                                  ObIArray<ObRawExpr*> &then_exprs,
+                                  ObRawExpr *default_expr,
+                                  ObCaseOpRawExpr *&case_expr);
+  /**
+   * @brief check_error_free_expr
+   * Judging whether an expression has a high risk of reporting errors during execution.
+   * @note The rules are mainly based on historical experience, results are not guaranteed to be accurate.
+   *       Please use with care.
+   */
+  static int check_error_free_expr(ObRawExpr *expr, bool &is_error_free);
+  static int check_error_free_exprs(ObIArray<ObRawExpr*> &exprs, bool &is_error_free);
   static int build_row_expr(ObRawExprFactory& expr_factory,
                             common::ObIArray<ObRawExpr*>& param_exprs,
                             ObOpRawExpr*& row_expr);
@@ -1786,7 +1816,7 @@ public:
                                       ObRawExpr *&output,
                                       bool is_count_star = false);
   static int refresh_select_items_name(ObIAllocator &allocator, ObSelectStmt *select_stmt);
-  static int refresh_column_items_name(ObSelectStmt *stmt, int64_t table_id);
+  static int refresh_column_items_name(ObDMLStmt *stmt, int64_t table_id);
 
   static int get_real_alias_name(ObSelectStmt *stmt, int64_t sel_idx, ObString& alias_name);
 
@@ -1888,6 +1918,30 @@ public:
   static int check_child_projection_validity(const ObSelectStmt *child_stmt,
                                              ObRawExpr *expr,
                                              bool &is_valid);
+  static int cartesian_tables_pre_split(ObSelectStmt *subquery,
+                                        ObIArray<ObRawExpr*> &outer_conditions,
+                                        ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables);
+  static int do_split_cartesian_tables(ObTransformerCtx *ctx,
+                                       ObDMLStmt *stmt,
+                                       ObSelectStmt *subquery,
+                                       ObSEArray<ObRawExpr*, 4> &outer_conditions,
+                                       ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables,
+                                       ObIArray<TableItem*> &right_tables,
+                                       ObIArray<ObSEArray<ObRawExpr*, 4>> &new_outer_conds);
+  static int create_columns_for_view_tables(ObTransformerCtx *ctx,
+                                            ObDMLStmt *stmt,
+                                            ObIArray<TableItem*> &right_tables,
+                                            ObIArray<ObSEArray<ObRawExpr*, 4>> &outer_conds);
+  static int connect_tables(const ObIArray<uint64_t> &table_ids,
+                            const ObIArray<TableItem *> &from_tables,
+                            UnionFind &uf);
+  static int check_contain_correlated_function_table(const ObDMLStmt *stmt, bool &is_contain);
+  static int check_contain_correlated_json_table(const ObDMLStmt *stmt, bool &is_contain);
+  static int check_contain_cannot_duplicate_expr(const ObIArray<ObRawExpr*> &exprs, bool &is_contain);
+  // check if a constant or parameterized constant is NULL.
+  static bool is_const_null(ObRawExpr &expr);
+  static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
+
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1937,6 +1991,33 @@ private:
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
                                          bool &is_safe);
+
+  static int get_idx_from_table_ids(const ObIArray<uint64_t> &src_table_ids,
+                                    const ObIArray<TableItem *> &target_tables,
+                                    ObIArray<int64_t> &indices);
+
+  static int collect_cartesian_tables(ObTransformerCtx *ctx,
+                                      ObDMLStmt *stmt,
+                                      ObSelectStmt *subquery,
+                                      ObIArray<ObRawExpr*> &outer_conditions,
+                                      ObIArray<ObSEArray<TableItem*, 4>> &all_connected_tables,
+                                      ObIArray<TableItem*> &right_tables,
+                                      ObIArray<ObSEArray<ObRawExpr*, 4>> &new_outer_conds);
+  static int collect_split_exprs_for_view(ObTransformerCtx *ctx,
+                                          ObDMLStmt *stmt,
+                                          ObSelectStmt *origin_subquery,
+                                          TableItem *&view_table,
+                                          ObIArray<TableItem*> &connected_tables);
+  static int collect_split_outer_conds(ObSelectStmt *origin_subquery,
+                                       ObIArray<ObRawExpr*> &outer_conditions,
+                                       ObIArray<TableItem*> &connected_tables,
+                                       ObIArray<ObRawExpr*> &split_outer_conds);
+  static int collect_common_conditions(ObTransformerCtx *ctx,
+                                       ObSelectStmt *origin_subquery,
+                                       ObIArray<ObRawExpr*> &outer_conditions,
+                                       ObIArray<TableItem*> &right_tables,
+                                       ObIArray<ObSEArray<ObRawExpr*, 4>> &new_outer_conds);
+  static int recursive_check_cannot_duplicate_expr(const ObRawExpr *expr, bool &is_contain);
 };
 
 class StmtUniqueKeyProvider

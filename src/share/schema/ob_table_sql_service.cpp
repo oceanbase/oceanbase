@@ -2728,6 +2728,10 @@ int ObTableSqlService::gen_table_dml(
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_2_3_0
+             && OB_UNLIKELY(0 != table.get_auto_increment_cache_size())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("auto increment cache size not support before 4.2.3", K(ret), K(table));
   } else {
   if (data_version < DATA_VERSION_4_2_1_0
       && (!table.get_ttl_definition().empty() || !table.get_kv_attributes().empty())) {
@@ -2735,6 +2739,9 @@ int ObTableSqlService::gen_table_dml(
     LOG_WARN("ttl definition and kv attributes is not supported in version less than 4.2.1",
         "ttl_definition", table.get_ttl_definition().empty(),
         "kv_attributes", table.get_kv_attributes().empty());
+  } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -2865,6 +2872,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         || (data_version >= DATA_VERSION_4_2_1_2
             && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
+        || (data_version >= DATA_VERSION_4_2_3_0
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -2895,6 +2904,9 @@ int ObTableSqlService::gen_table_options_dml(
              && OB_UNLIKELY(OB_DEFAULT_LOB_INROW_THRESHOLD != table.get_lob_inrow_threshold())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("lob_inrow_threshold not support before 4.2.1.2", K(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_2_3_0 && (table.get_auto_increment_cache_size() != 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("table auto_increment_cache_size not support before 4.2.3", K(ret), K(table));
   } else {}
   if (OB_SUCC(ret)) {
     const ObPartitionOption &part_option = table.get_part_option();
@@ -2926,6 +2938,9 @@ int ObTableSqlService::gen_table_options_dml(
     } else if (data_version < DATA_VERSION_4_1_0_0 && OB_UNLIKELY(table.view_column_filled())) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("option is not support before 4.1", K(ret), K(table));
+    } else if (not_compat_for_queuing_mode(data_version) && table.is_new_queuing_table_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(table));
     } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                                exec_tenant_id, table.get_tenant_id())))
         || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(
@@ -2994,6 +3009,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("name_generated_type", table.get_name_generated_type())))
         || (data_version >= DATA_VERSION_4_2_1_2
             && OB_FAIL(dml.add_column("lob_inrow_threshold", table.get_lob_inrow_threshold())))
+        || (data_version >= DATA_VERSION_4_2_3_0
+            && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3033,6 +3050,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
              && OB_UNLIKELY((OB_INVALID_VERSION != new_table_schema.get_truncate_version()))) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("truncate version is not support before 4.1", K(ret), K(new_table_schema));
+  } else if (not_compat_for_queuing_mode(data_version) && new_table_schema.is_new_queuing_table_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("moderate/super/extreme table mode is not supported in data version < 4.2.1.5 or 4.2.2 <= data_version < 4.2.3", K(ret), K(new_table_schema));
   } else if (OB_FAIL(dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(
                                              exec_tenant_id, tenant_id)))
       || OB_FAIL(dml.add_pk_column("table_id", ObSchemaUtils::get_extract_schema_id(

@@ -170,7 +170,8 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
                      + audit_record.user_name_len_
                      + audit_record.db_name_len_
                      + audit_record.params_value_len_
-                     + audit_record.rule_name_len_;
+                     + audit_record.rule_name_len_
+                     + audit_record.proxy_user_name_len_;
     if (NULL == (buf = (char*)alloc(total_size))) {
       if (REACH_TIME_INTERVAL(100 * 1000)) {
         SERVER_LOG(WARN, "record concurrent fifoallocator alloc mem failed",
@@ -183,7 +184,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
       record->data_ = audit_record;
       //deep copy sql
       if ((audit_record.sql_len_ > 0) && (NULL != audit_record.sql_)) {
-        int64_t stmt_len = min(audit_record.sql_len_, OB_MAX_SQL_LENGTH);
+        int64_t stmt_len = min(audit_record.sql_len_, ObSQLUtils::get_query_record_size_limit(get_tenant_id()));
         MEMCPY(buf + pos, audit_record.sql_, stmt_len);
         record->data_.sql_ = buf + pos;
         pos += stmt_len;
@@ -220,6 +221,13 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         MEMCPY(buf + pos, audit_record.db_name_, db_len);
         record->data_.db_name_ = buf + pos;
         pos += db_len;
+      }
+      //deep copy proxy_user_name
+      if ((audit_record.proxy_user_name_len_ > 0) && (NULL != audit_record.proxy_user_name_)) {
+        int64_t user_len = min(audit_record.proxy_user_name_len_, OB_MAX_USER_NAME_LENGTH);
+        MEMCPY(buf + pos, audit_record.proxy_user_name_, user_len);
+        record->data_.proxy_user_name_ = buf + pos;
+        pos += user_len;
       }
       //for find bug
       // only print this log if enable_perf_event is enable,

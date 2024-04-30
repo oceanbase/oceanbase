@@ -261,13 +261,17 @@ int ObIntegerBaseDiffDecoder::pushdown_operator(
                   col_data,
                   filter,
                   result_bitmap))) {
-        LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on EQ / NE operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
     case sql::WHITE_OP_BT: {
       if (OB_FAIL(bt_operator(parent, col_ctx, col_data, filter, result_bitmap))) {
-        LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        if (OB_UNLIKELY(OB_NOT_SUPPORTED != ret)) {
+          LOG_WARN("Failed on BT operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
@@ -564,7 +568,7 @@ int ObIntegerBaseDiffDecoder::traverse_all_data(
         cur_int = base_ + v;
         // use lambda here to filter and set result bitmap
         bool result = false;
-        if (OB_FAIL(lambda(cur_int, filter, result))) {
+        if (FAILEDx(lambda(cur_int, filter, result))) {
           LOG_WARN("Failed on trying to filter the row", K(ret), K(row_id), K(cur_int));
         } else if (result) {
           if (OB_FAIL(result_bitmap.set(row_id))) {

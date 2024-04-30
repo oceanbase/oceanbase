@@ -201,6 +201,19 @@ void ObGlobalHint::merge_parallel_dml_hint(ObPDMLOption pdml_option)
   }
 }
 
+void ObGlobalHint::merge_parallel_das_dml_hint(ObParallelDASOption parallel_das_option)
+{
+  if (ObParallelDASOption::DISABLE != parallel_das_dml_option_ && ObParallelDASOption::ENABLE != parallel_das_dml_option_) {
+    if (ObParallelDASOption::DISABLE == parallel_das_option || ObParallelDASOption::ENABLE == parallel_das_option) {
+      parallel_das_dml_option_ = parallel_das_option;
+    }
+  } else if (ObParallelDASOption::ENABLE == parallel_das_dml_option_ || ObParallelDASOption::ENABLE == parallel_das_option) {
+    parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+  } else {
+    parallel_das_dml_option_ = ObParallelDASOption::DISABLE;
+  }
+}
+
 void ObGlobalHint::merge_param_option_hint(ObParamOption opt)
 {
   if (ObParamOption::FORCE != param_option_ && ObParamOption::EXACT != param_option_) {
@@ -301,7 +314,8 @@ bool ObGlobalHint::has_hint_exclude_concurrent() const
          || has_gather_opt_stat_hint()
          || false != has_dbms_stats_hint_
          || -1 != dynamic_sampling_
-         || flashback_read_tx_uncommitted_;
+         || flashback_read_tx_uncommitted_
+         || ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_;
 }
 
 void ObGlobalHint::reset()
@@ -334,6 +348,7 @@ void ObGlobalHint::reset()
   osg_hint_.flags_ = 0;
   has_dbms_stats_hint_ = false;
   flashback_read_tx_uncommitted_ = false;
+  parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   dynamic_sampling_ = ObGlobalHint::UNSET_DYNAMIC_SAMPLING;
 }
 
@@ -362,6 +377,7 @@ int ObGlobalHint::merge_global_hint(const ObGlobalHint &other)
   osg_hint_.flags_ |= other.osg_hint_.flags_;
   has_dbms_stats_hint_ |= other.has_dbms_stats_hint_;
   flashback_read_tx_uncommitted_ |= other.flashback_read_tx_uncommitted_;
+  merge_parallel_das_dml_hint(other.parallel_das_dml_option_);
   merge_dynamic_sampling_hint(other.dynamic_sampling_);
   if (OB_FAIL(merge_monitor_hints(other.monitoring_ids_))) {
     LOG_WARN("failed to merge monitor hints", K(ret));
@@ -497,6 +513,19 @@ int ObGlobalHint::print_global_hint(PlanText &plan_text) const
       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
     }
   }
+
+  if (OB_SUCC(ret) && ObParallelDASOption::NOT_SPECIFIED != parallel_das_dml_option_) { //PDML
+     if (ObParallelDASOption::ENABLE == parallel_das_dml_option_) {
+       if (!ignore_parallel_for_dblink) {
+         PRINT_GLOBAL_HINT_STR("ENABLE_PARALLEL_DAS_DML");
+       }
+     } else if (ObParallelDASOption::DISABLE == parallel_das_dml_option_) {
+       PRINT_GLOBAL_HINT_STR("DISABLE_PARALLEL_DAS_DML");
+     } else {
+       ret = OB_ERR_UNEXPECTED;
+       LOG_WARN("unexpected pdml hint value", K(ret), K_(pdml_option));
+     }
+   }
   if (OB_SUCC(ret) && ObParamOption::NOT_SPECIFIED != param_option_) { // PARAM
     if (OB_UNLIKELY(ObParamOption::EXACT != param_option_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -897,6 +926,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_AGGR_FIRST_UNNEST:           return T_AGGR_FIRST_UNNEST;
     case T_NO_JOIN_FIRST_UNNEST:           return T_JOIN_FIRST_UNNEST;
     case T_NO_DECORRELATE :       return T_DECORRELATE;
+    case T_NO_COALESCE_AGGR:      return T_COALESCE_AGGR;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -953,6 +983,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_AGGR_FIRST_UNNEST:           return is_enable_hint ? "AGGR_FIRST_UNNEST" : "NO_AGGR_FIRST_UNNEST";
     case T_JOIN_FIRST_UNNEST:           return is_enable_hint ? "JOIN_FIRST_UNNEST" : "NO_JOIN_FIRST_UNNEST";
     case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
+    case T_COALESCE_AGGR:       return is_enable_hint ? "COALESCE_AGGR" : "NO_COALESCE_AGGR";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
@@ -1059,6 +1090,7 @@ int ObHint::deep_copy_hint_contain_table(ObIAllocator *allocator, ObHint *&hint)
     case HINT_GROUPBY_PLACEMENT: DEEP_COPY_NORMAL_HINT(ObGroupByPlacementHint); break;
     case HINT_JOIN_FILTER:  DEEP_COPY_NORMAL_HINT(ObJoinFilterHint); break;
     case HINT_WIN_MAGIC: DEEP_COPY_NORMAL_HINT(ObWinMagicHint); break;
+    case HINT_COALESCE_AGGR: DEEP_COPY_NORMAL_HINT(ObCoalesceAggrHint); break;
     default:  {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected hint type to deep copy", K(ret), K(hint_class_));
@@ -1568,6 +1600,34 @@ bool ObGroupByPlacementHint::enable_groupby_placement(ObCollationType cs_type,
   return bret;
 }
 
+int ObCoalesceAggrHint::assign(const ObCoalesceAggrHint &other)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTransHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  } else {
+    enable_trans_wo_pullup_ = other.enable_trans_wo_pullup_;
+    enable_trans_with_pullup_ = other.enable_trans_with_pullup_;
+  }
+  return ret;
+}
+
+int ObCoalesceAggrHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  if (enable_trans_wo_pullup_ && enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WO_PULLUP WITH_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  } else if (enable_trans_wo_pullup_ && !enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WO_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  } else if (!enable_trans_wo_pullup_ && enable_trans_with_pullup_ && OB_FAIL(BUF_PRINTF("WITH_PULLUP"))) {
+    LOG_WARN("failed to do BUF_PRINTF", K(ret));
+  }
+  return ret;
+}
+
 int ObWinMagicHint::assign(const ObWinMagicHint &other)
 {
   int ret = OB_SUCCESS;
@@ -1862,6 +1922,7 @@ int ObIndexHint::assign(const ObIndexHint &other)
 {
   int ret = OB_SUCCESS;
   index_name_ = other.index_name_;
+  index_prefix_ = other.index_prefix_;
   if (OB_FAIL(table_.assign(other.table_))) {
     LOG_WARN("fail to assign table", K(ret));
   } else if (OB_FAIL(ObOptHint::assign(other))) {
@@ -1882,6 +1943,10 @@ int ObIndexHint::print_hint_desc(PlanText &plan_text) const
     /* do nothing */
   } else if (OB_FAIL(BUF_PRINTF(" \"%.*s\"", index_name_.length(), index_name_.ptr()))) {
     LOG_WARN("fail to print index name", K(ret));
+  } else if (T_INDEX_HINT != hint_type_  || index_prefix_ < 0) {
+    //do nothing
+  } else if (OB_FAIL(BUF_PRINTF(" %ld", index_prefix_))) {
+    LOG_WARN("fail to print index prefix", K(ret));
   }
   return ret;
 }

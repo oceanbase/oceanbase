@@ -63,7 +63,7 @@ int ObExprSoundex::calc_result_type1(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("raw expr is null", K(ret));
   } else {
-    if (type1.is_string_type() || type1.is_enum_or_set()) {
+    if (type1.is_string_type() || type1.is_enum_or_set() || type1.is_geometry()) {
       if (ObCharset::is_cs_nonascii(type1.get_collation_type())) {
         param_calc_cs_type = CS_TYPE_UTF8MB4_GENERAL_CI;
       }
@@ -78,6 +78,10 @@ int ObExprSoundex::calc_result_type1(
       } else if (ObTinyTextType == type1.get_type()) {
         res_type = ObVarcharType;
         res_length = OB_MAX_BINARY_LENGTH;
+      } else if (type1.is_geometry()) {
+        param_calc_type = ObHexStringType;
+        res_type = ObLongTextType;
+        res_length = OB_MAX_LONGTEXT_LENGTH;
       } else {
         res_type = ObLongTextType;
         res_length = OB_MAX_LONGTEXT_LENGTH;
@@ -311,6 +315,7 @@ int ObExprSoundex::calc_text(const ObDatum &input_datum,
       ObDataBuffer buf_alloc(buf, buf_size);
       int64_t block_buf_len = is_oracle_mode
                               ? MIN_RESULT_LENGTH : MAX(MIN_RESULT_LENGTH, input_data.length());
+      pos = 0;
       if (need_charset_convert) {
         block_buf = static_cast<char *>(tmp_alloc.alloc(block_buf_len));
       } else {

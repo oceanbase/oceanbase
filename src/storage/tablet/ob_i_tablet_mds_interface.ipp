@@ -2,6 +2,10 @@
 #define INCLUDE_OB_TABLET_MDS_PART_IPP
 #include "lib/ob_errno.h"
 #include "ob_i_tablet_mds_interface.h"
+#include "share/ob_errno.h"
+#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
+#include "storage/multi_data_source/mds_node.h"
+#include "storage/tablet/ob_tablet_status.h"
 #endif
 namespace oceanbase
 {
@@ -98,6 +102,7 @@ inline int ObITabletMdsInterface::get_mds_data_from_tablet<ObTabletBindingMdsUse
     MDS_LOG_GET(WARN, "failed to load aux tablet info");
   } else if (!aux_tablet_info.is_valid()) {
     ret = OB_EMPTY_RESULT;
+    MDS_LOG_GET(DEBUG, "get empty aux_tablet_info");
   } else if (CLICK_FAIL(read_op(aux_tablet_info))) {
     MDS_LOG_GET(WARN, "failed to read_op");
   }
@@ -632,6 +637,97 @@ inline int ObITabletMdsInterface::fill_virtual_info(ObIArray<mds::MdsNodeInfoFor
     MDS_LOG_GET(WARN, "fail to fill aux_tablet_info_");
   }
 
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
+/********************************************this is special logic*****************************************************/
+struct GetTabletStatuaNodeFromMdsTableOp {
+  GetTabletStatuaNodeFromMdsTableOp(ObTabletCreateDeleteMdsUserData &tablet_status, share::SCN &redo_scn)
+  : tablet_status_(tablet_status),
+  redo_scn_(redo_scn) {}
+  int operator()(const mds::UserMdsNode<mds::DummyKey, ObTabletCreateDeleteMdsUserData> &node) {
+    tablet_status_.assign(node.user_data_);
+    redo_scn_ = node.redo_scn_;
+    MDS_LOG(TRACE, "read tablet status in mds_table", K(node));
+    return OB_SUCCESS;
+  }
+  ObTabletCreateDeleteMdsUserData &tablet_status_;
+  share::SCN &redo_scn_;
+};
+struct GetTabletStatuaFromTabletOp {
+  GetTabletStatuaFromTabletOp(ObTabletCreateDeleteMdsUserData &tablet_status)
+  : tablet_status_(tablet_status) {}
+  int operator()(const ObTabletCreateDeleteMdsUserData& data) {
+    tablet_status_.assign(data);
+    return OB_SUCCESS;
+  }
+  ObTabletCreateDeleteMdsUserData &tablet_status_;
+};
+inline int ObITabletMdsInterface::check_transfer_in_redo_written(bool &written)
+{
+  #define PRINT_WRAPPER KR(ret), K(*this), K(written)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  bool is_online = false;
+  ObTabletCreateDeleteMdsUserData tablet_status;
+  share::SCN redo_scn;
+  do {
+    mds::MdsTableHandle handle;
+    ObLSSwitchChecker ls_switch_checker;
+    if (CLICK_FAIL(get_mds_table_handle_(handle, false))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        MDS_LOG_GET(WARN, "failed to get_mds_table");
+      } else {
+        MDS_LOG_GET(TRACE, "failed to get_mds_table");
+      }
+    } else if (!handle.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG_GET(WARN, "mds cannot be NULL");
+    } else if (OB_ISNULL(get_tablet_pointer_())) {
+      ret = OB_ERR_UNEXPECTED;
+      MDS_LOG_GET(WARN, "tablet pointer is null", K(ret), KPC(this));
+    } else if (MDS_FAIL(ls_switch_checker.check_ls_switch_state(get_tablet_pointer_()->get_ls(), is_online))) {
+      MDS_LOG_GET(WARN, "check ls online state failed", K(ret), KPC(this));
+    } else if (CLICK_FAIL(handle.get_tablet_status_node(GetTabletStatuaNodeFromMdsTableOp(tablet_status, redo_scn)))) {
+      if (OB_SNAPSHOT_DISCARDED != ret) {
+        MDS_LOG_GET(WARN, "failed to get mds data");
+      } else {
+        MDS_LOG_GET(TRACE, "failed to get mds data");
+      }
+    } else {
+      if (tablet_status.get_tablet_status() != ObTabletStatus::TRANSFER_IN) {
+        ret = OB_STATE_NOT_MATCH;
+      } else if (!redo_scn.is_valid() || redo_scn.is_max()) {
+        written = false;
+        MDS_LOG_GET(TRACE, "get transfer in status on mds_table, but redo scn is not valid");
+      } else {
+        written = true;
+        MDS_LOG_GET(TRACE, "get transfer in status on mds_table, and redo scn is valid");
+      }
+    }
+    if (CLICK_FAIL(ret)) {
+      if (OB_ENTRY_NOT_EXIST == ret || OB_SNAPSHOT_DISCARDED == ret) {
+        if (CLICK_FAIL(get_mds_data_from_tablet<ObTabletCreateDeleteMdsUserData>(GetTabletStatuaFromTabletOp(tablet_status)))) {
+          MDS_LOG_GET(WARN, "failed to get latest data from tablet");
+        } else if (tablet_status.get_tablet_status() != ObTabletStatus::TRANSFER_IN) {
+          ret = OB_STATE_NOT_MATCH;
+        } else {
+          written = true;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (is_online && MDS_FAIL(ls_switch_checker.double_check_epoch())) {
+        if (!is_online) {
+          ret = OB_LS_OFFLINE;
+        }
+        MDS_LOG_GET(WARN, "failed to double check ls online");
+      } else {
+        MDS_LOG_GET(TRACE, "success to check_transfer_in_redo_written");
+      }
+    }
+  } while (ret == OB_VERSION_NOT_MATCH && is_online);
   return ret;
   #undef PRINT_WRAPPER
 }

@@ -124,6 +124,12 @@ private:
   int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
   int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
       const int64_t restore_concurrency);
+  int stat_restore_progress_(
+      common::ObISQLClient &proxy,
+      const share::ObPhysicalRestoreJob &job_info,
+      const bool is_restore_stat_start,
+      const bool is_restore_finish);
+  int set_restoring_start_ts_(common::ObISQLClient &proxy, const share::ObPhysicalRestoreJob &job_info);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

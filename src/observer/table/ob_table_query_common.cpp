@@ -67,9 +67,15 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObTableQueryResultIterator *tmp_result_iter = nullptr;
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  const ObString &kv_attributes = tb_ctx.get_table_schema()->get_kv_attributes();
+  ObString kv_attributes;
 
-  if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
+  ObKvSchemaCacheGuard *schema_cache_guard = tb_ctx.get_schema_cache_guard();
+  if (OB_ISNULL(schema_cache_guard) || !schema_cache_guard->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
+  } else if (OB_FAIL(schema_cache_guard->get_kv_attributes(kv_attributes))) {
+    LOG_WARN("get kv attributes failed", K(ret));
+  } else if (OB_FAIL(one_result.deep_copy_property_names(tb_ctx.get_query_col_names()))) {
     LOG_WARN("fail to deep copy property names to one result", K(ret), K(tb_ctx));
   } else if (has_filter) {
     if (is_hkv) {
@@ -155,47 +161,54 @@ void ObTableQueryUtils::destroy_result_iterator(ObTableQueryResultIterator *resu
   }
 }
 
-int ObTableQueryUtils::get_rowkey_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+int ObTableQueryUtils::get_rowkey_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = nullptr;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  const int64_t N = rowkey_info.get_size();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+  int64_t N = 0;
+  if (OB_FAIL(schema_cache_guard.get_rowkey_column_num(N))) {
+    LOG_WARN("failed to get rowkey column num", K(ret));
+  } else {
     uint64_t column_id = OB_INVALID_ID;
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
-    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(column_id));
-    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
-      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      const ObTableColumnInfo *column_info = nullptr;
+      if (OB_FAIL(schema_cache_guard.get_rowkey_column_id(i, column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i));
+      } else if (OB_FAIL(schema_cache_guard.get_column_info(column_id, column_info))) {
+        LOG_WARN("fail to get column info", K(ret), K(column_id));
+      } else if (OB_ISNULL(column_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (OB_FAIL(names.push_back(column_info->column_name_))) {
+        LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+      }
     }
   }
 
   return ret;
 }
 
-int ObTableQueryUtils::get_full_column_names(const ObTableSchema &table_schema, ObIArray<ObString> &names)
+int ObTableQueryUtils::get_full_column_names(ObKvSchemaCacheGuard &schema_cache_guard, ObIArray<ObString> &names)
 {
   int ret = OB_SUCCESS;
-  const ObColumnSchemaV2 *column_schema = nullptr;
-  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
-  const int64_t N = rowkey_info.get_size();
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
+  int64_t N = 0;
+  if (OB_FAIL(schema_cache_guard.get_rowkey_column_num(N))) {
+    LOG_WARN("failed to get rowkey column num", K(ret));
+  } else {
     uint64_t column_id = OB_INVALID_ID;
-    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-      LOG_WARN("fail to get column id", K(ret), K(i), K(rowkey_info));
-    } else if (NULL == (column_schema = table_schema.get_column_schema(column_id))){
-      ret = OB_ERR_COLUMN_NOT_FOUND;
-      LOG_WARN("column not exists", K(ret), K(column_id));
-    } else if (OB_FAIL(names.push_back(column_schema->get_column_name_str()))) {
-      LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+    for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+      const ObTableColumnInfo *column_info = nullptr;
+      if (OB_FAIL(schema_cache_guard.get_rowkey_column_id(i, column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i));
+      } else if (OB_FAIL(schema_cache_guard.get_column_info(column_id, column_info))) {
+        LOG_WARN("fail to get column info", K(ret), K(column_id));
+      } else if (OB_ISNULL(column_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (OB_FAIL(names.push_back(column_info->column_name_))) {
+        LOG_WARN("fail to push back rowkey column name", K(ret), K(names));
+      }
     }
   }
-
   return ret;
 }
 

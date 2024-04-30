@@ -279,22 +279,41 @@ int ObSqlPlan::construct_outline_global_hint(ObLogPlan &plan, ObGlobalHint &outl
   ObDelUpdLogPlan *del_upd_plan = NULL;
   outline_global_hint.pdml_option_ = ObPDMLOption::NOT_SPECIFIED;
   outline_global_hint.parallel_ = ObGlobalHint::UNSET_PARALLEL;
+  outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::NOT_SPECIFIED;
   const ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(query_ctx = plan.get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(query_ctx));
   } else {
+    bool has_set_parallel = false;
     outline_global_hint.opt_features_version_ = query_ctx->optimizer_features_enable_version_;
-    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan)) && del_upd_plan->use_pdml()) {
-      outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+    if (NULL != (del_upd_plan = dynamic_cast<ObDelUpdLogPlan*>(&plan))) {
+      if (del_upd_plan->use_pdml()) {
+        outline_global_hint.pdml_option_ = ObPDMLOption::ENABLE;
+      }
+
+      if (del_upd_plan->get_can_use_parallel_das_dml()) {
+        has_set_parallel = true;
+        outline_global_hint.parallel_das_dml_option_ = ObParallelDASOption::ENABLE;
+        if (plan.get_optimizer_context().is_use_auto_dop()) {
+          outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
+        } else {
+          outline_global_hint.merge_parallel_hint(del_upd_plan->get_max_dml_parallel());
+        }
+      }
     }
-    if (plan.get_optimizer_context().is_use_auto_dop()) {
+
+    if (has_set_parallel) {
+      // set parallel_ before
+    } else if (plan.get_optimizer_context().is_use_auto_dop()) {
       outline_global_hint.merge_parallel_hint(ObGlobalHint::SET_ENABLE_AUTO_DOP);
     } else if (plan.get_optimizer_context().get_max_parallel() > ObGlobalHint::DEFAULT_PARALLEL) {
       outline_global_hint.merge_parallel_hint(plan.get_optimizer_context().get_max_parallel());
     }
-  }
 
+  }
+  LOG_TRACE("after construct_outline_global_hint", K(outline_global_hint.parallel_das_dml_option_),
+      K(outline_global_hint.pdml_option_), K(outline_global_hint.parallel_));
   return ret;
 }
 
@@ -476,6 +495,9 @@ int ObSqlPlan::inner_store_sql_plan_for_explain(ObExecContext *ctx,
       if (OB_SUCCESS == ret) {
         ret = end_ret;
       }
+    }
+    if (OB_NOT_NULL(saved_session)) {
+      saved_session->reset();
     }
   }
   return ret;
@@ -880,7 +902,7 @@ int ObSqlPlan::get_plan_other_info(PlanText &plan_text,
     } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
     } else { /* Do nothing */ }
-    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
       if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
       } else {

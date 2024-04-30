@@ -1137,7 +1137,7 @@ public:
 
   int check_param_num() const;
 
-  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
+  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params), K_(udf_info));
 
   AccessNameType type_;
   common::ObString access_name_;
@@ -1411,7 +1411,8 @@ struct ObExprEqualCheckContext
     err_code_(common::OB_SUCCESS),
     param_expr_(),
     need_check_deterministic_(false),
-    ignore_param_(false)
+    ignore_param_(false),
+    error_code_(0)
   { }
   ObExprEqualCheckContext(bool need_check_deterministic)
   : override_const_compare_(false),
@@ -1423,7 +1424,8 @@ struct ObExprEqualCheckContext
     err_code_(common::OB_SUCCESS),
     param_expr_(),
     need_check_deterministic_(need_check_deterministic),
-    ignore_param_(false)
+    ignore_param_(false),
+    error_code_(0)
   { }
   virtual ~ObExprEqualCheckContext() {}
   struct ParamExprPair
@@ -1470,6 +1472,7 @@ struct ObExprEqualCheckContext
     param_expr_.reset();
     need_check_deterministic_ = false;
     ignore_param_ = false;
+    error_code_ = 0;
   }
   bool override_const_compare_;
   bool override_column_compare_;
@@ -1482,6 +1485,7 @@ struct ObExprEqualCheckContext
   common::ObSEArray<ParamExprPair, 3, common::ModulePageAllocator, true> param_expr_;
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
+  int64_t error_code_; //error code to return
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext
@@ -1608,7 +1612,9 @@ struct ObResolveContext
     tg_timing_event_(TG_TIMING_EVENT_INVALID),
     view_ref_id_(OB_INVALID_ID),
     is_variable_allowed_(true),
-    is_need_print_(false)
+    is_need_print_(false),
+    is_from_show_resolver_(false),
+    is_in_system_view_(false)
   {
   }
 
@@ -1656,6 +1662,8 @@ struct ObResolveContext
   uint64_t view_ref_id_;
   bool is_variable_allowed_;
   bool is_need_print_;
+  bool is_from_show_resolver_;
+  bool is_in_system_view_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;
@@ -2012,7 +2020,7 @@ inline void ObRawExpr::unset_result_flag(uint32_t result_flag)
 inline int ObRawExpr::add_relation_id(int64_t rel_idx)
 {
   int ret = common::OB_SUCCESS;
-  if (rel_idx < 0) {
+  if (OB_UNLIKELY(rel_idx < 0)) {
     ret = common::OB_INVALID_ARGUMENT;
   } else {
     ret = rel_ids_.add_member(rel_idx);
@@ -2967,6 +2975,7 @@ public:
                                    int64_t buf_len,
                                    int64_t &pos,
                                    ExplainType type) const;
+  int get_subquery_comparison_flag() const;
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
@@ -4618,8 +4627,8 @@ public:
   bool is_cte_query_type() const { return T_CTE_SEARCH_COLUMN == type_ || T_CTE_CYCLE_COLUMN == type_; }
   void set_cte_cycle_value(ObRawExpr *v, ObRawExpr *d_v) {cte_cycle_value_ = v; cte_cycle_default_value_ = d_v; };
   void get_cte_cycle_value(ObRawExpr *&v, ObRawExpr *&d_v) {v = cte_cycle_value_; d_v = cte_cycle_default_value_; };
-  void set_table_id(int64_t table_id) { table_id_ = table_id; }
-  int64_t get_table_id() const { return table_id_; }
+  void set_table_id(uint64_t table_id) { table_id_ = table_id; }
+  uint64_t get_table_id() const { return table_id_; }
   void set_table_name(const common::ObString &table_name) { table_name_ = table_name; }
   const common::ObString & get_table_name() const { return table_name_; }
 
@@ -4632,7 +4641,7 @@ public:
 private:
   ObRawExpr *cte_cycle_value_;
   ObRawExpr *cte_cycle_default_value_;
-  int64_t table_id_;
+  uint64_t table_id_;
   common::ObString table_name_;
   DISALLOW_COPY_AND_ASSIGN(ObPseudoColumnRawExpr);
 };

@@ -132,7 +132,6 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
   int64_t num_child = expr.arg_cnt_;
   ObString xml_target;
   ObString xpath_expr;
@@ -141,6 +140,7 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   ObIMulModeBase *xml_base = nullptr;
   ObXmlDocument *xml_doc = nullptr;
   bool return_null = false;
+  bool step_next = false;
   ObUpdateXMLRetType res_origin = ObUpdateXMLRetType::ObRetMax;
 
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
@@ -156,16 +156,22 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
              !ob_is_string_type(expr.args_[1]->datum_meta_.type_) ||
              ObNullType == expr.args_[2]->datum_meta_.type_) {
     return_null = true;
+    step_next = true;
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[0], ctx, xml_target, allocator))) {
     LOG_WARN("failed to get xml_target str from expr", K(ret));
   } else if (xml_target.empty()) {
     // do nothing
+    step_next = true;
   } else if (OB_FALSE_IT(allocator.add_baseline_size(xml_target.length()))) {
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[1], ctx, xpath_expr, allocator))) {
     LOG_WARN("failed to get xpath expr.", K(ret));
   } else if (OB_FAIL(ObXMLExprHelper::get_str_from_expr(expr.args_[2], ctx, new_xml, allocator))) {
     LOG_WARN("failed to get new xml.", K(ret));
   } else if (OB_FALSE_IT(allocator.add_baseline_size(new_xml.length()))) {
+  }
+
+  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
+  if (OB_FAIL(ret) || step_next) {
   } else if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_DOCUMENT))) {
     ret = OB_SUCCESS;
     if (OB_FAIL(ObMulModeFactory::get_xml_base(xml_mem_ctx, xml_target, ObNodeMemType::TREE_TYPE, ObNodeMemType::TREE_TYPE, xml_base, M_CONTENT))) {
@@ -185,11 +191,11 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
   } else if (return_null) {
     res.set_null();
   } else if (OB_ISNULL(xml_base)) {
-    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_res))) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_res))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_res));
     }
   } else if (res_origin == ObUpdateXMLRetType::ObRetInputStr) {
-    if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, xml_target))) {
+    if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, xml_target))) {
       LOG_WARN("pack res origin failed.", K(ret), K(xml_target));
     }
   } else if (res_origin == ObUpdateXMLRetType::ObRetNullType) {
@@ -201,30 +207,14 @@ int ObExprUpdateXml::eval_mysql_update_xml(const ObExpr &expr, ObEvalCtx &ctx, O
       LOG_WARN("get xml base failed.", K(ret));
     } else if (OB_FAIL(xml_doc->print_document(buff, CS_TYPE_INVALID, ObXmlFormatType::NO_FORMAT | ObXmlFormatType::NO_ENTITY_ESCAPE))) {
       LOG_WARN("failed to print document.", K(ret));
-    } else if (OB_FAIL(pack_long_text_res(expr, ctx, res, allocator, buff.string()))) {
-      LOG_WARN("failed to pack long text res.", K(ret));
+    } else {
+      ObString res_str = buff.string();
+      if (OB_FAIL(ObXMLExprHelper::set_string_result(expr, ctx, res, res_str))) {
+        LOG_WARN("failed to pack long text res.", K(ret));
+      }
     }
-
   }
 
-  return ret;
-}
-
-int ObExprUpdateXml::pack_long_text_res(const ObExpr &expr,
-                                        ObEvalCtx &ctx,
-                                        ObDatum &res,
-                                        ObIAllocator &allocator,
-                                        ObString input_res)
-{
-  INIT_SUCC(ret);
-  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
-  if (OB_FAIL(text_result.init(input_res.length(), &allocator))) {
-    LOG_WARN("init lob result failed", K(ret));
-  } else if (OB_FAIL(text_result.append(input_res.ptr(), input_res.length()))) {
-    LOG_WARN("failed to append realdata", K(ret), K(input_res), K(text_result));
-  } else {
-    text_result.set_result();
-  }
   return ret;
 }
 
@@ -245,7 +235,6 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObMulModeMemCtx* xml_mem_ctx = nullptr;
   bool input_is_doc = false;
   ObMulModeNodeType node_type = M_MAX_TYPE;
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
 
   if (OB_FAIL(ObXmlUtil::create_mulmode_tree_context(&allocator, xml_mem_ctx))) {
     LOG_WARN("fail to create tree memory context", K(ret));
@@ -284,11 +273,15 @@ int ObExprUpdateXml::eval_update_xml(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
       } else if (xpath_str.empty()) {
         ret = OB_ERR_INVALID_XPATH_EXPRESSION;
         LOG_WARN("xpath is empty", K(ret));
-      } else if (OB_FAIL(update_xml_tree(xml_mem_ctx,  expr.args_[i+1], ctx, xpath_str, default_ns, &prefix_ns, xml_tree))) {
-        LOG_WARN("fail to do update in xml tree", K(ret), K(xml_tree), K(xpath_str), K(default_ns), K(i+1));
+      } else {
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
+        if (OB_FAIL(update_xml_tree(xml_mem_ctx,  expr.args_[i+1], ctx, xpath_str, default_ns, &prefix_ns, xml_tree))) {
+          LOG_WARN("fail to do update in xml tree", K(ret), K(xml_tree), K(xpath_str), K(default_ns), K(i+1));
+        }
       }
     }
     // set result
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "XMLModule"));
     if (OB_SUCC(ret)) {
       ObXmlDocument *xml_doc = static_cast<ObXmlDocument *>(xml_tree);
       ObStringBuffer buff(&allocator);

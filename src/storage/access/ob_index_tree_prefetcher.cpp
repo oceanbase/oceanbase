@@ -16,6 +16,7 @@
 #include "share/rc/ob_tenant_base.h"
 #include "ob_index_tree_prefetcher.h"
 #include "ob_aggregated_store.h"
+#include "storage/access/ob_rows_info.h"
 #include "storage/blocksstable/ob_storage_cache_suite.h"
 
 namespace oceanbase
@@ -218,7 +219,7 @@ int ObIndexTreePrefetcher::lookup_in_index_tree(ObSSTableReadHandle &read_handle
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to get index block row", K(ret), K_(index_scanner));
       }
-    } else if (index_block_info.is_macro_node() && OB_FAIL(check_bloom_filter(index_block_info, read_handle))) {
+    } else if (index_block_info.is_macro_node() && OB_FAIL(check_bloom_filter(index_block_info, false, read_handle))) {
       LOG_WARN("Fail to check bloom filter", K(ret), K(index_block_info), K(read_handle));
     } else if (ObSSTableRowState::NOT_EXIST == read_handle.row_state_) {
       found = true;
@@ -274,38 +275,54 @@ int ObIndexTreePrefetcher::init_index_scanner(ObIndexBlockRowScanner &index_scan
   return ret;
 }
 
-int ObIndexTreePrefetcher::check_bloom_filter(const ObMicroIndexInfo &index_info, ObSSTableReadHandle &read_handle)
+int ObIndexTreePrefetcher::check_bloom_filter(
+    const ObMicroIndexInfo &index_info,
+    const bool is_multi_check,
+    ObSSTableReadHandle &read_handle)
 {
   int ret = OB_SUCCESS;
-
-  if (!read_handle.is_get_ || !index_info.is_valid() || !index_info.is_macro_node()) {
+  if (!index_info.is_valid() || !index_info.is_macro_node()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(index_info), K(read_handle));
   } else if (!access_ctx_->query_flag_.is_index_back() && access_ctx_->enable_bf_cache()) {
-    int temp_ret = OB_SUCCESS;
     bool is_contain = true;
-    if (OB_UNLIKELY(OB_SUCCESS != (temp_ret = OB_STORE_CACHE.get_bf_cache().may_contain(
-        MTL_ID(),
-        index_info.get_macro_id(),
-        *read_handle.rowkey_,
-        *datum_utils_,
-        is_contain)))) {
-      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != temp_ret)) {
-        LOG_WARN("Fail to check bloomfilter", K(temp_ret));
+    if (is_multi_check) {
+      if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
+                                                            index_info.get_macro_id(),
+                                                            index_info.rows_info_,
+                                                            index_info.rowkey_begin_idx_,
+                                                            index_info.rowkey_end_idx_,
+                                                            *datum_utils_,
+                                                            is_contain))) {
+        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+          LOG_WARN("Fail to check bloomfilter", K(ret));
+        }
       }
-    } else {
-      if (is_contain) {
-        read_handle.is_bf_contain_ = true;
-      } else {
-        read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
-        ++access_ctx_->table_store_stat_.bf_filter_cnt_;
+    } else if (OB_FAIL(OB_STORE_CACHE.get_bf_cache().may_contain(MTL_ID(),
+                                                                 index_info.get_macro_id(),
+                                                                 *read_handle.rowkey_,
+                                                                 *datum_utils_,
+                                                                 is_contain))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("Fail to check bloomfilter", K(ret));
       }
     }
+    if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
+    } else if (is_contain) {
+      read_handle.is_bf_contain_ = true;
+    } else {
+      read_handle.row_state_ = ObSSTableRowState::NOT_EXIST;
+      ++access_ctx_->table_store_stat_.bf_filter_cnt_;
+    }
     LOG_DEBUG("check bloomfilter", K(ret), K(read_handle), K(is_contain));
-    access_ctx_->table_store_stat_.rowkey_prefix_ = read_handle.rowkey_->get_datum_cnt();
+    if (is_multi_check) {
+      access_ctx_->table_store_stat_.rowkey_prefix_ = read_handle.rows_info_->get_datum_cnt();
+    } else {
+      access_ctx_->table_store_stat_.rowkey_prefix_ = read_handle.rowkey_->get_datum_cnt();
+    }
     ++access_ctx_->table_store_stat_.bf_access_cnt_;
   }
-
   return ret;
 }
 
@@ -623,7 +640,7 @@ int ObIndexTreeMultiPrefetcher::drill_down(
   } else if (cur_level_is_leaf != index_block_info.is_data_block()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Fail to prefetch, unexpected level", K(ret), K(cur_level_is_leaf), K(index_block_info));
-  } else if (index_block_info.is_macro_node() && OB_FAIL(check_bloom_filter(index_block_info, read_handle))) {
+  } else if (index_block_info.is_macro_node() && OB_FAIL(check_bloom_filter(index_block_info, false, read_handle))) {
     LOG_WARN("Fail to check bloom filter", K(ret), K(index_block_info), K(read_handle));
   } else if (ObSSTableRowState::NOT_EXIST == read_handle.row_state_) {
     mark_cur_rowkey_prefetched(read_handle);
@@ -842,9 +859,13 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       break;
     }
     case ObStoreRowIterator::IteratorScan:
-    case ObStoreRowIterator::IteratorRowLockCheck: {
       range_ = static_cast<const blocksstable::ObDatumRange *>(query_range);
       max_range_prefetching_cnt_ = DEFAULT_SCAN_RANGE_PREFETCH_CNT;
+      break;
+    case ObStoreRowIterator::IteratorRowLockCheck:
+    case ObStoreRowIterator::IteratorRowLockAndDuplicationCheck: {
+      range_ = static_cast<const blocksstable::ObDatumRange *>(query_range);
+      max_range_prefetching_cnt_ = 1;
       break;
     }
     case ObStoreRowIterator::IteratorMultiScan: {
@@ -857,6 +878,12 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::i
       } else if (1 < range_count) {
         is_multi_range = true;
       }
+      break;
+    }
+    case ObStoreRowIterator::IteratorMultiRowLockCheck: {
+      rows_info_ = static_cast<const ObRowsInfo *>(query_range);
+      range_count = 1;
+      max_range_prefetching_cnt_ = 1;
       break;
     }
     default:
@@ -928,7 +955,6 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
     for (int16_t level = 1; OB_SUCC(ret) && level < border_level; level++) {
       if (tree_handles_[level].is_prefetch_end()) {
       } else if (OB_FAIL(tree_handles_[level].prefetch(
-                  border_rowkey_,
                   level,
                   *this))) {
         if (OB_ITER_END != ret) {
@@ -954,6 +980,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
     ObSSTableReadHandle &read_handle = read_handles_[cur_range_prefetch_idx_ % max_range_prefetching_cnt_];
     if (OB_FAIL(prepare_read_handle(tree_handle, read_handle))) {
       LOG_WARN("Fail to prepare read handle", K(ret));
+    } else if (!read_handle.is_valid()) {
     } else if (read_handle.is_get_) {
       // get
       if (OB_FAIL(lookup_in_cache(read_handle))) {
@@ -971,7 +998,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
           EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
         }
       }
-    } else {
+    } else if (!is_multi_check()) {
       // scan
       read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
       if (OB_FAIL(sstable_->get_index_tree_root(index_block_))) {
@@ -991,10 +1018,27 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::t
       } else {
         EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
       }
+    } else {
+      read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
+      if (OB_FAIL(sstable_->get_index_tree_root(index_block_))) {
+        LOG_WARN("Fail to get index tree root", K(ret));
+      } else if (OB_FAIL(tree_handle.index_scanner_.open(ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID,
+                                                         index_block_,
+                                                         read_handle.rows_info_,
+                                                         0,
+                                                         read_handle.rows_info_->get_rowkey_cnt()))) {
+        if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+          LOG_WARN("Fail to open index scanner", K(ret), K(read_handle));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        EVENT_INC(ObStatEventIds::INDEX_BLOCK_READ_CNT);
+      }
     }
 
     // TODO: @dengzhi.ldz, border of the first level is false in most cases, opt later
-    if (OB_SUCC(ret) && OB_FAIL(tree_handle.check_blockscan(border_rowkey_))) {
+    if (OB_SUCC(ret) && read_handle.is_valid() && OB_FAIL(tree_handle.check_blockscan(border_rowkey_))) {
       LOG_WARN("Fail to check_blockscan", K(ret), K(border_rowkey_), K(tree_handle));
     }
   }
@@ -1038,7 +1082,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
         while (OB_SUCC(ret) && prefetched_cnt < prefetch_depth) {
           prefetch_micro_idx = micro_data_prefetch_idx_ % max_micro_handle_cnt_;
           ObMicroIndexInfo &block_info = micro_data_infos_[prefetch_micro_idx];
-          if (OB_FAIL(tree_handles_[cur_level_].get_next_data_row(block_info))) {
+          if (OB_FAIL(tree_handles_[cur_level_].get_next_data_row(is_multi_check(), block_info))) {
             if (OB_UNLIKELY(OB_ITER_END != ret)) {
               LOG_WARN("fail to get next", K(ret), K(cur_level_), K(tree_handles_[cur_level_]));
             } else {
@@ -1050,7 +1094,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
             if (OB_FAIL(agg_row_store_->fill_index_info(block_info))) {
               LOG_WARN("Fail to agg index info", K(ret), K(block_info), KPC(this));
             } else {
-              LOG_DEBUG("Success to agg index info", K(ret), KPC(agg_row_store_));
+              LOG_DEBUG("Success to agg index info", K(ret), K(block_info), KPC(agg_row_store_));
               continue;
             }
           } else if (OB_FAIL(check_row_lock(block_info, is_row_lock_checked_))) {
@@ -1099,8 +1143,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::d
   } else {
     while (OB_SUCC(ret)) {
       if (index_tree_height_ - 1 == cur_level_) {
-      } else if (OB_FAIL(tree_handles_[cur_level_ + 1].forward(border_rowkey_,
-                                                               iter_param_->has_lob_column_out()))) {
+      } else if (OB_FAIL(tree_handles_[cur_level_ + 1].forward(*this, iter_param_->has_lob_column_out()))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("fail to consume tree handle", K(ret), K(cur_level_), K(tree_handles_[cur_level_ + 1]));
         } else {
@@ -1155,7 +1198,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
         break;
       }
       case ObStoreRowIterator::IteratorScan:
-      case ObStoreRowIterator::IteratorRowLockCheck: {
+      case ObStoreRowIterator::IteratorRowLockCheck:
+      case ObStoreRowIterator::IteratorRowLockAndDuplicationCheck: {
         read_handle.reuse();
         read_handle.range_ = range_;
         read_handle.range_idx_ = cur_range_prefetch_idx_;
@@ -1166,13 +1210,21 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::p
       }
       case ObStoreRowIterator::IteratorMultiScan: {
         read_handle.reuse();
-        const ObDatumRange *range = &ranges_->at(cur_range_prefetch_idx_);
-        read_handle.range_ = range;
+        read_handle.range_ = &ranges_->at(cur_range_prefetch_idx_);
         read_handle.range_idx_ = cur_range_prefetch_idx_;
         read_handle.is_get_ = false;
         if (++cur_range_prefetch_idx_ >= ranges_->count()) {
           tree_handle.set_prefetch_end();
         }
+        break;
+      }
+      case ObStoreRowIterator::IteratorMultiRowLockCheck: {
+        read_handle.reuse();
+        read_handle.rows_info_ = rows_info_;
+        read_handle.range_idx_ = cur_range_prefetch_idx_;
+        read_handle.is_get_ = false;
+        cur_range_prefetch_idx_++;
+        tree_handle.set_prefetch_end();
         break;
       }
       default:
@@ -1423,11 +1475,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
     bool &is_row_lock_checked)
 {
   int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObIndexTreeMultiPassPrefetcher is not inited", K(ret));
-  } else if (ObStoreRowIterator::IteratorRowLockCheck == iter_type_
-               && !is_row_lock_checked) {
+  if (ObStoreRowIterator::IteratorRowLockCheck == iter_type_ && !is_row_lock_checked) {
     const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
     if (!index_info.contain_uncommitted_row()
           && index_info.get_max_merged_trans_version() <= read_snapshot_version) {
@@ -1443,7 +1491,6 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
 //////////////////////////////////////// ObIndexTreeLevelHandle //////////////////////////////////////////////
 template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
 int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::ObIndexTreeLevelHandle::prefetch(
-    const ObDatumRowkey &border_rowkey,
     const int64_t level,
     ObIndexTreeMultiPassPrefetcher &prefetcher)
 {
@@ -1469,10 +1516,9 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
       ObIndexTreeLevelHandle &parent = prefetcher.tree_handles_[level - 1];
       int8_t prefetch_idx = (prefetch_idx_ + 1) % INDEX_TREE_PREFETCH_DEPTH;
       ObMicroIndexInfo &index_info = index_block_read_handles_[prefetch_idx].index_info_;
-      if (OB_FAIL(parent.get_next_index_row(
-                  border_rowkey,
-                  index_info,
-                  prefetcher.iter_param_->has_lob_column_out()))) {
+      if (OB_FAIL(parent.get_next_index_row(prefetcher.iter_param_->has_lob_column_out(),
+                                            index_info,
+                                            prefetcher))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
           LOG_WARN("Fail to get next", K(ret), KPC(this));
         } else {
@@ -1483,7 +1529,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         if (OB_FAIL(prefetcher.agg_row_store_->fill_index_info(index_info))) {
           LOG_WARN("Fail to agg index info", K(ret), KPC(this));
         } else {
-          LOG_DEBUG("Success to agg index info", K(ret), K(index_info));
+          LOG_DEBUG("Success to agg index info", K(ret), K(index_info), KPC(prefetcher.agg_row_store_));
         }
       } else if (OB_FAIL(prefetcher.check_row_lock(index_info, is_row_lock_checked_))) {
         if (OB_UNLIKELY(OB_ITER_END != ret)) {
@@ -1491,8 +1537,11 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
         }
       } else {
         ObSSTableReadHandle &read_handle = prefetcher.read_handles_[index_info.range_idx() % prefetcher.max_range_prefetching_cnt_];
-        if (index_info.is_get() && index_info.is_macro_node() && OB_FAIL(prefetcher.check_bloom_filter(index_info, read_handle))) {
-          LOG_WARN("Fail to check bloom filter", K(ret), K(index_info), K(prefetcher.current_read_handle()));
+        if ((prefetcher.is_multi_check() || index_info.is_get())
+             && index_info.is_macro_node()
+             && OB_FAIL(prefetcher.check_bloom_filter(index_info, prefetcher.is_multi_check(), read_handle))) {
+          LOG_WARN("Fail to check bloom filter", K(ret), K(index_info), K(prefetcher.current_read_handle()),
+                    K(prefetcher.is_multi_check()));
         } else if (level == prefetcher.index_tree_height_ -1 && !index_info.is_leaf_block()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected unbalanced index tree", K(ret), K(level), K(index_info), K(parent));
@@ -1503,6 +1552,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
             prefetch_idx_++;
             parent.current_block_read_handle().end_prefetched_row_idx_++;
           }
+        } else if (prefetcher.is_multi_check()) {
+          read_handle.row_state_ = ObSSTableRowState::IN_BLOCK;
         }
       }
     }
@@ -1512,7 +1563,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
 
 template <int32_t DATA_PREFETCH_DEPTH, int32_t INDEX_PREFETCH_DEPTH>
 int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::ObIndexTreeLevelHandle::forward(
-    const ObDatumRowkey &border_rowkey,
+    ObIndexTreeMultiPassPrefetcher &prefetcher,
     const bool has_lob_out)
 {
   int ret = OB_SUCCESS;
@@ -1525,6 +1576,18 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
     ObMicroIndexInfo &index_info = index_block_read_handles_[fetch_idx].index_info_;
     if (OB_FAIL(index_block_read_handles_[fetch_idx].data_handle_.get_index_block_data(index_block_))) {
       LOG_WARN("Fail to get index block data", K(ret), KPC(this));
+    } else if (prefetcher.is_multi_check()) {
+      if (OB_FAIL(index_scanner_.open(index_info.get_macro_id(),
+                                      index_block_,
+                                      index_info.rows_info_,
+                                      index_info.rowkey_begin_idx_,
+                                      index_info.rowkey_end_idx_))) {
+        if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
+          LOG_WARN("Failed to open index scanner", K(ret), KPC(this));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
     } else if (index_info.is_get()) {
       if (OB_FAIL(index_scanner_.open(
           index_info.get_macro_id(),
@@ -1547,8 +1610,8 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::O
 
     if (OB_SUCC(ret)) {
       if (index_info.can_blockscan(has_lob_out)) {
-      } else if (OB_FAIL(check_blockscan(border_rowkey))) {
-        LOG_WARN("Fail to update_blockscan", K(ret), K(border_rowkey));
+      } else if (OB_FAIL(check_blockscan(prefetcher.border_rowkey_))) {
+        LOG_WARN("Fail to update_blockscan", K(ret), K_(prefetcher.border_rowkey));
       }
     } else if (OB_LIKELY(OB_BEYOND_THE_RANGE == ret)) {
       ret = OB_SUCCESS;

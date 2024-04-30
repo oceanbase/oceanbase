@@ -44,7 +44,7 @@ int ObExprPrivSTGeoHash::calc_result_typeN(
     LOG_USER_ERROR(OB_ERR_PARAM_SIZE, fun_name.length(), fun_name.ptr());
   } else {
     ObObjType type_geom = types[0].get_type();
-    if (!ob_is_geometry(type_geom) && !ob_is_string_type(type_geom) && !ob_is_null(type_geom)) {
+    if (!ob_is_geometry(type_geom)) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_PRIV_ST_GEOHASH);
       LOG_WARN("invalid geometry type", K(ret), K(type_geom));
@@ -68,6 +68,7 @@ int ObExprPrivSTGeoHash::calc_result_typeN(
     type.set_varchar();
     type.set_collation_type(type_ctx.get_coll_type());
     type.set_collation_level(CS_LEVEL_IMPLICIT);
+    type.set_length(OB_MAX_VARCHAR_LENGTH / 4);
   }
 
   return ret;

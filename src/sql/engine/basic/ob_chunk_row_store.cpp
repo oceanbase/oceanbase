@@ -293,7 +293,6 @@ void ObChunkRowStore::reset()
     }
     io_.fd_ = -1;
   }
-  file_size_ = 0;
   n_block_in_file_ = 0;
 
   while (!blocks_.is_empty()) {
@@ -321,6 +320,13 @@ void ObChunkRowStore::reset()
   max_blk_size_ = 0;
   n_blocks_ = 0;
   row_cnt_ = 0;
+
+  if(OB_SUCC(ret)) {
+    if (nullptr != callback_) {
+      callback_->dumped(-file_size_);
+    }
+  }
+  file_size_ = 0;
 
   if (NULL != projector_) {
     allocator_->free(projector_);

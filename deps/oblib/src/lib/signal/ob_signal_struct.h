@@ -32,6 +32,22 @@ extern const int MP_SIG; // MP means MULTI-PURPOSE
 extern const int SIG_STACK_SIZE;
 extern uint64_t g_rlimit_core;
 
+struct ObSignalHandlerGuard
+{
+public:
+  ObSignalHandlerGuard(signal_handler_t handler)
+    : last_(get_signal_handler())
+  {
+    get_signal_handler() = handler;
+  }
+  ~ObSignalHandlerGuard()
+  {
+    get_signal_handler() = last_;
+  }
+private:
+  const signal_handler_t last_;
+};
+
 class DTraceId
 {
 public:

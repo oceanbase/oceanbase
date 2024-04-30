@@ -60,6 +60,17 @@ struct ObTmpRange : public common::ObDLinkBase<ObTmpRange>
 
 typedef ObDList<ObTmpRange> TmpRangeList;
 
+struct ObTmpInParam
+{
+  ObTmpInParam(common::ObIAllocator &allocator)
+    : always_false_(false),
+      in_param_(allocator) {}
+
+  TO_STRING_KV(K_(always_false), K(in_param_));
+  bool always_false_;
+  ObFixedArray<ObObj*, ObIAllocator> in_param_;
+};
+
 class ObRangeGenerator
 {
 public:
@@ -80,6 +91,8 @@ public:
       always_false_range_(nullptr),
       all_tmp_ranges_(allocator),
       tmp_range_lists_(nullptr),
+      all_tmp_node_caches_(allocator),
+      always_false_tmp_range_(nullptr),
       is_generate_ss_range_(false)
   {}
 
@@ -107,6 +120,12 @@ private:
   int try_intersect_delayed_range(ObTmpRange &range);
   int create_new_range(ObNewRange *&range, int64_t column_cnt);
   inline bool is_const_expr_or_null(int64_t idx) { return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx; }
+  int final_not_in_range_node(const ObRangeNode &node,
+                              const int64_t not_in_idx,
+                              ObTmpInParam *in_param,
+                              ObTmpRange *&range);
+  int generate_tmp_not_in_param(const ObRangeNode &node,
+                                ObTmpInParam *&in_param);
 private:
   ObRangeGenerator();
   static const int64_t RANGE_BUCKET_SIZE = 1000;
@@ -122,6 +141,8 @@ private:
   common::ObNewRange *always_false_range_;
   ObFixedArray<ObTmpRange*, ObIAllocator> all_tmp_ranges_;
   TmpRangeList* tmp_range_lists_;
+  ObFixedArray<void*, ObIAllocator> all_tmp_node_caches_;
+  ObTmpRange *always_false_tmp_range_;
   bool is_generate_ss_range_;
 };
 

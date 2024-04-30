@@ -368,6 +368,9 @@ int ObRoutinePersistentInfo::check_dep_schema(ObSchemaGetterGuard &schema_guard,
       }
     }
   }
+  if (OB_SUCC(ret) && !match) {
+    LOG_INFO("not match schema", K(merge_version), K(dep_schema_objs));
+  }
 
   return ret;
 }
@@ -527,6 +530,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0 ||
             data_version < DATA_VERSION_4_2_2_0) {
     // do nothing
+  } else if (!MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+    // do nothing
   } else if (GCONF._enable_persistent_compiled_routine && ObRoutinePersistentInfo::ObPLOperation::NONE != op) {
     // insert/update so to inner table
     int64_t pos = 0;
@@ -562,10 +567,22 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
   int ret = OB_SUCCESS;
 
   uint64_t data_version = 0;
+  share::ObTenantRole tenant_role;
+  ObMySQLProxy *sql_proxy = nullptr;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0 ||
              data_version < DATA_VERSION_4_2_2_0) {
+    // do nothing
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected sql proxy", K(ret));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::get_tenant_role(sql_proxy, tenant_id, tenant_role))) {
+    LOG_WARN("fail to get tenant role", K(ret));
+  } else if (!tenant_role.is_valid()) {
+    ret = OB_NEED_WAIT;
+    LOG_WARN("tenant role is not ready", K(ret));
+  } else if (tenant_role.is_standby()) {
     // do nothing
   } else {
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);

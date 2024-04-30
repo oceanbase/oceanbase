@@ -159,7 +159,8 @@ public:
              const ObTimeoutCtx &ctx,
              sql::ObSQLSessionInfo *session,
              const uint64_t tenant_id,
-             const int64_t schema_version);
+             const int64_t schema_version,
+             const bool skip_consensus);
 
   // Use to check if the column of sys table (exclude core table) does exist
   // by querying __all_column when the column is not accessible.
@@ -325,6 +326,7 @@ public:
     TRUNCATE_TABLE = 0,
     SET_COMMENT = 1,
     CREATE_INDEX = 2,
+    CREATE_VIEW = 3,
     MAX_TYPE // can not > 32
   };
 
@@ -336,6 +338,7 @@ public:
   int is_parallel_ddl(const ObParallelDDLType type, bool &is_parallel);
   static int is_parallel_ddl_enable(const ObParallelDDLType ddl_type, const uint64_t tenant_id, bool &is_parallel);
   static int string_to_ddl_type(const ObString &ddl_string, ObParallelDDLType &ddl_type);
+  static int generate_parallel_ddl_control_config_for_create_tenant(ObSqlString &config_value);
 private:
   bool check_mode_valid_(uint8_t mode) { return mode > MASK ? false : true; }
   uint64_t value_;

@@ -215,11 +215,6 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
             if (OB_FAIL(result.get_next_row())) {
               if (OB_ITER_END != ret) {
                 LOG_WARN("get next row from result failed", KR(ret));
-              } else if (scan_op.need_all_output()) {
-                ret = scan_op.switch_scan_group();
-                if (OB_SUCC(ret)) {
-                  continue;
-                }
               }
             } else {
               if (OB_FAIL(datum_store.try_add_row(*output_exprs,
@@ -241,16 +236,8 @@ int ObDASTaskResultMgr::save_task_result(int64_t task_id,
               if (OB_ITER_END != ret) {
                 LOG_WARN("get next rows from result failed", KR(ret));
               } else {
-                if (scan_op.need_all_output()) {
-                  ret = scan_op.switch_scan_group();
-                  if (OB_SUCC(ret)) {
-                    continue;
-                  }
-                }
-                if (OB_ITER_END == ret) {
-                  iter_end = true;
-                  ret = OB_SUCCESS;
-                }
+                iter_end = true;
+                ret = OB_SUCCESS;
               }
             }
             if (OB_FAIL(ret) || 0 == read_rows) {

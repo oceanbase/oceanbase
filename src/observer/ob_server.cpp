@@ -424,8 +424,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (OB_FAIL(ObExternalTableFileManager::get_instance().init())) {
       LOG_ERROR("init external table file manager failed", KR(ret));
     } else if (OB_FAIL(SLOGGERMGR.init(storage_env_.log_spec_.log_dir_,
-        storage_env_.log_spec_.max_log_file_size_, storage_env_.slog_file_spec_,
-        true/*need_reserved*/))) {
+        storage_env_.sstable_dir_, storage_env_.log_spec_.max_log_file_size_,
+        storage_env_.slog_file_spec_))) {
       LOG_ERROR("init ObStorageLoggerManager failed", KR(ret));
     } else if (OB_FAIL(ObVirtualTenantManager::get_instance().init())) {
       LOG_ERROR("init tenant manager failed", KR(ret));
@@ -655,10 +655,6 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy ctas clean up timer");
     TG_DESTROY(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer destroyed");
-
-    FLOG_INFO("begin to destroy memory dump timer");
-    TG_DESTROY(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("memory dump timer destroyed");
 
     FLOG_INFO("begin to destroy redef heart beat task");
     TG_DESTROY(lib::TGDefIDs::RedefHeartBeatTask);
@@ -1385,10 +1381,6 @@ int ObServer::stop()
     TG_STOP(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("ctas clean up timer stopped");
 
-    FLOG_INFO("begin to stop memory dump timer");
-    TG_STOP(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("memory dump timer stopped");
-
     FLOG_INFO("begin to stop ctas clean up timer");
     TG_STOP(lib::TGDefIDs::HeartBeatCheckTask);
     FLOG_INFO("ctas clean up timer stopped");
@@ -1691,10 +1683,6 @@ int ObServer::wait()
     FLOG_INFO("begin to wait ctas clean up timer");
     TG_WAIT(lib::TGDefIDs::CTASCleanUpTimer);
     FLOG_INFO("wait ctas clean up timer success");
-
-    FLOG_INFO("begin to wait memory dump timer");
-    TG_WAIT(lib::TGDefIDs::MemDumpTimer);
-    FLOG_INFO("wait memory dump timer success");
 
     FLOG_INFO("begin to wait root service");
     root_service_.wait();
@@ -2057,8 +2045,6 @@ int ObServer::init_config()
         LOG_ERROR("fail to init server trace timer", KR(ret));
       } else if (OB_FAIL(TG_START(lib::TGDefIDs::CTASCleanUpTimer))) {
         LOG_ERROR("fail to init ctas clean up timer", KR(ret));
-      } else if (OB_FAIL(TG_START(lib::TGDefIDs::MemDumpTimer))) {
-        LOG_ERROR("fail to init memory dump timer", KR(ret));
       } else if (OB_FAIL(config_mgr_.base_init())) {
         LOG_ERROR("config_mgr_ base_init failed", KR(ret));
       } else if (OB_FAIL(config_mgr_.init(sql_proxy_, self_addr_))) {
@@ -2103,6 +2089,7 @@ int ObServer::init_pre_setting()
   reset_mem_leak_checker_label(GCONF.leak_mod_to_check.str());
   ObMallocSampleLimiter::set_interval(GCONF._max_malloc_sample_interval,
                                       GCONF._min_malloc_sample_interval);
+  enable_memleak_light_backtrace(GCONF._enable_memleak_light_backtrace);
 
   // oblog configuration
   if (OB_SUCC(ret)) {
@@ -2271,9 +2258,6 @@ int ObServer::init_io()
 
         if (OB_SUCC(ret) && OB_FAIL(log_block_mgr_.init(storage_env_.clog_dir_))) {
           LOG_ERROR("log block mgr init failed", KR(ret));
-        } else if (OB_FAIL(ObServerUtils::check_slog_data_binding(storage_env_.sstable_dir_,
-            storage_env_.log_spec_.log_dir_))) {
-          LOG_ERROR("fail to check need reserved space", K(ret), K(storage_env_));
         } else if (OB_FAIL(ObServerUtils::cal_all_part_disk_size(config_.datafile_size,
                                                   config_.log_disk_size,
                                                   config_.datafile_disk_percentage,

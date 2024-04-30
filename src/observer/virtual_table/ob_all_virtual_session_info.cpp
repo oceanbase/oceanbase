@@ -295,6 +295,7 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             } else {
               cur_row_->cells_[cell_idx].set_varchar("");
             }
+            cur_row_->cells_[cell_idx].set_collation_type(default_collation);
             break;
           }
           default: {

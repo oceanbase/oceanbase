@@ -48,6 +48,7 @@ TEST_F(TestEndpointIngressService, ingress_service)
   ObAddr addr1(1, 1);
   ObNetEndpointKey key1;
   key1.addr_ = addr1;
+  key1.group_id_ = 1;
   int64_t time = ObTimeUtility::current_time();
 
   ret = ingress_manager_.register_endpoint(key1, time);
@@ -72,6 +73,7 @@ TEST_F(TestEndpointIngressService, ingress_service)
   ObNetEndpointKey key2;
   ObNetEndpointValue *value2 = nullptr;
   key2.addr_ = addr2;
+  key2.group_id_ = 2;
   ret = ingress_manager_.register_endpoint(key2, time);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = ingress_manager_.ingress_plan_map_.get_refactored(key2, value2);
@@ -83,6 +85,7 @@ TEST_F(TestEndpointIngressService, ingress_service)
   ObNetEndpointKey key3;
   ObNetEndpointValue *value3 = nullptr;
   key3.addr_ = addr3;
+  key3.group_id_ = 3;
   ret = ingress_manager_.register_endpoint(key3, time);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = ingress_manager_.ingress_plan_map_.get_refactored(key3, value3);
@@ -128,6 +131,7 @@ TEST_F(TestEndpointIngressService, ingress_service)
   ObNetEndpointKey key4;
   ObNetEndpointValue *value4 = nullptr;
   key4.addr_ = addr4;
+  key4.group_id_ = 4;
   ret = ingress_manager_.register_endpoint(key4, time);
   ASSERT_EQ(ret, OB_SUCCESS);
   ret = ingress_manager_.ingress_plan_map_.get_refactored(key4, value4);

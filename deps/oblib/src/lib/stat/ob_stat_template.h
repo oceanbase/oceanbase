@@ -167,15 +167,16 @@ template<class T, int64_t N>
 void ObStatArray<T, N>::reset()
 {
   if (min_item_idx_ < N) {
-#ifdef ENABLE_DEBUG_LOG
-    const int cnt = max_item_idx_ - min_item_idx_ + 1;
-    if (max_item_idx_ >= N || cnt + min_item_idx_ - 1 >= N || cnt < 0) {
-      abort();
+    const int64_t min_index = min_item_idx_;
+    const int64_t max_index = max_item_idx_;
+    const int64_t cnt = max_index - min_index + 1;
+    if (OB_UNLIKELY(max_index >= N || cnt + min_index - 1 >= N || cnt < 0)) {
+      COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "ObStatArray memset out of bounds", K(min_index),
+          K(max_index), K(cnt), K(min_item_idx_), K(max_item_idx_), K(N));
+      memset(items_, 0, sizeof(items_));
+    } else {
+      memset(&(items_[min_index]), 0, sizeof(T) * cnt);
     }
-    memset(&(items_[min_item_idx_]), 0, sizeof(T) * cnt);
-#else
-    memset(&(items_[min_item_idx_]), 0, sizeof(T) * (max_item_idx_ - min_item_idx_ + 1));
-#endif
     min_item_idx_ = N;
     max_item_idx_ = -1;
   }

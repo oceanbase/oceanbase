@@ -579,7 +579,7 @@ int ObTenantTabletTTLMgr::alloc_tenant_info(uint64_t tenant_id)
   local_tenant_task_.is_dirty_ = false;
   ObMemAttr bucket_attr(tenant_id, "TTLTaskBucket");
   ObMemAttr node_attr(tenant_id, "TTLTaskNode");
-  if(OB_FAIL(local_tenant_task_.tablet_task_map_.create(DEFAULT_TTL_BUCKET_NUM, bucket_attr, node_attr))) {
+  if (OB_FAIL(local_tenant_task_.tablet_task_map_.create(DEFAULT_TTL_BUCKET_NUM, bucket_attr, node_attr))) {
     LOG_WARN("fail to create ttl partition map", KR(ret), K(tenant_id));
   } else {}
 

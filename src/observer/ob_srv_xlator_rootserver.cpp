@@ -123,16 +123,21 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAlterOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropOutlineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateRoutineP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateRoutineWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropRoutineP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterRoutineP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAlterRoutineWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateDbLinkP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropDbLinkP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreatePackageP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreatePackageWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterPackageP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAlterPackageWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropPackageP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTriggerP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateTriggerWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAlterTriggerP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAlterTriggerWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropTriggerP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateSynonymP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropSynonymP, *gctx_.root_service_);
@@ -140,6 +145,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcDropUserDefinedFunctionP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDoSequenceDDLP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcCreateUDTP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcCreateUDTWithResP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcDropUDTP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcOptimizeTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcSchemaReviseP, *gctx_.root_service_);
@@ -220,6 +226,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAdminReloadZoneP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminClearMergeErrorP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminMigrateUnitP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAdminAlterLSReplicaP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminUpgradeVirtualSchemaP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRunJobP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminRefreshIOCalibrationP, *gctx_.root_service_);
@@ -284,5 +291,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
 #endif
+    RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
 }

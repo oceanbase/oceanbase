@@ -209,8 +209,10 @@ void ObLogMinerAnalyzer::run1()
     ret = OB_NOT_INIT;
     LOG_ERROR("analyzer hasn't been initialized");
   } else {
+    const int64_t STAT_INTERVAL = 10L * 1000 * 1000; // 10s
+    const int64_t LOOP_INTERVAL = 1L * 1000 * 1000; // 1s
     while (!has_set_stop()) {
-      if (REACH_TIME_INTERVAL(10L * 1000 * 1000)) {
+      if (REACH_TIME_INTERVAL(STAT_INTERVAL)) {
         int64_t filter_task_cnt = 0;
         int64_t converter_task_cnt = 0;
         int64_t writer_task_cnt = 0;
@@ -228,6 +230,7 @@ void ObLogMinerAnalyzer::run1()
               "Writer", writer_task_cnt, "ResourceCollector", rc_task_cnt);
         }
       }
+      ob_usleep(LOOP_INTERVAL);
     }
   }
 }

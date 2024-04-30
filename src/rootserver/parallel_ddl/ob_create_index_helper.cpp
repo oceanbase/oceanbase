@@ -323,6 +323,7 @@ int ObCreateIndexHelper::check_table_legitimacy_()
   // resulting in performance decline during long periods of concentrated index building.
   } else if (!orig_data_table_schema_->check_can_do_ddl()) {
     ret = OB_OP_NOT_ALLOW;
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "execute ddl while table is executing offline ddl");
     LOG_WARN("offline ddl is being executed, other ddl operations are not allowed", KR(ret), KPC(orig_data_table_schema_));
   } else if (OB_UNLIKELY(orig_data_table_schema_->get_index_tid_count() >= OB_MAX_INDEX_PER_TABLE)) {
     ret = OB_ERR_TOO_MANY_KEYS;
@@ -379,8 +380,8 @@ int ObCreateIndexHelper::generate_index_schema_()
     LOG_WARN("fail alloc memory", KR(ret), KP(new_arg_ptr));
   } else if (FALSE_IT(new_arg_ = new (new_arg_ptr)obrpc::ObCreateIndexArg)) {
   } else if (OB_ISNULL(new_arg_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("new_arg_ is null, maybe not init", KR(ret));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new_arg_ is null", KR(ret));
   } else if (OB_FAIL(new_arg_->assign(arg_))) {
     LOG_WARN("fail to assign arg", KR(ret));
   } else if (OB_UNLIKELY(!new_arg_->is_valid())) {

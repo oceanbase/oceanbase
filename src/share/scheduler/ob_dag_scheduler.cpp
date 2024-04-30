@@ -366,7 +366,7 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     dag_ret_(OB_SUCCESS),
     add_time_(0),
     start_time_(0),
-    consumer_group_id_(0),
+    consumer_group_id_(USER_RESOURCE_OTHER_GROUP_ID),
     allocator_(nullptr),
     is_inited_(false),
     type_(type),
@@ -419,7 +419,7 @@ void ObIDag::clear_running_info()
 {
   add_time_ = 0;
   start_time_ = 0;
-  consumer_group_id_ = 0;
+  consumer_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   running_task_cnt_ = 0;
   dag_status_ = ObDagStatus::DAG_STATUS_INITING;
   dag_ret_ = OB_SUCCESS;
@@ -452,7 +452,7 @@ int ObIDag::add_task(ObITask &task)
     if (OB_FAIL(check_cycle())) {
       COMMON_LOG(WARN, "check_cycle failed", K(ret), K_(id));
       if (OB_ISNULL(task_list_.remove(&task))) {
-        COMMON_LOG(WARN, "failed to remove task from task_list", K_(id));
+        COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "failed to remove task from task_list", K_(id));
       }
     }
   }
@@ -1327,7 +1327,7 @@ ObTenantDagWorker::ObTenantDagWorker()
     check_period_(0),
     last_check_time_(0),
     function_type_(0),
-    group_id_(0),
+    group_id_(OB_INVALID_GROUP_ID),
     tg_id_(-1),
     is_inited_(false)
 {
@@ -1396,7 +1396,7 @@ void ObTenantDagWorker::reset()
   check_period_ = 0;
   last_check_time_ = 0;
   function_type_ = 0;
-  group_id_ = 0;
+  group_id_ = OB_INVALID_GROUP_ID;
   self_ = NULL;
   is_inited_ = false;
   TG_DESTROY(tg_id_);
@@ -1417,8 +1417,8 @@ void ObTenantDagWorker::resume()
 int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 {
   int ret = OB_SUCCESS;
-  uint64_t consumer_group_id = 0;
-  if (group_id != 0) {
+  uint64_t consumer_group_id = USER_RESOURCE_OTHER_GROUP_ID;
+  if (is_user_group(group_id)) {
     //user level
     consumer_group_id = group_id;
   } else if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(MTL_ID(), function_type_, consumer_group_id))) {
@@ -1428,7 +1428,12 @@ int ObTenantDagWorker::set_dag_resource(const uint64_t group_id)
 
   if (OB_SUCC(ret) && consumer_group_id != group_id_) {
     // for CPU isolation, depend on cgroup
-    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(MTL_ID(), consumer_group_id))) {
+    if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+        OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(
+            MTL_ID(),
+            consumer_group_id,
+            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
+                                                              : ""))) {
       LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(MTL_ID()), K(group_id));
     } else {
       // for IOPS isolation, only depend on consumer_group_id
@@ -2847,7 +2852,7 @@ int ObTenantDagScheduler::loop_running_dag_net_map()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag net is unepxected null", K(ret), KP(dag_net));
     } else if (dag_net->check_finished_and_mark_stop()) {
-      LOG_WARN("dag net is in finish state", K(ret), KPC(dag_net));
+      LOG_INFO("dag net is in finish state", K(ret), KPC(dag_net));
     } else if (dag_net->start_time_ + PRINT_SLOW_DAG_NET_THREASHOLD < ObTimeUtility::fast_current_time()) {
       ++slow_dag_net_cnt;
       LOG_DEBUG("slow dag net", K(ret), KP(dag_net), "dag_net_start_time", dag_net->start_time_);

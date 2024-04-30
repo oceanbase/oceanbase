@@ -357,8 +357,9 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to allocate memory", K(ret));
   } else {
-    session_->get_session_priv_info(session_priv);
-    if (OB_UNLIKELY(!session_priv.is_valid())) {
+    if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+      LOG_WARN("fail to get session priv info", K(ret));
+    } else if (OB_UNLIKELY(!session_priv.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
                 "user_id", session_priv.user_id_, K(ret));
@@ -1353,7 +1354,9 @@ bool ObTableColumns::can_rewrite_error_code(const int ret)
 {
   bool res = true;
   if (OB_ALLOCATE_MEMORY_FAILED == ret
-      || OB_SQL_RESOLVER_NO_MEMORY == ret) {
+      || OB_SQL_RESOLVER_NO_MEMORY == ret
+      || OB_TIMEOUT == ret
+      || OB_EAGAIN == ret) {
     res = false;
   }
   return res;

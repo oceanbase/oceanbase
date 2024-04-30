@@ -299,6 +299,7 @@ private:
   int inc_freeze_clock();
   void unset_freeze_();
   void undo_freeze_();
+  void try_freeze_tx_data_();
 
   /* inner subfunctions for freeze process */
   int inner_logstream_freeze(ObFuture<int> *result);

@@ -41,7 +41,7 @@ public:
   }
   ~ObSequenceResolver() = default;
 public:
-  int resolve_sequence_options(T *stmt, ParseNode *node);
+  int resolve_sequence_options(uint64_t tenant_id, T *stmt, ParseNode *node);
 private:
   int resolve_sequence_option(T *stmt, ParseNode *node);
   int resolve_sequence_option_inner(ParseNode &option_node,
@@ -56,7 +56,7 @@ private:
 };
 
 template<class T>
-int ObSequenceResolver<T>::resolve_sequence_options(T *stmt, ParseNode *node)
+int ObSequenceResolver<T>::resolve_sequence_options(uint64_t tenant_id, T *stmt, ParseNode *node)
 {
   int ret = common::OB_SUCCESS;
   if (OB_LIKELY(node)) {
@@ -73,6 +73,13 @@ int ObSequenceResolver<T>::resolve_sequence_options(T *stmt, ParseNode *node)
         if (OB_FAIL(resolve_sequence_option(stmt, option_node))) {
           SQL_LOG(WARN, "resolve sequence option failed", K(ret));
         }
+      }
+      // Fields used for upgrade compatibility, not user input
+      uint64_t compat_version = 0;
+      if (FAILEDx(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (compat_version >= DATA_VERSION_4_2_3_0) {
+        stmt->option().set_cache_order_mode(NEW_ACTION);
       }
 
       // conflict check

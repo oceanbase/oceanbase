@@ -177,6 +177,20 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       }
     }
   }
+
+  if (stmt::T_EXPLAIN != stmt_type && plan.get_das_dop() > 0) {
+    int64_t minimal_px_worker_count = plan.get_minimal_worker_count();
+    int64_t parallel_servers_target = INT64_MAX;
+    if (OB_FAIL(OB_PX_TARGET_MGR.get_parallel_servers_target(session.get_effective_tenant_id(),
+                                                             parallel_servers_target))) {
+      LOG_WARN("get parallel_servers_target failed", K(ret));
+    } else {
+      int64_t real_das_dop = std::min(parallel_servers_target, plan.get_das_dop());
+      exec_ctx.get_das_ctx().set_real_das_dop(real_das_dop);
+      LOG_TRACE("real das dop", K(real_das_dop), K(plan.get_das_dop()), K(parallel_servers_target));
+    }
+  }
+
   return ret;
 }
 

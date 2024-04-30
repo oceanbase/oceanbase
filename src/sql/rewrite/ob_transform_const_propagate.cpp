@@ -1354,43 +1354,39 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
                                                             bool &need_cast)
 {
   int ret = OB_SUCCESS;
+  ObRawExpr *parent_expr = NULL;
   bool is_in_param = false;
-  UNUSED(expr);
   need_cast = true;
   if (parent_exprs.empty()) {
     need_cast = false;
+  } else if (OB_ISNULL(parent_expr = parent_exprs.at(parent_exprs.count() - 1)) ||
+             OB_ISNULL(const_expr) || OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
   } else if (check_is_in_or_notin_param(parent_exprs, is_in_param)) {
     LOG_WARN("failed to check in or notin param", K(ret));
   } else if (is_in_param) {
     // for static engine, all params in rigth side of in or not in should have same type
     need_cast = true;
-  } else {
-    ObRawExpr *parent_expr = parent_exprs.at(parent_exprs.count() - 1);
-    if (OB_ISNULL(parent_expr) || OB_ISNULL(const_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
+  } else if (const_expr->get_expr_type() == T_NULL &&
+             ObDatumFuncs::is_null_aware_hash_type(expr->get_result_type().get_type())) {
+    // To adapt to the behavior of casting NULL values for hash compare
+    // cast need to be added above NULL for null aware hash type.
+    need_cast = true;
+  } else if (parent_expr->is_win_func_expr()) {
+    ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(parent_expr);
+    if (OB_NOT_NULL(win_expr->get_agg_expr()) &&
+        ObOptimizerUtil::find_item(win_expr->get_agg_expr()->get_real_param_exprs(), expr)) {
+      need_cast = true;
+    } else if (ObOptimizerUtil::find_item(win_expr->get_func_params(), expr)) {
+      need_cast = true;
     } else {
-      bool is_parent_cmp = IS_COMPARISON_OP(parent_expr->get_expr_type());
-      // To adapt to the behavior of casting NULL values for hash compare
-      // cast need to be added above NULL when its' parent expr is CMP_OP.
-      bool need_cast_null = false;
-      if (is_parent_cmp && const_expr->get_expr_type() == T_NULL) {
-        for (int64_t i = 0; !need_cast_null && OB_SUCC(ret) &&
-               i < parent_expr->get_param_count(); ++i) {
-          const ObRawExpr *param_expr = parent_expr->get_param_expr(i);
-          if (OB_ISNULL(param_expr)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("param expr is null");
-          } else if (ObDatumFuncs::is_null_aware_hash_type(param_expr->get_result_type().get_type())) {
-            need_cast_null = true;
-          }
-        }
-      }
-      need_cast = need_cast_null || !(is_parent_cmp ||
-                                      parent_expr->is_query_ref_expr() ||
-                                      parent_expr->is_win_func_expr() ||
-                                      T_OP_ROW == parent_expr->get_expr_type());
+      need_cast = false;
     }
+  } else {
+    need_cast = !(IS_COMPARISON_OP(parent_expr->get_expr_type()) ||
+                  T_OP_ROW == parent_expr->get_expr_type() ||
+                  parent_expr->is_query_ref_expr());
   }
   return ret;
 }
@@ -1485,7 +1481,8 @@ int ObTransformConstPropagate::check_cast_const_expr(ExprConstInfo &const_info,
     LOG_WARN("get unexpected null", K(ret));
   } else if (!const_info.const_expr_->is_static_scalar_const_expr()) {
     is_valid = false;
-  } else if (const_info.need_add_constraint_ == PRE_CALC_RESULT_NULL) {
+  } else if (const_info.need_add_constraint_ == PRE_CALC_RESULT_NULL ||
+             ObTransformUtils::is_const_null(*const_info.const_expr_)) {
     // do nothing
   } else if (OB_FAIL(ObRawExprUtils::check_need_cast_expr(const_info.const_expr_->get_result_type(),
                                                         const_info.column_expr_->get_result_type(),

@@ -569,6 +569,13 @@ int ObLSTxCtxMgr::get_tx_ctx_(const ObTransID &tx_id, const bool for_replay, ObP
       TRANS_LOG(INFO, "transaction statistics", K_(ls_id),
           "total_tx_ctx_count", get_tx_ctx_count_());
     }
+#ifdef ENABLE_DEBUG_LOG
+    // ENABLE_DEBUG_LOG macro only defined in inner test environment
+    if (REACH_TIME_INTERVAL(3 * 60 * 1000 * 1000 /*3 min*/)) {
+      TRANS_LOG(INFO, "transaction statistics", K_(ls_id),
+          "total_tx_ctx_count", get_tx_ctx_count_(), K(lbt()));
+    }
+#endif
   }
   return ret;
 }
@@ -1125,14 +1132,15 @@ int ObLSTxCtxMgr::check_scheduler_status(SCN &min_start_scn, MinStartScnStatus &
   IteratePartCtxAskSchedulerStatusFunctor functor;
   if (OB_FAIL(ls_tx_ctx_map_.for_each(functor))) {
     TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
+  } else if (!min_start_scn.is_valid()) {
+    // The default min_start_scn must be valid, or skip writting HAS_CTX/NO_CTX CLOG
+    status = MinStartScnStatus::UNKOWN;
   } else {
-    if (0 == ls_tx_ctx_map_.count()) {
-      min_start_scn.reset();
-      status = MinStartScnStatus::NO_CTX;
-    } else {
-      min_start_scn = functor.get_min_start_scn();
-      status = functor.get_min_start_status();
-    }
+    // use smaller one between max_decided_scn and min_start_scn of all tx ctx
+    TRANS_LOG(DEBUG, "set min start scn", K(min_start_scn), K(functor.get_min_start_scn()));
+    min_start_scn = std::min(min_start_scn, functor.get_min_start_scn());
+
+    status = functor.get_min_start_status();
   }
 
   return ret;

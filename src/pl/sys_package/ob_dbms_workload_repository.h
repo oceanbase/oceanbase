@@ -24,11 +24,16 @@ class ObDbmsWorkloadRepository
 public:
   struct AshReportParams
   {
+    AshReportParams()
+      :ash_begin_time(0), ash_end_time(0),sql_id(),trace_id(),wait_class(),svr_ip(),port(-1)
+    {}
     int64_t ash_begin_time;
     int64_t ash_end_time;
     ObString sql_id;
     ObString trace_id;
     ObString wait_class;
+    ObString svr_ip;
+    int64_t port;
   };
 
 public:
@@ -88,6 +93,7 @@ public:
 private:
   static int check_snapshot_task_success_for_snap_id(int64_t snap_id, bool &is_all_success);
   static int check_drop_task_success_for_snap_id_range(const int64_t low_snap_id, const int64_t high_snap_id, bool &is_all_success);
+  static int process_ash_report_params(const uint64_t data_version, const sql::ParamStore &params, AshReportParams &ash_report_params);
 };
 
 } // end pl

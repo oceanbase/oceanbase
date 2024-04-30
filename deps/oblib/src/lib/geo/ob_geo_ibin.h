@@ -184,6 +184,9 @@ private:
 
 class ObIWkbGeomLinearRing : public ObIWkbGeometry {
 public:
+  typedef ObWkbGeomLinearRing value_type;
+
+public:
   // constructor
   ObIWkbGeomLinearRing(uint32_t srid = 0)
     : ObIWkbGeometry(srid) {}
@@ -304,6 +307,9 @@ private:
 };
 
 class ObIWkbGeogLinearRing : public ObIWkbGeometry {
+public:
+  typedef ObWkbGeogLinearRing value_type;
+
 public:
   // constructor
   ObIWkbGeogLinearRing(uint32_t srid = 0)

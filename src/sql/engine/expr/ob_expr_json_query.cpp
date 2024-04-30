@@ -183,7 +183,6 @@ int ObExprJsonQuery::eval_json_query(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-  lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, "JSONModule"));
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObIJsonBase *jb_empty = NULL;
@@ -547,6 +546,7 @@ int ObExprJsonQuery::deal_item_method_special_case(ObJsonPath* j_path,
   INIT_SUCC(ret);
   if (hits[pos]->json_type() == ObJsonNodeType::J_NULL && !hits[pos]->is_real_json_null(hits[pos])) {
     is_null_result = true;
+  } else if (!j_path->is_last_func()) { // do nothing
   } else if (!use_wrapper && j_path->is_last_func() && j_path->path_node_cnt() == 1) { // do nothing
   } else if (j_path->get_last_node_type() == JPN_LENGTH && !(hits[pos]->json_type() == ObJsonNodeType::J_UINT
             && ((ObJsonUint *)hits[pos])->get_is_string_length())) { // distinct uint and length()

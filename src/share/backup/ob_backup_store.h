@@ -126,6 +126,7 @@ public:
   int init(const share::ObBackupDest &backup_dest);
 
   bool is_init() const;
+  void reset();
   const ObBackupDest &get_backup_dest() const;
   const ObBackupStorageInfo *get_storage_info() const;
 

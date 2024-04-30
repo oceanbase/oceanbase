@@ -47,6 +47,7 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
 {
@@ -68,8 +69,12 @@ class ObDbmsCursorInfo;
 namespace debugger
 {
 class ObPLDebugger;
-}
-#endif
+} // namespace debugger
+
+#endif // OB_BUILD_ORACLE_PL
+
+class ObPLProfiler;
+
 } // namespace pl
 
 namespace obmysql
@@ -667,6 +672,10 @@ public:
     {
       reset();
     }
+    ~StmtSavedValue()
+    {
+      reset();
+    }
     inline void reset()
     {
       ObBasicSessionInfo::StmtSavedValue::reset();
@@ -951,7 +960,7 @@ public:
   void set_trans_type(transaction::ObTxClass t) { trans_type_ = t; }
   transaction::ObTxClass get_trans_type() const { return trans_type_; }
 
-  void get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
+  int get_session_priv_info(share::schema::ObSessionPrivInfo &session_priv) const;
   void set_found_rows(const int64_t count) { found_rows_ = count; }
   int64_t get_found_rows() const { return found_rows_; }
   void set_affected_rows(const int64_t count) { affected_rows_ = count; }
@@ -969,6 +978,37 @@ public:
   int remove_ps_session_info(const ObPsStmtId stmt_id);
   int get_ps_session_info(const ObPsStmtId stmt_id,
                           ObPsSessionInfo *&ps_session_info) const;
+  template <typename Visitor>
+  int visit_ps_session_info(const ObPsStmtId stmt_id,
+                          Visitor &visitor)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      ret = OB_HASH_NOT_EXIST;
+      SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
+    } else if (OB_FAIL(ps_session_info_map_.read_atomic<Visitor>(stmt_id, visitor))) {
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      if (ret == OB_HASH_NOT_EXIST) {
+        ret = OB_EER_UNKNOWN_STMT_HANDLER;
+      }
+    }
+    return ret;
+  }
+  template <typename T>
+  int update_ps_session_info_safety(const ObPsStmtId stmt_id, T &update)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      ret = OB_HASH_NOT_EXIST;
+      SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
+    } else if (OB_FAIL(ps_session_info_map_.atomic_refactored<T>(stmt_id, update))) {
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      if (ret == OB_HASH_NOT_EXIST) {
+        ret = OB_EER_UNKNOWN_STMT_HANDLER;
+      }
+    }
+    return ret;
+  }
   int64_t get_ps_session_info_size() const { return ps_session_info_map_.size(); }
   inline pl::ObPL *get_pl_engine() const { return GCTX.pl_engine_; }
 
@@ -992,8 +1032,20 @@ public:
 #ifdef OB_BUILD_ORACLE_PL
   inline pl::debugger::ObPLDebugger *get_pl_debugger() const { return pl_debugger_; }
   void set_pl_debugger (pl::debugger::ObPLDebugger *pl_debugger) {pl_debugger_ = pl_debugger; };
+
+  int alloc_pl_profiler(int32_t run_id);
 #endif
   bool is_pl_debug_on();
+  inline pl::ObPLProfiler *get_pl_profiler() const
+  {
+    pl::ObPLProfiler *profiler = nullptr;
+
+#ifdef OB_BUILD_ORACLE_PL
+    profiler = pl_profiler_;
+#endif // OB_BUILD_ORACLE_PL
+
+    return profiler;
+  }
 
   inline void set_pl_attached_id(uint32_t id) { pl_attach_session_id_ = id; }
   inline uint32_t get_pl_attached_id() const { return pl_attach_session_id_; }
@@ -1153,6 +1205,7 @@ public:
     return package_state_map_.erase_refactored(package_id);
   }
   void reset_pl_debugger_resource();
+  void reset_pl_profiler_resource();
   void reset_all_package_changed_info();
   void reset_all_package_state();
   int reset_all_package_state_by_dbms_session(bool need_set_sync_var);
@@ -1286,6 +1339,7 @@ public:
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_sqlstat_enabled() const;
   bool is_spf_mlj_group_rescan_enabled() const;
+  bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
@@ -1393,6 +1447,17 @@ public:
   share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
   int set_login_info(const share::schema::ObUserLoginInfo &login_info);
   int set_login_auth_data(const ObString &auth_data);
+  template <typename Function>
+  int for_each_ps_session_info(Function &fn)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      // do nothing
+    } else if (OB_FAIL(ps_session_info_map_.foreach_refactored(fn))) {
+      SQL_ENG_LOG(WARN, "failed to read each ps session info", K(ret));
+    }
+    return ret;
+  }
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
@@ -1461,7 +1526,7 @@ private:
   // 2.2版本之后，不再使用该变量
   bool is_max_availability_mode_;
   typedef common::hash::ObHashMap<ObPsStmtId, ObPsSessionInfo *,
-                                  common::hash::NoPthreadDefendMode> PsSessionInfoMap;
+                                  common::hash::SpinReadWriteDefendMode> PsSessionInfoMap;
   PsSessionInfoMap ps_session_info_map_;
   inline int try_create_ps_session_info_map()
   {
@@ -1511,6 +1576,7 @@ private:
 
 #ifdef OB_BUILD_ORACLE_PL
   pl::debugger::ObPLDebugger *pl_debugger_; // 如果开启了debug, 该字段不为null
+  pl::ObPLProfiler *pl_profiler_;
 #endif
 #ifdef OB_BUILD_SPM
   ObSpmCacheCtx::SpmSelectPlanType select_plan_type_;
@@ -1631,6 +1697,8 @@ public:
   bool is_pl_prepare_stage() const;
   inline ObExecutingSqlStatRecord& get_executing_sql_stat_record() {return executing_sql_stat_record_; }
   int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
+  dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
+  void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -1662,6 +1730,7 @@ private:
   bool client_non_standard_;
   share::schema::ObUserLoginInfo login_info_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
+  dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

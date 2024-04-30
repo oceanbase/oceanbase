@@ -218,7 +218,6 @@ int ObTableApiModifyExecutor::calc_tablet_loc(ObExpr *calc_part_id_expr,
   if (OB_NOT_NULL(calc_part_id_expr)) {
     ObObjectID partition_id = OB_INVALID_ID;
     ObTabletID tablet_id;
-    clear_evaluated_flag();
     if (OB_FAIL(ObExprCalcPartitionBase::calc_part_and_tablet_id(calc_part_id_expr,
                                                                  eval_ctx_,
                                                                  partition_id,
@@ -252,15 +251,6 @@ int ObTableApiModifyExecutor::calc_del_tablet_loc(ObExpr *calc_part_id_expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("calc_part_id_expr is NULL", K(ret));
   } else { // for global index
-    if (is_primary_table) {
-      // primary table tablet_loc use conflict checker lookup tablet loc:
-      // because the lookup tablet loc may not local tablet loc
-      if (OB_FAIL(ObSQLUtils::clear_evaluated_flag(calc_dep_exprs, eval_ctx_))) {
-        LOG_WARN("fail to clear rowkey flag", K(ret), KPC(calc_part_id_expr));
-      }
-    } else {
-      clear_evaluated_flag();
-    }
     if (OB_SUCC(ret)) {
       ObObjectID partition_id = OB_INVALID_ID;
       ObTabletID tablet_id;
@@ -501,9 +491,14 @@ int ObTableApiModifyExecutor::get_next_conflict_rowkey(DASTaskIter &task_iter,
 
 int ObTableApiModifyExecutor::modify_htable_timestamp()
 {
+  const ObITableEntity *entity = static_cast<const ObITableEntity*>(tb_ctx_.get_entity());
+  return modify_htable_timestamp(entity);
+}
+
+int ObTableApiModifyExecutor::modify_htable_timestamp(const ObITableEntity *entity)
+{
   int ret = OB_SUCCESS;
   int64_t now_ms = -ObHTableUtils::current_time_millis();
-  const ObITableEntity *entity = static_cast<const ObITableEntity*>(tb_ctx_.get_entity());
   if (entity->get_rowkey_size() != 3) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("htable should be with 3 rowkey columns", K(ret), K(entity));
@@ -580,15 +575,19 @@ int ObTableApiModifyExecutor::check_rowkey_change(const ObChunkDatumStore::Store
 {
   int ret = OB_SUCCESS;
   if (lib::is_mysql_mode()) {
+    int64_t column_nums = tb_ctx_.get_column_info_array().count();
     if (OB_UNLIKELY(upd_old_row.cnt_ != upd_new_row.cnt_)
-        || OB_UNLIKELY(upd_old_row.cnt_ != tb_ctx_.get_column_items().count())) {
+        || OB_UNLIKELY(upd_old_row.cnt_ != column_nums)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("check column size failed", K(ret), K(upd_old_row.cnt_),
-                K(upd_new_row.cnt_), K(tb_ctx_.get_column_items().count()));
+                K(upd_new_row.cnt_), K(column_nums));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < tb_ctx_.get_column_items().count(); i++) {
-      ObTableColumnItem &item = tb_ctx_.get_column_items().at(i);
-      if (item.rowkey_position_ <= 0) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_nums; i++) {
+      ObTableColumnInfo *col_info = tb_ctx_.get_column_info_array().at(i);
+      if (OB_ISNULL(col_info)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (col_info->rowkey_position_ <= 0) {
         // do nothing
       } else if (!ObDatum::binary_equal(upd_old_row.cells()[i], upd_new_row.cells()[i])) {
         ret = OB_ERR_UPDATE_ROWKEY_COLUMN;
@@ -605,17 +604,20 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
 {
   int ret = OB_SUCCESS;
   const ObIArray<ObExpr *> &new_row = upd_ctdef.new_row_;
-  const ObIArray<ObTableColumnItem>& column_items = tb_ctx_.get_column_items();
-  if (OB_UNLIKELY(store_row.cnt_ != new_row.count()) || OB_UNLIKELY(new_row.count() != column_items.count())) {
+  const ObIArray<ObTableColumnInfo *>& column_infos = tb_ctx_.get_column_info_array();
+  if (OB_UNLIKELY(store_row.cnt_ != new_row.count()) || OB_UNLIKELY(new_row.count() != column_infos.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("datum count mismatch", K(ret), K(store_row.cnt_), K(new_row.count()), K(column_items.count()));
+    LOG_WARN("datum count mismatch", K(ret), K(store_row.cnt_), K(new_row.count()), K(column_infos.count()));
   } else {
     // 1. refresh rowkey expr datum
     // not always the primary key is the prefix of table schema
     // e.g., create table test(a varchar(1024), b int primary key);
-    for (uint64_t i = 0; OB_SUCC(ret) && i < column_items.count(); ++i) {
+    for (uint64_t i = 0; OB_SUCC(ret) && i < column_infos.count(); ++i) {
       const ObExpr *expr = new_row.at(i);
-      if (column_items.at(i).rowkey_position_ > 0) {
+      if (OB_ISNULL(column_infos.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column info is NULL", K(ret), K(i));
+      } else if (column_infos.at(i)->rowkey_position_ > 0) {
         expr->locate_expr_datum(eval_ctx_) = store_row.cells()[i];
         expr->get_eval_info(eval_ctx_).evaluated_ = true;
         expr->get_eval_info(eval_ctx_).projected_ = true;
@@ -626,33 +628,34 @@ int ObTableApiModifyExecutor::to_expr_skip_old(const ObChunkDatumStore::StoredRo
     const ObIArray<ObTableAssignment> &assigns = tb_ctx_.get_assignments();
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
       const ObTableAssignment &assign = assigns.at(i);
-      if (OB_ISNULL(assign.column_item_)) {
+      if (OB_ISNULL(assign.column_info_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("assign column item is null", K(ret), K(assign));
-      } else if (new_row.count() < assign.column_item_->col_idx_) {
+      } else if (new_row.count() < assign.column_info_->col_idx_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_item_));
-      } else if (assign.column_item_->is_virtual_generated_column_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "update virtual generated column");
-        LOG_WARN("virtual generated column not support to update", K(ret), K(assign));
+        LOG_WARN("unexpected assign projector_index_", K(ret), K(new_row), K(assign.column_info_));
       } else {
-        ObExpr *expr = new_row.at(assign.column_item_->col_idx_);
+        ObExpr *expr = new_row.at(assign.column_info_->col_idx_);
         if (OB_ISNULL(expr)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("expr is null", K(ret));
-        } else if (assign.column_item_->is_stored_generated_column_) {
-          // do nothing, stored generated column not need to fill
-        } else if (assign.column_item_->auto_filled_timestamp_ && !assign.is_assigned_) {
+        } else if (assign.column_info_->is_generated_column_) {
+          // do nothing, generated column not need to fill
+        } else if (assign.is_inc_or_append_) {
+          // the dependent expr of inc or append column are old_row expr and delta expr
+          // and the old row expr is filled by conflict checker, so need clear its evaluated flag
+          expr->get_eval_info(eval_ctx_).evaluated_ = false;
+          expr->get_eval_info(eval_ctx_).projected_ = false;
+        } else if (assign.column_info_->auto_filled_timestamp_ && !assign.is_assigned_) {
           ObDatum *tmp_datum = nullptr;
           if (OB_FAIL(expr->eval(eval_ctx_, tmp_datum))) {
             LOG_WARN("fail to eval current timestamp expr", K(ret));
           }
         } else {
-          expr->locate_expr_datum(eval_ctx_) = store_row.cells()[assign.column_item_->col_idx_];
+          expr->locate_expr_datum(eval_ctx_) = store_row.cells()[assign.column_info_->col_idx_];
           expr->get_eval_info(eval_ctx_).evaluated_ = true;
           expr->get_eval_info(eval_ctx_).projected_ = true;
-          }
+        }
       }
     }
   }
@@ -751,6 +754,89 @@ int ObTableApiModifyExecutor::insert_upd_new_row_to_das(const ObTableUpdCtDef &u
   return ret;
 }
 
+int ObTableApiModifyExecutor::gen_del_and_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                                               ObTableUpdRtDef &upd_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(upd_ctdef.ddel_ctdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("upd_ctdef.ddel_ctdef_ is NULL", K(ret));
+  } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
+    if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_DELETE,
+                                                  allocator_,
+                                                  upd_rtdef.ddel_rtdef_))) {
+      LOG_WARN("fail to create das delete rtdef", K(ret));
+    } else if (OB_FAIL(generate_del_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate delete rtdef", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(upd_ctdef.dins_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("upd_ctdef.dins_ctdef_ is NULL", K(ret));
+  } else if (OB_ISNULL(upd_rtdef.dins_rtdef_)) {
+    if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_INSERT,
+                                                  allocator_,
+                                                  upd_rtdef.dins_rtdef_))) {
+      LOG_WARN("fail to create das insert rtdef", K(ret));
+    } else if (OB_FAIL(generate_ins_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate insert rtdef", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableApiModifyExecutor::update_row_to_das(const ObTableUpdCtDef &upd_ctdef,
+                                                ObTableUpdRtDef &upd_rtdef,
+                                                ObDMLRtCtx &dml_rtctx)
+{
+  int ret = OB_SUCCESS;
+  ObChunkDatumStore::StoredRow *old_row = nullptr;
+  ObChunkDatumStore::StoredRow *new_row = nullptr;
+  ObChunkDatumStore::StoredRow *full_row = nullptr;
+  ObDASTabletLoc *old_tablet_loc = nullptr;
+  ObDASTabletLoc *new_tablet_loc = nullptr;
+  if (upd_ctdef.das_ctdef_.updated_column_ids_.empty()) {
+    // assign column is empty, do nothing
+  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.old_part_id_expr_,
+                              *upd_rtdef.das_rtdef_.table_loc_,
+                              old_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(old_tablet_loc));
+  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.new_part_id_expr_,
+                                      *upd_rtdef.das_rtdef_.table_loc_,
+                                    new_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(new_tablet_loc));
+  } else if (OB_ISNULL(new_tablet_loc) || OB_ISNULL(old_tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet loc is NULL", K(ret), KPC(new_tablet_loc), KPC(old_tablet_loc));
+  } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
+    if (OB_FAIL(gen_del_and_ins_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate delete and insert rfdef", K(ret));
+    } else if (OB_FAIL(ObDMLService::delete_row(*upd_ctdef.ddel_ctdef_,
+                                           *upd_rtdef.ddel_rtdef_,
+                                           old_tablet_loc,
+                                           dml_rtctx,
+                                           upd_ctdef.old_row_,
+                                           old_row))) {
+      LOG_WARN("fail to delete row", K(ret), K(*upd_ctdef.ddel_ctdef_), K(*upd_rtdef.ddel_rtdef_));
+    } else if (OB_FAIL(ObDMLService::insert_row(*upd_ctdef.dins_ctdef_,
+                                                *upd_rtdef.dins_rtdef_,
+                                                new_tablet_loc,
+                                                dml_rtctx,
+                                                upd_ctdef.new_row_,
+                                                new_row))) {
+      LOG_WARN("fail to insert row", K(ret), K(*upd_ctdef.dins_ctdef_), K(*upd_rtdef.dins_rtdef_));
+    }
+  } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef.das_ctdef_,
+                                              upd_rtdef.das_rtdef_,
+                                              old_tablet_loc,
+                                              dml_rtctx_,
+                                              upd_ctdef.full_row_))) { // local das task
+    LOG_WARN("fail to update row to das op", K(ret), K(upd_ctdef), K(upd_rtdef.das_rtdef_));
+  }
+  return ret;
+}
+
 int ObTableApiModifyExecutor::execute_das_task(ObDMLRtCtx &dml_rtctx, bool del_task_ahead)
 {
   int ret = OB_SUCCESS;
@@ -775,18 +861,36 @@ int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::Store
                                                   ObEvalCtx &ctx)
 {
   int ret = OB_SUCCESS;
+  const ObIArray<ObTableColumnInfo *>& column_infos = tb_ctx_.get_column_info_array();
 
-  if (OB_UNLIKELY(row.cnt_ != exprs.count())) {
+  if (OB_UNLIKELY(row.cnt_ != exprs.count()) && OB_UNLIKELY(row.cnt_ != column_infos.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()));
+    LOG_WARN("datum count mismatch", K(ret), K(row.cnt_), K(exprs.count()), K(column_infos.count()));
   } else {
     for (uint32_t i = 0; i < row.cnt_; ++i) {
-      exprs.at(i)->locate_expr_datum(ctx) = row.cells()[i];
-      exprs.at(i)->set_evaluated_projected(ctx);
+      if (column_infos.at(i)->is_generated_column_) {
+        // generate column need to clear the evaluated flag
+        exprs.at(i)->clear_evaluated_flag(ctx);
+      } else {
+        exprs.at(i)->locate_expr_datum(ctx) = row.cells()[i];
+        exprs.at(i)->set_evaluated_projected(ctx);
+      }
     }
   }
 
   return ret;
+}
+
+void ObTableApiModifyExecutor::reset_new_row_datum(const ObExprPtrIArray &new_row_exprs)
+{
+  clear_evaluated_flag();
+  // reset ptr in ObDatum to reserved buf
+  for (int64_t i = 0; i < new_row_exprs.count(); ++i) {
+    if (OB_NOT_NULL(new_row_exprs.at(i))) {
+      // locate expr datum && reset ptr_ to reserved buf
+      new_row_exprs.at(i)->locate_datum_for_write(eval_ctx_);
+    }
+  }
 }
 
 }  // namespace table

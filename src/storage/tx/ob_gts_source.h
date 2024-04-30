@@ -82,7 +82,7 @@ public:
   int get_srr(MonotonicTs &srr);
   int get_latest_srr(MonotonicTs &latest_srr);
   int64_t get_task_count() const;
-  int gts_callback_interrupted(const int errcode);
+  int gts_callback_interrupted(const int errcode, const share::ObLSID ls_id);
 public:
   int update_gts(const int64_t gts, bool &update);
   int get_gts(const MonotonicTs stc, ObTsCbTask *task, int64_t &gts, MonotonicTs &receive_gts_ts);

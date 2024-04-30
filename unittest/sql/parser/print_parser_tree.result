@@ -325,7 +325,7 @@ question_mask_size: 0
 					|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[0],[T_IDENT], str_value_=[d], value=[9223372036854775807]
@@ -382,7 +382,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
@@ -434,7 +434,7 @@ question_mask_size: 0
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
-			|--[0],[T_OP_AND], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_OP_AND], str_value_=[], value=[2]
 				|--[0],[T_OP_GT], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
@@ -2586,7 +2586,7 @@ question_mask_size: 0
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_OP_IN], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_EXPR_LIST], str_value_=[], value=[2]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
@@ -2619,7 +2619,7 @@ question_mask_size: 0
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 		|--[5],[T_WHERE_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_OP_IN], str_value_=[], value=[9223372036854775807]
-				|--[0],[T_EXPR_LIST], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_EXPR_LIST], str_value_=[], value=[2]
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_COLUMN_REF], str_value_=[c2], value=[9223372036854775807]
@@ -3037,6 +3037,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 157   ***************
 create or replace outline out_name on select * from t1;
@@ -3056,6 +3057,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 158   ***************
 create outline out_name on select * from t1;
@@ -3074,6 +3076,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 159   ***************
 create outline out_name on select /*+ssssss*/* from t1;
@@ -3092,6 +3095,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 160   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select /*+ssssss*/* from t1;
@@ -3118,6 +3122,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 161   ***************
 create outline out_name on select /*+ssssss*/* from t1 to select * from t1;
@@ -3144,6 +3149,7 @@ question_mask_size: 0
 				|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 					|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 162   ***************
 create outline out_name on insert /*+ssssss*/ into t1 values(1, 2)  to insert /*+ssssss*/ into t1 values(1, 2);
@@ -3176,6 +3182,7 @@ question_mask_size: 0
 						|--[0],[T_INT], str_value_=[1], value=[1]
 						|--[1],[T_INT], str_value_=[2], value=[2]
 			|--[1],[T_INSERT], str_value_=[], value=[9223372036854775807]
+		|--[5],[T_INT], str_value_=[], value=[0]
 
 **************   Case 163   ***************
 drop outline out_name;
@@ -3185,6 +3192,7 @@ question_mask_size: 0
 	|--[0],[T_DROP_OUTLINE], str_value_=[], value=[0]
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 164   ***************
 drop outline db_name.out_name;
@@ -3195,6 +3203,7 @@ question_mask_size: 0
 		|--[0],[T_RELATION_FACTOR], str_value_=[out_name], value=[9223372036854775807]
 			|--[0],[T_IDENT], str_value_=[db_name], value=[9223372036854775807]
 			|--[1],[T_IDENT], str_value_=[out_name], value=[9223372036854775807]
+		|--[1],[T_INT], str_value_=[], value=[0]
 
 **************   Case 165   ***************
 create tenant tt1 replica_num = 1, primary_zone = 'zone1', resource_pool_list = ('zone1') set ob_tcp_invited_nodes='%';
@@ -3628,3 +3637,283 @@ question_mask_size: 0
 				|--[1],[T_VARCHAR], str_value_=[zone1], value=[9223372036854775807]
 				|--[2],[T_VARCHAR], str_value_=["10.101.74.122":41425], value=[9223372036854775807]
 
+**************   Case 196   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+
+**************   Case 197   ***************
+alter system transfer partition table_id = 1, object_id = 1 to ls 1001 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_TRANSFER_PARTITION_TO_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+				|--[0],[T_INT], str_value_=[1], value=[1]
+				|--[1],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1001], value=[1001]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 198   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+
+**************   Case 199   ***************
+alter system cancel transfer partition  table_id = 1, object_id = 1 tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_PARTITION_INFO], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[1], value=[1]
+			|--[1],[T_INT], str_value_=[1], value=[1]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 200   ***************
+alter system cancel transfer partition ALL;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+
+**************   Case 201   ***************
+alter system cancel transfer partition ALL tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_TRANSFER_PARTITION], str_value_=[], value=[0]
+		|--[0],[T_ALL], str_value_=[], value=[9223372036854775807]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 202   ***************
+alter system cancel balance job;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+
+**************   Case 203   ***************
+alter system cancel balance job tenant 'mysql';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_BALANCE_JOB], str_value_=[], value=[0]
+		|--[0],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql], value=[9223372036854775807]
+
+**************   Case 204   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_INT], str_value_=[3], value=[3]
+		|--[5],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 205   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 206   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+
+**************   Case 207   ***************
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_ADD_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+
+**************   Case 208   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_INT], str_value_=[3], value=[3]
+		|--[3],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 209   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 210   ***************
+alter system remove replica ls=100 server='100.88.107.212:5000';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_REMOVE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+
+**************   Case 211   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_INT], str_value_=[3], value=[3]
+		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 212   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+		|--[3],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 213   ***************
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_REPLICA_TYPE], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=[F], value=[9223372036854775807]
+
+**************   Case 214   ***************
+alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_PAXOS_REPLICA_NUM], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_INT], str_value_=[3], value=[3]
+		|--[2],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 215   ***************
+alter system modify ls=100 paxos_replica_num=3;
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MODIFY_LS_PAXOS_REPLICA_NUM], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_INT], str_value_=[3], value=[3]
+
+**************   Case 216   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+		|--[4],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 217   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[3],[T_VARCHAR], str_value_=["100.88.107.212":5001], value=[9223372036854775807]
+
+**************   Case 218   ***************
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_MIGRATE_LS_REPLICA], str_value_=[], value=[0]
+		|--[0],[T_LS], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_INT], str_value_=[100], value=[100]
+		|--[1],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+		|--[2],[T_VARCHAR], str_value_=["100.88.107.212":5000], value=[9223372036854775807]
+
+**************   Case 219   ***************
+alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_LS_REPLICA_TASK], str_value_=[], value=[0]
+		|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]
+		|--[1],[T_TENANT_NAME], str_value_=[], value=[9223372036854775807]
+			|--[0],[T_VARCHAR], str_value_=[mysql_tenant], value=[9223372036854775807]
+
+**************   Case 220   ***************
+alter system cancel replica task task_id = 'xxx';
+question_mask_size: 0
+
+|--[0],[T_STMT_LIST], str_value_=[], value=[9223372036854775807]
+	|--[0],[T_CANCEL_LS_REPLICA_TASK], str_value_=[], value=[0]
+		|--[0],[T_VARCHAR], str_value_=[xxx], value=[9223372036854775807]

@@ -33,6 +33,7 @@ EVENT_INFO(BLOCKSCAN_ROW_CNT, blockscan_row_cnt)
 EVENT_INFO(PUSHDOWN_STORAGE_FILTER_ROW_CNT, pushdown_storage_filter_row_cnt)
 EVENT_INFO(FUSE_ROW_CACHE_HIT, fuse_row_cache_hit)
 EVENT_INFO(SCHEDULE_TIME, schedule_time)
+EVENT_INFO(NETWORK_WAIT_TIME, network_wait_time)
 #endif
 
 #ifndef OCEANBASE_SQL_OB_EXEC_STAT_H
@@ -105,6 +106,7 @@ struct ObExecRecord
       application_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                     \
       concurrency_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                     \
       schedule_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SCHEDULE_WAIT_TIME);                 \
+      network_wait_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::NETWORK_WAIT_TIME);                   \
     } \
   } while(0);
 
@@ -144,6 +146,33 @@ struct ObExecRecord
     UPDATE_EVENT(blockscan_block_cnt);
     UPDATE_EVENT(blockscan_row_cnt);
     UPDATE_EVENT(pushdown_storage_filter_row_cnt);
+    UPDATE_EVENT(network_wait_time);
+  }
+
+  uint64_t get_cur_memstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_memstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_memstore_read_row_count = memstore_read_row_count_ +
+                                    (EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT)
+                                    - memstore_read_row_count_start_);
+    }
+    return cur_memstore_read_row_count;
+  }
+
+  uint64_t get_cur_ssstore_read_row_count(common::ObDiagnoseSessionInfo *di = NULL) {
+    oceanbase::common::ObDiagnoseSessionInfo *diag_session_info =
+        (NULL != di) ? di : oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
+    uint64_t cur_ssstore_read_row_count = 0;
+    if (NULL != diag_session_info) {
+      oceanbase::common::ObStatEventAddStatArray &arr = diag_session_info->get_add_stat_stats();
+      cur_ssstore_read_row_count = ssstore_read_row_count_ +
+                                   (EVENT_STAT_GET(arr, ObStatEventIds::SSSTORE_READ_ROW_COUNT)
+                                   - ssstore_read_row_count_start_);
+    }
+    return cur_ssstore_read_row_count;
   }
 };
 
@@ -354,6 +383,9 @@ struct ObAuditRecordData {
   int64_t user_id_;
   char *user_name_;
   int64_t user_name_len_;
+  int64_t proxy_user_id_;
+  char *proxy_user_name_;
+  int64_t proxy_user_name_len_;
   int user_group_; // user 所属 cgroup id，仅主线程展示
   uint64_t db_id_;
   char *db_name_;
@@ -405,6 +437,10 @@ struct ObAuditRecordData {
   ObCurTraceId::TraceId pl_trace_id_;
   int64_t plsql_exec_time_;
   char snapshot_source_[OB_MAX_SNAPSHOT_SOURCE_LENGTH + 1];
+  char format_sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  stmt::StmtType stmt_type_;
+  uint64_t total_memstore_read_row_count_;
+  uint64_t total_ssstore_read_row_count_;
 };
 
 } //namespace sql

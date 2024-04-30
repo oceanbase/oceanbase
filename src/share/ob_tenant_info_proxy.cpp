@@ -163,7 +163,9 @@ void ObAllTenantInfo::reset()
 
 OB_SERIALIZE_MEMBER(ObAllTenantInfo, tenant_id_, tenant_role_,
                     switchover_status_, switchover_epoch_, sync_scn_,
-                    replayable_scn_, readable_scn_, recovery_until_scn_, log_mode_,
+                    replayable_scn_,
+                    readable_scn_,   // FARM COMPAT WHITELIST
+                    recovery_until_scn_, log_mode_,
                     max_ls_id_);
 
 ObAllTenantInfo& ObAllTenantInfo::operator= (const ObAllTenantInfo &other)

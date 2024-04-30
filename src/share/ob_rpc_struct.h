@@ -1016,16 +1016,22 @@ struct ObCreateTableRes
 public:
   ObCreateTableRes() :
       table_id_(OB_INVALID_ID),
-      schema_version_(OB_INVALID_VERSION)
+      schema_version_(OB_INVALID_VERSION),
+      task_id_(0),
+      do_nothing_(false)
   {}
   int assign(const ObCreateTableRes &other) {
     table_id_ = other.table_id_;
     schema_version_ = other.schema_version_;
+    task_id_ = other.task_id_;
+    do_nothing_ = other.do_nothing_;
     return common::OB_SUCCESS;
   }
-  TO_STRING_KV(K_(table_id), K_(schema_version));
+  TO_STRING_KV(K_(table_id), K_(schema_version), K_(task_id), K_(do_nothing));
   uint64_t table_id_;
   int64_t schema_version_;
+  int64_t task_id_;
+  bool do_nothing_;
 };
 
 struct ObCreateTableLikeArg : public ObDDLArg
@@ -1310,6 +1316,53 @@ public:
   bool no_invalidate_;
   bool update_system_stats_only_;
   DECLARE_VIRTUAL_TO_STRING;
+};
+
+struct ObDropLobArg: public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDropLobArg():
+      ObDDLArg(),
+      tenant_id_(common::OB_INVALID_ID),
+      session_id_(common::OB_INVALID_ID),
+      data_table_id_(common::OB_INVALID_ID),
+      aux_lob_meta_table_id_(common::OB_INVALID_ID)
+  {}
+  virtual ~ObDropLobArg() {}
+  void reset()
+  {
+    ObDDLArg::reset();
+    tenant_id_ = common::OB_INVALID_ID;
+    session_id_ = common::OB_INVALID_ID;
+    data_table_id_ = common::OB_INVALID_ID;
+    aux_lob_meta_table_id_ = common::OB_INVALID_ID;
+  }
+  bool is_valid() const
+  {
+    return common::OB_INVALID_ID != tenant_id_
+      && common::OB_INVALID_ID != data_table_id_
+      && common::OB_INVALID_ID != aux_lob_meta_table_id_;
+  }
+  int assign(const ObDropLobArg &other)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ObDDLArg::assign(other))) {
+      SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      session_id_ = other.session_id_;
+      data_table_id_ = other.data_table_id_;
+      aux_lob_meta_table_id_ = other.aux_lob_meta_table_id_;
+    }
+    return ret;
+  }
+public:
+  uint64_t tenant_id_;
+  uint64_t session_id_;
+  uint64_t data_table_id_;
+  uint64_t aux_lob_meta_table_id_;
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg, K_(tenant_id), K_(session_id), K_(data_table_id), K_(aux_lob_meta_table_id));
 };
 
 struct ObDropIndexArg: public ObIndexArg
@@ -1946,6 +1999,32 @@ private:
    DISALLOW_COPY_AND_ASSIGN(ObSetCommentArg);
 };
 
+struct ObMViewRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObMViewRefreshInfo()
+    : mview_table_id_(OB_INVALID_ID),
+      last_refresh_scn_(),
+      refresh_scn_(),
+      start_time_(OB_INVALID_TIMESTAMP),
+      is_mview_complete_refresh_(false)
+  {
+  }
+  ~ObMViewRefreshInfo() = default;
+  TO_STRING_KV(K_(mview_table_id),
+               K_(last_refresh_scn),
+               K_(refresh_scn),
+               K_(start_time),
+               K_(is_mview_complete_refresh));
+public:
+  uint64_t mview_table_id_;
+  share::SCN last_refresh_scn_;
+  share::SCN refresh_scn_;
+  int64_t start_time_;
+  bool is_mview_complete_refresh_;
+};
+
 struct ObAlterTableArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -2018,6 +2097,13 @@ public:
     ALTER_CONSTRAINT_STATE,
     CONSTRAINT_NO_OPERATION = 1000
   };
+  enum AlterAlgorithm
+  {
+    DEFAULT = 0, // empty
+    INSTANT = 1,
+    INPLACE = 2,
+  };
+
   ObAlterTableArg():
       ObDDLArg(),
       session_id_(common::OB_INVALID_ID),
@@ -2047,7 +2133,9 @@ public:
       foreign_key_checks_(true),
       is_add_to_scheduler_(false),
       inner_sql_exec_addr_(),
-      local_session_var_(&allocator_)
+      local_session_var_(&allocator_),
+      mview_refresh_info_(),
+      alter_algorithm_(INPLACE)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2062,6 +2150,10 @@ public:
   bool is_valid() const;
   bool has_rename_action() const
   { return alter_table_schema_.alter_option_bitset_.has_member(TABLE_NAME); }
+  bool has_alter_duplicate_scope() const
+  {
+    return alter_table_schema_.alter_option_bitset_.has_member(DUPLICATE_SCOPE);
+  }
   bool need_progressive_merge() const {
     return alter_table_schema_.alter_option_bitset_.has_member(BLOCK_SIZE)
         || alter_table_schema_.alter_option_bitset_.has_member(COMPRESS_METHOD)
@@ -2092,7 +2184,8 @@ public:
                                                   nls_timestamp_tz_format};
     return set_nls_formats(tmp_str);
   }
-  TO_STRING_KV(K_(session_id),
+  INHERIT_TO_STRING_KV("ObDDLArg", ObDDLArg,
+               K_(session_id),
                K_(index_arg_list),
                K_(foreign_key_arg_list),
                K_(alter_table_schema),
@@ -2114,7 +2207,9 @@ public:
                K_(table_id),
                K_(hidden_table_id),
                K_(inner_sql_exec_addr),
-               K_(local_session_var));
+               K_(local_session_var),
+               K_(mview_refresh_info),
+               K_(alter_algorithm));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2147,6 +2242,8 @@ public:
   bool is_add_to_scheduler_;
   common::ObAddr inner_sql_exec_addr_;
   ObLocalSessionVar local_session_var_;
+  ObMViewRefreshInfo mview_refresh_info_;
+  AlterAlgorithm alter_algorithm_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
@@ -3785,6 +3882,197 @@ public:
   OB_UNIS_VERSION(3);
 };
 
+class ObAlterLSReplicaTaskType
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum AlterLSReplicaTaskType
+  {
+    AddLSReplicaTask = 0,
+    RemoveLSReplicaTask,
+    MigrateLSReplicaTask,
+    ModifyLSReplicaTypeTask,
+    ModifyLSPaxosReplicaNumTask,
+    CancelLSReplicaTask,
+    LSReplicaTaskMax
+  };
+public:
+  ObAlterLSReplicaTaskType() : type_(LSReplicaTaskMax) {}
+  ObAlterLSReplicaTaskType(AlterLSReplicaTaskType type) : type_(type) {}
+
+  ObAlterLSReplicaTaskType &operator=(const AlterLSReplicaTaskType type) { type_ = type; return *this; }
+  ObAlterLSReplicaTaskType &operator=(const ObAlterLSReplicaTaskType &other) { type_ = other.type_; return *this; }
+  bool operator==(const ObAlterLSReplicaTaskType &other) const { return other.type_ == type_; }
+  bool operator!=(const ObAlterLSReplicaTaskType &other) const { return other.type_ != type_; }
+
+  void reset() { type_ = LSReplicaTaskMax; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+  void assign(const ObAlterLSReplicaTaskType &other) { type_ = other.type_; }
+  bool is_valid() const { return LSReplicaTaskMax != type_; }
+  bool is_add_task() const { return AddLSReplicaTask == type_; }
+  bool is_remove_task() const { return RemoveLSReplicaTask == type_; }
+  bool is_migrate_task() const { return MigrateLSReplicaTask == type_; }
+  bool is_modify_replica_task() const { return ModifyLSReplicaTypeTask == type_; }
+  bool is_modify_paxos_replica_num_task() const { return ModifyLSPaxosReplicaNumTask == type_; }
+  bool is_cancel_task() const { return CancelLSReplicaTask == type_; }
+  int parse_from_string(const ObString &type);
+  const AlterLSReplicaTaskType &get_type() const { return type_; }
+  const char* get_type_str() const;
+private:
+  AlterLSReplicaTaskType type_;
+};
+
+struct ObAdminAlterLSReplicaArg
+{
+public:
+  OB_UNIS_VERSION(1);
+public:
+  ObAdminAlterLSReplicaArg()
+    : ls_id_(),
+      server_addr_(),
+      destination_addr_(),
+      replica_type_(common::REPLICA_TYPE_MAX),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      task_id_(),
+      data_source_(),
+      paxos_replica_num_(0),
+      alter_task_type_(ObAlterLSReplicaTaskType::LSReplicaTaskMax) {}
+public:
+  int assign(const ObAdminAlterLSReplicaArg &that);
+  int init_add(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObReplicaType& replica_type,
+            const common::ObAddr& data_source,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_remove(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_migrate(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObAddr& destination_addr,
+            const common::ObAddr& data_source,
+            const uint64_t tenant_id);
+  int init_modify_replica(
+            const share::ObLSID& ls_id,
+            const common::ObAddr& server_addr,
+            const common::ObReplicaType& replica_type,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_modify_paxos_replica_num(
+            const share::ObLSID& ls_id,
+            const int64_t paxos_replica_num,
+            const uint64_t tenant_id);
+  int init_cancel(
+            const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1>& task_id,
+            const uint64_t tenant_id);
+  void reset();
+  TO_STRING_KV(K_(ls_id),
+               K_(server_addr),
+               K_(destination_addr),
+               K_(replica_type),
+               K_(tenant_id),
+               K_(task_id),
+               K_(data_source),
+               K_(paxos_replica_num),
+               K_(alter_task_type));
+  bool is_valid() const {
+    return alter_task_type_.is_valid() &&
+         ((alter_task_type_.is_add_task() && is_add_valid_())
+       || (alter_task_type_.is_remove_task() && is_remove_valid_())
+       || (alter_task_type_.is_migrate_task() && is_migrate_valid_())
+       || (alter_task_type_.is_modify_replica_task() && is_modify_replica_valid_())
+       || (alter_task_type_.is_modify_paxos_replica_num_task() && is_modify_paxos_replica_num_valid_())
+       || (alter_task_type_.is_cancel_task() && is_cancel_valid_()));
+  }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const common::ObAddr &get_server_addr() const { return server_addr_; }
+  const common::ObAddr &get_destination_addr() const { return destination_addr_; }
+  const common::ObReplicaType& get_replica_type() const { return replica_type_; }
+  const uint64_t& get_tenant_id() const { return tenant_id_; }
+  const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> &get_task_id() const { return task_id_; }
+  const common::ObAddr &get_data_source() const { return data_source_; }
+  const int64_t& get_paxos_replica_num() const { return paxos_replica_num_; }
+  const ObAlterLSReplicaTaskType& get_alter_task_type() const { return alter_task_type_; }
+
+private:
+  bool is_add_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && REPLICA_TYPE_MAX != replica_type_
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_remove_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_migrate_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && destination_addr_.is_valid()
+        && is_valid_tenant_id(tenant_id_);
+  }
+  bool is_modify_replica_valid_() const {
+    return ls_id_.is_valid()
+        && server_addr_.is_valid()
+        && REPLICA_TYPE_MAX != replica_type_
+        && is_valid_tenant_id(tenant_id_)
+        && paxos_replica_num_ >= 0;
+  }
+  bool is_modify_paxos_replica_num_valid_() const {
+    return ls_id_.is_valid()
+        && paxos_replica_num_ > 0
+        && is_valid_tenant_id(tenant_id_);
+  }
+  bool is_cancel_valid_() const {
+    return !task_id_.is_empty() && is_valid_tenant_id(tenant_id_);
+  }
+
+  share::ObLSID ls_id_;
+  common::ObAddr server_addr_;
+  common::ObAddr destination_addr_;
+  common::ObReplicaType replica_type_;
+  uint64_t tenant_id_;
+  common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> task_id_;
+  common::ObAddr data_source_;
+  int64_t paxos_replica_num_;
+  ObAlterLSReplicaTaskType alter_task_type_;
+};
+
+struct ObLSCancelReplicaTaskArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSCancelReplicaTaskArg()
+    : task_id_(),
+      ls_id_(),
+      tenant_id_(OB_INVALID_TENANT_ID) {}
+public:
+  int assign(const ObLSCancelReplicaTaskArg &that);
+  int init(const share::ObTaskId &task_id,
+           const share::ObLSID &ls_id,
+           const uint64_t tenant_id);
+  void reset();
+  TO_STRING_KV(K_(task_id),
+               K_(ls_id),
+               K_(tenant_id));
+  bool is_valid() const;
+  const share::ObTaskId &get_task_id() const { return task_id_; }
+  const share::ObLSID &get_ls_id() const { return ls_id_; }
+  const uint64_t &get_tenant_id() const { return tenant_id_; }
+private:
+  share::ObTaskId task_id_;
+  share::ObLSID ls_id_;
+  uint64_t tenant_id_;
+};
+
 struct ObLSMigrateReplicaArg
 {
 public:
@@ -3798,7 +4086,9 @@ public:
       dst_(),
       data_source_(),
       paxos_replica_number_(0),
-      skip_change_member_list_() {}
+      skip_change_member_list_(),
+      force_use_data_source_(false),
+      force_data_source_() {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -3810,7 +4100,8 @@ public:
       const common::ObReplicaMember &dst,
       const common::ObReplicaMember &data_source,
       const int64_t paxos_replica_number,
-      const bool skip_change_member_list);
+      const bool skip_change_member_list,
+      const common::ObReplicaMember &force_data_source);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),
@@ -3819,7 +4110,9 @@ public:
                K_(dst),
                K_(data_source),
                K_(paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source),
+               K_(force_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -3837,8 +4130,12 @@ public:
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_source_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
+  // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  common::ObReplicaMember force_data_source_;
 };
 
 struct ObLSAddReplicaArg
@@ -3854,7 +4151,9 @@ public:
       data_source_(),
       orig_paxos_replica_number_(0),
       new_paxos_replica_number_(0),
-      skip_change_member_list_(false) {}
+      skip_change_member_list_(false),
+      force_use_data_source_(false),
+      force_data_source_() {}
 public:
   int assign(const ObLSAddReplicaArg &that);
 
@@ -3866,7 +4165,8 @@ public:
       const common::ObReplicaMember &data_source,
       const int64_t orig_paxos_replica_number,
       const int64_t new_paxos_replica_number,
-      const bool skip_change_member_list);
+      const bool skip_change_member_list,
+      const common::ObReplicaMember &force_data_source);
 
   TO_STRING_KV(K_(task_id),
                K_(tenant_id),
@@ -3875,7 +4175,9 @@ public:
                K_(data_source),
                K_(orig_paxos_replica_number),
                K_(new_paxos_replica_number),
-               K_(skip_change_member_list));
+               K_(skip_change_member_list),
+               K_(force_use_data_source),
+               K_(force_data_source));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -3892,9 +4194,13 @@ public:
   share::ObLSID ls_id_;
   common::ObReplicaMember dst_;
   common::ObReplicaMember data_source_;
+  // no longer used after 423 (to ensure compatibility, it must be valid)
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
+  bool force_use_data_source_;
+  // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  common::ObReplicaMember force_data_source_;
 };
 
 struct ObLSChangeReplicaArg
@@ -4188,7 +4494,6 @@ public:
 private:
   AdminDRTaskType type_;
 };
-
 struct ObAdminCommandArg
 {
 public:
@@ -4938,6 +5243,28 @@ public:
   common::ObSEArray<uint64_t, 4> user_ids_; //for set default role to multiple users
 };
 
+struct ObAlterUserProxyArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterUserProxyArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID),
+    client_user_ids_(), proxy_user_ids_(),
+    credential_type_(0), flags_(0), role_ids_()
+  {}
+  virtual ~ObAlterUserProxyArg() {}
+  int assign(const ObAlterUserProxyArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(client_user_ids), K_(proxy_user_ids), K_(role_ids), K_(flags));
+
+  uint64_t tenant_id_;
+  ObSEArray<uint64_t, 4> client_user_ids_;
+  ObSEArray<uint64_t, 4> proxy_user_ids_;
+  uint64_t credential_type_;
+  uint64_t flags_;
+  bool is_grant_;
+  common::ObSEArray<uint64_t, 4> role_ids_;
+};
+
 struct ObCreateDirectoryArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
@@ -5441,7 +5768,6 @@ public:
                K_(passwd_array),
                K_(kms_info),
                K_(table_items),
-               K_(multi_uri),
                K_(with_restore_scn),
                K_(encrypt_key),
                K_(kms_uri),
@@ -6261,15 +6587,17 @@ struct ObDropOutlineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_() {}
+  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_(), is_format_(false) {}
   virtual ~ObDropOutlineArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name));
+  int assign(const ObDropOutlineArg &other);
+  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
   common::ObString outline_name_;
+  bool is_format_;
 };
 
 struct ObCreateDbLinkArg : public ObDDLArg
@@ -6432,7 +6760,8 @@ public:
     is_or_replace_(false),
     is_need_alter_(false),
     error_info_(),
-    dependency_infos_() {}
+    dependency_infos_(),
+    with_if_not_exist_(false) {}
   virtual ~ObCreateRoutineArg() {}
   bool is_valid() const;
   int assign(const ObCreateRoutineArg &other);
@@ -6441,7 +6770,8 @@ public:
                K_(is_or_replace),
                K_(is_need_alter),
                K_(error_info),
-               K_(dependency_infos));
+               K_(dependency_infos),
+               K_(with_if_not_exist));
 
   share::schema::ObRoutineInfo routine_info_;
   common::ObString db_name_;
@@ -6449,6 +6779,7 @@ public:
   bool is_need_alter_; // used in mysql mode
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
+  bool with_if_not_exist_;
 };
 
 struct ObDropRoutineArg : public ObDDLArg
@@ -6517,13 +6848,16 @@ public:
       package_type_(share::schema::INVALID_PACKAGE_TYPE),
       compatible_mode_(-1),
       public_routine_infos_(),
-      error_info_()
+      error_info_(),
+      exec_env_(),
+      dependency_infos_()
       {}
   virtual ~ObAlterPackageArg() {}
   bool is_valid() const;
   int assign(const ObAlterPackageArg &other);
   TO_STRING_KV(K_(tenant_id), K_(db_name), K_(package_name), K_(package_type),
-               K_(compatible_mode), K_(public_routine_infos), K_(error_info));
+               K_(compatible_mode), K_(public_routine_infos), K_(error_info),
+               K_(exec_env), K_(dependency_infos));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
@@ -6532,6 +6866,8 @@ public:
   int64_t compatible_mode_;
   common::ObSArray<share::schema::ObRoutineInfo> public_routine_infos_;
   share::schema::ObErrorInfo error_info_;
+  common::ObString exec_env_;
+  common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
 };
 
 struct ObDropPackageArg : public ObDDLArg
@@ -6598,6 +6934,22 @@ public:
   };
   share::schema::ObErrorInfo error_info_;
   common::ObSArray<oceanbase::share::schema::ObDependencyInfo> dependency_infos_;
+};
+
+struct ObRoutineDDLRes
+{
+  OB_UNIS_VERSION(1);
+
+public:
+  ObRoutineDDLRes() :
+    store_routine_schema_version_(OB_INVALID_VERSION)
+  {}
+  int assign(const ObRoutineDDLRes &other) {
+    store_routine_schema_version_ = other.store_routine_schema_version_;
+    return common::OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(store_routine_schema_version));
+  int64_t store_routine_schema_version_;
 };
 
 struct ObCreateTriggerRes
@@ -8777,6 +9129,23 @@ private:
 };
 #endif
 
+struct ObAlterUserProxyRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterUserProxyRes()
+    : ret_(OB_SUCCESS)
+  {}
+  ~ObAlterUserProxyRes() {}
+  int assign(const ObAlterUserProxyRes &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  void reset() { ret_ = OB_SUCCESS; };
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
 struct TenantServerUnitConfig
 {
 public:
@@ -10558,7 +10927,6 @@ public:
   uint64_t tenant_id_;
   int64_t log_disk_size_;
 };
-
 struct ObDumpServerUsageRequest final
 {
   OB_UNIS_VERSION(1);
@@ -10567,7 +10935,6 @@ public:
   ~ObDumpServerUsageRequest() { tenant_id_ = OB_INVALID_TENANT_ID; }
   uint64_t tenant_id_;
 };
-
 struct ObDumpServerUsageResult final
 {
   OB_UNIS_VERSION(1);

@@ -108,11 +108,6 @@ private:
   static int remove_and_insert_element_node(ObXmlElement *ele_node, ObXmlNode *update_node, int64_t pos, bool is_remove);
   // for pi node
   static int update_pi_node(ObMulModeMemCtx* xml_mem_ctx, ObXmlNode *xml_node, const ObExpr *expr, ObEvalCtx &ctx, ObXmlUpdateNodeInfo *&update_info);
-  static int pack_long_text_res(const ObExpr &expr,
-                                ObEvalCtx &ctx,
-                                ObDatum &res,
-                                ObIAllocator &allocator,
-                                ObString input_res);
 
   static int get_update_str_info(ObMulModeMemCtx* xml_mem_ctx,
                                  const ObExpr *expr,

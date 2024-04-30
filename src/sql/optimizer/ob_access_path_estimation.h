@@ -76,7 +76,8 @@ private:
                                    common::ObIArray<AccessPath*> &paths,
                                    const ObIArray<ObRawExpr*> &filter_exprs,
                                    bool is_inner_path,
-                                   ObBaseTableEstMethod &valid_methods);
+                                   ObBaseTableEstMethod &valid_methods,
+                                   ObBaseTableEstMethod &hint_specify_methods);
 
   static int check_can_use_dynamic_sampling(ObOptimizerContext &ctx,
                                             const ObLogPlan &log_plan,

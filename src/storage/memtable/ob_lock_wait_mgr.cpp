@@ -208,7 +208,7 @@ void ObLockWaitMgr::run1()
         row_holder_mapper_.clear();
       }
     }
-    ob_usleep(500000, true/*is_idle_sleep*/);
+    ob_usleep(10000, true/*is_idle_sleep*/);
   }
 }
 

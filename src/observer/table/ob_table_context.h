@@ -20,7 +20,7 @@
 #include "sql/resolver/dml/ob_dml_stmt.h"
 #include "share/table/ob_table.h"
 #include "ob_table_session_pool.h"
-
+#include "ob_table_schema_cache.h"
 namespace oceanbase
 {
 namespace table
@@ -74,102 +74,67 @@ struct ObTableIndexInfo
   sql::ObRawExpr *new_part_id_expr_;
   // only primary table has related_index_ids, which contains local index table ids.
   TableIDArray related_index_ids_;
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObTableIndexInfo);
 };
 
-struct ObTableColumnItem : public sql::ColumnItem
+struct ObTableColumnItem
 {
   ObTableColumnItem()
-      : sql::ColumnItem(),
-        raw_expr_(nullptr),
-        is_generated_column_(false),
-        is_stored_generated_column_(false),
-        is_virtual_generated_column_(false),
-        is_auto_increment_(false),
-        is_nullable_(true),
-        rowkey_position_(-1),
-        column_type_(ObMaxType)
+  : column_info_(nullptr),
+    expr_(nullptr),
+    raw_expr_(nullptr)
   {}
-  TO_STRING_KV("ColumnItem", static_cast<const sql::ColumnItem &>(*this),
-               KPC_(raw_expr),
-               K_(is_generated_column),
-               K_(is_stored_generated_column),
-               K_(is_virtual_generated_column),
-               K_(cascaded_column_ids),
-               K_(generated_expr_str),
-               K_(dependant_exprs),
-               K_(is_auto_increment),
-               K_(is_nullable),
-               K_(rowkey_position),
-               K_(column_type));
-  sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
-  bool is_generated_column_;
-  bool is_stored_generated_column_;
-  bool is_virtual_generated_column_;
-  common::ObSEArray<uint64_t, 8> cascaded_column_ids_;
-  // default equal item.default_value_.get_string()
-  // specific value in append and increment operation
-  common::ObString generated_expr_str_;
-  common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
-  bool is_auto_increment_;
-  bool is_nullable_;
-  int64_t rowkey_position_; // greater than zero if this is rowkey column, 0 if this is common column
-  common::ObObjType column_type_;
-};
 
-struct ObTableColumnInfo
-{
-  ObTableColumnInfo()
-      : type_(),
-        is_auto_inc_(false),
-        is_nullable_(true)
-  {
-  }
-  ObTableColumnInfo(sql::ObExprResType type, const common::ObString &column_name, bool is_auto_inc = false, bool is_nullable = true)
-      : type_(type),
-        column_name_(column_name),
-        is_auto_inc_(is_auto_inc),
-        is_nullable_(is_nullable)
-  {
-  }
-  sql::ObExprResType type_;
-  common::ObString column_name_;
-  bool is_auto_inc_;
-  bool is_nullable_;
-  TO_STRING_KV(K_(type),
-               K_(column_name),
-               K_(is_auto_inc),
-               K_(is_nullable));
+  ObTableColumnItem(const ObTableColumnInfo *column_info)
+    : column_info_(column_info),
+      expr_(nullptr),
+      raw_expr_(nullptr)
+  {}
+
+  TO_STRING_KV(KPC_(column_info),
+               KPC_(raw_expr));
+
+  const ObTableColumnInfo *column_info_;
+  sql::ObColumnRefRawExpr *expr_; // todo: need to add comment
+  sql::ObRawExpr *raw_expr_; // column ref expr or calculate expr
+  common::ObSEArray<sql::ObRawExpr*, 8, common::ModulePageAllocator, true> dependant_exprs_;
 };
 
 struct ObTableAssignment : public sql::ObAssignment
 {
   ObTableAssignment()
       : sql::ObAssignment(),
+        column_info_(nullptr),
+        column_item_(nullptr),
+        is_inc_or_append_(false),
+        generated_expr_str_(),
+        delta_expr_(nullptr),
+        is_assigned_(false)
+  {}
+  ObTableAssignment(ObTableColumnInfo *col_info)
+      : sql::ObAssignment(),
+        column_info_(col_info),
         column_item_(nullptr),
         is_inc_or_append_(false),
         delta_expr_(nullptr),
         is_assigned_(false)
   {}
-  ObTableAssignment(ObTableColumnItem *item)
-      : sql::ObAssignment(),
-        column_item_(item),
-        is_inc_or_append_(false),
-        delta_expr_(nullptr),
-        is_assigned_(false)
-  {}
   TO_STRING_KV("ObAssignment", static_cast<const sql::ObAssignment &>(*this),
-               KPC_(column_item),
+               KPC_(column_info),
                K_(is_inc_or_append),
                KPC_(delta_expr),
                K_(assign_value),
                K_(is_assigned));
+  const ObTableColumnInfo *column_info_;
+  // only use for plan cache mismatch in CG stage
   ObTableColumnItem *column_item_;
   bool is_inc_or_append_; // for append/increment
+  ObString generated_expr_str_; // for append/increment
   sql::ObColumnRefRawExpr *delta_expr_; // for append/increment
   common::ObObj assign_value_;
-  bool is_assigned_; // did user assign specific value or not
+  // did user assign specific value or not,
+  // e.g. virtual generated column will be added into assignment internally
+  //     when its dependent column is assigned by user but its is_assigned_ will false
+  bool is_assigned_;
 };
 
 enum ObTableExecutorType
@@ -196,12 +161,15 @@ public:
       : allocator_(allocator),
         ctx_allocator_("ObTableCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         expr_info_(nullptr),
+        phy_plan_ctx_(allocator_),
+        sql_ctx_(),
         exec_ctx_(allocator_),
         expr_factory_(allocator_),
         all_exprs_(false),
         agg_cell_proj_(allocator_),
         has_auto_inc_(false),
         has_global_index_(false),
+        has_local_index_(false),
         is_global_index_scan_(false)
   {
     // common
@@ -214,7 +182,12 @@ public:
     index_tablet_id_ = ObTabletID::INVALID_TABLET_ID;
     ls_id_ = share::ObLSID::INVALID_LS_ID;
     timeout_ts_ = 0;
+    sess_guard_ = nullptr;
+    schema_guard_ = nullptr;
     table_schema_ = nullptr;
+    simple_table_schema_ = nullptr;
+    schema_cache_guard_ = nullptr;
+    flags_.value_ = 0;
     // scan
     is_scan_ = false;
     is_index_scan_ = false;
@@ -230,16 +203,98 @@ public:
     is_for_insertup_ = false;
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
-    batch_op_ = nullptr;
+    ops_ = nullptr;
     return_affected_entity_ = false;
     return_rowkey_ = false;
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     is_ttl_table_ = false;
     is_skip_scan_ = false;
     is_client_set_put_ = false;
+    has_generated_column_ = false;
+    is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    column_items_.set_attr(ObMemAttr(MTL_ID(), "KvColItm"));
+    assigns_.set_attr(ObMemAttr(MTL_ID(), "KvAssigns"));
+    select_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvSelExprs"));
+    rowkey_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvRowExprs"));
+    index_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvIdxExprs"));
+    filter_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvFilExprs"));
+    select_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvSelColIds"));
+    query_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvQryColIds"));
+    query_col_names_.set_attr(ObMemAttr(MTL_ID(), "KvQryColNams"));
+    index_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvIdxColIds"));
+    table_index_info_.set_attr(ObMemAttr(MTL_ID(), "KvIdxInfos"));
+    key_ranges_.set_attr(ObMemAttr(MTL_ID(), "KvRanges"));
   }
+
+  void reset()
+  {
+    // common
+    is_init_ = false;
+    tenant_id_ = common::OB_INVALID_TENANT_ID;
+    database_id_ = common::OB_INVALID_ID;
+    ref_table_id_ = common::OB_INVALID_ID;
+    index_table_id_ = common::OB_INVALID_ID;
+    tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    index_tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    ls_id_ = share::ObLSID::INVALID_LS_ID;
+    timeout_ts_ = 0;
+    sess_guard_ = nullptr;
+    schema_guard_ = nullptr;
+    table_schema_ = nullptr;
+    simple_table_schema_ = nullptr;
+    schema_cache_guard_ = nullptr;
+    flags_.value_ = 0;
+    has_auto_inc_ = false;
+    has_global_index_ = false;
+    has_local_index_ = false;
+    is_global_index_scan_ = false;
+    // scan
+    is_scan_ = false;
+    is_index_scan_ = false;
+    is_index_back_ = false;
+    is_weak_read_ = false;
+    is_get_ = false;
+    read_latest_ = true;
+    index_schema_ = nullptr;
+    limit_ = -1;
+    offset_ = 0;
+    tenant_schema_version_ = -1;
+    is_for_update_ = false;
+    is_for_insertup_ = false;
+    entity_type_ = ObTableEntityType::ET_DYNAMIC;
+    entity_ = nullptr;
+    ops_ = nullptr;
+    return_affected_entity_ = false;
+    return_rowkey_ = false;
+    cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
+    is_ttl_table_ = false;
+    is_skip_scan_ = false;
+    is_client_set_put_ = false;
+    has_generated_column_ = false;
+    is_tablegroup_req_ = false;
+    binlog_row_image_type_ = ObBinlogRowImage::FULL;
+    is_full_table_scan_ = false;
+    // others
+    agg_cell_proj_.reset();
+    all_exprs_.reuse();
+    exec_ctx_.get_das_ctx().clear_all_location_info();
+    expr_info_ = nullptr;
+    column_items_.reset();
+    assigns_.reset();
+    select_exprs_.reset();
+    rowkey_exprs_.reset();
+    index_exprs_.reset();
+    filter_exprs_.reset();
+    query_col_ids_.reset();
+    query_col_names_.reset();
+    index_col_ids_.reset();
+    table_index_info_.reset();
+    key_ranges_.reset();
+    phy_plan_ctx_.get_autoinc_params().reset();
+  }
+
   virtual ~ObTableCtx()
   {}
   TO_STRING_KV(K_(is_init),
@@ -254,6 +309,9 @@ public:
                K_(tenant_schema_version),
                K_(column_items),
                K_(assigns),
+               K_(has_global_index),
+               K_(is_global_index_scan),
+               K(flags_.value_),
                // scan to string
                K_(is_scan),
                K_(is_index_scan),
@@ -286,11 +344,13 @@ public:
   OB_INLINE common::ObTableID get_index_table_id() const { return index_table_id_; }
   OB_INLINE common::ObTabletID get_tablet_id() const { return tablet_id_; }
   OB_INLINE common::ObString &get_table_name() { return table_name_; }
-  OB_INLINE share::ObLSID& get_ls_id() { return ls_id_; }
+  OB_INLINE const share::ObLSID& get_ls_id() const { return ls_id_; }
   OB_INLINE int64_t get_timeout_ts() const { return timeout_ts_; }
+  // may be null, need judge table_schema_ is not null when use!
   OB_INLINE const share::schema::ObTableSchema* get_table_schema() const { return table_schema_; }
-  OB_INLINE const share::schema::ObSchemaGetterGuard& get_schema_guard() const { return schema_guard_; }
-  OB_INLINE share::schema::ObSchemaGetterGuard& get_schema_guard() { return schema_guard_; }
+  OB_INLINE const share::schema::ObSimpleTableSchemaV2* get_simple_table_schema() const { return simple_table_schema_; }
+  OB_INLINE share::schema::ObSchemaGetterGuard* get_schema_guard() const { return schema_guard_; }
+  OB_INLINE ObKvSchemaCacheGuard* get_schema_cache_guard() const { return schema_cache_guard_; }
   OB_INLINE sql::ObExprFrameInfo* get_expr_frame_info() { return expr_info_; }
   OB_INLINE sql::ObExecContext& get_exec_ctx() { return exec_ctx_; }
   OB_INLINE sql::ObRawExprFactory& get_expr_factory() { return expr_factory_; }
@@ -298,19 +358,21 @@ public:
   OB_INLINE ObIArray<sql::ObRawExpr *>& get_all_exprs_array() {
     return const_cast<ObIArray<ObRawExpr *> &>(all_exprs_.get_expr_array());
   }
+  OB_INLINE ObTableApiSessGuard* get_sess_guard() const { return sess_guard_; }
   OB_INLINE sql::ObSQLSessionInfo& get_session_info()
-  { return sess_guard_.get_sess_info();}
+  { return sess_guard_->get_sess_info();}
   OB_INLINE const sql::ObSQLSessionInfo& get_session_info() const
-  { return sess_guard_.get_sess_info(); }
+  { return sess_guard_->get_sess_info(); }
   OB_INLINE int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   OB_INLINE ObTableOperationType::Type get_opertion_type() const { return operation_type_; }
   OB_INLINE bool is_init() const { return is_init_; }
   OB_INLINE const ObIArray<ObTableColumnItem>& get_column_items() const { return column_items_; }
   OB_INLINE ObIArray<ObTableColumnItem>& get_column_items() { return column_items_; }
+  OB_INLINE const ObIArray<ObTableColumnInfo *>& get_column_info_array() const { return schema_cache_guard_->get_column_info_array(); }
   OB_INLINE const ObIArray<ObTableAssignment>& get_assignments() const { return assigns_; }
   OB_INLINE ObIArray<ObTableAssignment>& get_assignments() { return assigns_; }
-  OB_INLINE ObIArray<ObTableIndexInfo*>& get_table_index_info() { return table_index_info_; }
-  OB_INLINE const ObIArray<ObTableIndexInfo*>& get_table_index_info() const { return table_index_info_; }
+  OB_INLINE ObIArray<ObTableIndexInfo>& get_table_index_info() { return table_index_info_; }
+  OB_INLINE const ObIArray<ObTableIndexInfo>& get_table_index_info() const { return table_index_info_; }
 
   // for scan
   OB_INLINE bool is_scan() const { return is_scan_; }
@@ -354,8 +416,16 @@ public:
   {
     return ObTableOperationType::Type::GET != operation_type_ && !is_scan_;
   }
+  OB_INLINE bool need_full_rowkey_op() const
+  {
+    return ObTableOperationType::Type::DEL == operation_type_
+      || ObTableOperationType::Type::UPDATE == operation_type_
+      || ObTableOperationType::Type::GET == operation_type_;
+  }
   // for dml
-  OB_INLINE const ObIArray<common::ObTableID>& get_related_index_ids() const { return related_index_ids_; }
+  OB_INLINE ObTableIndexInfo& get_primary_index_info() { return table_index_info_.at(0); }
+  OB_INLINE const ObTableIndexInfo& get_primary_index_info() const { return table_index_info_.at(0); }
+  OB_INLINE const ObIArray<common::ObTableID>& get_related_index_ids() const { return get_primary_index_info().related_index_ids_; }
   OB_INLINE bool is_for_insertup() const { return is_for_insertup_; }
   OB_INLINE const ObITableEntity* get_entity() const { return entity_; }
   OB_INLINE ObTableEntityType get_entity_type() const { return entity_type_; }
@@ -365,12 +435,14 @@ public:
     return ObTableOperationType::Type::INSERT == operation_type_;
   }
   // for htable
-  OB_INLINE const ObTableBatchOperation* get_batch_operation() const { return batch_op_; }
+  OB_INLINE const common::ObIArray<table::ObTableOperation>* get_batch_operation() const { return ops_; }
+  OB_INLINE bool is_tablegroup_req() const { return is_tablegroup_req_; }
+  OB_INLINE void set_is_tablegroup_req(const bool is_tablegroup_req) { is_tablegroup_req_ = is_tablegroup_req; }
   // for increment/append
   OB_INLINE bool return_affected_entity() const { return return_affected_entity_;}
   OB_INLINE bool return_rowkey() const { return return_rowkey_;}
   OB_INLINE uint64_t get_cur_cluster_version() const { return cur_cluster_version_;}
-  OB_INLINE bool has_generated_column() const { return table_schema_->has_generated_column(); }
+  OB_INLINE bool has_generated_column() const { return has_generated_column_; }
   // for aggregate
   OB_INLINE const common::ObIArray<uint64_t> &get_agg_projs() const { return agg_cell_proj_; }
   OB_INLINE ObPhysicalPlanCtx *get_physical_plan_ctx() { return exec_ctx_.get_physical_plan_ctx(); }
@@ -380,10 +452,21 @@ public:
   OB_INLINE bool is_global_index_scan() const { return is_global_index_scan_; }
   OB_INLINE bool is_global_index_back() const { return is_global_index_scan_ && is_index_back_;}
   OB_INLINE bool need_dist_das() { return has_global_index_ || (is_global_index_scan_ && is_index_back_); }
+  // for local index
+  OB_INLINE bool has_local_index() { return has_local_index_; }
+  OB_INLINE bool has_secondary_index() { return has_local_index_ || has_global_index_; }
+  // for put
+  OB_INLINE bool is_client_use_put() const { return is_client_set_put_; }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
   OB_INLINE void set_expr_info(ObExprFrameInfo *expr_info) { expr_info_ = expr_info; }
+  OB_INLINE void set_sess_guard(ObTableApiSessGuard *sess_guard) { sess_guard_ = sess_guard; }
+  OB_INLINE void set_schema_guard(ObSchemaGetterGuard *schema_guard) { schema_guard_ = schema_guard; }
+  OB_INLINE void set_table_schema(const ObTableSchema *table_schema) { table_schema_ = table_schema; }
+  OB_INLINE void set_simple_table_schema(const ObSimpleTableSchemaV2 *simple_table_schema) { simple_table_schema_ = simple_table_schema; }
+  OB_INLINE void set_schema_cache_guard(ObKvSchemaCacheGuard *schema_cache_guard) { schema_cache_guard_ = schema_cache_guard; }
+  OB_INLINE void set_ls_id(share::ObLSID &ls_id) { ls_id_ = ls_id; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
@@ -393,7 +476,7 @@ public:
   OB_INLINE void set_entity_type(const ObTableEntityType &type) { entity_type_ = type; }
   OB_INLINE void set_operation_type(const ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   // for htable
-  OB_INLINE void set_batch_operation(const ObTableBatchOperation *batch_op) { batch_op_ = batch_op; }
+  OB_INLINE void set_batch_operation(const ObIArray<table::ObTableOperation> *ops) { ops_ = ops; }
   // for auto inc
   OB_INLINE bool need_auto_inc_expr()
   {
@@ -431,16 +514,11 @@ public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
                   const common::ObTabletID &arg_tablet_id,
-                  const common::ObString &arg_table_name,
-                  const int64_t &timeout_ts);
-
-  // 基于 table id 初始化common部分(不包括expr_info_, exec_ctx_)
-  int init_common(ObTableApiCredential &credential,
-                  const common::ObTabletID &arg_tablet_id,
-                  const uint64_t table_id,
                   const int64_t &timeout_ts);
   // 初始化 insert 相关
   int init_insert();
+  // init put
+  int init_put();
   // 初始化scan相关(不包括表达分类)
   int init_scan(const ObTableQuery &query,
                 const bool &is_wead_read,
@@ -468,9 +546,7 @@ public:
                  const transaction::ObTxReadSnapshot &tx_snapshot);
   int init_das_context(ObDASCtx &das_ctx);
   int init_related_tablet_map(ObDASCtx &das_ctx);
-  int init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema_version);
-  // init exec_ctx_.das_ctx_.sql_ctx_
-  int init_sql_ctx();
+  void init_physical_plan_ctx(int64_t timeout_ts, int64_t tenant_schema_version);
   // 更新全局自增值
   int update_auto_inc_value();
   // init table context for ttl operation
@@ -486,6 +562,9 @@ public:
   int get_expr_from_assignments(const common::ObString &col_name, sql::ObRawExpr *&expr) const;
   int check_insert_up_can_use_put(bool &use_put);
   int get_assignment_by_column_id(uint64_t column_id, const ObTableAssignment *&assign) const;
+  int cons_column_items_for_cg();
+  // only for genarate spec or exprs, to generate full table_schema
+  int generate_table_schema_for_cg();
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -496,20 +575,20 @@ private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
                            common::ObTabletID &tablet_id);
-  int init_sess_info(ObTableApiCredential &credential);
   // for scan
-  int generate_column_infos(common::ObIArray<ObTableColumnInfo> &columns_infos);
+  int generate_column_infos(common::ObIArray<const ObTableColumnInfo*> &columns_infos);
   int init_index_info(const common::ObString &index_name, const uint64_t arg_table_id);
   int generate_key_range(const common::ObIArray<common::ObNewRange> &scan_ranges);
   int init_scan_index_info();
   int init_primary_index_info();
   // for dml
-  int init_dml_related_tid();
+  int init_dml_related_tid(ObIArray<common::ObTableID> &related_tids);
   int init_dml_index_info();
-  int check_if_skip_build_index_info(const share::schema::ObTableSchema *index_schema, bool &can_skip);
+  int check_if_can_skip_update_index(const share::schema::ObTableSchema *index_schema, bool &is_exist);
   // for update
   int init_assignments(const ObTableEntity &entity);
-  int add_stored_generated_column_assignment(const ObTableAssignment &assign);
+  int add_generated_column_assignment(const ObIArray<ObTableColumnInfo *> &col_info_array,
+                                             const ObTableAssignment &assign);
   // Init size of aggregation project array.
   //
   // @param [in]  size      The agg size
@@ -522,14 +601,11 @@ private:
   // @return Returns OB_SUCCESS on success, error code otherwise.
   int add_aggregate_proj(int64_t cell_idx, const common::ObString &column_name, const ObIArray<ObTableAggregation> &aggregations);
 
-  int add_auto_inc_param(const share::schema::ObColumnSchemaV2 &column_schema);
+  int add_auto_inc_param();
 
 private:
-  int construct_column_items();
-  int cons_column_info(const share::schema::ObColumnSchemaV2 &column_schema,
-                       ObTableColumnInfo &column_info);
+  int init_schema_info_from_cache();
   int adjust_column_type(const ObTableColumnInfo &column_info, ObObj &ob);
-  int adjust_column(const ObColumnSchemaV2 &col_schema, ObObj &obj);
   int adjust_rowkey();
   int adjust_properties();
   bool has_exist_in_columns(const common::ObIArray<common::ObString>& columns,
@@ -541,8 +617,7 @@ private:
 
 
   // 初始化 table schema 之后的 common 部分
-  int inner_init_common(ObTableApiCredential &credential,
-                        const common::ObTabletID &arg_tablet_id,
+  int inner_init_common(const common::ObTabletID &arg_tablet_id,
                         const common::ObString &table_name,
                         const int64_t &timeout_ts);
 private:
@@ -558,16 +633,21 @@ private:
   common::ObTabletID index_tablet_id_;
   share::ObLSID ls_id_;
   int64_t timeout_ts_;
+  ObTableApiSessGuard *sess_guard_;
   const share::schema::ObTableSchema *table_schema_;
-  share::schema::ObSchemaGetterGuard schema_guard_;
+  const share::schema::ObSimpleTableSchemaV2 *simple_table_schema_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
+  ObKvSchemaCacheGuard *schema_cache_guard_;
+  int64_t tenant_schema_version_;
   sql::ObExprFrameInfo *expr_info_;
+  sql::ObPhysicalPlanCtx phy_plan_ctx_;
+  sql::ObSqlCtx sql_ctx_;
   sql::ObExecContext exec_ctx_;
   sql::ObRawExprFactory expr_factory_;
   sql::ObRawExprUniqueSet all_exprs_;
-  ObTableApiSessGuard sess_guard_;
-  int64_t tenant_schema_version_;
-  common::ObSEArray<ObTableColumnItem, 8> column_items_;
-  common::ObSEArray<ObTableAssignment, 8> assigns_;
+  // column items only construct in CG stage when plan cache is mismatch
+  common::ObSEArray<ObTableColumnItem, 32> column_items_;
+  common::ObSEArray<ObTableAssignment, 16> assigns_;
   // for scan
   bool is_scan_;
   bool is_index_scan_;
@@ -584,7 +664,7 @@ private:
   common::ObSEArray<uint64_t, 32> query_col_ids_; // 用户查询的select column id
   common::ObSEArray<common::ObString, 32> query_col_names_; // 用户查询的select column name，引用的是schema上的列名
   common::ObSEArray<uint64_t, 16> index_col_ids_;
-  common::ObSEArray<ObTableIndexInfo*, 4> table_index_info_; // 用于记录主表和全局索引表信息
+  common::ObSEArray<ObTableIndexInfo, 4> table_index_info_; // 用于记录主表和全局索引表信息
   const share::schema::ObTableSchema *index_schema_;
   int64_t offset_;
   int64_t limit_;
@@ -600,14 +680,14 @@ private:
   bool return_affected_entity_;
   bool return_rowkey_;
   // for dml
-  common::ObSEArray<common::ObTableID, 16> related_index_ids_;
   bool is_for_insertup_;
   ObTableEntityType entity_type_;
   const ObITableEntity *entity_;
   // for htable
-  const ObTableBatchOperation *batch_op_;
+  const ObIArray<table::ObTableOperation> *ops_;
   // for lob adapt
   uint64_t cur_cluster_version_;
+  // for ttl table
   bool is_ttl_table_;
   // for delete skip scan
   bool is_skip_scan_;
@@ -618,7 +698,12 @@ private:
   bool is_full_table_scan_;
   // for global index
   bool has_global_index_;
+  bool has_local_index_;
   bool is_global_index_scan_;
+  // from schema_cache
+  ObTableSchemaFlags flags_;
+  bool has_generated_column_;
+  bool is_tablegroup_req_; // is table name a tablegroup name
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };
