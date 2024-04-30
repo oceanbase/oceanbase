@@ -226,10 +226,20 @@ int get_user_tenant(ObRequest &req, char *user_name_buf, char *tenant_name_buf)
     }
   }
 
-  MEMCPY(user_name_buf, user_name.ptr(), user_name.length());
-  user_name_buf[user_name.length()] = '\0';
-  MEMCPY(tenant_name_buf, tenant_name.ptr(), tenant_name.length());
-  tenant_name_buf[tenant_name.length()] = '\0';
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (user_name.length() > OB_MAX_USER_NAME_LENGTH) {
+    ret = OB_WRONG_USER_NAME_LENGTH;
+    LOG_WARN("username is too long", K(ret));
+  } else if (tenant_name.length() > OB_MAX_TENANT_NAME_LENGTH) {
+    ret = OB_INVALID_TENANT_NAME;
+    LOG_WARN("tenant name is too long", K(ret));
+  } else {
+    MEMCPY(user_name_buf, user_name.ptr(), user_name.length());
+    user_name_buf[user_name.length()] = '\0';
+    MEMCPY(tenant_name_buf, tenant_name.ptr(), tenant_name.length());
+    tenant_name_buf[tenant_name.length()] = '\0';
+  }
 
   if (OB_NOT_NULL(endpoint_tenant_mapping_buf)) {
     ob_free(endpoint_tenant_mapping_buf);
@@ -662,8 +672,8 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
           LOG_ERROR("deliver request fail", K(req));
         }
       } else if (OB_NOT_NULL(mysql_queue_)) {
-        char user_name_buf[OB_MAX_USER_NAME_LENGTH] = "";
-        char tenant_name_buf[OB_MAX_TENANT_NAME_LENGTH] = "";
+        char user_name_buf[OB_MAX_USER_NAME_BUF_LENGTH] = "";
+        char tenant_name_buf[OB_MAX_TENANT_NAME_LENGTH + 1] = "";
         uint64_t tenant_id = OB_INVALID_TENANT_ID;
         if (OB_FAIL(get_user_tenant(req, user_name_buf, tenant_name_buf))) {
           LOG_WARN("fail to get username and tenant name", K(ret), K(req));
