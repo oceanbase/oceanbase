@@ -575,6 +575,7 @@ void ObAllTenantInfoCache::reset()
   ora_rowscn_ = 0;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR);
 int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
                                               common::ObMySQLProxy *sql_proxy,
                                               bool &content_changed)
@@ -602,7 +603,9 @@ int ObAllTenantInfoCache::refresh_tenant_info(const uint64_t tenant_id,
     * This also ensures the consistency of tenant_role cache and the tenant role field in all_tenant_info
     */
     SpinWLockGuard guard(lock_);
-    if (ora_rowscn >= ora_rowscn_) {
+    if (OB_UNLIKELY(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR)) {
+      ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
+    } else if (ora_rowscn >= ora_rowscn_) {
       if (ora_rowscn > ora_rowscn_) {
         MTL_SET_TENANT_ROLE_CACHE(new_tenant_info.get_tenant_role().value());
         (void)tenant_info_.assign(new_tenant_info);
@@ -637,6 +640,8 @@ int ObAllTenantInfoCache::update_tenant_info_cache(
   if (!new_tenant_info.is_valid() || 0 == new_ora_rowscn || INT64_MAX == new_ora_rowscn) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(new_tenant_info), K(new_ora_rowscn));
+  } else if (OB_UNLIKELY(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR)) {
+    ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
   } else {
     SpinWLockGuard guard(lock_);
     if (!tenant_info_.is_valid() || 0 == ora_rowscn_) {

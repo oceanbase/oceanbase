@@ -158,6 +158,8 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
       }
     }
     //TODO maybe need consider readable scn in inner table
+    ObLSID ls_id = ls_->get_ls_id();
+    LOG_INFO("all ls readable scn", K(ls_id), K(readable_scn), K(replicas_scn_));
   }
   if (FAILEDx(get_latest_palf_stat_(palf_stat_second))) {
     LOG_WARN("get latest palf_stat failed", KR(ret), KPC_(ls));
@@ -487,8 +489,8 @@ int ObLSRecoveryStatHandler::gather_replica_readable_scn()
     if (OB_FAIL(replicas_scn_.assign(replicas_scn))) {
       LOG_WARN("failed to replicas scn", KR(ret), K(replicas_scn));
     }
-    const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
-    if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+    const int64_t PRINT_INTERVAL = 1 * 1000 * 1000L;
+    if (REACH_TENANT_TIME_INTERVAL(PRINT_INTERVAL)) {
       LOG_INFO("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
     } else {
       LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));

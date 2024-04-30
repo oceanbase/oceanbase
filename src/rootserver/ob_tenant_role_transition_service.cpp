@@ -1342,7 +1342,11 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc(const uint64_t tenant_
     ObGetLSSyncScnProxy proxy(
         *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::get_ls_sync_scn);
     obrpc::ObGetLSSyncScnArg arg;
-    const uint64_t group_id = share::OBCG_DBA_COMMAND;
+    //由于在check_sync_to_latest，需要给上游发RPC或者SQL获取准确的end_scn，所以会存在嵌套
+    //RPC的概率，OBCG_DBA_COMMAND这个队列是需要的时候创建，个数和租户的CPU相关，如果发生
+    //嵌套RPC的话，可能会出现资源型饿死的可能性。
+    //在不需要检查check_sync_to_latest使用OBCG_DBA_COMMAND，否则为了避免嵌套RPC，使用NORMAL队列
+    const uint64_t group_id = check_sync_to_latest ? 0 : share::OBCG_DBA_COMMAND;
     for (int64_t i = 0; OB_SUCC(ret) && i < status_info_array.count(); ++i) {
       const ObLSStatusInfo &info = status_info_array.at(i);
       const int64_t timeout_us = !THIS_WORKER.is_timeout_ts_valid() ?
