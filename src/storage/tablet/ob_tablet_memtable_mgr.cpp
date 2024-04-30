@@ -168,7 +168,7 @@ int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_for_leader_(
       }
     }
     if (!can_resolve && !double_check) {
-      last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary(false);
+      last_frozen_tablet_memtable->clear_resolved_active_memtable_left_boundary();
     }
     double_check = !double_check;
   } while (!can_resolve && double_check);
@@ -186,7 +186,7 @@ int ObTabletMemtableMgr::try_resolve_boundary_on_create_memtable_for_leader_(
   } else if (can_resolve) {
     SCN new_start_scn;
     last_frozen_tablet_memtable->resolve_right_boundary();
-    last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary(true);
+    last_frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
     if (new_tablet_memtable != last_frozen_tablet_memtable) {
       new_start_scn = MAX(last_frozen_tablet_memtable->get_end_scn(),
                                      last_frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
@@ -413,7 +413,7 @@ void ObTabletMemtableMgr::resolve_direct_load_memtable_boundary_(ObITabletMemtab
     new_memtable_start_scn =
         MAX(frozen_tablet_memtable->get_end_scn(), frozen_tablet_memtable->get_migration_clog_checkpoint_scn());
     (void)active_tablet_memtable->resolve_left_boundary(new_memtable_start_scn);
-    (void)frozen_tablet_memtable->set_resolved_active_memtable_left_boundary(true);
+    (void)frozen_tablet_memtable->set_resolved_active_memtable_left_boundary();
   }
 }
 
@@ -589,7 +589,7 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObITabletMemt
     ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
-    tablet_memtable->set_resolved_active_memtable_left_boundary(true);
+    tablet_memtable->set_resolved_active_memtable_left_boundary();
   }
 
   return ret;
@@ -612,13 +612,13 @@ int ObTabletMemtableMgr::unset_logging_blocked_for_active_memtable(ObITabletMemt
     LOG_WARN("fail to get active memtable", K(ret));
   } else {
     // allow the new memtable to submit log
-    active_tablet_memtable->unset_logging_blocked();
+    active_tablet_memtable->clear_logging_blocked();
   }
   if (OB_ENTRY_NOT_EXIST== ret) {
     ret = OB_SUCCESS;
   }
   if (OB_SUCC(ret)) {
-    tablet_memtable->unset_active_memtable_logging_blocked();
+    tablet_memtable->set_unset_active_memtable_logging_blocked();
   }
 
   return ret;

@@ -1763,13 +1763,18 @@ int64_t ObMemtable::get_btree_alloc_memory() const
 void ObMemtable::set_allow_freeze(const bool allow_freeze)
 {
   int ret = OB_SUCCESS;
-  if (allow_freeze_ != allow_freeze) {
+  if (get_allow_freeze_() != allow_freeze) {
     const common::ObTabletID tablet_id = key_.tablet_id_;
     const int64_t retire_clock = local_allocator_.get_retire_clock();
     ObTenantFreezer *freezer = nullptr;
     freezer = MTL(ObTenantFreezer *);
 
-    ATOMIC_STORE(&allow_freeze_, allow_freeze);
+    if (allow_freeze) {
+      set_allow_freeze_();
+    } else {
+      clear_allow_freeze_();
+    }
+
     if (allow_freeze) {
       if (OB_FAIL(freezer->unset_tenant_slow_freeze(tablet_id))) {
         LOG_WARN("unset tenant slow freeze failed.", KPC(this));
@@ -1871,7 +1876,7 @@ bool ObMemtable::ready_for_flush_()
     } else if (OB_FAIL(handle.get_data_memtable(first_frozen_memtable))) {
       TRANS_LOG(WARN, "fail to get memtable", K(ret));
     } else if (first_frozen_memtable == this) {
-      (void)unset_logging_blocked();
+      (void)clear_logging_blocked();
       TRANS_LOG(WARN, "unset logging_block in ready_for_flush", KPC(this));
     }
   }
@@ -3115,7 +3120,7 @@ bool ObMemtable::is_frozen_memtable()
               K(logstream_freeze_clock),
               KPC(this));
   }
-  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || is_tablet_freeze_;
+  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || get_is_tablet_freeze();
 
   if (bool_ret && 0 == get_frozen_time()) {
     set_frozen_time(ObClockGenerator::getClock());

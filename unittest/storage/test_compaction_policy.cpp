@@ -68,7 +68,7 @@ namespace storage
 
   bool ObITabletMemtable::can_be_minor_merged()
   {
-    return is_tablet_freeze_;
+    return get_is_tablet_freeze();
   }
 
 }
@@ -368,8 +368,8 @@ int TestCompactionPolicy::mock_memtable(
     memtable->snapshot_version_ = snapshot_scn;
     memtable->write_ref_cnt_ = 0;
     memtable->unsubmitted_cnt_ = 0;
-    memtable->is_tablet_freeze_ = true;
-    memtable->set_resolved_active_memtable_left_boundary(true);
+    memtable->set_is_tablet_freeze();
+    memtable->set_resolved_active_memtable_left_boundary();
     memtable->set_frozen();
     memtable->location_ = storage::checkpoint::ObFreezeCheckpointLocation::PREPARE;
   }

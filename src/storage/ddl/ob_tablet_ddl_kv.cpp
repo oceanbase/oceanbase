@@ -1511,7 +1511,7 @@ bool ObDDLKV::is_frozen_memtable()
               K(logstream_freeze_clock),
               KPC(this));
   }
-  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || is_tablet_freeze_;
+  const bool bool_ret = logstream_freeze_clock > get_freeze_clock() || get_is_tablet_freeze();
 
   if (bool_ret && 0 == get_frozen_time()) {
     set_frozen_time(ObClockGenerator::getClock());
@@ -1574,8 +1574,12 @@ void ObDDLKV::print_ready_for_flush()
 void ObDDLKV::set_allow_freeze(const bool allow_freeze)
 {
   int ret = OB_SUCCESS;
-  if (allow_freeze_ != allow_freeze) {
-    ATOMIC_STORE(&allow_freeze_, allow_freeze);
+  if (get_allow_freeze_() != allow_freeze) {
+    if (allow_freeze) {
+      set_allow_freeze_();
+    } else {
+      clear_allow_freeze_();
+    }
   }
 }
 
