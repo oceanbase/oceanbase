@@ -5130,7 +5130,7 @@ int ObIJsonBase::to_uint(uint64_t &value, bool fail_on_negative, bool check_rang
       int err = 0;
       char *endptr = NULL;
       bool is_unsigned = true;
-      if (OB_ISNULL(data)) {
+      if (OB_ISNULL(data) || length == 0) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("data is null", K(ret));
       } else if (data[0] == '-') {

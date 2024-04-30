@@ -2210,7 +2210,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
         if (OB_FAIL(ret)) {
           //do nothing
         } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, pos,
-                                           "__mvi_%ld", /*naming rules are compatible with oracle*/
+                                           "SYS_NC_mvi_%ld", /*naming rules are compatible with oracle*/
                                            multival_col.get_column_id()))) {
           LOG_WARN("print generate column prefix name failed", K(ret));
         } else if (OB_FAIL(multival_col.set_column_name(col_name_buf))) {
@@ -2248,7 +2248,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
           multival_arr_col.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]);
 
           if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, pos,
-                                            "__mvi_arr_%ld", /*naming rules are compatible with oracle*/
+                                            "SYS_NC_mvi_arr_%ld", /*naming rules are compatible with oracle*/
                                             multival_arr_col.get_column_id()))) {
             LOG_WARN("print generate column prefix name failed", K(ret));
           } else if (OB_FAIL(multival_arr_col.set_column_name(col_name_buf))) {
