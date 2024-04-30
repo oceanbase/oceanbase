@@ -119,6 +119,20 @@ int ObDASDMLIterator::get_next_domain_index_row(ObNewRow *&row)
   return ret;
 }
 
+int ObDASDMLIterator::get_next_domain_index_rows(ObNewRow *&rows, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(domain_iter_) && OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(
+          allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_, domain_iter_))) {
+    LOG_WARN("fail to create domain index dml iterator", K(ret));
+  } else if (OB_FAIL(domain_iter_->get_next_domain_rows(rows, row_count))) {
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next domain rows", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDASDMLIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -168,7 +182,7 @@ int ObDASDMLIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
   int ret = OB_SUCCESS;
   const bool is_domain_index = das_ctdef_->table_param_.get_data_table().is_domain_index();
   row_count = 0;
-  if (is_domain_index || 1 == batch_size_) {
+  if (1 == batch_size_) {
     if (OB_FAIL(get_next_row(rows))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("Failed to get next row", K(ret), K_(batch_size), K(is_domain_index));
@@ -184,29 +198,35 @@ int ObDASDMLIterator::get_next_rows(ObNewRow *&rows, int64_t &row_count)
         LOG_WARN("Failed to begin write iterator", K(ret));
       }
     }
-    while (OB_SUCC(ret) && row_count < batch_size_) {
-      const ObChunkDatumStore::StoredRow *sr = nullptr;
-      if (OB_FAIL(write_iter_.get_next_row(sr))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("Failed to get next row from result iterator", K(ret));
-        }
-      } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
-                                                         *sr,
-                                                         *row_projector_,
-                                                         allocator_,
-                                                         cur_rows_[row_count]))) {
-        LOG_WARN("Failed to project storage row", K(ret));
-      } else {
-        ++row_count;
-        LOG_TRACE("Get next rows from dml das iterator", KPC(sr), K(cur_rows_[row_count - 1]), K_(das_ctdef));
+    if (OB_SUCC(ret) && is_domain_index) {
+      if (OB_FAIL(get_next_domain_index_rows(rows, row_count))) {
+        LOG_WARN("fail to get next domain index rows", K(ret));
       }
-    }
-    if (OB_SUCC(ret) || OB_LIKELY(OB_ITER_END == ret)) {
-      if (0 == row_count) {
-        ret = OB_ITER_END;
-      } else {
-        rows = cur_rows_;
-        ret = OB_SUCCESS;
+    } else {
+      while (OB_SUCC(ret) && row_count < batch_size_) {
+        const ObChunkDatumStore::StoredRow *sr = nullptr;
+        if (OB_FAIL(write_iter_.get_next_row(sr))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("Failed to get next row from result iterator", K(ret));
+          }
+        } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
+                                                           *sr,
+                                                           *row_projector_,
+                                                           allocator_,
+                                                           cur_rows_[row_count]))) {
+          LOG_WARN("Failed to project storage row", K(ret));
+        } else {
+          ++row_count;
+          LOG_TRACE("Get next rows from dml das iterator", KPC(sr), K(cur_rows_[row_count - 1]), K_(das_ctdef));
+        }
+      }
+      if (OB_SUCC(ret) || OB_LIKELY(OB_ITER_END == ret)) {
+        if (0 == row_count) {
+          ret = OB_ITER_END;
+        } else {
+          rows = cur_rows_;
+          ret = OB_SUCCESS;
+        }
       }
     }
   }

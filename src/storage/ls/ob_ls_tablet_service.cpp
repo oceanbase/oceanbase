@@ -2691,7 +2691,7 @@ int ObLSTabletService::insert_rows(
     void *ptr = nullptr;
     ObStoreRow *tbl_rows = nullptr;
     int64_t row_count = 0;
-    bool first_bulk = true;
+    int64_t row_buf_cnt = 0;
     ObNewRow *rows = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
@@ -2717,12 +2717,16 @@ int ObLSTabletService::insert_rows(
           } else if (1 == row_count) {
             tbl_rows = &reserved_row;
             tbl_rows[0].flag_.set_flag(ObDmlFlag::DF_INSERT);
-          } else if (first_bulk) {
-            first_bulk = false;
+          } else if (row_buf_cnt < row_count) {
+            if (nullptr != ptr) {
+              work_allocator.free(ptr);
+              ptr = nullptr;
+            }
             if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("fail to allocate memory", K(ret), K(row_count));
             } else {
+              row_buf_cnt = row_count;
               tbl_rows = new (ptr) ObStoreRow[row_count];
               for (int64_t i = 0; i < row_count; i++) {
                 tbl_rows[i].flag_.set_flag(ObDmlFlag::DF_INSERT);

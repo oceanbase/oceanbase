@@ -544,6 +544,43 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   return ret;
 }
 
+int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  const ObChunkDatumStore::StoredRow *sr = nullptr;
+  bool got_row = false;
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker interrupt", K(ret));
+  }
+  row_count = 0;
+  while (OB_SUCC(ret) && !got_row) {
+    if (row_idx_ >= rows_.count()) {
+      rows_.reuse();
+      row_idx_ = 0;
+      if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, not domain index", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+      } else if (FAILEDx(write_iter_.get_next_row(sr))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("get next row from result iterator failed", K(ret));
+        }
+      } else if (OB_FAIL(generate_domain_rows(sr))) {
+        if (ret != OB_ITER_END) {
+          LOG_WARN("fail to generate domain index row", K(ret), KPC(sr));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && row_idx_ < rows_.count()) {
+      row = &(rows_[row_idx_]);
+      row_count = rows_.count() - row_idx_;
+      row_idx_ = rows_.count();
+      got_row = true;
+    }
+  }
+  LOG_DEBUG("get next domain rows", K(ret), K(got_row), K(row_idx_), K(row_count), K(rows_), KPC(row), KPC(sr));
+  return ret;
+}
+
 int ObSpatialDMLIterator::generate_domain_rows(const ObChunkDatumStore::StoredRow *store_row)
 {
   int ret = OB_SUCCESS;
