@@ -1527,6 +1527,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
         const int64_t free_page_nums = blk.get_free_page_nums();
         if (OB_FAIL(wait_info->exec_wait())) {
           STORAGE_LOG(WARN, "fail to exec io handle wait", K(ret), K_(tenant_id), KPC(wait_info));
+          ATOMIC_DEC(&washing_count_);
           int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(blk.check_and_set_status(ObTmpMacroBlock::WASHING, ObTmpMacroBlock::MEMORY))) {
             STORAGE_LOG(ERROR, "fail to rollback block status", K(ret), K(tmp_ret), K(block_id), K(blk));
