@@ -2057,9 +2057,12 @@ int ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid(sql::ObExecContext
   ObString val = in_val.get_string();
   if (!val.empty()) {
     if (val.case_compare(OB_LOG_ROW_VALUE_PARTIAL_LOB) == 0) {
-      out_val = in_val;
-    } else if (val.case_compare(OB_LOG_ROW_VALUE_PARTIAL_JSON) == 0
-        || val.case_compare(OB_LOG_ROW_VALUE_PARTIAL_ALL) == 0) {
+      // because not adapat obcdc, currently partial_lob is disabled
+      // out_val = in_val;
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partial_lob is not support, please use _enable_dbms_lob_partial_update instead", K(ret), K(in_val));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partial_lob");
+    } else if (val.case_compare(OB_LOG_ROW_VALUE_PARTIAL_JSON) == 0) {
       uint64_t tenant_data_version = 0;
       if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), tenant_data_version))) {
         LOG_WARN("get tenant data version failed", K(ret), K(val));

@@ -1921,3 +1921,6 @@ DEF_BOOL(_allow_skip_replay_redo_after_detete_tablet, OB_TENANT_PARAMETER, "FALS
 DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
          "Control whether can use DBMS_JOB package.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
+         "Enable the capability of dbms_lob to perform partial updates on LOB",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

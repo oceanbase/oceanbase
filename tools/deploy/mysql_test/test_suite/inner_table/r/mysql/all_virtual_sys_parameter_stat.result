@@ -291,6 +291,7 @@ _enable_compaction_diagnose
 _enable_convert_real_to_decimal
 _enable_dblink_reuse_connection
 _enable_dbms_job_package
+_enable_dbms_lob_partial_update
 _enable_defensive_check
 _enable_easy_keepalive
 _enable_hash_join_hasher
