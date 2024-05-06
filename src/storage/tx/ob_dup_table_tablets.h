@@ -605,6 +605,7 @@ public:
   {
     reset();
   }
+  ~ObLSDupTabletsMgr() { destroy(); }
   int init(ObDupTableLSHandler *dup_ls_handle);
   void destroy();
   void reset();

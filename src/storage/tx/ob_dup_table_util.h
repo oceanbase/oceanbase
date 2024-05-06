@@ -101,6 +101,7 @@ public:
   {
     reset();
   }
+  ~ObDupTableLSHandler() { destroy(); }
   // init by ObDupTabletScanTask or replay
   int init(bool is_dup_table);
 

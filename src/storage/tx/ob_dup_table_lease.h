@@ -46,6 +46,7 @@ public:
 
 public:
   ObDupTableLSLeaseMgr() : lease_diag_info_log_buf_(nullptr) { reset(); }
+  ~ObDupTableLSLeaseMgr() { destroy(); }
 
   int init(ObDupTableLSHandler *dup_ls_handle);
   int offline();
