@@ -105,6 +105,15 @@ public:
 protected:
   int prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx);
   int get_base_iter_curr_macro_block(const blocksstable::ObMacroBlockDesc *&macro_desc);
+  void set_base_iter(const MERGE_ITER_ARRAY &minimum_iters) {
+    const int64_t count = minimum_iters.count();
+    if (!minimum_iters.empty() && minimum_iters[count - 1]->is_base_sstable_iter()
+      && minimum_iters[count - 1]->is_macro_merge_iter()) {
+      base_iter_ = minimum_iters[count - 1];
+    } else {
+      base_iter_ = nullptr;
+    }
+  }
   static const int64_t CACHED_TRANS_STATE_MAX_CNT = 10 * 1024l;
 private:
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) = 0;
