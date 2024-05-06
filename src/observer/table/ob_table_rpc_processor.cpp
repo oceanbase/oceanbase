@@ -796,11 +796,11 @@ int ObTableRpcProcessor<T>::process()
   int ret = OB_SUCCESS;
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
     if (OB_NOT_NULL(request_string_)) { // request_string_ has been generated if enable sql_audit
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_));
+      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_), K(audit_record_.exec_timestamp_));
     } else if (had_do_response()) { // req_ may be freed
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_));
+      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_),  K(audit_record_.exec_timestamp_));
     } else {
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_);
+      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_,  K(audit_record_.exec_timestamp_));
     }
     // whether the client should refresh location cache and retry
     if (ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {

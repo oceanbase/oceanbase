@@ -203,8 +203,9 @@ int ObTableGlobalIndexLookupExecutor::build_data_table_range(common::ObNewRange 
 int ObTableGlobalIndexLookupExecutor::do_index_lookup()
 {
   int ret = OB_SUCCESS;
+  const int64_t curr_time = ObTimeUtility::fast_current_time();
   if (OB_FAIL(das_ref_.execute_all_task())) {
-    LOG_WARN("fail to execute das task", K(ret));
+    LOG_WARN("fail to execute das task", K(ret), K(curr_time));
   } else {
     lookup_result_ = das_ref_.begin_result_iter();
   }

@@ -156,9 +156,10 @@ int ObTableApiScanExecutor::prepare_das_task()
 int ObTableApiScanExecutor::do_table_scan()
 {
   int ret = OB_SUCCESS;
+  const int64_t curr_time = ObTimeUtility::fast_current_time();
   if (das_ref_.has_task()) {
     if (OB_FAIL(das_ref_.execute_all_task())) {
-      LOG_WARN("fail to execute all das scan task", K(ret));
+      LOG_WARN("fail to execute all das scan task", K(ret), K(curr_time));
     }
   }
   if (OB_SUCC(ret)) {
