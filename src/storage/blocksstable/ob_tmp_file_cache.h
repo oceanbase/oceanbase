@@ -425,8 +425,10 @@ private:
   struct DestroyBlockMapOp final
   {
   public:
-    DestroyBlockMapOp() = default;
+    DestroyBlockMapOp(ObTmpTenantFileStore &tenant_store) : tenant_store_(tenant_store) {}
     int operator () (oceanbase::common::hash::HashMapPair<int64_t, ObTmpMacroBlock*> &entry);
+  private:
+    ObTmpTenantFileStore &tenant_store_;  // reference to tenant store from ObTmpTenantMemBlockManager
   };
 
 private:
