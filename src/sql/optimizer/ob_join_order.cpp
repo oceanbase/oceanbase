@@ -2365,7 +2365,8 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
             LOG_WARN("failed to push back order item", K(ret));
           }
         }
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) || helper.is_inner_path_) {
+          // The ordering of inner path can not be preserved
         } else if (OB_FAIL(check_all_interesting_order(index_ordering,
                                                        stmt,
                                                        max_prefix_count,
