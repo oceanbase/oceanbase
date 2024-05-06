@@ -902,7 +902,7 @@ int ObTmpTenantMemBlockManager::DestroyBlockMapOp::operator () (oceanbase::commo
     } else if (OB_FAIL(blk->give_back_buf_into_cache())) {
       STORAGE_LOG(WARN, "fail to put tmp block cache", K(ret), K(blk));
     } else {
-      OB_TMP_FILE_STORE.dec_block_cache_num(blk->get_tenant_id(), 1);
+      tenant_store_.dec_block_cache_num(1);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -933,7 +933,7 @@ void ObTmpTenantMemBlockManager::destroy()
     }
   }
   ATOMIC_STORE(&washing_count_, 0);
-  DestroyBlockMapOp op;
+  DestroyBlockMapOp op(tenant_store_);
   if (OB_FAIL(t_mblk_map_.foreach_refactored(op))) {
     STORAGE_LOG(WARN, "destroy mblk map failed", K(ret));
   }
@@ -1211,7 +1211,7 @@ int ObTmpTenantMemBlockManager::check_and_free_mem_block(ObTmpMacroBlock *&t_mbl
   } else if (OB_FAIL(free_macro_block(t_mblk->get_block_id()))) {
     STORAGE_LOG(WARN, "fail to free tmp macro block for block cache", K(ret));
   } else {
-    OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
+    tenant_store_.dec_block_cache_num(1);
   }
   return ret;
 }
@@ -1493,7 +1493,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
               }
             } else {
               ++wait_io_cnt;
-              OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
+              tenant_store_.dec_block_cache_num(1);
               ObTaskController::get().allow_next_syslog();
               STORAGE_LOG(INFO, "succeed to wash a block", K(block_id), K(macro_id),
                   K(free_page_nums), K(t_mblk_map_.size()));
