@@ -557,6 +557,8 @@ inline bool is_cpu_support_sse42()
   return 0 != (data & CPUID_STD_SSE4_2);
  #elif defined(__aarch64__)
   return 0;
+ #elif defined(__powerpc64__)
+  return 0;
  #else
   #error arch unsupported
  #endif

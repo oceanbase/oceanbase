@@ -826,9 +826,15 @@ TEST(ObFIFOAllocator, dump_using_when_dctor)
 // use gettimeofday() before, but the precise is not enough(there is some 0).
 int64_t get_current_time()
 {
+#if defined(__x86_64__)
   uint32_t low, high;
   __asm__ __volatile__("rdtsc":"=a"(low), "=d"(high));
   return ((uint64_t)high << 32) | low;
+#elif defined(__powerpc64__)
+    uint64_t virtual_timer_value;
+    asm volatile("mfspr %0, 268" : "=r"(virtual_timer_value)); //add for Power ppc64le 2023-12
+    return virtual_timer_value;
+#endif
 }
 
 // [15] Comprehensive test. May allocate normal or special, and record the alloc/free time.

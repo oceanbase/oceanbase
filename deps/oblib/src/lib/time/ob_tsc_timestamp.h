@@ -76,6 +76,23 @@ static inline uint64_t rdtscp_id(uint64_t &cpuid)
   cpuid = 0;
   return rdtscp();
 }
+#elif defined(__powerpc64__)
+static __inline__ uint64_t rdtscp()
+{
+    uint64_t virtual_timer_value;
+    asm volatile("mfspr %0, 268" : "=r"(virtual_timer_value)); 
+    return virtual_timer_value;
+}
+static __inline__ uint64_t rdtsc()
+{
+    return rdtscp();
+}
+static inline uint64_t rdtscp_id(uint64_t &cpuid)
+{
+  cpuid = 0;
+  return rdtscp();
+}
+
 #else
 // if it is not intel architecture, not use tsc and return 0.
 static inline uint64_t rdtsc()
@@ -145,6 +162,13 @@ private:
   {
     return true;
   }
+#elif defined(__powerpc64__)
+  uint64_t get_cpufreq_khz_(void);
+  bool is_support_invariant_tsc_()
+  {
+    return true;
+  }
+
 #else
   uint64_t get_cpufreq_khz_(void)
   {
