@@ -58,6 +58,8 @@ int ObAnalyzeTableInfo::assign(const ObAnalyzeTableInfo &other)
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(column_params_.assign(other.column_params_))) {
     LOG_WARN("failed to assign", K(ret));
+  } else if (OB_FAIL(column_group_params_.assign(other.column_group_params_))) {
+    LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_partition_infos_.assign(other.all_partition_infos_))) {
     LOG_WARN("failed to assign", K(ret));
   } else if (OB_FAIL(all_subpartition_infos_.assign(other.all_subpartition_infos_))) {
