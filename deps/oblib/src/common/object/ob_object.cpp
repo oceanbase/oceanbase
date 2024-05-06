@@ -284,6 +284,7 @@ DEF_TO_STRING(ObLobLocatorV2)
           J_KV(K(*extern_header));
           J_COMMA();
           J_KV("extern size", *(uint16_t *)extern_header->data_);
+          offset += MEM_LOB_EXTERN_SIZE_LEN;
           J_COMMA();
           offset += MEM_LOB_EXTERN_SIZE_LEN;
           if (buf_len > pos && extern_header->flags_.has_tx_info_
