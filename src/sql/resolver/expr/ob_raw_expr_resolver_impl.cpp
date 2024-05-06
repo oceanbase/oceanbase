@@ -426,6 +426,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                 }
               }
             }
+          } else if (ob_is_rowid_tc(data_type)) {
+            int32_t len = static_cast<int32_t>(node->int16_values_[OB_NODE_CAST_C_LEN_IDX]);
+            if (OB_UNLIKELY(0 == len)) {
+              ret = OB_ERR_ZERO_LEN_COL;
+              LOG_WARN("Oracle not allowed zero length", K(ret));
+            } else if (OB_UNLIKELY(len > OB_MAX_USER_ROW_KEY_LENGTH)) {
+              ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+              LOG_WARN("column data length is invalid", K(ret), K(len));
+            }
           }
 
           if (OB_SUCC(ret)) {
