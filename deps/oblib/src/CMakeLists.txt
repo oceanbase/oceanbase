@@ -199,6 +199,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  $<$<STREQUAL:"${ARCHITECTURE}","aarch64">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   $<$<STREQUAL:"${ARCHITECTURE}","ppc64le">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
@@ -225,6 +226,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
   ${DEP_DIR}/lib/libprotobuf-c.a
+  $<$<STREQUAL:"${ARCHITECTURE}","aarch64">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   $<$<STREQUAL:"${ARCHITECTURE}","ppc64le">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib

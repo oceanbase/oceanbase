@@ -11,9 +11,7 @@
  */
 
 #include <gtest/gtest.h>
-#if defined(__powerpc64__)
-#include <stdint.h> //add for ppc64le due to undefined uint64_6
-#endif
+#include <stdint.h> //add for ppc64le due to undefined uint64
 #include "lib/oblog/ob_easy_log.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/profile/ob_profile_log.h"
@@ -43,7 +41,6 @@ TEST(TestEasyLog, ob_easy_log_format)
   char str_buf[str_buf_length];
   int64_t int_value = 5;
   int64_t str_length = 3;
-#ifdef OB_BUILD_CLOSE_MODULES // not for opensource on x86_64/aarch_64/ppc64le 2023-12
   EXPECT_EQ(OB_SUCCESS, TestProfileUtils::build_string(str_buf, str_buf_length, str_length));
   ob_easy_log_format(level, file_name, line, function, 0, FMT_STR, str_buf, int_value);
   str_length = -3;
@@ -61,7 +58,6 @@ TEST(TestEasyLog, ob_easy_log_format)
   str_length = 4096;
   EXPECT_EQ(OB_SUCCESS, TestProfileUtils::build_string(str_buf, str_buf_length, str_length));
   ob_easy_log_format(level, file_name, line, function, 0, FMT_STR, str_buf, int_value);
-#endif
 }
 } //end common
 } //end oceanbase

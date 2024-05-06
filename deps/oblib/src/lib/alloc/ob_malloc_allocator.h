@@ -41,9 +41,6 @@ public:
   }
   ObTenantCtxAllocatorGuard(ObTenantCtxAllocatorGuard &&other)
   {
-#if defined(__powerpc64__) //init lock_ 
-    this->lock_ = false;
-#endif
     *this = std::move(other);
   }
   ObTenantCtxAllocatorGuard &operator=(ObTenantCtxAllocatorGuard &&other)

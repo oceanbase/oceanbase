@@ -161,6 +161,10 @@ AChunk *chunk(void *ptr)
 
 TEST_F(TestObjectMgr, TestFragmentWash)
 {
+  const ssize_t ps = get_page_size();
+  if(ps != OS_NORMAL_PAGE_SIZE) {
+    return;
+  }
   ObTenantResourceMgrHandle resource_handle;
   ObResourceMgr::get_instance().get_tenant_resource_mgr(
       OB_SERVER_TENANT_ID, resource_handle);

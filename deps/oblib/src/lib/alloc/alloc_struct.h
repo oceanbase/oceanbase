@@ -368,6 +368,7 @@ static const uint32_t ACHUNK_HEADER_SIZE = 16L << 10;
 static const uint32_t ACHUNK_SIZE = INTACT_ACHUNK_SIZE - ACHUNK_HEADER_SIZE;
 static const uint64_t BLOCKS_PER_CHUNK = ACHUNK_SIZE / ABLOCK_SIZE;
 static const uint64_t ABLOCK_ALIGN = 1L << 12;
+static const uint64_t OS_NORMAL_PAGE_SIZE = 4096L;
 STATIC_ASSERT(ACHUNK_HEADER_SIZE < ACHUNK_PRESERVE_SIZE &&
               0 == (ACHUNK_HEADER_SIZE & (ABLOCK_ALIGN - 1)) &&
               0 == (ABLOCK_SIZE & (ABLOCK_ALIGN - 1)) &&

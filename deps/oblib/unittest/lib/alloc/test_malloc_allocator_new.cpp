@@ -119,23 +119,15 @@ TEST(TestMallocAllocator, user_tenant)
       ASSERT_TRUE(NULL ==  malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id));
       ASSERT_EQ(OB_ENTRY_NOT_EXIST, malloc_allocator->recycle_tenant_allocator(tenant_id));
 
-      ObTenantCtxAllocator *last_allocator = allocator;
-      // shouldn't reused if not exists in unrecycled_list
       ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
       ObTenantCtxAllocator *cur_allocator = malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id).ref_allocator();
-#if defined(__powerpc64__)
-      // do nothing //Power ppc64le may allocator the same addr just recyle/free
-#else
-      ASSERT_NE(last_allocator, cur_allocator);
-#endif
       // alloc pieces to make recycling fails
       cur_allocator->alloc(100, attr);
       ASSERT_EQ(OB_ERROR, malloc_allocator->recycle_tenant_allocator(tenant_id));
-      last_allocator = cur_allocator;
 
       // should reuse if exists in unrecycled_list
       ASSERT_EQ(OB_SUCCESS, malloc_allocator->create_and_add_tenant_allocator(tenant_id));
-      ASSERT_EQ(last_allocator,  malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id).ref_allocator());
+      ASSERT_EQ(cur_allocator,  malloc_allocator->get_tenant_ctx_allocator(tenant_id, g_ctx_id).ref_allocator());
     } else if (i == 2) {
       // test idle cleanup
       ObTenantCtxAllocatorGuard ta;

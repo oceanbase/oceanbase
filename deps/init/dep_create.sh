@@ -134,8 +134,14 @@ function get_os_release() {
   elif [[ "${OS_ARCH}x" == "sw_64x" ]]; then
     case "$ID" in
       UOS)
-	version_ge "20" && OS_RELEASE=20 && return
+	      version_ge "20" && OS_RELEASE=20 && return
       ;;
+    esac
+  elif [[ "${OS_ARCH}x" == "ppc64lex" ]]; then
+    case "$ID" in
+      centos)
+        version_ge "8.0" && OS_RELEASE=8 && return
+        ;;
     esac
   fi
   not_supported && return 1
