@@ -115,6 +115,11 @@ class OptSelectivityCtx
   FilterDependencyType get_dependency_type() const { return dependency_type_; }
   void set_dependency_type(FilterDependencyType type) { dependency_type_ = type; }
 
+  uint64_t get_compat_version() const {
+    return OB_ISNULL(opt_ctx_.get_query_ctx()) ? 0 :
+           opt_ctx_.get_query_ctx()->optimizer_features_enable_version_;
+  }
+
   void init_op_ctx(const EqualSets *equal_sets, const double current_rows,
                    FilterDependencyType dependency_type = FilterDependencyType::INDEPENDENT)
   {
@@ -612,23 +617,27 @@ public:
                                 const double sample_size_scale,
                                 double &density);
 
-  static int get_range_sel_by_histogram(const common::ObHistogram &histogram,
+  static int get_range_sel_by_histogram(const OptSelectivityCtx &ctx,
+                                        const common::ObHistogram &histogram,
                                         const ObQueryRangeArray &ranges,
                                         bool no_whole_range,
                                         const double sample_size_scale,
                                         double &selectivity);
 
-  static int get_less_pred_sel(const ObHistogram &histogram,
+  static int get_less_pred_sel(const OptSelectivityCtx &ctx,
+                               const ObHistogram &histogram,
                                const ObObj &maxv,
                                const bool inclusive,
                                double &density);
 
-  static int get_greater_pred_sel(const ObHistogram &histogram,
+  static int get_greater_pred_sel(const OptSelectivityCtx &ctx,
+                                  const ObHistogram &histogram,
                                   const ObObj &minv,
                                   const bool inclusive,
                                   double &density);
 
-  static int get_range_pred_sel(const ObHistogram &histogram,
+  static int get_range_pred_sel(const OptSelectivityCtx &ctx,
+                                const ObHistogram &histogram,
                                 const ObObj &minv,
                                 const bool min_inclusive,
                                 const ObObj &maxv,
