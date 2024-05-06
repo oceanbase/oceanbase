@@ -581,6 +581,8 @@ public:
   static int data_fmt_nd(char *buffer, int64_t buf_len, int64_t &pos, const int64_t n, int64_t target, bool has_fm_flag = false);
   static int data_fmt_d(char *buffer, int64_t buf_len, int64_t &pos, int64_t target);
   static int data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, const char *ptr);
+  // check each part of ObTime and carry if necessary.
+  static void adjust_ob_time(ObTime &ot);
 
 public:
   // other functions.

@@ -319,10 +319,17 @@ int ObExprFromUnixTime::get_usec_from_datum(const common::ObDatum &param_datum,
     LOG_WARN("failed to get number", K(ret));
   } else if (OB_FAIL(param1.mul(param2, res, alloc))) {
     LOG_WARN("failed to mul", K(ret));
-  } else if (OB_LIKELY(res.is_valid_int64(tmp))) {
-    usec_val = tmp;
+  } else if (OB_FAIL(res.extract_valid_int64_with_round(tmp))) {
+    if (OB_DATA_OUT_OF_RANGE == ret) {
+      ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+      ObString dec("DECIMAL");
+      const char *num_str = param2_tmp.format();
+      LOG_USER_ERROR(OB_ERR_TRUNCATED_WRONG_VALUE, dec.length(), dec.ptr(),
+                     static_cast<int>(strlen(num_str)), num_str);
+    }
+    LOG_WARN("extract valid int64 with round failed", K(ret), K(res));
   } else {
-    ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+    usec_val = tmp;
   }
   return ret;
 }
