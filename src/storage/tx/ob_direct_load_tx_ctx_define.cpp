@@ -77,8 +77,10 @@ int ObDLIBatchSet::deserialize(const char *buf, const int64_t data_len, int64_t 
   int64_t hash_count = 0;
   const int64_t origin_pos = pos;
   const common::ObTabletID invalid_tablet_id(common::ObTabletID::INVALID_TABLET_ID);
-
-  if (OB_FAIL(serialization::decode(buf, data_len, pos, hash_count))) {
+  ObMemAttr mem_attr(MTL_ID(), "DLI_BATCH_HASH");
+  if (!created() && OB_FAIL(create(32, mem_attr, mem_attr))) {
+    TRANS_LOG(WARN, "create batch hash set failed", K(ret));
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, hash_count))) {
     TRANS_LOG(WARN, "decode hash count failed", K(ret), K(hash_count), KP(buf), K(data_len),
               K(pos));
   } else {
