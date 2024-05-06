@@ -12723,9 +12723,10 @@ def_table_schema(
     ('tenant_id', 'int', 'false'),
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
     ('svr_port', 'int'),
-    ('response_time', 'bigint:14', 'false', '0'),
-    ('count',  'bigint:14', 'false', '0'),
-    ('total',  'bigint:14', 'false', '0')
+    ('response_time', 'bigint', 'false', '0'),
+    ('count',  'bigint', 'false', '0'),
+    ('total',  'bigint', 'false', '0'),
+    ('sql_type', 'varchar:128', 'false', '')
   ],
   partition_columns=['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14795,6 +14796,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 # 15454: __all_virtual_storage_io_usage
 # 15455: __all_zone_storage
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
+# 15457: __all_virtual_query_response_time
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -34140,7 +34142,8 @@ def_table_schema(
   FROM oceanbase.__all_virtual_nic_info
   """.replace("\n", " ")
 )
-
+# 21587: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 #
 
 # 余留位置（此行之前占位）
@@ -61666,7 +61669,8 @@ def_table_schema(
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
 )
-
+# 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 23233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

@@ -3393,9 +3393,10 @@ Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
-response_time	bigint(14)	NO		0	
-count	bigint(14)	NO		0	
-total	bigint(14)	NO		0	
+response_time	bigint(20)	NO		0	
+count	bigint(20)	NO		0	
+total	bigint(20)	NO		0	
+sql_type	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_query_response_time;
 IF(count(*) >= 0, 1, 0)
 1
