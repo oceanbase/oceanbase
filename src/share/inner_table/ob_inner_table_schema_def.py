@@ -61670,7 +61670,7 @@ def_table_schema(
   """.replace("\n", " ")
 )
 # 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
-# 23233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
