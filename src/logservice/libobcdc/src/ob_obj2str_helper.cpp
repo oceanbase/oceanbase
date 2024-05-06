@@ -224,19 +224,13 @@ int ObObj2strHelper::obj2str(const uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       common::ObObj str_obj;
       common::ObObjType target_type = common::ObMaxType;
-      ObCDCTenantTimeZoneInfo *obcdc_tenant_tz_info = nullptr;
 
-      if (OB_ISNULL(timezone_info_getter_)) {
+      if (OB_ISNULL(tz_info_wrap)) {
         ret = OB_ERR_UNEXPECTED;
-        OBLOG_LOG(ERROR, "timezone_info_getter_ is null", K(timezone_info_getter_));
-      } else if (OB_FAIL(timezone_info_getter_->get_tenant_tz_info(tenant_id, obcdc_tenant_tz_info))) {
-        OBLOG_LOG(ERROR, "get_tenant_tz_wrap failed", KR(ret), K(tenant_id));
-      } else if (OB_ISNULL(obcdc_tenant_tz_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        OBLOG_LOG(ERROR, "tenant_tz_info not valid", KR(ret), K(tenant_id));
+        OBLOG_LOG(ERROR, "tz_info_wrap is nullptr", K(tenant_id), K(table_id), K(tz_info_wrap));
       } else {
         // obcdc need use_standard_format
-        const common::ObTimeZoneInfo *tz_info = obcdc_tenant_tz_info->get_timezone_info();
+        const common::ObTimeZoneInfo *tz_info = tz_info_wrap->get_time_zone_info();
         const ObDataTypeCastParams dtc_params(tz_info);
         ObObjCastParams cast_param(&allocator, &dtc_params, CM_NONE, collation_type);
         cast_param.format_number_with_limit_ = false;//here need no limit format number for libobcdc
