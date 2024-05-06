@@ -769,9 +769,25 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
                     ObCharset::get_default_charset()));
             } else {
               // TODO: if (column_schema->is_index_column())
-              cells[cell_idx].set_varchar("");
-              cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                  ObCharset::get_default_charset()));
+              bool is_unique = false;
+              if (!is_oracle_mode && OB_FAIL(is_unique_key(*table_schema, *column_schema, is_unique))) {
+                SERVER_LOG(WARN, "judge unique key fail", K(ret));
+              } else if (is_unique) {
+                // is mysql mode and is unique key
+                // 兼容mysql UNI
+                if (column_schema->is_nullable()) {
+                  cells[cell_idx].set_varchar("UNI");
+                } else {
+                  // in mysql, unique key with not_nullable is set as PRI
+                  cells[cell_idx].set_varchar("PRI");
+                }
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                ObCharset::get_default_charset()));
+              } else {
+                cells[cell_idx].set_varchar("");
+                cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                    ObCharset::get_default_charset()));
+              }
             }
             break;
           }
@@ -895,6 +911,46 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
     }
   }
 
+  return ret;
+}
+
+int ObInfoSchemaColumnsTable::is_unique_key(const ObTableSchema &table_schema,
+                                  const ObColumnSchemaV2 &column_schema,
+                                  bool &is_unique) const
+{
+  int ret = OB_SUCCESS;
+  bool tmp_unique = false;
+  ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
+
+  if (OB_UNLIKELY(NULL == schema_guard_)) {
+    ret = OB_NOT_INIT;
+    SERVER_LOG(WARN, "data member or parameter is NULL", K(ret), K(schema_guard_));
+  } else if (OB_FAIL(table_schema.get_simple_index_infos(
+                     simple_index_infos))) {
+    SERVER_LOG(WARN, "get simple_index_infos failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      const ObTableSchema *index_schema = NULL;
+      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+                         simple_index_infos.at(i).table_id_, index_schema))) {
+        SERVER_LOG(WARN, "fail to get table schema", K(ret));
+      } else if (OB_UNLIKELY(NULL == index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        SERVER_LOG(WARN, "index schema from schema guard is NULL", K(ret), K(index_schema));
+      } else if (index_schema->is_unique_index() && 1 == index_schema->get_index_column_num()) {
+        const ObIndexInfo &index_info = index_schema->get_index_info();
+        uint64_t column_id = OB_INVALID_ID;
+        if (OB_FAIL(index_info.get_column_id(0, column_id))) {
+          SERVER_LOG(WARN, "get index column id fail", K(ret));
+        } else if (column_schema.get_column_id() == column_id) {
+          tmp_unique = true;
+        } else {/*do nothing*/}
+      } else {/*do nothing*/}
+    } // for
+  }
+  if (OB_SUCC(ret)) {
+    is_unique = tmp_unique;
+  }
   return ret;
 }
 

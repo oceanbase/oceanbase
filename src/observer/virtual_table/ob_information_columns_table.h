@@ -115,6 +115,10 @@ private:
       char* buf,
       const int64_t buf_len,
       int64_t &pos);
+
+  int is_unique_key(const ObTableSchema &table_schema,
+                    const ObColumnSchemaV2 &column_schema,
+                    bool &is_unique) const;
   inline int init_mem_context();
 private:
   uint64_t tenant_id_;
