@@ -3476,7 +3476,7 @@ int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                                                       min_cost_range_count,
                                                       cost))) {
           LOG_WARN("failed to calculate range expr cost", K(ret));
-        } else if (cost >= min_cost) {
+        } else if (cost >= min_cost && min_cost_range_count > 500) {
           //increase cost, ignore in expr
           range_exprs.pop_back();
           if (OB_FAIL(ignore_predicates.push_back(min_cost_in_expr))) {
