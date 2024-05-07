@@ -1742,8 +1742,7 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
   ret = acquire_global_snapshot__(expire_ts,
                                   GCONF._ob_get_gts_ahead_interval,
                                   snapshot,
-                                  uncertain_bound,
-                                  [&]() -> bool { return tx.flags_.INTERRUPTED_; });
+                                  uncertain_bound);
   tx.lock_.lock();
   bool interrupted = tx.flags_.INTERRUPTED_;
   if (interrupted) {
@@ -1756,9 +1755,9 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
     if (tx.is_aborted()) {
       ret = tx.abort_cause_ == OB_DEAD_LOCK ? OB_DEAD_LOCK : OB_TRANS_KILLED;
       TRANS_LOG(WARN, "txn has been aborted", KR(ret), K(tx.abort_cause_));
-    } else if (interrupted) {
-        ret = OB_ERR_INTERRUPTED;
-        TRANS_LOG(WARN, "txn has been interrupted", KR(ret), K(tx));
+    } else if (tx.is_rollbacked()) {
+      ret = OB_TRANS_ROLLBACKED;
+      TRANS_LOG(WARN, "txn has been rollbacked", KR(ret), K(tx));
     } else if (OB_FAIL(ret)) {
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -1771,38 +1770,33 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
 int ObTransService::acquire_global_snapshot__(const int64_t expire_ts,
                                               const int64_t gts_ahead,
                                               SCN &snapshot,
-                                              int64_t &uncertain_bound,
-                                              ObFunction<bool()> interrupt_checker)
+                                              int64_t &uncertain_bound)
 {
   int ret = OB_SUCCESS;
-  const MonotonicTs now0 = get_req_receive_mts_();
-  const MonotonicTs now = now0 - MonotonicTs(gts_ahead);
+  const MonotonicTs request_time_base = get_req_receive_mts_();
+  const MonotonicTs request_time = request_time_base - MonotonicTs(gts_ahead);
   const int64_t current_time = ObClockGenerator::getClock();
   // occupy current worker thread for at most 1s
   const int64_t MAX_WAIT_TIME_US = 1 * 1000 * 1000;
-  MonotonicTs rts(0);
-
-  if (interrupt_checker()) {
-    ret = OB_ERR_INTERRUPTED;
-  } else if (current_time >= expire_ts) {
+  MonotonicTs gts_receive_ts(0);
+  const int64_t timeout_us = min(MAX_WAIT_TIME_US, expire_ts - current_time);
+  if (current_time >= expire_ts) {
     ret = OB_TIMEOUT;
     TRANS_LOG(WARN, "get gts timeout", K(ret), K(expire_ts), K(current_time));
-  } else if (OB_FAIL(ts_mgr_->get_gts_sync(tenant_id_, now, MAX_WAIT_TIME_US, snapshot, rts))) {
-    TRANS_LOG(WARN, "get gts fail", K(ret), K(expire_ts), K(now));
+  } else if (OB_FAIL(ts_mgr_->get_gts_sync(tenant_id_, request_time, timeout_us, snapshot, gts_receive_ts))) {
+    TRANS_LOG(WARN, "get gts fail", K(ret), K(timeout_us), K(request_time));
     if (OB_TIMEOUT == ret) {
       ret = OB_GTS_NOT_READY;
     }
   } else if (OB_UNLIKELY(!snapshot.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "invalid snapshot from gts", K(snapshot), K(now));
+    TRANS_LOG(WARN, "invalid snapshot from gts", K(ret), K(snapshot));
   } else {
-    uncertain_bound = rts.mts_ + gts_ahead;
+    uncertain_bound = gts_receive_ts.mts_ + gts_ahead;
   }
 
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "acquire global snapshot fail", K(ret),
-              K(gts_ahead), K(expire_ts), K(now), K(now0),
-              K(snapshot), K(uncertain_bound));
+    TRANS_LOG(WARN, "acquire global snapshot fail", K(ret), K(gts_ahead), K(expire_ts), K(request_time));
   }
   return ret;
 }

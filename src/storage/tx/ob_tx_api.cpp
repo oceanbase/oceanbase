@@ -760,12 +760,10 @@ int ObTransService::get_read_snapshot_version(const int64_t expire_ts,
 {
   int ret = OB_SUCCESS;
   int64_t uncertain_bound = 0;
-
   ret = acquire_global_snapshot__(expire_ts,
                                   0,
                                   snapshot_version,
-                                  uncertain_bound,
-                                  []() -> bool { return false; });
+                                  uncertain_bound);
   return ret;
 }
 
