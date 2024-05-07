@@ -391,7 +391,7 @@ ObTxDesc::ObTxDesc()
     rpc_cond_(),
     commit_task_(),
     xa_ctx_(NULL)
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   , alloc_link_()
 #endif
 {}
@@ -1562,7 +1562,7 @@ int ObTxDescMgr::wait()
       ret = OB_TIMEOUT;
       TRANS_LOG(WARN, "txDescMgr.wait timeout", K(ret));
       PrintTxDescFunctor fn(128);
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
       (void)map_.alloc_handle_.for_each(fn);
 #else
       (void)map_.for_each(fn);

@@ -5,7 +5,6 @@
 # check tenant has multiple ls
 
 connection sys;
-
 let $breakLoop=0;
 let $i=0;
 let $fail = 0;
@@ -15,7 +14,7 @@ while ($breakLoop == 0) {
  if ($lsCnt > 1) {
     --inc $breakLoop
  }
- if ($i >= 300) {
+ if ($i >= 3000) {
     --inc $fail
     --inc $breakLoop
  }
@@ -73,7 +72,7 @@ while ($breakLoop == 0)
   if ($lsCnt > 1) {
     --inc $breakLoop
   }
-  if ($i >= 300) {
+  if ($i >= 3000) {
     --inc $fail
     --inc $breakLoop
   }

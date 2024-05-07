@@ -236,7 +236,7 @@ int ObSQLSessionMgr::ValueAlloc::clean_tenant(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
-    auto *t_session_mgr = MTL(ObTenantSQLSessionMgr*);
+    ObTenantSQLSessionMgr *t_session_mgr = MTL(ObTenantSQLSessionMgr*);
     t_session_mgr->clean_session_pool();
   } else {
     LOG_ERROR("switch tenant failed", K(ret), K(tenant_id));
@@ -252,7 +252,7 @@ ObSQLSessionInfo *ObSQLSessionMgr::ValueAlloc::alloc_value(uint64_t tenant_id)
   // we use OX instead of OZ in operation of upper session pool, because we need acquire
   // from lower session pool when not success, no matter which errno we get here.
   MTL_SWITCH(tenant_id) {
-    auto *t_session_mgr = MTL(ObTenantSQLSessionMgr*);
+    ObTenantSQLSessionMgr *t_session_mgr = MTL(ObTenantSQLSessionMgr*);
     if (OB_ISNULL(session = t_session_mgr->alloc_session())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc session", K(ret));
@@ -312,7 +312,7 @@ void ObSQLSessionMgr::ValueAlloc::free_value(ObSQLSessionInfo *session)
           K(session->get_sessid()), K(server_sessid), K(tmp_ret),K(lbt()));
       }
     }
-    auto *t_session_mgr = session->get_tenant_session_mgr();
+    ObTenantSQLSessionMgr *t_session_mgr = session->get_tenant_session_mgr();
     if (t_session_mgr != NULL) {
       t_session_mgr->free_session(session);
     }
@@ -740,7 +740,7 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   bool need_disconnect = false;
   session.set_query_start_time(ObTimeUtility::current_time());
   if (session.is_in_transaction()) {
-    auto tx_desc = session.get_tx_desc();
+    transaction::ObTxDesc *tx_desc = session.get_tx_desc();
     if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::kill_tx_on_session_killed(&session))) {
       LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
                "proxy_sessid", session.get_proxy_sessid(),
@@ -781,7 +781,7 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {
-    auto tx_desc = session.get_tx_desc();
+    transaction::ObTxDesc *tx_desc = session.get_tx_desc();
     if (OB_FAIL(ObSqlTransControl::kill_tx_on_session_disconnect(&session))) {
       LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
                "proxy_sessid", session.get_proxy_sessid(), K(ret),
