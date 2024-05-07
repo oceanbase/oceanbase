@@ -20,7 +20,7 @@
 #include "pl/parser/pl_parser_base.h"
 #include "pl_parser_mysql_mode_tab.h"
 
-extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s,...);
+extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s);
 extern void obpl_mysql_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
 
 #define YY_FATAL_ERROR(msg, args...) (obpl_mysql_parse_fatal_error(OB_PARSER_ERR_NO_MEMORY, yyscanner, msg, ##args))
