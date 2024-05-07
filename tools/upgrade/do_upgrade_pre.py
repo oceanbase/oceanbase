@@ -23,9 +23,9 @@ class UpgradeParams:
   rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 
 class PasswordMaskingFormatter(logging.Formatter):
-    def format(self, record):
-        s = super(PasswordMaskingFormatter, self).format(record)
-        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 
 def config_logging_module(log_filenamme):
   logging.basicConfig(level=logging.INFO,\
@@ -146,7 +146,7 @@ def do_upgrade_by_argv(argv):
         else:
           raise MyError('invalid module: {0}'.format(cmd_module))
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-          host, port, user, password, timeout, module_set, log_filename)
+          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
       do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')
