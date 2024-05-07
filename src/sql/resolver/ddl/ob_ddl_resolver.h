@@ -857,8 +857,6 @@ protected:
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
   int check_ttl_definition(const ParseNode *node);
 
-  int get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns);
-
   int add_new_indexkey_for_oracle_temp_table();
 
   void reset();

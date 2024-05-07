@@ -28,6 +28,7 @@
 #include "lib/xml/ob_xml_parser.h"
 #include "lib/xml/ob_xml_util.h"
 #endif
+#include "share/table/ob_ttl_util.h"
 
 namespace oceanbase
 {
@@ -1060,7 +1061,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
           ObSEArray<ObString, 8> ttl_columns;
           if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
             LOG_WARN("fail to get table schema", K(ret));
-          } else if (OB_FAIL(get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
+          } else if (OB_FAIL(ObTTLUtil::get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
             LOG_WARN("fail to get ttl column", K(ret));
           } else if (ttl_columns.empty()) {
             // do nothing
@@ -1073,7 +1074,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
               if (OB_ISNULL(column)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("unexpected null alter column", K(ret));
-              } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+              } else if (ObTTLUtil::is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
@@ -5956,17 +5957,6 @@ int ObAlterTableResolver::resolve_modify_all_trigger(const ParseNode &node)
     }
   }
   return ret;
-}
-
-bool ObAlterTableResolver::is_ttl_column(const ObString &orig_column_name, const ObIArray<ObString> &ttl_columns)
-{
-  bool bret = false;
-  for (int64_t i = 0; i < ttl_columns.count() && !bret; i++) {
-    if (orig_column_name.case_compare(ttl_columns.at(i)) == 0) {
-      bret = true;
-    }
-  }
-  return bret;
 }
 
 int ObAlterTableResolver::check_mysql_rename_column(const AlterColumnSchema &alter_column_schema,

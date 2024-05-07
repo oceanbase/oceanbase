@@ -183,7 +183,6 @@ private:
                                    const share::schema::ObColumnSchemaV2 &src_col_schema,
                                    const share::schema::ObColumnSchemaV2 &dst_col_schema);
   int generate_index_arg_cascade();
-  bool is_ttl_column(const common::ObString &orig_column_name, const ObIArray<common::ObString> &ttl_columns);
 
   int check_alter_column_schemas_valid(ObAlterTableStmt &stmt);
 

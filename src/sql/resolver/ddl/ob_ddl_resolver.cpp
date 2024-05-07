@@ -11114,32 +11114,6 @@ int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
   return ret;
 }
 
-int ObDDLResolver::get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns)
-{
-  int ret = OB_SUCCESS;
-  if (ttl_definition.empty()) {
-    // do nothing
-  } else {
-    ObString right = ttl_definition;
-    bool is_end = false;
-    while (OB_SUCC(ret) && !is_end) {
-      ObString left = right.split_on(',');
-      if (left.empty()) {
-        left = right;
-        is_end = true;
-      }
-      ObString column_name = left.split_on('+').trim();
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null column name", K(ret));
-      } else if (OB_FAIL(ttl_columns.push_back(column_name))) {
-        LOG_WARN("fail to add column name", K(ret), K(column_name));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
                                               ObIArray<ObRawExpr*> &exprs)
 {

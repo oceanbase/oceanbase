@@ -228,6 +228,7 @@ int ObTableGlobalIndexLookupExecutor::get_next_row_from_data_table()
     ret = OB_ITER_END;
     LOG_DEBUG("lookup task is empty", K(ret));
   }
+  do_clear_evaluated_flag();
   while (OB_SUCC(ret) && !got_row) {
     bool filter = false;
     if (OB_FAIL(lookup_result_.get_next_row())) {
