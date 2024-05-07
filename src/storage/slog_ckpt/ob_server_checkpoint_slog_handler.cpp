@@ -264,7 +264,7 @@ int ObServerCheckpointSlogHandler::enable_replay_clog()
   for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
     const uint64_t &tenant_id = tenant_ids.at(i);
     MTL_SWITCH(tenant_id) {
-      if (OB_FAIL(OB_FAIL(MTL(ObLSService*)->enable_replay()))) {
+      if (OB_FAIL(MTL(ObLSService*)->enable_replay())) {
         LOG_WARN("fail enable replay clog", K(ret));
       } else if (OB_ISNULL(transfer_service = (MTL(ObTransferService *)))) {
         ret = OB_ERR_UNEXPECTED;

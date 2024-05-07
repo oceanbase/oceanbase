@@ -2037,6 +2037,8 @@ int ObLS::enable_replay()
   } else if (is_remove()) {
     ret = OB_LS_IS_DELETED;
     LOG_WARN("ls status is WAIT_GC when enable replay", K(get_ls_id()));
+  } else if (log_handler_.is_replay_enabled()) {
+    LOG_INFO("ls is already replay enabled, no need enable again", K_(ls_meta));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
                                                 ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret));
