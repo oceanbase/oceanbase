@@ -139,7 +139,8 @@ union ObTableSchemaFlags{
     bool has_generated_column_  : 1;
     bool is_ttl_table_          : 1;
     bool is_partitioned_table_  : 1;
-    uint64_t reserved_          : 58;
+    bool has_lob_column_        : 1;
+    uint64_t reserved_          : 57;
   };
 };
 
@@ -216,6 +217,7 @@ public:
   OB_INLINE void set_has_generated_column(bool has_generated_column) { flags_.has_generated_column_ = has_generated_column; }
   OB_INLINE void set_is_ttl_table(bool is_ttl_table) { flags_.is_ttl_table_ = is_ttl_table; }
   OB_INLINE void set_is_partitioned_table(bool is_partitioned_table) { flags_.is_partitioned_table_ = is_partitioned_table; }
+  OB_INLINE void set_has_lob_column(bool has_lob_column) { flags_.has_lob_column_ = has_lob_column; }
   OB_INLINE int64_t get_column_count() { return column_cnt_; }
   OB_INLINE int64_t get_rowkey_count() { return rowkey_cnt_; }
   OB_INLINE const ObString& get_kv_attributes() { return kv_attributes_; }

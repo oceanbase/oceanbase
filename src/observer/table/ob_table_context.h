@@ -211,6 +211,7 @@ public:
     is_skip_scan_ = false;
     is_client_set_put_ = false;
     has_generated_column_ = false;
+    has_lob_column_ = false;
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
@@ -273,6 +274,7 @@ public:
     is_skip_scan_ = false;
     is_client_set_put_ = false;
     has_generated_column_ = false;
+    has_lob_column_ = false;
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
@@ -457,6 +459,8 @@ public:
   OB_INLINE bool has_secondary_index() { return has_local_index_ || has_global_index_; }
   // for put
   OB_INLINE bool is_client_use_put() const { return is_client_set_put_; }
+  // lob column
+  OB_INLINE bool has_lob_column() const { return has_lob_column_; }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
@@ -704,6 +708,7 @@ private:
   ObTableSchemaFlags flags_;
   bool has_generated_column_;
   bool is_tablegroup_req_; // is table name a tablegroup name
+  bool has_lob_column_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

@@ -257,6 +257,9 @@ int ObKvSchemaCacheObj::cons_columns_array(const ObTableSchema *table_schema)
         if (!flags_.has_generated_column_ && col_info->is_generated_column_) {
           set_has_generated_column(col_info->is_generated_column_);
         }
+        if (!flags_.has_lob_column_ && is_lob_storage(col_info->type_.get_type())) {
+          set_has_lob_column(true);
+        }
       }
     } // end for
 

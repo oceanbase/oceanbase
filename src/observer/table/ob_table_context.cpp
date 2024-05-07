@@ -393,6 +393,7 @@ int ObTableCtx::init_schema_info_from_cache()
     has_auto_inc_ = flags.has_auto_inc_;
     is_ttl_table_ = flags.is_ttl_table_;
     has_generated_column_ = flags.has_generated_column_;
+    has_lob_column_ = flags.has_lob_column_;
     if (is_dml()) {
       has_global_index_ = flags.has_global_index_;
       has_local_index_ = flags.has_local_index_;
@@ -1125,6 +1126,10 @@ int ObTableCtx::init_put()
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with index use put");
     LOG_WARN("table with index use put is not supported", K(ret));
+  } else if (has_lob_column()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with lob column use put");
+    LOG_WARN("table with lob column use put is not supported", K(ret));
   } else if (is_total_quantity_log() && !is_htable()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "binlog_row_image is full use put");
@@ -2036,21 +2041,20 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
-  } else if (has_global_index()) {
-    // cannot use put: the global index table will insert a new row insert of covering the old row
-    // when the assign value of index column is new.
-    can_use_put = false;
-  } else if (is_htable()) { // htable has no index and alway full filled.
-    can_use_put = true;
   } else if (is_client_set_put_ && has_secondary_index()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with index use put");
     LOG_WARN("client set use_put flag, but has local index is not support", K(ret));
   } else if (has_secondary_index()) {
     /* has index, can not use put:
-       for global index: insert a new row insert of covering the old row
+       for local/global index: insert a new row insert of covering the old row
        when the assign value of index column is new. */
     can_use_put = false;
+  } else if (has_lob_column()) {
+    // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
+    can_use_put = false;
+  } else if (is_htable()) { // htable has no index and alway full filled.
+    can_use_put = true;
   } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema cache guard is NULL or not init", K(ret));
