@@ -616,7 +616,6 @@ int ObDbmsStatsLockUnlock::get_insert_locked_type_sql(const ObTableStatParam &pa
     uint64_t tenant_id = param.tenant_id_;
     uint64_t ext_tenant_id = share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id);
     uint64_t pure_table_id = share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, param.table_id_);
-    int64_t current_time = ObTimeUtility::current_time();
     StatLevel stat_level = INVALID_LEVEL;
     int64_t cur_part_id = OB_INVALID_ID;
     for (int64_t i = 0; OB_SUCC(ret) && i < no_stats_partition_ids.count(); ++i) {
@@ -631,14 +630,13 @@ int ObDbmsStatsLockUnlock::get_insert_locked_type_sql(const ObTableStatParam &pa
         stat_level = PARTITION_LEVEL;
       }
       char suffix = (i == no_stats_partition_ids.count() - 1 ? ';' : ',');
-      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %d, %u, usec_to_time('%ld'), -1, -1, 0, 0, -1,\
+      if (OB_FAIL(insert_sql.append_fmt("(%lu, %ld, %ld, %d, %u, 0, -1, -1, 0, 0, -1,\
                                         -1, 0, 0, %ld)%c",
                                         ext_tenant_id,
                                         pure_table_id,
                                         no_stats_partition_ids.at(i),
                                         param.is_index_stat_,
                                         stat_level,
-                                        current_time,
                                         part_stattypes.at(i),
                                         suffix))) {
         LOG_WARN("failed to append fmt", K(ret));
