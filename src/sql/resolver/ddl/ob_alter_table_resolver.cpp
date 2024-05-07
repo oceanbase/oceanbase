@@ -5058,6 +5058,25 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode &node)
         ObCreateForeignKeyArg foreign_key_arg;
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
         if (OB_FAIL(resolve_foreign_key_node(foreign_key_action_node, foreign_key_arg, true))) {
+          if (ret == OB_ERR_COLUMN_NOT_FOUND) {
+            int child_col_cnt = foreign_key_arg.child_columns_.count();
+            int alter_table_scheme_col_cnt = alter_table_stmt->get_alter_table_schema().get_column_count();
+            const ObString &child_col_name = foreign_key_arg.child_columns_[0];
+            const ObString &fk_col_name = alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(0)->get_column_name_str();
+            // 不支持一个 alter table 语句中，同时加列并在该列上加外键
+            SQL_RESV_LOG(WARN, "child columns cnt & alter table scheme column cnt", K(child_col_cnt), K(alter_table_scheme_col_cnt));
+            SQL_RESV_LOG(WARN, "names", K(child_col_name), K(fk_col_name));
+            SQL_RESV_LOG(WARN, "alter_table_schema", K(alter_table_stmt->get_alter_table_schema()));
+            for (int i=0; i<foreign_key_arg.child_columns_.count() && ret != OB_NOT_SUPPORTED; i++) {
+              const ObString &child_column_name = foreign_key_arg.child_columns_[i];
+              for (int j=0; j<alter_table_scheme_col_cnt; j++) {
+                if (alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(j)->get_column_name_str() == child_column_name) {
+                  ret = OB_NOT_SUPPORTED;
+                  break;
+                }
+              }
+            }
+          }
           SQL_RESV_LOG(WARN, "failed to resolve foreign key node", K(ret));
         } else if (OB_FAIL(alter_table_stmt->get_foreign_key_arg_list().push_back(foreign_key_arg))) {
           SQL_RESV_LOG(WARN, "failed to push back foreign key arg", K(ret));
@@ -5636,6 +5655,12 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
         if (lib::is_oracle_mode() && !is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
+        } else if (lib::is_mysql_mode() && column_schema->get_column_name_str() != dst_col_schema.get_column_name_str()) {
+          ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+          LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                     column_schema->get_column_name_str().length(),
+                     column_schema->get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "rename a partition key is not allowed");
         } else if (cur_table_schema.is_global_index_table()) {
           // FIXME YIREN (20221019), allow to alter part key of global index table by refilling part info when rebuilding it.
           ret = OB_OP_NOT_ALLOW;
