@@ -274,7 +274,7 @@ public:
     return common::murmurhash(&slice_id, sizeof(slice_id), 0L);
   }
   void reset_slice_ctx_on_demand();
-  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx));
+  TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn), KPC(storage_schema_));
   struct AggregatedCGInfo final {
   public:
     AggregatedCGInfo()
@@ -303,6 +303,9 @@ public:
   int64_t task_finish_count_; // reach the parallel slice cnt, means the tablet data finished.
   int64_t task_total_cnt_; // parallelism of the PX.
   int64_t fill_column_group_finish_count_;
+  share::SCN commit_scn_;
+  ObArenaAllocator schema_allocator_;
+  ObStorageSchema *storage_schema_;
 };
 
 class ObTabletDirectLoadMgr
@@ -378,9 +381,10 @@ public:
   virtual int wait_notify(const ObDirectLoadSliceWriter *slice_writer, const share::SCN &start_scn);
   int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
   virtual int notify_all();
-  virtual int calc_range(const ObStorageSchema *storage_schema, const blocksstable::ObStorageDatumUtils &datum_utils, const int64_t thread_cnt);
+  virtual int calc_range(const int64_t thread_cnt);
   int calc_cg_range(ObArray<ObDirectLoadSliceWriter *> &sorted_slices, const int64_t thread_cnt);
   const ObIArray<ObColumnSchemaItem> &get_column_info() const { return column_items_; };
+  int prepare_storage_schema(ObTabletHandle &tablet_handle);
 
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(is_schema_item_ready), K_(ls_id), K_(tablet_id), K_(table_key), K_(data_format_version), K_(ref_cnt),
                K_(direct_load_type), K_(sqc_build_ctx), KPC(lob_mgr_handle_.get_obj()), K_(schema_item), K_(column_items), K_(lob_column_idxs));
@@ -424,7 +428,6 @@ protected:
   ObArray<ObColumnSchemaItem> column_items_;
   ObArray<int64_t> lob_column_idxs_;
   ObArray<common::ObObjMeta> lob_col_types_;
-  ObTabletHandle tablet_handle_;
   ObTableSchemaItem schema_item_;
   int64_t dir_id_;
 };
