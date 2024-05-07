@@ -6585,7 +6585,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               bool has_index_task = false;
               typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
               SMART_VAR(TableSchemaArray, new_index_schemas) {
-                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
                     trans, origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id(), index_table_schema->get_table_id(), has_index_task))) {
                   LOG_WARN("failed to check ddl conflict", K(ret));
                 } else if (has_index_task) {
