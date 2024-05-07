@@ -1997,7 +1997,11 @@ int ObSysVarOnCheckFuncs::check_log_row_value_option_is_valid(sql::ObExecContext
       ret = OB_ERR_PARAM_VALUE_INVALID;
       LOG_USER_ERROR(OB_ERR_PARAM_VALUE_INVALID);
     } else {
-      out_val = in_val;
+      // because not adapat obcdc, currently partial_lob is disabled
+      // out_val = in_val;
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partial_lob is not support, please use _enable_dbms_lob_partial_update instead", K(ret), K(in_val));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partial_lob");
     }
   } else {
     out_val = in_val;

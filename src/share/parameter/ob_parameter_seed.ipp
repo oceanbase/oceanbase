@@ -1751,3 +1751,6 @@ DEF_BOOL(_allow_skip_replay_redo_after_detete_tablet, OB_TENANT_PARAMETER, "FALS
          "allow skip replay invalid redo log after tablet delete transaction is committed."
          "The default value is FALSE. Value: TRUE means we allow skip replaying this invalid redo log, False means we do not alow such behavior.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
+         "Enable the capability of dbms_lob to perform partial updates on LOB",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
