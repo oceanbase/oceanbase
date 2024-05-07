@@ -327,7 +327,7 @@ int ObTableIndex::get_rowkey_index_column(const ObTableSchema &table_schema,
     }
   } else {
     is_column_visible = false;
-    if (table_schema.is_view_table()) {
+    if (table_schema.is_view_table() && !table_schema.is_materialized_view()) {
       is_end = true;
       rowkey_info_idx_ = OB_INVALID_ID;
     } else if (!table_schema.is_heap_table()
@@ -366,7 +366,27 @@ int ObTableIndex::add_rowkey_indexes(const ObTableSchema &table_schema,
   } else {
     const ObColumnSchemaV2 *column_schema = NULL;
     bool is_column_visible = false;
-    if (OB_FAIL(get_rowkey_index_column(table_schema, column_schema,
+    const ObTableSchema *real_table_schema = &table_schema;
+    if (table_schema.is_materialized_view()) {
+      // a mview's indexes are built upon its container table
+      const ObTableSchema *container_table_schema = nullptr;
+      if (OB_FAIL(schema_guard_->get_table_schema(table_schema.get_tenant_id(),
+          table_schema.get_data_table_id(), container_table_schema))) {
+        SERVER_LOG(WARN, "failed to get table schema", KR(ret), K(table_schema));
+      } else if (OB_ISNULL(container_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "invalid container table id", KR(ret),
+            "container table id", table_schema.get_data_table_id());
+      } else {
+        real_table_schema = container_table_schema;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(real_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null schema", KR(ret), KP(real_table_schema));
+    } else if (OB_FAIL(get_rowkey_index_column(*real_table_schema, column_schema,
                                         is_column_visible, is_end))) {
       SERVER_LOG(WARN, "fail to get rowkey index column", K(ret));
     } else if (is_end) {
