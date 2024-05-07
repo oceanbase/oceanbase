@@ -1030,11 +1030,10 @@ protected:
   };
   int add_parent_gen_col_exprs(const ObArray<GenColumnExprInfo> &gen_col_exprs);
 
-  int try_add_join_table_for_fts(
-      const TableItem *left_table,
-      JoinedTable *&joined_table);
+  int try_add_join_table_for_fts(const TableItem *left_table, TableItem *&rowkey_doc_table);
   int try_update_column_expr_for_fts(
       const TableItem &table_item,
+      TableItem *rowkey_doc_table,
       common::ObIArray<ObColumnRefRawExpr *> &column_exprs);
 protected:
   ObStmtScope current_scope_;
