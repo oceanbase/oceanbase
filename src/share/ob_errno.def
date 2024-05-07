@@ -2285,6 +2285,11 @@ DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_re
 DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
 DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
 
+DEFINE_ERROR_DEP(OB_OBJECT_NOT_EXIST, -9120, -1, "HY000", "cannot find object on object storage");
+DEFINE_ERROR_DEP(OB_S2_REUSE_VERSION_MISMATCH, -9121, -1, "HY000", "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache");
+DEFINE_ERROR_DEP(OB_S2_ENTRY_NOT_EXIST, -9122, -1, "HY000", "entry not exist in s2 micro_cache");
+
+
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////

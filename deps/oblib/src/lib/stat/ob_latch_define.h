@@ -367,7 +367,10 @@ LATCH_DEF(COLUMN_STORE_DDL_RESCAN_LOCK, 333, "column store ddl rescan lock", LAT
 LATCH_DEF(TABLET_DIRECT_LOAD_MGR_SCHEMA_LOCK, 334, "tablet direct load manager schema lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 336, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(S2_PHY_BLOCK_LOCK, 336, "s2 phy block lock", LATCH_FIFO, INT64_MAX, 0, false)
+LATCH_DEF(S2_MEM_BLOCK_LOCK, 337, "s2 mem block lock", LATCH_FIFO, INT64_MAX, 0, false)
+
+LATCH_DEF(LATCH_END, 338, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
