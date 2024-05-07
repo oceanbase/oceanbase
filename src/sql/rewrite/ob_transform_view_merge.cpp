@@ -849,7 +849,8 @@ int ObTransformViewMerge::find_not_null_column_with_condition(
     for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_column_exprs.count(); ++i) {
       bool has_null_reject = false;
       //首先找到null reject的select expr
-      if (OB_FAIL(ObTransformUtils::has_null_reject_condition(join_conditions,
+      if (FULL_OUTER_JOIN != helper.parent_table->joined_type_ &&
+          OB_FAIL(ObTransformUtils::has_null_reject_condition(join_conditions,
                                                               old_column_exprs.at(i),
                                                               has_null_reject))) {
         LOG_WARN("failed to check has null reject condition", K(ret));
