@@ -1336,7 +1336,7 @@ int ObBackupMetaIndexMerger::merge_index()
       } else if (OB_FAIL(move_iters_next_(min_iters))) {
         LOG_WARN("failed to move iters next", K(ret), K(min_iters));
       } else {
-        LOG_INFO("meta index merge round", K(count), K(min_iters), K(meta_index));
+        LOG_DEBUG("meta index merge round", K(count), K(min_iters), K(meta_index));
         count++;
       }
     }
