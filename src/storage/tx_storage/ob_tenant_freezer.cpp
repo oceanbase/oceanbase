@@ -95,11 +95,11 @@ int ObTenantFreezer::init()
              KP(GCTX.rs_rpc_proxy_), KP(GCTX.rs_mgr_), K(GCONF.self_addr_));
   } else if (OB_FAIL(freeze_trigger_pool_.init_and_start(FREEZE_TRIGGER_THREAD_NUM))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger pool", KR(ret));
-  } else if (OB_FAIL(freeze_thread_pool_.init_and_start(FREEZE_THREAD_NUM))) {
+  } else if (OB_FAIL(freeze_thread_pool_.init_and_start(
+                 FREEZE_THREAD_NUM, 13 /* queue_size = 2^13(8192) */))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze thread pool", KR(ret));
-  } else if (OB_FAIL(freeze_trigger_timer_.init_and_start(freeze_trigger_pool_,
-                                                          TIME_WHEEL_PRECISION,
-                                                          "FrzTrigger"))) {
+  } else if (OB_FAIL(freeze_trigger_timer_.init_and_start(
+                 freeze_trigger_pool_, TIME_WHEEL_PRECISION, "FrzTrigger"))) {
     LOG_WARN("[TenantFreezer] fail to initialize freeze trigger timer", K(ret));
   } else if (OB_FAIL(rpc_proxy_.init(GCTX.net_frame_->get_req_transport(),
                                      GCONF.self_addr_))) {
