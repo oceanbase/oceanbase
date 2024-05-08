@@ -48,7 +48,7 @@ case ERR_CODE: {                                                \
   break;                                                        \
 }                                                               \
 
-OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_);
+OB_SERIALIZE_MEMBER(ObExprExtraSerializeInfo, *current_time_, *last_trace_id_, *mview_ids_, *last_refresh_scns_);
 
 // 物理分布策略：对于叶子节点，dfo 分布一般直接按照数据分布来
 // Note：如果 dfo 中有两个及以上的 scan，仅仅考虑第一个。并且，要求其余 scan
@@ -1664,6 +1664,8 @@ int ObPxTreeSerializer::serialize_expr_frame_info(char *buf,
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
   expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+  expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+  expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
   // rt exprs
   ObExpr::get_serialize_array() = &exprs;
 
@@ -1830,6 +1832,8 @@ int ObPxTreeSerializer::deserialize_expr_frame_info(const char *buf,
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
   expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+  expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+  expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
   if (OB_FAIL(expr_info.deserialize(buf, data_len, pos))) {
     LOG_WARN("fail to deserialize expr extra info", K(ret));
   } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &expr_cnt))) {
@@ -1960,6 +1964,8 @@ int64_t ObPxTreeSerializer::get_serialize_expr_frame_info_size(
   ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
   expr_info.current_time_ = &plan_ctx->get_cur_time();
   expr_info.last_trace_id_ = &plan_ctx->get_last_trace_id();
+  expr_info.mview_ids_ = &plan_ctx->get_mview_ids();
+  expr_info.last_refresh_scns_ = &plan_ctx->get_last_refresh_scns();
   ObIArray<ObExpr> &exprs = expr_frame_info.rt_exprs_;
   int32_t expr_cnt = expr_frame_info.is_mark_serialize()
       ? expr_frame_info.ser_expr_marks_.count()
