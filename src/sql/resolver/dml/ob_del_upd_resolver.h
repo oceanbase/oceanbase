@@ -254,6 +254,9 @@ protected:
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
   int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
+  int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
+  int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;
   bool is_column_specify_;
