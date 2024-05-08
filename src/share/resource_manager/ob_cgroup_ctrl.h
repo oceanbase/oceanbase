@@ -185,6 +185,9 @@ public:
   // 删除group反应到IO层：停用对应的group结构
   int delete_group_iops(const uint64_t tenant_id,
                         const common::ObString &consumer_group);
+  int get_group_info_by_group_id(const uint64_t tenant_id,
+                                 uint64_t group_id,
+                                 share::ObGroupName &group_name);
 
   class DirProcessor
   {
@@ -221,9 +224,6 @@ private:
       const uint64_t tenant_id,
       uint64_t group_id = OB_INVALID_GROUP_ID,
       const char *base_path = "");
-  int get_group_info_by_group_id(const uint64_t tenant_id,
-                                 uint64_t group_id,
-                                 share::ObGroupName &group_name);
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
   int which_type_dir_(const char *curr_path, int &result);
   int recursion_remove_group_(const char *curr_path);

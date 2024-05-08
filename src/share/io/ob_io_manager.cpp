@@ -1242,11 +1242,10 @@ uint64_t ObTenantIOManager::get_usage_index(const int64_t group_id)
   }
   return index;
 }
+
 void ObTenantIOManager::print_io_status()
 {
-  int ret = OB_SUCCESS;
   if (is_working() && is_inited_) {
-    int64_t tenant_throttled_time = 0;
     char io_status[1024] = { 0 };
     bool need_print_io_config = false;
     ObIOUsage::AvgItems avg_iops, avg_size, avg_rt;
@@ -1259,81 +1258,43 @@ void ObTenantIOManager::print_io_status()
       if (io_config_.group_configs_.at(i-1).deleted_) {
         continue;
       }
-      int tmp_ret = OB_SUCCESS;
-      uint64_t group_id = io_config_.group_ids_.at(i - 1);
-      int64_t current_throttled_time_us = -1;
-      int64_t throttled_time = 0;
-      if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
-        // do nothing
-      } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_id_,
-          current_throttled_time_us,
-          group_id,
-          GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-        LOG_WARN("get throttled time failed", K(tmp_ret), K(tenant_id_), K(group_id), K(i));
-      } else if (current_throttled_time_us > 0) {
-        throttled_time = current_throttled_time_us - io_usage_.group_throttled_time_us_.at(i);
-        tenant_throttled_time += throttled_time;
-        io_usage_.group_throttled_time_us_.at(i) = current_throttled_time_us;
-      }
-
       if (avg_size.at(i).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
-        snprintf(io_status, sizeof(io_status), "group_id: %ld, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
-                 group_id,
+        snprintf(io_status, sizeof(io_status), "group_id: %ld, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f",
+                 io_config_.group_ids_.at(i-1),
                  avg_size.at(i).at(static_cast<int>(ObIOMode::READ)),
                  avg_iops.at(i).at(static_cast<int>(ObIOMode::READ)),
-                 avg_rt.at(i).at(static_cast<int>(ObIOMode::READ)),
-                 throttled_time);
+                 avg_rt.at(i).at(static_cast<int>(ObIOMode::READ)));
         LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
         need_print_io_config = true;
       }
       if (avg_size.at(i).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-        snprintf(io_status, sizeof(io_status), "group_id: %ld, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
-                 group_id,
+        snprintf(io_status, sizeof(io_status), "group_id: %ld, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f",
+                 io_config_.group_ids_.at(i-1),
                  avg_size.at(i).at(static_cast<int>(ObIOMode::WRITE)),
                  avg_iops.at(i).at(static_cast<int>(ObIOMode::WRITE)),
-                 avg_rt.at(i).at(static_cast<int>(ObIOMode::WRITE)),
-                 throttled_time);
+                 avg_rt.at(i).at(static_cast<int>(ObIOMode::WRITE)));
         LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
         need_print_io_config = true;
       }
     }
-
-    int tmp_ret = OB_SUCCESS;
-    int64_t current_throttled_time_us = -1;
-    int64_t throttled_time = 0;
-    if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
-      // do nothing
-    } else if (OB_TMP_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_id_,
-        current_throttled_time_us,
-        USER_RESOURCE_OTHER_GROUP_ID,
-        GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-      LOG_WARN("get other group throttled time failed", K(tmp_ret), K(tenant_id_));
-    } else if (current_throttled_time_us > 0) {
-      throttled_time = current_throttled_time_us - io_usage_.group_throttled_time_us_.at(0);
-      tenant_throttled_time += throttled_time;
-      io_usage_.group_throttled_time_us_.at(0) = current_throttled_time_us;
-    }
-
     // OTHER_GROUPS
     if (avg_size.at(0).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
-      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
+      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode:  read, size: %10.2f, iops: %8.2f, rt: %8.2f",
                0L,
                "OTHER_GROUPS",
                avg_size.at(0).at(static_cast<int>(ObIOMode::READ)),
                avg_iops.at(0).at(static_cast<int>(ObIOMode::READ)),
-               avg_rt.at(0).at(static_cast<int>(ObIOMode::READ)),
-               throttled_time);
+               avg_rt.at(0).at(static_cast<int>(ObIOMode::READ)));
       LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
       need_print_io_config = true;
     }
     if (avg_size.at(0).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f, throttled_time: %ld",
+      snprintf(io_status, sizeof(io_status), "group_id: %ld, group_name: %s, mode: write, size: %10.2f, iops: %8.2f, rt: %8.2f",
                0L,
                "OTHER_GROUPS",
                avg_size.at(0).at(static_cast<int>(ObIOMode::WRITE)),
                avg_iops.at(0).at(static_cast<int>(ObIOMode::WRITE)),
-               avg_rt.at(0).at(static_cast<int>(ObIOMode::WRITE)),
-               throttled_time);
+               avg_rt.at(0).at(static_cast<int>(ObIOMode::WRITE)));
       LOG_INFO("[IO STATUS]", K_(tenant_id), KCSTRING(io_status));
       need_print_io_config = true;
     }
@@ -1374,7 +1335,7 @@ void ObTenantIOManager::print_io_status()
       LOG_INFO("[IO STATUS CONFIG]", K_(tenant_id), K_(ref_cnt), K_(io_config),
           "allocated_memory", io_allocator_.get_allocated_size(),
           "pre_allocated_count", io_allocator_.get_pre_allocated_count(),
-          "callback_queues", queue_count_array, K(tenant_throttled_time));
+          "callback_queues", queue_count_array);
     }
     if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {
       io_tracer_.print_status();
@@ -1396,4 +1357,27 @@ void ObTenantIOManager::dec_ref()
     LOG_ERROR("bug: ref_cnt < 0", K(ret), K(tmp_ref));
     abort();
   }
+}
+
+int ObTenantIOManager::get_throttled_time(uint64_t group_id, int64_t &throttled_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_throttled_time_us = -1;
+  if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_id_,
+                 current_throttled_time_us,
+                 group_id,
+                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN("get throttled time failed", K(ret), K(tenant_id_), K(group_id));
+  } else if (current_throttled_time_us > 0) {
+    uint64_t idx = 0;
+    if (OB_FAIL(get_group_index(group_id, idx))) {
+      LOG_WARN("get group index failed", K(ret), K(group_id));
+    } else {
+      throttled_time = current_throttled_time_us - io_usage_.group_throttled_time_us_.at(idx);
+      io_usage_.group_throttled_time_us_.at(idx) = current_throttled_time_us;
+    }
+  }
+  return ret;
 }

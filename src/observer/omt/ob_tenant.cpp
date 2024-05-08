@@ -604,6 +604,24 @@ int ObResourceGroup::clear_worker()
   return ret;
 }
 
+int ObResourceGroup::get_throttled_time(int64_t &throttled_time)
+{
+  int ret = OB_SUCCESS;
+  int64_t current_throttled_time_us = -1;
+  if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
+    // do nothing
+  } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_throttled_time(tenant_->id(),
+                 current_throttled_time_us,
+                 group_id_,
+                 GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+    LOG_WARN("get throttled time failed", K(ret), K(tenant_->id()), K(group_id_));
+  } else if (current_throttled_time_us > 0) {
+    throttled_time = current_throttled_time_us - throttled_time_us_;
+    throttled_time_us_ = current_throttled_time_us;
+  }
+  return ret;
+}
+
 int GroupMap::create_and_insert_group(int32_t group_id, ObTenant *tenant, ObCgroupCtrl *cgroup_ctrl, ObResourceGroup *&group)
 {
   int ret = OB_SUCCESS;
@@ -1576,6 +1594,72 @@ int ObTenant::timeup()
     IGNORE_RETURN unlock(handle);
   }
   return OB_SUCCESS;
+}
+
+void ObTenant::print_throttled_time()
+{
+  class ThrottledTimeLog
+  {
+  public:
+    ThrottledTimeLog(ObTenant *tenant) : tenant_(tenant)
+    {}
+    ~ThrottledTimeLog()
+    {}
+    int64_t to_string(char *buf, const int64_t len) const
+    {
+      int64_t pos = 0;
+      int tmp_ret = OB_SUCCESS;
+      int64_t tenant_throttled_time = 0;
+      int64_t group_throttled_time = 0;
+      ObResourceGroupNode *iter = NULL;
+      ObResourceGroup *group = nullptr;
+      ObCgSet &set = ObCgSet::instance();
+      while (NULL != (iter = tenant_->group_map_.quick_next(iter))) {
+        group = static_cast<ObResourceGroup *>(iter);
+        if (OB_TMP_FAIL(group->get_throttled_time(group_throttled_time))) {
+          LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group));
+        } else {
+          tenant_throttled_time += group_throttled_time;
+          databuff_printf(buf, len, pos, "group: %s, throttled_time: %ld;", set.name_of_id(group->group_id_), group_throttled_time);
+        }
+      }
+
+      share::ObGroupName g_name;
+      ObRefHolder<ObTenantIOManager> tenant_holder;
+      if (OB_TMP_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_->id_, tenant_holder))) {
+        LOG_WARN_RET(tmp_ret, "get tenant io manager failed", K(tmp_ret), K(tenant_->id_));
+      } else {
+        for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
+          uint64_t group_id = OB_INVALID_GROUP_ID;
+          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_) {
+            group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
+          }
+          if (!is_user_group(group_id)) {
+            // do nothing
+          } else if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(i, group_throttled_time))) {
+            LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(i));
+          } else if (OB_TMP_FAIL(tenant_->cgroup_ctrl_.get_group_info_by_group_id(tenant_->id_, group_id, g_name))) {
+            LOG_WARN_RET(tmp_ret, "get group_name by id failed", K(tmp_ret), K(group_id));
+          } else {
+            tenant_throttled_time += group_throttled_time;
+            databuff_printf(buf,
+                len,
+                pos,
+                "group: %.*s, throttled_time: %ld;",
+                g_name.get_value().length(),
+                g_name.get_value().ptr(),
+                group_throttled_time);
+          }
+        }
+      }
+      databuff_printf(
+          buf, len, pos, "tenant_id: %lu, tenant_throttled_time: %ld;", tenant_->id_, tenant_throttled_time);
+      return pos;
+    }
+    ObTenant *tenant_;
+  };
+  ThrottledTimeLog throttled_time_log(this);
+  LOG_INFO("dump throttled time info", K(id_), K(throttled_time_log));
 }
 
 void ObTenant::handle_retry_req(bool need_clear)
