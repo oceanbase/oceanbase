@@ -1221,7 +1221,7 @@ int ObTmpFile::sync(const int64_t timeout_ms)
     // all extents has been closed.
     const ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
     common::hash::ObHashSet<int64_t> blk_id_set;
-    if (OB_FAIL(blk_id_set.create(extents.count()))){
+    if (OB_FAIL(blk_id_set.create(min(extents.count(), 1024 * 1024)))){
       STORAGE_LOG(WARN, "create block id set failed", K(ret), K(timeout_ms));
     } else {
       // get extents block id set.
