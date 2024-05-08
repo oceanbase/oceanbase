@@ -362,7 +362,8 @@ ObGCHandler::ObGCHandler() : is_inited_(false),
                              gc_start_ts_(OB_INVALID_TIMESTAMP),
                              block_tx_ts_(OB_INVALID_TIMESTAMP),
                              block_log_debug_time_(OB_INVALID_TIMESTAMP),
-                             log_sync_stopped_(false)
+                             log_sync_stopped_(false),
+                             last_print_dba_log_ts_(OB_INVALID_TIMESTAMP)
 {
 }
 
@@ -374,6 +375,7 @@ ObGCHandler::~ObGCHandler()
 void ObGCHandler::reset()
 {
   WLockGuard wlock_guard(rwlock_);
+  last_print_dba_log_ts_ = OB_INVALID_TIMESTAMP;
   gc_seq_invalid_member_ = -1;
   ls_ = NULL;
   gc_start_ts_ = OB_INVALID_TIMESTAMP;
@@ -952,6 +954,7 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
   palf::LSN lsn;
   SCN scn;
   ObMemAttr attr(MTL_ID(), ObModIds::OB_GC_LOG_BUFF);
+  int64_t start_ts = ObTimeUtility::current_time();
   if (OB_ISNULL(ls_)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ls is NULL");
@@ -975,6 +978,7 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
     // 此处需要考虑能否做成异步
     int64_t retry_cnt = 0;
     const int64_t WAIT_TIME = 100; // us
+    constexpr int64_t MIN = 60 * 1000 * 1000;
     bool is_finished = false;
     while (!is_finished) {
       if (cb.is_succeed()) {
@@ -990,6 +994,11 @@ int ObGCHandler::submit_log_(const ObGCLSLOGType log_type, bool &is_success)
         retry_cnt++;
         if (retry_cnt % 1000 == 0) {
           CLOG_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "GC ls log wait cb too much time", K(retry_cnt), K(log_type));
+        }
+        int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
+        if (cost_ts >= 10 * MIN && palf_reach_time_interval(10 * MIN, last_print_dba_log_ts_)) {
+          LOG_DBA_ERROR(OB_ERR_TOO_MUCH_TIME, "msg", "wait log sync cost too much time, can not drop replica!!!",
+                        K(start_ts), K(cost_ts));
         }
       }
     }
@@ -1179,13 +1188,15 @@ int ObGCHandler::diagnose(GCDiagnoseInfo &diagnose_info) const
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     CLOG_LOG(WARN, "GC handler not init");
-  } else {
-    RLockGuard wlock_guard(rwlock_);
+  } else if (true == rwlock_.try_rdlock()){
     if (OB_FAIL(ls_->get_gc_state(diagnose_info.gc_state_))) {
       CLOG_LOG(WARN, "get_gc_state failed", K(ls_->get_ls_id()));
     } else {
       diagnose_info.gc_start_ts_ = gc_start_ts_;
     }
+    rwlock_.unlock();
+  } else {
+    CLOG_LOG(WARN, "try_lock failed", KP(ls_));
   }
   return ret;
 }
