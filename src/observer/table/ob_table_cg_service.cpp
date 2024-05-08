@@ -17,6 +17,7 @@
 #include "share/system_variable/ob_system_variable.h" // for ObBinlogRowImage::FULL
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h" // for ObAutoincNextvalExtra
 #include "sql/resolver/dml/ob_delete_resolver.h"  // for resolve partition expr
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
