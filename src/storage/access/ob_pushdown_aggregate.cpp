@@ -938,7 +938,7 @@ int ObCountAggCell::eval_micro_block(
     if (OB_ISNULL(row_ids)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected, row_ids is null", K(ret), KPC(this), K(row_count));
-    } else if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, valid_row_count))) {
+    } else if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, basic_info_.col_param_, valid_row_count))) {
       LOG_WARN("Failed to get row count from micro block decoder", K(ret), KPC(this), K(row_count));
     } else {
       row_count_ += valid_row_count;
@@ -1859,7 +1859,7 @@ int ObSumOpSizeAggCell::eval_micro_block(
       if (OB_ISNULL(row_ids)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected, row_ids is null", K(ret), KPC(this), K(row_count));
-      } else if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, valid_row_count))) {
+      } else if (OB_FAIL(reader->get_row_count(col_offset, row_ids, row_count, false, basic_info_.col_param_, valid_row_count))) {
         LOG_WARN("Failed to get row count from micro block decoder", K(ret), KPC(this), K(row_count));
       } else {
         total_size_ += (row_count - valid_row_count) * sizeof(ObDatum) + valid_row_count * op_size_;
@@ -3146,6 +3146,10 @@ int ObFirstRowAggCell::eval_micro_block(
       blocksstable::ObStorageDatum datum;
       if (OB_FAIL(reader->get_column_datum(iter_param, context, *basic_info_.col_param_, col_offset, row_ids[0], datum))) {
         LOG_WARN("Failed to get first datum", K(ret), K(col_offset), K(row_ids[0]), K(row_count));
+      } else if (OB_FAIL(fill_default_if_need(datum))) {
+        LOG_WARN("Failed to fill default", K(ret), KPC(this));
+      } else if (OB_FAIL(pad_column_if_need(datum))) {
+        LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(datum));
       } else if (OB_FAIL(result_datum_.deep_copy(datum, datum_allocator_))) {
         LOG_WARN("Failed to deep copy datum", K(ret), K(datum));
       } else {

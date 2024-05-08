@@ -1599,8 +1599,9 @@ int ObMicroBlockCSDecoder::get_rows(
 }
 
 int ObMicroBlockCSDecoder::get_row_count(int32_t col_id, const int64_t *row_ids,
-  const int64_t row_cap, const bool contains_null, int64_t &count)
+  const int64_t row_cap, const bool contains_null, const share::schema::ObColumnParam *col_param, int64_t &count)
 {
+  UNUSED(col_param);
   int ret = OB_SUCCESS;
   decoder_allocator_.reuse();
   if (IS_NOT_INIT) {
