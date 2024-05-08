@@ -6137,7 +6137,8 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
   OZ (cur_stmt_tables_.assign(saved_value.cur_stmt_tables_));
   OZ (total_stmt_tables_.assign(saved_value.total_stmt_tables_));
 //OX (thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_);
-  int64_t len = MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1);
+  // 4013 scene, len may be -1, illegal.
+  int64_t len = MAX(MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1), 0);
   OX (thread_data_.cur_query_len_ = len);
   if (thread_data_.cur_query_ != nullptr) {
     OX (MEMCPY(thread_data_.cur_query_, saved_value.cur_query_, len));
