@@ -51,7 +51,6 @@ typedef struct pn_grp_comm_t
 
 #define PN_COMM                \
   bool is_stop_;               \
-  bool has_stopped_;           \
   void *pd;                    \
   int accept_qfd;              \
   int gid;                     \
