@@ -502,7 +502,7 @@ int ObDataBackupDestConfigParser::update_inner_config_table(common::ObISQLClient
     }
   }
   
-  if (OB_FAIL(update_data_backup_dest_config_(trans))) {
+  if (FAILEDx(update_data_backup_dest_config_(trans))) {
     LOG_WARN("fail to update data backup dest config", K(ret), K_(tenant_id));
   } else {
     LOG_INFO("succeed to set backup dest", K(ret), KPC(this));
