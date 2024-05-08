@@ -1465,6 +1465,10 @@ constexpr int OB_TRANSFER_CANNOT_START = -7123;
 constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
 constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
 constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
+constexpr int OB_ERR_OPERATOR_NOT_EXIST = -7298;
+constexpr int OB_INVALID_MASK = -7299;
+constexpr int OB_GEO_IN_DIFFERENT_COORDINATE = -7300;
+constexpr int OB_ERR_DOMAIN_COLUMN_DUPLICATE = -7301;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -3676,6 +3680,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_VALUE_NOT_ALLOWED__USER_ERROR_MSG "value not allowed"
+#define OB_ERR_OPERATOR_NOT_EXIST__USER_ERROR_MSG "operator binding does not exist"
+#define OB_INVALID_MASK__USER_ERROR_MSG "operator binding does not exist"
+#define OB_GEO_IN_DIFFERENT_COORDINATE__USER_ERROR_MSG "geometry objects are in different coordinate systems"
+#define OB_ERR_DOMAIN_COLUMN_DUPLICATE__USER_ERROR_MSG "cannot create multiple domain indexes on a column list using same"
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "XPATH syntax error: ''"
@@ -5917,7 +5925,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CANT_CREATE_GEOMETRY_OBJECT__ORA_USER_ERROR_MSG "ORA-00600: Cannot get geometry object from data you send to the GEOMETRY field."
 #define OB_ERR_SRID_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of srid."
 #define OB_ERR_INDEX_ORDER_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of spatial/fulltext/hash index and explicit index order."
-#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__ORA_USER_ERROR_MSG "ORA-00600: A SPATIAL index may only contain a geometrical type column."
+#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__ORA_USER_ERROR_MSG "ORA-13249: A SPATIAL index may only contain a geometrical type column."
 #define OB_ERR_SPATIAL_CANT_HAVE_NULL__ORA_USER_ERROR_MSG "ORA-00600: All parts of a SPATIAL index must be NOT NULL."
 #define OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: The index type %s is not supported for spatial indexes."
 #define OB_ERR_UNIT_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: There\'s no unit of measure named \'%s\'."
@@ -5936,6 +5944,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__ORA_USER_ERROR_MSG "ORA-13033: Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__ORA_USER_ERROR_MSG "ORA-13034: Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_VALUE_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-24323: value not allowed"
+#define OB_ERR_OPERATOR_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-29900: operator binding does not exist"
+#define OB_INVALID_MASK__ORA_USER_ERROR_MSG "ORA-20000: operator binding does not exist"
+#define OB_GEO_IN_DIFFERENT_COORDINATE__ORA_USER_ERROR_MSG "ORA-13295: geometry objects are in different coordinate systems"
+#define OB_ERR_DOMAIN_COLUMN_DUPLICATE__ORA_USER_ERROR_MSG "ORA-29879: cannot create multiple domain indexes on a column list using same"
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -6405,7 +6417,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2256];
+extern int g_all_ob_errnos[2260];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
