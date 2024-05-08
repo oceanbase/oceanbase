@@ -3499,6 +3499,10 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
   ObPLCursorInfo *cursor = NULL;
   ObObjParam cursor_var;
   ObCusorDeclareLoc loc;
+  ObExecRecord exec_record;
+  ObExecTimestamp exec_timestamp;
+  ObSPITimeRecord time_record;
+  exec_timestamp.exec_type_ = sql::PLSql;
   if (OB_ISNULL(ctx)
      || OB_ISNULL(ctx->exec_ctx_)
      || OB_ISNULL(session_info = ctx->exec_ctx_->get_my_session())
@@ -3574,6 +3578,21 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
           int64_t tenant_version = 0;
           int64_t sys_version = 0;
           do {
+            ObWaitEventDesc max_wait_desc;
+            ObWaitEventStat total_wait_desc;
+            const bool enable_perf_event = lib::is_diagnose_info_enabled();
+            const bool enable_sql_audit =
+              GCONF.enable_sql_audit && session_info->get_local_ob_enable_sql_audit();
+            bool need_destruct = false;
+          {
+            ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
+            ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
+            if (enable_perf_event) {
+              exec_record.record_start();
+            }
+            //监控项统计开始
+            time_record.set_send_timestamp(ObTimeUtility::current_time());
+
             ret = OB_SUCCESS;
             // 如果当前cursor已经有spi_result则复用,避免内存占用过多
             retry_ctrl.clear_state_before_each_retry(session_info->get_retry_info_for_update());
@@ -3632,7 +3651,6 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                   spi_result->get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
               OZ (cursor->set_and_register_snapshot(snapshot));
             }
-            bool need_destruct = false;
             if (OB_FAIL(ret) && OB_NOT_NULL(spi_result)) {
               int tmp_ret = ret;
               ret = OB_SUCCESS;
@@ -3660,6 +3678,42 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                 }
               }
             }
+            LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
+            //监控项统计结束
+            time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+            if (enable_perf_event) {
+              exec_record.record_end();
+            }
+          }
+            // 处理监控统计项
+            if (OB_NOT_NULL(spi_result->get_result_set())) {
+              if (spi_result->get_result_set()->is_inited()) {
+                ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+                int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+                ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+                session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+                ObInnerSQLConnection::process_record(*spi_result->get_result_set(),
+                                                      spi_result->get_sql_ctx(),
+                                                      *session_info,
+                                                      time_record,
+                                                      ret,
+                                                      session_info->get_current_execution_id(), // sql execute id
+                                                      OB_INVALID_ID,
+                                                      max_wait_desc,
+                                                      total_wait_desc,
+                                                      exec_record,
+                                                      exec_timestamp,
+                                                      true,
+                                                      sql != NULL ? sql : ps_sql,
+                                                      true,
+                                                      spi_result->get_exec_params_str_ptr());
+                session_info->get_raw_audit_record().exec_record_ = record_bk;
+                session_info->get_raw_audit_record().try_cnt_ = try_cnt;
+              } else {
+                LOG_DEBUG("result set is not inited, do not process record",
+                          K(ret), K(ps_sql), K(sql), K(type));
+              }
+            }
             if (need_destruct) {
               spi_result->~ObSPIResultSet();
             }
@@ -3681,6 +3735,19 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             int64_t sys_version = 0;
             bool is_retry = false;
             do {
+              ObWaitEventDesc max_wait_desc;
+              ObWaitEventStat total_wait_desc;
+              const bool enable_perf_event = lib::is_diagnose_info_enabled();
+              const bool enable_sql_audit =
+                GCONF.enable_sql_audit && session_info->get_local_ob_enable_sql_audit();
+              {
+              ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL);
+              ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL);
+              if (enable_perf_event) {
+                exec_record.record_start();
+              }
+              //监控项统计开始
+              time_record.set_send_timestamp(ObTimeUtility::current_time());
               ret = OB_SUCCESS;
               if (is_retry) {
                 spi_result.get_out_params().reset();
@@ -3754,7 +3821,42 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
                   spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
                 OZ (cursor->set_and_register_snapshot(snapshot));
               }
-
+              LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
+              //监控项统计结束
+              time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
+              if (enable_perf_event) {
+                exec_record.record_end();
+              }
+              }
+              // 处理监控统计项
+              if (OB_NOT_NULL(spi_result.get_result_set())) {
+                if (spi_result.get_result_set()->is_inited()) {
+                  ObSQLSessionInfo *session_info = ctx->exec_ctx_->get_my_session();
+                  int64_t try_cnt = session_info->get_raw_audit_record().try_cnt_;
+                  ObExecRecord record_bk = session_info->get_raw_audit_record().exec_record_;
+                  session_info->get_raw_audit_record().try_cnt_ = retry_ctrl.get_retry_times();
+                  ObInnerSQLConnection::process_record(*spi_result.get_result_set(),
+                                                        spi_result.get_sql_ctx(),
+                                                        *session_info,
+                                                        time_record,
+                                                        ret,
+                                                        session_info->get_current_execution_id(), // sql execute id
+                                                        OB_INVALID_ID,
+                                                        max_wait_desc,
+                                                        total_wait_desc,
+                                                        exec_record,
+                                                        exec_timestamp,
+                                                        true,
+                                                        sql != NULL ? sql : ps_sql,
+                                                        true,
+                                                        spi_result.get_exec_params_str_ptr());
+                  session_info->get_raw_audit_record().exec_record_ = record_bk;
+                  session_info->get_raw_audit_record().try_cnt_ = try_cnt;
+                } else {
+                  LOG_DEBUG("result set is not inited, do not process record",
+                            K(ret), K(ps_sql), K(sql), K(type));
+                }
+              }
               int close_ret = spi_result.close_result_set();
               if (OB_SUCCESS != close_ret) {
                 LOG_WARN("close mysql result failed", K(ret), K(close_ret));
