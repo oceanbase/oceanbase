@@ -619,7 +619,11 @@ int ObDASDataEraseReq::init(const uint64_t tenant_id, const int64_t task_id)
 OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
                     datum_store_,
                     tenant_id_, task_id_, has_more_,
-                    enable_rich_format_, vec_row_store_);
+                    enable_rich_format_, vec_row_store_,
+                    io_read_bytes_,
+                    ssstore_read_bytes_,
+                    ssstore_read_row_cnt_,
+                    memstore_read_row_cnt_);
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
@@ -627,7 +631,11 @@ ObDASDataFetchRes::ObDASDataFetchRes()
           task_id_(0),
           has_more_(false),
           enable_rich_format_(false),
-          vec_row_store_()
+          vec_row_store_(),
+          io_read_bytes_(0),
+          ssstore_read_bytes_(0),
+          ssstore_read_row_cnt_(0),
+          memstore_read_row_cnt_(0)
 {
 }
 

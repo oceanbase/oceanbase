@@ -566,7 +566,9 @@ public:
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
   int64_t get_task_id() const { return task_id_; }
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store));
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store),
+               K_(io_read_bytes), K_(ssstore_read_bytes),
+               K_(ssstore_read_row_cnt), K_(memstore_read_row_cnt));
 private:
   ObChunkDatumStore datum_store_;
   uint64_t tenant_id_;
@@ -574,6 +576,10 @@ private:
   bool has_more_;
   bool enable_rich_format_;
   ObTempRowStore vec_row_store_;
+  int64_t io_read_bytes_;
+  int64_t ssstore_read_bytes_;
+  int64_t ssstore_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
 };
 
 class ObDASDataEraseReq
