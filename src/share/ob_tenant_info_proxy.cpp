@@ -453,25 +453,31 @@ int ObAllTenantInfoProxy::update_tenant_recovery_status_in_trans(
       LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
     } else {
       const int64_t MAX_GAP = tenant_config->_standby_max_replay_gap_time * 1000;
-      const int64_t REAL_GAP = new_replayable_scn.get_val_for_gts() - new_readable_scn.get_val_for_gts();
-      const bool IS_MAX_GAP_REACHED = REAL_GAP > MAX_GAP ? true : false;
       SCN new_readable_scn_plus_gap;
       new_readable_scn_plus_gap = SCN::plus(new_readable_scn, MAX_GAP);
       if (REACH_TENANT_TIME_INTERVAL(10 * 1000 * 1000)) { // 10s
+        const int64_t REAL_GAP = new_replayable_scn.get_val_for_gts() - new_readable_scn.get_val_for_gts();
+        const bool IS_MAX_GAP_REACHED = REAL_GAP > MAX_GAP ? true : false;
         LOG_INFO("tenant scn gap info", K(IS_MAX_GAP_REACHED), K(REAL_GAP), K(MAX_GAP), K(new_sync_scn),
             K(new_replayable_scn), K(new_readable_scn), K(old_tenant_info));
       }
       if (!old_tenant_info.is_primary()
+          && !old_tenant_info.get_max_ls_id().is_sys_ls()
           && new_replayable_scn.is_valid()
           && new_readable_scn_plus_gap.is_valid()
-          && new_replayable_scn > new_readable_scn_plus_gap) {
-        if (new_readable_scn_plus_gap >= old_tenant_info.get_replayable_scn()
-            && old_tenant_info.get_readable_scn() > SCN::base_scn()) {
-          // sys ls's readable_scn starts from base_scn
-          // replayable_scn cannot start from base_scn, it's too slow when restore tenant
-          // at the beginning time, replayable_scn should be sync_scn
-          new_replayable_scn = new_readable_scn_plus_gap;
-        }
+          && new_replayable_scn > new_readable_scn_plus_gap
+          && new_readable_scn_plus_gap >= old_tenant_info.get_replayable_scn()
+          && old_tenant_info.get_readable_scn() > SCN::base_scn()) {
+        // condition: !old_tenant_info.get_max_ls_id().is_sys_ls()
+        // If max_ls_id is sys ls, this logic is not needed.
+        // The goal of this logic is to minimize the difference of readable_scn among multiple ls
+
+        // condition: old_tenant_info.get_readable_scn() > SCN::base_scn()
+        // This condition is for restore tenant
+        // sys ls's readable_scn starts from base_scn
+        // replayable_scn cannot start from base_scn, it's too slow when we restore tenant
+        // At the beginning time, replayable_scn should be sync_scn
+        new_replayable_scn = new_readable_scn_plus_gap;
       }
     }
     if (old_tenant_info.get_sync_scn() == new_sync_scn
