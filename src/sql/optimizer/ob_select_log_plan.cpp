@@ -7138,6 +7138,10 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     table_scan->set_output_row_count(1.0);
     table_scan->set_phy_query_range_row_count(1.0);
     table_scan->set_query_range_row_count(1.0);
+    table_scan->set_parallel(index_scan->get_parallel());
+    table_scan->set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
+    table_scan->set_available_parallel(index_scan->get_available_parallel()),
+    table_scan->set_server_cnt(index_scan->get_server_cnt());
     table_get = table_scan;
   }
   return ret;
@@ -7246,6 +7250,10 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
       join->set_strong_sharding(left_child->get_sharding());
       join->set_interesting_order_info(left_child->get_interesting_order_info());
       join->set_fd_item_set(&left_child->get_fd_item_set());
+      // set parallel info
+      join->set_parallel(left_child->get_parallel());
+      join->set_available_parallel(left_child->get_available_parallel()),
+      join->set_server_cnt(left_child->get_server_cnt());
       join_op = join;
     }
   }
