@@ -831,7 +831,7 @@ int ObCdcFetcher::check_lag_follower_(const ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   ObRole role = INVALID_ROLE;
-  bool is_in_sync = true;
+  bool is_in_sync = false;
   int64_t leader_epoch = OB_INVALID_TIMESTAMP;
   if (OB_FAIL(check_ls_sync_status_(ls_id, palf_handle_guard, role, is_in_sync))) {
     LOG_WARN("failed to check ls sync status", K(ls_id), K(role), K(is_in_sync));
@@ -863,7 +863,6 @@ int ObCdcFetcher::check_ls_sync_status_(const ObLSID &ls_id,
     storage::ObLSHandle ls_handle;
     ObLS *ls = NULL;
     logservice::ObLogHandler *log_handler = NULL;
-    bool is_sync = false;
     bool is_need_rebuild = false;
 
     if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
@@ -874,8 +873,8 @@ int ObCdcFetcher::check_ls_sync_status_(const ObLSID &ls_id,
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log_handler is NULL", KR(ret), K(ls_id));
-    } else if (OB_FAIL(log_handler->is_in_sync(is_sync, is_need_rebuild))) {
-      LOG_WARN("log_handler is_in_sync fail", KR(ret), K(ls_id), K(is_sync));
+    } else if (OB_FAIL(log_handler->is_in_sync(in_sync, is_need_rebuild))) {
+      LOG_WARN("log_handler is_in_sync fail", KR(ret), K(ls_id), K(in_sync));
     }
   } else {
     // leader must be in_sync
