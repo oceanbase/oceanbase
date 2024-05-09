@@ -864,8 +864,13 @@ eval alter tenant mysql set primary_zone = "$saved_primary_zone";
 
 if ($client_session_id_version == 2) {
 --disable_query_log
-  eval alter proxyconfig set proxy_id = $proxy_id;
+# **Note**
+# must recover client_session_id_version before recover proxy_id
+# otherwise, will report:
+# ERROR:
+#   When reset client_session_id_version to v1, proxy_id must be set to less than 255
   alter proxyconfig set client_session_id_version = 2;
+  eval alter proxyconfig set proxy_id = $proxy_id;
 --enable_query_log
 }
 

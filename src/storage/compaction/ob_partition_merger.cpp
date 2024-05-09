@@ -686,6 +686,7 @@ int ObPartitionMajorMerger::merge_partition(
         } else if (0 == minimum_iters_.count()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected minimum_iters_ is null", K(ret));
+        } else if (FALSE_IT(set_base_iter(minimum_iters_))) {
         } else if (merge_helper_->is_need_skip()) {
           //move purge iters
           if (OB_FAIL(merge_helper_->move_iters_next(minimum_iters_))) {
@@ -1036,6 +1037,7 @@ int ObPartitionMinorMerger::merge_partition(
       } else if (rowkey_minimum_iters.empty()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected rowkey_minimum_iters is null", K(ret));
+      } else if (FALSE_IT(set_base_iter(rowkey_minimum_iters))) {
       } else if (1 == rowkey_minimum_iters.count()
           && nullptr == rowkey_minimum_iters.at(0)->get_curr_row()) {
         // only one iter, output its' macro block

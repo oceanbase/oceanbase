@@ -153,8 +153,10 @@ public:
                                             bool use_wrapper);
   static int get_error_option(int8_t &error_type, ObIJsonBase *&error_val, ObIJsonBase *jb_arr, ObIJsonBase *jb_obj, bool &is_null);
   static int get_mismatch_option(int8_t &mismatch_type, int &ret);
-  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);  static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
- /* code from ob_expr_cast for cal_result_type */
+  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);
+  static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
+  static int check_data_type_allowed(const ObExprResType* types_stack, const ObExprResType& data_type);
+  /* code from ob_expr_cast for cal_result_type */
   const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
 
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonQuery);

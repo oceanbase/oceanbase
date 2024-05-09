@@ -59,6 +59,15 @@ int ObDirectLoadInsertTableRowIterator::inner_init(
 int ObDirectLoadInsertTableRowIterator::get_next_row(const ObDatumRow *&result_row)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(get_next_row(false, result_row))) {
+    LOG_WARN("fail to get next row", KR(ret));
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTableRowIterator::get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&result_row)
+{
+  int ret = OB_SUCCESS;
   result_row = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -73,7 +82,7 @@ int ObDirectLoadInsertTableRowIterator::get_next_row(const ObDatumRow *&result_r
                OB_FAIL(insert_tablet_ctx_->get_table_ctx()->update_sql_statistics(*sql_statistics_,
                                                                                   *datum_row))) {
       LOG_WARN("fail to update sql statistics", KR(ret));
-    } else if (insert_tablet_ctx_->has_lob_storage() && OB_FAIL(handle_lob(*datum_row))) {
+    } else if ((insert_tablet_ctx_->has_lob_storage() && !skip_lob) && OB_FAIL(handle_lob(*datum_row))) {
       LOG_WARN("fail to handle lob", KR(ret));
     } else {
       result_row = datum_row;

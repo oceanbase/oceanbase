@@ -541,6 +541,63 @@ TEST_F(TestObSimpleLogClusterRestart, restart_and_clear_tmp_files)
   PALF_LOG(INFO, "end test restart", K(id), K(guard));
 }
 
+TEST_F(TestObSimpleLogClusterRestart, test_with_tmp_dir)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_with_tmp_dir");
+  OB_LOGGER.set_log_level("INFO");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  PALF_LOG(INFO, "start advance_base_lsn", K(id));
+  int64_t leader_idx = 0;
+  int64_t log_ts = 1;
+  ObServerLogBlockMgr *log_pool = nullptr;
+  std::string logserver_dir;
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+    EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
+    logserver_dir = leader.palf_env_impl_->log_dir_;
+    sleep(2);
+    LSN log_tail =
+        leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_;
+    int count = (LSN(PALF_META_BLOCK_SIZE) - log_tail)/4096;
+    for (int64_t i = 0; i < count; i++) {
+      EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->enable_vote());
+    }
+    while (LSN(PALF_META_BLOCK_SIZE) !=
+        leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_)
+    {
+      sleep(1);
+    }
+    sleep(1);
+    EXPECT_EQ(LSN(PALF_META_BLOCK_SIZE), leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->log_engine_.log_meta_storage_.block_mgr_.switch_next_block(1));
+    ObISimpleLogServer *i_server = get_cluster()[leader_idx];
+    ObSimpleLogServer *server = dynamic_cast<ObSimpleLogServer*>(i_server);
+    log_pool = &server->log_block_pool_;
+  }
+  const std::string log_pool_dir = log_pool->log_pool_path_;
+  std::size_t pos = log_pool_dir.find_last_of('/');
+  const std::string log_base_dir = log_pool_dir.substr(0, pos);
+  const std::string mkdir_unexpected_dir = "mkdir -p " + log_base_dir + "/unexpected_dir";
+  CLOG_LOG(INFO, "runlin trace print mkdir", K(mkdir_unexpected_dir.c_str()));
+  system(mkdir_unexpected_dir.c_str());
+  EXPECT_EQ(OB_ERR_UNEXPECTED, restart_paxos_groups());
+  const std::string rm_unexpected_dir = "rm -rf " + log_base_dir + "/unexpected_dir";
+  system(rm_unexpected_dir.c_str());
+  const std::string tmp_log_dir = logserver_dir + "/tmp_dir";
+  const std::string mkdir_tmp_log_dir = "mkdir -p " + tmp_log_dir;
+  system(mkdir_tmp_log_dir.c_str());
+  EXPECT_EQ(OB_SUCCESS, restart_paxos_groups());
+  {
+    PalfHandleImplGuard leader;
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_LT(LSN(PALF_META_BLOCK_SIZE), leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->set_base_lsn(LSN(0)));
+    sleep(1);
+    EXPECT_LT(LSN(PALF_META_BLOCK_SIZE) + 4096, leader.palf_handle_impl_->log_engine_.log_meta_storage_.log_tail_);
+  }
+}
+
 } // namespace unittest
 } // namespace oceanbase
 

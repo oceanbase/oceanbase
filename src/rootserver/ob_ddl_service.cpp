@@ -5178,6 +5178,7 @@ int ObDDLService::check_alter_table_constraint(
   const ObAlterTableArg::AlterConstraintType type = alter_table_arg.alter_constraint_type_;
   bool change_cst_column_name = false;
   bool is_alter_decimal_int_offline = false;
+  bool is_column_group_store = false;
   switch(type) {
     case obrpc::ObAlterTableArg::ADD_CONSTRAINT:
     case obrpc::ObAlterTableArg::ALTER_CONSTRAINT_STATE: {
@@ -5201,8 +5202,15 @@ int ObDDLService::check_alter_table_constraint(
     }
     // to avoid ddl type being modified from DROP_COLUMN to NORMAL_TYPE
     case obrpc::ObAlterTableArg::DROP_CONSTRAINT: {
+      bool is_drop_col_only = false;
       if (ObDDLType::DDL_DROP_COLUMN == ddl_type) {
         // In oracle mode, we support to drop constraint implicitly caused by drop column.
+      } else if (OB_FAIL(ObCODDLUtil::need_column_group_store(orig_table_schema, is_column_group_store))) {
+        LOG_WARN("fail to check schema is column group store", K(ret));
+      } else if (OB_FAIL(ObSchemaUtils::is_drop_column_only(alter_table_arg.alter_table_schema_, is_drop_col_only))) {
+        LOG_WARN("fail to check is drop column only", K(ret), K(alter_table_arg.alter_table_schema_));
+      } else if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type && is_drop_col_only && is_column_group_store) {
+        // for column store, drop column is table redefinition
       } else if (OB_FAIL(check_is_alter_decimal_int_offline(ddl_type,
                                                             orig_table_schema,
                                                             alter_table_arg.alter_table_schema_,
@@ -6585,7 +6593,7 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               bool has_index_task = false;
               typedef common::ObSEArray<share::schema::ObTableSchema, 4> TableSchemaArray;
               SMART_VAR(TableSchemaArray, new_index_schemas) {
-                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_task(
+                if (!drop_index_arg->is_inner_ && !index_table_schema->can_read_index() && OB_FAIL(ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
                     trans, origin_table_schema.get_tenant_id(), origin_table_schema.get_table_id(), index_table_schema->get_table_id(), has_index_task))) {
                   LOG_WARN("failed to check ddl conflict", K(ret));
                 } else if (has_index_task) {
@@ -10739,14 +10747,49 @@ int ObDDLService::drop_not_null_cst_in_column_flag(
 {
   int ret = OB_SUCCESS;
   int64_t col_cnt = new_table_schema.get_column_count();
+
+  common::hash::ObHashSet<uint64_t> drop_col_id;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  /* get column in drop */
+  int64_t hash_set_size = alter_table_schema.get_column_count() > 0 ? alter_table_schema.get_column_count() : 1;
+  if (OB_FAIL(drop_col_id.create(hash_set_size,
+                                 lib::ObLabel("ChkDropCol"),
+                                 lib::ObLabel("ChkDropCol")))) {
+    LOG_WARN("failed to init drop column set", K(ret), K(alter_table_schema));
+  }
+  for (; OB_SUCC(ret) && it_begin != it_end; it_begin ++) {
+    const AlterColumnSchema *alter_col = static_cast<AlterColumnSchema*>(*it_begin);
+    if (OB_ISNULL(alter_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter col should not be null", K(ret), K(alter_table_schema));
+    } else if (OB_DDL_DROP_COLUMN != alter_col->alter_type_) {
+    } else {
+      const ObColumnSchemaV2 *orig_col = orig_table_schema.get_column_schema(alter_col->get_origin_column_name());
+      if (OB_ISNULL(orig_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("orig col should not be null", K(ret), K(orig_table_schema), K(alter_table_schema));
+      } else if (OB_FAIL(drop_col_id.set_refactored(orig_col->get_column_id()))) {
+        LOG_WARN("failed to set refactor", K(ret));
+      }
+    }
+  }
+
   for (ObTableSchema::const_constraint_iterator iter = alter_table_schema.constraint_begin(); OB_SUCC(ret) &&
       iter != alter_table_schema.constraint_end(); iter ++) {
     if (CONSTRAINT_TYPE_NOT_NULL == (*iter)->get_constraint_type()) {
       const uint64_t column_id = *((*iter)->cst_col_begin());
       ObColumnSchemaV2 *column = new_table_schema.get_column_schema(column_id);
       if (OB_ISNULL(column)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column", K(ret));
+        /* if col in drop, skip */
+        if (OB_HASH_EXIST != drop_col_id.exist_refactored(column_id)) {
+          if (ret == OB_HASH_NOT_EXIST) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid column", K(ret), K(column_id), K(alter_table_schema));
+          } else {
+            LOG_WARN("failed to get check col in drop col list", K(ret), K(column_id));
+          }
+        }
       } else if (column->has_not_null_constraint()) {
         column->drop_not_null_cst();
         if (OB_FAIL(ddl_operator.update_single_column(

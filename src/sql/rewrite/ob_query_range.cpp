@@ -4182,7 +4182,13 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
     int size = j_base->element_count();
-    if (size > MAX_JSON_ARRAY_CHANGE_TO_OR_SIZE && is_single_op
+    if (size == 0) {
+      if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+        LOG_WARN("failed set normal key", K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_)) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+    } else if (size > MAX_JSON_ARRAY_CHANGE_TO_OR_SIZE && is_single_op
         && (OB_NOT_NULL(query_range_ctx_) && query_range_ctx_->use_in_optimization_)) {
       if (OB_FAIL(get_json_array_in_keyparts(j_base, out_key_part, exec_ctx, dtc_params))) {
         LOG_WARN("fail to get json_array in keyparts", K(ret));

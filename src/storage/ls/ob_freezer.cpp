@@ -1081,11 +1081,15 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tab
 {
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
+  int64_t last_submit_log_time = start;
   int ret = OB_SUCCESS;
   bool ready_for_flush = false;
 
   do {
-    if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(tablet_memtable, ready_for_flush, start))) {
+    if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(tablet_memtable,
+                                                               ready_for_flush,
+                                                               start,
+                                                               last_submit_log_time))) {
       TRANS_LOG(WARN, "[Freezer] memtable is not ready_for_flush", K(ret));
     }
   } while (OB_SUCC(ret) && !ready_for_flush);
@@ -1095,7 +1099,8 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tab
 
 int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
                                                               bool &ready_for_flush,
-                                                              const int64_t start)
+                                                              const int64_t start,
+                                                              int64_t &last_submit_log_time)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -1109,7 +1114,12 @@ int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable 
   } else if (FALSE_IT(ready_for_flush = tablet_memtable->ready_for_flush())) {
   } else if (!ready_for_flush) {
     if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      if (need_resubmit_log()) {
+      if (need_resubmit_log() ||
+          // In order to prevent the txn has already passed the try_submit test
+          // while failing to submit some logs due to an unexpected bug, we need
+          // retry to submit the log to go around the above case
+          (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
+        last_submit_log_time = ObTimeUtility::current_time();
         submit_log_for_freeze(true/*tablet freeze*/, false/*try*/);
         TRANS_LOG(INFO, "[Freezer] resubmit log", K(ret));
       }
@@ -1278,6 +1288,7 @@ int ObFreezer::batch_tablet_freeze_task(ObTableHandleArray tables_array)
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
+  int64_t last_submit_log_time = start;
 
   while (OB_SUCC(ret) && tables_array.count() > 0) {
     for (int i = 0; OB_SUCC(ret) && i < tables_array.count(); ++i) {
@@ -1289,7 +1300,10 @@ int ObFreezer::batch_tablet_freeze_task(ObTableHandleArray tables_array)
         TRANS_LOG(WARN, "memtable cannot be null", K(ret), K(ls_id));
       } else if (OB_FAIL(handle.get_tablet_memtable(tablet_memtable))) {
         LOG_WARN("fail to get memtable", K(ret));
-      } else if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(tablet_memtable, ready_for_flush, start))) {
+      } else if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(tablet_memtable,
+                                                                        ready_for_flush,
+                                                                        start,
+                                                                        last_submit_log_time))) {
         TRANS_LOG(WARN, "[Freezer] fail to wait memtable ready_for_flush", K(ret), K(ls_id));
       } else if (!ready_for_flush) {
       } else if (OB_FAIL(finish_freeze_with_ls_lock(tablet_memtable))) {
@@ -1530,11 +1544,17 @@ void ObFreezer::wait_memtable_ready_for_flush(ObITabletMemtable *tablet_memtable
 {
   share::ObLSID ls_id = get_ls_id();
   const int64_t start = ObTimeUtility::current_time();
+  int64_t last_submit_log_time = start;
   int ret = OB_SUCCESS;
 
   while (!tablet_memtable->ready_for_flush()) {
     if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      if (need_resubmit_log()) {
+      if (need_resubmit_log() ||
+          // In order to prevent the txn has already passed the try_submit test
+          // while failing to submit some logs due to an unexpected bug, we need
+          // retry to submit the log to go around the above case
+          (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
+        last_submit_log_time = ObTimeUtility::current_time();
         submit_log_for_freeze(true/*tablet freeze*/, false/*try*/);
         TRANS_LOG(INFO, "[Freezer] resubmit log for tablet_freeze", K(ls_id));
       }

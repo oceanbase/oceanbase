@@ -120,6 +120,14 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
       LOG_WARN("schema_status_proxy is null", KR(ret));
     } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id_, schema_status))) {
       LOG_WARN("fail to get schema status", KR(ret), K(tenant_id_));
+    } else if (common::OB_INVALID_TIMESTAMP != schema_status.snapshot_timestamp_) {
+      //for fix bugfic:56142375
+      //schema_status in memory maybe not valid, try to load from table
+      if (OB_FAIL(schema_status_proxy->load_refresh_schema_status(tenant_id_, schema_status))) {
+        LOG_WARN("failed to load refresh schema status", KR(ret), K(tenant_id_));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (common::OB_INVALID_TIMESTAMP == schema_status.snapshot_timestamp_) {
       int64_t version_in_inner_table = OB_INVALID_VERSION;
       int64_t local_schema_version = OB_INVALID_VERSION;
@@ -138,6 +146,8 @@ int ObStandbySchemaRefreshTrigger::submit_tenant_refresh_schema_task_()
       } else if (OB_FAIL(GCTX.ob_service_->submit_async_refresh_schema_task(tenant_id_, version_in_inner_table))) {
         LOG_WARN("failed to submit_async_refresh_schema_task", KR(ret), K_(tenant_id));
       }
+    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
+      LOG_INFO("standby tenant can not refresh schema", K(schema_status));
     }
   }
   return ret;

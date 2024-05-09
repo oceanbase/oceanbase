@@ -2046,7 +2046,7 @@ DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_STD_UNKNOWN_EXCEPTION, -7275, ER_STD_UNKNOWN_
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_CANT_CREATE_GEOMETRY_OBJECT, -7276, ER_CANT_CREATE_GEOMETRY_OBJECT, "22003", "Cannot get geometry object from data you send to the GEOMETRY field.", "Cannot get geometry object from data you send to the GEOMETRY field.", 600, "Cannot get geometry object from data you send to the GEOMETRY field.", "Cannot get geometry object from data you send to the GEOMETRY field.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SRID_WRONG_USAGE, -7277, ER_WRONG_USAGE, "HY000", "Incorrect usage of srid, srid column attribute only support in geometry.", "Incorrect usage of srid.", 600, "Incorrect usage of srid.", "Incorrect usage of srid.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_ORDER_WRONG_USAGE, -7278, ER_WRONG_USAGE, "HY000", "Incorrect usage of spatial/fulltext/hash index and explicit index order.", "Incorrect usage of spatial/fulltext/hash index and explicit index order.", 600, "Incorrect usage of spatial/fulltext/hash index and explicit index order.", "Incorrect usage of spatial/fulltext/hash index and explicit index order.");
-DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL, -7279, ER_SPATIAL_MUST_HAVE_GEOM_COL, "42000", "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.", 600, "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.");
+DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL, -7279, ER_SPATIAL_MUST_HAVE_GEOM_COL, "42000", "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.", 13249, "A SPATIAL index may only contain a geometrical type column.", "A SPATIAL index may only contain a geometrical type column.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_SPATIAL_CANT_HAVE_NULL, -7280, ER_SPATIAL_CANT_HAVE_NULL, "42000", "All parts of a SPATIAL index must be NOT NULL.", "All parts of a SPATIAL index must be NOT NULL.", 600, "All parts of a SPATIAL index must be NOT NULL.", "All parts of a SPATIAL index must be NOT NULL.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, -7281, ER_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX, "HY000", "The index type is not supported for spatial indexes.", "The index type %s is not supported for spatial indexes.", 600, "The index type is not supported for spatial indexes.", "The index type %s is not supported for spatial indexes.");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_UNIT_NOT_FOUND, -7282, ER_UNIT_NOT_FOUND, "SU001", "There\'s no unit of measure.", "There\'s no unit of measure named \'%s\'.", 600, "There\'s no unit of measure.", "There\'s no unit of measure named \'%s\'.");
@@ -2065,7 +2065,10 @@ DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_NULL_SDO_GEOMETRY, -7294, -1, "HY000", "I
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY, -7295, -1, "HY000", "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object", 13033, "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY, -7296, -1, "HY000", "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object", 13034, "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object");
 DEFINE_ORACLE_ERROR_DEP(OB_ERR_VALUE_NOT_ALLOWED, -7297, -1, "HY000", "value not allowed", 24323, "value not allowed");
-
+DEFINE_ORACLE_ERROR(OB_ERR_OPERATOR_NOT_EXIST, -7298, -1, "42000", "operator binding does not exist", 29900, "operator binding does not exist");
+DEFINE_ORACLE_ERROR(OB_INVALID_MASK, -7299, -1, "42000", "operator binding does not exist", 20000, "operator binding does not exist");
+DEFINE_ORACLE_ERROR(OB_GEO_IN_DIFFERENT_COORDINATE, -7300, -1, "42000", "geometry objects are in different coordinate systems", 13295, "geometry objects are in different coordinate systems");
+DEFINE_ORACLE_ERROR(OB_ERR_DOMAIN_COLUMN_DUPLICATE, -7301, -1, "42000", "cannot create multiple domain indexes on a column list using same", 29879, "cannot create multiple domain indexes on a column list using same");
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GIS错误码值域  [-7201, -7400)
@@ -2284,6 +2287,12 @@ DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/
 DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_region does not match the endpoint");
 DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
 DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
+
+DEFINE_ERROR_DEP(OB_OBJECT_NOT_EXIST, -9120, -1, "HY000", "cannot find object on object storage");
+DEFINE_ERROR_DEP(OB_S2_REUSE_VERSION_MISMATCH, -9121, -1, "HY000", "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache");
+DEFINE_ERROR_DEP(OB_S2_ENTRY_NOT_EXIST, -9122, -1, "HY000", "entry not exist in s2 micro_cache");
+DEFINE_ERROR(OB_TABLET_IS_SPLIT_SRC, -9123, -1, "HY000", "cannot access split src tablet");
+
 
 // 余留位置，在该行之前继续添加storage错误码
 
@@ -2585,6 +2594,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_OUT_PARAM_NOT_BIND_VAR, -9763, -1, "HY000", "output p
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_TIME_EARLIER_THAN_SYSDATE, -9764, -1, "HY000", "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future", 23420, "the parameter must evaluate to a time in the future", "the parameter %s must evaluate to a time in the future");
 DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way", 224, "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR_EXPR, -9766, -1, "HY000", "CURSOR expression not allowed", 22902, "CURSOR expression not allowed");
+DEFINE_ORACLE_ERROR_V2_EXT(OB_APPLICATION_ERROR_FROM_REMOTE, -9767, -1, "HY000", "application error from remote", "%.*s", 20000, "application error from remote", "%.*s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2659,6 +2669,7 @@ DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", 
 DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND, "HY000", "Can't find FULLTEXT index matching the column list");
 DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
 DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
+DEFINE_ERROR(OB_ERR_PS_NO_RECURSION, -11016, ER_PS_NO_RECURSION, "HY000", "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

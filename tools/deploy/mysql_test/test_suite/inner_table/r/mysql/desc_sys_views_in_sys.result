@@ -5637,9 +5637,9 @@ cnt
 1
 desc information_schema.QUERY_RESPONSE_TIME;
 Field	Type	Null	Key	Default	Extra
-RESPONSE_TIME	bigint(14)	NO			
-COUNT	bigint(14)	NO			
-TOTAL	bigint(14)	NO			
+RESPONSE_TIME	bigint(20)	NO			
+COUNT	bigint(20)	NO			
+TOTAL	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.QUERY_RESPONSE_TIME limit 1);
 cnt
 1

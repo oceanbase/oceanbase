@@ -107,6 +107,7 @@ enum ObDDLType
   DDL_ADD_COLUMN_ONLINE = 10002, // only add trailing columns
   DDL_CHANGE_COLUMN_NAME = 10003,
   DDL_DROP_COLUMN_INSTANT = 10004,
+  DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE = 10005, // auto table auto partition // online
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };

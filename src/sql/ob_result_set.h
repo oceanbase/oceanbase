@@ -275,7 +275,7 @@ public:
   // ref: obmp_query.cpp, ob_mysql_end_trans_callback.cpp
   bool is_async_end_trans_submitted() const
   {
-    auto &s = get_exec_context().get_trans_state();
+    const TransState &s = get_exec_context().get_trans_state();
     return s.is_end_trans_executed() && s.is_end_trans_success();
   }
   inline TransState &get_trans_state()  { return get_exec_context().get_trans_state(); }

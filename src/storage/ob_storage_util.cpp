@@ -37,36 +37,20 @@ OB_INLINE static const ObString get_padding_str(ObCollationType coll_type)
 OB_INLINE static void append_padding_pattern(const ObString &space_pattern,
                                              const int32_t offset,
                                              const int32_t buf_len,
-                                             char *&buf)
+                                             char *&buf,
+                                             int32_t &true_len)
 {
-  if (1 == space_pattern.length()) {
+  true_len = offset;
+  if (OB_UNLIKELY((buf_len - offset) < space_pattern.length())) {
+  } else if (1 == space_pattern.length()) {
     MEMSET(buf + offset, space_pattern[0], buf_len - offset);
+    true_len = buf_len;
   } else {
-    for (int32_t i = offset; i < buf_len; i += space_pattern.length()) {
+    for (int32_t i = offset; i <= (buf_len - space_pattern.length()); i += space_pattern.length()) {
       MEMCPY(buf + i, space_pattern.ptr(), space_pattern.length());
+      true_len += space_pattern.length();
     }
   }
-}
-
-OB_INLINE static int pad_datum_on_local_buf(const ObString &space_pattern,
-                                            int32_t pad_whitespace_length,
-                                            common::ObIAllocator &padding_alloc,
-                                            const char *&data_ptr,
-                                            uint32_t &data_len)
-{
-  int ret = OB_SUCCESS;
-  char *buf = nullptr;
-  const int32_t buf_len = data_len + pad_whitespace_length * space_pattern.length();
-  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "no memory", K(ret));
-  } else {
-    MEMCPY(buf, data_ptr, data_len);
-    append_padding_pattern(space_pattern, data_len, buf_len, buf);
-    data_ptr = buf;
-    data_len = buf_len;
-  }
-  return ret;
 }
 
 OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
@@ -77,15 +61,17 @@ OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
-  const int32_t buf_len = length + pad_whitespace_length * space_pattern.length();
+  const int32_t pad_len = length + pad_whitespace_length * space_pattern.length();
+  const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
   if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
+    int32_t true_len = 0;
     MEMCPY(buf, ptr, length);
-    append_padding_pattern(space_pattern, length, buf_len, buf);
+    append_padding_pattern(space_pattern, length, buf_len, buf, true_len);
     ptr = buf;
-    length = buf_len;
+    length = true_len;
   }
   return ret;
 }
@@ -134,7 +120,7 @@ int pad_column(const ObObjMeta &obj_meta, const ObAccuracy accuracy, common::ObI
       cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
     }
     if (cur_len < length &&
-        OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+        OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
       STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
     }
   }
@@ -160,15 +146,17 @@ int pad_column(const common::ObAccuracy accuracy, sql::ObEvalCtx &ctx, sql::ObEx
     }
     if (cur_len < length) {
       char *ptr = nullptr;
-      const int32_t buf_len = datum.pack_ + (length - cur_len) * space_pattern.length();
+      const int32_t pad_len = datum.pack_ + (length - cur_len) * space_pattern.length();
+      const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
       if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, buf_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
       } else {
+        int32_t true_len = 0;
         MEMMOVE(ptr, datum.ptr_, datum.pack_);
-        append_padding_pattern(space_pattern, datum.pack_, buf_len, ptr);
+        append_padding_pattern(space_pattern, datum.pack_, buf_len, ptr, true_len);
         datum.ptr_ = ptr;
-        datum.pack_ = buf_len;
+        datum.pack_ = true_len;
       }
     }
   }
@@ -192,14 +180,15 @@ int pad_on_datums(const common::ObAccuracy accuracy,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "no memory", K(ret));
     } else {
-      append_padding_pattern(space_pattern, 0, buf_len, buf);
+      int32_t true_len = 0;
+      append_padding_pattern(space_pattern, 0, buf_len, buf, true_len);
       for (int64_t i = 0; i < row_count; i++) {
         common::ObDatum &datum = datums[i];
         if (datum.is_null()) {
           // do nothing
         } else if (0 == datum.pack_){
           datum.ptr_ = buf;
-          datum.pack_ = buf_len;
+          datum.pack_ = true_len;
         }
       }
     }
@@ -226,7 +215,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           } else {
             int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
             if (cur_len < length &&
-                OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+                OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
               STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
             }
           }
@@ -246,7 +235,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
           cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
         }
         if (cur_len < length &&
-            OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
+            OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, datum.ptr_, datum.pack_))) {
           STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len), K(datum));
         }
       }
@@ -282,13 +271,14 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
       } else {
-        append_padding_pattern(space_pattern, 0, buf_len, buf);
+        int32_t true_len = 0;
+        append_padding_pattern(space_pattern, 0, buf_len, buf, true_len);
         for (int64_t i = vec_offset; i < vec_offset + row_count; i++) {
           if (nulls->at(i)) {
             // do nothing
           } else if (0 == lens[i]){
             ptrs[i] = buf;
-            lens[i] = buf_len;
+            lens[i] = true_len;
           }
         }
       }
@@ -314,7 +304,7 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
             } else {
               int32_t cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
               if (cur_len < length &&
-                  OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
+                  OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
                 STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
               }
             }
@@ -333,7 +323,7 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
             cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, ptrs[i], lens[i]));
           }
           if (cur_len < length &&
-              OB_FAIL(pad_datum_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
+              OB_FAIL(pad_on_local_buf(space_pattern, length - cur_len, padding_alloc, (const char *&)ptrs[i], (uint32_t &)lens[i]))) {
             STORAGE_LOG(WARN, "fail to pad on padding allocator", K(ret), K(length), K(cur_len));
           }
         }

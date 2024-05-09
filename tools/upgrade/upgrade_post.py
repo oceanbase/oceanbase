@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.1.0"
-#current_data_version = "4.3.1.0"
+#current_cluster_version = "4.3.2.0"
+#current_data_version = "4.3.2.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -624,9 +624,9 @@
 #  rollback_sql_filename =  config.post_upgrade_rollback_sql_filename
 #
 #class PasswordMaskingFormatter(logging.Formatter):
-#    def format(self, record):
-#        s = super(PasswordMaskingFormatter, self).format(record)
-#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
@@ -756,7 +756,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -796,9 +796,9 @@
 #  rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 #
 #class PasswordMaskingFormatter(logging.Formatter):
-#    def format(self, record):
-#        s = super(PasswordMaskingFormatter, self).format(record)
-#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
@@ -919,7 +919,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -1675,9 +1675,9 @@
 #  old_version = '4.0.0.0'
 #
 #class PasswordMaskingFormatter(logging.Formatter):
-#    def format(self, record):
-#        s = super(PasswordMaskingFormatter, self).format(record)
-#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2464,7 +2464,7 @@
 #      password = get_opt_password()
 #      timeout = int(get_opt_timeout())
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
 #      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -2490,9 +2490,9 @@
 #  log_filename = 'upgrade_cluster_health_checker.log'
 #
 #class PasswordMaskingFormatter(logging.Formatter):
-#    def format(self, record):
-#        s = super(PasswordMaskingFormatter, self).format(record)
-#        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2921,7 +2921,7 @@
 #      timeout = int(get_opt_timeout())
 #      zone = get_opt_zone()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
-#          host, port, user, password, log_filename, timeout, zone)
+#          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
 #      do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')

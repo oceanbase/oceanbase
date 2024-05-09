@@ -107,6 +107,8 @@ private:
   int get_udt_definition(ObString &ddl_str, const ObString &udt_name,
                                 const ObString &db_name,
                                 GetDDLObjectType object_type);
+  int get_database_id(uint64_t tenant_id, const ObString db_name,
+                      uint64_t &database_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetObjectDefinition);
 };

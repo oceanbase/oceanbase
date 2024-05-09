@@ -1889,7 +1889,7 @@ int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
 int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &write_seq_no)
 {
   int ret = OB_SUCCESS;
-  TRANS_LOG(TRACE, "", K(force), K(write_seq_no), K_(trans_id), K_(ls_id),
+  TRANS_LOG(TRACE, "submit_redo_after_write", K(force), K(write_seq_no), K_(trans_id), K_(ls_id),
             K(mt_ctx_.get_pending_log_size()));
   ObTimeGuard tg("submit_redo_for_after_write", 100000);
   if (force || mt_ctx_.pending_log_size_too_large(write_seq_no)) {
@@ -1897,7 +1897,15 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
 #define LOAD_PARALLEL_LOGGING parallel_logging = exec_info_.serial_final_scn_.atomic_load().is_valid()
     LOAD_PARALLEL_LOGGING;
     if (!parallel_logging) {
-      if (OB_SUCCESS == lock_.try_lock()) {
+      if (force) {
+        // For the frozen memtable, we must guarantee
+        CtxLockGuard guard(lock_);
+        // double check parallel_logging is on
+        LOAD_PARALLEL_LOGGING;
+        if (!parallel_logging) {
+          ret = serial_submit_redo_after_write_();
+        }
+      } else if (OB_SUCCESS == lock_.try_lock()) {
         CtxLockGuard guard(lock_, false);
         // double check parallel_logging is on
         LOAD_PARALLEL_LOGGING;
@@ -1913,7 +1921,26 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
 #undef LOAD_PARALLEL_LOGGING
     tg.click("serial_log");
     if (parallel_logging) {
-      if (OB_SUCC(lock_.try_rdlock_flush_redo())) {
+      if (force) {
+        CtxLockGuard guard(lock_, CtxLockGuard::MODE::REDO_FLUSH_R);
+        if (OB_SUCC(check_can_submit_redo_()) && !is_committing_()) {
+          // TODO(handora.qc): Currently, parallel_submit might return
+          // OB_SUCCESS without having fully submitted all necessary logs,
+          // resulting in an inability to mark need_resubmit on the freezer.
+          // Therefore, we rely on the fallback mechanism of freezer_task to
+          // retry submitting logs to meet the requirement of freezing that
+          // waiting for all logs to be submitted.
+          //
+          // However, we definitely need to ensure in the future that OB_SUCCESS
+          // is only returned only when the logs are fully submitted.
+          ObTxRedoSubmitter submitter(*this, mt_ctx_);
+          if (OB_FAIL(submitter.parallel_submit(write_seq_no))) {
+            if (OB_ITER_END == ret || OB_EAGAIN == ret) {
+              ret = OB_SUCCESS;
+            }
+          }
+        }
+      } else if (OB_SUCC(lock_.try_rdlock_flush_redo())) {
         if (OB_SUCC(check_can_submit_redo_()) && !is_committing_()) {
           ObTxRedoSubmitter submitter(*this, mt_ctx_);
           if (OB_FAIL(submitter.parallel_submit(write_seq_no))) {

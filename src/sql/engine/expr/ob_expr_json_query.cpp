@@ -149,13 +149,10 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
     }
   } else if (OB_FAIL(ObJsonExprHelper::get_cast_type(types_stack[JSN_QUE_RET], dst_type, type_ctx))) {
     LOG_WARN("get cast dest type failed", K(ret));
-  } else if (!is_asis &&
-            dst_type.get_type() != ObVarcharType
-            && dst_type.get_type() != ObLongTextType
-            && dst_type.get_type() != ObJsonType) {
-    ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
-    LOG_USER_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING);
+  } else if (OB_FAIL(check_data_type_allowed(types_stack, dst_type))) {
+    LOG_WARN("check dest type failed", K(ret));
   }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObJsonExprHelper::set_dest_type(types_stack[JSN_QUE_DOC], type, dst_type, type_ctx))) {
       LOG_WARN("set dest type failed", K(ret));
@@ -163,6 +160,29 @@ int ObExprJsonQuery::calc_returning_type(ObExprResType& type,
       type.set_calc_collation_type(type.get_collation_type());
     }
   }
+  return ret;
+}
+
+int ObExprJsonQuery::check_data_type_allowed(const ObExprResType* types_stack, const ObExprResType& data_type)
+{
+  int ret = OB_SUCCESS;
+  bool is_asis = types_stack[JSN_QUE_ASIS].get_param().get_int() > 0;
+  bool is_multivalue = types_stack[JSN_QUE_MULTIVALUE].get_param().get_int() > 0;
+
+  // multivalue genreated column __mvi_%ld
+  if (!is_asis && data_type.get_type() != ObVarcharType
+    && data_type.get_type() != ObLongTextType
+    && data_type.get_type() != ObJsonType) {
+    ret = OB_ERR_INVALID_DATA_TYPE_RETURNING;
+    LOG_USER_ERROR(OB_ERR_INVALID_DATA_TYPE_RETURNING);
+  } else if (is_asis && !is_multivalue) {
+    if (data_type.get_type() == ObCharType &&
+        (data_type.get_length() > OB_MAX_CAST_CHAR_VARCHAR_LENGTH || data_type.get_length() == -1)) {
+      ret = OB_NOT_MULTIVALUE_SUPPORT;
+      LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing data to array of char/binary BLOBs");
+    }
+  }
+
   return ret;
 }
 
@@ -376,7 +396,7 @@ int ObExprJsonQuery::check_enable_cast_index_array(ObIJsonBase* json_base, bool 
   } else if (json_base->json_type() == ObJsonNodeType::J_BOOLEAN) {
     ret = OB_NOT_MULTIVALUE_SUPPORT;
     LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing JSON BOOLEAN type to array");
-  } else if (!disable_container && json_base->json_type() == ObJsonNodeType::J_OBJECT) {
+  } else if (json_base->json_type() == ObJsonNodeType::J_OBJECT) {
     ret = OB_NOT_MULTIVALUE_SUPPORT;
     LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing JSON OBJECT type to array");
   }
@@ -544,8 +564,8 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
                                                         dst_collation, accuracy, dest_type,
                                                         tmp_obj))) {
       LOG_WARN("failed to cast to res", K(ret), K(dest_type));
-      ret = OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
-      LOG_USER_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX);
+      ret = OB_ERR_JSON_CONTAINER_CAST_SCALAR;
+      LOG_USER_ERROR(OB_ERR_JSON_CONTAINER_CAST_SCALAR);
     } else if (FALSE_IT(reserve_len = tmp_obj.get_serialize_size())) {
     } else if (OB_FAIL(str_buff.reserve(reserve_len + 128))) {
       LOG_WARN("failed to reserve size", K(ret), K(reserve_len));

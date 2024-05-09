@@ -8987,7 +8987,9 @@ int ObDMLResolver::resolve_table_relation_factor(const ParseNode *node,
             ret = tmp_ret;
             synonym_name.reset();
             synonym_db_name.reset();
-          } else { /* do nothing */ }
+          } else if (!dblink_name.empty()) {
+            query_ctx->set_has_dblink(true);
+          }
         } else if (OB_FAIL(ret)) {
           synonym_name.reset();
           synonym_db_name.reset();
@@ -17374,10 +17376,11 @@ int ObDMLResolver::fill_doc_id_expr_param(
   return ret;
 }
 
-int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, JoinedTable *&joined_table)
+int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, TableItem *&rowkey_doc_table)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  JoinedTable *joined_table;
   const ObTableSchema *table_schema = nullptr;
   TableItem *right_table = nullptr;
   uint64_t rowkey_doc_tid = OB_INVALID_ID;
@@ -17430,7 +17433,7 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Joine
   } else {
     right_table->type_ = TableItem::BASE_TABLE;
     right_table->ref_id_ = table_schema->get_table_id();
-    right_table->table_id_ = table_schema->get_table_id();
+    right_table->table_id_ = generate_table_id();
     right_table->is_system_table_ = table_schema->is_sys_table();
     right_table->is_view_table_ = table_schema->is_view_table();
     right_table->table_name_ = table_schema->get_table_name_str();
@@ -17468,6 +17471,9 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Joine
     }
     OZ((get_stmt()->add_joined_table)(joined_table));
     OZ(join_infos_.push_back(ResolverJoinInfo(joined_table->table_id_)));
+    OZ((get_stmt()->add_from_item)(joined_table->table_id_, true));
+    OZ((get_stmt()->remove_from_item)(left_table->table_id_));
+    rowkey_doc_table = right_table;
     // add hint to forcibly use nested loop join
     ObQueryHint &query_hint = params_.query_ctx_->get_query_hint_for_update();
     bool filter_embedded_hint = query_hint.has_outline_data() || query_hint.has_user_def_outline();
@@ -17516,6 +17522,7 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Joine
 
 int ObDMLResolver::try_update_column_expr_for_fts(
     const TableItem &table_item,
+    TableItem *rowkey_doc_table,
     common::ObIArray<ObColumnRefRawExpr *> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -17523,7 +17530,7 @@ int ObDMLResolver::try_update_column_expr_for_fts(
   const ObTableSchema *table_schema = nullptr;
   const uint64_t table_id = table_item.ref_id_;
   uint64_t rowkey_doc_tid = OB_INVALID_ID;
-  if (OB_UNLIKELY(TableItem::BASE_TABLE != table_item.type_)) {
+  if (OB_UNLIKELY(TableItem::BASE_TABLE != table_item.type_ || OB_ISNULL(rowkey_doc_table))) {
     // There is a fulltext index in only base table. So, not base table, just skip.
   } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
     ret = OB_INVALID_ARGUMENT;
@@ -17566,27 +17573,23 @@ int ObDMLResolver::try_update_column_expr_for_fts(
       ret = OB_ERR_UNEXPECTED;
       STORAGE_FTS_LOG(WARN, "Don't found doc id column id", K(ret), K(col_id));
     } else {
-      const TableItem *index_item = get_stmt()->get_table_item_by_id(rowkey_doc_tid);
-      ColumnItem *column_item = get_stmt()->get_column_item_by_id(rowkey_doc_tid, col_id);
-      if (OB_ISNULL(index_item)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected error, index item is nullptr", K(ret), KP(index_item));
-      } else if (NULL == column_item) {
-        if (OB_FAIL(resolve_basic_column_item(*index_item, doc_id_col_name, true, column_item, get_stmt()))) {
+      ColumnItem *doc_id_col = get_stmt()->get_column_item_by_id(rowkey_doc_table->table_id_, col_id);
+      if (NULL == doc_id_col) {
+        if (OB_FAIL(resolve_basic_column_item(*rowkey_doc_table, doc_id_col_name, true, doc_id_col, get_stmt()))) {
           STORAGE_FTS_LOG(WARN, "fail to add column doc id item to array", K(ret));
-        } else if (OB_ISNULL(column_item) || OB_ISNULL(column_item->expr_)) {
+        } else if (OB_ISNULL(doc_id_col) || OB_ISNULL(doc_id_col->expr_)) {
           ret = OB_ERR_BAD_FIELD_ERROR;
-          STORAGE_FTS_LOG(WARN, "failed to add column item", K(ret), KPC(column_item));
+          STORAGE_FTS_LOG(WARN, "failed to add column item", K(ret), KPC(doc_id_col));
         }
-        STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(column_item), K(column_exprs));
+        STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(doc_id_col), K(column_exprs));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); ++i) {
         if (OB_ISNULL(column_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_FTS_LOG(WARN, "unexpected error, column_expr is nullptr", K(ret), K(i));
         } else if (column_exprs.at(i)->get_column_id() == col_id) {
-          column_exprs.at(i) = column_item->expr_;
-          STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(column_item));
+          column_exprs.at(i) = doc_id_col->expr_;
+          STORAGE_FTS_LOG(DEBUG, "fts resovle", K(ret), K(rowkey_doc_tid), K(col_id), KPC(doc_id_col));
           break;
         }
       }

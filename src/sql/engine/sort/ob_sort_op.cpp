@@ -39,8 +39,7 @@ ObSortSpec::ObSortSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type
   is_fetch_with_ties_(false),
   prescan_enabled_(false),
   enable_encode_sortkey_opt_(false),
-  part_cnt_(0),
-  compress_type_(NONE_COMPRESSOR)
+  part_cnt_(0)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortSpec, ObOpSpec),

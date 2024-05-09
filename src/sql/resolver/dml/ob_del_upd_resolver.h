@@ -280,7 +280,7 @@ protected:
   int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
   int add_select_item_func(ObSelectStmt &select_stmt, ColumnItem &col);
-  int select_items_has_pk(const ObSelectStmt& select_stmt, bool &has_pk);
+  int select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk);
 
 private:
   common::hash::ObPlacementHashSet<uint64_t, 4229> insert_column_ids_;

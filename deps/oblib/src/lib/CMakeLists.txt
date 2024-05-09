@@ -7,6 +7,13 @@ ob_set_subtarget(oblib_lib ALONE
   geo/ob_geo_func_covered_by.cpp
   geo/ob_geo_func_within.cpp
   geo/ob_geo_func_union.cpp
+  geo/ob_geo_func_touches.cpp
+  geo/ob_geo_func_equals.cpp
+  geo/ob_geo_func_intersects.cpp
+  geo/ob_geo_func_symdifference.cpp
+  geo/ob_geo_func_distance.cpp
+  geo/ob_geo_func_crosses.cpp
+  geo/ob_geo_func_overlaps.cpp
 )
 
 ob_set_subtarget(oblib_lib charset
@@ -67,7 +74,6 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_wkb_check_visitor.cpp
   geo/ob_geo_zoom_in_visitor.cpp
   geo/ob_geo_func_envelope.cpp
-  geo/ob_geo_func_intersects.cpp
   geo/ob_geo_func_area.cpp
   geo/ob_geo_func_correct.cpp
   geo/ob_geo_func_disjoint.cpp
@@ -76,7 +82,6 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_func_transform.cpp
   geo/ob_geo_func_box.cpp
   geo/ob_geo_func_buffer.cpp
-  geo/ob_geo_func_distance.cpp
   geo/ob_geo_func_isvalid.cpp
   geo/ob_geometry_cast.cpp
   geo/ob_sdo_geo_func_to_wkb.cpp
@@ -85,19 +90,14 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_wkb_byte_order_visitor.cpp
   geo/ob_geo_3d.cpp
   geo/ob_sdo_geo_object.cpp
-  geo/ob_geo_func_equals.cpp
-  geo/ob_geo_func_touches.cpp
   geo/ob_geo_func_centroid.cpp
   geo/ob_geo_interior_point_visitor.cpp
   geo/ob_geo_box_clip_visitor.cpp
-  geo/ob_geo_func_crosses.cpp
-  geo/ob_geo_func_overlaps.cpp
   geo/ob_geo_elevation_visitor.cpp
   geo/ob_geo_func_length.cpp
   geo/ob_geo_mvt_encode_visitor.cpp
   geo/ob_geo_mvt.cpp
   geo/ob_vector_tile.pb-c.c
-  geo/ob_geo_func_symdifference.cpp
   geo/ob_geo_affine_visitor.cpp
   geo/ob_geo_grid_visitor.cpp
   geo/ob_geo_simplify_visitor.cpp

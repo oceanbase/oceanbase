@@ -390,9 +390,11 @@ TEST_F(TestServerLogBlockMgr, dirty_ls_dir_and_log_pool_file)
   system("mkdir clog_disk/clog/log_pool/1.tmp");
   log_block_mgr_.destroy();
   bool result = false;
-  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.init(log_pool_base_path_));
+  EXPECT_EQ(OB_ERR_UNEXPECTED, log_block_mgr_.init(log_pool_base_path_));
   EXPECT_EQ(OB_SUCCESS, FileDirectoryUtils::is_exists("clog_disk/clog/tenant_1/1/meta/10000.tmp",result));
   EXPECT_EQ(false, result);
+  system("rm -rf clog_disk/clog/tenant_0111");
+  EXPECT_EQ(OB_SUCCESS, log_block_mgr_.init(log_pool_base_path_));
 }
 
 TEST_F(TestServerLogBlockMgr, resize_failed_and_restar)

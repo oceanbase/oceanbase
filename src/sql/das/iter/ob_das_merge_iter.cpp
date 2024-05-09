@@ -174,14 +174,17 @@ int ObDASMergeIter::create_das_task(const ObDASTabletLoc *tablet_loc, ObDASScanO
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
+  // when the cluster version is less than 4.3.1, a DAS_OP_TABLE_BATCH_SCAN task is sent on group rescan situtations
+  // for compatibility considerations.
+  ObDASOpType op_type = (nullptr != group_id_expr_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) ? DAS_OP_TABLE_BATCH_SCAN : DAS_OP_TABLE_SCAN;
   reuse_op = false;
   if (OB_ISNULL(das_ref_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr das ref", K(ret));
-  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_loc, DAS_OP_TABLE_SCAN))) {
+  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_loc, op_type))) {
     // reuse scan op
     reuse_op = true;
-  } else if (OB_FAIL(das_ref_->create_das_task(tablet_loc, DAS_OP_TABLE_SCAN, task_op))) {
+  } else if (OB_FAIL(das_ref_->create_das_task(tablet_loc, op_type, task_op))) {
     LOG_WARN("das ref failed to create das task", K(ret));
   }
   if (OB_SUCC(ret)) {

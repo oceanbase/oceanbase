@@ -5940,7 +5940,7 @@ def_table_schema(
     ('group_id', 'int', 'true'),
     ('tx_id', 'int', 'true'),
     ('blocking_session_id', 'int', 'true'),
-    ('plan_hash', 'int', 'true'),
+    ('plan_hash', 'uint', 'true'),
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
   ],
@@ -12462,7 +12462,7 @@ def_table_schema(
     ('GROUP_ID', 'int', 'true'),
     ('TX_ID', 'int', 'true'),
     ('BLOCKING_SESSION_ID', 'int', 'true'),
-    ('PLAN_HASH', 'int', 'true'),
+    ('PLAN_HASH', 'uint', 'true'),
     ('THREAD_ID', 'int', 'true'),
     ('STMT_TYPE', 'int', 'true'),
   ],
@@ -12723,9 +12723,10 @@ def_table_schema(
     ('tenant_id', 'int', 'false'),
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
     ('svr_port', 'int'),
-    ('response_time', 'bigint:14', 'false', '0'),
-    ('count',  'bigint:14', 'false', '0'),
-    ('total',  'bigint:14', 'false', '0')
+    ('response_time', 'bigint', 'false', '0'),
+    ('count',  'bigint', 'false', '0'),
+    ('total',  'bigint', 'false', '0'),
+    ('sql_type', 'varchar:128', 'false', '')
   ],
   partition_columns=['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14795,6 +14796,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 # 15454: __all_virtual_storage_io_usage
 # 15455: __all_zone_storage
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
+# 15457: __all_virtual_query_response_time
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -33217,7 +33219,13 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) AS UPDATE_LOG,
       CAST(NULL AS CHAR(128)) AS MASTER_ROLLBACK_SEG,
       CAST(NULL AS CHAR(128)) AS MASTER_LINK,
-      CAST('N' AS CHAR(1)) AS REWRITE_ENABLED,
+      CAST(
+        CASE ((B.TABLE_MODE >> 27) & 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS REWRITE_ENABLED,
       CAST(NULL AS CHAR(9)) AS REWRITE_CAPABILITY,
       CAST(
         CASE C.REFRESH_MODE
@@ -33274,7 +33282,13 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) AS UNUSABLE_BEFORE,
       CAST(NULL AS CHAR(128)) AS UNUSABLE_BEGINNING,
       CAST(NULL AS CHAR(100)) AS DEFAULT_COLLATION,
-      CAST('N' AS CHAR(1)) AS ON_QUERY_COMPUTATION
+      CAST(
+        CASE ((B.TABLE_MODE >> 28) & 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS ON_QUERY_COMPUTATION
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -33307,7 +33321,13 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) AS UPDATE_LOG,
       CAST(NULL AS CHAR(128)) AS MASTER_ROLLBACK_SEG,
       CAST(NULL AS CHAR(128)) AS MASTER_LINK,
-      CAST('N' AS CHAR(1)) AS REWRITE_ENABLED,
+      CAST(
+        CASE ((B.TABLE_MODE >> 27) & 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS REWRITE_ENABLED,
       CAST(NULL AS CHAR(9)) AS REWRITE_CAPABILITY,
       CAST(
         CASE C.REFRESH_MODE
@@ -33364,7 +33384,13 @@ def_table_schema(
       CAST(NULL AS CHAR(128)) AS UNUSABLE_BEFORE,
       CAST(NULL AS CHAR(128)) AS UNUSABLE_BEGINNING,
       CAST(NULL AS CHAR(100)) AS DEFAULT_COLLATION,
-      CAST('N' AS CHAR(1)) AS ON_QUERY_COMPUTATION
+      CAST(
+        CASE ((B.TABLE_MODE >> 28) & 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS ON_QUERY_COMPUTATION
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -34140,7 +34166,8 @@ def_table_schema(
   FROM oceanbase.__all_virtual_nic_info
   """.replace("\n", " ")
 )
-
+# 21587: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 #
 
 # 余留位置（此行之前占位）
@@ -53236,7 +53263,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,
-      CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,
+      CAST(
+        CASE bitand((B.TABLE_MODE / 134217728), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS REWRITE_ENABLED,
       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,
       CAST(
         DECODE(C.REFRESH_MODE, 0, 'NEVER',
@@ -53290,7 +53323,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,
       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,
-      CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION
+      CAST(
+        CASE bitand((B.TABLE_MODE / 268435456), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS ON_QUERY_COMPUTATION
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -53326,7 +53365,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,
-      CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,
+      CAST(
+        CASE bitand((B.TABLE_MODE / 134217728), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS REWRITE_ENABLED,
       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,
       CAST(
         DECODE(C.REFRESH_MODE, 0, 'NEVER',
@@ -53380,7 +53425,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,
       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,
-      CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION
+      CAST(
+        CASE bitand((B.TABLE_MODE / 268435456), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS ON_QUERY_COMPUTATION
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -53418,7 +53469,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UPDATE_LOG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_ROLLBACK_SEG,
       CAST(NULL AS VARCHAR2(128)) AS MASTER_LINK,
-      CAST('N' AS VARCHAR2(1)) AS REWRITE_ENABLED,
+      CAST(
+        CASE bitand((B.TABLE_MODE / 134217728), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS REWRITE_ENABLED,
       CAST(NULL AS VARCHAR2(9)) AS REWRITE_CAPABILITY,
       CAST(
         DECODE(C.REFRESH_MODE, 0, 'NEVER',
@@ -53472,7 +53529,13 @@ def_table_schema(
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEFORE,
       CAST(NULL AS VARCHAR2(128)) AS UNUSABLE_BEGINNING,
       CAST(NULL AS VARCHAR2(100)) AS DEFAULT_COLLATION,
-      CAST('N' AS VARCHAR2(1)) AS ON_QUERY_COMPUTATION
+      CAST(
+        CASE bitand((B.TABLE_MODE / 268435456), 1)
+          WHEN 0 THEN 'N'
+          WHEN 1 THEN 'Y'
+          ELSE NULL
+        END AS CHAR(1)
+      ) AS ON_QUERY_COMPUTATION
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -61666,7 +61729,8 @@ def_table_schema(
   WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
   """.replace("\n", " ")
 )
-
+# 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

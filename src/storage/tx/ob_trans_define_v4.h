@@ -575,7 +575,7 @@ private:
   ObTxTimeoutTask commit_task_;     // commit retry task
   ObXACtx *xa_ctx_;                 // xa context
   ObTransTraceLog tlog_;
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   struct DLink {
     DLink(): next_(this), prev_(this) {}
     void reset() { next_ = this; prev_ = this; }
@@ -842,54 +842,54 @@ public:
   {
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
                    , lk_()
                    , list_()
-  #endif
+#endif
    {}
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
      ObTxDesc *it = op_alloc(ObTxDesc);
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
       ObSpinLockGuard guard(lk_);
       list_.insert(it->alloc_link_);
-  #endif
+#endif
       return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
-  #endif
+#endif
         op_free(v);
       }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
     template<typename Function>
     int for_each(Function &fn)
     {
       int ret = OB_SUCCESS;
       ObSpinLockGuard guard(lk_);
-      auto n = list_.next_;
+      ObTxDesc::DLink *n = list_.next_;
       while(n != &list_) {
-        auto tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);
+        ObTxDesc *tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);
         ret = fn(tx);
         n = n->next_;
       }
       return ret;
     }
-  #endif
+#endif
     private:
       int64_t alloc_cnt_;
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
       ObSpinLock lk_;
       ObTxDesc::DLink list_;
-  #endif
+#endif
   };
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;

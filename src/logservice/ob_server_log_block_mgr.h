@@ -294,6 +294,8 @@ private:
                            const int64_t src_buf_len, const int64_t offset);
   int read_unitl_success_(const palf::FileDesc &src_fd, char *dest_buf,
                           const int64_t dest_buf_len, const int64_t offset);
+  int scan_tenant_dir_(const char *tenant_dir, int64_t &has_allocated_block_cnt);
+  int scan_ls_dir_(const char *tenant_dir, int64_t &has_allocated_block_cnt);
 private:
   typedef common::ObFunction<int(int64_t&)> GetTenantsLogDiskSize;
   mutable ObSpinLock log_pool_meta_lock_;

@@ -48,9 +48,16 @@ struct ObExprExtraSerializeInfo
 {
   OB_UNIS_VERSION(1);
 public:
-  ObExprExtraSerializeInfo() : current_time_(nullptr), last_trace_id_(nullptr) { }
+  ObExprExtraSerializeInfo() :
+    current_time_(nullptr),
+    last_trace_id_(nullptr),
+    mview_ids_(nullptr),
+    last_refresh_scns_(nullptr)
+    { }
   common::ObObj *current_time_;
   common::ObCurTraceId::TraceId *last_trace_id_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> *mview_ids_;
+  common::ObFixedArray<uint64_t, common::ObIAllocator> *last_refresh_scns_;
 };
 
 class ObPxSqcUtil

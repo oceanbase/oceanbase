@@ -1228,6 +1228,12 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
       LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
     } else {
       LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
+      ROOTSERVICE_EVENT_ADD("standby_tenant", "remove_balance_task",
+          K_(tenant_id), "task_type", ls_balance_task.get_task_op(),
+          "task_scn", ls_balance_task.get_operation_scn(),
+          "switchover_status", tenant_info.get_switchover_status(),
+          "src_ls", ls_balance_task.get_src_ls(),
+          "dest_ls", ls_balance_task.get_dest_ls());
     }
     END_TRANSACTION(trans)
   }

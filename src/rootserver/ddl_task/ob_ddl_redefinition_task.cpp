@@ -164,6 +164,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       int64_t affected_rows = 0;
       if (oracle_mode) {
         sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+      } else if (is_mview_complete_refresh_) {
+        sql_mode_ = SMO_STRICT_ALL_TABLES;
       }
       ObSessionParam session_param;
       session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);

@@ -22,6 +22,52 @@
 namespace oceanbase {
 namespace storage {
 
+#define ATOMIC_ADD_TAG(tag)                     \
+  while (true) {                                \
+    const uint8_t old = ATOMIC_LOAD(&(flag_));  \
+    const uint8_t tmp = (old | (tag));          \
+    if (ATOMIC_BCAS(&(flag_), old, tmp)) {      \
+      break;                                    \
+    }                                           \
+  }
+
+#define ATOMIC_SUB_TAG(tag)                     \
+  while (true) {                                \
+    const uint8_t old = ATOMIC_LOAD(&(flag_));  \
+    const uint8_t tmp = (old & (~(tag)));       \
+    if (ATOMIC_BCAS(&(flag_), old, tmp)) {      \
+      break;                                    \
+    }                                           \
+  }
+
+#define OB_MEMTABLE_DEFINE_FLAG_OPERATOR(cls, CLS)      \
+  OB_INLINE void set_##cls()                            \
+  {                                                     \
+    ATOMIC_ADD_TAG(MEMTABLE_##CLS##_MASK);              \
+  }                                                     \
+  OB_INLINE void clear_##cls()                          \
+  {                                                     \
+    ATOMIC_SUB_TAG(MEMTABLE_##CLS##_MASK);              \
+  }                                                     \
+  OB_INLINE bool get_##cls() const                      \
+  {                                                     \
+    return ATOMIC_LOAD(&flag_) & MEMTABLE_##CLS##_MASK; \
+  }                                                     \
+
+#define OB_MEMTABLE_DEFINE_FLAG_OPERATOR_(cls, CLS)     \
+  OB_INLINE void set_##cls##_()                         \
+  {                                                     \
+    ATOMIC_ADD_TAG(MEMTABLE_##CLS##_MASK);              \
+  }                                                     \
+  OB_INLINE void clear_##cls##_()                       \
+  {                                                     \
+    ATOMIC_SUB_TAG(MEMTABLE_##CLS##_MASK);              \
+  }                                                     \
+  OB_INLINE bool get_##cls##_() const                   \
+  {                                                     \
+    return ATOMIC_LOAD(&flag_) & MEMTABLE_##CLS##_MASK; \
+  }                                                     \
+
 class ObTabletMemtableMgr;
 
 /*
@@ -117,7 +163,7 @@ public:
   {
     int ret = OB_SUCCESS;
     // logstream freeze
-    if (!is_tablet_freeze()) {
+    if (!get_is_tablet_freeze()) {
       share::ObLSID ls_id;
       if (OB_FAIL(get_ls_id(ls_id))) {
         TRANS_LOG(WARN, "failed to get ls id", KPC(this));
@@ -135,27 +181,28 @@ public:
 
 public:
   ObITabletMemtable()
-      : allow_freeze_(true),
-        is_tablet_freeze_(false),
-        freeze_clock_(0),
-        init_timestamp_(0),
-        max_schema_version_(0),
-        freezer_(nullptr),
-        mt_stat_(),
-        freeze_scn_(),
-        max_end_scn_(),
-        rec_scn_(),
-        is_flushed_(false),
-        logging_blocked_(false),
-        resolved_active_memtable_left_boundary_(true),
-        unset_active_memtable_logging_blocked_(false),
-        read_barrier_(false),
-        unsubmitted_cnt_(0),
-        logging_blocked_start_time_(0),
-        write_ref_cnt_(0),
-        migration_clog_checkpoint_scn_(),
-        freeze_state_(TabletMemtableFreezeState::INVALID),
-        memtable_mgr_handle_()
+    : freeze_clock_(0),
+    init_timestamp_(0),
+    max_schema_version_(0),
+    freezer_(nullptr),
+    mt_stat_(),
+    freeze_scn_(),
+    max_end_scn_(),
+    rec_scn_(),
+    allow_freeze_(true),
+    is_tablet_freeze_(false),
+    is_flushed_(false),
+    logging_blocked_(false),
+    resolved_active_memtable_left_boundary_(true),
+    unset_active_memtable_logging_blocked_(false),
+    has_backoffed_(false),
+    read_barrier_(false),
+    unsubmitted_cnt_(0),
+    logging_blocked_start_time_(0),
+    write_ref_cnt_(0),
+    migration_clog_checkpoint_scn_(),
+    freeze_state_(TabletMemtableFreezeState::INVALID),
+    memtable_mgr_handle_()
   {
     max_end_scn_.set_min();
     rec_scn_.set_max();
@@ -173,6 +220,7 @@ public:
     logging_blocked_ = false;
     resolved_active_memtable_left_boundary_ = true;
     unset_active_memtable_logging_blocked_ = false;
+    has_backoffed_ = false;
     read_barrier_ = false;
     freeze_clock_ = 0;
     freeze_state_ = TabletMemtableFreezeState::INVALID;
@@ -244,24 +292,32 @@ public:
   // *************** pure virtual functions *****************
 
 public:
+  // ************* memtable flag operator *************
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(is_tablet_freeze, IS_TABLET_FREEZE);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(is_flushed, IS_FLUSHED);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(resolved_active_memtable_left_boundary,
+                                   RESOLVED_ACTIVE_MEMTABLE_LEFT_BOUNDARY);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(unset_active_memtable_logging_blocked,
+                                   UNSET_ACTIVE_MEMTABLE_LOGGING_BLOCKED);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR(has_backoffed, HAS_BACKOFFED);
+  // ************* memtable flag operator *************
+
+public:
   // *************** setter *****************
   void set_max_schema_version(const int64_t schema_version);
-  void set_is_tablet_freeze() { is_tablet_freeze_ = true; }
   void set_freeze_clock(const uint32_t freeze_clock) { ATOMIC_STORE(&freeze_clock_, freeze_clock); }
-  void set_is_flushed() { is_flushed_ = true; }
   void set_read_barrier() { read_barrier_ = true; }
   void reset_mt_stat() { mt_stat_.reset(); }
-  void unset_active_memtable_logging_blocked() { ATOMIC_STORE(&unset_active_memtable_logging_blocked_, true); }
   void set_frozen_time(const int64_t timestamp) const { mt_stat_.frozen_time_ = timestamp; }
   void set_last_print_time(const int64_t timestamp) const { mt_stat_.last_print_time_ = timestamp; }
   void set_ready_for_flush_time(const int64_t timestamp) { mt_stat_.ready_for_flush_time_= timestamp; }
   void set_create_flush_dag_time(const int64_t timestamp) { mt_stat_.create_flush_dag_time_ = timestamp; }
   void set_release_time(const int64_t timestamp) { mt_stat_.release_time_ = timestamp; }
   void set_push_table_into_gc_queue_time(const int64_t timestamp) { mt_stat_.push_table_into_gc_queue_time_ = timestamp; }
-  void set_resolved_active_memtable_left_boundary(bool flag)
-  {
-    ATOMIC_STORE(&resolved_active_memtable_left_boundary_, flag);
-  }
   void set_freeze_state(const TabletMemtableFreezeState state)
   {
     if (state >= TabletMemtableFreezeState::ACTIVE && state <= TabletMemtableFreezeState::RELEASED) {
@@ -271,12 +327,12 @@ public:
   void set_logging_blocked()
   {
     logging_blocked_start_time_ = ObClockGenerator::getClock();
-    ATOMIC_STORE(&logging_blocked_, true);
+    set_logging_blocked_();
   }
-  void unset_logging_blocked()
+  void clear_logging_blocked()
   {
     if (get_logging_blocked()) {
-      ATOMIC_STORE(&logging_blocked_, false);
+      clear_logging_blocked_();
       int64_t cost_time = ObClockGenerator::getClock() - logging_blocked_start_time_;
       TRANS_LOG(INFO, "the cost time of logging blocked: ", K(cost_time), K(this), K(key_.tablet_id_));
     }
@@ -285,12 +341,9 @@ public:
 
 public:
   // *************** getter *****************
-  bool get_is_flushed() { return is_flushed_; }
-  bool is_tablet_freeze() { return is_tablet_freeze_; }
   bool &get_read_barrier() { return read_barrier_; }
-  bool allow_freeze() const { return ATOMIC_LOAD(&allow_freeze_); }
-  bool get_logging_blocked() { return ATOMIC_LOAD(&logging_blocked_); }
-  bool get_resolved_active_memtable_left_boundary() { return ATOMIC_LOAD(&resolved_active_memtable_left_boundary_); }
+  bool allow_freeze() const { return get_allow_freeze_(); }
+  bool get_logging_blocked() { return get_logging_blocked_(); }
   uint32_t get_freeze_clock() const { return ATOMIC_LOAD(&freeze_clock_); }
   int64_t get_unsubmitted_cnt() const { return ATOMIC_LOAD(&unsubmitted_cnt_); }
   int64_t get_max_schema_version() const ;
@@ -315,6 +368,7 @@ public:
                        K(logging_blocked_),
                        K(resolved_active_memtable_left_boundary_),
                        K(unset_active_memtable_logging_blocked_),
+                       K(has_backoffed_),
                        K(read_barrier_),
                        K(freeze_clock_),
                        K(freeze_state_),
@@ -333,7 +387,14 @@ public:
                        K(mt_stat_.create_flush_dag_time_),
                        K(mt_stat_.release_time_),
                        K(mt_stat_.push_table_into_gc_queue_time_),
-                       K(mt_stat_.last_print_time_))
+                       K(mt_stat_.last_print_time_));
+
+protected:
+  // ************* memtable flag inner operator *************
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR_(allow_freeze, ALLOW_FREEZE);
+
+  OB_MEMTABLE_DEFINE_FLAG_OPERATOR_(logging_blocked, LOGGING_BLOCKED);
+  // ************* memtable flag inner operator *************
 
 protected:
   void resolve_left_boundary_for_active_memtable_();
@@ -346,8 +407,6 @@ protected:
   void unset_logging_blocked_for_active_memtable_();
 
 protected:
-  bool allow_freeze_;
-  bool is_tablet_freeze_;
   mutable uint32_t freeze_clock_;
   int64_t init_timestamp_;
   int64_t max_schema_version_;  // to record the max schema version of memtable & schema_change_clog
@@ -358,10 +417,39 @@ protected:
   share::SCN rec_scn_;
 
 private:
-  bool is_flushed_;
-  bool logging_blocked_;  // flag whether the memtable can submit log, cannot submit if true
-  bool resolved_active_memtable_left_boundary_;
-  bool unset_active_memtable_logging_blocked_;
+
+  static const uint8_t MEMTABLE_ALLOW_FREEZE_MASK                            = 1 << 0;
+  static const uint8_t MEMTABLE_IS_TABLET_FREEZE_MASK                        = 1 << 1;
+  static const uint8_t MEMTABLE_IS_FLUSHED_MASK                              = 1 << 2;
+  static const uint8_t MEMTABLE_LOGGING_BLOCKED_MASK                         = 1 << 3;
+  static const uint8_t MEMTABLE_RESOLVED_ACTIVE_MEMTABLE_LEFT_BOUNDARY_MASK  = 1 << 4;
+  static const uint8_t MEMTABLE_UNSET_ACTIVE_MEMTABLE_LOGGING_BLOCKED_MASK   = 1 << 5;
+  static const uint8_t MEMTABLE_HAS_BACKOFFED_MASK                           = 1 << 6;
+
+  union {
+    // NB: not allow to use it directly
+    uint8_t flag_; // extend it if necessary
+    struct {
+      // whether the memtable allow freeze
+      bool allow_freeze_                           :1;
+      // whether the memtable is tabelt freezed
+      bool is_tablet_freeze_                       :1;
+      // whether the memtable has finished the MINI
+      bool is_flushed_                             :1;
+      // whether the memtable allow submit log
+      bool logging_blocked_                        :1;
+      // whether the memtable has resolved the left
+      // boundary of the active memtable
+      bool resolved_active_memtable_left_boundary_ :1;
+      // whether the memtable has unset the logging
+      // block state of the active memtable
+      bool unset_active_memtable_logging_blocked_  :1;
+      // whether the memtable has backoffed its
+      // right boundary because of sync_log_fail
+      bool has_backoffed_                          :1;
+    };
+  };
+
   bool read_barrier_ CACHE_ALIGNED;
   int64_t unsubmitted_cnt_;
   int64_t logging_blocked_start_time_;  // record the start time of logging blocked
@@ -370,9 +458,6 @@ private:
   TabletMemtableFreezeState freeze_state_;
   ObMemtableMgrHandle memtable_mgr_handle_;
 };
-
-
-
 
 }  // namespace storage
 }  // namespace oceanbase

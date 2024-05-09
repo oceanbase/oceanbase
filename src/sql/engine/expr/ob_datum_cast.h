@@ -159,6 +159,7 @@ int ob_datum_to_ob_time_with_date(const T &datum,
         ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, date_sql_mode);
         if (OB_SUCC(ret)) {
           ob_time.parts_[DT_USEC] = (dec_part + 500) / 1000;
+          ObTimeConverter::adjust_ob_time(ob_time);
         }
       }
       break;

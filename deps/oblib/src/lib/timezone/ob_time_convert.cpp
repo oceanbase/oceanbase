@@ -1802,6 +1802,9 @@ int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob
   } else {
     parts[DT_HOUR] = TIME_MAX_HOUR + 1;
   }
+  if (OB_SUCC(ret)) {
+    adjust_ob_time(ob_time);
+  }
   UNUSED(mode);
   return ret;
 }
@@ -1990,6 +1993,7 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_ti
       LOG_WARN("datetime is invalid or out of range",
                K(ret), K(str), K(ob_time), K(date_sql_mode), KCSTRING(lbt()));
     } else {
+      adjust_ob_time(ob_time);
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     }
     if (NULL != scale) {
@@ -2152,16 +2156,10 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
         }
         if (OB_SUCC(ret) && OB_FAIL(validate_time(ob_time))) {
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
-        } else {
-          // '2:59:59.9999999' ---> '03:00:00.000000'
-          const int64_t *part_max = DT_PART_BASE;
-          for (int i = DATETIME_PART_CNT - 1; OB_SUCC(ret) && i > DATE_PART_CNT; i--) {
-            if (ob_time.parts_[i] == part_max[i]) {
-              ob_time.parts_[i] = 0;
-              ob_time.parts_[i - 1]++;
-            }
-          }
         }
+      }
+      if (OB_SUCC(ret)) {
+        adjust_ob_time(ob_time);
       }
     }
   }
@@ -3134,6 +3132,26 @@ int ObTimeConverter::data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, con
     }
   }
   return ret;
+}
+
+void ObTimeConverter::adjust_ob_time(ObTime &ob_time)
+{
+  // '2:59:59.9999995' ---> '03:00:00.000000'
+  for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
+    if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+      ob_time.parts_[i] -= DT_PART_BASE[i];
+      ob_time.parts_[i - 1]++;
+    }
+  }
+  int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
+  if (ob_time.parts_[DT_MDAY] > days) {
+    ob_time.parts_[DT_MDAY] -= days;
+    ob_time.parts_[DT_MON]++;
+  }
+  if (ob_time.parts_[DT_MON] > 12) {
+    ob_time.parts_[DT_MON] -= 12;
+    ob_time.parts_[DT_YEAR]++;
+  }
 }
 
 /**

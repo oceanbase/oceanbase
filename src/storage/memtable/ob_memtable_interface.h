@@ -131,7 +131,6 @@ public:
   virtual int64_t dec_write_ref() { return OB_INVALID_COUNT; }
   virtual int64_t get_write_ref() const { return OB_INVALID_COUNT; }
   virtual uint32_t get_freeze_flag() { return 0; }
-  virtual bool is_tablet_freeze() { return false; }
   virtual int64_t get_occupied_size() const { return 0; }
   virtual int estimate_phy_size(const ObStoreRowkey *start_key,
                                 const ObStoreRowkey *end_key,

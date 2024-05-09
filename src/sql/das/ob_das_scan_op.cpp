@@ -1092,16 +1092,25 @@ OB_SERIALIZE_MEMBER((ObDASScanOp, ObIDASTaskOp),
 OB_SERIALIZE_MEMBER(ObDASObsoletedObj, flag_);
 
 ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
-  : ObDASScanOp(op_alloc)
+  : ObDASScanOp(op_alloc),
+    iter_(),
+    cur_group_idx_(0),
+    group_size_(0)
 {
 
+}
+
+void ObDASGroupScanOp::init_group_range(int64_t cur_group_idx, int64_t group_size)
+{
+  cur_group_idx_ = cur_group_idx;
+  group_size_ = group_size;
 }
 
 ObDASGroupScanOp::~ObDASGroupScanOp()
 {
 }
 
-OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp));
+OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);
 
 ObDASScanResult::ObDASScanResult()
   : ObIDASTaskResult(),
@@ -1112,7 +1121,11 @@ ObDASScanResult::ObDASScanResult()
     eval_ctx_(nullptr),
     extra_result_(nullptr),
     need_check_output_datum_(false),
-    enable_rich_format_(false)
+    enable_rich_format_(false),
+    io_read_bytes_(0),
+    ssstore_read_bytes_(0),
+    ssstore_read_row_cnt_(0),
+    memstore_read_row_cnt_(0)
 {
 }
 
@@ -1262,7 +1275,11 @@ int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     datum_store_,
                     enable_rich_format_,
-                    vec_row_store_);
+                    vec_row_store_,
+                    io_read_bytes_,
+                    ssstore_read_bytes_,
+                    ssstore_read_row_cnt_,
+                    memstore_read_row_cnt_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

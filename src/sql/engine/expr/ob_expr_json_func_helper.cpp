@@ -422,7 +422,7 @@ int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExecContext *ctx
     ObCollationType cs_type = data.get_collation_type();
     if (OB_FAIL(ObJsonExprHelper::transform_convertible_2jsonBase(data, val_type, allocator,
                                                                   cs_type, j_base, ObConv2JsonParam(to_bin,
-                                                                  data.has_lob_header(), false)))) {
+                                                                  data.has_lob_header(), false, false, true, true)))) {
       LOG_WARN("failed: parse value to jsonBase", K(ret), K(val_type));
     }
   } else {
@@ -1680,7 +1680,17 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
           uint32_t parse_flag = flags.relax_type_ ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_STRICT_FLAG;
           ADD_FLAG_IF_NEED(flags.is_schema_, parse_flag, ObJsonParser::JSN_SCHEMA_FLAG);
           if(OB_FAIL(ObJsonExprHelper::cast_to_json_tree(j_str, allocator, parse_flag))) {
-            LOG_WARN("cast to json tree fail", K(ret));
+            if (flags.wrap_on_fail_) {
+              if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonString)))) {
+                ret = OB_ALLOCATE_MEMORY_FAILED;
+                LOG_WARN("fail to allocate json string", K(ret));
+              } else {
+                ret = OB_SUCCESS;
+                json_node = (ObJsonString*)new(buf)ObJsonString(j_str.ptr(), j_str.length());
+              }
+            } else {
+              LOG_WARN("cast to json tree fail", K(ret));
+            }
           } else {
             ObJsonInType to_type = flags.to_bin_ ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
             if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_TREE,
@@ -1693,13 +1703,11 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
             }
           }
         } else {
-          uint64_t len = j_str.length();
-          const char *ptr = j_str.ptr();
-          buf = allocator->alloc(sizeof(ObJsonString));
-          if (OB_ISNULL(buf)) {
+          if (OB_ISNULL(buf = allocator->alloc(sizeof(ObJsonString)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate json string", K(ret));
           } else {
-            json_node = (ObJsonString*)new(buf)ObJsonString(ptr, len);
+            json_node = (ObJsonString*)new(buf)ObJsonString(j_str.ptr(), j_str.length());
           }
         }
       }

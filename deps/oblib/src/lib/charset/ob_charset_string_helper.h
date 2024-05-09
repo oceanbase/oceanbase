@@ -61,6 +61,8 @@ inline int ob_charset_char_len<CHARSET_UTF8MB4>(const unsigned char *s, const un
       mb_len = 3;
     } else if (c < 0xf8) {
       mb_len = 4;
+    } else {
+      mb_len = 1; /* Illegal mb head */
     }
     if (s + mb_len > e) {
       mb_len = OB_CS_TOOSMALL;
@@ -195,6 +197,8 @@ inline int ob_charset_char_len<CHARSET_GB18030>(const unsigned char *s, const un
         if (OB_LIKELY(s + 3 < e)) {
           mb_len = 4;
         }
+      } else {
+        mb_len = 1; /* Illegal low_c */
       }
     }
   }
@@ -614,6 +618,7 @@ public:
   static int foreach_char_prototype(const ObString &str,
                                     HANDLE_FUNC &func,
                                     bool ignore_convert_failed = false,
+                                    bool stop_when_truncated = false,
                                     int64_t *truncated_len = NULL)
   {
     int ret = OB_SUCCESS;
@@ -621,20 +626,23 @@ public:
     const char* end = str.ptr() + str.length();
     int64_t step = 0;
     ob_wc_t unicode = -1;
+    int32_t replace_wc = 0;
     for (; OB_SUCC(ret) && begin < end; begin += step) {
       if (DO_DECODE) {
         step = ob_charset_decode_unicode<CS_TYPE>(pointer_cast<const unsigned char*>(begin), pointer_cast<const unsigned char*>(end), unicode);
       } else {
         step = ob_charset_char_len<CS_TYPE>(pointer_cast<const unsigned char*>(begin), pointer_cast<const unsigned char*>(end));
       }
-      if (OB_UNLIKELY(step <= OB_CS_TOOSMALL)) {
-        ret = OB_ERR_DATA_TRUNCATED;
-        if (OB_NOT_NULL(truncated_len)) {
-          *truncated_len = end - begin;
-        }
-      } else if (OB_UNLIKELY(step <= 0)) {
-        if (ignore_convert_failed) {
+      if (OB_UNLIKELY(step <= 0)) {
+        if (ignore_convert_failed && !(stop_when_truncated && step <= OB_CS_TOOSMALL)) {
+          ret = OB_SUCCESS;
           step = 1;
+          unicode = -1;
+        } else if (step <= OB_CS_TOOSMALL) {
+          ret = OB_ERR_DATA_TRUNCATED;
+          if (OB_NOT_NULL(truncated_len)) {
+            *truncated_len = end - begin;
+          }
         } else {
           ret = OB_ERR_INCORRECT_STRING_VALUE;
         }
@@ -662,44 +670,45 @@ public:
                           HANDLE_FUNC &func,
                           bool convert_unicode = true,
                           bool ignore_convert_failed = false,
+                          bool stop_when_truncated = false,
                           int64_t *truncated_len = NULL)
   {
     int ret = OB_SUCCESS;
     switch (cs_type) {
     case CHARSET_UTF8MB4:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_UTF8MB4, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_UTF8MB4, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_UTF8MB4, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_UTF8MB4, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_GBK:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_GBK, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_GB18030:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_GB18030_2022:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_GB18030_2022, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_GB18030_2022, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_GB18030, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_UTF16:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_UTF16, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_LATIN1:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     case CHARSET_BINARY:
       ret = convert_unicode ?
-            foreach_char_prototype<CHARSET_BINARY, HANDLE_FUNC, true>(str, func, ignore_convert_failed, truncated_len)
-          : foreach_char_prototype<CHARSET_BINARY, HANDLE_FUNC, false>(str, func, ignore_convert_failed, truncated_len);
+            foreach_char_prototype<CHARSET_BINARY, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_BINARY, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -744,30 +753,31 @@ public:
     ObCharsetType in_cs_type = ObCharset::charset_type_by_coll(src_coll_type);
     ObCharsetType out_cs_type = ObCharset::charset_type_by_coll(out_coll_type);
     int64_t truncated_len = 0;
+    bool stop_when_truncated = false;
     switch (out_cs_type) {
       case CHARSET_UTF8MB4: {
         Encoder<CHARSET_UTF8MB4> encoder(buf, buf_len, pos, replaced_char);
-        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, &truncated_len);
+        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, stop_when_truncated, &truncated_len);
         break;
       }
       case CHARSET_GBK: {
         Encoder<CHARSET_GBK> encoder(buf, buf_len, pos, replaced_char);
-        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, &truncated_len);
+        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, stop_when_truncated, &truncated_len);
         break;
       }
       case CHARSET_GB18030: {
         Encoder<CHARSET_GB18030> encoder(buf, buf_len, pos, replaced_char);
-        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, &truncated_len);
+        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, stop_when_truncated, &truncated_len);
         break;
       }
       case CHARSET_GB18030_2022: {
         Encoder<CHARSET_GB18030_2022> encoder(buf, buf_len, pos, replaced_char);
-        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, &truncated_len);
+        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, stop_when_truncated, &truncated_len);
         break;
       }
       case CHARSET_UTF16: {
         Encoder<CHARSET_UTF16> encoder(buf, buf_len, pos, replaced_char);
-        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, &truncated_len);
+        ret = foreach_char(str, in_cs_type, encoder, true, !report_error, stop_when_truncated, &truncated_len);
         break;
       }
       default: {

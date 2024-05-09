@@ -218,7 +218,7 @@ public:
       common::ObIArray<ObSqlDatumInfo> &datum_infos,
       const int64_t datum_offset = 0) override;
   virtual int get_row_count(int32_t col_id, const int64_t *row_ids, const int64_t row_cap,
-    const bool contains_null, int64_t &count) override final;
+    const bool contains_null, const share::schema::ObColumnParam *col_param, int64_t &count) override final;
   virtual int64_t get_column_count() const override
   {
     return column_count_;

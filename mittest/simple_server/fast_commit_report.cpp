@@ -113,7 +113,7 @@ int ObMemtable::flush(share::ObLSID ls_id)
   int ret = OB_SUCCESS;
 
   int64_t cur_time = ObTimeUtility::current_time();
-  if (is_flushed_) {
+  if (get_is_flushed()) {
     ret = OB_NO_NEED_UPDATE;
   } else {
     if (mt_stat_.create_flush_dag_time_ == 0 &&

@@ -359,6 +359,7 @@ int ObLeaseStateMgr::do_renew_lease()
   ObLeaseResponse lease_response;
   ObAddr rs_addr;
   NG_TRACE(do_renew_lease_begin);
+  DEBUG_SYNC(BEFORE_SEND_HB);
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

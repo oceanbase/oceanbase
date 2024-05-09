@@ -1246,9 +1246,6 @@ int ObStorageS3Reader::pread_(char *buf,
     } else {
       Aws::S3::Model::GetObjectRequest request;
       Aws::S3::Model::GetObjectOutcome outcome;
-      if (get_data_size == file_length_) {
-        request.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
-      }
       char range_read[64] = { 0 };
       request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
 

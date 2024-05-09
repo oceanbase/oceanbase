@@ -4970,6 +4970,10 @@ int ObSelectResolver::resolve_into_clause(const ParseNode *node)
           if (CHARSET_INVALID == (charset_type = ObCharset::charset_type(charset.trim()))) {
             ret = OB_ERR_UNKNOWN_CHARSET;
             LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());
+          } else if (CHARSET_UTF16 == charset_type) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("select into outfile character set utf16", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "upload data using utf16");
           } else {
             into_item->cs_type_ = ObCharset::get_default_collation(charset_type);
           }

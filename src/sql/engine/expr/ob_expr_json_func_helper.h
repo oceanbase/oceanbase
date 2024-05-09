@@ -154,12 +154,22 @@ struct ObConv2JsonParam {
   format_json_(format_json),
   is_schema_(is_schema)
   {}
+
+  ObConv2JsonParam(bool to_bin, bool has_lob_header, bool deep_copy, bool relax_type, bool format_json, bool is_schema, bool is_wrap_fail) :
+    to_bin_(to_bin),
+    has_lob_header_(has_lob_header),
+    deep_copy_(deep_copy),
+    relax_type_(relax_type),
+    format_json_(format_json),
+    is_schema_(is_schema),
+    wrap_on_fail_(is_wrap_fail) {}
   bool to_bin_;
   bool has_lob_header_;
   bool deep_copy_ = false;
   bool relax_type_ = true;
   bool format_json_ = false;
   bool is_schema_ = false;
+  bool wrap_on_fail_ = false;
 };
 
 class ObJsonExprHelper final

@@ -1142,23 +1142,22 @@ int ObDelUpdResolver::add_select_item_func(ObSelectStmt &select_stmt, ColumnItem
   return ret;
 }
 
-int ObDelUpdResolver::select_items_has_pk(const ObSelectStmt& select_stmt, bool &has_pk) {
+int ObDelUpdResolver::select_items_is_pk(const ObSelectStmt& select_stmt, bool &has_pk) {
   int ret = OB_SUCCESS;
   has_pk = false;
 
   for (int64_t i = 0; i < select_stmt.get_select_items().count() && !has_pk && OB_SUCC(ret); ++i) {
     const SelectItem &si = select_stmt.get_select_items().at(i);
-    ObSEArray<uint64_t, 2> used_column_ids;
     if (OB_ISNULL(si.expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("select item expr is null", K(ret));
-    } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(si.expr_, used_column_ids))) {
-      LOG_WARN("failed to extract column ids", K(ret));
-    } else {
-      for (int64_t idx = 0; idx < used_column_ids.count() && !has_pk; ++idx) {
-        if (used_column_ids.at(idx) == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
-          has_pk = true;
-        }
+    } else if (si.expr_->is_column_ref_expr()) {
+      const ObColumnRefRawExpr* col_ref = static_cast<const ObColumnRefRawExpr*>(si.expr_);
+      if (OB_ISNULL(col_ref)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref expr is null", K(ret));
+      } else if (col_ref->get_column_id() == OB_HIDDEN_PK_INCREMENT_COLUMN_ID) {
+        has_pk = true;
       }
     }
   }
@@ -1198,8 +1197,8 @@ int ObDelUpdResolver::add_all_column_to_updatable_view(ObDMLStmt &stmt,
     if (table_item.is_basic_table() || table_item.is_link_table()) {
       bool has_pk = false;
       if (stmt::T_SELECT == stmt.get_stmt_type()) {
-        // select_items_has_pk must happend before add_select_item_func
-        if (OB_FAIL(select_items_has_pk(static_cast<ObSelectStmt &>(stmt), has_pk))) {
+        // select_items_is_pk must happend before add_select_item_func
+        if (OB_FAIL(select_items_is_pk(static_cast<ObSelectStmt &>(stmt), has_pk))) {
           LOG_WARN("failed to extract pk", K(ret));
         } else if (has_pk) {
           ret = OB_ERR_BAD_FIELD_ERROR;

@@ -121,6 +121,10 @@ void ObLSWorker::destroy()
   LOG_INFO("destroy stream worker succ");
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(LOG_FETCHER_LSW_TIMER_START_FAIL);
+ERRSIM_POINT_DEF(LOG_FETCHER_LSW_HANDLER_START_FAIL);
+#endif
 int ObLSWorker::start()
 {
   int ret = OB_SUCCESS;
@@ -128,8 +132,16 @@ int ObLSWorker::start()
   if (OB_UNLIKELY(! inited_)) {
     LOG_ERROR("not init", K(inited_));
     ret = OB_NOT_INIT;
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_FETCHER_LSW_TIMER_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_FETCHER_LSW_TIMER_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_START(timer_id_))) {
     LOG_ERROR("start timer thread fail", KR(ret));
+#ifdef ERRSIM
+  } else if (OB_FAIL(LOG_FETCHER_LSW_HANDLER_START_FAIL)) {
+    LOG_ERROR("ERRSIM: LOG_FETCHER_LSW_HANDLER_START_FAIL");
+#endif
   } else if (OB_FAIL(TG_SET_HANDLER_AND_START(tg_id_, *this))) {
     LOG_WARN("TG_SET_HANDLER_AND_START failed", KR(ret), K(tg_id_));
   } else {

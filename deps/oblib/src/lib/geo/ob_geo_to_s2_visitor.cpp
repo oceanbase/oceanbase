@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX LIB
 #include "ob_geo_to_s2_visitor.h"
 #include "ob_srs_info.h"
+#include "ob_geo_dispatcher.h"
 
 namespace oceanbase {
 namespace common {

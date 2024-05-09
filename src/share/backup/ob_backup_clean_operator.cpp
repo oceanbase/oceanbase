@@ -532,7 +532,7 @@ int ObBackupCleanJobOperator::update_retry_count(
     LOG_WARN("failed to exec sql", K(ret), K(sql));
   } else if (1 != affected_rows) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid affected_rows", K(ret), K(affected_rows), K(sql), K(job_attr));
+    LOG_WARN("invalid affected_rows", K(ret), K(affected_rows), K(sql), K(job_attr));
   }
   return ret;
 }

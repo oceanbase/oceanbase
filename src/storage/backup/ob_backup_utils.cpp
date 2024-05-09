@@ -2039,7 +2039,7 @@ int ObBackupTabletProvider::hold_tablet_handle_(
   } else if (OB_FAIL(ls_backup_ctx_->hold_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to hold tablet", K(ret), K(tablet_id), K(tablet_handle));
   } else {
-    LOG_INFO("hold tablet handle", K(tablet_id), K(tablet_handle));
+    LOG_DEBUG("hold tablet handle", K(tablet_id), K(tablet_handle));
   }
   return ret;
 }

@@ -29,6 +29,82 @@ struct ObTabletCreateSSTableParam;
 }
 namespace blocksstable
 {
+struct ObTxContext
+{
+  struct ObTxDesc{
+    int64_t tx_id_;
+    int64_t row_count_;
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(serialization::encode_i64(buf, buf_len,pos, tx_id_))) {
+        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+      } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, row_count_))) {
+        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+      }
+      return ret;
+    }
+
+    int deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &tx_id_))) {
+        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+      } else if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &row_count_))) {
+        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+      }
+      return ret;
+    }
+
+    int64_t get_serialize_size() const {
+      return serialization::encoded_length_i64(tx_id_) + serialization::encoded_length_i64(row_count_);
+    }
+    TO_STRING_KV(K(tx_id_), K(row_count_));
+  };
+
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    int ret = OB_SUCCESS;
+    const_cast<ObTxContext *>(this)->len_ = get_serialize_size();
+    if (OB_FAIL(serialization::encode_i32(buf, buf_len,pos, len_))) {
+      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+    } else if (OB_FAIL(tx_descs_.serialize(buf, buf_len, pos))) {
+      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+    }
+    return ret;
+  }
+  int64_t get_serialize_size() const {
+    return serialization::encoded_length_i32(len_) + tx_descs_.get_serialize_size();
+  }
+  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
+  {
+    int ret = OB_SUCCESS;
+    const int64_t tmp_pos = pos;
+    if (OB_FAIL(serialization::decode_i32(buf, buf_len, pos, &len_))) {
+      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+    } else if (OB_FAIL(tx_descs_.deserialize(buf, buf_len, pos))) {
+      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
+    } else if (OB_UNLIKELY(pos - tmp_pos != len_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected len_", K(ret), K(len_), K(tmp_pos), K(pos));
+    }
+    return ret;
+  }
+  int assign(const ObTxContext &tx_ctx) {
+    len_ = tx_ctx.len_;
+    return tx_descs_.assign(tx_ctx.tx_descs_);
+  }
+  void reset() {
+    len_ = 0;
+    tx_descs_.reset();
+  }
+  static const int64_t MAX_TX_IDS_COUNT = 16;
+  int32_t len_;
+  ObSEArray<ObTxDesc, MAX_TX_IDS_COUNT> tx_descs_;
+  TO_STRING_KV(K(tx_descs_));
+};
+
 //For compatibility, the variables in this struct MUST NOT be deleted or moved.
 //You should ONLY add variables at the end.
 //Note that if you use complex structure as variables, the complex structure should also keep compatibility.
@@ -154,8 +230,8 @@ public:
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
   OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
-  OB_INLINE int64_t get_tx_id_count() const { return tx_ids_.count(); }
-  OB_INLINE int64_t get_tx_ids(int64_t idx) const { return tx_ids_.at(idx); }
+  OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.tx_descs_.count(); }
+  OB_INLINE int64_t get_tx_ids(int64_t idx) const { return tx_ctx_.tx_descs_.at(idx).tx_id_; }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
@@ -245,7 +321,7 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
-  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ids), K_(is_inited));
+  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
@@ -265,7 +341,6 @@ private:
 private:
   friend class ObSSTable;
   static const int64_t SSTABLE_META_VERSION = 1;
-    static const int64_t MAX_TX_IDS_COUNT = 16;
 private:
   ObSSTableBasicMeta basic_meta_;
   ObRootBlockInfo data_root_info_;
@@ -273,7 +348,7 @@ private:
   ObSSTableArray cg_sstables_;
   int64_t *column_checksums_;
   int64_t column_checksum_count_;
-  ObSEArray<int64_t, MAX_TX_IDS_COUNT> tx_ids_;
+  ObTxContext tx_ctx_;
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);

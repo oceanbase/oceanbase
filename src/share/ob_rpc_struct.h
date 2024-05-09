@@ -2156,7 +2156,8 @@ public:
       inner_sql_exec_addr_(),
       local_session_var_(&allocator_),
       mview_refresh_info_(),
-      alter_algorithm_(INPLACE)
+      alter_algorithm_(INPLACE),
+      alter_auto_partition_attr_(false)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2260,6 +2261,7 @@ public:
   ObLocalSessionVar local_session_var_;
   ObMViewRefreshInfo mview_refresh_info_;
   AlterAlgorithm alter_algorithm_;
+  bool alter_auto_partition_attr_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
