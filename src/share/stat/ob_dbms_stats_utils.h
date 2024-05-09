@@ -180,6 +180,8 @@ public:
   static int check_all_cols_range_skew(const ObIArray<ObColumnStatParam> &column_params,
                                        ObIArray<ObOptStat> &opt_stats);
 
+  static int implicit_commit_before_gather_stats(sql::ObExecContext &ctx);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

@@ -23,6 +23,7 @@
 #include "share/stat/ob_stat_item.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/ob_result_set.h"
 
 namespace oceanbase
 {
@@ -1265,6 +1266,22 @@ int ObDbmsStatsUtils::check_all_cols_range_skew(const ObIArray<ObColumnStatParam
   return ret;
 }
 
+int ObDbmsStatsUtils::implicit_commit_before_gather_stats(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t optimizer_features_enable_version = 0;
+  if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(ctx.get_my_session()));
+  } else if (OB_FAIL(ctx.get_my_session()->get_optimizer_features_enable_version(optimizer_features_enable_version))) {
+    LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
+  } else if (optimizer_features_enable_version < COMPAT_VERSION_4_2_4) {
+    //do nothing
+  } else if (OB_FAIL(ObResultSet::implicit_commit_before_cmd_execute(*ctx.get_my_session(), ctx, stmt::T_ANALYZE))) {
+    LOG_WARN("failed to implicit commit before cmd execute", K(ret));
+  } else {/*do nothing*/}
+  return ret;
+}
 
 }
 }
