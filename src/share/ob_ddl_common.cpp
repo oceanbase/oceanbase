@@ -2016,10 +2016,9 @@ int ObDDLUtil::batch_check_tablet_checksum(
   return ret;
 }
 
-bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version)
+bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type)
 {
-  UNUSED(data_format_version);
-  return false;
+  return data_format_version >= DATA_VERSION_4_3_1_0 && task_type == DDL_MVIEW_COMPLETE_REFRESH;
 }
 
 /******************           ObCheckTabletDataComplementOp         *************/

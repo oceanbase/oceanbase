@@ -1439,7 +1439,7 @@ int64_t ObDDLTask::get_execution_id() const
   return execution_id_;
 }
 
-int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
+int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType task_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
@@ -1457,7 +1457,7 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else {
       LOG_INFO("push execution id", K(tenant_id), K(task_id), K(task_status), K(execution_id), K(ret_code));
-      if (ObDDLUtil::use_idempotent_mode(data_format_version)) {
+      if (ObDDLUtil::use_idempotent_mode(data_format_version, task_type)) {
         if (0 == execution_id) {
           // has been executed before
           if (!ddl_can_retry) {
