@@ -141,6 +141,9 @@ int ObSelectIntoOp::inner_open()
       }
     }
   }
+  if (OB_SUCC(ret) && T_INTO_OUTFILE == into_type && OB_FAIL(open_file())) {
+    LOG_WARN("failed to open file", K(ret));
+  }
   return ret;
 }
 
@@ -505,12 +508,6 @@ int ObSelectIntoOp::into_outfile()
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
-  } else if (is_first_) { // create file
-    if (OB_FAIL(open_file())) {
-      LOG_WARN("open file failed", K(ret), K(file_name_));
-    } else {
-      is_first_ = false;
-    }
   }
   if (OB_SUCC(ret)) {
     ObDatum *datum = NULL;
@@ -535,12 +532,6 @@ int ObSelectIntoOp::into_outfile_batch(const ObBatchRows &brs)
   if (select_exprs.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid count of exprs in select into outfile", K(select_exprs.count()), K(ret));
-  } else if (is_first_) { // create file
-    if (OB_FAIL(open_file())) {
-      LOG_WARN("open file failed", K(ret), K(file_name_));
-    } else {
-      is_first_ = false;
-    }
   }
   OZ(select_exprs.at(0)->eval_batch(eval_ctx_, *brs.skip_, brs.size_));
   if (OB_SUCC(ret)) {

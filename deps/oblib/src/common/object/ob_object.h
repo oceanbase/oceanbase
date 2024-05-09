@@ -1123,23 +1123,30 @@ struct ObObjPrintParams
     cs_type_(cs_type),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    ignore_convert_failed_(false),
+    replaced_char_('?')
   {}
   ObObjPrintParams (const ObTimeZoneInfo *tz_info):
     tz_info_(tz_info),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    ignore_convert_failed_(false),
+    replaced_char_('?')
   {}
   ObObjPrintParams ():
     tz_info_(NULL),
     cs_type_(CS_TYPE_UTF8MB4_GENERAL_CI),
     print_flags_(0),
     exec_ctx_(NULL),
-    ob_obj_type_(ObNullType)
+    ob_obj_type_(ObNullType),
+    ignore_convert_failed_(false),
+    replaced_char_('?')
   {}
-  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type));
+  TO_STRING_KV(K_(tz_info), K_(cs_type),K_(print_flags), K_(ob_obj_type), K_(ignore_convert_failed),
+               K_(replaced_char));
   const ObTimeZoneInfo *tz_info_;
   ObCollationType cs_type_;
   union {
@@ -1169,6 +1176,8 @@ struct ObObjPrintParams
   */
   sql::ObExecContext *exec_ctx_;
   ObObjType ob_obj_type_;
+  bool ignore_convert_failed_;
+  ob_wc_t replaced_char_;
 };
 
 // sizeof(ObObjValue)=8
