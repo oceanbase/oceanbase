@@ -341,7 +341,15 @@ int ObLogExprValues::allocate_expr_post(ObAllocExprContext &ctx)
       LOG_WARN("values table should output is same as value_desc", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < output_exprs_.count(); i++) {
-        if (OB_UNLIKELY(output_exprs_.at(i) != value_desc_.at(i))) {
+        ObSEArray<ObRawExpr *, 2> column_exprs;
+        if (OB_FAIL(ObRawExprUtils::extract_column_exprs(output_exprs_.at(i), column_exprs))) {
+          LOG_WARN("failed to extract column expr", K(ret));
+        } else if (OB_UNLIKELY(column_exprs.count() >= 2)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("values table should output is same as value_desc", K(ret));
+        } else if (column_exprs.empty()) {
+          /* do nothing */
+        } else if (OB_UNLIKELY(value_desc_.at(i) != column_exprs.at(0))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("values table should output is same as value_desc", K(ret));
         }
