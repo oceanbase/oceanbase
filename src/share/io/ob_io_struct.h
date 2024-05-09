@@ -207,7 +207,7 @@ public:
   void destroy();
   int send_detect_task();
   virtual void run1() override;
-
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   void print_sender_status();
   void print_io_status();
@@ -562,6 +562,7 @@ public:
   void reuse();
   int trace_request(const ObIORequest *req, const char *msg, const TraceType trace_type);
   void print_status();
+  int64_t to_string(char *buf, const int64_t len) const;
 private:
   bool is_inited_;
   uint64_t tenant_id_;
