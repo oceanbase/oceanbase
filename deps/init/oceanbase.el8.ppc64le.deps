@@ -32,7 +32,7 @@ devdeps-rocksdb-6.22.1-1.el8.ppc64le.rpm
 devdeps-s2geometry-0.9.0-1.el8.ppc64le.rpm
 devdeps-sqlite-3.38.1-1.el8.ppc64le.rpm
 devdeps-xz-5.2.2-4.el8.ppc64le.rpm
-devdeps-zlib-static-1.2.7-1.el8.ppc64le.rpm
+devdeps-zlib-shared-1.2.7-1.el8.ppc64le.rpm
 
 
 [tools]
