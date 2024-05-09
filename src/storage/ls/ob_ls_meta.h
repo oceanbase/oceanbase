@@ -164,7 +164,8 @@ public:
 private:
   int check_can_update_();
 public:
-  mutable common::ObLatch lock_;
+  mutable common::ObLatch rw_lock_;     // only for atomic read/write in memory.
+  mutable common::ObLatch update_lock_; // only one process can update ls meta. both for write slog and memory
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
 
