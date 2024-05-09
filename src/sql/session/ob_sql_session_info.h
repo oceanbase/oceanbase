@@ -978,6 +978,9 @@ public:
   int remove_ps_session_info(const ObPsStmtId stmt_id);
   int get_ps_session_info(const ObPsStmtId stmt_id,
                           ObPsSessionInfo *&ps_session_info) const;
+  int check_ps_stmt_id_in_use(const ObPsStmtId stmt_id, bool &is_in_use);
+  int add_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
+  int earse_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
   template <typename Visitor>
   int visit_ps_session_info(const ObPsStmtId stmt_id,
                           Visitor &visitor)
@@ -1537,6 +1540,19 @@ private:
                                         common::ObModIds::OB_HASH_BUCKET_PS_SESSION_INFO,
                                         common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO,
                                         orig_tenant_id_);
+    }
+    return ret;
+  }
+  common::hash::ObHashSet<ObPsStmtId> in_use_ps_stmt_id_set_;
+  inline int try_create_in_use_ps_stmt_id_set()
+  {
+    int ret = OB_SUCCESS;
+    static const int64_t PS_BUCKET_NUM = 64;
+    if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+      ret = in_use_ps_stmt_id_set_.create(common::hash::cal_next_prime(PS_BUCKET_NUM),
+                                   common::ObModIds::OB_HASH_BUCKET_PS_SESSION_INFO,
+                                   common::ObModIds::OB_HASH_NODE_PS_SESSION_INFO,
+                                   orig_tenant_id_);
     }
     return ret;
   }

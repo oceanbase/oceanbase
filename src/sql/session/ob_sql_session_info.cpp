@@ -320,6 +320,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     enable_early_lock_release_ = false;
     ps_session_info_map_.reuse();
     ps_name_id_map_.reuse();
+    in_use_ps_stmt_id_set_.reuse();
     next_client_ps_stmt_id_ = 0;
     is_remote_session_ = false;
     session_type_ = INVALID_TYPE;
@@ -1356,6 +1357,42 @@ int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
   return ret;
 }
 
+int ObSQLSessionInfo::check_ps_stmt_id_in_use(const ObPsStmtId stmt_id, bool & is_in_use)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("map not created before insert any element", K(ret));
+  } else if (!in_use_ps_stmt_id_set_.empty() && OB_HASH_EXIST == in_use_ps_stmt_id_set_.exist_refactored(stmt_id)) {
+    is_in_use = true;
+  } else {
+    is_in_use = false;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::add_ps_stmt_id_in_use(const ObPsStmtId stmt_id) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set not created before insert any element", K(ret));
+  } else if (OB_FAIL(in_use_ps_stmt_id_set_.set_refactored(stmt_id))) {
+    LOG_WARN("add ps stmt id failed", K(ret), K(stmt_id));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::earse_ps_stmt_id_in_use(const ObPsStmtId stmt_id) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set not created before insert any element", K(ret));
+  } else if (OB_FAIL(in_use_ps_stmt_id_set_.erase_refactored(stmt_id))) {
+    LOG_WARN("ps stmt id not exist", K(stmt_id));
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
                                       const ObPsStmtInfo *stmt_info,
                                       ObPsStmtId &client_stmt_id,
@@ -1383,8 +1420,9 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
     LOG_TRACE("will add session info", K(proxy_version_), K(min_proxy_version_ps_),
               K(inner_stmt_id), K(client_stmt_id), K(next_client_ps_stmt_id_),
               K(is_new_proxy), K(ret), K(is_inner_sql));
-
-    if (OB_FAIL(try_create_ps_session_info_map())) {
+    if(lib::is_mysql_mode() && OB_FAIL(try_create_in_use_ps_stmt_id_set())) {
+      LOG_WARN("fail create in use ps stmt id", K(ret));
+    } else if (OB_FAIL(try_create_ps_session_info_map())) {
       LOG_WARN("fail create map", K(ret));
     } else {
       ret = ps_session_info_map_.get_refactored(client_stmt_id, session_info);
