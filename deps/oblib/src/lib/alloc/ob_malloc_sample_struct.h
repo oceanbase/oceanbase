@@ -177,15 +177,6 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
   return ret;
 }
 
-#define ob_malloc_sample_backtrace(obj, size)                                                                  \
-  {                                                                                                            \
-    if (OB_UNLIKELY(obj->on_malloc_sample_)) {                                                                 \
-      void *addrs[100] = {nullptr};                                                                            \
-      int bt_len = ob_backtrace(addrs, ARRAYSIZEOF(addrs));                                                    \
-      STATIC_ASSERT(AOBJECT_BACKTRACE_SIZE < sizeof(addrs), "AOBJECT_BACKTRACE_SIZE must be less than addrs!");\
-      MEMCPY(&obj->data_[size], (char*)addrs, AOBJECT_BACKTRACE_SIZE);                                         \
-    }                                                                                                          \
-  }
 } // end of namespace lib
 } // end of namespace oceanbase
 

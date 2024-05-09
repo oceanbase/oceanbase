@@ -14,6 +14,7 @@
 #include "lib/allocator/ob_ctx_define.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/alloc/memory_sanity.h"
+#include "lib/alloc/ob_tenant_ctx_allocator.h"
 
 using namespace oceanbase;
 using namespace lib;
@@ -229,13 +230,12 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   attr.tenant_id_ = OB_SERVER_TENANT_ID;
   attr.label_ = common::ObModIds::OB_TENANT_CTX_ALLOCATOR;
   attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+  attr.ignore_version_ = true;
   root_mgr.lock();
-  auto *obj = root_mgr.alloc_object(sizeof(SubObjectMgr), attr);
+  void *ptr = ObTenantCtxAllocator::common_realloc(NULL, sizeof(SubObjectMgr), attr, *(ta.ref_allocator()), root_mgr);
   root_mgr.unlock();
-  if (OB_NOT_NULL(obj)) {
-    obj->ignore_version_ = true;
-    SANITY_UNPOISON(obj->data_, obj->alloc_bytes_);
-    sub_mgr = new (obj->data_) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
+  if (OB_NOT_NULL(ptr)) {
+    sub_mgr = new (ptr) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
                                             ablock_size_, enable_dirty_list_, blk_mgr_);
     sub_mgr->set_tenant_ctx_allocator(ta_);
   }
@@ -249,11 +249,7 @@ void ObjectMgr::destroy_sub_mgr(SubObjectMgr *sub_mgr)
                                                                           ObCtxIds::DEFAULT_CTX_ID);
     auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
     sub_mgr->~SubObjectMgr();
-    auto *obj = reinterpret_cast<AObject*>((char*)sub_mgr - AOBJECT_HEADER_SIZE);
-    abort_unless(obj->MAGIC_CODE_ == AOBJECT_MAGIC_CODE
-                 || obj->MAGIC_CODE_ == BIG_AOBJECT_MAGIC_CODE);
-    SANITY_POISON(obj->data_, obj->alloc_bytes_);
-    root_mgr.free_object(obj);
+    ObTenantCtxAllocator::common_free(sub_mgr);
   }
 }
 

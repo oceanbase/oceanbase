@@ -51,6 +51,10 @@ public:
   {
     return os_.alloc_object(size, attr);
   }
+  OB_INLINE AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
+  {
+    return os_.realloc_object(obj, size, attr);
+  }
   void free_object(AObject *object);
   OB_INLINE ABlock *alloc_block(uint64_t size, const ObMemAttr &attr) override
   {
