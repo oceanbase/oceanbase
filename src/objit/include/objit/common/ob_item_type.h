@@ -2483,6 +2483,7 @@ typedef enum ObItemType
   T_SET_UNION_ALL,
   T_SHOW_CHECK_TABLE,
   T_SHARED_STORAGE_INFO,
+  T_XA_RECOVER,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

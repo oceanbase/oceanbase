@@ -11383,7 +11383,8 @@ def_table_schema(
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12206',
   table_name = '__all_virtual_global_transaction',
-  keywords = all_def_keywords['__all_tenant_global_transaction']))
+  keywords = all_def_keywords['__all_tenant_global_transaction'],
+  in_tenant_space = True))
 
 # 12207: __all_virtual_all_clusters # abandoned in 4.0
 
