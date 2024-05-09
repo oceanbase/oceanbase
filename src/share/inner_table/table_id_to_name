@@ -273,10 +273,8 @@
 # 424: __all_transfer_task_history
 # 425: __all_balance_job
 # 426: __all_balance_job_history
-# 426: __all_balance_job  # BASE_TABLE_NAME
 # 427: __all_balance_task
 # 428: __all_balance_task_history
-# 428: __all_balance_task  # BASE_TABLE_NAME
 # 429: __all_arbitration_service
 # 430: __all_ls_arb_replica_task
 # 431: __all_data_dictionary_in_log
@@ -921,13 +919,11 @@
 # 12344: __all_virtual_balance_job
 # 12344: __all_balance_job  # BASE_TABLE_NAME
 # 12345: __all_virtual_balance_job_history
-# 12345: __all_balance_job  # BASE_TABLE_NAME
-# 12345: __all_balance_job_history  # BASE_TABLE_NAME1
+# 12345: __all_balance_job_history  # BASE_TABLE_NAME
 # 12346: __all_virtual_balance_task
 # 12346: __all_balance_task  # BASE_TABLE_NAME
 # 12347: __all_virtual_balance_task_history
-# 12347: __all_balance_task  # BASE_TABLE_NAME
-# 12347: __all_balance_task_history  # BASE_TABLE_NAME1
+# 12347: __all_balance_task_history  # BASE_TABLE_NAME
 # 12348: __all_virtual_rls_policy
 # 12348: __all_rls_policy  # BASE_TABLE_NAME
 # 12349: __all_virtual_rls_policy_history
@@ -1601,13 +1597,11 @@
 # 15377: ALL_VIRTUAL_BALANCE_JOB_REAL_AGENT
 # 15377: __all_balance_job  # BASE_TABLE_NAME
 # 15378: ALL_VIRTUAL_BALANCE_JOB_HISTORY_REAL_AGENT
-# 15378: __all_balance_job  # BASE_TABLE_NAME
-# 15378: __all_balance_job_history  # BASE_TABLE_NAME1
+# 15378: __all_balance_job_history  # BASE_TABLE_NAME
 # 15379: ALL_VIRTUAL_BALANCE_TASK_REAL_AGENT
 # 15379: __all_balance_task  # BASE_TABLE_NAME
 # 15380: ALL_VIRTUAL_BALANCE_TASK_HISTORY_REAL_AGENT
-# 15380: __all_balance_task  # BASE_TABLE_NAME
-# 15380: __all_balance_task_history  # BASE_TABLE_NAME1
+# 15380: __all_balance_task_history  # BASE_TABLE_NAME
 # 15381: ALL_VIRTUAL_TRANSFER_TASK_REAL_AGENT
 # 15381: __all_transfer_task  # BASE_TABLE_NAME
 # 15382: ALL_VIRTUAL_TRANSFER_TASK_HISTORY_REAL_AGENT
