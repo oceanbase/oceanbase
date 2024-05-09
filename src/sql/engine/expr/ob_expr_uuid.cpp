@@ -857,17 +857,19 @@ int ObExprBin2uuid::bin2uuid(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_d
     } else if (OB_ISNULL(bin_text_ptr) || UuidCommon::BYTE_LENGTH != bin_text.length()) {
       ObString string_type_str("binary");
       ObString func_str(N_BIN_TO_UUID);
-      char hex_buf[bin_text.length()*2];
-      int64_t pos = 0;
-      if (OB_SUCC(common::hex_print(bin_text.ptr(), bin_text.length(), hex_buf, bin_text.length()*2, pos))) {
-        ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
-        LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
-                      string_type_str.length(), string_type_str.ptr(),
-                      bin_text.length()*2, hex_buf,
-                      func_str.length(), func_str.ptr());
-        LOG_WARN("incorrect string value for function bin_to_uuid", K(ret), K(bin_text));
-      } else {
-        LOG_WARN("fail to print incorrect hex string value", K(ret), K(bin_text));
+      int text_len = std::min(bin_text.length(), UuidCommon::BYTE_LENGTH * 2);
+      SMART_VAR(char[UuidCommon::BYTE_LENGTH * 4], hex_buf) {
+        int64_t pos = 0;
+        if (OB_SUCC(common::hex_print(bin_text.ptr(), text_len, hex_buf, text_len*2, pos))) {
+          ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+          LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                        string_type_str.length(), string_type_str.ptr(),
+                        text_len*2, hex_buf,
+                        func_str.length(), func_str.ptr());
+          LOG_WARN("incorrect string value for function bin_to_uuid", K(ret), K(bin_text));
+        } else {
+          LOG_WARN("fail to print incorrect hex string value", K(ret), K(bin_text));
+        }
       }
     } else  if (need_swap) {
       // The first 4 bytes are restored to "time-low".
@@ -944,17 +946,19 @@ int ObExprBin2uuid::bin2uuid_batch(const ObExpr &expr,
         } else if (OB_ISNULL(bin_text_ptr) || UuidCommon::BYTE_LENGTH != bin_text.length()) {
           ObString string_type_str("binary");
           ObString func_str(N_BIN_TO_UUID);
-          char hex_buf[bin_text.length()*2];
-          int64_t pos = 0;
-          if (OB_SUCC(common::hex_print(bin_text.ptr(), bin_text.length(), hex_buf, bin_text.length()*2, pos))) {
-            ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
-            LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
-                          string_type_str.length(), string_type_str.ptr(),
-                          bin_text.length()*2, hex_buf,
-                          func_str.length(), func_str.ptr());
-            LOG_WARN("incorrect string value for function bin_to_uuid", K(ret), K(bin_text));
-          } else {
-            LOG_WARN("fail to print incorrect hex string value", K(ret), K(bin_text));
+          int text_len = std::min(bin_text.length(), UuidCommon::BYTE_LENGTH * 2);
+          SMART_VAR(char[UuidCommon::BYTE_LENGTH * 4], hex_buf) {
+            int64_t pos = 0;
+            if (OB_SUCC(common::hex_print(bin_text.ptr(), text_len, hex_buf, text_len*2, pos))) {
+              ret = OB_ERR_INCORRECT_VALUE_FOR_FUNCTION;
+              LOG_USER_ERROR(OB_ERR_INCORRECT_VALUE_FOR_FUNCTION,
+                            string_type_str.length(), string_type_str.ptr(),
+                            text_len*2, hex_buf,
+                            func_str.length(), func_str.ptr());
+              LOG_WARN("incorrect string value for function bin_to_uuid", K(ret), K(bin_text));
+            } else {
+              LOG_WARN("fail to print incorrect hex string value", K(ret), K(bin_text));
+            }
           }
         } else  if (need_swap) {
           // The first 4 bytes are restored to "time-low".
