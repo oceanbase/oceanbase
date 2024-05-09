@@ -676,8 +676,24 @@ int ObTransformSimplifyGroupby::remove_aggr_distinct(ObDMLStmt *stmt, bool &tran
         bool is_unique = false;
         if (OB_FAIL(aggr_param_exprs.assign(aggr_expr->get_real_param_exprs()))) {
           LOG_WARN("failed to push back aggr param expr", K(ret));
-        } else if (OB_FAIL(append(aggr_param_exprs, select_stmt->get_group_exprs()))) {
-          LOG_WARN("failed to append group by expr", K(ret));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_group_expr_size(); ++i) {
+          ObRawExpr *group_expr = select_stmt->get_group_exprs().at(i);
+          bool is_not_null = false;
+          if (OB_ISNULL(group_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret));
+          } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(ctx_, stmt, group_expr,
+                                                                NULLABLE_SCOPE::NS_GROUPBY,
+                                                                is_not_null))) {
+            LOG_WARN("failed to check is expr not null", K(ret));
+          } else if (!is_not_null) {
+            // do nothing
+          } else if (OB_FAIL(aggr_param_exprs.push_back(group_expr))) {
+            LOG_WARN("failed to append group by expr", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else if (OB_FAIL(ObTransformUtils::check_stmt_unique(select_stmt, ctx_->session_info_,
                                                                ctx_->schema_checker_,
                                                                aggr_param_exprs,
