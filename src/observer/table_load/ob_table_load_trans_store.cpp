@@ -503,14 +503,43 @@ int ObTableLoadTransStoreWriter::write_row_to_table_store(ObDirectLoadTableStore
   return ret;
 }
 
+static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshold, bool &is_inrow)
+{
+  int ret = OB_SUCCESS;
+  is_inrow = false;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(obj), K(lob_inrow_threshold));
+  } else if (OB_ISNULL(lob_mngr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get lob manager handle.", K(ret));
+  } else {
+    ObString data = obj.get_string();
+    const bool set_has_lob_header = data.length() > 0;
+    ObLobLocatorV2 src(data, set_has_lob_header);
+    if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length(), lob_inrow_threshold)) {
+      is_inrow = true;
+    } else {
+      is_inrow = false;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadTransStoreWriter::check_support_obj(const ObObj &obj)
 {
   int ret = OB_SUCCESS;
   if (is_incremental_ && is_inc_replace_) {
-    if (obj.is_lob_storage() && OB_UNLIKELY(obj.get_data_length() > lob_inrow_threshold_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("incremental direct-load does not support outrow lob", KR(ret), K(obj));
-      FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support outrow lob");
+    if (obj.is_lob_storage()) {
+      bool is_inrow = false;
+      if (OB_FAIL(check_lob_is_inrow(obj, lob_inrow_threshold_, is_inrow))) {
+        LOG_WARN("fail to check lob is inrow", KR(ret));
+      } else if (OB_UNLIKELY(!is_inrow)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support outrow lob", KR(ret), K(obj));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support outrow lob");
+      }
     }
   }
   return ret;
