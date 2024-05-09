@@ -360,7 +360,7 @@ int ObResultSet::start_stmt()
         SQL_LOG(WARN, "fail to start stmt", K(ret),
                 K(phy_plan->get_dependency_table()));
       } else {
-        auto literal_stmt_type = literal_stmt_type_ != stmt::T_NONE ? literal_stmt_type_ : stmt_type_;
+        stmt::StmtType literal_stmt_type = literal_stmt_type_ != stmt::T_NONE ? literal_stmt_type_ : stmt_type_;
         my_session_.set_first_need_txn_stmt_type(literal_stmt_type);
       }
       get_trans_state().set_start_stmt_executed(OB_SUCC(ret));

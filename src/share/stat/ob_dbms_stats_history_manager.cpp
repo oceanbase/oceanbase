@@ -100,7 +100,7 @@ namespace common {
                                              FROM %s                   \
                                              WHERE tenant_id = %lu and table_id = %lu %s"
 
-#define TABLE_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, usec_to_time(%ld), 0, 0, usec_to_time(%ld), 0, -1, -1, 0, 0, -1, 0, 0, 0, 0)"
+#define TABLE_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, usec_to_time(%ld), 0, 0, 0, 0, -1, -1, 0, 0, -1, 0, 0, 0, 0)"
 
 #define INSERT_COLUMN_STAT_HISTORY "INSERT INTO %s(tenant_id,                 \
                                                    table_id,                  \
@@ -394,7 +394,6 @@ int ObDbmsStatsHistoryManager::backup_no_table_part_stats(ObMySQLTransaction &tr
                                      share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
                                      share::schema::ObSchemaUtils::get_extract_schema_id(tenant_id, table_id),
                                      partition_ids.at(idx++),
-                                     saving_time,
                                      saving_time))) {
           LOG_WARN("failed to append fmt", K(ret));
         } else if (OB_FAIL(values_list.append_fmt("%s%s",

@@ -2365,7 +2365,7 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_turn
   need_copy = true;
   if (!macro_index_store_for_turn_.is_inited()) {
     need_copy = true;
-    LOG_INFO("macro index store for turn is not inited", K(ret));
+    LOG_DEBUG("macro index store for turn is not inited", K(ret));
   } else if (OB_FAIL(macro_index_store_for_turn_.get_macro_block_index(item.get_logic_id(), macro_index))) {
     LOG_WARN("inner check backup item need copy when change turn", K(ret), K(item), K(need_copy), K(macro_index));
     if (OB_ENTRY_NOT_EXIST == ret) {
@@ -3203,7 +3203,7 @@ int ObLSBackupDataTask::write_backup_meta_(const ObBufferReader &data, const com
   } else if (OB_FAIL(backup_data_ctx_.write_meta_data(data, tablet_id, meta_type, meta_index))) {
     LOG_WARN("failed to write macro block data", K(ret), K(data), K(tablet_id), K(meta_type));
   } else {
-    LOG_INFO("write meta data", K(tablet_id), K(meta_type));
+    LOG_DEBUG("write meta data", K(tablet_id), K(meta_type), K(meta_index));
   }
   return ret;
 }
@@ -3220,7 +3220,7 @@ int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, 
   } else if (OB_FAIL(ls_backup_ctx_->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("get tablet handle", K(tablet_id));
+    LOG_DEBUG("get tablet handle", K(tablet_id));
   }
   return ret;
 }
@@ -3237,7 +3237,7 @@ int ObLSBackupDataTask::release_tablet_handle_(const common::ObTabletID &tablet_
   } else if (OB_FAIL(ls_backup_ctx_->release_tablet(tablet_id))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("release tablet handle", K(tablet_id));
+    LOG_DEBUG("release tablet handle", K(tablet_id));
   }
   return ret;
 }

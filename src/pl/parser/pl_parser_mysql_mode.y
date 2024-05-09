@@ -78,7 +78,7 @@ typedef struct _YYLookaheadToken
 } YYLookaheadToken;
 
 extern ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *prefix, YYLookaheadToken *la_token, int end_token_cnt, ...);
-extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...);
+extern void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s);
 extern void obpl_mysql_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, yyconst char *msg, ...);
 
 int obpl_mysql_check_specific_node(const ParseNode *node, const ObItemType type, int *is_contain) {
@@ -2814,12 +2814,11 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
   return sql_node;
 }
 
-void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...)
+void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s)
 {
   if (OB_LIKELY(NULL != parse_ctx)) {
-    va_list ap;
-    va_start(ap, s);
-    vsnprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, s, ap);
+    strncpy(parse_ctx->global_errmsg_, s, MAX_ERROR_MSG);
+    parse_ctx->global_errmsg_[MAX_ERROR_MSG - 1] = '\0';
     // vfprintf(stderr, s, ap);
     if (OB_LIKELY(NULL != yylloc)) {
       ObParseErrorInfo *error_info = (ObParseErrorInfo*)parse_malloc(sizeof(ObParseErrorInfo), parse_ctx->mem_pool_);
@@ -2834,7 +2833,6 @@ void obpl_mysql_yyerror(YYLTYPE *yylloc, ObParseCtx *parse_ctx, char *s, ...)
         parse_ctx->cur_error_info_ = error_info;
       }
     }
-    va_end(ap);
   }
 }
 

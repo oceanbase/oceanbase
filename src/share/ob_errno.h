@@ -1465,6 +1465,10 @@ constexpr int OB_TRANSFER_CANNOT_START = -7123;
 constexpr int OB_ERR_DIMENSION_NUMBER_IS_OUT_OF_RANGE = -7290;
 constexpr int OB_ERR_INVALID_SRID_IN_SDO_GEOMETRY = -7292;
 constexpr int OB_ERR_INVALID_GTYPE_FOR_POINT_OBJECT = -7293;
+constexpr int OB_ERR_OPERATOR_NOT_EXIST = -7298;
+constexpr int OB_INVALID_MASK = -7299;
+constexpr int OB_GEO_IN_DIFFERENT_COORDINATE = -7300;
+constexpr int OB_ERR_DOMAIN_COLUMN_DUPLICATE = -7301;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -1572,6 +1576,7 @@ constexpr int OB_FILE_OR_DIRECTORY_PERMISSION_DENIED = -9102;
 constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
 constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
+constexpr int OB_TABLET_IS_SPLIT_SRC = -9123;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -1872,6 +1877,7 @@ constexpr int OB_CANNOT_USER_IF_EXISTS = -11012;
 constexpr int OB_ERR_ILLEGAL_USER_VAR = -11013;
 constexpr int OB_ERR_FT_COLUMN_NOT_INDEXED = -11014;
 constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
+constexpr int OB_ERR_PS_NO_RECURSION = -11016;
 constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
@@ -3674,6 +3680,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__USER_ERROR_MSG "Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_VALUE_NOT_ALLOWED__USER_ERROR_MSG "value not allowed"
+#define OB_ERR_OPERATOR_NOT_EXIST__USER_ERROR_MSG "operator binding does not exist"
+#define OB_INVALID_MASK__USER_ERROR_MSG "operator binding does not exist"
+#define OB_GEO_IN_DIFFERENT_COORDINATE__USER_ERROR_MSG "geometry objects are in different coordinate systems"
+#define OB_ERR_DOMAIN_COLUMN_DUPLICATE__USER_ERROR_MSG "cannot create multiple domain indexes on a column list using same"
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "XPATH syntax error: ''"
@@ -3825,6 +3835,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_S3_REGION_MISMATCH__USER_ERROR_MSG "the specified s3_region does not match the endpoint"
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__USER_ERROR_MSG "object storage endpoint is invalid"
 #define OB_RESTORE_SOURCE_NOT_ENOUGH__USER_ERROR_MSG "%s"
+#define OB_OBJECT_NOT_EXIST__USER_ERROR_MSG "cannot find object on object storage"
+#define OB_S2_REUSE_VERSION_MISMATCH__USER_ERROR_MSG "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
+#define OB_S2_ENTRY_NOT_EXIST__USER_ERROR_MSG "entry not exist in s2 micro_cache"
+#define OB_TABLET_IS_SPLIT_SRC__USER_ERROR_MSG "cannot access split src tablet"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -4127,6 +4141,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__USER_ERROR_MSG "User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__USER_ERROR_MSG "Can't find FULLTEXT index matching the column list"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__USER_ERROR_MSG "Can't update table '%s' while '%s' is being created."
+#define OB_ERR_PS_NO_RECURSION__USER_ERROR_MSG "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
 #define OB_ERR_PARTITION_EXCHANGE_PART_TABLE__USER_ERROR_MSG "Table to exchange with partition is partitioned: \'%.*s\'"
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
@@ -5910,7 +5925,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_CANT_CREATE_GEOMETRY_OBJECT__ORA_USER_ERROR_MSG "ORA-00600: Cannot get geometry object from data you send to the GEOMETRY field."
 #define OB_ERR_SRID_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of srid."
 #define OB_ERR_INDEX_ORDER_WRONG_USAGE__ORA_USER_ERROR_MSG "ORA-00600: Incorrect usage of spatial/fulltext/hash index and explicit index order."
-#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__ORA_USER_ERROR_MSG "ORA-00600: A SPATIAL index may only contain a geometrical type column."
+#define OB_ERR_SPATIAL_MUST_HAVE_GEOM_COL__ORA_USER_ERROR_MSG "ORA-13249: A SPATIAL index may only contain a geometrical type column."
 #define OB_ERR_SPATIAL_CANT_HAVE_NULL__ORA_USER_ERROR_MSG "ORA-00600: All parts of a SPATIAL index must be NOT NULL."
 #define OB_ERR_INDEX_TYPE_NOT_SUPPORTED_FOR_SPATIAL_INDEX__ORA_USER_ERROR_MSG "ORA-00600: The index type %s is not supported for spatial indexes."
 #define OB_ERR_UNIT_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: There\'s no unit of measure named \'%s\'."
@@ -5929,6 +5944,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATA_IN_SDO_ELEM_INFO_ARRAY__ORA_USER_ERROR_MSG "ORA-13033: Invalid data in the SDO_ELEM_INFO_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_INVALID_DATA_IN_SDO_ORDINATE_ARRAY__ORA_USER_ERROR_MSG "ORA-13034: Invalid data in the SDO_ORDINATE_ARRAY in SDO_GEOMETRY object"
 #define OB_ERR_VALUE_NOT_ALLOWED__ORA_USER_ERROR_MSG "ORA-24323: value not allowed"
+#define OB_ERR_OPERATOR_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-29900: operator binding does not exist"
+#define OB_INVALID_MASK__ORA_USER_ERROR_MSG "ORA-20000: operator binding does not exist"
+#define OB_GEO_IN_DIFFERENT_COORDINATE__ORA_USER_ERROR_MSG "ORA-13295: geometry objects are in different coordinate systems"
+#define OB_ERR_DOMAIN_COLUMN_DUPLICATE__ORA_USER_ERROR_MSG "ORA-29879: cannot create multiple domain indexes on a column list using same"
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -6080,6 +6099,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_S3_REGION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9117, the specified s3_region does not match the endpoint"
 #define OB_INVALID_OBJECT_STORAGE_ENDPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9118, object storage endpoint is invalid"
 #define OB_RESTORE_SOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9119, %s"
+#define OB_OBJECT_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9120, cannot find object on object storage"
+#define OB_S2_REUSE_VERSION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9121, reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
+#define OB_S2_ENTRY_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9122, entry not exist in s2 micro_cache"
+#define OB_TABLET_IS_SPLIT_SRC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9123, cannot access split src tablet"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6382,6 +6405,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ILLEGAL_USER_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11013, User variable name %.*s is illegal"
 #define OB_ERR_FT_COLUMN_NOT_INDEXED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11014, Can't find FULLTEXT index matching the column list"
 #define OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11015, Can't update table '%s' while '%s' is being created."
+#define OB_ERR_PS_NO_RECURSION__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11016, The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner"
 #define OB_ERR_PARTITION_EXCHANGE_PART_TABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11017, Table to exchange with partition is partitioned: \'%.*s\'"
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
@@ -6393,7 +6417,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2251];
+extern int g_all_ob_errnos[2260];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

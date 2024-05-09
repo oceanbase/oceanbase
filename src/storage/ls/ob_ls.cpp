@@ -2183,6 +2183,8 @@ int ObLS::enable_replay()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls is not inited", K(ret));
+  } else if (log_handler_.is_replay_enabled()) {
+    LOG_INFO("ls is already replay enabled, no need enable again", K_(ls_meta));
   } else if (OB_FAIL(log_handler_.enable_replay(ls_meta_.get_clog_base_lsn(),
                                                 ls_meta_.get_clog_checkpoint_scn()))) {
     LOG_WARN("failed to enable replay", K(ret));

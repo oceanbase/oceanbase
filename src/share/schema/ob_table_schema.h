@@ -1078,6 +1078,13 @@ public:
                                                  common::ObString &new_idx_name,
                                                  common::ObIAllocator &allocator,
                                                  ObSchemaGetterGuard &guard);
+  static int get_xml_hidden_column_id(const ObTableSchema *data_table_schema,
+                                      const ObColumnSchemaV2 *data_column_schema,
+                                      int64_t &data_column_id);
+  static int find_xml_hidden_column_index(const ObTableSchema *table_schema,
+                                          const ObColumnSchemaV2 *column_schema,
+                                          const ObArray<ObColDesc> &desc_col_ids,
+                                          int64_t &dst_index_col);
 public:
   typedef ObColumnSchemaV2* const *const_column_iterator;
   typedef ObConstraint * const *const_constraint_iterator;
@@ -1635,6 +1642,7 @@ public:
   int get_column_schema_in_same_col_group(uint64_t column_id, uint64_t udt_set_id,
                                           common::ObIArray<ObColumnSchemaV2 *> &column_group) const;
   ObColumnSchemaV2* get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const;
+  ObColumnSchemaV2* get_xml_hidden_column_parent_col_schema(uint64_t column_id, uint64_t udt_set_id) const;
   bool is_same_type_category(const ObColumnSchemaV2 &src_column,
                              const ObColumnSchemaV2 &dst_column) const;
   int check_has_trigger_on_table(ObSchemaGetterGuard &schema_guard,

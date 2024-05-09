@@ -297,9 +297,10 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
+      const share::schema::ObColumnParam *col_param,
       int64_t &count)
   {
-    UNUSEDx(col_id, row_ids, row_cap, contains_null, count);
+    UNUSEDx(col_id, row_ids, row_cap, contains_null, col_param, count);
     return OB_NOT_SUPPORTED;
   }
   virtual int64_t get_column_count() const = 0;

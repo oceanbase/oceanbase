@@ -1118,4 +1118,5 @@
 #define N_PRIV_ST_ASMVTGEOM                 "_st_asmvtgeom"
 #define N_PRIV_ST_MAKEVALID                 "_st_makevalid"
 #define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
+#define N_SDO_RELATE                        "sdo_relate"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

@@ -6968,7 +6968,7 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
       LOG_WARN("failed to extract info", K(ret));
     } else if (!search_keywords->is_static_const_expr()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query is not supported");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
       LOG_WARN("search query is not const expr", K(ret));
     } else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
       ret = OB_NOT_SUPPORTED;

@@ -3064,7 +3064,9 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
           } else if (task_record.task_id_ != task_id) {
             switch (ddl_type) {
               case ObDDLType::DDL_DROP_TABLE: {
-                if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
+                if ((task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX
+                    || task_record.ddl_type_ == ObDDLType::DDL_DROP_MLOG)
+                    && task_record.target_object_id_ != task_record.object_id_) {
                   LOG_WARN("conflict with ddl", K(task_record));
                   has_conflict_ddl = true;
                 }
@@ -3102,7 +3104,7 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::check_has_index_task(
+int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -3120,8 +3122,9 @@ int ObDDLTaskRecordOperator::check_has_index_task(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d)) as has",
-          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_DROP_INDEX))) {
+      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d, %d, %d)) as has",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_DROP_INDEX,
+          ObDDLType::DDL_CREATE_MLOG, ObDDLType::DDL_DROP_MLOG))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
@@ -3138,7 +3141,7 @@ int ObDDLTaskRecordOperator::check_has_index_task(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::get_create_index_task_cnt(
+int ObDDLTaskRecordOperator::get_create_index_or_mlog_task_cnt(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -3153,8 +3156,8 @@ int ObDDLTaskRecordOperator::get_create_index_task_cnt(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type = %d",
-          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, ObDDLType::DDL_CREATE_INDEX))) {
+      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type IN (%d, %d)",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_CREATE_MLOG))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

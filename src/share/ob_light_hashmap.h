@@ -515,7 +515,7 @@ private:
   ObLightHashHeader buckets_[BUCKETS_CNT];
   LockType locks_[LOCKS_CNT];
   int64_t total_cnt_;
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
 public:
 #endif
   AllocHandle alloc_handle_;

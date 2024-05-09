@@ -303,14 +303,14 @@ public:
       const share::ObDDLType ddl_type,
       bool &has_conflict_ddl);
 
-  static int check_has_index_task(
+  static int check_has_index_or_mlog_task(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       bool &has_index_task);
 
-  static int get_create_index_task_cnt(
+  static int get_create_index_or_mlog_task_cnt(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,

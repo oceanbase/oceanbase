@@ -71,6 +71,7 @@ public:
   int start_net_client(int net_thread_count);
   void stop();
   void wait();
+  void destroy();
   bool has_start() {return has_start_;}
   int update_tcp_keepalive_params(int64_t user_timeout);
   int update_server_standby_fetch_log_bandwidth_limit(int64_t value);

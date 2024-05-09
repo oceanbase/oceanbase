@@ -10141,7 +10141,7 @@ int ObTransformPreProcess::disable_complex_dml_for_fulltext_index(ObDMLStmt *stm
     TableItem* table = NULL;
     if (OB_FAIL(del_upd_stmt->get_dml_table_infos(table_infos))) {
       LOG_WARN("failed to get dml table infos", K(ret));
-    } else if (table_infos.count() == 1) {
+    } else if (table_infos.count() == 1 && del_upd_stmt->get_from_item_size() == 1) {
       if (OB_ISNULL(table_infos.at(0))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));

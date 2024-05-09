@@ -59,7 +59,6 @@ public:
   bool enable_encode_sortkey_opt_;
   // if use, all_exprs_ is : hash(part_by) + part_by + order_by.
   int64_t part_cnt_;
-  ObCompressorType compress_type_;
 };
 
 class ObSortOp : public ObOperator

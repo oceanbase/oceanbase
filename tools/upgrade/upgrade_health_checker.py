@@ -14,9 +14,9 @@ class UpgradeParams:
   log_filename = 'upgrade_cluster_health_checker.log'
 
 class PasswordMaskingFormatter(logging.Formatter):
-    def format(self, record):
-        s = super(PasswordMaskingFormatter, self).format(record)
-        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 
 #### --------------start : my_error.py --------------
 class MyError(Exception):
@@ -445,7 +445,7 @@ if __name__ == '__main__':
       timeout = int(get_opt_timeout())
       zone = get_opt_zone()
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
-          host, port, user, password, log_filename, timeout, zone)
+          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
       do_check(host, port, user, password, upgrade_params, timeout, False, zone) # need_check_major_status = False
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')

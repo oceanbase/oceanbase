@@ -1121,7 +1121,11 @@ ObDASScanResult::ObDASScanResult()
     eval_ctx_(nullptr),
     extra_result_(nullptr),
     need_check_output_datum_(false),
-    enable_rich_format_(false)
+    enable_rich_format_(false),
+    io_read_bytes_(0),
+    ssstore_read_bytes_(0),
+    ssstore_read_row_cnt_(0),
+    memstore_read_row_cnt_(0)
 {
 }
 
@@ -1271,7 +1275,11 @@ int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     datum_store_,
                     enable_rich_format_,
-                    vec_row_store_);
+                    vec_row_store_,
+                    io_read_bytes_,
+                    ssstore_read_bytes_,
+                    ssstore_read_row_cnt_,
+                    memstore_read_row_cnt_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {

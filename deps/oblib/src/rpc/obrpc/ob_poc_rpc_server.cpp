@@ -314,6 +314,8 @@ void ObPocRpcServer::stop()
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
     pn_stop(gid);
   }
+  has_start_ = false;
+  start_as_client_ = false;
 }
 
 void ObPocRpcServer::wait()
@@ -321,6 +323,12 @@ void ObPocRpcServer::wait()
   for (uint64_t gid = 1; gid < END_GROUP; gid++) {
     pn_wait(gid);
   }
+}
+
+void ObPocRpcServer::destroy()
+{
+  stop();
+  wait();
 }
 
 int ObPocRpcServer::update_tcp_keepalive_params(int64_t user_timeout) {

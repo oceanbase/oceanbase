@@ -153,7 +153,7 @@ int ObExprLastRefreshScn::set_last_refresh_scns(const ObIArray<uint64_t> &src_mv
             LOG_WARN("fail to push back", K(ret));
           }
         }
-        if (OB_UNLIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)
+        if (OB_LIKELY(OB_SUCCESS == ret || OB_ITER_END == ret)
             && (OB_FAIL(mview_ids.assign(res_ids)) || OB_FAIL(last_refresh_scns.assign(res_scns)))) {
           LOG_WARN("fail to assign array", K(ret));
         }

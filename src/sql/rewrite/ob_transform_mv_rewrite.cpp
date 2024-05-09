@@ -80,9 +80,9 @@ int ObTransformMVRewrite::need_transform(const common::ObIArray<ObParentDMLStmt>
   bool is_stmt_valid = false;
   uint64_t data_version;
   need_trans = false;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_) || OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexprcted null", K(ret), K(ctx_));
+    LOG_WARN("get unexprcted null", K(ret), K(ctx_), K(stmt.get_query_ctx()));
   } else if (OB_FAIL(ObTransformRule::need_transform(parent_stmts,
                                                      current_level,
                                                      stmt,
@@ -98,6 +98,9 @@ int ObTransformMVRewrite::need_transform(const common::ObIArray<ObParentDMLStmt>
   } else if (ctx_->session_info_->is_inner() || !ctx_->session_info_->is_user_session()) {
     need_trans = false;
     OPT_TRACE("not a user SQL, skip mv rewrite");
+  } else if (stmt.get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_1) {
+    need_trans = false;
+    OPT_TRACE("optimizer features enable version is lower than 4.3.1, skip mv rewrite");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(ctx_->session_info_->get_effective_tenant_id(), data_version))) {
     LOG_WARN("failed to get data version", K(ret), K(ctx_->session_info_->get_effective_tenant_id()));
   } else if (OB_UNLIKELY(data_version < DATA_VERSION_4_3_1_0)) {

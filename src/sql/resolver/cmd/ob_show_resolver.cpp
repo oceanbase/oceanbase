@@ -1889,8 +1889,12 @@ int ObShowResolver::resolve_show_from_table(const ParseNode *from_table_node,
                !table_schema->is_view_table()) {
       ret = OB_ERR_WRONG_OBJECT;
       LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, to_cstring(show_database_name), to_cstring(show_table_name), "VIEW");
+    } else if ((T_SHOW_COLUMNS == node_type) && table_schema->is_materialized_view()) {
+      show_table_id = table_schema->get_data_table_id();
     } else {
       show_table_id = table_schema->get_table_id();
+    }
+    if (OB_SUCC(ret)) {
       is_view = table_schema->is_view_table() ? true : false;
 
       OZ (check_desc_priv_if_ness(real_tenant_id, table_schema, show_database_name, is_sys_view));

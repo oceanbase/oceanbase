@@ -592,7 +592,7 @@ int ObBackupDataCtx::append_index_(const IndexType &index, ObBackupIndexBufferNo
   } else if (OB_FAIL(buffer_node.put_backup_index(index))) {
     LOG_WARN("failed to put backup index", K(ret), K(index));
   } else {
-    LOG_INFO("append index", K(index));
+    LOG_DEBUG("append index", K(index));
   }
   return ret;
 }
@@ -973,7 +973,7 @@ int ObLSBackupCtx::hold_tablet(const common::ObTabletID &tablet_id, storage::ObT
   } else if (OB_FAIL(tablet_holder_.hold_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to hold tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("hold tablet", K(tablet_id));
+    LOG_DEBUG("hold tablet", K(tablet_id));
   }
   return ret;
 }
@@ -988,7 +988,7 @@ int ObLSBackupCtx::get_tablet(const common::ObTabletID &tablet_id, storage::ObTa
   } else if (OB_FAIL(tablet_holder_.get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("acquire tablet", K(tablet_id));
+    LOG_DEBUG("acquire tablet", K(tablet_id));
   }
   return ret;
 }
@@ -1003,7 +1003,7 @@ int ObLSBackupCtx::release_tablet(const common::ObTabletID &tablet_id)
   } else if (OB_FAIL(tablet_holder_.release_tablet(tablet_id))) {
     LOG_WARN("failed to release tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("release tablet", K(tablet_id));
+    LOG_DEBUG("release tablet", K(tablet_id));
   }
   return ret;
 }

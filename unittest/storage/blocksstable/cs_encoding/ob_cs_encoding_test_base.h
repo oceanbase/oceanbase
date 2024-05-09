@@ -493,7 +493,7 @@ int ObCSEncodingTestBase::check_get_row_count(const ObMicroBlockHeader *header,
     std::shuffle(row_ids, row_ids + header->row_count_, std::default_random_engine(seed)); // 随机打乱数组
 
     for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < col_cnt; col_idx++) {
-      if (OB_FAIL(decoder.get_row_count(col_idx, row_ids, header->row_count_, contains_null, real_row_count))) {
+      if (OB_FAIL(decoder.get_row_count(col_idx, row_ids, header->row_count_, contains_null, nullptr, real_row_count))) {
         if (expected_row_cnt_arr[col_idx] != real_row_count) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("row count mismatch", K(ret), K(contains_null),

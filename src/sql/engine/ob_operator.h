@@ -345,6 +345,7 @@ public:
   int64_t max_batch_size_;
   bool need_check_output_datum_;
   bool use_rich_format_;
+  ObCompressorType compress_type_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpec);

@@ -1096,6 +1096,43 @@ TEST_F(TestCompactionPolicy, test_minor_dag_intersect)
   ASSERT_EQ(false, (dag1 == dag2));
 }
 
+
+TEST_F(TestCompactionPolicy, check_sstable_continue_failed)
+{
+  int ret = OB_SUCCESS;
+  ObTenantFreezeInfoMgr *mgr = MTL(ObTenantFreezeInfoMgr *);
+  ASSERT_TRUE(nullptr != mgr);
+
+  common::ObArray<share::ObFreezeInfo> freeze_info;
+  share::SCN frozen_val;
+  frozen_val.val_ = 1;
+  ASSERT_EQ(OB_SUCCESS, freeze_info.push_back(share::ObFreezeInfo(frozen_val, 1, 0)));
+
+  ret = TestCompactionPolicy::prepare_freeze_info(500, freeze_info);
+
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  const char *key_data =
+      "table_type    start_scn    end_scn    max_ver    upper_ver\n"
+      "10            0            1          1          1        \n"
+      "11            1            150        150        150      \n"
+      "11            150          200        200        200      \n"
+      "11            200          250        250        250      \n"
+      "11            250          300        300        300      \n"
+      "11            900          1000       1000       1000      \n";
+
+  ret = prepare_tablet(key_data, 1000, 1000);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObTablet *tablet = tablet_handle_.get_obj();
+  ASSERT_TRUE(nullptr != tablet);
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  ret = tablet->fetch_table_store(table_store_wrapper);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = table_store_wrapper.get_member()->check_continuous();
+  ASSERT_EQ(OB_ERR_SYS, ret);
+}
+
 } //unittest
 } //oceanbase
 

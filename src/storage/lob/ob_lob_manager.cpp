@@ -4038,7 +4038,7 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
         } else if (extern_header->flags_.has_retry_info_ && OB_FAIL(lob.get_retry_info(retry_info))) {
           LOG_WARN("failed to get retry info", K(ret), K(lob));
         } else {
-          auto snapshot_tx_seq = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
+          transaction::ObTxSEQ snapshot_tx_seq = transaction::ObTxSEQ::cast_from_int(tx_info->snapshot_seq_);
           if (OB_ISNULL(param.tx_desc_) ||
               param.tx_desc_->get_tx_id().get_id() == tx_info->snapshot_tx_id_ || // read in same tx
               (tx_info->snapshot_tx_id_ == 0 && !snapshot_tx_seq.is_valid() && tx_info->snapshot_version_ > 0)) { // read not in tx

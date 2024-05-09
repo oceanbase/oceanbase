@@ -291,7 +291,11 @@ public:
                        K_(datum_store),
                        KPC_(output_exprs),
                        K_(enable_rich_format),
-                       K_(vec_row_store));
+                       K_(vec_row_store),
+                       K_(io_read_bytes),
+                       K_(ssstore_read_bytes),
+                       K_(ssstore_read_row_cnt),
+                       K_(memstore_read_row_cnt));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
@@ -302,6 +306,10 @@ private:
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
   bool enable_rich_format_;
+  int64_t io_read_bytes_;
+  int64_t ssstore_read_bytes_;
+  int64_t ssstore_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl

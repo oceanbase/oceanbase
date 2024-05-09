@@ -2624,7 +2624,7 @@ int ObHashGroupByOp::by_pass_prepare_one_batch(const int64_t batch_size)
     } else {
       calc_groupby_exprs_hash_batch(dup_groupby_exprs_, brs_);
       if (OB_FAIL(bypass_add_llc_map_batch(ObThreeStageAggrStage::FIRST_STAGE == MY_SPEC.aggr_stage_ ?
-                                           by_pass_nth_group_ == MY_SPEC.dist_col_group_idxs_.count() : true))) {
+                                           by_pass_nth_group_ > MY_SPEC.dist_col_group_idxs_.count() : true))) {
         LOG_WARN("failed to add llc map batch", K(ret));
       }
     }
