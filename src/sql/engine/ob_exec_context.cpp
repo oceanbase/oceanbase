@@ -92,7 +92,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     row_id_list_(nullptr),
     row_id_list_array_(),
     total_row_count_(0),
-    is_evolution_(false),
     reusable_interm_result_(false),
     is_async_end_trans_(false),
     gi_task_map_(nullptr),

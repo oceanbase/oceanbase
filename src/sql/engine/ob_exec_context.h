@@ -383,8 +383,6 @@ public:
   int64_t get_row_id_list_total_count() const { return total_row_count_; }
   void set_plan_start_time(int64_t t) { phy_plan_ctx_->set_plan_start_time(t); }
   int64_t get_plan_start_time() const { return phy_plan_ctx_->get_plan_start_time(); }
-  void set_is_evolution(bool v) { is_evolution_ = v; }
-  bool get_is_evolution() const { return is_evolution_; }
   void set_is_ps_prepare_stage(bool v) { is_ps_prepare_stage_ = v; }
   bool is_ps_prepare_stage() const { return is_ps_prepare_stage_; }
 
@@ -590,9 +588,6 @@ protected:
   ObRowIdListArray row_id_list_array_;
   //判断现在执行的计划是否为演进过程中的计划
   int64_t total_row_count_;
-  // -----------------------
-
-  bool is_evolution_;
   // Interminate result of index building is reusable, reused in build index retry with same snapshot.
   // Reusable intermediate result is not deleted in the close phase, deleted deliberately after
   // execution is completed.
