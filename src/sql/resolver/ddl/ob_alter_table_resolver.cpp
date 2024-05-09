@@ -5655,6 +5655,12 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
         if (lib::is_oracle_mode() && !is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
+        } else if (lib::is_mysql_mode() && column_schema->get_column_name_str() != dst_col_schema.get_column_name_str()) {
+          ret = OB_ERR_DEPENDENT_BY_PARTITION_FUNC;
+          LOG_USER_ERROR(OB_ERR_DEPENDENT_BY_PARTITION_FUNC,
+                     column_schema->get_column_name_str().length(),
+                     column_schema->get_column_name_str().ptr());
+          SQL_RESV_LOG(WARN, "rename a partition key is not allowed");
         } else if (cur_table_schema.is_global_index_table()) {
           // FIXME YIREN (20221019), allow to alter part key of global index table by refilling part info when rebuilding it.
           ret = OB_OP_NOT_ALLOW;
