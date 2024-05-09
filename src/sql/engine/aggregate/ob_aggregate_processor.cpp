@@ -379,6 +379,7 @@ int ObAggregateProcessor::ExtraResult::init_distinct_set(const uint64_t tenant_i
     ObIOEventObserver *io_event_observer)
 {
   int ret = OB_SUCCESS;
+  need_rewind_ = need_rewind;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));

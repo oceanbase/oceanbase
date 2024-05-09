@@ -291,22 +291,27 @@ public:
   {
   public:
     // %alloc is used to initialize the structures, can not be used to hold the data
-    explicit ExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
-      : is_inited_(false), alloc_(alloc), op_monitor_info_(op_monitor_info), unique_sort_op_(NULL)
+    explicit ExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info) :
+      is_inited_(false), need_rewind_(false), alloc_(alloc), op_monitor_info_(op_monitor_info),
+      unique_sort_op_(NULL)
     {}
     virtual ~ExtraResult();
-    bool is_inited() const { return is_inited_; }
+    bool is_inited() const
+    {
+      return is_inited_;
+    }
     virtual void reuse();
-    int init_distinct_set(const uint64_t tenant_id,
-                          const ObAggrInfo &aggr_info,
-                          ObEvalCtx &eval_ctx,
-                          const bool need_rewind,
+    int init_distinct_set(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
+                          ObEvalCtx &eval_ctx, const bool need_rewind,
                           ObIOEventObserver *io_event_observer);
     DECLARE_VIRTUAL_TO_STRING;
+
   protected:
     bool is_inited_;
+    bool need_rewind_;
     common::ObIAllocator &alloc_;
     ObMonitorNode op_monitor_info_;
+
   public:
     // for distinct calculate may be replace by hash based distinct in the future.
     ObUniqueSortImpl *unique_sort_op_;
@@ -336,7 +341,7 @@ public:
     explicit HashBasedDistinctExtraResult(common::ObIAllocator &alloc, ObMonitorNode &op_monitor_info)
       : ExtraResult(alloc, op_monitor_info), hash_values_for_batch_(nullptr),
         my_skip_(nullptr), aggr_info_(nullptr), hp_infras_mgr_(nullptr), hp_infras_(nullptr),
-        need_rewind_(false), flags_(0), brs_holder_(), srs_holder_()
+        flags_(0), brs_holder_(), srs_holder_()
     {}
     virtual ~HashBasedDistinctExtraResult();
     virtual void reuse();
@@ -370,7 +375,6 @@ public:
     const ObAggrInfo *aggr_info_;
     HashPartInfrasMgr *hp_infras_mgr_;
     HashPartInfras *hp_infras_;
-    bool need_rewind_;
     union {
       uint32_t flags_;
       struct {
