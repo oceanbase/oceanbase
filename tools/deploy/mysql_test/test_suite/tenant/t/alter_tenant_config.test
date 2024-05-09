@@ -1,0 +1,20 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : kunxing.lyk
+# owner group: storage
+# description: check for unsupported tenant names
+#--disable_abort_on_error
+
+
+connect(my_sys,$OBMYSQL_MS0,root@sys,,,$OBMYSQL_PORT);
+
+# ========= alter exist tenant config ========
+alter tenant mysql set progressive_merge_num = 2;
+
+# ========= alter non-exist tenant config ========
+-- error 5157
+alter tenant t1 set progressive_merge_num = 2;
+
+disconnect my_sys;
+connection default;

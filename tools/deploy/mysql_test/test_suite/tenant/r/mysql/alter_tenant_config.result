@@ -1,0 +1,3 @@
+alter tenant mysql set progressive_merge_num = 2;
+alter tenant t1 set progressive_merge_num = 2;
+ERROR HY000: Unknown tenant
