@@ -322,8 +322,8 @@ private:
 class ObDeviceChannel;
 
 /**
- * worker to process sync io reuest and get result of async io request from file system
- * io channel has two independent threads, one for sync io operation, anather for polling events from file system
+ * worker to process sync io request and get result of async io request from file system
+ * io channel has two independent threads, one for sync io operation, another for polling events from file system
  */
 class ObIOChannel : public lib::TGRunnable
 {
