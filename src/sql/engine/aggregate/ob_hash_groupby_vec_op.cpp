@@ -1005,6 +1005,7 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
         LOG_WARN("failed to prepare batch", K(ret));
       }
     } else if (ObThreeStageAggrStage::SECOND_STAGE == MY_SPEC.aggr_stage_) {
+      clear_evaluated_flag();
       if (OB_FAIL(aggr_processor_.collect_group_results(local_group_rows_.get_row_meta(),
                                                         all_groupby_exprs_, op_max_batch_size, brs_,
                                                         curr_group_id_))) {
@@ -1012,6 +1013,7 @@ int ObHashGroupByVecOp::inner_get_next_batch(const int64_t max_row_cnt)
       }
     } else {
       int64_t read_rows = 0;
+      clear_evaluated_flag();
       if (OB_FAIL(local_group_rows_.get_next_batch(return_rows_, op_max_batch_size, read_rows))) {
         LOG_WARN("failed to get batch", K(ret));
       } else if (OB_UNLIKELY(0 == read_rows)) {
