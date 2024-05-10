@@ -45,6 +45,7 @@ obdevtools-gcc13-13.2.0-1.el8.ppc64le.rpm
 obdevtools-llvm-11.1.0-1.el8.ppc64le.rpm
 
 [tools-deps]
+devdeps-oblogmsg-1.0.0-1.el8.ppc64le.rpm
 devdeps-rocksdb-6.22.1-1.el8.ppc64le.rpm
 obshell-4.2.3-4.el8.ppc64le.rpm target=community
 
