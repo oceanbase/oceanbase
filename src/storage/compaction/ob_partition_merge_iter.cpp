@@ -1592,14 +1592,14 @@ int ObPartitionMinorRowMergeIter::next()
     if (OB_UNLIKELY(ret != OB_ITER_END)) {
       LOG_WARN("Failed to inner next row", K(ret));
     }
+  } else if (OB_FAIL(skip_ghost_row())) {
+    if (OB_UNLIKELY(ret != OB_ITER_END)) {
+      LOG_WARN("Failed to skip_ghost_row", K(ret));
+    }
   } else if (OB_ISNULL(curr_row_)) {
     if (typeid(*this) == typeid(ObPartitionMinorRowMergeIter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpceted null current row", K(ret), K(*this));
-    }
-  } else if (OB_FAIL(skip_ghost_row())) {
-    if (OB_UNLIKELY(ret != OB_ITER_END)) {
-      LOG_WARN("Failed to skip_ghost_row", K(ret));
     }
   } else if (need_recycle_mv_row()) {
     if (OB_FAIL(compact_old_row())) {
