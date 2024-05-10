@@ -1014,7 +1014,9 @@ int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_i
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
   bool need_retry = is_in_trans() ? false : true;
-
+  if (get_session().get_ddl_info().is_ddl()) {  // ddl retry in ddl scheduler layer
+    need_retry = false;
+  }
   // timeout related
   int64_t abs_timeout_us = 0;
   int64_t start_time = ObTimeUtility::current_time();
