@@ -119,6 +119,7 @@ int ObExprToOutfileRow::calc_outfile_info(const ObExpr &expr,
   int ret = OB_SUCCESS;
   ObObj objs_array[PARAM_SELECT_ITEM];
   ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  int32_t replaced_char = 0;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
@@ -128,6 +129,7 @@ int ObExprToOutfileRow::calc_outfile_info(const ObExpr &expr,
   } else {
     out_info.print_params_.use_memcpy_ = true;
     out_info.print_params_.binary_string_print_hex_ = lib::is_oracle_mode();
+    out_info.print_params_.ignore_convert_failed_ = true;
     out_info.is_optional_ = expr.locate_param_datum(ctx, PARAM_OPTIONAL).get_bool();
   }
 
@@ -141,6 +143,8 @@ int ObExprToOutfileRow::calc_outfile_info(const ObExpr &expr,
     out_info.enclose_ = objs_array[PARAM_ENCLOSED];
     out_info.escape_ = objs_array[PARAM_ESCAPED];
     out_info.print_params_.cs_type_ = static_cast<ObCollationType>(objs_array[PARAM_CHARSET].get_int());
+    OZ(ObCharset::get_replace_character(out_info.print_params_.cs_type_, replaced_char));
+    out_info.print_params_.replaced_char_ = static_cast<ob_wc_t>(replaced_char);
   }
 
   OZ(extract_fisrt_wchar_from_varhcar(out_info.field_, out_info.wchar_field_));

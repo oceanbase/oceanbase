@@ -538,6 +538,7 @@ public:
 
   static bool is_cs_nonascii(ObCollationType collation_type);
   static bool is_cs_unicode(ObCollationType collation_type);
+  static int get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode);
   static bool is_cjk_charset(ObCollationType collation_type);
   static bool is_valid_connection_collation(ObCollationType collation_type);
   static const char* get_oracle_charset_name_by_charset_type(ObCharsetType charset_type);

@@ -1278,7 +1278,10 @@ inline int obj_print_plain_str<ObHexStringType>(const ObObj &obj, char *buffer,
                                              params.cs_type_,                               \
                                              buffer + pos,                                  \
                                              length - pos,                                  \
-                                             result_len))) {                                \
+                                             result_len,                                    \
+                                             true,                                          \
+                                             !params.ignore_convert_failed_,                \
+                                             params.replaced_char_))) {                     \
       } else {                                                                              \
         pos += result_len;                                                                  \
       }                                                                                     \
@@ -2793,7 +2796,10 @@ template <>
                                              params.cs_type_,                               \
                                              buffer + pos,                                  \
                                              length - pos,                                  \
-                                             result_len))) {                                \
+                                             result_len,                                    \
+                                             true,                                          \
+                                             !params.ignore_convert_failed_,                \
+                                             params.replaced_char_))) {                     \
       } else {                                                                              \
         pos += result_len;                                                                  \
       }                                                                                     \

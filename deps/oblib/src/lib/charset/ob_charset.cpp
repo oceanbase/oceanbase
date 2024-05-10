@@ -3137,6 +3137,20 @@ bool ObCharset::is_cs_unicode(ObCollationType collation_type)
   return is_cs_unicode;
 }
 
+int ObCharset::get_replace_character(ObCollationType collation_type, int32_t &replaced_char_unicode)
+{
+  int ret = OB_SUCCESS;
+  if (is_cs_unicode(collation_type)) {
+    replaced_char_unicode = OB_CS_REPLACEMENT_CHARACTER;
+  } else if (!is_cs_nonascii(collation_type)) {
+    replaced_char_unicode = '?';
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected collation type", K(ret));
+  }
+  return ret;
+}
+
 bool ObCharset::is_cjk_charset(ObCollationType collation_type)
 {
   ObCharsetType cs_type = ObCharset::charset_type_by_coll(collation_type);
