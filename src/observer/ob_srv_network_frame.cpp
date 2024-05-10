@@ -57,6 +57,7 @@ ObSrvNetworkFrame::ObSrvNetworkFrame(ObGlobalContext &gctx)
       mysql_transport_(NULL),
       batch_rpc_transport_(NULL),
       last_ssl_info_hash_(UINT64_MAX),
+      lock_(),
       standby_fetchlog_bw_limit_(0),
       standby_fetchlog_bytes_(0),
       standby_fetchlog_time_(0)
@@ -787,15 +788,21 @@ int ObSrvNetworkFrame::net_endpoint_register(const ObNetEndpointKey &endpoint_ke
 int ObSrvNetworkFrame::net_endpoint_predict_ingress(const ObNetEndpointKey &endpoint_key, int64_t &predicted_bw)
 {
   int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
   int64_t current_time = ObTimeUtility::current_time();
   uint64_t current_fetchlog_bytes = pn_get_rxbytes(obrpc::ObPocRpcServer::RATELIMIT_PNIO_GROUP);
   uint64_t peroid_bytes = current_fetchlog_bytes - standby_fetchlog_bytes_;
-  int64_t real_bw = peroid_bytes * 1000000L / (current_time - standby_fetchlog_time_);
-
-  if (real_bw <= standby_fetchlog_bw_limit_) {
-    predicted_bw = (uint64_t)(real_bw + max(real_bw / 10, 1024 * 1024L));
+  uint64_t peroid_time = current_time - standby_fetchlog_time_;
+  if (0 >= peroid_time) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("peroid_time is not larger than 0", K(ret), K(endpoint_key), K(peroid_time));
   } else {
-    predicted_bw = (uint64_t)(real_bw + real_bw / 2);
+    int64_t real_bw = peroid_bytes * 1000000L / peroid_time;
+    if (real_bw <= standby_fetchlog_bw_limit_) {
+      predicted_bw = (uint64_t)(real_bw + max(real_bw / 10, 1024 * 1024L));
+    } else {
+      predicted_bw = (uint64_t)(real_bw + real_bw / 2);
+    }
   }
   standby_fetchlog_time_ = current_time;
   standby_fetchlog_bytes_ = current_fetchlog_bytes;
@@ -816,6 +823,7 @@ int ObSrvNetworkFrame::net_endpoint_set_ingress(const ObNetEndpointKey &endpoint
     ret = OB_INVALID_CONFIG;
     LOG_WARN("assigned bandwidtth is invalid", K(ret), K(endpoint_key), K(assigned_bw));
   } else {
+    ObSpinLockGuard guard(lock_);
     standby_fetchlog_bw_limit_ = assigned_bw;
     standby_fetchlog_time_ = ObTimeUtility::current_time();
     standby_fetchlog_bytes_ = pn_get_rxbytes(obrpc::ObPocRpcServer::RATELIMIT_PNIO_GROUP);
