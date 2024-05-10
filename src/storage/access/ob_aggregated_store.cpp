@@ -250,7 +250,7 @@ int ObCountAggCell::process(
     if (OB_ISNULL(row_ids)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Uexpected, row_ids is null", K(ret), K(*this), K(row_count));
-    } else if (OB_FAIL(reader->get_row_count(col_idx_, row_ids, row_count, false, valid_row_count))) {
+    } else if (OB_FAIL(reader->get_row_count(col_idx_, row_ids, row_count, false, col_param_, valid_row_count))) {
       LOG_WARN("Failed to get row count from micro block decoder", K(ret), K(*this), K(row_count));
     } else {
       row_count_ += valid_row_count;
