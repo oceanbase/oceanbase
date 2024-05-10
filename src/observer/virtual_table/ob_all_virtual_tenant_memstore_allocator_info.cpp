@@ -41,6 +41,8 @@ public:
     item.ls_id_ = (OB_SUCCESS == mt.get_ls_id(ls_id)) ? ls_id.id() : ObLSID::INVALID_LS_ID;
     item.tablet_id_ = mt.get_key().tablet_id_.id();
     item.scn_range_ = mt.get_scn_range();
+    item.mt_addr_ = &mt;
+    item.ref_cnt_ = mt.get_ref();
     return array_.push_back(item);
   }
   ItemArray& array_;
@@ -208,6 +210,16 @@ int ObAllVirtualTenantMemstoreAllocatorInfo::inner_get_next_row(ObNewRow *&row)
             }
             case PROTECTION_CLOCK: {
               cells[i].set_int(info.protection_clock_);
+              break;
+            }
+            case ADDRESS: {
+              snprintf(mt_addr_, sizeof(mt_addr_), "%p", info.mt_addr_);
+              cells[i].set_varchar(mt_addr_);
+              cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+              break;
+            }
+            case REF_COUNT: {
+              cells[i].set_int(info.ref_cnt_);
               break;
             }
             default: {

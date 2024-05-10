@@ -31,14 +31,19 @@ struct ObMemstoreAllocatorInfo
         is_active_(false),
         ls_id_(OB_INVALID_ID),
         tablet_id_(OB_INVALID_ID),
-        scn_range_() {}
+        scn_range_(),
+        mt_addr_(NULL),
+        ref_cnt_(0) {}
   ~ObMemstoreAllocatorInfo() {}
-  TO_STRING_KV(K_(protection_clock), K_(is_active), K_(ls_id), K_(tablet_id), K_(scn_range));
+  TO_STRING_KV(K_(protection_clock), K_(is_active), K_(ls_id),
+               K_(tablet_id), K_(scn_range), K_(mt_addr), K_(ref_cnt));
   int64_t protection_clock_;
   bool is_active_;
   int64_t ls_id_;
   uint64_t tablet_id_;
   share::ObScnRange scn_range_;
+  memtable::ObMemtable *mt_addr_;
+  int64_t ref_cnt_;
 };
 class ObAllVirtualTenantMemstoreAllocatorInfo : public common::ObVirtualTableIterator
 {
@@ -62,6 +67,8 @@ private:
     IS_ACTIVE,
     RETIRE_CLOCK,
     PROTECTION_CLOCK,
+    ADDRESS,
+    REF_COUNT
   };
   int fill_tenant_ids();
   int fill_memstore_infos(const uint64_t tenant_id);
@@ -72,6 +79,7 @@ private:
   int64_t tenant_ids_idx_;
   int64_t col_count_;
   int64_t retire_clock_;
+  char mt_addr_[32];
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualTenantMemstoreAllocatorInfo);
 };
 

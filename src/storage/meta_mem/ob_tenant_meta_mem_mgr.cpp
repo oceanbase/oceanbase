@@ -392,6 +392,9 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
   const int64_t size = sizeof(TableGCItem);
   const ObMemAttr attr(tenant_id_, "TableGCItem");
   TableGCItem *item = nullptr;
+  static const int64_t SLEEP_TS = 100_ms;
+  static const int64_t MAX_RETRY_TIMES = 1000; // about 100s
+  int64_t retry_cnt = 0;
 
   if (OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
@@ -402,32 +405,44 @@ int ObTenantMetaMemMgr::push_table_into_gc_queue(ObITable *table, const ObITable
   } else if (OB_UNLIKELY(ObITable::is_sstable(table_type) && ObITable::DDL_MEM_SSTABLE != table_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("should not recycle sstable", K(ret), K(table_type), KPC(table));
-  } else if (OB_ISNULL(item = (TableGCItem *)ob_malloc(size, attr))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("fail to allocate memory for TableGCItem", K(ret), K(size));
   } else {
-    if (ObITable::TableType::DATA_MEMTABLE == table_type) {
-      ObMemtable *memtable = static_cast<ObMemtable *>(table);
-      memtable::ObMtStat& mt_stat = memtable->get_mt_stat();
-      if (0 == mt_stat.push_table_into_gc_queue_time_) {
-        mt_stat.push_table_into_gc_queue_time_ = ObTimeUtility::current_time();
-        if (0 != mt_stat.release_time_
-            && mt_stat.push_table_into_gc_queue_time_ -
-               mt_stat.release_time_ >= 10 * 1000 * 1000 /*10s*/) {
-          LOG_WARN("It cost too much time to dec ref cnt", K(ret), KPC(memtable), K(lbt()));
+    do {
+      if (OB_ISNULL(item = (TableGCItem *)ob_malloc(size, attr))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to allocate memory for TableGCItem", K(ret), K(size));
+      } else {
+        if (ObITable::TableType::DATA_MEMTABLE == table_type) {
+          ObMemtable *memtable = static_cast<ObMemtable *>(table);
+          memtable::ObMtStat& mt_stat = memtable->get_mt_stat();
+          if (0 == mt_stat.push_table_into_gc_queue_time_) {
+            mt_stat.push_table_into_gc_queue_time_ = ObTimeUtility::current_time();
+            if (0 != mt_stat.release_time_
+                && mt_stat.push_table_into_gc_queue_time_ -
+                   mt_stat.release_time_ >= 10 * 1000 * 1000 /*10s*/) {
+              LOG_WARN("It cost too much time to dec ref cnt", K(ret), KPC(memtable), K(lbt()));
+            }
+          }
+        }
+
+        item->table_ = table;
+        item->table_type_ = table_type;
+        if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
+          LOG_ERROR("fail to push back into free_tables_queue_", K(ret), KPC(item));
         }
       }
-    }
 
-    item->table_ = table;
-    item->table_type_ = table_type;
-    if (OB_FAIL(free_tables_queue_.push((ObLink *)item))) {
-      LOG_ERROR("fail to push back into free_tables_queue_", K(ret), KPC(item));
-    }
-  }
-
-  if (OB_FAIL(ret) && nullptr != item) {
-    ob_free(item);
+      if (OB_FAIL(ret) && nullptr != item) {
+        ob_free(item);
+      }
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        ob_usleep(SLEEP_TS);
+        retry_cnt++;               // retry some times
+        if (retry_cnt % 100 == 0) {
+          LOG_ERROR("push table into gc queue retry too many times", K(retry_cnt));
+        }
+      }
+    } while (OB_ALLOCATE_MEMORY_FAILED == ret
+             && retry_cnt < MAX_RETRY_TIMES);
   }
   LOG_DEBUG("push table into gc queue", K(ret), KP(table), K(table_type), K(common::lbt()));
   return ret;
