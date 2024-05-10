@@ -1461,7 +1461,7 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
       LOG_WARN("failed to check table mode", K(ret), K(tablet));
     } else {
       result.version_range_.base_version_ = 0;
-      result.version_range_.multi_version_start_ = tablet_snapshot_version;
+      result.version_range_.multi_version_start_ = tablet.get_multi_version_start();
       result.version_range_.snapshot_version_ = tablet_snapshot_version;
     }
   } // end else
@@ -1473,6 +1473,9 @@ int ObAdaptiveMergePolicy::find_adaptive_merge_tables(
       LOG_INFO("errsim", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
       if (OB_FAIL(ret)) {
         FLOG_INFO("set schedule medium with errsim", "tablet_id", tablet.get_tablet_meta().tablet_id_);
+        result.version_range_.base_version_ = 0;
+        result.version_range_.multi_version_start_ = tablet.get_multi_version_start();;
+        result.version_range_.snapshot_version_ = tablet_snapshot_version;
         ret = OB_SUCCESS;
       }
     }
