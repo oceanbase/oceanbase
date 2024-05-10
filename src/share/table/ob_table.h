@@ -251,6 +251,7 @@ struct ObTableOperationType
     CHECK_AND_INSERT_UP = 10,
     PUT = 11,
     TRIGGER = 12, // internal type for group commit trigger
+    REDIS = 13,
     INVALID = 15
   };
 };
