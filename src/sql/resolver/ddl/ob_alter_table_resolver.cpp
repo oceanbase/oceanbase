@@ -5059,17 +5059,12 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode &node)
         ObAlterTableStmt *alter_table_stmt = get_alter_table_stmt();
         if (OB_FAIL(resolve_foreign_key_node(foreign_key_action_node, foreign_key_arg, true))) {
           if (ret == OB_ERR_COLUMN_NOT_FOUND) {
-            int child_col_cnt = foreign_key_arg.child_columns_.count();
-            int alter_table_scheme_col_cnt = alter_table_stmt->get_alter_table_schema().get_column_count();
-            const ObString &child_col_name = foreign_key_arg.child_columns_[0];
-            const ObString &fk_col_name = alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(0)->get_column_name_str();
-            // 不支持一个 alter table 语句中，同时加列并在该列上加外键
-            SQL_RESV_LOG(WARN, "child columns cnt & alter table scheme column cnt", K(child_col_cnt), K(alter_table_scheme_col_cnt));
-            SQL_RESV_LOG(WARN, "names", K(child_col_name), K(fk_col_name));
-            SQL_RESV_LOG(WARN, "alter_table_schema", K(alter_table_stmt->get_alter_table_schema()));
-            for (int i=0; i<foreign_key_arg.child_columns_.count() && ret != OB_NOT_SUPPORTED; i++) {
+            // 不支持一个 alter table 语句中，同时加列并在该列上加外键，在此检查
+            const int64_t child_col_cnt = foreign_key_arg.child_columns_.count();
+            const int64_t alter_table_scheme_col_cnt = alter_table_stmt->get_alter_table_schema().get_column_count();
+            for (int64_t i = 0; i < child_col_cnt && ret != OB_NOT_SUPPORTED; i++) {
               const ObString &child_column_name = foreign_key_arg.child_columns_[i];
-              for (int j=0; j<alter_table_scheme_col_cnt; j++) {
+              for (int64_t j = 0; j < alter_table_scheme_col_cnt; j++) {
                 if (alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(j)->get_column_name_str() == child_column_name) {
                   ret = OB_NOT_SUPPORTED;
                   break;

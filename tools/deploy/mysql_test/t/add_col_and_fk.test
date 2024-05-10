@@ -1,0 +1,40 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : kunxing.lyk
+# owner group: storage
+# description: add a col and add a foreign key to it in a single ddl is not supported.
+#--disable_abort_on_error
+
+
+
+--disable_warnings
+drop database if exists lyk;
+--enable_warnings
+
+create database lyk;
+
+use lyk;
+
+CREATE TABLE `schema_authorwithevenlongername` (
+  `id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY,
+  `name` varchar(255) NOT NULL,
+  `height` integer UNSIGNED NULL CHECK (`height` >= 0)
+);
+CREATE TABLE `schema_bookwithlongname` (
+  `id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY,
+  `author_foreign_key_with_really_long_field_name_id` integer NOT NULL
+);
+
+-- error 1235
+ALTER TABLE
+  `schema_bookwithlongname`
+ADD
+  COLUMN `author_other_really_long_named_i_mean_so_long_fk_id` integer NOT NULL,
+ADD
+  CONSTRAINT `schema_bookwithlongn_author_other_really__6c36f4d2_fk_schema_au` FOREIGN KEY (
+    `author_other_really_long_named_i_mean_so_long_fk_id`
+  ) REFERENCES `schema_authorwithevenlongername`(`id`);
+
+drop table schema_authorwithevenlongername, schema_bookwithlongname;
+drop database lyk;

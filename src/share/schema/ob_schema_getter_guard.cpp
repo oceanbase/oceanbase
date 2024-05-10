@@ -2137,8 +2137,8 @@ int ObSchemaGetterGuard::get_tenant_info(const ObString &tenant_name,
   } else if (OB_FAIL(mgr->get_tenant_schema(tenant_name, simple_tenant))) {
      LOG_WARN("get simple tenant failed", KR(ret), K(tenant_name));
   } else if (NULL == simple_tenant) {
-    LOG_INFO("tenant not exist", K(tenant_name));
-    ret = OB_TENANT_NOT_EXIST;
+    // ret = OB_ERR_INVALID_TENANT_NAME;
+    // LOG_INFO("tenant not exist", KR(ret), K(tenant_name));
   } else if (OB_FAIL(get_schema(TENANT_SCHEMA,
                                 OB_SYS_TENANT_ID,
                                 simple_tenant->get_tenant_id(),
