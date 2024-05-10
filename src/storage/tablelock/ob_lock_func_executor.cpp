@@ -1067,6 +1067,7 @@ int ObReleaseAllLockExecutor::execute(const int64_t raw_owner_id)
       OZ (session.init(0 /*default session id*/,
                        0 /*default proxy id*/,
                        &allocator));
+      OX (session.set_inner_session());
       OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
       OZ (guard.get_tenant_info(tenant_id, tenant_schema));
       OZ (session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id));
