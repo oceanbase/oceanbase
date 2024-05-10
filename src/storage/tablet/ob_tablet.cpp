@@ -5112,6 +5112,7 @@ int ObTablet::check_schema_version_elapsed(
     } else if (refreshed_schema_version >= schema_version) {
       // schema version already refreshed
     } else if (OB_FAIL(schema_service->get_tenant_refreshed_schema_version(tenant_id, tenant_refreshed_schema_version))) {
+      ret = OB_ENTRY_NOT_EXIST == ret ? OB_SCHEMA_EAGAIN : ret;
       LOG_WARN("get tenant refreshed schema version failed", K(ret));
     } else if (tenant_refreshed_schema_version < schema_version) {
       ret = OB_EAGAIN;
