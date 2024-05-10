@@ -2624,6 +2624,93 @@ int ObTableSchema::create_new_idx_name_after_flashback(
   return ret;
 }
 
+int ObTableSchema::get_xml_hidden_column_id(const ObTableSchema *data_table_schema,
+                                            const ObColumnSchemaV2 *data_column_schema,
+                                            int64_t &data_column_id)
+{
+  INIT_SUCC(ret);
+  data_column_id = -1;
+  ObSEArray<ObColumnSchemaV2 *, 1> data_hidden_cols;
+  if (OB_ISNULL(data_table_schema) || OB_ISNULL(data_column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schem or column schema is null", K(data_table_schema), K(data_column_schema));
+  } else if (OB_FAIL(data_table_schema->get_column_schema_in_same_col_group(data_column_schema->get_column_id(),
+                                                                     data_column_schema->get_udt_set_id(),
+                                                                     data_hidden_cols))) {
+    LOG_WARN("failed to get column schema", K(ret));
+  } else if (data_hidden_cols.count() != 1 ||
+             OB_ISNULL(data_hidden_cols.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get data data_hidden_cols count > 1.", K(ret), K(data_hidden_cols.count()));
+  } else {
+    ObColumnSchemaV2* data_hidden_col = data_hidden_cols.at(0);
+    ObTableSchema::const_column_iterator iter = data_table_schema->column_begin();
+    bool has_find = false;
+    for ( ; OB_SUCC(ret) && !has_find && iter != data_table_schema->column_end(); ++iter) {
+      const ObColumnSchemaV2 *column_schema = *iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Column schema is NULL", K(ret));
+      } else if (!column_schema->is_udt_hidden_column()) {
+        // do nothing
+      } else if (column_schema->get_udt_set_id() == data_hidden_col->get_udt_set_id()) {
+        data_column_id = column_schema->get_column_id();
+        has_find = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!has_find) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The hidden column corresponding to column in the table was not found.", K(ret), K(*data_table_schema), K(*data_column_schema));
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::find_xml_hidden_column_index(const ObTableSchema *table_schema,
+                                                const ObColumnSchemaV2 *column_schema,
+                                                const ObArray<ObColDesc> &desc_col_ids,
+                                                int64_t &dst_index_col)
+{
+  INIT_SUCC(ret);
+  dst_index_col = -1;
+  ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+  if (OB_ISNULL(table_schema) || OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schem or column schema is null", K(table_schema), K(column_schema));
+  } else if (OB_FAIL(table_schema->get_column_schema_in_same_col_group(column_schema->get_column_id(),
+                                                                       column_schema->get_udt_set_id(),
+                                                                       hidden_cols))) {
+    LOG_WARN("failed to get column schema", K(ret));
+  } else if (hidden_cols.count() != 1 || OB_ISNULL(hidden_cols.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get data data_hidden_cols count > 1.", K(ret), K(hidden_cols.count()));
+  } else {
+    bool has_find = false;
+    for (int64_t i = 0; OB_SUCC(ret) && !has_find && i < desc_col_ids.count(); i++) {
+      const uint64_t hidden_column_id = desc_col_ids.at(i).col_id_;
+      const ObColumnSchemaV2 *find_hidden_column_schema = table_schema->get_column_schema(hidden_column_id);
+      if (OB_ISNULL(find_hidden_column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get hidden col or hidden data column null", K(ret));
+      } else if (!find_hidden_column_schema->is_udt_hidden_column()) {
+        // do nothing
+      } else if (find_hidden_column_schema->get_udt_set_id() == hidden_cols.at(0)->get_udt_set_id()) {
+        dst_index_col = i;
+        has_find = true;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (!has_find) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("The hidden column corresponding to column in the table was not found.", K(ret), K(*table_schema), K(*column_schema));
+    }
+  }
+  return ret;
+}
+
 void ObTableSchema::construct_partition_key_column(
     const ObColumnSchemaV2 &column,
     ObPartitionKeyColumn &partition_key_column)
@@ -2810,6 +2897,19 @@ int ObTableSchema::get_orig_default_row(const common::ObIArray<ObColDesc> &colum
     }
   }
   return ret;
+}
+
+ObColumnSchemaV2* ObTableSchema::get_xml_hidden_column_parent_col_schema(uint64_t column_id, uint64_t udt_set_id) const
+{
+  ObColumnSchemaV2 *res = NULL;
+  for (int64_t i = 0; udt_set_id > 0 && OB_ISNULL(res) && i < column_cnt_; ++i) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_ISNULL(column) || !column->is_extend() || column_id == column->get_column_id()) {
+    } else if (udt_set_id == column->get_udt_set_id()) {
+      res = column;
+    }
+  }
+  return res;
 }
 
 ObColumnSchemaV2* ObTableSchema::get_xml_hidden_column_schema(uint64_t column_id, uint64_t udt_set_id) const

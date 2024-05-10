@@ -940,9 +940,37 @@ int ObComplementWriteTask::generate_col_param()
           ObColDesc tmp_col_desc = tmp_col_ids.at(i);
           if (nullptr == data_column_schema) {
             // may be newly added column, can not find in data table.
+          } else if (data_column_schema->is_udt_hidden_column()) {
+            // do nothing
+            // Hidden columns of udt are written when processing the parent column
           } else if (FALSE_IT(tmp_col_desc.col_id_ = data_column_schema->get_column_id())) {
           } else if (OB_FAIL(col_ids_.push_back(tmp_col_desc))) {
             LOG_WARN("fail to push back col desc", K(ret), K(tmp_col_ids.at(i)), K(tmp_col_desc));
+          } else if (data_column_schema->is_extend()) {
+            int64_t column_id = 0;
+            int64_t index_col = 0;
+            if (!data_column_schema->is_xmltype()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+            } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema,
+                                                                       data_column_schema,
+                                                                       column_id))) {
+              LOG_WARN("failed to get xml hidden column id.", K(ret));
+            } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
+                                                                           hidden_column_schema,
+                                                                           tmp_col_ids,
+                                                                           index_col))) {
+              LOG_WARN("failed to find xml hidden column index.", K(ret));
+            } else if (index_col >= tmp_col_ids.count() || index_col < 0 || column_id < 0) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid index_col.", K(ret), K(index_col), K(tmp_col_ids.count()), K(column_id));
+            } else {
+              ObColDesc find_col_desc = tmp_col_ids.at(index_col);
+              find_col_desc.col_id_ = column_id;
+              if (OB_FAIL(col_ids_.push_back(find_col_desc))) {
+                LOG_WARN("fail to push back col desc", K(ret), K(find_col_desc));
+              }
+            }
           }
         }
       }
@@ -958,6 +986,29 @@ int ObComplementWriteTask::generate_col_param()
           const ObColumnSchemaV2 *data_column_schema = data_table_schema->get_column_schema(col_ids_.at(j).col_id_);
           if (nullptr == data_column_schema) {
             // may be newly added column.
+          } else if (data_column_schema->is_udt_hidden_column()) {
+            if (hidden_column_schema->is_udt_hidden_column()) {
+              // hidden parent
+              ObColumnSchemaV2 *parent_hidden_column_schema = nullptr;
+              // data parent
+              ObColumnSchemaV2 *parent_data_column_schema = nullptr;
+              if (OB_ISNULL(parent_hidden_column_schema =
+                            hidden_table_schema->get_xml_hidden_column_parent_col_schema(hidden_column_schema->get_column_id(),
+                                                                                         hidden_column_schema->get_udt_set_id()))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get hidden column parent is null", K(ret), K(*hidden_column_schema), K(*hidden_table_schema));
+              } else if (OB_ISNULL(parent_data_column_schema =
+                                   data_table_schema->get_xml_hidden_column_parent_col_schema(data_column_schema->get_column_id(),
+                                                                                              data_column_schema->get_udt_set_id()))) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("get data_ column parent is null", K(ret), K(*data_column_schema), K(*data_table_schema));
+              } else if (parent_hidden_column_schema->get_column_name_str() == parent_data_column_schema->get_column_name_str()) {
+                if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
+                  LOG_WARN("fail to push back output projector", K(ret));
+                }
+                break;
+              }
+            }
           } else if (hidden_column_name == data_column_schema->get_column_name_str()) {
             if (OB_FAIL(output_projector_.push_back(static_cast<int32_t>(j)))) {
               LOG_WARN("fail to push back output projector", K(ret));
@@ -1729,8 +1780,25 @@ int ObLocalScan::get_exist_column_mapping(
       const ObColumnSchemaV2 *data_column_schema = data_table_schema.get_column_schema(hidden_column_name);
       if (nullptr == data_column_schema) {
         // newly added column, can not find in data table.
+      } else if (data_column_schema->is_udt_hidden_column()) {
+        // do nothing
+        // Hidden columns of udt are written when processing the parent column
       } else if (OB_FAIL(exist_column_mapping_.set(i))) {
         LOG_WARN("fail to set bit map", K(ret), K(*data_column_schema));
+      } else if (data_column_schema->is_extend()) {
+        ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
+        int64_t index_col = 0;
+        if (!data_column_schema->is_xmltype()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+        } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(&hidden_table_schema,
+                                                                       hidden_column_schema,
+                                                                       tmp_col_ids,
+                                                                       index_col))) {
+          LOG_WARN("failed to find xml hidden column index.", K(ret));
+        } else if (OB_FAIL(exist_column_mapping_.set(index_col))) {
+          LOG_WARN("fail to set bit map", K(ret), K(*data_column_schema));
+        }
       } else {/* do nothing. */}
     }
   }
@@ -1997,13 +2065,42 @@ int ObLocalScan::get_origin_table_checksum(
         const ObString &hidden_column_name = hidden_col_schema->get_column_name_str();
         const ObColumnSchemaV2 *data_col_schema = data_table_schema->get_column_schema(hidden_column_name);
         const int64_t index_in_array = i < rowkey_cols_cnt ? i : i + extra_rowkey_cnt;
-        if (OB_ISNULL(data_col_schema)) {
+        if (hidden_col_schema->is_udt_hidden_column()) {
+          // do nothing
+          // Hidden columns of udt are written when processing the parent column
+        } else if (OB_ISNULL(data_col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data column schema should not be null", K(ret), K(hidden_column_name));
+        } else if (data_col_schema->is_udt_hidden_column()) {
+          // do nothing
         } else if (OB_FAIL(report_col_ids.push_back(data_col_schema->get_column_id()))) {
           LOG_WARN("fail to push back col id", K(ret), K(*data_col_schema));
         } else if (OB_FAIL(report_col_checksums.push_back(checksum_calculator_.get_column_checksum()[index_in_array]))) {
           LOG_WARN("fail to push back col checksum", K(ret));
+        } else if (data_col_schema->is_extend()) {
+          int64_t column_id = 0;
+          int64_t index_col = 0;
+          if (!data_col_schema->is_xmltype()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("The udt type is not adapted", K(ret), K(*data_col_schema));
+          } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema, data_col_schema, column_id))) {
+            LOG_WARN("failed to get xml hidden column id.", K(ret));
+          } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,
+                                                                         hidden_col_schema,
+                                                                         tmp_col_ids,
+                                                                         index_col))) {
+            LOG_WARN("failed to find xml hidden column index.", K(ret));
+          } else if (!exist_column_mapping_.test(index_col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get xml udt hidden column not exist column mapping", K(ret), K(index_col));
+          } else {
+            const int64_t udt_hidden_index_in_array = index_col < rowkey_cols_cnt ? index_col : index_col + extra_rowkey_cnt;
+            if (OB_FAIL(report_col_ids.push_back(column_id))) {
+              LOG_WARN("fail to push back udt hidden col id", K(ret), K(*data_col_schema));
+            } else if (OB_FAIL(report_col_checksums.push_back(checksum_calculator_.get_column_checksum()[udt_hidden_index_in_array]))) {
+              LOG_WARN("fail to push back col checksum", K(ret));
+            }
+          }
         } else {/* do nothing. */}
       } else {/* do nothing. */}
     }
