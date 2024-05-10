@@ -6834,5 +6834,51 @@
       "background_cn": "",
       "ref_url": "",
       "placeholder": true
+  },
+  "low_priority_updates": {
+      "id": 10386,
+      "name": "low_priority_updates",
+      "default_value": "0",
+      "base_value": "0",
+      "data_type": "bool",
+      "info": "mock for mysql5.7",
+      "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+      "publish_version": "424",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": "",
+      "placeholder": true
+  },
+  "max_error_count": {
+      "id": 10387,
+      "name": "max_error_count",
+      "default_value": "64",
+      "base_value": "64",
+      "data_type": "int",
+      "info": "mock for mysql5.7",
+      "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+      "min_val": "0",
+      "max_val": "65535",
+      "publish_version": "424",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": "",
+      "placeholder": true
+  },
+  "max_insert_delayed_threads": {
+      "id": 10388,
+      "name": "max_insert_delayed_threads",
+      "default_value": "0",
+      "base_value": "0",
+      "data_type": "int",
+      "info": "mock for mysql5.7",
+      "flags": "GLOBAL | SESSION | MYSQL_ONLY",
+      "min_val": "20",
+      "max_val": "16384",
+      "publish_version": "424",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": "",
+      "placeholder": true
   }
 }
