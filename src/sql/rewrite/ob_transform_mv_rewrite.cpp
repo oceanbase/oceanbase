@@ -95,7 +95,7 @@ int ObTransformMVRewrite::need_transform(const common::ObIArray<ObParentDMLStmt>
     OPT_TRACE("only do mv rewrite in the first iteration");
   } else if (stmt.is_select_stmt() && static_cast<const ObSelectStmt*>(&stmt)->is_expanded_mview()) {
     need_trans = false;
-  } else if (ctx_->session_info_->is_inner() || !ctx_->session_info_->is_user_session()) {
+  } else if (ctx_->session_info_->get_ddl_info().is_refreshing_mview()) {
     need_trans = false;
     OPT_TRACE("not a user SQL, skip mv rewrite");
   } else if (stmt.get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_1) {
