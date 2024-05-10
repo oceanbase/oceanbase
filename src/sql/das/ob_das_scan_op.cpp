@@ -61,7 +61,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_format_str_,
                     trans_info_expr_,
                     group_by_column_ids_,
-                    ir_scan_type_);
+                    ir_scan_type_,
+                    rowkey_exprs_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
