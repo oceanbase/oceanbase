@@ -189,27 +189,18 @@ int ObTableLoadInstance::start_stmt(const ObTableLoadParam &param)
   stmt_ctx_.is_incremental_ = ObDirectLoadMethod::is_incremental(param.method_);
   stmt_ctx_.use_insert_into_select_tx_ = param.px_mode_;
   if (stmt_ctx_.is_incremental_) { // incremental direct-load
-    bool end_sql_tx_if_fail = false;
-    bool rollback_savepoint_if_fail = false;
     if (OB_FAIL(build_tx_param())) {
       LOG_WARN("fail to build tx param", KR(ret), K(stmt_ctx_));
     } else if (OB_FAIL(start_sql_tx())) {
       LOG_WARN("fail to start sql tx", KR(ret), K(stmt_ctx_));
-    } else if (FALSE_IT(end_sql_tx_if_fail = true)) {
-    } else if (OB_FAIL(create_implicit_savepoint())) {
-      LOG_WARN("fail to create implicit savepoint", KR(ret), K(stmt_ctx_));
     } else if (OB_FAIL(lock_table_in_tx())) {
       LOG_WARN("fail to lock table in tx", KR(ret), K(stmt_ctx_));
-    } else if (FALSE_IT(rollback_savepoint_if_fail = true)) {
     } else if (OB_FAIL(init_ddl_param_for_inc_direct_load())) {
       LOG_WARN("fail to init ddl param for inc direct load", KR(ret), K(stmt_ctx_));
     }
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
-      if (rollback_savepoint_if_fail && OB_TMP_FAIL(rollback_to_implicit_savepoint())) {
-        LOG_WARN("fail to rollback to implicit savepoint", KR(tmp_ret));
-      }
-      if (end_sql_tx_if_fail && OB_TMP_FAIL(end_sql_tx(false /*commit*/))) {
+      if (OB_TMP_FAIL(end_sql_tx(false /*commit*/))) {
         LOG_WARN("fail to end sql tx", KR(tmp_ret));
       }
     }
@@ -230,10 +221,6 @@ int ObTableLoadInstance::end_stmt(const bool commit)
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (stmt_ctx_.is_incremental_) {
-    // rollback in fail only, ignore ret
-    if (!commit && OB_TMP_FAIL(rollback_to_implicit_savepoint())) {
-      LOG_WARN("fail to rollback to implicit savepoint", KR(tmp_ret));
-    }
     if (OB_FAIL(end_sql_tx(commit))) {
       LOG_WARN("fail to end sql tx", KR(ret));
     }
@@ -364,50 +351,6 @@ int ObTableLoadInstance::end_sql_tx(const bool commit)
     }
   }
   stmt_ctx_.tx_desc_ = nullptr;
-  return ret;
-}
-
-int ObTableLoadInstance::create_implicit_savepoint()
-{
-  int ret = OB_SUCCESS;
-  ObTransService *txs = MTL(ObTransService *);
-  ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
-  if (stmt_ctx_.use_insert_into_select_tx_) {
-    // do nothing
-  } else {
-    ObTxSEQ savepoint;
-    if (OB_FAIL(txs->create_implicit_savepoint(*tx_desc, stmt_ctx_.tx_param_, savepoint))) {
-      LOG_WARN("fail to create implicit savepoint", KR(ret));
-    } else {
-      stmt_ctx_.savepoint_ = savepoint;
-      LOG_INFO("create implicit savepoint succeed", KPC(tx_desc), K(savepoint));
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadInstance::rollback_to_implicit_savepoint()
-{
-  int ret = OB_SUCCESS;
-  ObTransService *txs = MTL(ObTransService *);
-  ObSQLSessionInfo *session_info = stmt_ctx_.session_info_;
-  ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
-  if (stmt_ctx_.use_insert_into_select_tx_) {
-    // do nothing
-  } else {
-    if (!stmt_ctx_.savepoint_.is_valid()) {
-      // do nothing
-    } else {
-      const int64_t stmt_timeout_ts = get_stmt_expire_ts(session_info);
-      const ObTxSEQ savepoint = stmt_ctx_.savepoint_;
-      if (OB_FAIL(txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_timeout_ts, nullptr))) {
-        LOG_WARN("failed to rollback to implicit savepoint", KR(ret), KPC(tx_desc));
-      } else {
-        stmt_ctx_.savepoint_.reset();
-        LOG_INFO("rollback to implicit savepoint succeed", KPC(tx_desc), K(savepoint));
-      }
-    }
-  }
   return ret;
 }
 

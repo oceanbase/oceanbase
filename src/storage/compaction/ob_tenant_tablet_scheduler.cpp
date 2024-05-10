@@ -91,7 +91,7 @@ int ObFastFreezeChecker::check_need_fast_freeze(
   int ret = OB_SUCCESS;
   need_fast_freeze = false;
   ObTableHandleV2 table_handle;
-  memtable::ObMemtable *memtable = nullptr;
+  ObITabletMemtable *memtable = nullptr;
   const share::ObLSID &ls_id = tablet.get_tablet_meta().ls_id_;
   const common::ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
 
@@ -104,23 +104,26 @@ int ObFastFreezeChecker::check_need_fast_freeze(
     } else {
       LOG_WARN("[FastFreeze] failed to get active memtable", K(ret));
     }
-  } else if (OB_FAIL(table_handle.get_data_memtable(memtable))) {
+  } else if (OB_FAIL(table_handle.get_tablet_memtable(memtable))) {
     LOG_WARN("[FastFreeze] failed to get memtalbe", K(ret), K(table_handle));
   } else if (OB_ISNULL(memtable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[FastFreeze] get unexpected null memtable", K(ret), KPC(memtable));
   } else if (!memtable->is_active_memtable()) {
     // do nothing
+  } else if (!memtable->is_data_memtable()) {
+    // do nothing
   } else if (ObTimeUtility::current_time() < memtable->get_timestamp() + FAST_FREEZE_INTERVAL_US) {
     if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
       LOG_INFO("[FastFreeze] no need to check fast freeze now", K(tablet));
     }
   } else {
-    check_hotspot_need_fast_freeze(*memtable, need_fast_freeze);
+    memtable::ObMemtable *mt = static_cast<memtable::ObMemtable *>(memtable);
+    check_hotspot_need_fast_freeze(*mt, need_fast_freeze);
     if (need_fast_freeze) {
       FLOG_INFO("[FastFreeze] tablet detects hotspot row, need fast freeze", K(ls_id), K(tablet_id));
     } else {
-      check_tombstone_need_fast_freeze(tablet, *memtable, need_fast_freeze);
+      check_tombstone_need_fast_freeze(tablet, *mt, need_fast_freeze);
       if (need_fast_freeze) {
         FLOG_INFO("[FastFreeze] tablet detects tombstone, need fast freeze", K(ls_id), K(tablet_id));
       }

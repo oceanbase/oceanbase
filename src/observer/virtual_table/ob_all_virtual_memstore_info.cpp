@@ -139,7 +139,7 @@ int ObAllVirtualMemstoreInfo::get_next_tablet(ObTabletHandle &tablet_handle)
   return ret;
 }
 
-int ObAllVirtualMemstoreInfo::get_next_memtable(memtable::ObMemtable *&mt)
+int ObAllVirtualMemstoreInfo::get_next_memtable(ObITabletMemtable *&mt)
 {
   int ret = OB_SUCCESS;
 
@@ -164,7 +164,7 @@ int ObAllVirtualMemstoreInfo::get_next_memtable(memtable::ObMemtable *&mt)
       } else if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(tables_handle_))) {
         SERVER_LOG(WARN, "failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet_handle.get_obj()));
       }
-    } else if (OB_FAIL(tables_handle_.at(memtable_array_pos_++).get_data_memtable(mt))) {
+    } else if (OB_FAIL(tables_handle_.at(memtable_array_pos_++).get_tablet_memtable(mt))) {
       // get next memtable
       ret = OB_SUCCESS;
     } else if (OB_ISNULL(mt)) {
@@ -197,7 +197,7 @@ void ObAllVirtualMemstoreInfo::get_freeze_time_dist(const ObMtStat& mt_stat)
 int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObMemtable *mt = NULL;
+  ObITabletMemtable *mt = NULL;
   if (NULL == allocator_) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "allocator_ shouldn't be NULL", K(allocator_), K(ret));
@@ -214,6 +214,10 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
   } else {
     ObMtStat& mt_stat = mt->get_mt_stat();
     const int64_t col_count = output_column_ids_.count();
+    memtable::ObMemtable *data_memtable = NULL;
+    if (mt->is_data_memtable()) {
+      data_memtable = static_cast<memtable::ObMemtable *>(mt);
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
       uint64_t col_id = output_column_ids_.at(i);
       switch (col_id) {
@@ -284,19 +288,35 @@ int ObAllVirtualMemstoreInfo::process_curr_tenant(ObNewRow *&row)
           break;
         case OB_APP_MIN_COLUMN_ID + 14:
           // hash_item_count
-          cur_row_.cells_[i].set_int(mt->get_hash_item_count());
+          if (nullptr != data_memtable) {
+            cur_row_.cells_[i].set_int(data_memtable->get_hash_item_count());
+          } else {
+            cur_row_.cells_[i].set_int(0);
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 15:
           // hash_mem_used
-          cur_row_.cells_[i].set_int(mt->get_hash_alloc_memory());
+          if (nullptr != data_memtable) {
+            cur_row_.cells_[i].set_int(data_memtable->get_hash_alloc_memory());
+          } else {
+            cur_row_.cells_[i].set_int(0);
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 16:
           // btree_item_count
-          cur_row_.cells_[i].set_int(mt->get_btree_item_count());
+          if (nullptr != data_memtable) {
+            cur_row_.cells_[i].set_int(data_memtable->get_btree_item_count());
+          } else {
+            cur_row_.cells_[i].set_int(0);
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 17:
           // btree_mem_used
-          cur_row_.cells_[i].set_int(mt->get_btree_alloc_memory());
+          if (nullptr != data_memtable) {
+            cur_row_.cells_[i].set_int(data_memtable->get_btree_alloc_memory());
+          } else {
+            cur_row_.cells_[i].set_int(0);
+          }
           break;
         case OB_APP_MIN_COLUMN_ID + 18:
           // insert_row_count

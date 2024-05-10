@@ -300,9 +300,6 @@ int ObPartitionMergePolicy::find_mini_merge_tables(
     } else if (OB_UNLIKELY(memtable->is_active_memtable())) {
       LOG_DEBUG("skip active memtable", K(i), KPC(memtable), K(memtable_handles));
       break;
-    } else if (OB_UNLIKELY(memtable->is_direct_load_memtable())) {
-      LOG_DEBUG("skip direct load memtable", K(i), KPC(memtable), K(memtable_handles));
-      break;
     } else if (!memtable->can_be_minor_merged()) {
       FLOG_INFO("memtable cannot mini merge now", K(ret), K(i), KPC(memtable), K(max_snapshot_version), K(memtable_handles), K(param));
       break;
@@ -1022,7 +1019,7 @@ int ObPartitionMergePolicy::check_need_medium_merge(
       can_merge = tablet.get_snapshot_version() >= medium_snapshot;
       if (!can_merge) {
         ObTableHandleV2 memtable_handle;
-        memtable::ObMemtable *last_frozen_memtable = nullptr;
+        ObITabletMemtable *last_frozen_memtable = nullptr;
         if (OB_FAIL(tablet.get_protected_memtable_mgr_handle(protected_handle))) {
           LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), K(tablet));
         } else if (OB_FAIL(protected_handle->get_last_frozen_memtable(memtable_handle))) {
@@ -1032,7 +1029,7 @@ int ObPartitionMergePolicy::check_need_medium_merge(
           } else {
             LOG_WARN("failed to get last frozen memtable", K(ret), K(tablet));
           }
-        } else if (OB_FAIL(memtable_handle.get_data_memtable(last_frozen_memtable))) {
+        } else if (OB_FAIL(memtable_handle.get_tablet_memtable(last_frozen_memtable))) {
           LOG_WARN("failed to get last frozen memtable", K(ret));
         } else {
           need_force_freeze = last_frozen_memtable->get_snapshot_version() < medium_snapshot;

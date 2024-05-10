@@ -225,6 +225,10 @@ public: // derived from ObITabletMemtable
   virtual bool is_inited() const override { return is_inited_; }
   virtual int64_t dec_write_ref() override;
   virtual bool is_frozen_memtable() override;
+  virtual int get_schema_info(
+    const int64_t input_column_cnt,
+    int64_t &max_schema_version_on_memtable,
+    int64_t &max_column_cnt_on_memtable) const override;
 
 public: // derived from ObITable
   // ==================== Memtable Operation Interface ==================
@@ -357,7 +361,6 @@ public: // derived from ObITable
       storage::ObStoreCtx &ctx,
       const share::SCN &scn,
       ObMemtableMutatorIterator *mmi);
-  virtual int replay_schema_version_change_log(const int64_t schema_version);
   virtual int safe_to_destroy(bool &is_safe);
 
 public:
@@ -369,10 +372,6 @@ public:
   int64_t get_max_data_schema_version() const;
   void set_max_column_cnt(const int64_t column_cnt);
   int64_t get_max_column_cnt() const;
-  int get_schema_info(
-    const int64_t input_column_cnt,
-    int64_t &max_schema_version_on_memtable,
-    int64_t &max_column_cnt_on_memtable) const;
   int row_compact(ObMvccRow *value,
                   const share::SCN snapshot_version,
                   const int64_t flag);
@@ -450,7 +449,7 @@ public:
   int check_cleanout(bool &is_all_cleanout,
                      bool &is_all_delay_cleanout,
                      int64_t &count);
-  int dump2text(const char *fname);
+  virtual int dump2text(const char *fname) override;
   // TODO(handora.qc) ready_for_flush interface adjustment
 
   virtual int finish_freeze();

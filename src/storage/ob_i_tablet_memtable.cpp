@@ -346,6 +346,21 @@ int64_t ObITabletMemtable::get_max_schema_version() const
   return ATOMIC_LOAD(&max_schema_version_);
 }
 
+int ObITabletMemtable::replay_schema_version_change_log(const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    TRANS_LOG(WARN, "not init", K(*this));
+    ret = OB_NOT_INIT;
+  } else if (schema_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(schema_version));
+  } else {
+    set_max_schema_version(schema_version);
+  }
+  return ret;
+}
+
 int64_t ObITabletMemtable::inc_unsubmitted_cnt_() { return ATOMIC_AAF(&unsubmitted_cnt_, 1); }
 int64_t ObITabletMemtable::dec_unsubmitted_cnt_() { return ATOMIC_SAF(&unsubmitted_cnt_, 1); }
 int64_t ObITabletMemtable::inc_write_ref_() { return ATOMIC_AAF(&write_ref_cnt_, 1); }

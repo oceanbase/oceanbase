@@ -886,10 +886,17 @@ int ObTabletDDLUtil::update_ddl_table_store(
   } else {
     const bool is_major_sstable = ddl_param.table_key_.is_major_sstable();
     const int64_t rebuild_seq = ls.get_rebuild_seq();
-    const int64_t snapshot_version = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_snapshot_version())
-                                                     : tablet.get_snapshot_version();
-    const int64_t multi_version_start = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_multi_version_start())
-                                            : 0;
+    int64_t snapshot_version = 0;
+    int64_t multi_version_start = 0;
+    if (is_full_direct_load(ddl_param.direct_load_type_)) {
+      snapshot_version = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_snapshot_version())
+                                          : tablet.get_snapshot_version();
+      multi_version_start = is_major_sstable ? max(ddl_param.snapshot_version_, tablet.get_multi_version_start())
+                                             : 0;
+    } else {
+      snapshot_version = max(ddl_param.snapshot_version_, tablet.get_snapshot_version());
+      multi_version_start = tablet.get_multi_version_start();
+    }
     ObTabletHandle new_tablet_handle;
     ObUpdateTableStoreParam table_store_param(sstable,
                                               snapshot_version,

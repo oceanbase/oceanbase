@@ -586,7 +586,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
           } else if (table->is_direct_load_memtable()) {
-            ret = OB_NOT_SUPPORTED;
+            ret = OB_TRANSFER_SYS_ERROR;
             LOG_WARN("find a direct load memtable", KR(ret), K(tablet_info_.tablet_id_), KPC(table));
           } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
           } else if (table->get_start_scn() >= backfill_tx_ctx_->log_sync_scn_
