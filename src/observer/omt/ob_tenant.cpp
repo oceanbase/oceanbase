@@ -1552,13 +1552,16 @@ int ObTenant::recv_large_request(rpc::ObRequest &req)
 {
   int ret = OB_SUCCESS;
   req.set_enqueue_timestamp(ObTimeUtility::current_time());
-  req.set_large_retry_flag(true);
-  if (0 != req.get_group_id()) {
+  if (has_stopped()) {
+    ret = OB_TENANT_NOT_IN_SERVER;
+    LOG_WARN("receive large request but tenant has already stopped", K(ret), "tenant_id", id_);
+  } else if (0 != req.get_group_id()) {
     if (OB_FAIL(recv_group_request(req, req.get_group_id()))) {
-      LOG_WARN("tenant receive large retry request fail", K(ret));
+      LOG_WARN("tenant receive large retry request fail", K(ret),
+          "tenant_id", id_, "group_id", req.get_group_id());
     }
   } else if (OB_FAIL(recv_group_request(req, OBCG_LQ))){
-    LOG_ERROR("recv large request failed", K(id_));
+    LOG_ERROR("recv large request failed", "tenant_id", id_);
   } else {
     ObTenantStatEstGuard guard(id_);
     EVENT_INC(REQUEST_ENQUEUE_COUNT);
@@ -1667,11 +1670,22 @@ void ObTenant::handle_retry_req(bool need_clear)
   int ret = OB_SUCCESS;
   ObLink* task = nullptr;
   ObRequest *req = NULL;
+  // even if ret != OB_SUCCESS, the loop must continue to pop all requests
   while (OB_SUCC(retry_queue_.pop(task, need_clear))) {
+    // if pop returns OB_SUCCESS, then the task must not be NULL.
     req = static_cast<rpc::ObRequest*>(task);
-    if (OB_FAIL(recv_large_request(*req))) {
-      LOG_ERROR("tenant patrol push req fail", "tenant", id_);
-      break;
+    if (req->large_retry_flag()) {
+      if (OB_FAIL(recv_large_request(*req))) {
+        LOG_WARN("tenant patrol push req into large_query queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
+      }
+    } else {
+      if (OB_FAIL(recv_request(*req))) {
+        LOG_WARN("tenant patrol push req into common queue fail, "
+            "and the req well be destroyed", "tenant_id", id_, "req", *req, K(ret));
+        on_translate_fail(req, ret);
+      }
     }
   }
 }
