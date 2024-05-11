@@ -65,7 +65,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     int pn_err = 0;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
-    if (OB_LS_FETCH_LOG2 == pcode_) {
+    if (OB_LS_FETCH_LOG2 == pcode_ || OB_CDC_FETCH_RAW_LOG == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, true, false, sessid_))) {
@@ -206,7 +206,7 @@ int SSHandle<pcodeStruct>::abort()
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     int pn_err = 0;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
-    if (OB_LS_FETCH_LOG2 == pcode_) {
+    if (OB_LS_FETCH_LOG2 == pcode_ || OB_CDC_FETCH_RAW_LOG == pcode_) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     if (OB_FAIL(rpc_encode_req(proxy_, pool, pcode_, NULL, opts_, pnio_req, pnio_req_sz, false, false, true, sessid_))) {

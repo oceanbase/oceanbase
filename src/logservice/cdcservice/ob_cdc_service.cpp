@@ -24,14 +24,16 @@ namespace cdc
 
 ExpiredArchiveClientLSFunctor::ExpiredArchiveClientLSFunctor(const int64_t current_time):
     current_time_us_(current_time),
-    valid_client_ls_cnt_(0),
+    valid_client_ls_cnt_v1_(0),
+    valid_client_ls_cnt_v2_(0),
     other_client_ls_cnt_(0)
 {
 }
 
 ExpiredArchiveClientLSFunctor::~ExpiredArchiveClientLSFunctor()
 {
-  valid_client_ls_cnt_ = 0;
+  valid_client_ls_cnt_v1_ = 0;
+  valid_client_ls_cnt_v2_ = 0;
   other_client_ls_cnt_ = 0;
 }
 
@@ -40,11 +42,19 @@ bool ExpiredArchiveClientLSFunctor::operator()(const ClientLSKey &key, ClientLSC
   int ret = OB_SUCCESS;
   bool bret = true;
   if (OB_ISNULL(value)) {
-    EXTLOG_LOG(WARN, "get null clientls ctx", K(key));
+    EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get null clientls ctx", K(key));
   } else {
     const FetchMode fetch_mode = value->get_fetch_mode();
     if (FetchMode::FETCHMODE_ARCHIVE == fetch_mode) {
-      valid_client_ls_cnt_++;
+      const obrpc::ObCdcFetchLogProtocolType proto = value->get_proto_type();
+      if (is_v1_fetch_log_protocol(proto)) {
+        valid_client_ls_cnt_v1_++;
+      } else if (is_v2_fetch_log_protocol(proto)) {
+        valid_client_ls_cnt_v2_++;
+      } else {
+        other_client_ls_cnt_++;
+        EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get suspicious proto, unexpected", K(key), K(proto));
+      }
     } else {
       other_client_ls_cnt_++;
     }
@@ -393,7 +403,7 @@ int ObCdcService::fetch_raw_log(const obrpc::ObCdcFetchRawLogReq &req,
     status.set_process_time(end_ts - start_ts);
     do_monitor_stat_(start_ts, end_ts, send_ts, recv_ts);
 
-    EXTLOG_LOG(TRACE, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp));
+    EXTLOG_LOG(INFO, "ObCdcService fetch_raw_log", K(ret), K(req), K(resp), K(send_ts), K(recv_ts));
   }
 
   return ret;
@@ -404,7 +414,7 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
     const ObLSID &ls_id,
     const int8_t flag,
     const int64_t client_progress,
-    const FetchLogProtocolType proto_type,
+    const ObCdcFetchLogProtocolType proto_type,
     ClientLSCtx *&ctx)
 {
   int ret = OB_SUCCESS;
@@ -434,7 +444,7 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
           } else if (OB_FAIL(ls_ctx_map_.get(ls_key, ctx))) {
             EXTLOG_LOG(WARN, "failed to get ctx from ctx_map when creating ctx failed", K(ls_key));
           }
-        } else if (FetchLogProtocolType::LogGroupEntryProto == proto_type) {
+        } else if (ObCdcFetchLogProtocolType::LogGroupEntryProto == proto_type) {
           if (OB_FAIL(ctx->init(client_progress, proto_type))) {
             EXTLOG_LOG(WARN, "failed to init client ls ctx", KR(ret), K(client_progress), K(proto_type));
           } else {
@@ -445,7 +455,7 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
             }
             EXTLOG_LOG(INFO, "create client ls ctx succ", K(ls_key), K(ctx));
           }
-        } else if (FetchLogProtocolType::RawLogDataProto == proto_type) {
+        } else if (ObCdcFetchLogProtocolType::RawLogDataProto == proto_type) {
           ctx->set_proto_type(proto_type);
         } else {
           ret = OB_INVALID_ARGUMENT;
@@ -624,17 +634,19 @@ int ObCdcService::resize_log_ext_handler_()
     EXTLOG_LOG(ERROR, "failed to get expired archive client ls key in ls_ctx_map");
   } else {
     const int64_t other_ls_count = functor.get_other_client_ls_cnt();
-    const int64_t valid_ls_count = functor.get_valid_client_ls_cnt();
+    const int64_t valid_ls_v1_count = functor.get_valid_client_ls_v1_cnt();
+    const int64_t valid_ls_v2_count = functor.get_valid_client_ls_v2_cnt();
     const int64_t single_read_concurrency = 8; // default 8
-    const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) * valid_ls_count);
+    const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) *
+        (valid_ls_v1_count + valid_ls_v2_count));
 
     if (OB_FAIL(log_ext_handler_.resize(new_concurrency))) {
       EXTLOG_LOG(WARN, "log_ext_handler failed to resize", K(new_concurrency));
     }
 
     if (OB_SUCC(ret)) {
-      EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts),
-          K(tenant_max_cpu), K(valid_ls_count), K(other_ls_count), K(new_concurrency));
+      EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts), K(tenant_max_cpu),
+          K(valid_ls_v1_count), K(valid_ls_v2_count), K(other_ls_count), K(new_concurrency));
     }
   }
 

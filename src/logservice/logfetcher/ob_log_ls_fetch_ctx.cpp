@@ -311,16 +311,22 @@ void LSFetchCtx::reset_memory_storage()
 int LSFetchCtx::get_next_group_entry(
     palf::LogGroupEntry &group_entry,
     palf::LSN &lsn,
-    const char *&buf)
+    const char *&buf,
+    const share::SCN replayable_point,
+    const obrpc::ObCdcFetchRawSource data_end_source)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!group_iterator_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_ERROR("group_iterator_ not init!");
-  } else if (OB_FAIL(group_iterator_.next())) {
+  } else if (OB_FAIL(group_iterator_.next(replayable_point))) {
     if (OB_ITER_END != ret) {
-      LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      if (obrpc::ObCdcFetchRawSource::ARCHIVE != data_end_source && OB_PARTIAL_LOG != ret) {
+        LOG_ERROR("iterate group_entry failed", KR(ret), K_(group_iterator));
+      } else {
+        LOG_WARN("iterate group_entry failed", KR(ret), K_(group_iterator));
+      }
     }
   } else if (OB_FAIL(group_iterator_.get_entry(buf, group_entry, lsn))) {
     LOG_ERROR("get_next_group_entry failed", KR(ret), K_(group_iterator), K(group_entry), K(lsn));
@@ -989,9 +995,9 @@ void LSFetchCtx::handle_error(const share::ObLSID &ls_id,
       const int err_no,
       const char *fmt, ...)
 {
-   if (OB_NOT_NULL(err_handler_)) {
-     err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
-   }
+  if (OB_NOT_NULL(err_handler_)) {
+    err_handler_->handle_error(ls_id, err_type, trace_id, lsn, err_no, fmt);
+  }
 }
 
 /////////////////////////////////// LSProgress ///////////////////////////////////

@@ -58,13 +58,18 @@ public:
     return other_client_ls_cnt_;
   }
 
-  int64_t get_valid_client_ls_cnt() const {
-    return valid_client_ls_cnt_;
+  int64_t get_valid_client_ls_v1_cnt() const {
+    return valid_client_ls_cnt_v1_;
+  }
+
+    int64_t get_valid_client_ls_v2_cnt() const {
+    return valid_client_ls_cnt_v2_;
   }
 
 private:
   int64_t current_time_us_;
-  int64_t valid_client_ls_cnt_;
+  int64_t valid_client_ls_cnt_v1_;
+  int64_t valid_client_ls_cnt_v2_;
   int64_t other_client_ls_cnt_;
 };
 
@@ -144,7 +149,7 @@ public:
       const ObLSID &ls_id,
       const int8_t flag,
       const int64_t client_progress,
-      const FetchLogProtocolType proto_type,
+      const obrpc::ObCdcFetchLogProtocolType proto_type,
       ClientLSCtx *&ctx);
 
   int revert_client_ls_ctx(ClientLSCtx *ctx);

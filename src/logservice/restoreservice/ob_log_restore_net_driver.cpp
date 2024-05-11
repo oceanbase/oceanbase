@@ -391,7 +391,10 @@ int ObLogRestoreNetDriver::init_fetcher_if_needed_(const int64_t cluster_id, con
     const logfetcher::ClientFetchingMode fetching_mode = logfetcher::ClientFetchingMode::FETCHING_MODE_INTEGRATED;
     share::ObBackupPathString archive_dest;
     common::ObMySQLProxy *proxy = NULL;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     cfg_.fetch_log_rpc_timeout_sec = get_rpc_timeout_sec_();
+    cfg_.logfetcher_parallel_log_transport = tenant_config.is_valid() ?
+        tenant_config->_ob_enable_standby_db_parallel_log_transport : 0;
 
     if (OB_FAIL(proxy_.get_sql_proxy(proxy))) {
       LOG_WARN("get sql proxy failed");
@@ -434,7 +437,13 @@ void ObLogRestoreNetDriver::delete_fetcher_if_needed_with_lock_()
 void ObLogRestoreNetDriver::update_config_()
 {
   if (NULL != fetcher_) {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
     const int64_t fetch_log_rpc_timeout_sec = get_rpc_timeout_sec_();
+    const bool standby_db_parallel_log_transport = tenant_config.is_valid() ?
+        tenant_config->_ob_enable_standby_db_parallel_log_transport : false;
+    if (standby_db_parallel_log_transport != cfg_.logfetcher_parallel_log_transport) {
+      cfg_.logfetcher_parallel_log_transport = standby_db_parallel_log_transport;
+    }
     if (fetch_log_rpc_timeout_sec != cfg_.fetch_log_rpc_timeout_sec) {
       cfg_.fetch_log_rpc_timeout_sec = fetch_log_rpc_timeout_sec;
       fetcher_->configure(cfg_);

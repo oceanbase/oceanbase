@@ -86,6 +86,8 @@ public:
       const int64_t nbytes,
       int64_t &read_size);
 
+  void update_source_cb();
+
   TO_STRING_KV(K_(inited), K_(tenant_id), K_(id), K_(pre_scn), K_(start_lsn), K_(cur_lsn), K_(max_lsn), K_(log_ext_handler));
 
 private:

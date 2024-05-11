@@ -200,6 +200,8 @@ public:
   T_DEF_INT_INFT(rpc_result_count_per_rpc_upper_limit, OB_CLUSTER_PARAMETER, 16, 1,
       "max rpc result count per rpc");
 
+  T_DEF_BOOL(logfetcher_parallel_log_transport, OB_CLUSTER_PARAMETER, 1, "0: disabled, 1 enabled");
+
   // Whether to print RPC processing information
   // Print every RPC processing
   // No printing by default

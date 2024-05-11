@@ -16,6 +16,8 @@
 #include "lib/objectpool/ob_small_obj_pool.h"   // ObSmallObjPool
 #include "lib/hash/ob_linear_hash_map.h"        // ObLinearHashMap
 #include "logservice/common_util/ob_log_ls_define.h" // logservice::TenantLSID
+#include "ob_log_fetch_log_rpc_result.h"
+#include "ob_log_file_buffer_pool.h"
 #include "ob_log_fetch_stream_container.h"      // FetchStreamContainer
 #include "ob_log_fetch_stream_pool.h"           // FetchStreamPool
 #include "ob_log_fetch_log_rpc.h"               // FetchLogARpcResultPool
@@ -54,12 +56,14 @@ public:
       const uint64_t self_tenant_id,
       const int64_t svr_stream_cached_count,
       const int64_t fetch_stream_cached_count,
-      const int64_t rpc_result_cached_count,
+      LogFileDataBufferPool &log_file_pool,
       IObLogRpc &rpc,
       IObLSWorker &stream_worker,
       PartProgressController &progress_controller,
       ILogFetcherHandler &log_handler);
   void destroy();
+
+  int update_fetch_log_protocol(const obrpc::ObCdcFetchLogProtocolType proto);
 
 public:
   virtual int add_fsc(const FetchStreamType stype,
@@ -82,6 +86,14 @@ private:
     }
   };
 
+  struct UpdateProtoFunc
+  {
+    explicit UpdateProtoFunc(const obrpc::ObCdcFetchLogProtocolType proto):
+        proto_type_(proto) {}
+    bool operator() (const logservice::TenantLSID &key, FetchStreamContainer *value);
+    obrpc::ObCdcFetchLogProtocolType proto_type_;
+  };
+
   typedef common::ObLinearHashMap<logservice::TenantLSID, FetchStreamContainer*> FscMap;
   typedef common::ObSmallObjPool<FetchStreamContainer> FscPool;
   static const int64_t SVR_STREAM_POOL_BLOCK_SIZE = 1 << 22;
@@ -90,6 +102,7 @@ private:
   bool is_inited_;
 
   uint64_t                      self_tenant_id_;
+  obrpc::ObCdcFetchLogProtocolType proto_type_;
   // External modules
   IObLogRpc                     *rpc_;                    // RPC handler
   IObLSWorker                   *stream_worker_;          // Stream master
@@ -99,7 +112,8 @@ private:
   FscMap                        fsc_map_;
   FscPool                       fsc_pool_;                // Supports multi-threaded alloc/release
   FetchStreamPool               fs_pool_;                 // FetchStream object pool
-  FetchLogARpcResultPool        rpc_result_pool_;         // RPC resujt object pool
+  FetchLogRpcResultPool         rpc_result_pool_;         // RPC resujt object pool
+  LogFileDataBufferPool         *log_file_buffer_pool_;
 };
 
 } // namespace logfetcher

@@ -36,6 +36,7 @@
 #include "ob_log_fetcher_start_parameters.h"    // ObLogFetcherStartParameters
 #include "ob_log_fetcher_err_handler.h"         // IObLogErrHandler
 #include "logservice/ob_log_external_storage_handler.h" // ObLogExternalStorageHandler
+#include "ob_log_fetcher_bg_worker.h"
 
 namespace oceanbase
 {
@@ -167,6 +168,9 @@ public:
   virtual void *alloc_decompression_buf(int64_t size) = 0;
   //free memory for log decompression
   virtual void free_decompression_buf(void *buf)  = 0;
+
+  virtual void set_source_min_observer_version(const uint64_t min_observer_version) = 0;
+  virtual uint64_t get_source_min_observer_version() const = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -260,6 +264,14 @@ public:
 
   virtual int get_fetcher_config(const ObLogFetcherConfig *&cfg);
 
+  virtual void set_source_min_observer_version(const uint64_t min_observer_version) {
+    ATOMIC_STORE(&source_min_observer_version_, min_observer_version);
+  }
+
+  virtual uint64_t get_source_min_observer_version() const {
+    return ATOMIC_LOAD(&source_min_observer_version_);
+  }
+
   virtual int check_progress(
       const uint64_t tenant_id,
       const int64_t timestamp,
@@ -269,6 +281,8 @@ public:
   virtual void print_stat();
   void *alloc_decompression_buf(int64_t size);
   void free_decompression_buf(void *buf);
+
+  int update_fetch_log_protocol(const obrpc::ObCdcFetchLogProtocolType proto);
 
 private:
   int suggest_cached_rpc_res_count_(const int64_t min_res_cnt,
@@ -296,6 +310,7 @@ private:
   int64_t                                  cluster_id_;
   uint64_t                                 source_tenant_id_;
   uint64_t                                 self_tenant_id_;
+  uint64_t                                 source_min_observer_version_;
   const ObLogFetcherConfig                 *cfg_;
 
   bool                                     is_loading_data_dict_baseline_data_;
@@ -316,8 +331,9 @@ private:
   ObLogStartLSNLocator                     start_lsn_locator_;
   ObLogFetcherIdlePool                     idle_pool_;
   ObLogFetcherDeadPool                     dead_pool_;
+  ObLogFetcherBGWorker                     bg_worker_;
   ObLSWorker                               stream_worker_;
-  // TODO
+  LogFileDataBufferPool                    log_file_pool_;
   ObFsContainerMgr                         fs_container_mgr_;
 
   volatile bool                            stop_flag_ CACHE_ALIGNED;

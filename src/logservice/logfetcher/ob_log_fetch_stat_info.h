@@ -119,6 +119,8 @@ struct TransStatInfo
 // Fetch log overall process statistics
 struct FetchStatInfo
 {
+  int64_t last_update_ts_;
+
   int64_t fetch_log_cnt_;           // Number of log entries
   int64_t fetch_log_size_;          // Fetch log size
 
@@ -212,6 +214,116 @@ struct FetchStatInfoPrinter
 
 private:
   DISALLOW_COPY_AND_ASSIGN(FetchStatInfoPrinter);
+};
+
+///////////////////////////////// RawLogFetchStatInfo /////////////////////////////////
+
+// RawLog Fetch Process TimeCost Model be like this
+
+  //  sub_rpc 1 |-l2s-|--svr_time--|--s2l--|--sub_rpc_cb--|       |            |
+  //  sub_rpc 2 |--l2s--|---svr_time--|--s2l--|--sub_rpc_cb--|    |            |
+  //            |----------------max_sub_rpc_time-----------------|---rpc_cb---|
+  //  sub_rpc 3 |--l2s--|---svr_time---|--s2l--|--sub_rpc_cb--|   |            |
+  //  sub_rpc 4 |---l2s---|---svr_time---|---s2l---|--sub_rpc_cb--|            |
+
+
+struct RawLogFetchStatInfo
+{
+  int64_t last_update_ts_;
+
+  int64_t fetch_log_size_;
+  int64_t fetch_log_rpc_cnt_;       // Number of fetch log rpc
+  int64_t fetch_log_sub_rpc_cnt_;
+
+  int64_t single_rpc_cnt_;          // Number of rpc that stop immediately after execution
+
+  int64_t result_not_readable_rpc_cnt_;
+
+  int64_t reach_max_log_id_rpc_cnt_;  // Number of rpc that reach max log id
+
+  int64_t no_log_rpc_cnt_;            // Number of rpc that without log
+
+  int64_t reach_max_result_rpc_cnt_;  // Number of rpc that reach max result
+
+  // Total time of fetch log RPC: including network, observer processing, asynchronous callback processing
+  int64_t fetch_log_rpc_time_;
+
+  int64_t fetch_log_rpc_prepare_time_;
+
+  int64_t mean_fetch_log_sub_rpc_time_;
+  int64_t max_fetch_log_sub_rpc_time_;
+  int64_t min_fetch_log_sub_rpc_time_;
+
+  // Network time libobcdc to observer
+  int64_t mean_fetch_log_rpc_to_svr_net_time_;
+  int64_t max_fetch_log_rpc_to_svr_net_time_;
+  int64_t min_fetch_log_rpc_to_svr_net_time_;
+
+  // observer queuing time
+  int64_t mean_fetch_log_rpc_svr_queue_time_;
+  int64_t max_fetch_log_rpc_svr_queue_time_;
+  int64_t min_fetch_log_rpc_svr_queue_time_;
+
+  // observer progressing time
+  int64_t mean_fetch_log_rpc_svr_process_time_;
+  int64_t max_fetch_log_rpc_svr_process_time_;
+  int64_t min_fetch_log_rpc_svr_process_time_;
+
+  int64_t mean_fetch_log_rpc_read_palf_time_;
+  int64_t max_fetch_log_rpc_read_palf_time_;
+  int64_t min_fetch_log_rpc_read_palf_time_;
+
+  int64_t mean_fetch_log_rpc_read_archive_time_;
+  int64_t max_fetch_log_rpc_read_archive_time_;
+  int64_t min_fetch_log_rpc_read_archive_time_;
+
+  int64_t mean_fetch_log_rpc_to_local_net_time_;
+  int64_t max_fetch_log_rpc_to_local_net_time_;
+  int64_t min_fetch_log_rpc_to_local_net_time_;
+
+  // RPC local callback processing time
+
+  int64_t fetch_log_rpc_callback_time_;
+
+  int64_t max_fetch_log_sub_rpc_callback_time_;
+  int64_t min_fetch_log_sub_rpc_callback_time_;
+  int64_t mean_fetch_log_sub_rpc_callback_time_;
+
+  // Total log processing time
+  int64_t handle_rpc_time_;
+
+  // Processing log flow: time to read logs
+  int64_t handle_rpc_read_log_time_;
+
+  // Processing log flow: flush partition transaction operation time
+  int64_t handle_rpc_flush_time_;
+
+  // Deserialize log entry time in the read log process
+  int64_t read_log_decode_log_entry_time_;
+
+  // Transaction Resolution Statistics
+  TransStatInfo tsi_;
+
+  RawLogFetchStatInfo() { reset(); }
+
+  void reset();
+  RawLogFetchStatInfo operator - (const RawLogFetchStatInfo &fsi) const;
+};
+
+// RawLogFetchStatInfo Printers
+struct RawLogFetchStatInfoPrinter
+{
+  RawLogFetchStatInfoPrinter(const RawLogFetchStatInfo &cur_stat_info,
+      const RawLogFetchStatInfo &last_stat_info,
+      const double delta_second);
+
+  int64_t to_string(char* buf, const int64_t buf_len) const;
+
+  RawLogFetchStatInfo delta_fsi_;
+  const double delta_second_;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(RawLogFetchStatInfoPrinter);
 };
 
 }

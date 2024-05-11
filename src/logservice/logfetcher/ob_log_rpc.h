@@ -58,6 +58,14 @@ public:
       obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
       const int64_t timeout) = 0;
+
+  // Fetch raw log based on log stream
+  // Asynchronous RPC
+  virtual int async_stream_fetch_raw_log(const uint64_t tenant_id,
+      const common::ObAddr &svr,
+      obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcProxy::AsyncCB<obrpc::OB_CDC_FETCH_RAW_LOG> &cb,
+      const int64_t timeout) = 0;
 };
 
 //////////////////////////////////////////// ObLogRpc //////////////////////////////////////
@@ -94,6 +102,12 @@ public:
       const common::ObAddr &svr,
       obrpc::ObCdcLSFetchMissLogReq &req,
       obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> &cb,
+      const int64_t timeout);
+
+  int async_stream_fetch_raw_log(const uint64_t tenant_id,
+      const common::ObAddr &svr,
+      obrpc::ObCdcFetchRawLogReq &req,
+      obrpc::ObCdcProxy::AsyncCB<obrpc::OB_CDC_FETCH_RAW_LOG> &cb,
       const int64_t timeout);
 
 public:

@@ -37,9 +37,7 @@ public:
   // would not reset other fields
   // if caller want to get a brand new rpc request
   // use reset above
-  void reset(const ObCdcRpcId &client_id,
-       const uint64_t tenant_id,
-       const share::ObLSID &ls_id,
+  void reset(const share::ObLSID &ls_id,
        const palf::LSN &start_lsn,
        const uint64_t size,
        const int64_t progress);
@@ -53,8 +51,16 @@ public:
     set_current_round_rpc_count(rpc_count);
   }
 
+  void set_client_id(const ObCdcRpcId &client_id) {
+    client_id_ = client_id;
+  }
+
   const ObCdcRpcId &get_client_id() const {
     return client_id_;
+  }
+
+  void set_tenant_id(const uint64_t tenant_id) {
+    tenant_id_ = tenant_id;
   }
 
   uint64_t get_tenant_id() const {
@@ -177,6 +183,14 @@ public:
     return source_;
   }
 
+  void set_read_active(bool read_active) {
+    read_active_file_ = read_active;
+  }
+
+  bool get_read_active() const {
+    return read_active_file_;
+  }
+
   void set_process_time(const int64_t ptime) {
     process_time_ = ptime;
   }
@@ -238,12 +252,14 @@ private:
 
 class ObCdcFetchRawLogResp
 {
-private:
-  static const int64_t FETCH_BUF_LEN = 1 << 24; // 16MB
+public:
+  static const int64_t FETCH_BUF_LEN = 8 << 20; // 20MB
 public:
   OB_UNIS_VERSION(1);
 public:
-  ObCdcFetchRawLogResp() { reset(); }
+  ObCdcFetchRawLogResp() {
+    reset();
+  }
   ~ObCdcFetchRawLogResp() { reset(); }
 
   void reset();
@@ -278,14 +294,6 @@ public:
     return fetch_status_;
   }
 
-  void set_progress(const share::SCN progress) {
-    server_progress_ = progress;
-  }
-
-  share::SCN get_progress() const {
-    return server_progress_;
-  }
-
   void set_read_size(const int64_t read_size) {
     read_size_ = read_size;
   }
@@ -303,16 +311,20 @@ public:
   }
 
   const char *get_log_data() const {
-    return log_entry_buf_;
+    return log_entry_buf_ + aligned_offset_;
   }
 
   char *get_log_buffer() {
-    return log_entry_buf_;
+    return log_entry_buf_ + aligned_offset_;
   }
 
-  int64_t get_buffer_len() {
+  const char *get_log_buffer() const {
+    return log_entry_buf_ + aligned_offset_;
+  }
+
+  int64_t get_buffer_len() const {
     // assume that log_entry_buf is a array
-    return sizeof(log_entry_buf_);
+    return FETCH_BUF_LEN;
   }
 
   TO_STRING_KV(
@@ -323,9 +335,9 @@ public:
     K(cur_round_rpc_count_),
     K(feedback_type_),
     K(fetch_status_),
-    K(server_progress_),
     K(read_size_),
-    K(replayable_point_scn_)
+    K(replayable_point_scn_),
+    K(aligned_offset_)
   );
 
 private:
@@ -337,10 +349,10 @@ private:
   int32_t cur_round_rpc_count_;
   FeedbackType feedback_type_;
   ObCdcFetchRawStatus fetch_status_;
-  share::SCN server_progress_;
   int64_t read_size_;
   share::SCN replayable_point_scn_;
-  char log_entry_buf_[FETCH_BUF_LEN+palf::LOG_DIO_ALIGN_SIZE*2];
+  int64_t aligned_offset_;    // just for alignment, never serialize or deserialize it
+  char log_entry_buf_[FETCH_BUF_LEN + palf::LOG_DIO_ALIGN_SIZE];
 };
 
 }

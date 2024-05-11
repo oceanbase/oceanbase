@@ -302,6 +302,7 @@ int64_t TransStatInfo::to_string(char* buf, const int64_t buf_len) const
 
 void FetchStatInfo::reset()
 {
+  last_update_ts_ = OB_INVALID_TIMESTAMP;
   fetch_log_cnt_ = 0;
   fetch_log_size_ = 0;
   fetch_log_rpc_cnt_ = 0;
@@ -371,6 +372,142 @@ FetchStatInfo FetchStatInfo::operator - (const FetchStatInfo &fsi) const
   ret_fsi.tsi_ = tsi_ - fsi.tsi_;
 
   return ret_fsi;
+}
+
+///////////////////////////////////// RawLogFetchStatInfo /////////////////////////////////////
+
+void RawLogFetchStatInfo::reset()
+{
+  last_update_ts_ = OB_INVALID_TIMESTAMP;
+  fetch_log_size_ = 0;
+  fetch_log_rpc_cnt_ = 0;
+  fetch_log_sub_rpc_cnt_ = 0;
+  single_rpc_cnt_ = 0;
+  result_not_readable_rpc_cnt_ = 0;
+  reach_max_result_rpc_cnt_ = 0;
+  no_log_rpc_cnt_ = 0;
+  fetch_log_rpc_time_ = 0;
+
+  fetch_log_rpc_prepare_time_ = 0;
+
+  mean_fetch_log_sub_rpc_time_ = 0;
+  max_fetch_log_sub_rpc_time_ = 0;
+  min_fetch_log_sub_rpc_time_ = 0;
+
+  mean_fetch_log_rpc_to_svr_net_time_ = 0;
+  max_fetch_log_rpc_to_svr_net_time_ = 0;
+  min_fetch_log_rpc_to_svr_net_time_ = 0;
+
+  mean_fetch_log_rpc_svr_queue_time_ = 0;
+  max_fetch_log_rpc_svr_queue_time_ = 0;
+  min_fetch_log_rpc_svr_queue_time_ = 0;
+
+  mean_fetch_log_rpc_svr_process_time_ = 0;
+  max_fetch_log_rpc_svr_process_time_ = 0;
+  min_fetch_log_rpc_svr_process_time_ = 0;
+
+  mean_fetch_log_rpc_read_palf_time_ = 0;
+  max_fetch_log_rpc_read_palf_time_ = 0;
+  min_fetch_log_rpc_read_palf_time_ = 0;
+
+  mean_fetch_log_rpc_read_archive_time_ = 0;
+  max_fetch_log_rpc_read_archive_time_ = 0;
+  min_fetch_log_rpc_read_archive_time_ = 0;
+
+  mean_fetch_log_rpc_to_local_net_time_ = 0;
+  max_fetch_log_rpc_to_local_net_time_ = 0;
+  min_fetch_log_rpc_to_local_net_time_ = 0;
+
+  fetch_log_rpc_callback_time_ = 0;
+
+  max_fetch_log_sub_rpc_callback_time_ = 0;
+  min_fetch_log_sub_rpc_callback_time_ = 0;
+  mean_fetch_log_sub_rpc_callback_time_ = 0;
+
+  handle_rpc_time_ = 0;
+  handle_rpc_read_log_time_ = 0;
+  handle_rpc_flush_time_ = 0;
+  read_log_decode_log_entry_time_ = 0;
+  tsi_.reset();
+}
+
+RawLogFetchStatInfo RawLogFetchStatInfo::operator-(const RawLogFetchStatInfo &fsi) const
+{
+  RawLogFetchStatInfo delta;
+  delta.fetch_log_size_ = fetch_log_size_ - fsi.fetch_log_size_;
+  delta.fetch_log_rpc_cnt_ = fetch_log_rpc_cnt_ - fsi.fetch_log_rpc_cnt_;
+  delta.fetch_log_sub_rpc_cnt_ = fetch_log_sub_rpc_cnt_ - fsi.fetch_log_sub_rpc_cnt_;
+  delta.single_rpc_cnt_ = single_rpc_cnt_ - fsi.single_rpc_cnt_;
+  delta.result_not_readable_rpc_cnt_ = result_not_readable_rpc_cnt_ - fsi.result_not_readable_rpc_cnt_;
+  delta.reach_max_log_id_rpc_cnt_ = reach_max_log_id_rpc_cnt_ - fsi.reach_max_log_id_rpc_cnt_;
+  delta.reach_max_result_rpc_cnt_ = reach_max_result_rpc_cnt_ - fsi.reach_max_result_rpc_cnt_;
+  delta.no_log_rpc_cnt_ = no_log_rpc_cnt_ - fsi.no_log_rpc_cnt_;
+  delta.fetch_log_rpc_time_ = fetch_log_rpc_time_ - fsi.fetch_log_rpc_time_;
+
+  delta.fetch_log_rpc_prepare_time_ = fetch_log_rpc_prepare_time_ - fsi.fetch_log_rpc_prepare_time_;
+
+  delta.mean_fetch_log_sub_rpc_time_ =
+      mean_fetch_log_sub_rpc_time_ - fsi.mean_fetch_log_sub_rpc_time_;
+  delta.max_fetch_log_sub_rpc_time_ =
+      max_fetch_log_sub_rpc_time_ - fsi.max_fetch_log_sub_rpc_time_;
+  delta.min_fetch_log_sub_rpc_time_ =
+      min_fetch_log_sub_rpc_time_ - fsi.min_fetch_log_sub_rpc_time_;
+
+  delta.mean_fetch_log_rpc_to_svr_net_time_ =
+      mean_fetch_log_rpc_to_svr_net_time_ - fsi.mean_fetch_log_rpc_to_svr_net_time_;
+  delta.max_fetch_log_rpc_to_svr_net_time_ =
+      max_fetch_log_rpc_to_svr_net_time_ - fsi.max_fetch_log_rpc_to_svr_net_time_;
+  delta.min_fetch_log_rpc_to_svr_net_time_ =
+      min_fetch_log_rpc_to_svr_net_time_ - fsi.min_fetch_log_rpc_to_svr_net_time_;
+
+  delta.mean_fetch_log_rpc_svr_queue_time_ =
+      mean_fetch_log_rpc_svr_queue_time_ - fsi.mean_fetch_log_rpc_svr_queue_time_;
+  delta.max_fetch_log_rpc_svr_queue_time_ =
+      max_fetch_log_rpc_svr_queue_time_ - fsi.max_fetch_log_rpc_svr_queue_time_;
+  delta.min_fetch_log_rpc_svr_queue_time_ =
+      min_fetch_log_rpc_svr_queue_time_ - fsi.min_fetch_log_rpc_svr_queue_time_;
+
+  delta.mean_fetch_log_rpc_svr_process_time_ =
+      mean_fetch_log_rpc_svr_process_time_ - fsi.mean_fetch_log_rpc_svr_process_time_;
+  delta.max_fetch_log_rpc_svr_process_time_ =
+      max_fetch_log_rpc_svr_process_time_ - fsi.max_fetch_log_rpc_svr_process_time_;
+  delta.min_fetch_log_rpc_svr_process_time_ =
+      min_fetch_log_rpc_svr_process_time_ - fsi.min_fetch_log_rpc_svr_process_time_;
+
+  delta.mean_fetch_log_rpc_read_palf_time_ = mean_fetch_log_rpc_read_palf_time_ - fsi.mean_fetch_log_rpc_read_palf_time_;
+  delta.max_fetch_log_rpc_read_palf_time_ = max_fetch_log_rpc_read_palf_time_ - fsi.max_fetch_log_rpc_read_palf_time_;
+  delta.min_fetch_log_rpc_read_palf_time_ = min_fetch_log_rpc_read_palf_time_ - fsi.min_fetch_log_rpc_read_palf_time_;
+
+  delta.mean_fetch_log_rpc_read_archive_time_ = mean_fetch_log_rpc_read_archive_time_ - fsi.mean_fetch_log_rpc_read_archive_time_;
+  delta.max_fetch_log_rpc_read_archive_time_ = max_fetch_log_rpc_read_archive_time_ - fsi.max_fetch_log_rpc_read_archive_time_;
+  delta.min_fetch_log_rpc_read_archive_time_ = min_fetch_log_rpc_read_archive_time_ - fsi.min_fetch_log_rpc_read_archive_time_;
+
+  delta.mean_fetch_log_rpc_to_local_net_time_ =
+      mean_fetch_log_rpc_to_local_net_time_ - fsi.mean_fetch_log_rpc_to_local_net_time_;
+  delta.max_fetch_log_rpc_to_local_net_time_ =
+      max_fetch_log_rpc_to_local_net_time_ - fsi.max_fetch_log_rpc_to_local_net_time_;
+  delta.min_fetch_log_rpc_to_local_net_time_ =
+      min_fetch_log_rpc_to_local_net_time_ - fsi.min_fetch_log_rpc_to_local_net_time_;
+
+  delta.fetch_log_rpc_callback_time_ =
+      fetch_log_rpc_callback_time_ - fsi.fetch_log_rpc_callback_time_;
+
+  delta.max_fetch_log_sub_rpc_callback_time_ =
+      max_fetch_log_sub_rpc_callback_time_ - fsi.max_fetch_log_sub_rpc_callback_time_;
+  delta.min_fetch_log_sub_rpc_callback_time_ =
+      min_fetch_log_sub_rpc_callback_time_ - fsi.min_fetch_log_sub_rpc_callback_time_;
+  delta.mean_fetch_log_sub_rpc_callback_time_ =
+      mean_fetch_log_sub_rpc_callback_time_ - fsi.mean_fetch_log_sub_rpc_callback_time_;
+
+  delta.handle_rpc_time_ = handle_rpc_time_ - fsi.handle_rpc_time_;
+  delta.handle_rpc_read_log_time_ =
+      handle_rpc_read_log_time_ - fsi.handle_rpc_read_log_time_;
+  delta.handle_rpc_flush_time_ =
+      handle_rpc_flush_time_ - fsi.handle_rpc_flush_time_;
+  delta.read_log_decode_log_entry_time_ =
+      read_log_decode_log_entry_time_ - fsi.read_log_decode_log_entry_time_;
+  delta.tsi_ = tsi_ - fsi.tsi_;
+  return delta;
 }
 
 ///////////////////////////////// FetchStatInfoPrinter /////////////////////////////////
@@ -473,6 +610,183 @@ int64_t FetchStatInfoPrinter::to_string(char* buf, const int64_t buf_len) const
 
   return pos;
 }
+
+///////////////////////////////// RawLogFetchStatInfoPrinter /////////////////////////////////
+
+RawLogFetchStatInfoPrinter::RawLogFetchStatInfoPrinter(
+    const RawLogFetchStatInfo &cur_stat_info,
+    const RawLogFetchStatInfo &last_stat_info,
+    const double delta_second):
+    delta_fsi_(cur_stat_info - last_stat_info),
+    delta_second_(delta_second)
+{
+}
+
+int64_t RawLogFetchStatInfoPrinter::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+
+  if (delta_second_ > 0) {
+    int64_t log_size = delta_fsi_.fetch_log_size_;
+    int64_t rpc_cnt = delta_fsi_.fetch_log_rpc_cnt_;
+    int64_t sub_rpc_cnt = delta_fsi_.fetch_log_sub_rpc_cnt_;
+    int64_t single_rpc_cnt = delta_fsi_.single_rpc_cnt_;
+    int64_t reach_max_log_id_rpc_cnt = delta_fsi_.reach_max_log_id_rpc_cnt_;
+    int64_t no_log_rpc_cnt = delta_fsi_.no_log_rpc_cnt_;
+    int64_t result_not_readable_rpc_cnt = delta_fsi_.result_not_readable_rpc_cnt_;
+    int64_t reach_max_result_rpc_cnt = delta_fsi_.reach_max_result_rpc_cnt_;
+    int64_t rpc_time = delta_fsi_.fetch_log_rpc_time_;
+    int64_t rpc_prepare_time = delta_fsi_.fetch_log_rpc_prepare_time_;
+
+    int64_t mean_sub_rpc_time = delta_fsi_.mean_fetch_log_sub_rpc_time_;
+    int64_t max_sub_rpc_time = delta_fsi_.max_fetch_log_sub_rpc_time_;
+    int64_t min_sub_rpc_time = delta_fsi_.min_fetch_log_sub_rpc_time_;
+
+    int64_t mean_svr_queue_time = delta_fsi_.mean_fetch_log_rpc_svr_queue_time_;
+    int64_t max_svr_queue_time = delta_fsi_.max_fetch_log_rpc_svr_queue_time_;
+    int64_t min_svr_queue_time = delta_fsi_.min_fetch_log_rpc_svr_queue_time_;
+
+    int64_t mean_svr_process_time = delta_fsi_.mean_fetch_log_rpc_svr_process_time_;
+    int64_t max_svr_process_time = delta_fsi_.max_fetch_log_rpc_svr_process_time_;
+    int64_t min_svr_process_time = delta_fsi_.min_fetch_log_rpc_svr_process_time_;
+
+    int64_t mean_read_palf_time = delta_fsi_.mean_fetch_log_rpc_read_palf_time_;
+    int64_t max_read_palf_time = delta_fsi_.max_fetch_log_rpc_read_palf_time_;
+    int64_t min_read_palf_time = delta_fsi_.min_fetch_log_rpc_read_palf_time_;
+
+    int64_t mean_read_archive_time = delta_fsi_.mean_fetch_log_rpc_read_archive_time_;
+    int64_t max_read_archive_time = delta_fsi_.max_fetch_log_rpc_read_archive_time_;
+    int64_t min_read_archive_time = delta_fsi_.min_fetch_log_rpc_read_archive_time_;
+
+    int64_t mean_l2s_net_time = delta_fsi_.mean_fetch_log_rpc_to_svr_net_time_;
+    int64_t max_l2s_net_time = delta_fsi_.max_fetch_log_rpc_to_svr_net_time_;
+    int64_t min_l2s_net_time = delta_fsi_.min_fetch_log_rpc_to_svr_net_time_;
+
+    int64_t mean_sub_rpc_cb_time = delta_fsi_.mean_fetch_log_sub_rpc_callback_time_;
+    int64_t max_sub_rpc_cb_time = delta_fsi_.max_fetch_log_sub_rpc_callback_time_;
+    int64_t min_sub_rpc_cb_time = delta_fsi_.min_fetch_log_sub_rpc_callback_time_;
+
+    int64_t callback_time = delta_fsi_.fetch_log_rpc_callback_time_;
+
+    // Network time from libobcdc to server
+
+    // The network time from server to libobcdc is calculated and is inaccurate
+    // including: observer's outgoing packet queue, libobcdc's incoming packet queue, outgoing packet encoding, incoming packet decoding, and network time
+    int64_t mean_s2l_net_time = delta_fsi_.mean_fetch_log_rpc_to_local_net_time_;
+    int64_t max_s2l_net_time = delta_fsi_.max_fetch_log_rpc_to_local_net_time_;
+    int64_t min_s2l_net_time = delta_fsi_.min_fetch_log_rpc_to_local_net_time_;
+
+    // Total asynchronous processing RPC time
+    int64_t handle_rpc_time = delta_fsi_.handle_rpc_time_;
+
+    // Parsing log time
+    int64_t read_log_time = delta_fsi_.handle_rpc_read_log_time_;
+
+    // Deserialization log entry time
+    int64_t decode_log_entry_time = delta_fsi_.read_log_decode_log_entry_time_;
+
+    // Output Transaction Task Time
+    int64_t flush_time = delta_fsi_.handle_rpc_flush_time_;
+
+    // Calculate transaction statistics difference
+    TransStatInfo tsi = delta_fsi_.tsi_;
+
+    // Each statistic item is divided by the number of RPC to obtain statistics per RPC
+    tsi.do_stat(rpc_cnt);
+
+    int64_t traffic = static_cast<int64_t>(static_cast<double>(log_size) / delta_second_);
+    int64_t rpc_cnt_per_sec = static_cast<int64_t>(static_cast<double>(rpc_cnt) / delta_second_);
+    int64_t sub_rpc_cnt_per_sec = static_cast<int64_t>(static_cast<double>(sub_rpc_cnt) / delta_second_);
+    int64_t sub_rpc_cnt_per_rpc = rpc_cnt <= 0 ? 0 : sub_rpc_cnt / rpc_cnt;
+    int64_t single_rpc_cnt_per_sec =
+        static_cast<int64_t>(static_cast<double>(single_rpc_cnt) / delta_second_);
+    int64_t result_not_readable_rpc_cnt_per_sec =
+        static_cast<int64_t>(static_cast<double>(result_not_readable_rpc_cnt) / delta_second_);
+    int64_t reach_max_log_id_rpc_cnt_per_sec =
+        static_cast<int64_t>(static_cast<double>(reach_max_log_id_rpc_cnt) / delta_second_);
+    int64_t no_log_rpc_cnt_per_sec =
+        static_cast<int64_t>(static_cast<double>(no_log_rpc_cnt) / delta_second_);
+    int64_t reach_max_result_rpc_cnt_per_sec =
+        static_cast<int64_t>(static_cast<double>(reach_max_result_rpc_cnt) / delta_second_);
+    int64_t log_size_per_rpc = rpc_cnt <= 0 ? 0 : log_size / rpc_cnt;
+    int64_t rpc_time_per_rpc = rpc_cnt <= 0 ? 0 : rpc_time / rpc_cnt;
+
+    int64_t rpc_prepare_time_per_rpc = rpc_cnt <= 0 ? 0 : rpc_prepare_time / rpc_cnt;
+
+    int64_t mean_sub_rpc_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_sub_rpc_time / rpc_cnt;
+    int64_t max_sub_rpc_time_per_rpc = rpc_cnt <= 0 ? 0 : max_sub_rpc_time / rpc_cnt;
+    int64_t min_sub_rpc_time_per_rpc = rpc_cnt <= 0 ? 0 : min_sub_rpc_time / rpc_cnt;
+
+    int64_t mean_s2l_net_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_s2l_net_time / rpc_cnt;
+    int64_t max_s2l_net_time_per_rpc = rpc_cnt <= 0 ? 0 : max_s2l_net_time / rpc_cnt;
+    int64_t min_s2l_net_time_per_rpc = rpc_cnt <= 0 ? 0 : min_s2l_net_time / rpc_cnt;
+
+    int64_t mean_svr_process_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_svr_process_time / rpc_cnt;
+    int64_t max_svr_process_time_per_rpc = rpc_cnt <= 0 ? 0 : max_svr_process_time / rpc_cnt;
+    int64_t min_svr_process_time_per_rpc = rpc_cnt <= 0 ? 0 : min_svr_process_time / rpc_cnt;
+
+    int64_t mean_read_palf_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_read_palf_time / rpc_cnt;
+    int64_t max_read_palf_time_per_rpc = rpc_cnt <= 0 ? 0 : max_read_palf_time / rpc_cnt;
+    int64_t min_read_palf_time_per_rpc = rpc_cnt <= 0 ? 0 : min_read_palf_time / rpc_cnt;
+
+    int64_t mean_read_archive_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_read_archive_time / rpc_cnt;
+    int64_t max_read_archive_time_per_rpc = rpc_cnt <= 0 ? 0 : max_read_archive_time / rpc_cnt;
+    int64_t min_read_archive_time_per_rpc = rpc_cnt <= 0 ? 0 : min_read_archive_time / rpc_cnt;
+
+    int64_t mean_svr_queue_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_svr_queue_time / rpc_cnt;
+    int64_t max_svr_queue_time_per_rpc = rpc_cnt <= 0 ? 0 : max_svr_queue_time / rpc_cnt;
+    int64_t min_svr_queue_time_per_rpc = rpc_cnt <= 0 ? 0 : min_svr_queue_time / rpc_cnt;
+
+    int64_t mean_l2s_net_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_l2s_net_time / rpc_cnt;
+    int64_t max_l2s_net_time_per_rpc = rpc_cnt <= 0 ? 0 : max_l2s_net_time / rpc_cnt;
+    int64_t min_l2s_net_time_per_rpc = rpc_cnt <= 0 ? 0 : min_l2s_net_time / rpc_cnt;
+
+    int64_t mean_sub_rpc_cb_time_per_rpc = rpc_cnt <= 0 ? 0 : mean_sub_rpc_cb_time / rpc_cnt;
+    int64_t max_sub_rpc_cb_time_per_rpc = rpc_cnt <= 0 ? 0 : max_sub_rpc_cb_time / rpc_cnt;
+    int64_t min_sub_rpc_cb_time_rpc = rpc_cnt <= 0 ? 0 : min_sub_rpc_cb_time / rpc_cnt;
+
+    int64_t callback_time_per_rpc = rpc_cnt <= 0 ? 0 : callback_time / rpc_cnt;
+
+    int64_t handle_rpc_time_per_rpc = rpc_cnt <= 0 ? 0 : handle_rpc_time / rpc_cnt;
+    int64_t read_log_time_per_rpc = rpc_cnt <= 0 ? 0 : read_log_time / rpc_cnt;
+    int64_t decode_log_entry_time_per_rpc = (rpc_cnt <= 0 ? 0 : decode_log_entry_time / rpc_cnt);
+    int64_t flush_time_per_rpc = (rpc_cnt <= 0 ? 0 : flush_time / rpc_cnt);
+
+    (void)databuff_printf(buf, buf_len, pos,
+        "traffic=%s/sec log_size=%ld size/rpc=%s "
+        "rpc_cnt=%ld(%ld/sec) sub_rpc_cnt=%ld(%ld/sec) sub_rpc_cnt/rpc=%ld single_rpc=%ld(%ld/sec)"
+        "(not_readable=%ld(%ld/sec),max_log=%ld(%ld/sec),no_log=%ld(%ld/sec),max_result=%ld(%ld/sec)) "
+        "rpc_time=%ld rpc_prepare_time=%ld sub_rpc_time(mean=%ld, max=%ld, min=%ld) "
+        "svr_time=(queue=(mean=%ld, max=%ld, min=%ld),process=(mean=%ld(online=%ld archive=%ld), "
+        "max=%ld(online=%ld archive=%ld), min=%ld(online=%ld archive=%ld))) "
+        "net_time=(l2s=(mean=%ld, max=%ld, min=%ld), s2l=(mean=%ld, max=%ld, min=%ld)) "
+        "sub_rpc_cb_time=(mean=%ld, max=%ld, min=%ld) cb_time=%ld "
+        "handle_rpc_time=%ld flush_time=%ld read_log_time=%ld(log_entry=%ld,trans=%ld) %s",
+        SIZE_TO_STR(traffic), log_size, SIZE_TO_STR(log_size_per_rpc),
+        rpc_cnt, rpc_cnt_per_sec, sub_rpc_cnt, sub_rpc_cnt_per_sec, sub_rpc_cnt_per_rpc,
+        single_rpc_cnt, single_rpc_cnt_per_sec,
+        result_not_readable_rpc_cnt, result_not_readable_rpc_cnt_per_sec,
+        reach_max_log_id_rpc_cnt, reach_max_log_id_rpc_cnt_per_sec,
+        no_log_rpc_cnt, no_log_rpc_cnt_per_sec,
+        reach_max_result_rpc_cnt, reach_max_result_rpc_cnt_per_sec,
+        rpc_time_per_rpc, rpc_prepare_time_per_rpc,
+        mean_sub_rpc_time_per_rpc, max_sub_rpc_time_per_rpc, min_sub_rpc_time_per_rpc,
+        mean_svr_queue_time_per_rpc, max_svr_queue_time_per_rpc, min_svr_queue_time_per_rpc,
+        mean_svr_process_time_per_rpc, mean_read_palf_time_per_rpc, mean_read_archive_time_per_rpc,
+        max_svr_process_time_per_rpc, max_read_palf_time_per_rpc, max_read_archive_time_per_rpc,
+        min_svr_process_time_per_rpc, min_read_palf_time_per_rpc, min_read_archive_time_per_rpc,
+        mean_l2s_net_time_per_rpc, max_l2s_net_time_per_rpc, min_l2s_net_time_per_rpc,
+        mean_s2l_net_time_per_rpc, max_s2l_net_time_per_rpc, min_s2l_net_time_per_rpc,
+        mean_sub_rpc_cb_time_per_rpc, max_sub_rpc_cb_time_per_rpc, min_sub_rpc_cb_time_rpc,
+        callback_time_per_rpc,
+        handle_rpc_time_per_rpc, flush_time_per_rpc, read_log_time_per_rpc,
+        decode_log_entry_time_per_rpc, tsi.get_total_time(), to_cstring(tsi));
+
+  }
+
+  return pos;
+}
+
 
 }
 }

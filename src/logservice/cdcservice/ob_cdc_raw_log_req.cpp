@@ -35,16 +35,11 @@ void ObCdcFetchRawLogReq::reset()
   flag_ = 0;
 }
 
-void ObCdcFetchRawLogReq::reset(const ObCdcRpcId &client_id,
-     const uint64_t tenant_id,
-     const share::ObLSID &ls_id,
+void ObCdcFetchRawLogReq::reset(const share::ObLSID &ls_id,
      const palf::LSN &start_lsn,
      const uint64_t size,
      const int64_t progress)
 {
-  // only reset specified members for update rpc req, don't reset all
-  client_id_ = client_id;
-  tenant_id_ = tenant_id;
   ls_id_ = ls_id;
   start_lsn_ = start_lsn;
   size_ = size;
@@ -72,9 +67,10 @@ void ObCdcFetchRawLogResp::reset()
   cur_round_rpc_count_ = 0;
   feedback_type_ = FeedbackType::INVALID_FEEDBACK;
   fetch_status_.reset();
-  server_progress_.reset();
   read_size_ = 0;
   replayable_point_scn_.reset();
+  aligned_offset_ =
+    upper_align_buf(log_entry_buf_, palf::LOG_DIO_ALIGN_SIZE) - log_entry_buf_;
 }
 
 void ObCdcFetchRawLogResp::reset(const share::ObLSID &ls_id,
@@ -94,14 +90,13 @@ OB_DEF_SERIALIZE(ObCdcFetchRawLogResp)
   int ret = OB_SUCCESS;
 
   LST_DO_CODE(OB_UNIS_ENCODE, rpc_ver_, err_, ls_id_, file_id_, seq_, cur_round_rpc_count_,
-      cur_round_rpc_count_, feedback_type_, fetch_status_, server_progress_,
-      read_size_, replayable_point_scn_);
+      cur_round_rpc_count_, feedback_type_, fetch_status_, read_size_, replayable_point_scn_);
 
   if (OB_SUCCESS == ret && read_size_ > 0) {
     if (buf_len - pos < read_size_) {
       ret = OB_BUF_NOT_ENOUGH;
     } else {
-      MEMCPY(buf + pos, log_entry_buf_, read_size_);
+      MEMCPY(buf + pos, log_entry_buf_ + aligned_offset_, read_size_);
       pos += read_size_;
     }
   }
@@ -114,8 +109,9 @@ OB_DEF_DESERIALIZE(ObCdcFetchRawLogResp)
   int ret = OB_SUCCESS;
 
   LST_DO_CODE(OB_UNIS_DECODE, rpc_ver_, err_, ls_id_, file_id_, seq_, cur_round_rpc_count_,
-      cur_round_rpc_count_, feedback_type_, fetch_status_, server_progress_,
-      read_size_, replayable_point_scn_);
+      cur_round_rpc_count_, feedback_type_, fetch_status_, read_size_, replayable_point_scn_);
+
+  aligned_offset_ = 0;
 
   if (OB_SUCC(ret)) {
     if (read_size_ > 0) {
@@ -144,8 +140,7 @@ OB_DEF_SERIALIZE_SIZE(ObCdcFetchRawLogResp)
   int64_t len = 0;
 
   LST_DO_CODE(OB_UNIS_ADD_LEN, rpc_ver_, err_, ls_id_, file_id_, seq_, cur_round_rpc_count_,
-      cur_round_rpc_count_, feedback_type_, fetch_status_, server_progress_,
-      read_size_, replayable_point_scn_);
+      cur_round_rpc_count_, feedback_type_, fetch_status_, read_size_, replayable_point_scn_);
 
   if (read_size_ >= 0 && read_size_ < sizeof(log_entry_buf_)) {
     len += read_size_;

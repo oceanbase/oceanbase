@@ -167,5 +167,6 @@ TG_DEF(SvrStartupHandler, SvrStartupHandler, QUEUE_THREAD,
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+TG_DEF(LogFetcherBGWorker, LogFetcherBGW, TIMER)
 TG_DEF(TableGroupCommitMgr, TableGroupCommitMgr, TIMER)
 #endif

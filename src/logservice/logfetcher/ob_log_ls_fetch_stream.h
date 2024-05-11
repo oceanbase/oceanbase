@@ -38,6 +38,7 @@ class IObLogRpc;
 class LSFetchCtx;
 class PartProgressController;
 class ObLogFetcherConfig;
+class RawLogFileRpcResult;
 
 class FetchStream;
 typedef ObLogDListNode<FetchStream> FSListNode;
@@ -91,7 +92,8 @@ public:
       const FetchStreamType stream_type,
       IObLogRpc &rpc,
       IObLSWorker &stream_worker,
-      IFetchLogARpcResultPool &rpc_result_pool,
+      FetchLogRpcResultPool &rpc_result_pool,
+      LogFileDataBufferPool &log_file_pool,
       PartProgressController &progress_controller,
       ILogFetcherHandler &log_handler);
 
@@ -123,6 +125,8 @@ public:
 
   int get_upper_limit(int64_t &upper_limit_ns);
 
+  int get_progress(int64_t &progress);
+
   // Execution Statistics
   void do_stat();
 
@@ -138,6 +142,12 @@ public:
 
   const common::ObAddr &get_server() const { return svr_; }
   IObLogRpc &get_log_rpc() { return *rpc_; }
+
+  void set_fetch_log_proto(const obrpc::ObCdcFetchLogProtocolType proto) {
+    if (fetch_log_arpc_.get_fetch_log_proto() != proto) {
+      fetch_log_arpc_.set_fetch_log_proto(proto);
+    }
+  }
 
 public:
   static int64_t g_schedule_time;
@@ -159,8 +169,33 @@ private:
   int async_fetch_log_(
       const palf::LSN &req_start_lsn,
       bool &rpc_send_succeed);
+
   void print_handle_info_(
-      FetchLogARpcResult &result,
+      FetchLogRpcResult &result,
+      const int64_t handle_rpc_time,
+      const int64_t read_log_time,
+      const int64_t decode_log_entry_time,
+      const bool rpc_is_flying,
+      const bool is_stream_valid,
+      const char *stream_invalid_reason,
+      const KickOutInfo &kickout_info,
+      const TransStatInfo &tsi,
+      const bool need_stop_request);
+
+  void print_handle_info_(
+      RawLogFileRpcResult &result,
+      const int64_t handle_rpc_time,
+      const int64_t read_log_time,
+      const int64_t decode_log_entry_time,
+      const bool rpc_is_flying,
+      const bool is_stream_valid,
+      const char *stream_invalid_reason,
+      const KickOutInfo &kickout_info,
+      const TransStatInfo &tsi,
+      const bool need_stop_request);
+
+  void print_handle_info_(
+      LogGroupEntryRpcResult &result,
       const int64_t handle_rpc_time,
       const int64_t read_log_time,
       const int64_t decode_log_entry_time,
@@ -171,7 +206,7 @@ private:
       const TransStatInfo &tsi,
       const bool need_stop_request);
   bool has_new_fetch_task_() const;
-  int process_result_(FetchLogARpcResult &result,
+  int process_result_(FetchLogRpcResult &result,
       volatile bool &stop_flag,
       const bool rpc_is_flying,
       KickOutInfo &kickout_info,
@@ -179,8 +214,25 @@ private:
       bool &is_stream_valid);
   int handle_fetch_log_task_(volatile bool &stop_flag);
   int handle_fetch_archive_task_(volatile bool &stop_flag);
+
   void update_fetch_stat_info_(
-      FetchLogARpcResult &result,
+      FetchLogRpcResult &result,
+      const int64_t handle_rpc_time,
+      const int64_t read_log_time,
+      const int64_t decode_log_entry_time,
+      const int64_t flush_time,
+      const TransStatInfo &tsi);
+
+  void update_fetch_stat_info_(
+      RawLogFileRpcResult &result,
+      const int64_t handle_rpc_time,
+      const int64_t read_log_time,
+      const int64_t decode_log_entry_time,
+      const int64_t flush_time,
+      const TransStatInfo &tsi);
+
+  void update_fetch_stat_info_(
+      LogGroupEntryRpcResult &result,
       const int64_t handle_rpc_time,
       const int64_t read_log_time,
       const int64_t decode_log_entry_time,
@@ -193,7 +245,7 @@ private:
       const int64_t fetch_log_time,
       const int64_t flush_time,
       const TransStatInfo &tsi);
-  int handle_fetch_log_result_(FetchLogARpcResult &result,
+  int handle_fetch_log_result_(FetchLogRpcResult &result,
       volatile bool &stop_flag,
       bool &is_stream_valid,
       const char *&stream_invalid_reason,
@@ -206,7 +258,8 @@ private:
   int update_rpc_request_params_();
   int handle_fetch_log_error_(
       const obrpc::ObRpcResultCode &rcode,
-      const obrpc::ObCdcLSFetchLogResp &resp,
+      const int err,
+      const FetchLogRpcResult &result,
       KickOutInfo &kickout_info);
   bool exist_(KickOutInfo &kick_out_info,
       const logservice::TenantLSID &tls_id);
@@ -230,17 +283,21 @@ private:
       KickOutInfo &kick_out_info,
       TransStatInfo &tsi,
       volatile bool &stop_flag);
-  int read_log_(
-      const obrpc::ObCdcLSFetchLogResp &resp,
+  int read_log_(const char *data,
+      const int64_t data_len,
+      const share::SCN replayable_point,
+      const obrpc::ObCdcFetchRawSource data_end_source,
       volatile bool &stop_flag,
       KickOutInfo &kick_out_info,
+      int64_t &log_num,
+      int64_t &read_len,
       int64_t &read_log_time,
       int64_t &decode_log_entry_time,
       TransStatInfo &tsi);
 
   KickOutReason get_feedback_reason_(const Feedback &feedback) const;
-  int check_feedback_(
-      const obrpc::ObCdcLSFetchLogResp &resp,
+  int check_feedback_(const FetchLogRpcResult &result,
+      const obrpc::FeedbackType feed_back,
       KickOutInfo &kick_out_info);
   int kick_out_task_(const KickOutInfo &kick_out_info);
   int update_fetch_task_state_(
@@ -252,6 +309,16 @@ private:
   int check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_info);
   int prepare_rpc_request_();
   bool check_need_switch_server_();
+
+  int get_result_data_(const FetchLogRpcResult &result,
+      bool &is_readable,
+      const char *&data,
+      int64_t &data_len,
+      share::SCN &replayable_point,
+      obrpc::ObRpcResultCode &rcode,
+      obrpc::ObCdcFetchRawSource &source,
+      int &err,
+      obrpc::FeedbackType &feed_back);
 
 public:
   TO_STRING_KV("type", "FETCH_STREAM",
@@ -272,7 +339,7 @@ private:
   common::ObAddr                svr_;                               // Target server
   IObLogRpc                     *rpc_;                              // RPC Processor
   IObLSWorker                   *stream_worker_;                    // Stream master
-  IFetchLogARpcResultPool       *rpc_result_pool_;                  // RPC result object pool
+  FetchLogRpcResultPool         *rpc_result_pool_;                  // RPC result object pool
   PartProgressController        *progress_controller_;              // Progress Controller
   ILogFetcherHandler            *log_handler_;
 
@@ -287,6 +354,8 @@ private:
   int64_t                       last_stat_time_;
   FetchStatInfo                 cur_stat_info_;
   FetchStatInfo                 last_stat_info_;
+  RawLogFetchStatInfo           raw_cur_stat_info_;
+  RawLogFetchStatInfo           raw_last_stat_info_;
   common::ObByteLock            stat_lock_;      // Mutex lock that statistical information update and access to
 
 private:

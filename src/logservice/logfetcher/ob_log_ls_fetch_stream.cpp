@@ -12,6 +12,7 @@
  * Fetch Log Stream
  */
 
+
 #define USING_LOG_PREFIX OBLOG_FETCHER
 
 #include "ob_log_ls_fetch_stream.h"
@@ -24,6 +25,7 @@
 #include "ob_ls_worker.h"                         // IObLSWorker
 #include "ob_log_part_progress_controller.h"      // PartProgressController
 #include "ob_log_trace_id.h"                      // ObLogTraceIdGuard
+#include "ob_log_fetch_log_rpc_result.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
@@ -113,7 +115,8 @@ int FetchStream::init(
     const FetchStreamType stream_type,
     IObLogRpc &rpc,
     IObLSWorker &stream_worker,
-    IFetchLogARpcResultPool &rpc_result_pool,
+    FetchLogRpcResultPool &rpc_result_pool,
+    LogFileDataBufferPool &log_file_pool,
     PartProgressController &progress_controller,
     ILogFetcherHandler &log_handler)
 {
@@ -127,7 +130,8 @@ int FetchStream::init(
       || OB_UNLIKELY(! is_fetch_stream_type_valid(stream_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(source_tenant_id), K(stream_type), K(ls_fetch_ctx), KPC(this));
-  } else if (OB_FAIL(fetch_log_arpc_.init(source_tenant_id, self_tenant_id, rpc, stream_worker, rpc_result_pool))) {
+  } else if (OB_FAIL(fetch_log_arpc_.init(source_tenant_id, self_tenant_id, rpc,
+      stream_worker, rpc_result_pool, log_file_pool))) {
     LOG_ERROR("FetchLogARpc init failed", KR(ret), K(source_tenant_id));
   } else {
     ls_fetch_ctx_ = &ls_fetch_ctx;
@@ -338,13 +342,28 @@ void FetchStream::do_stat()
         K(last_stat_time_), K(this));
   } else {
     FetchStatInfoPrinter fsi_printer(cur_stat_info_, last_stat_info_, delta_second);
+    RawLogFetchStatInfoPrinter raw_log_fsi_printer(raw_cur_stat_info_, raw_last_stat_info_, delta_second);
 
     if (nullptr != ls_fetch_ctx_) {
-      _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
-          print_fetch_stream_type(stype_),
-          to_cstring(ls_fetch_ctx_->get_tls_id()),
-          SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
-          to_cstring(fsi_printer));
+      if (cur_stat_info_.last_update_ts_ != last_stat_info_.last_update_ts_ ||
+          raw_cur_stat_info_.last_update_ts_ == raw_last_stat_info_.last_update_ts_) {
+        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+            print_fetch_stream_type(stype_),
+            to_cstring(ls_fetch_ctx_->get_tls_id()),
+            fetch_log_protocol_type_str(fetch_log_arpc_.get_fetch_log_proto()),
+            SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
+            to_cstring(fsi_printer));
+      }
+      if (raw_cur_stat_info_.last_update_ts_ != raw_last_stat_info_.last_update_ts_ ||
+          cur_stat_info_.last_update_ts_ == last_stat_info_.last_update_ts_) {
+        _LOG_INFO("[STAT] [FETCH_STREAM] stream=%s(%p:%s)(%s)(proto_type:%s)(FETCHED_LOG:%s) %s", to_cstring(svr_), this,
+            print_fetch_stream_type(stype_),
+            to_cstring(ls_fetch_ctx_->get_tls_id()),
+            fetch_log_protocol_type_str(fetch_log_arpc_.get_fetch_log_proto()),
+            SIZE_TO_STR(ls_fetch_ctx_->get_fetched_log_size()),
+            to_cstring(raw_log_fsi_printer));
+      }
+
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("ls_fetch_ctx_ is NULL", KR(ret), "fs", *this);
@@ -352,6 +371,7 @@ void FetchStream::do_stat()
 
     last_stat_time_ = cur_time;
     last_stat_info_ = cur_stat_info_;
+    raw_last_stat_info_ = raw_cur_stat_info_;
   }
 }
 
@@ -410,7 +430,14 @@ int FetchStream::handle_idle_task_(volatile bool &stop_flag)
         const palf::LSN &next_lsn = ls_fetch_ctx_->get_next_lsn();
 
         if (OB_FAIL(async_fetch_log_(next_lsn, rpc_send_succeed))) {
-          LOG_ERROR("async fetch log fail", KR(ret));
+          switch_state(IDLE);
+          if (OB_EAGAIN != ret) {
+            LOG_ERROR("async fetch log fail", KR(ret));
+          } else {
+            if (OB_FAIL(hibernate_())) {
+              LOG_ERROR("failed to hibernate when there is no available log file buffer");
+            }
+          }
         } else if (rpc_send_succeed) {
           // Asynchronous fetch log RPC success, wait for RPC callback, after that can not continue to manipulate any data structure
           // Note: You cannot continue to manipulate any data structures afterwards !!!!!
@@ -522,6 +549,20 @@ int FetchStream::get_upper_limit(int64_t &upper_limit_ns)
   return ret;
 }
 
+int FetchStream::get_progress(int64_t &progress)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ls_fetch_ctx_)) {
+    ret = OB_INVALID_ERROR;
+    LOG_ERROR("ls_fetch_ctx is null in fetchstream", K(ls_fetch_ctx_), KP(this));
+  } else {
+    progress = ls_fetch_ctx_->get_progress();
+  }
+
+  return ret;
+}
+
 int FetchStream::check_need_fetch_log_(const int64_t limit, bool &need_fetch_log)
 {
   int ret = OB_SUCCESS;
@@ -609,7 +650,9 @@ int FetchStream::async_fetch_log_(
 
   // Launch an asynchronous RPC
   if (OB_FAIL(fetch_log_arpc_.async_fetch_log(req_start_lsn, client_progress, upper_limit_, rpc_send_succeed))) {
-    LOG_ERROR("async_fetch_log fail", KR(ret), K(req_start_lsn), K(upper_limit_), K(fetch_log_arpc_));
+    if (OB_EAGAIN != ret) {
+      LOG_ERROR("async_fetch_log fail", KR(ret), K(req_start_lsn), K(upper_limit_), K(fetch_log_arpc_));
+    }
   } else {
     // Asynchronous RPC execution succeeded
     // Note: You cannot continue to manipulate any data structures afterwards !!!!
@@ -619,7 +662,68 @@ int FetchStream::async_fetch_log_(
 }
 
 void FetchStream::print_handle_info_(
-    FetchLogARpcResult &result,
+    FetchLogRpcResult &result,
+    const int64_t handle_rpc_time,
+    const int64_t read_log_time,
+    const int64_t decode_log_entry_time,
+    const bool rpc_is_flying,
+    const bool is_stream_valid,
+    const char *stream_invalid_reason,
+    const KickOutInfo &kickout_info,
+    const TransStatInfo &tsi,
+    const bool need_stop_request)
+{
+  if (is_v1_fetch_log_protocol(result.type_)) {
+    LogGroupEntryRpcResult &group_entry_result = static_cast<LogGroupEntryRpcResult&>(result);
+    print_handle_info_(group_entry_result, handle_rpc_time, read_log_time, decode_log_entry_time, rpc_is_flying,
+        is_stream_valid, stream_invalid_reason, kickout_info, tsi, need_stop_request);
+  } else if (is_v2_fetch_log_protocol(result.type_)) {
+    RawLogFileRpcResult &raw_log_result = static_cast<RawLogFileRpcResult&>(result);
+    print_handle_info_(raw_log_result, handle_rpc_time, read_log_time, decode_log_entry_time, rpc_is_flying,
+        is_stream_valid, stream_invalid_reason, kickout_info, tsi, need_stop_request);
+  }
+}
+
+void FetchStream::print_handle_info_(
+    RawLogFileRpcResult &result,
+    const int64_t handle_rpc_time,
+    const int64_t read_log_time,
+    const int64_t decode_log_entry_time,
+    const bool rpc_is_flying,
+    const bool is_stream_valid,
+    const char *stream_invalid_reason,
+    const KickOutInfo &kickout_info,
+    const TransStatInfo &tsi,
+    const bool need_stop_request)
+{
+  bool print_rpc_handle_info = ATOMIC_LOAD(&g_print_rpc_handle_info);
+
+
+  if (print_rpc_handle_info) {
+    LOG_INFO("handle rpc result by fetch stream",
+        "fetch_stream", this,
+        "upper_limit", NTS_TO_STR(upper_limit_),
+        K(need_stop_request),
+        "rpc_stop_upon_result", result.rpc_stop_upon_result_,
+        "rpc_stop_reason", print_rpc_stop_reason(result.rpc_stop_reason_),
+        K(rpc_is_flying), K(is_stream_valid), K(stream_invalid_reason), K(kickout_info),
+        "result", result, K(handle_rpc_time), K(read_log_time), K(decode_log_entry_time),
+        K(tsi));
+  } else {
+    LOG_TRACE("handle rpc result by fetch stream",
+        "fetch_stream", this,
+        "upper_limit", NTS_TO_STR(upper_limit_),
+        K(need_stop_request),
+        "rpc_stop_upon_result", result.rpc_stop_upon_result_,
+        "rpc_stop_reason", print_rpc_stop_reason(result.rpc_stop_reason_),
+        K(rpc_is_flying), K(is_stream_valid), K(stream_invalid_reason), K(kickout_info),
+        "result", result, K(handle_rpc_time), K(read_log_time), K(decode_log_entry_time),
+        K(tsi));
+  }
+}
+
+void FetchStream::print_handle_info_(
+    LogGroupEntryRpcResult &result,
     const int64_t handle_rpc_time,
     const int64_t read_log_time,
     const int64_t decode_log_entry_time,
@@ -640,7 +744,7 @@ void FetchStream::print_handle_info_(
         "upper_limit", NTS_TO_STR(upper_limit_),
         K(need_stop_request),
         "rpc_stop_upon_result", result.rpc_stop_upon_result_,
-        "rpc_stop_reason", FetchLogARpc::print_rpc_stop_reason(result.rpc_stop_reason_),
+        "rpc_stop_reason", print_rpc_stop_reason(result.rpc_stop_reason_),
         K(rpc_is_flying), K(is_stream_valid), K(stream_invalid_reason), K(kickout_info),
         "resp", result.resp_, K(handle_rpc_time), K(read_log_time), K(decode_log_entry_time),
         K(tsi), K(min_progress), K(min_tls_id));
@@ -650,7 +754,7 @@ void FetchStream::print_handle_info_(
         "upper_limit", NTS_TO_STR(upper_limit_),
         K(need_stop_request),
         "rpc_stop_upon_result", result.rpc_stop_upon_result_,
-        "rpc_stop_reason", FetchLogARpc::print_rpc_stop_reason(result.rpc_stop_reason_),
+        "rpc_stop_reason", print_rpc_stop_reason(result.rpc_stop_reason_),
         K(rpc_is_flying), K(is_stream_valid), K(stream_invalid_reason), K(kickout_info),
         "resp", result.resp_, K(handle_rpc_time), K(read_log_time), K(decode_log_entry_time),
         K(tsi), K(min_progress), K(min_tls_id));
@@ -664,7 +768,7 @@ bool FetchStream::has_new_fetch_task_() const
 }
 
 int FetchStream::process_result_(
-    FetchLogARpcResult &result,
+    FetchLogRpcResult &result,
     volatile bool &stop_flag,
     const bool rpc_is_flying,
     KickOutInfo &kickout_info,
@@ -754,7 +858,7 @@ int FetchStream::handle_fetch_log_task_(volatile bool &stop_flag)
     bool need_hibernate = false;
     bool rpc_is_flying = false;
     bool is_stream_valid = true;
-    FetchLogARpcResult *result = NULL;
+    FetchLogRpcResult *result = NULL;
     KickOutInfo kickout_info;
 
     // Whether the log stream is taken over by RPC, default is false
@@ -910,6 +1014,7 @@ void FetchStream::update_fetch_stat_info_(
   fsi.handle_rpc_flush_time_ += flush_time;
   fsi.fetch_log_rpc_time_ += fetch_log_time;
   fsi.tsi_.update(tsi);
+  fsi.last_update_ts_ = get_timestamp();
 }
 
 int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
@@ -1059,7 +1164,159 @@ int FetchStream::handle_fetch_archive_task_(volatile bool &stop_flag)
 }
 
 void FetchStream::update_fetch_stat_info_(
-    FetchLogARpcResult &result,
+    FetchLogRpcResult &result,
+    const int64_t handle_rpc_time,
+    const int64_t read_log_time,
+    const int64_t decode_log_entry_time,
+    const int64_t flush_time,
+    const TransStatInfo &tsi)
+{
+  if (is_v1_fetch_log_protocol(result.type_)) {
+    LogGroupEntryRpcResult &log_group_entry_result = static_cast<LogGroupEntryRpcResult&>(result);
+    update_fetch_stat_info_(log_group_entry_result, handle_rpc_time, read_log_time,
+        decode_log_entry_time, flush_time, tsi);
+  } else if (is_v2_fetch_log_protocol(result.type_)) {
+    RawLogFileRpcResult &raw_log_file_result = static_cast<RawLogFileRpcResult&>(result);
+    update_fetch_stat_info_(raw_log_file_result, handle_rpc_time,  read_log_time,
+        decode_log_entry_time, flush_time, tsi);
+  }
+}
+
+void FetchStream::update_fetch_stat_info_(
+    RawLogFileRpcResult &result,
+    const int64_t handle_rpc_time,
+    const int64_t read_log_time,
+    const int64_t decode_log_entry_time,
+    const int64_t flush_time,
+    const TransStatInfo &tsi)
+{
+  int ret = OB_SUCCESS;
+  ObByteLockGuard lock_guard(stat_lock_);
+  RawLogFetchStatInfo &fsi = raw_cur_stat_info_;
+  const ObIArray<RawLogDataRpcStatus> &rcode_arr = result.sub_rpc_status_;
+  if (result.is_readable_) {
+    // mean, max, min
+    static constexpr int mean_pos = 0, max_pos = 1, min_pos = 2;
+    int64_t fetch_log_sub_rpc_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_to_svr_net_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_svr_queue_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_svr_process_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_fetch_palf_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_fetch_archive_times[3] = {0, 0, INT64_MAX};
+    int64_t fetch_log_rpc_to_local_net_times[3] = {0 ,0 ,INT64_MAX};
+    int64_t fetch_log_sub_rpc_callback_times[3] = {0 ,0 ,INT64_MAX};
+
+    struct {
+      void operator()(int64_t *arr, const int64_t stat) {
+        arr[mean_pos] += stat;
+        arr[max_pos] = max(arr[max_pos], stat);
+        arr[min_pos] = min(arr[min_pos], stat);
+      }
+    } update_stat_func;
+
+    int64_t stat_sub_rpc_cnt = 0;
+
+    fsi.fetch_log_size_ += result.data_len_;
+    fsi.fetch_log_rpc_cnt_++;
+    fsi.fetch_log_rpc_time_ += result.rpc_time_;
+
+    fsi.fetch_log_rpc_prepare_time_ += result.rpc_prepare_time_;
+
+    fsi.fetch_log_rpc_callback_time_ += result.rpc_callback_time_;
+
+    fsi.handle_rpc_time_ += handle_rpc_time;
+    fsi.handle_rpc_read_log_time_ += read_log_time;
+    fsi.handle_rpc_flush_time_ += flush_time;
+    fsi.read_log_decode_log_entry_time_ += decode_log_entry_time;
+
+    ARRAY_FOREACH(rcode_arr, idx) {
+      const RawLogDataRpcStatus &stat = rcode_arr.at(idx);
+      if (OB_SUCCESS == stat.err_ && OB_SUCCESS == stat.rcode_.rcode_) {
+        const int64_t s2l_net_time = stat.rpc_time_ - stat.fetch_status_.get_local_to_svr_time() -
+            stat.fetch_status_.get_queue_time() - stat.fetch_status_.get_process_time() -
+            stat.rpc_callback_time_;
+        stat_sub_rpc_cnt++;
+        update_stat_func(fetch_log_sub_rpc_times, stat.rpc_time_);
+        update_stat_func(fetch_log_rpc_to_svr_net_times, stat.fetch_status_.get_local_to_svr_time());
+        update_stat_func(fetch_log_rpc_svr_queue_times, stat.fetch_status_.get_queue_time());
+        update_stat_func(fetch_log_rpc_svr_process_times, stat.fetch_status_.get_process_time());
+        update_stat_func(fetch_log_rpc_fetch_palf_times, stat.fetch_status_.get_read_palf_time());
+        update_stat_func(fetch_log_rpc_fetch_archive_times, stat.fetch_status_.get_read_archive_time());
+        update_stat_func(fetch_log_rpc_to_local_net_times, s2l_net_time);
+        update_stat_func(fetch_log_sub_rpc_callback_times, stat.rpc_callback_time_);
+      }
+    }
+
+    fsi.fetch_log_sub_rpc_cnt_ += stat_sub_rpc_cnt;
+
+    if (stat_sub_rpc_cnt > 0) {
+      fetch_log_sub_rpc_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_to_svr_net_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_svr_queue_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_svr_process_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_fetch_palf_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_fetch_archive_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_sub_rpc_callback_times[mean_pos] /= stat_sub_rpc_cnt;
+      fetch_log_rpc_to_local_net_times[mean_pos] /= stat_sub_rpc_cnt;
+    }
+
+    fsi.mean_fetch_log_sub_rpc_time_ += fetch_log_sub_rpc_times[mean_pos];
+    fsi.mean_fetch_log_rpc_to_svr_net_time_ += fetch_log_rpc_to_svr_net_times[mean_pos];
+    fsi.mean_fetch_log_rpc_svr_queue_time_ += fetch_log_rpc_svr_queue_times[mean_pos];
+    fsi.mean_fetch_log_rpc_svr_process_time_ += fetch_log_rpc_svr_process_times[mean_pos];
+    fsi.mean_fetch_log_rpc_read_palf_time_ += fetch_log_rpc_fetch_palf_times[mean_pos];
+    fsi.mean_fetch_log_rpc_read_archive_time_ += fetch_log_rpc_fetch_archive_times[mean_pos];
+    fsi.mean_fetch_log_sub_rpc_callback_time_ += fetch_log_sub_rpc_callback_times[mean_pos];
+    fsi.mean_fetch_log_rpc_to_local_net_time_ += fetch_log_rpc_to_local_net_times[mean_pos];
+
+    fsi.max_fetch_log_sub_rpc_time_ += fetch_log_sub_rpc_times[max_pos];
+    fsi.max_fetch_log_rpc_to_svr_net_time_ += fetch_log_rpc_to_svr_net_times[max_pos];
+    fsi.max_fetch_log_rpc_svr_queue_time_ += fetch_log_rpc_svr_queue_times[max_pos];
+    fsi.max_fetch_log_rpc_svr_process_time_ += fetch_log_rpc_svr_process_times[max_pos];
+    fsi.max_fetch_log_rpc_read_palf_time_ += fetch_log_rpc_fetch_palf_times[max_pos];
+    fsi.max_fetch_log_rpc_read_archive_time_ += fetch_log_rpc_fetch_archive_times[max_pos];
+    fsi.max_fetch_log_sub_rpc_callback_time_ += fetch_log_sub_rpc_callback_times[max_pos];
+    fsi.max_fetch_log_rpc_to_local_net_time_ += fetch_log_rpc_to_local_net_times[max_pos];
+
+    fsi.min_fetch_log_sub_rpc_time_ += fetch_log_sub_rpc_times[min_pos];
+    fsi.min_fetch_log_rpc_to_svr_net_time_ += fetch_log_rpc_to_svr_net_times[min_pos];
+    fsi.min_fetch_log_rpc_svr_queue_time_ += fetch_log_rpc_svr_queue_times[min_pos];
+    fsi.min_fetch_log_rpc_svr_process_time_ += fetch_log_rpc_svr_process_times[min_pos];
+    fsi.min_fetch_log_rpc_read_palf_time_ += fetch_log_rpc_fetch_palf_times[min_pos];
+    fsi.min_fetch_log_rpc_read_archive_time_ += fetch_log_rpc_fetch_archive_times[min_pos];
+    fsi.min_fetch_log_sub_rpc_callback_time_ += fetch_log_sub_rpc_callback_times[min_pos];
+    fsi.min_fetch_log_rpc_to_local_net_time_ += fetch_log_rpc_to_local_net_times[min_pos];
+
+    fsi.tsi_.update(tsi);
+    if (result.rpc_stop_upon_result_) {
+      fsi.single_rpc_cnt_++;
+      switch (result.rpc_stop_reason_) {
+        case RpcStopReason::RESULT_NOT_READABLE:
+          fsi.result_not_readable_rpc_cnt_++;
+          break;
+
+        case RpcStopReason::REACH_MAX_LOG:
+          fsi.reach_max_log_id_rpc_cnt_++;
+          break;
+
+        case RpcStopReason::FETCH_NO_LOG:
+          fsi.no_log_rpc_cnt_++;
+          break;
+
+        case RpcStopReason::REACH_MAX_RPC_RESULT:
+          fsi.reach_max_result_rpc_cnt_++;
+          break;
+
+        default:
+          break;
+      }
+    }
+    fsi.last_update_ts_ = get_timestamp();
+  }
+}
+
+void FetchStream::update_fetch_stat_info_(
+    LogGroupEntryRpcResult &result,
     const int64_t handle_rpc_time,
     const int64_t read_log_time,
     const int64_t decode_log_entry_time,
@@ -1095,19 +1352,19 @@ void FetchStream::update_fetch_stat_info_(
       fsi.single_rpc_cnt_++;
 
       switch (result.rpc_stop_reason_) {
-        case FetchLogARpc::REACH_UPPER_LIMIT:
+        case RpcStopReason::REACH_UPPER_LIMIT:
           fsi.reach_upper_limit_rpc_cnt_++;
           break;
 
-        case FetchLogARpc::REACH_MAX_LOG:
+        case RpcStopReason::REACH_MAX_LOG:
           fsi.reach_max_log_id_rpc_cnt_++;
           break;
 
-        case FetchLogARpc::FETCH_NO_LOG:
+        case RpcStopReason::FETCH_NO_LOG:
           fsi.no_log_rpc_cnt_++;
           break;
 
-        case FetchLogARpc::REACH_MAX_RPC_RESULT:
+        case RpcStopReason::REACH_MAX_RPC_RESULT:
           fsi.reach_max_result_rpc_cnt_++;
           break;
 
@@ -1115,11 +1372,13 @@ void FetchStream::update_fetch_stat_info_(
           break;
       }
     }
+
+    fsi.last_update_ts_ = get_timestamp();
   }
 }
 
 int FetchStream::handle_fetch_log_result_(
-    FetchLogARpcResult &result,
+    FetchLogRpcResult &result,
     volatile bool &stop_flag,
     bool &is_stream_valid,
     const char *&stream_invalid_reason,
@@ -1131,8 +1390,16 @@ int FetchStream::handle_fetch_log_result_(
     int64_t &flush_time)
 {
   int ret = OB_SUCCESS;
-  const ObRpcResultCode &rcode = result.rcode_;
-  const ObCdcLSFetchLogResp &resp = result.resp_;
+  int64_t log_num = 0;
+  int err = OB_SUCCESS;
+  const char *data = nullptr;
+  bool is_readable = true;
+  int64_t data_len = 0;
+  int64_t read_len = 0;
+  share::SCN replayable_point = share::SCN::max_scn();
+  obrpc::ObRpcResultCode rcode;
+  FeedbackType feed_back = FeedbackType::INVALID_FEEDBACK;
+  obrpc::ObCdcFetchRawSource data_end_source = obrpc::ObCdcFetchRawSource::UNKNOWN;
 
   is_stream_valid = true;
   stream_invalid_reason = NULL;
@@ -1141,33 +1408,36 @@ int FetchStream::handle_fetch_log_result_(
   read_log_time = 0;
   decode_log_entry_time = 0;
 
-  if (OB_SUCCESS != rcode.rcode_ || OB_SUCCESS != resp.get_err()) {
+  if (OB_FAIL(get_result_data_(result, is_readable, data, data_len, replayable_point,
+      rcode, data_end_source, err, feed_back))) {
+    LOG_ERROR("failed to get result data", K(result));
+  // TODO: if result is not readable, but error code may be OB_SUCCESS how to handle this?
+  } else if (! is_readable) {
     is_stream_valid = false;
-    stream_invalid_reason = "FetchLogFail";
-    if (OB_FAIL(handle_fetch_log_error_(rcode, resp, kickout_info))) {
-      LOG_ERROR("handle fetch log error fail", KR(ret), K(rcode), K(resp), K(kickout_info));
+    stream_invalid_reason = "NonReadable";
+    LOG_INFO("get not readable result", K(result));
+    if (OB_FAIL(handle_fetch_log_error_(rcode, err, result, kickout_info))) {
+      LOG_ERROR("handle fetch log error fail", KR(ret), K(result), K(kickout_info));
     }
   } else {
     // Read all log entries
-    if (OB_FAIL(read_log_(resp, stop_flag, kickout_info, read_log_time, decode_log_entry_time,
-        tsi))) {
+    if (OB_FAIL(read_log_(data, data_len, replayable_point, data_end_source, stop_flag, kickout_info, log_num, read_len,
+        read_log_time, decode_log_entry_time, tsi))) {
       if (OB_LOG_NOT_SYNC == ret) {
         // The stream is out of sync and needs to be reopened
         // Note: This error code is handled uniformly below, and the following logic must be handled to
       } else if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
-        LOG_ERROR("read log fail", KR(ret), K(resp));
+        LOG_ERROR("read log fail", KR(ret), K(result));
       }
     }
     // Check the feedback array
-    else if (OB_FAIL(check_feedback_(resp, kickout_info))) {
-      LOG_ERROR("check feed back fail", KR(ret), K(resp));
+    else if (OB_FAIL(check_feedback_(result, feed_back, kickout_info))) {
+      LOG_ERROR("check feed back fail", KR(ret), K(result));
     } // Update the status of the fetch log task
     else if (OB_FAIL(update_fetch_task_state_(kickout_info, stop_flag, flush_time))) {
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("update fetch task state fail", KR(ret), K(kickout_info));
       }
-    } else {
-      // success
     }
 
     // The error code is handled uniformly here
@@ -1198,12 +1468,26 @@ int FetchStream::handle_fetch_log_result_(
         is_stream_valid = true;
 
         // When the fetched log is empty, it needs to sleep for a while
-        if (resp.get_log_num() <= 0) {
+        if (log_num <= 0) {
           need_hibernate = true;
         }
 
         // TODO: Here we check the upper limit to achieve dynamic adjustment of the upper limit interval
       }
+    }
+
+    // read_len < data_len means there must be some logs not read in mem_storage,
+    // so we should reset memory storage anyway, and stream is invalid because
+    // the logs from following rpc responses is not continuous, we should discard
+    // the following rpc responses and launch rpc request again.
+    if (read_len < data_len) {
+      ls_fetch_ctx_->reset_memory_storage();
+      is_stream_valid = false;
+      if (nullptr == stream_invalid_reason) {
+        stream_invalid_reason = "ReadPartialLog";
+      }
+      LOG_TRACE("read partial log, reset mem_storage, invalidate stream",
+        K(read_len), K(data_len), KPC(ls_fetch_ctx_));
     }
   }
 
@@ -1247,7 +1531,8 @@ int FetchStream::update_rpc_request_params_()
 
 int FetchStream::handle_fetch_log_error_(
     const ObRpcResultCode &rcode,
-    const obrpc::ObCdcLSFetchLogResp &resp,
+    const int err,
+    const FetchLogRpcResult &result,
     KickOutInfo &kickout_info)
 {
   int ret = OB_SUCCESS;
@@ -1274,7 +1559,7 @@ int FetchStream::handle_fetch_log_error_(
     }
   }
   // server return error
-  else if (OB_SUCCESS != resp.get_err()) {
+  else if (OB_SUCCESS != err) {
     // Other errors, switch server directly
     need_kick_out = true;
     kick_out_reason = FETCH_LOG_FAIL_ON_SERVER;
@@ -1283,16 +1568,14 @@ int FetchStream::handle_fetch_log_error_(
                                 IObLogErrHandler::ErrType::FETCH_LOG,
                                 trace_id,
                                 ls_fetch_ctx_->get_next_lsn(),
-                                resp.get_err(),
+                                err,
                                 "%s");
-      IS_WARN_LOG_LEVEL(resp.get_err()) {
+      IS_WARN_LOG_LEVEL(err) {
         LOG_WARN("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
-                        "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
-                        K(rcode), K(resp));
+                        K(rcode), K(result));
       } else {
         LOG_ERROR("fetch log fail on server, need_switch_server", "fetch_stream", this, K(svr_),
-                        "svr_err", resp.get_err(), "svr_debug_err", resp.get_debug_err(),
-                        K(rcode), K(resp));
+                        K(rcode), K(result));
       }
     }
   } else {
@@ -1353,58 +1636,65 @@ int FetchStream::set_(KickOutInfo &kick_out_info,
   return ret;
 }
 
-int FetchStream::read_log_(
-    const obrpc::ObCdcLSFetchLogResp &resp,
+int FetchStream::read_log_(const char *data,
+    const int64_t data_len,
+    const share::SCN replayable_point,
+    const obrpc::ObCdcFetchRawSource data_end_source,
     volatile bool &stop_flag,
     KickOutInfo &kick_out_info,
+    int64_t &log_num,
+    int64_t &read_len,
     int64_t &read_log_time,
     int64_t &decode_log_entry_time,
     TransStatInfo &tsi)
 {
   int ret = OB_SUCCESS;
-  const char *buf = resp.get_log_entry_buf();
-  const int64_t len = resp.get_pos();
-  const int64_t log_cnt = resp.get_log_num();
   int64_t pos = 0;
   int64_t start_read_time = get_timestamp();
+  share::SCN last_log_scn;
+  read_len = 0;
   read_log_time = 0;
   decode_log_entry_time = 0;
   // TODO for Debug remove
-  LOG_TRACE("redo_log_debug", K(resp), "tls_id", ls_fetch_ctx_->get_tls_id());
+  LOG_TRACE("redo_log_debug", "tls_id", ls_fetch_ctx_->get_tls_id());
 
-  if (OB_ISNULL(buf)) {
-    LOG_ERROR("invalid response log buf", K(buf), K(resp));
+  if (0 == data_len) {
+    // Ignore 0 logs
+    LOG_TRACE("fetch 0 log", K_(svr));
+  } else if (OB_ISNULL(data)) {
+    LOG_ERROR("invalid response log buf", K(data), K(data_len));
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_ISNULL(ls_fetch_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid ls_fetch_ctx", KR(ret), K(ls_fetch_ctx_));
-  } else if (0 == log_cnt) {
-    // Ignore 0 logs
-    LOG_TRACE("fetch 0 log", K_(svr), "fetch_status", resp.get_fetch_status());
-  } else if (OB_FAIL(ls_fetch_ctx_->append_log(buf, len))) {
-    LOG_ERROR("append log to LSFetchCtx failed", KR(ret), KPC(ls_fetch_ctx_), K(resp));
+  } else if (OB_FAIL(ls_fetch_ctx_->append_log(data, data_len))) {
+    LOG_ERROR("append log to LSFetchCtx failed", KR(ret), KPC(ls_fetch_ctx_));
   } else {
     // Iterate through all log entries
-    for (int64_t idx = 0; OB_SUCC(ret) && (idx < log_cnt); ++idx) {
+    log_num = 0;
+    for (log_num = 0; OB_SUCC(ret); ++log_num) {
       int64_t begin_time = get_timestamp();
       palf::LSN group_start_lsn;
       palf::LogGroupEntry group_entry;
       palf::MemPalfBufferIterator entry_iter;
       const char *buffer = nullptr;
 
-      if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn, buffer))) {
+      if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn,
+          buffer, replayable_point, data_end_source))) {
         if (OB_ITER_END != ret) {
-          LOG_ERROR("get next_group_entry failed", KR(ret), K_(ls_fetch_ctx), K(resp));
-          if (OB_CHECKSUM_ERROR == ret || OB_INVALID_DATA == ret)  {
-            OB_ASSERT(ret);
+          if (obrpc::ObCdcFetchRawSource::ARCHIVE != data_end_source && OB_PARTIAL_LOG != ret) {
+            LOG_ERROR("get next_group_entry failed", KR(ret), K_(ls_fetch_ctx), K(data_end_source));
+            if (OB_CHECKSUM_ERROR == ret || OB_INVALID_DATA == ret)  {
+              OB_ASSERT(ret);
+            }
+          } else {
+            LOG_WARN("get next_group_entry failed, retry", KR(ret), K_(ls_fetch_ctx), K(data_end_source));
           }
-        } else if (idx < log_cnt - 1) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("group_entry iterate end unexpected", KR(ret), K_(ls_fetch_ctx), K(resp));
         } else { /* group_entry iter end */ }
       } else {
         // GroupLogEntry deserialize time
         decode_log_entry_time += (get_timestamp() - begin_time);
+        read_len += group_entry.get_group_entry_size();
 
         if (OB_FAIL(read_group_entry_(group_entry, group_start_lsn, buffer, kick_out_info, tsi, stop_flag))) {
           if (OB_IN_STOP_STATE != ret && OB_NEED_RETRY != ret) {
@@ -1413,6 +1703,8 @@ int FetchStream::read_log_(
 
           // If failed, reset memory storage
           ls_fetch_ctx_->reset_memory_storage();
+        } else {
+          last_log_scn = group_entry.get_scn();
         }
 
         // update log process
@@ -1423,10 +1715,31 @@ int FetchStream::read_log_(
         }
       }
     }
+
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
   }
 
   if (OB_SUCCESS == ret) {
+    int64_t upper_limit_ns = OB_INVALID_TIMESTAMP;
     read_log_time = get_timestamp() - start_read_time;
+    // server and rpc framework cannot find out whether the log reached upper limit,
+    // so stop fetching log if log is reach upper limit, then when finished processing
+    // all rpc result, the fetchstream would switch state to idle and check upper limit
+    // before it send rpc request again.
+    if (last_log_scn.is_valid()) {
+      if (OB_FAIL(get_upper_limit(upper_limit_ns))) {
+        LOG_ERROR("failed to get upper limit");
+      } else if (upper_limit_ns < last_log_scn.get_val_for_logservice()){
+        if (OB_FAIL(fetch_log_arpc_.mark_request_stop())) {
+          LOG_ERROR("failed to mark request stop", K(fetch_log_arpc_), K(upper_limit_ns), K(last_log_scn));
+        } else {
+          LOG_INFO("reach upper limit, stop rpc", K(upper_limit_ns), K(last_log_scn),
+              "tls_id", ls_fetch_ctx_->get_tls_id());
+        }
+      }
+    }
   }
 
   return ret;
@@ -1501,11 +1814,11 @@ KickOutReason FetchStream::get_feedback_reason_(const Feedback &feedback) const
   return reason;
 }
 
-int FetchStream::check_feedback_(const obrpc::ObCdcLSFetchLogResp &resp,
+int FetchStream::check_feedback_(const FetchLogRpcResult &result,
+    const FeedbackType feedback,
     KickOutInfo &kick_out_info)
 {
   int ret = OB_SUCCESS;
-  const Feedback &feedback = resp.get_feedback_type();
   KickOutReason reason = get_feedback_reason_(feedback);
 
   // Kick out all the LS in the feedback, but not the NONE
@@ -1697,6 +2010,67 @@ int FetchStream::check_switch_server_(LSFetchCtx &task, KickOutInfo &kick_out_in
   }
 
   LOG_TRACE("check_switch_server", "ls_id", ls_fetch_ctx_->get_tls_id(), K(branch_str));
+  return ret;
+}
+
+int FetchStream::get_result_data_(const FetchLogRpcResult &result,
+    bool &is_readable,
+    const char *&data,
+    int64_t &data_len,
+    share::SCN &replayable_point,
+    obrpc::ObRpcResultCode &rcode,
+    obrpc::ObCdcFetchRawSource &source,
+    int &err,
+    obrpc::FeedbackType &feed_back)
+{
+  int ret = OB_SUCCESS;
+
+  if (is_v1_fetch_log_protocol(result.type_)) {
+    const LogGroupEntryRpcResult &log_group_entry_result = static_cast<const LogGroupEntryRpcResult&>(result);
+    const ObCdcLSFetchLogResp &resp = log_group_entry_result.resp_;
+    rcode = log_group_entry_result.rcode_;
+    err = resp.get_err();
+    data = resp.get_log_entry_buf();
+    data_len = resp.get_pos();
+    // regard all fetch source as palf, loggroupentry proto ensure that all fetched logs are complete
+    source = obrpc::ObCdcFetchRawSource::PALF;
+    replayable_point = SCN::max_scn();
+    feed_back = resp.get_feedback_type();
+    is_readable = (OB_SUCCESS == ret && OB_SUCCESS == rcode.rcode_);
+  } else if (is_v2_fetch_log_protocol(result.type_)) {
+    const RawLogFileRpcResult &raw_log_file_result = static_cast<const RawLogFileRpcResult&>(result);
+    const ObIArray<RawLogDataRpcStatus> &sub_rpc_status_arr = raw_log_file_result.sub_rpc_status_;
+    is_readable = raw_log_file_result.is_readable_;
+    data = raw_log_file_result.data_;
+    data_len = raw_log_file_result.data_len_;
+    replayable_point = raw_log_file_result.replayable_point_;
+    source = raw_log_file_result.data_end_source_;
+    ARRAY_FOREACH(sub_rpc_status_arr, idx) {
+      const RawLogDataRpcStatus &status = sub_rpc_status_arr.at(idx);
+      if (OB_SUCCESS == err && OB_SUCCESS != status.err_) {
+        err = status.err_;
+      }
+
+      if (OB_SUCCESS == rcode.rcode_ && OB_SUCCESS != status.rcode_.rcode_) {
+        rcode = status.rcode_;
+      }
+
+      if (obrpc::FeedbackType::INVALID_FEEDBACK == feed_back &&
+          obrpc::FeedbackType::INVALID_FEEDBACK != status.feed_back_) {
+        feed_back = status.feed_back_;
+      }
+    }
+
+    if (is_readable &&
+        (OB_SUCCESS != err || OB_SUCCESS != rcode.rcode_) &&
+        obrpc::FeedbackType::INVALID_FEEDBACK == feed_back) {
+      feed_back = obrpc::FeedbackType::LOG_NOT_IN_THIS_SERVER;
+    }
+
+  } else {
+    ret = OB_NOT_SUPPORTED;
+  }
+
   return ret;
 }
 

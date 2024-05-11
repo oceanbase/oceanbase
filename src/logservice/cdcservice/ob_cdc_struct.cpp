@@ -102,7 +102,7 @@ ClientLSCtx::ClientLSCtx()
   : source_lock_(ObLatchIds::CDC_SERVICE_LS_CTX_LOCK),
     source_version_(0),
     source_(NULL),
-    proto_type_(FetchLogProtocolType::Unknown),
+    proto_type_(obrpc::ObCdcFetchLogProtocolType::Unknown),
     fetch_mode_(FetchMode::FETCHMODE_UNKNOWN),
     last_touch_ts_(OB_INVALID_TIMESTAMP),
     client_progress_(OB_INVALID_TIMESTAMP)
@@ -115,7 +115,7 @@ ClientLSCtx::~ClientLSCtx()
   reset();
 }
 
-int ClientLSCtx::init(int64_t client_progress, const FetchLogProtocolType type)
+int ClientLSCtx::init(int64_t client_progress, const obrpc::ObCdcFetchLogProtocolType type)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TIMESTAMP != client_progress) {
@@ -279,7 +279,7 @@ void ClientLSCtx::reset()
     source_ = NULL;
     source_version_ = 0;
   }
-  proto_type_ = FetchLogProtocolType::Unknown;
+  proto_type_ = obrpc::ObCdcFetchLogProtocolType::Unknown;
   fetch_mode_ = FetchMode::FETCHMODE_UNKNOWN;
   last_touch_ts_ = OB_INVALID_TIMESTAMP;
   client_progress_ = OB_INVALID_TIMESTAMP;

@@ -97,6 +97,10 @@ ObLogRpc::~ObLogRpc()
   destroy();
 }
 
+// #ifdef ERRSIM
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_TIME_OUT);
+// #endif
+
 int ObLogRpc::req_start_lsn_by_tstamp(const uint64_t tenant_id,
     const common::ObAddr &svr,
     obrpc::ObCdcReqStartLSNByTsReq &req,
@@ -129,8 +133,20 @@ int ObLogRpc::async_stream_fetch_log(const uint64_t tenant_id,
     req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_TEST_SWITCH_MODE);
   }
   req.set_compressor_type(ATOMIC_LOAD(&compressor_type_));
+// #ifdef ERRSIM
+  if (OB_SUCCESS != ERRSIM_FETCH_LOG_TIME_OUT &&
+    OB_TIMEOUT != ERRSIM_FETCH_LOG_TIME_OUT) {
+    ret = ERRSIM_FETCH_LOG_TIME_OUT;
+  } else if (OB_TIMEOUT == ERRSIM_FETCH_LOG_TIME_OUT) {
+    SEND_RPC(async_stream_fetch_log, tenant_id, svr, 1, req, &cb);
+  } else {
+// #endif
   SEND_RPC(async_stream_fetch_log, tenant_id, svr, timeout, req, &cb);
   LOG_TRACE("rpc: async fetch stream log", KR(ret), K(svr), K(timeout), K(req));
+// #ifdef ERRSIM
+  }
+// #endif
+
   return ret;
 }
 
@@ -149,6 +165,36 @@ int ObLogRpc::async_stream_fetch_missing_log(const uint64_t tenant_id,
   req.set_compressor_type(ATOMIC_LOAD(&compressor_type_));
   SEND_RPC(async_stream_fetch_miss_log, tenant_id, svr, timeout, req, &cb);
   LOG_TRACE("rpc: async fetch stream missing_log", KR(ret), K(svr), K(timeout), K(req));
+  return ret;
+}
+
+int ObLogRpc::async_stream_fetch_raw_log(const uint64_t tenant_id,
+    const common::ObAddr &svr,
+    obrpc::ObCdcFetchRawLogReq &req,
+    obrpc::ObCdcProxy::AsyncCB<obrpc::OB_CDC_FETCH_RAW_LOG> &cb,
+    const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  req.set_client_id(client_id_);
+  req.set_tenant_id(self_tenant_id_);
+  if (1 == cfg_->test_mode_force_fetch_archive) {
+    req.set_flag(ObCdcRpcTestFlag::OBCDC_RPC_FETCH_ARCHIVE);
+  }
+  req.set_compressor_type(ATOMIC_LOAD(&compressor_type_));
+// #ifdef ERRSIM
+  if (OB_SUCCESS != ERRSIM_FETCH_LOG_TIME_OUT &&
+    OB_TIMEOUT != ERRSIM_FETCH_LOG_TIME_OUT) {
+    ret = ERRSIM_FETCH_LOG_TIME_OUT;
+  } else if (OB_TIMEOUT == ERRSIM_FETCH_LOG_TIME_OUT) {
+    SEND_RPC(async_stream_fetch_raw_log, tenant_id, svr, 1, req, &cb);
+  } else {
+// #endif
+  SEND_RPC(async_stream_fetch_raw_log, tenant_id, svr, timeout, req, &cb);
+  LOG_TRACE("rpc: async stream fetch raw log", KR(ret), K(svr), K(timeout), K(req));
+// #ifdef ERRSIM
+  }
+// #endif
+
   return ret;
 }
 

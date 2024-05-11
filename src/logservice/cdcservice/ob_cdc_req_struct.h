@@ -88,6 +88,25 @@ private:
   ObAddr client_addr_;
 };
 
+enum ObCdcFetchLogProtocolType
+{
+  Unknown = -1,
+  LogGroupEntryProto = 0,
+  RawLogDataProto = 1,
+};
+
+ObCdcFetchLogProtocolType get_fetch_log_protocol_type(const ObString &proto_type_str);
+
+const char *fetch_log_protocol_type_str(const ObCdcFetchLogProtocolType type);
+
+inline bool is_v1_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
+  return ObCdcFetchLogProtocolType::LogGroupEntryProto == type;
+}
+
+inline bool is_v2_fetch_log_protocol(const ObCdcFetchLogProtocolType type) {
+  return ObCdcFetchLogProtocolType::RawLogDataProto == type;
+}
+
 }
 }
 

@@ -133,7 +133,7 @@ public:
     uint8_t thread_id = balance_assign_tidx();
     uint64_t pnio_group_id = ObPocRpcServer::DEFAULT_PNIO_GROUP;
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
-    if (OB_LS_FETCH_LOG2 == pcode) {
+    if (OB_LS_FETCH_LOG2 == pcode || OB_CDC_FETCH_RAW_LOG == pcode) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     {
@@ -203,7 +203,7 @@ public:
     char rpc_timeguard_str[ObPocRpcServer::RPC_TIMEGUARD_STRING_SIZE] = {'\0'};
     ObTimeGuard timeguard("poc_rpc_post", 10 * 1000);
     // TODO:@fangwu.lcc map proxy.group_id_ to pnio_group_id
-    if (OB_LS_FETCH_LOG2 == pcode) {
+    if (OB_LS_FETCH_LOG2 == pcode || OB_CDC_FETCH_RAW_LOG == pcode) {
       pnio_group_id = ObPocRpcServer::RATELIMIT_PNIO_GROUP;
     }
     uint8_t thread_id = balance_assign_tidx();

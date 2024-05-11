@@ -29,7 +29,7 @@ namespace logfetcher
 class IFetchStreamPool;
 class IObLogRpc;
 class IObLSWorker;
-class IFetchLogARpcResultPool;
+class FetchLogRpcResultPool;
 class PartProgressController;
 class FetchStreamContainer
 {
@@ -44,7 +44,8 @@ public:
       IObLogRpc &rpc,
       IFetchStreamPool &fs_pool,
       IObLSWorker &stream_worker,
-      IFetchLogARpcResultPool &rpc_result_pool,
+      LogFileDataBufferPool &log_file_pool,
+      FetchLogRpcResultPool &rpc_result_pool,
       PartProgressController &progress_controller,
       ILogFetcherHandler &log_handler);
 
@@ -56,6 +57,8 @@ public:
 
   // print stat info
   void do_stat();
+
+  void update_fetch_stream_proto(const obrpc::ObCdcFetchLogProtocolType proto);
 
 public:
   TO_STRING_KV("stype", print_fetch_stream_type(stype_),
@@ -73,11 +76,13 @@ private:
 
 private:
   FetchStreamType           stype_;
+  obrpc::ObCdcFetchLogProtocolType proto_type_;
   uint64_t                  self_tenant_id_;
   IObLogRpc                 *rpc_;                    // RPC Processor
   IFetchStreamPool          *fs_pool_;                // Fetch log stream task object pool
   IObLSWorker               *stream_worker_;          // Stream master
-  IFetchLogARpcResultPool   *rpc_result_pool_;        // RPC result pool
+  FetchLogRpcResultPool     *rpc_result_pool_;        // RPC result pool
+  LogFileDataBufferPool     *log_file_pool_;
   PartProgressController    *progress_controller_;    // Progress controller
   ILogFetcherHandler        *log_handler_;
 

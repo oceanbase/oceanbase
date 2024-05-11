@@ -28,6 +28,8 @@
 #include "ob_log_ls_fetch_stream.h"       // FetchStream
 #include "ob_log_trace_id.h"              // ObLogTraceIdGuard
 #include "ob_log_config.h"                // ObLogFetcherConfig
+#include "ob_log_fetch_log_rpc_req.h"
+#include "ob_log_fetch_log_rpc_result.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::obrpc;
@@ -36,6 +38,12 @@ namespace oceanbase
 {
 namespace logfetcher
 {
+
+// #ifdef ERRSIM
+ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)
+ERRSIM_POINT_DEF(ERRSIM_SEND_FETCH_LOG_REQ_FAIL)
+ERRSIM_POINT_DEF(ERRSIM_SEND_FETCH_RAW_LOG_REQ_FAIL)
+// #endif
 
 ////////////////////////////// FetchLogSRpc //////////////////////////////
 FetchLogSRpc::FetchLogSRpc() :
@@ -256,46 +264,6 @@ void FetchLogARpc::configure(const ObLogFetcherConfig &config)
   LOG_INFO("[CONFIG]", K(print_rpc_handle_info));
 }
 
-const char *FetchLogARpc::print_rpc_stop_reason(const RpcStopReason reason)
-{
-  const char *reason_str = "INVALID";
-  switch (reason) {
-    case INVALID_REASON:
-      reason_str = "INVALID";
-      break;
-
-    case REACH_MAX_LOG:
-      reason_str = "REACH_MAX_LOG";
-      break;
-
-    case REACH_UPPER_LIMIT:
-      reason_str = "REACH_UPPER_LIMIT";
-      break;
-
-    case FETCH_NO_LOG:
-      reason_str = "FETCH_NO_LOG";
-      break;
-
-    case FETCH_LOG_FAIL:
-      reason_str = "FETCH_LOG_FAIL";
-      break;
-
-    case REACH_MAX_RPC_RESULT:
-      reason_str = "REACH_MAX_RPC_RESULT";
-      break;
-
-    case FORCE_STOP_RPC:
-      reason_str = "FORCE_STOP_RPC";
-      break;
-
-    default:
-      reason_str = "INVALID";
-      break;
-  }
-
-  return reason_str;
-}
-
 FetchLogARpc::FetchLogARpc(FetchStream &host) :
     host_(host),
     source_tenant_id_(OB_INVALID_TENANT_ID),
@@ -304,10 +272,13 @@ FetchLogARpc::FetchLogARpc(FetchStream &host) :
     rpc_(NULL),
     stream_worker_(NULL),
     result_pool_(NULL),
+    log_file_pool_(NULL),
     state_(IDLE),
     cur_req_(NULL),
     flying_req_list_(),
     res_queue_(),
+    proto_type_(obrpc::ObCdcFetchLogProtocolType::Unknown),
+    splitter_(NULL),
     lock_(ObLatchIds::OBCDC_FETCHLOG_ARPC_LOCK)
 {
   int ret = OB_SUCCESS;
@@ -338,6 +309,11 @@ void FetchLogARpc::reset()
   cur_req_ = NULL;
   flying_req_list_.reset();
   (void)res_queue_.reset();
+  proto_type_ = obrpc::ObCdcFetchLogProtocolType::Unknown;
+  if (NULL != splitter_) {
+    OB_DELETE(IFetchLogRpcSplitter, "FetcherRpcSplit", splitter_);
+    splitter_ = NULL;
+  }
 }
 
 int FetchLogARpc::init(
@@ -345,19 +321,26 @@ int FetchLogARpc::init(
     const uint64_t self_tenant_id,
     IObLogRpc &rpc,
     IObLSWorker &stream_worker,
-    IFetchLogARpcResultPool &result_pool)
+    FetchLogRpcResultPool &result_pool,
+    LogFileDataBufferPool &log_file_pool)
 {
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == source_tenant_id)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", KR(ret), K(source_tenant_id));
+  } else if (OB_ISNULL(splitter_ = OB_NEW(ObLogFetchLogRpcSplitter,
+        ObMemAttr(self_tenant_id, "FetcherRpcSplit"), RawLogFileRpcRequest::MAX_SEND_REQ_CNT))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("failed to allocate memory for splitter", K(self_tenant_id));
   } else {
     source_tenant_id_ = source_tenant_id;
     self_tenant_id_ = self_tenant_id;
     rpc_ = &rpc;
     stream_worker_ = &stream_worker;
     result_pool_ = &result_pool;
+    log_file_pool_ = &log_file_pool;
+    proto_type_ = obrpc::ObCdcFetchLogProtocolType::RawLogDataProto;
   }
 
   return ret;
@@ -408,13 +391,27 @@ int FetchLogARpc::prepare_request(const share::ObLSID &ls_id,
     ret = OB_INVALID_ERROR;
   }
   // Allocate a new RPC request to carry the new stream
-  else if (OB_FAIL(alloc_rpc_request_(ls_id, rpc_timeout, cur_req_))) {
-    LOG_ERROR("alloc rpc request fail", KR(ret));
-  } else if (OB_ISNULL(cur_req_)) {
-    LOG_ERROR("alloc rpc request fail", K(cur_req_));
-    ret = OB_ERR_UNEXPECTED;
+  else if (is_v1_fetch_log_protocol(proto_type_)) {
+    if (OB_FAIL(alloc_log_group_entry_rpc_request_(ls_id, rpc_timeout, cur_req_))) {
+      LOG_ERROR("alloc rpc request fail", KR(ret));
+    } else if (OB_ISNULL(cur_req_)) {
+      LOG_ERROR("alloc rpc request fail", K(cur_req_));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      // success
+    }
+  } else if (is_v2_fetch_log_protocol(proto_type_)) {
+    if (OB_FAIL(alloc_raw_log_file_rpc_request_(ls_id, rpc_timeout, cur_req_))) {
+      LOG_ERROR("alloc rpc request fail", KR(ret));
+    } else if (OB_ISNULL(cur_req_)) {
+      LOG_ERROR("alloc rpc request fail", K(cur_req_));
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      // success
+    }
   } else {
-    // success
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("failed to get valid protocol type", KPC(this));
   }
 
   return ret;
@@ -482,12 +479,20 @@ int FetchLogARpc::async_fetch_log(
     LOG_ERROR("RPC is flying, can not launch async fetch log request",
         K(cur_req_->rpc_is_flying()), KPC(cur_req_));
     ret = OB_INVALID_ERROR;
-  }
-    // Initiating asynchronous requests
-  else if (OB_FAIL(launch_async_rpc_(*cur_req_, req_start_lsn, client_progress, upper_limit, false, rpc_send_succeed))) {
-    LOG_ERROR("launch async rpc fail", KR(ret), K(req_start_lsn), K(upper_limit), KPC(cur_req_));
+  } else if (is_v1_fetch_log_protocol(cur_req_->get_proto_type())) {
+    if (OB_FAIL(launch_async_rpc_(static_cast<LogGroupEntryRpcRequest&>(*cur_req_), req_start_lsn,
+      client_progress, upper_limit, false, rpc_send_succeed))) {
+      LOG_ERROR("launch async rpc fail", KR(ret), K(req_start_lsn), K(upper_limit), KPC(cur_req_));
+    }
+  } else if (is_v2_fetch_log_protocol(cur_req_->get_proto_type())) {
+    if (OB_FAIL(launch_async_raw_file_rpc_(static_cast<RawLogFileRpcRequest&>(*cur_req_), req_start_lsn,
+      client_progress, false, rpc_send_succeed))) {
+      if (OB_EAGAIN != ret) {
+        LOG_ERROR("failed to launch raw file rpc", K(req_start_lsn), K(client_progress), KPC(cur_req_));
+      }
+    }
   } else {
-    // success
+    ret = OB_NOT_SUPPORTED;
   }
 
   return ret;
@@ -502,7 +507,7 @@ int64_t FetchLogARpc::get_flying_request_count()
 void FetchLogARpc::print_flying_request_list()
 {
   ObSpinLockGuard guard(lock_);
-  RpcRequest *req = flying_req_list_.head_;
+  FetchLogRpcReq *req = flying_req_list_.head_;
   int64_t index = 0;
   while (NULL != req) {
     LOG_INFO("[FLYING_RPC_REQUEST]", "fetch_stream", &host_, K_(svr), K(index), K(req), KPC(req));
@@ -548,8 +553,7 @@ void FetchLogARpc::stop()
   }
 }
 
-ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_TIME_OUT);
-int FetchLogARpc::next_result(FetchLogARpcResult *&result, bool &rpc_is_flying)
+int FetchLogARpc::next_result(FetchLogRpcResult *&result, bool &rpc_is_flying)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
@@ -586,17 +590,12 @@ int FetchLogARpc::next_result(FetchLogARpcResult *&result, bool &rpc_is_flying)
       }
     }
   }
-  if (OB_SUCC(ret) && (ERRSIM_FETCH_LOG_TIME_OUT)) {
-    process_errsim_code_(result);
-    LOG_TRACE("process errsim code");
-  }
   return ret;
 }
 
-void FetchLogARpc::revert_result(FetchLogARpcResult *result)
+void FetchLogARpc::revert_result(FetchLogRpcResult *result)
 {
   ObSpinLockGuard guard(lock_);
-
   if (OB_ISNULL(result_pool_)) {
     LOG_ERROR_RET(OB_INVALID_ARGUMENT, "invalid rpc result pool", K(result_pool_));
   } else if (OB_NOT_NULL(result)) {
@@ -617,8 +616,16 @@ int FetchLogARpc::update_request(const int64_t upper_limit,
     ret = OB_INVALID_ERROR;
   } else {
     // Update request parameters
-    cur_req_->update_request(upper_limit,
-        rpc_timeout);
+    if (is_v1_fetch_log_protocol(cur_req_->get_proto_type())) {
+      LogGroupEntryRpcRequest *log_group_entry_req = static_cast<LogGroupEntryRpcRequest*>(cur_req_);
+      if (OB_ISNULL(log_group_entry_req)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("failed to dynamic cast cur_req_ to log_group_entry_req", KPC(cur_req_));
+      } else {
+        log_group_entry_req->update_request(upper_limit, rpc_timeout);
+      }
+    }
+
   }
 
   return ret;
@@ -642,7 +649,7 @@ int FetchLogARpc::mark_request_stop()
   return ret;
 }
 
-int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
+int FetchLogARpc::handle_rpc_response(LogGroupEntryRpcRequest &rpc_req,
     const obrpc::ObRpcResultCode &rcode,
     const obrpc::ObCdcLSFetchLogResp *resp)
 {
@@ -676,7 +683,7 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
     }
   } else {
     bool need_stop_rpc = false;
-    RpcStopReason rpc_stop_reason = INVALID_REASON;
+    RpcStopReason rpc_stop_reason = RpcStopReason::INVALID_REASON;
     int64_t next_upper_limit = OB_INVALID_TIMESTAMP;
     palf::LSN req_start_lsn;
     // Timeout or rpc failed, resp is nullptr.
@@ -750,6 +757,60 @@ int FetchLogARpc::handle_rpc_response(RpcRequest &rpc_req,
   return ret;
 }
 
+int FetchLogARpc::handle_rpc_response(RawLogFileRpcRequest &request,
+    const bool need_lock)
+{
+  int ret = OB_SUCCESS;
+
+  if (need_lock) {
+    ObSpinLockGuard guard(lock_);
+    ret = handle_rpc_response_no_lock_(request);
+  } else {
+    ret = handle_rpc_response_no_lock_(request);
+  }
+
+  return ret;
+}
+
+
+int FetchLogARpc::split_rpc_request(RawLogFileRpcRequest &request)
+{
+  int ret = OB_SUCCESS;
+  LogFileDataBuffer *data_buf = nullptr;
+
+  if (OB_ISNULL(splitter_) || OB_ISNULL(log_file_pool_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("splitter or log_file_pool is null, unexpected", K(splitter_),
+        K(request), K(log_file_pool_));
+  } else if (OB_FAIL(splitter_->split(request))) {
+    LOG_ERROR("splitter failed to split rpc request", K(request), K(splitter_));
+  }
+  // must split first, if we get log_file_pool first,
+  // request.sub_rpc_req_count_ hasn't been determined
+  else if (OB_FAIL(log_file_pool_->get(request.sub_rpc_req_count_,
+      request.start_lsn_, &request, data_buf))) {
+    if (OB_EAGAIN != ret) {
+      LOG_ERROR("failed to get data_buf from log_file_pool", K(request));
+    } else {
+      LOG_INFO("no free data_buf in log_file_pool, need retry", K(request));
+    }
+  } else if (OB_ISNULL(data_buf)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("databuff in log file pool is null", K(data_buf));
+  } else {
+    request.buffer_ = data_buf;
+  }
+
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(request.revert_request_in_busy_list())) {
+      LOG_ERROR_RET(tmp_ret, "failed to revert request in busy_list");
+    }
+  }
+
+  return ret;
+}
+
 const char *FetchLogARpc::print_state(State state)
 {
   const char *str = "UNKNOWN";
@@ -767,25 +828,22 @@ const char *FetchLogARpc::print_state(State state)
   return str;
 }
 
-ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)
-int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
+int FetchLogARpc::alloc_log_group_entry_rpc_request_(const ObLSID &ls_id,
     const int64_t rpc_timeout,
-    RpcRequest *&req)
+    FetchLogRpcReq *&req)
 {
   int ret = OB_SUCCESS;
-  int64_t size = sizeof(RpcRequest);
+  int64_t size = sizeof(LogGroupEntryRpcRequest);
   void *buf = NULL;
   ObMemAttr attr(self_tenant_id_, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST);
 
   if (OB_UNLIKELY(! ls_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid ls_id", KR(ret), K(ls_id));
-  } else if (OB_FAIL(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)) {
-    LOG_ERROR("ALLOC_FETCH_LOG_ARPC_REQ_FAIL");
   } else if (OB_ISNULL(buf = ob_malloc(size, attr))) {
     LOG_ERROR("allocate memory for RpcRequest fail", K(size));
     ret = OB_ALLOCATE_MEMORY_FAILED;
-  } else if (OB_ISNULL(req = new(buf) RpcRequest(*this, ls_id, rpc_timeout))) {
+  } else if (OB_ISNULL(req = new(buf) LogGroupEntryRpcRequest(*this, ls_id, rpc_timeout))) {
     LOG_ERROR("construct RpcRequest fail", K(buf), K(req));
     ret = OB_ALLOCATE_MEMORY_FAILED;
   } else {
@@ -795,16 +853,46 @@ int FetchLogARpc::alloc_rpc_request_(const ObLSID &ls_id,
   return ret;
 }
 
-void FetchLogARpc::free_rpc_request_(RpcRequest *request)
+int FetchLogARpc::alloc_raw_log_file_rpc_request_(const ObLSID &ls_id,
+    const int64_t rpc_timeout,
+    FetchLogRpcReq *&req)
+{
+  int ret = OB_SUCCESS;
+
+  int64_t size = sizeof(RawLogFileRpcRequest);
+  void *buf = NULL;
+  ObMemAttr attr(self_tenant_id_, ObModIds::OB_LOG_FETCH_LOG_ARPC_REQUEST);
+
+  if (OB_UNLIKELY(! ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid ls_id", KR(ret), K(ls_id));
+// #ifdef ERRSIM
+  } else if (OB_FAIL(ALLOC_FETCH_LOG_ARPC_REQ_FAIL)) {
+    LOG_ERROR("ALLOC_FETCH_LOG_ARPC_REQ_FAIL");
+// #endif
+  } else if (OB_ISNULL(buf = ob_malloc(size, attr))) {
+    LOG_ERROR("allocate memory for RpcRequest fail", K(size));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_ISNULL(req = new(buf) RawLogFileRpcRequest(*this, ls_id, rpc_timeout))) {
+    LOG_ERROR("construct RpcRequest fail", K(buf), K(req));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    // success
+  }
+
+  return ret;
+}
+
+void FetchLogARpc::free_rpc_request_(FetchLogRpcReq *request)
 {
   if (OB_NOT_NULL(request)) {
-    request->~RpcRequest();
+    request->~FetchLogRpcReq();
     ob_free(request);
     request = NULL;
   }
 }
 
-int FetchLogARpc::generate_rpc_result_(RpcRequest &rpc_req,
+int FetchLogARpc::generate_rpc_result_(LogGroupEntryRpcRequest &rpc_req,
     const obrpc::ObRpcResultCode &rcode,
     const obrpc::ObCdcLSFetchLogResp *resp,
     const int64_t rpc_callback_start_time,
@@ -813,7 +901,7 @@ int FetchLogARpc::generate_rpc_result_(RpcRequest &rpc_req,
     bool &need_dispatch_stream_task)
 {
   int ret = OB_SUCCESS;
-  FetchLogARpcResult *result = NULL;
+  LogGroupEntryRpcResult *result = NULL;
   bool is_state_idle = false;
   int64_t rpc_start_time = rpc_req.get_rpc_start_time();
   const common::ObCurTraceId::TraceId &trace_id = rpc_req.get_trace_id();
@@ -855,7 +943,86 @@ int FetchLogARpc::generate_rpc_result_(RpcRequest &rpc_req,
   return ret;
 }
 
-void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
+int FetchLogARpc::handle_rpc_response_no_lock_(RawLogFileRpcRequest &request)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t start_proc_time = get_timestamp();
+  ObLogTraceIdGuard guard(request.get_trace_id());
+
+  // revert sub rpc req in busy list anyway, these sub rpc req are not busy;
+  // when there is no busy sub rpc req, the main request could be destroyed safely
+  // without memleak
+  if (OB_TMP_FAIL(request.revert_request_in_busy_list())) {
+    LOG_ERROR_RET(tmp_ret, "failed to revert request in busy list");
+  }
+
+  if (OB_ISNULL(stream_worker_)) {
+    LOG_ERROR("invalid stream worker", K(stream_worker_));
+    ret = OB_INVALID_ERROR;
+  } else if (NULL == cur_req_ || cur_req_ != &request) {
+    // RPC requests have been deprecated
+    LOG_INFO("rpc request has been discarded", K_(svr),
+        "fetch_stream", &host_, K(request), KPC(cur_req_));
+
+    // Try to find the corresponding RPC request structure, then destroy the
+    if (OB_FAIL(destroy_flying_request_(&request))) {
+      LOG_ERROR("destroy_flying_request_ fail", KR(ret), K(request));
+    }
+  } else  {
+    bool need_stop_rpc = false;
+    RpcStopReason reason = RpcStopReason::INVALID_REASON;
+    bool need_dispatch_stream_task = false;
+    palf::LSN next_req_lsn;
+    if (OB_FAIL(generate_rpc_result_(request, start_proc_time, need_stop_rpc, reason,
+        need_dispatch_stream_task, next_req_lsn))) {
+      LOG_ERROR("failed to generate rpc result", K(request), K(need_stop_rpc), K(reason), K(start_proc_time));
+    } else {
+      if (need_stop_rpc) {
+        request.mark_flying_state(false);
+      } else {
+        bool rpc_send_succeed = false;
+        int64_t progress = OB_INVALID_TIMESTAMP;
+        // Launch the next RPC
+        if (OB_FAIL(host_.get_progress(progress))) {
+          LOG_ERROR("failed to get progress from host", K(host_));
+        } else if (OB_FAIL(launch_async_raw_file_rpc_(request, next_req_lsn, progress, true, rpc_send_succeed))) {
+          if (OB_EAGAIN != ret) {
+            LOG_ERROR("launch_async_rpc_ fail", KR(ret), K(request), K(next_req_lsn), K(progress));
+          } else {
+            ret = OB_SUCCESS;
+            request.mark_flying_state(false);
+            LOG_INFO("not enough LogFileDataBuffer, stop launch rpc");
+          }
+        }
+      }
+
+      if (OB_SUCC(ret) && need_dispatch_stream_task) {
+        if (OB_FAIL(stream_worker_->dispatch_stream_task(host_, "RawLogRpcCallback"))) {
+          LOG_ERROR("dispatch stream task fail", KR(ret));
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      request.mark_flying_state(false);
+      if (need_dispatch_stream_task || IDLE == state_) {
+        if (IDLE == state_) {
+          host_.switch_state(FetchStream::State::IDLE);
+        }
+        if (OB_TMP_FAIL(stream_worker_->dispatch_stream_task(host_, "FailPostProcess"))) {
+          LOG_ERROR_RET(tmp_ret, "dispatch stream task fail", KR(ret));
+        }
+      }
+      LOG_ERROR("handle_rpc_response failed, need reschedule", K(need_dispatch_stream_task), K(state_));
+    }
+  }
+
+  return ret;
+}
+
+void FetchLogARpc::print_handle_info_(LogGroupEntryRpcRequest &rpc_req,
     const obrpc::ObCdcLSFetchLogResp *resp,
     const int64_t next_upper_limit,
     const bool need_stop_rpc,
@@ -894,16 +1061,81 @@ void FetchLogARpc::print_handle_info_(RpcRequest &rpc_req,
   }
 }
 
-void FetchLogARpc::process_errsim_code_(FetchLogARpcResult *result)
+int FetchLogARpc::launch_async_raw_file_rpc_(RawLogFileRpcRequest &request,
+    const palf::LSN &req_start_lsn,
+    const int64_t progress,
+    const bool launch_by_cb,
+    bool &rpc_send_succeed)
 {
-  if (ERRSIM_FETCH_LOG_TIME_OUT) {
-    result->rcode_.rcode_ = ERRSIM_FETCH_LOG_TIME_OUT;
-    result->trace_id_ = *ObCurTraceId::get_trace_id();
-    LOG_TRACE("errsim fetch log time out", K(result));
+  int ret = OB_SUCCESS;
+
+  rpc_send_succeed = false;
+
+  if (OB_ISNULL(rpc_)) {
+    ret = OB_INVALID_ERROR;
+    LOG_ERROR("invalid handlers", K(rpc_));
+  } else if (OB_FAIL(request.prepare(self_tenant_id_, req_start_lsn, progress))) {
+    if (OB_EAGAIN != ret) {
+      LOG_ERROR("raw log file request failed to prepare", K(self_tenant_id_), K(req_start_lsn), K(progress));
+    } else {
+      LOG_INFO("not enough buffer, need retry", K(self_tenant_id_), K(req_start_lsn), K(progress));
+    }
+  } else {
+    ObLogTraceIdGuard guard(request.get_trace_id());
+    ObSEArray<RawLogDataRpcRequest* , RawLogFileRpcRequest::MAX_SEND_REQ_CNT> failed_list;
+    obrpc::ObRpcResultCode first_fail_rcode;
+    _LOG_TRACE("launch async fetch log rpc by %s, request=%s",
+        launch_by_cb ? "callback" : "fetch stream", to_cstring(request));
+
+    request.mark_flying_state(true);
+    rpc_send_succeed = true;
+
+
+    DLIST_FOREACH(sub_req, request.busy_list_) {
+      if (OB_ISNULL(sub_req)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("sub request is null, unexpected", K(sub_req));
+      }
+      // TODO: assume the process above never fails, it's not able to recover when the process above failed
+      else if (OB_FAIL(first_fail_rcode.rcode_)) {
+        LOG_WARN("rpc send error previously, skip send rpc, generate error resp", K(first_fail_rcode));
+// #ifdef ERRSIM
+      } else if (OB_FAIL(ERRSIM_SEND_FETCH_RAW_LOG_REQ_FAIL)) {
+        LOG_WARN("ERRSIM: ERRSIM_SEND_FETCH_RAW_LOG_REQ_FAIL", K(request));
+// #endif
+      } else if (OB_FAIL(rpc_->async_stream_fetch_raw_log(source_tenant_id_, svr_, sub_req->req_, sub_req->cb_, request.rpc_timeout_))) {
+        LOG_ERROR("failed to send rpc to fetch raw log", K(source_tenant_id_), K(svr_), KPC(sub_req));
+      }
+
+      if (OB_FAIL(ret)) {
+        // overwrite ret here, for complete rpc req send process
+        first_fail_rcode.rcode_ = ret;
+        (void) snprintf(first_fail_rcode.msg_, sizeof(first_fail_rcode.msg_),
+            "send async stream fetch raw log rpc fail");
+        if (OB_FAIL(failed_list.push_back(sub_req))) {
+          LOG_ERROR("failed list failed to add failed sub_req", KPC(sub_req), K(failed_list));
+        }
+      }
+    }
+
+    ARRAY_FOREACH_NORET(failed_list, idx) {
+      // Mustn't unlock the lock_ before handle_sub_rpc_response and lock the lock_ after handle_sub_rpc_response,
+      // the request would not be freed under the protection of the lock_, once the lock_ in unlocked,
+      // the LSWorker may call discard_request, and the request could be freed in handle_sub_rpc_response,
+      // so that the subsequent access of request would be illegal thus cause coredump.
+      RawLogDataRpcRequest *sub_req = failed_list.at(idx);
+      // overwrite ret
+      if (OB_FAIL(request.handle_sub_rpc_response(*sub_req, first_fail_rcode, nullptr, false))) {
+        LOG_WARN("failed to handle sub rpc response", K(first_fail_rcode));
+      }
+    }
   }
+
+
+  return ret;
 }
 
-int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
+int FetchLogARpc::launch_async_rpc_(LogGroupEntryRpcRequest &rpc_req,
     const palf::LSN &req_start_lsn,
     const int64_t progress,
     const int64_t upper_limit,
@@ -933,7 +1165,15 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
     rpc_req.mark_flying_state(true);
 
     // Sending the asynchronous RPC
+// #ifdef ERRSIM
+    if (OB_FAIL(ERRSIM_SEND_FETCH_LOG_REQ_FAIL)) {
+      LOG_WARN("ERRSIM: ERRSIM_SEND_FETCH_LOG_REQ_FAIL", K(ERRSIM_SEND_FETCH_LOG_REQ_FAIL));
+    } else {
+// #endif
     ret = rpc_->async_stream_fetch_log(source_tenant_id_, svr_, rpc_req.req_, rpc_req.cb_, rpc_req.rpc_timeout_);
+// #ifdef ERRSIM
+    }
+// #endif
 
     if (OB_SUCC(ret)) {
       // RPC sent successfully
@@ -961,7 +1201,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
 
       // RPC send failure, uniformly considered to be a problem of the observer, directly generated RPC results
       bool rpc_stopped = true;
-      RpcStopReason reason = FETCH_LOG_FAIL;
+      RpcStopReason reason = RpcStopReason::FETCH_LOG_FAIL;
       // Note: No need to process the return value here: need_dispatch_stream_task
       // This function initiates the RPC request, and only determines whether the dispatch task is needed
       // when the RPC result is processed by the asynchronous callback
@@ -976,7 +1216,7 @@ int FetchLogARpc::launch_async_rpc_(RpcRequest &rpc_req,
   return ret;
 }
 
-int FetchLogARpc::push_result_and_be_ready_(FetchLogARpcResult *result, bool &is_state_idle)
+int FetchLogARpc::push_result_and_be_ready_(FetchLogRpcResult *result, bool &is_state_idle)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(result)) {
@@ -995,13 +1235,11 @@ int FetchLogARpc::push_result_and_be_ready_(FetchLogARpcResult *result, bool &is
   return ret;
 }
 
-int FetchLogARpc::pop_result_(FetchLogARpcResult *&result)
+int FetchLogARpc::pop_result_(FetchLogRpcResult *&result)
 {
   int ret = OB_SUCCESS;
-  void *data = NULL;
 
-  ret = res_queue_.pop(data);
-  result = static_cast<FetchLogARpcResult *>(data);
+  ret = res_queue_.pop(result);
 
   if (OB_SUCCESS == ret) {
     // success
@@ -1018,7 +1256,7 @@ int FetchLogARpc::pop_result_(FetchLogARpcResult *&result)
 void FetchLogARpc::clear_result_()
 {
   int ret = OB_SUCCESS;
-  void *data = NULL;
+  FetchLogRpcResult *data = NULL;
 
   // Empty the data when the queue is not empty
   if (res_queue_.count() > 0) {
@@ -1028,10 +1266,9 @@ void FetchLogARpc::clear_result_()
       LOG_ERROR("invalid rpc result pool, can not clear results", KR(ret), K(result_pool_));
     } else {
       while (OB_SUCC(res_queue_.pop(data))) {
-        FetchLogARpcResult *result = static_cast<FetchLogARpcResult *>(data);
-        if (OB_NOT_NULL(result)) {
-          result_pool_->free(result);
-          result = NULL;
+        if (OB_NOT_NULL(data)) {
+          result_pool_->free(data);
+          data = NULL;
         }
         data = NULL;
       }
@@ -1042,7 +1279,7 @@ void FetchLogARpc::clear_result_()
   (void)ATOMIC_SET(&state_, IDLE);
 }
 
-int FetchLogARpc::destroy_flying_request_(RpcRequest *target_request)
+int FetchLogARpc::destroy_flying_request_(FetchLogRpcReq *target_request)
 {
   int ret = OB_SUCCESS;
 
@@ -1061,7 +1298,87 @@ int FetchLogARpc::destroy_flying_request_(RpcRequest *target_request)
   return ret;
 }
 
-int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
+int FetchLogARpc::generate_rpc_result_(RawLogFileRpcRequest &rpc_req,
+    const int64_t rpc_callback_start_time,
+    bool &need_stop_rpc,
+    RpcStopReason &rpc_stop_reason,
+    bool &need_dispatch_stream_task,
+    palf::LSN &next_req_lsn)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+
+  RawLogFileRpcResult *result = nullptr;
+  const int64_t rpc_result_count_per_rpc_upper_limit =
+      ATOMIC_LOAD(&g_rpc_result_count_per_rpc_upper_limit) / 4;
+  const int64_t res_queue_cnt = res_queue_.count();
+  bool is_state_idle = false;
+
+  need_stop_rpc = false;
+  rpc_stop_reason = RpcStopReason::INVALID_REASON;
+
+  if (OB_ISNULL(result_pool_) || OB_ISNULL(splitter_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid result pool or splitter", K(result_pool_), K(splitter_));
+  } else if (OB_FAIL(result_pool_->alloc(result))) {
+    LOG_ERROR("failed to allocate raw log data protocol result");
+  } else if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get null RawLogFileRpcResult, unexpected", K(result));
+  } else if (OB_ISNULL(rpc_req.buffer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("buffer in rpc_req is null");
+  } else {
+    int32_t cur_valid_rpc_cnt = RawLogFileRpcRequest::MAX_SEND_REQ_CNT;
+    next_req_lsn.reset();
+    result->trace_id_ = rpc_req.get_trace_id();
+    if (OB_FAIL(result->generate_result_from_data(rpc_req.buffer_))) {
+      LOG_ERROR("failed to get data", K(result));
+    } else if (! result->is_readable_) {
+      need_stop_rpc = true;
+      rpc_stop_reason = RpcStopReason::RESULT_NOT_READABLE;
+    } else {
+      if (get_fetch_log_proto() != rpc_req.get_proto_type()) {
+        need_stop_rpc = true;
+        rpc_stop_reason = RpcStopReason::RPC_PROTO_NOT_MATCH;
+      } else if (0 >= result->data_len_) {
+        need_stop_rpc = true;
+        rpc_stop_reason = RpcStopReason::FETCH_NO_LOG;
+      } else if (result->is_active_) {
+        need_stop_rpc = true;
+        rpc_stop_reason = RpcStopReason::REACH_MAX_LOG;
+      } else if (res_queue_cnt >= rpc_result_count_per_rpc_upper_limit) {
+        need_stop_rpc = true;
+        rpc_stop_reason = RpcStopReason::REACH_MAX_RPC_RESULT;
+      } else {
+        next_req_lsn = rpc_req.start_lsn_ + result->data_len_;
+      }
+      cur_valid_rpc_cnt = max(1, result->valid_rpc_cnt_);
+    }
+
+    if (OB_SUCC(ret)) {
+      const int64_t cur_time = get_timestamp();
+      result->rpc_stop_upon_result_ = need_stop_rpc;
+      result->rpc_stop_reason_ = rpc_stop_reason;
+      result->rpc_time_ = cur_time - rpc_req.rpc_start_time_;
+      result->rpc_callback_time_ = cur_time - rpc_callback_start_time;
+      result->rpc_prepare_time_ = rpc_req.prepare_end_time_ - rpc_req.rpc_start_time_;
+      if (OB_FAIL(splitter_->update_stat(cur_valid_rpc_cnt))) {
+        LOG_ERROR("failed to update splitter stat", K(result));
+      } else if (OB_FAIL(push_result_and_be_ready_(result, need_dispatch_stream_task))) {
+        LOG_ERROR("push result and be ready fail", KPC(result));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(result_pool_) && OB_NOT_NULL(result)) {
+    result_pool_->free(result);
+  }
+
+  return ret;
+}
+
+int FetchLogARpc::analyze_result_(LogGroupEntryRpcRequest &rpc_req,
     const obrpc::ObRpcResultCode &rcode,
     const obrpc::ObCdcLSFetchLogResp *resp,
     bool &need_stop_rpc,
@@ -1076,21 +1393,21 @@ int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
   bool force_stop_rpc = rpc_req.get_stop_flag();
 
   need_stop_rpc = false;
-  rpc_stop_reason = INVALID_REASON;
+  rpc_stop_reason = RpcStopReason::INVALID_REASON;
   next_upper_limit = rpc_req.get_upper_limit();
 
   // If the RPC send fails, or the server returns a failure, there is no need to continue fetching logs
   if (OB_SUCCESS != rcode.rcode_ || NULL == resp || OB_SUCCESS != resp->get_err()) {
     need_stop_rpc = true;
-    rpc_stop_reason = FETCH_LOG_FAIL;
+    rpc_stop_reason = RpcStopReason::FETCH_LOG_FAIL;
   } else if (reach_max_rpc_result) {
     // If the number of RPC results reaches the threshold, stop sending RPCs
     need_stop_rpc = true;
-    rpc_stop_reason = REACH_MAX_RPC_RESULT;
+    rpc_stop_reason = RpcStopReason::REACH_MAX_RPC_RESULT;
   } else if (force_stop_rpc) {
     // External forced stop RPC
     need_stop_rpc = true;
-    rpc_stop_reason = FORCE_STOP_RPC;
+    rpc_stop_reason = RpcStopReason::FORCE_STOP_RPC;
   } else {
     const int64_t last_upper_limit = rpc_req.get_upper_limit();
     const ObCdcFetchStatus &fetch_status = resp->get_fetch_status();
@@ -1103,9 +1420,16 @@ int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
     bool fetch_no_log = (resp->get_log_num() <= 0);
 
     // If the LS have reached the maximum log, there is no need to continue fetching logs
-    if (is_reach_max_lsn) {
+    if (get_fetch_log_proto() != rpc_req.get_proto_type()) {
       need_stop_rpc = true;
-      rpc_stop_reason = REACH_MAX_LOG;
+      rpc_stop_reason = RpcStopReason::RPC_PROTO_NOT_MATCH;
+    } else if (fetch_no_log) {
+      // No logs need to be fetched next time, if no logs are fetched
+      need_stop_rpc = true;
+      rpc_stop_reason = RpcStopReason::FETCH_NO_LOG;
+    } else if (is_reach_max_lsn) {
+      need_stop_rpc = true;
+      rpc_stop_reason = RpcStopReason::REACH_MAX_LOG;
     } else if (is_reach_upper_limit_ts) {
       // For LS that have reached their upper limit, get the latest upper limit
       // Decide whether to continue to send RPC by whether the upper limit has changed
@@ -1113,333 +1437,16 @@ int FetchLogARpc::analyze_result_(RpcRequest &rpc_req,
         LOG_ERROR("get upper limit fail", KR(ret));
       } else {
         need_stop_rpc = (next_upper_limit <= last_upper_limit);
-        rpc_stop_reason = REACH_UPPER_LIMIT;
+        rpc_stop_reason = RpcStopReason::REACH_UPPER_LIMIT;
       }
-    } else if (fetch_no_log) {
-      // No logs need to be fetched next time, if no logs are fetched
-      need_stop_rpc = true;
-      rpc_stop_reason = FETCH_NO_LOG;
     } else {
       // The logs are requested to continue to be fetched in all other cases
       need_stop_rpc = false;
-      rpc_stop_reason = INVALID_REASON;
+      rpc_stop_reason = RpcStopReason::INVALID_REASON;
     }
   }
 
   return ret;
-}
-
-///////////////////////////// FetchLogARpc::RpcCB /////////////////////////
-ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_CB_FAIL);
-rpc::frame::ObReqTransport::AsyncCB *FetchLogARpc::RpcCB::clone(const rpc::frame::SPAlloc &alloc) const
-{
-  return static_cast<rpc::frame::ObReqTransport::AsyncCB *>(const_cast<FetchLogARpc::RpcCB*>(this));
-}
-
-int FetchLogARpc::RpcCB::process()
-{
-  int ret = OB_SUCCESS;
-  ObCdcLSFetchLogResp &result = RpcCBBase::result_;
-  const ObRpcResultCode rcode = RpcCBBase::rcode_;
-  const common::ObAddr svr = RpcCBBase::dst_;
-
-  if (OB_FAIL(do_process_(rcode, &result))) {
-    LOG_ERROR("process fetch log callback fail", KR(ret), K(rcode), K(svr));
-  }
-  // Aone:
-  // Note: Active destructe response after asynchronous RPC processing
-  // result.reset();
-
-  return ret;
-}
-
-void FetchLogARpc::RpcCB::on_timeout()
-{
-  int ret = OB_SUCCESS;
-  ObRpcResultCode rcode;
-  const common::ObAddr svr = RpcCBBase::dst_;
-
-  rcode.rcode_ = OB_TIMEOUT;
-  (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "fetch log rpc timeout, svr=%s",
-      to_cstring(svr));
-
-  if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on timeout fail", KR(ret), K(rcode), K(svr));
-  }
-}
-
-void FetchLogARpc::RpcCB::on_invalid()
-{
-  int ret = OB_SUCCESS;
-  ObRpcResultCode rcode;
-  const common::ObAddr svr = RpcCBBase::dst_;
-
-  // Invalid package encountered, decode failed
-  rcode.rcode_ = OB_RPC_PACKET_INVALID;
-  (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
-      "fetch log rpc response packet is invalid, svr=%s",
-      to_cstring(svr));
-
-  if (OB_FAIL(do_process_(rcode, NULL))) {
-    LOG_ERROR("process fetch log callback on invalid fail", KR(ret), K(rcode), K(svr));
-  }
-}
-
-int FetchLogARpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLSFetchLogResp *resp)
-{
-  int ret = OB_SUCCESS;
-  RpcRequest &rpc_req = host_;
-  FetchLogARpc &rpc_host = rpc_req.host_;
-
-  if (OB_FAIL(rpc_host.handle_rpc_response(rpc_req, rcode, resp))) {
-    LOG_ERROR("set fetch log response fail", KR(ret), K(rcode));
-  } else {
-    // success
-  }
-  return ret;
-}
-
-///////////////////////////// FetchLogARpc::RpcRequest /////////////////////////
-
-FetchLogARpc::RpcRequest::RpcRequest(FetchLogARpc &host,
-    const ObLSID &ls_id,
-    const int64_t rpc_timeout) :
-    host_(host),
-    cb_(*this),
-    rpc_timeout_(rpc_timeout),
-    req_(),
-    trace_id_(),
-    next_(NULL),
-    force_stop_flag_(false),
-    rpc_start_time_(OB_INVALID_TIMESTAMP),
-    rpc_is_flying_(false)
-{
-  // Initializing the request
-   req_.set_ls_id(ls_id);
-}
-
-void FetchLogARpc::RpcRequest::update_request(const int64_t upper_limit,
-    const int64_t rpc_timeout)
-{
-  req_.set_upper_limit_ts(upper_limit);
-  rpc_timeout_ = rpc_timeout;
-}
-
-int FetchLogARpc::RpcRequest::prepare(
-    const palf::LSN &req_start_lsn,
-    const int64_t upper_limit,
-    const int64_t progress)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(! req_start_lsn.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KR(ret), K(req_start_lsn));
-  } else {
-    req_.set_client_pid(static_cast<uint64_t>(getpid()));
-    req_.set_progress(progress);
-    // set start lsn
-    req_.set_start_lsn(req_start_lsn);
-    // set request parameter: upper limit
-    // upper limit may need reset before rpc send, thus value of upper limit should be provided dynamicly
-    //
-    // Set request parameter: upper limit
-    req_.set_upper_limit_ts(upper_limit);
-
-    // Update the next round of RPC trace id
-    trace_id_.init(get_self_addr());
-
-    // Update request time
-    rpc_start_time_ = get_timestamp();
-
-    // reset stop flag
-    force_stop_flag_ = false;
-  }
-
-  return ret;
-}
-
-void FetchLogARpc::RpcRequest::mark_flying_state(const bool is_flying)
-{
-  ATOMIC_SET(&rpc_is_flying_, is_flying);
-}
-
-////////////////////////////// RpcRequestList //////////////////////////////
-
-void FetchLogARpc::RpcRequestList::add(RpcRequest *req)
-{
-  if (OB_NOT_NULL(req)) {
-    req->next_ = NULL;
-
-    if (NULL == head_) {
-      head_ = req;
-      tail_ = req;
-    } else {
-      tail_->next_ = req;
-      // fix
-      tail_ = req;
-    }
-
-    count_++;
-  }
-}
-
-int FetchLogARpc::RpcRequestList::remove(RpcRequest *target)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(target)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    bool found = false;
-    RpcRequest *pre_request = NULL;
-    RpcRequest *request = head_;
-
-    // Find the matching request structure
-    while (NULL != request && ! found) {
-      if (target == request) {
-        found = true;
-      } else {
-        pre_request = request;
-        request = request->next_;
-      }
-    }
-
-    if (found) {
-      // Delete the corresponding node
-      if (NULL == pre_request) {
-        head_ = target->next_;
-        if (target == tail_) {
-          tail_ = head_;
-        }
-      } else {
-        pre_request->next_ = target->next_;
-        if (target == tail_) {
-          tail_ = pre_request;
-        }
-      }
-
-      count_--;
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-
-  return ret;
-}
-
-
-////////////////////////////// FetchLogARpcResult //////////////////////////////
-
-int FetchLogARpcResult::set(const obrpc::ObRpcResultCode &rcode,
-    const obrpc::ObCdcLSFetchLogResp *resp,
-    const common::ObCurTraceId::TraceId &trace_id,
-    const int64_t rpc_start_time,
-    const int64_t rpc_callback_start_time,
-    const bool rpc_stop_upon_result,
-    const FetchLogARpc::RpcStopReason rpc_stop_reason)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
-    LOG_ERROR("invalid fetch log response", K(rcode), K(resp));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_UNLIKELY(rpc_start_time <= 0) || OB_UNLIKELY(rpc_callback_start_time <= 0)) {
-    LOG_ERROR("invalid argument", K(rpc_start_time), K(rpc_callback_start_time));
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    rcode_ = rcode;
-    trace_id_ = trace_id;
-
-    // The result is valid when no error occurs
-    if (OB_SUCCESS == rcode.rcode_) {
-      if (OB_FAIL(resp_.assign(*resp))) {
-        LOG_ERROR("assign new fetch log resp fail", KR(ret), KPC(resp), K(resp_));
-      }
-    } else {
-      resp_.reset();
-    }
-  }
-
-  // After setting all the result items, only then start setting the statistics items,
-  // because the results need a memory copy and this time must be considered
-  if (OB_SUCCESS == ret) {
-    int64_t rpc_end_time = get_timestamp();
-
-    rpc_time_ = rpc_end_time - rpc_start_time;
-    rpc_callback_time_ = rpc_end_time - rpc_callback_start_time;
-    rpc_stop_upon_result_ = rpc_stop_upon_result;
-    rpc_stop_reason_ = rpc_stop_reason;
-  }
-
-  return ret;
-}
-
-////////////////////////////// FetchLogARpcResult Object Pool //////////////////////////////
-
-int FetchLogARpcResultPool::init(const uint64_t tenant_id, const int64_t cached_obj_count)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_ERROR("init twice");
-  } else if (OB_FAIL(pool_.init(cached_obj_count,
-      ObModIds::OB_LOG_FETCH_LOG_ARPC_RESULT,
-      tenant_id,
-      DEFAULT_RESULT_POOL_BLOCK_SIZE))) {
-    LOG_ERROR("init result obj pool fail", KR(ret), K(tenant_id), K(cached_obj_count));
-  } else {
-    inited_ = true;
-    LOG_INFO("FetchLogARpcResultPool init succ", K(tenant_id), K(cached_obj_count));
-  }
-
-  return ret;
-}
-
-void FetchLogARpcResultPool::destroy()
-{
-  inited_ = false;
-  pool_.destroy();
-}
-
-void FetchLogARpcResultPool::print_stat()
-{
-  const int64_t alloc_count = pool_.get_alloc_count();
-  const int64_t free_count = pool_.get_free_count();
-  const int64_t fixed_count = pool_.get_fixed_count();
-  const int64_t used_count = alloc_count - free_count;
-  const int64_t dynamic_count = (alloc_count > fixed_count) ? alloc_count - fixed_count : 0;
-  const int64_t cached_total_count = pool_.get_cached_total_count();
-
-  _LOG_INFO("[STAT] [RPC_RESULT_POOL] USED=%ld ALLOC=%ld FREE=%ld FIXED=%ld DYNAMIC=%ld CACHED_TOTAL_COUNT=%ld",
-      used_count, alloc_count, free_count, fixed_count, dynamic_count, cached_total_count);
-}
-
-ERRSIM_POINT_DEF(ALLOC_FETCH_LOG_ARPC_RESULT_FAIL)
-int FetchLogARpcResultPool::alloc(FetchLogARpcResult *&result)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(! inited_)) {
-    ret = OB_NOT_INIT;
-  } else if (OB_FAIL(ALLOC_FETCH_LOG_ARPC_RESULT_FAIL)) {
-  } else {
-    ret = pool_.alloc(result);
-  }
-  return ret;
-}
-
-void FetchLogARpcResultPool::free(FetchLogARpcResult *result)
-{
-  int ret = OB_SUCCESS;
-  if (OB_LIKELY(inited_) && OB_NOT_NULL(result)) {
-    result->reset();
-    if (OB_FAIL(pool_.free(result))) {
-      LOG_ERROR("free result into pool fail", KR(ret), K(result));
-    } else {
-      result = NULL;
-    }
-  }
 }
 
 }

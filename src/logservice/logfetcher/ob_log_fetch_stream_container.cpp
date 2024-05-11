@@ -44,11 +44,13 @@ void FetchStreamContainer::reset()
   free_fs_list_();
 
   stype_ = FETCH_STREAM_TYPE_UNKNOWN;
+  proto_type_ = obrpc::ObCdcFetchLogProtocolType::LogGroupEntryProto;
   self_tenant_id_ = OB_INVALID_TENANT_ID;
 
   rpc_ = NULL;
   fs_pool_ = NULL;
   stream_worker_ = NULL;
+  log_file_pool_ = NULL;
   rpc_result_pool_ = NULL;
   progress_controller_ = NULL;
   log_handler_ = NULL;
@@ -61,7 +63,8 @@ void FetchStreamContainer::reset(const FetchStreamType stype,
     IObLogRpc &rpc,
     IFetchStreamPool &fs_pool,
     IObLSWorker &stream_worker,
-    IFetchLogARpcResultPool &rpc_result_pool,
+    LogFileDataBufferPool &log_file_pool,
+    FetchLogRpcResultPool &rpc_result_pool,
     PartProgressController &progress_controller,
     ILogFetcherHandler &log_handler)
 {
@@ -72,6 +75,7 @@ void FetchStreamContainer::reset(const FetchStreamType stype,
   rpc_ = &rpc;
   fs_pool_ = &fs_pool;
   stream_worker_ = &stream_worker;
+  log_file_pool_ = &log_file_pool;
   rpc_result_pool_ = &rpc_result_pool;
   progress_controller_ = &progress_controller;
   log_handler_ = &log_handler;
@@ -105,6 +109,17 @@ void FetchStreamContainer::do_stat()
     if (fs->get_fetch_task_count() > 0) {
       fs->do_stat();
     }
+    fs = fs->get_next();
+  }
+}
+
+void FetchStreamContainer::update_fetch_stream_proto(const obrpc::ObCdcFetchLogProtocolType proto)
+{
+  SpinRLockGuard guard(lock_);
+  proto_type_ = proto;
+  FetchStream *fs = fs_list_.head();
+  while (NULL != fs) {
+    fs->set_fetch_log_proto(proto);
     fs = fs->get_next();
   }
 }
@@ -189,11 +204,14 @@ int FetchStreamContainer::alloc_fetch_stream_(
         *rpc_,
         *stream_worker_,
         *rpc_result_pool_,
+        *log_file_pool_,
         *progress_controller_,
         *log_handler_))) {
     LOG_ERROR("FetchStream init failed", KR(ret), K(ls_fetch_ctx), K(fs), KPC(fs));
   } else {
-    LOG_INFO("[STAT] [FETCH_STREAM_CONTAINER] [ALLOC_FETCH_STREAM]", K(fs), KPC(fs));
+    // protected under lock
+    fs->set_fetch_log_proto(proto_type_);
+    LOG_INFO("[STAT] [FETCH_STREAM_CONTAINER] [ALLOC_FETCH_STREAM]", K(fs), KPC(fs), K(proto_type_));
   }
 
   return ret;

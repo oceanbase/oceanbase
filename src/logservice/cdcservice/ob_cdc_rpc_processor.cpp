@@ -117,7 +117,7 @@ int ObCdcFetchRawLogP::process()
     set_result_compress_type(req.get_compressor_type());
     ret = cdc_service->fetch_raw_log(req, resp, get_send_timestamp(), get_receive_timestamp());
   }
-  return ret;
+  return OB_SUCCESS;
 }
 
 } // namespace obrpc
