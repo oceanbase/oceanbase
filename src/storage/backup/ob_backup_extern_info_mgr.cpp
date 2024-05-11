@@ -449,7 +449,7 @@ int ObExternTabletMetaWriter::close()
       LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
     }
   } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }
