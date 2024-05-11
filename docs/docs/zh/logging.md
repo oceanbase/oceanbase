@@ -1,4 +1,8 @@
-# OceanBase System Log Introduction
+---
+title: OceanBase 系统日志介绍
+---
+
+# OceanBase 系统日志介绍
 
 ## Introduction
 
