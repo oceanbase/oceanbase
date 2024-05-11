@@ -1,3 +1,7 @@
+---
+title: IDE 配置
+---
+
 # 背景
 
 为了更好的阅读OceanBase的代码，我们建议使用一个可以方便的索引OceanBase代码的IDE。在Windows下，我们推荐使用`Source Insight`，在Mac或者Linux下，我们推荐使用`VSCode + ccls`来阅读OceanBase的代码。由于`Source Insight`使用起来非常简单，所以本文档不介绍如何使用`Source Insight`。
