@@ -707,12 +707,10 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 false, // false mean not first update plan stat
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         } else if (sql_ctx.self_add_plan_ && !sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 true,
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         }
       }

@@ -3991,7 +3991,7 @@ int ObSql::execute_get_plan(ObPlanCache &plan_cache,
       if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
         // do nothing
       } else {
-        LOG_WARN("fail to get physical plan", K(ret));
+        LOG_WARN("fail to get physical plan", K(ret), KPC(guard.get_cache_obj()));
       }
     }
   }

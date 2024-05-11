@@ -476,7 +476,6 @@ int ObPhysicalPlan::init_operator_stats()
 
 void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_first,
-                                      const bool is_evolution,
                                       const ObIArray<ObTableRowCount> *table_row_count_list)
 {
   const int64_t current_time = ObClockGenerator::getClock();

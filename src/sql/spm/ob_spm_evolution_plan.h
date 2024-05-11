@@ -140,8 +140,8 @@ private:
                    bool &is_same) const;
   int is_evolving_plan_better(bool &is_better) const;
   int process_plan_evolution_result(const bool is_better);
-  int discard_evolving_plan_add_baseline_plan_to_pc(ObPlanCacheCtx &ctx);
-  int discard_baseline_plan_add_evolving_plan_to_pc(ObPlanCacheCtx &ctx);
+  void discard_evolving_plan_add_baseline_plan_to_pc(ObPlanCacheCtx &ctx);
+  void discard_baseline_plan_add_evolving_plan_to_pc(ObPlanCacheCtx &ctx);
   int discard_all_plan_by_type(EvolutionPlanType plan_type, bool evict_plan = false);
   int add_evolving_plan_to_pc(ObPlanCacheCtx &ctx);
   int add_all_baseline_plans_to_pc(ObPlanCacheCtx &ctx);
