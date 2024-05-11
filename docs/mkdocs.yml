@@ -3,7 +3,7 @@ site_url: https://oceanbase.github.io/oceanbase
 repo_url: https://github.com/oceanbase/oceanbase
 repo_name: oceanbase/oceanbase
 plugins:
-  #- search
+  - search
   #- material-relative-language-selector
   #- mdpo
   - i18n:
