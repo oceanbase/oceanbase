@@ -1,8 +1,10 @@
+---
+title: Architecture
+---
+
 # OceanBase DataBase Architecture
 
 OceanBase Database adopts a shared-nothing architecture, where each node is equal to each other. That is, each node has its own SQL engine, storage engine, and transaction engine, and runs on a cluster of ordinary PC servers. OceanBase Database provides core features such as high scalability, high availability, high performance, cost-effectiveness, and strong compatibility with mainstream databases.
-
-![HA](https://help-static-aliyun-doc.aliyuncs.com/assets/img/zh-CN/7726968461/p355597.jpg)
 
 ## Zone
 
