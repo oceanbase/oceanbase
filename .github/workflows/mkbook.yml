@@ -33,7 +33,7 @@ jobs:
 
       - name: Install Depdencies 
         run: |
-          python3 -m pip install -r ./requirements.txt
+          python3 -m pip install -r ./docs/requirements.txt
       - name: Setup Pages
         id: pages
         run: |
