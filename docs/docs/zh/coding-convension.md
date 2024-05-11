@@ -1,3 +1,7 @@
+---
+title: 编程惯例
+---
+
 OceanBase 编程惯例
 
 OceanBase 是一个发展了十几年的、包含几百万行C++代码的巨型工程，它已经有了很多自己特有的编程习惯，这里介绍一些首次接触OceanBase源码同学一些需要注意的事项，也可以让大家更方便的阅读OceanBase源码。更详细的内容可以参考[OceanBase C++编程规范](coding_standard.md)。
