@@ -51,5 +51,7 @@ theme:
     - navigation.sections
     - navigation.path
     - navigation.top
+  logo: assets/logo.png
+  favicon: images/favicon.ico
   icon:
     repo: fontawesome/brands/github
