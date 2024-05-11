@@ -810,8 +810,7 @@ int ObDDLUtil::generate_build_replica_sql(
     ObArray<int64_t> select_column_ids;
     ObArray<int64_t> order_column_ids;
     bool is_shadow_column = false;
-    int64_t real_parallelism = std::max(1L, parallelism);
-    real_parallelism = std::min(ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
+    const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, false/*is mv refresh*/);
     // get dest table column names
     if (dest_table_schema->is_spatial_index()) {
       if (OB_FAIL(ObDDLUtil::generate_spatial_index_column_names(*dest_table_schema, *source_table_schema, insert_column_names,
@@ -1140,8 +1139,7 @@ int ObDDLUtil::generate_build_mview_replica_sql(
         }
       }
       if (OB_SUCC(ret)) {
-        int64_t real_parallelism = std::max(2L, parallelism);
-        real_parallelism = std::min(ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
+        const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
         const ObString &select_sql_string = mview_table_schema->get_view_schema().get_view_definition_str();
         if (is_oracle_mode) {
           if (OB_FAIL(sql_string.assign_fmt("INSERT /*+ append monitor enable_parallel_dml parallel(%ld) opt_param('ddl_execution_id', %ld) opt_param('ddl_task_id', %ld) use_px */ INTO \"%.*s\".\"%.*s\""
@@ -2019,6 +2017,18 @@ int ObDDLUtil::batch_check_tablet_checksum(
 bool ObDDLUtil::use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type)
 {
   return data_format_version >= DATA_VERSION_4_3_1_0 && task_type == DDL_MVIEW_COMPLETE_REFRESH;
+}
+
+int64_t ObDDLUtil::get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh)
+{
+  int64_t real_parallelism = 0L;
+  if (is_mv_refresh) {
+    real_parallelism = std::max(2L, parallelism);
+  } else {
+    real_parallelism = std::max(1L, parallelism);
+  }
+  real_parallelism = std::min(oceanbase::ObMacroDataSeq::MAX_PARALLEL_IDX + 1, real_parallelism);
+  return real_parallelism;
 }
 
 /******************           ObCheckTabletDataComplementOp         *************/
