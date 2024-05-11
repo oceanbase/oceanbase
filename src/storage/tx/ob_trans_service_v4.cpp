@@ -2106,6 +2106,7 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.tx_ptr_,
                                   msg.for_transfer(),
                                   msg.specified_from_scn_,
+                                  msg.request_id_,
                                   result.downstream_parts_);
   if (msg.use_async_resp()) {
     ObTxRollbackSPRespMsg resp;
