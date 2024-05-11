@@ -870,6 +870,8 @@ private:
 
   int contain_enum_set_rowkeys(const ObLogTableScan &table_scan, bool &contain);
 
+  int check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*>& aggr_items, bool &has_keep_aggr);
+
   DISALLOW_COPY_AND_ASSIGN(ObSelectLogPlan);
 };
 }//end of namespace sql
