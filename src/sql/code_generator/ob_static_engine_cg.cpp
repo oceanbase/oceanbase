@@ -1811,7 +1811,10 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
   bool bulk_search = (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
                       && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
                      || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0);
-  bool add_extra_column = bulk_search && lib::is_oracle_mode() && op.is_breadth_search();
+  bool add_extra_column = (NULL != op.get_identify_seq_expr());
+  if (lib::is_oracle_mode() && op.is_breadth_search()) {
+    bulk_search &= add_extra_column;
+  }
   if (OB_UNLIKELY(spec.get_child_cnt() != 2)
       || OB_ISNULL(left = spec.get_child(0))
       || OB_ISNULL(right = spec.get_child(1))

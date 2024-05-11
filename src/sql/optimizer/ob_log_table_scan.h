@@ -125,7 +125,6 @@ public:
         tablet_id_type_(0),
         calc_part_id_expr_(NULL),
         trans_info_expr_(NULL),
-        rcte_op_(nullptr),
         identify_seq_expr_(nullptr),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
@@ -554,8 +553,8 @@ public:
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }
   virtual int get_card_without_filter(double &card) override;
-  inline ObLogSet *get_rcte_op() { return rcte_op_; }
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
+  void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
 
 private: // member functions
   //called when index_back_ set
@@ -678,7 +677,6 @@ protected: // memeber variables
   ObRawExpr *trans_info_expr_;
 
   //for batch search recursive cte
-  ObLogSet *rcte_op_;
   ObRawExpr *identify_seq_expr_;
 
   // begin for global index lookup

@@ -4017,6 +4017,8 @@ int ObLogPlan::generate_subplan_for_query_ref(ObQueryRefRawExpr *query_ref,
   } else if (OB_ISNULL(logical_plan = opt_ctx.get_log_plan_factory().create(opt_ctx, *subquery))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create plan", K(ret), K(opt_ctx.get_query_ctx()->get_sql_stmt()));
+  } else if (FALSE_IT(logical_plan->set_nonrecursive_plan_for_fake_cte(get_nonrecursive_plan_for_fake_cte()))) {
+    // never reach
   } else if (OB_FAIL(SMART_CALL(static_cast<ObSelectLogPlan *>(logical_plan)->generate_raw_plan()))) {
     LOG_WARN("failed to optimize sub-select", K(ret));
   } else {
@@ -12172,11 +12174,16 @@ int ObLogPlan::do_post_plan_processing()
 {
   int ret = OB_SUCCESS;
   ObLogicalOperator *root = NULL;
+  uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
   if (OB_ISNULL(root = get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(adjust_final_plan_info(root))) {
     LOG_WARN("failed to adjust parent-child relationship", K(ret));
+  } else if ((((min_cluster_version >= CLUSTER_VERSION_4_2_2_0 && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
+              || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0)) && is_oracle_mode()) &&
+               OB_FAIL(set_identify_seq_expr_for_recursive_union_all(root))) {
+    LOG_WARN("failed to set identify seq expr", K(ret));
   } else if (OB_FAIL(update_re_est_cost(root))) {
     LOG_WARN("failed to re est cost", K(ret));
   } else if (OB_FAIL(choose_duplicate_table_replica(root,
@@ -12359,6 +12366,78 @@ int ObLogPlan::adjust_final_plan_info(ObLogicalOperator *&op)
                  OB_FAIL(static_cast<ObLogJoin*>(op)->adjust_join_conds(static_cast<ObLogJoin *>(op)->get_join_conditions()))) {
         LOG_WARN("failed to adjust join conds", K(ret));
       } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::set_identify_seq_expr_for_recursive_union_all(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (LOG_SET == op->get_type() && static_cast<ObLogSet *>(op)->is_recursive_union() &&
+             static_cast<ObLogSet *>(op)->is_breadth_search()) {
+    ObRawExpr *identify_seq_expr = NULL;
+    bool is_valid = true;
+    if (OB_FAIL(ObOptimizerUtil::allocate_identify_seq_expr(get_optimizer_context(), identify_seq_expr))) {
+        LOG_WARN("allocate identify seq expr failed", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+      if (OB_FAIL(SMART_CALL(set_identify_seq_expr_for_fake_cte(op->get_child(i),
+                                                                identify_seq_expr,
+                                                                is_valid)))) {
+        LOG_WARN("failed to set identify seq expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_valid) {
+      static_cast<ObLogSet *>(op)->set_identify_seq_expr(identify_seq_expr);
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+    if (OB_FAIL(SMART_CALL(set_identify_seq_expr_for_recursive_union_all(op->get_child(i))))) {
+      LOG_WARN("failed to set identify seq expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::set_identify_seq_expr_for_fake_cte(ObLogicalOperator *op,
+                                                  ObRawExpr *identify_seq_expr,
+                                                  bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op) || OB_ISNULL(identify_seq_expr) || OB_ISNULL(op->get_parent())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (op->get_contains_fake_cte()) {
+    if (op->is_plan_root()) {
+      // check whether the identify seq expr can be set to the output exprs of the plan root
+      if (LOG_SET == op->get_parent()->get_type() &&
+          static_cast<ObLogSet *>(op->get_parent())->is_recursive_union()) {
+        // do nothing
+      } else {
+        // fake cte is in an inline view, not supported
+        is_valid = false;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
+      if (OB_FAIL(SMART_CALL(set_identify_seq_expr_for_fake_cte(op->get_child(i),
+                                                                identify_seq_expr,
+                                                                is_valid)))) {
+        LOG_WARN("failed to set identify seq expr", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && is_valid) {
+      if (LOG_TABLE_SCAN == op->get_type()) {
+        static_cast<ObLogTableScan *>(op)->set_identify_seq_expr(identify_seq_expr);
+      }
+      if (op->is_plan_root()) {
+        if (OB_FAIL(op->get_output_exprs().push_back(identify_seq_expr))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
     }
   }
   return ret;
