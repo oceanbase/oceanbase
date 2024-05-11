@@ -1,3 +1,7 @@
+---
+title: 基础数据结构
+---
+
 # 介绍
 
 C++ STL提供了很多很方便的容器，比如vector、map、unordered_map等，由于OceanBase编程风格与内存控制等原因，在OceanBase中禁止使用STL的容器。OceanBase 提供了一些容器实现，包括数组、链表、HashMap等，本篇文档会对这些容器做一些介绍。
