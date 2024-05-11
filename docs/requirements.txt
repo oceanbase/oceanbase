@@ -1,2 +1,3 @@
 mkdocs-material
 mkdocs-static-i18n
+mkdocs-git-committers-plugin-2
