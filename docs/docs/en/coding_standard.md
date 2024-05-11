@@ -1,3 +1,6 @@
+---
+title: Coding Standard
+---
 
 | Number | Document Version | Revised Chapter | Reason for Revision | Revision Date   |
 | -------| ---------------- | --------------- | ------------------- | -------------   |
