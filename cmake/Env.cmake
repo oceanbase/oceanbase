@@ -40,6 +40,8 @@ ob_define(OB_ENABLE_UNITY ON)
 
 ob_define(OB_BUILD_OPENSOURCE ON)
 
+ob_define(OB_DISABLE_LSE OFF)
+
 
 if(WITH_COVERAGE)
   # -ftest-coverage to generate .gcno file
@@ -285,7 +287,13 @@ if( ${ARCHITECTURE} STREQUAL "x86_64" )
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")
 else()
-    set(MARCH_CFLAGS "-march=armv8-a+crc+lse" )
+    if (${OB_DISABLE_LSE})
+      message(STATUS "build with no-lse")
+      set(MARCH_CFLAGS "-march=armv8-a+crc")
+    else()
+      message(STATUS "build with lse")
+      set(MARCH_CFLAGS "-march=armv8-a+crc+lse")
+    endif()
     set(MTUNE_CFLAGS "-mtune=generic" )
     set(ARCH_LDFLAGS "-l:libatomic.a")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/19.10/client64")
