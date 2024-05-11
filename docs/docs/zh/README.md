@@ -23,7 +23,7 @@
     在开始编写稍大的功能之前，你应该阅读以下内容，它可以帮助你更好地理解OceanBase。
     1. [日志系统](logging.md)
     2. [内存管理](memory.md)
-    3. [容器](container.md)
+    3. [基础数据结构](container.md)
     4. [编程规范](coding_standard.md)
 
 ## 用户文档
