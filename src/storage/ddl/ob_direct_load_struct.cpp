@@ -642,7 +642,7 @@ int ObMacroBlockSliceStore::init(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else if (OB_FAIL(static_cast<ObDDLIncRedoLogWriterCallback *>(ddl_redo_callback_)->init(
-          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn, data_format_version, tx_desc, trans_id))) {
+          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn, data_format_version, direct_load_type, tx_desc, trans_id))) {
         LOG_WARN("fail to init inc ddl_redo_callback_", K(ret));
       }
     } else {
@@ -650,7 +650,7 @@ int ObMacroBlockSliceStore::init(
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory", K(ret));
       } else if (OB_FAIL(static_cast<ObDDLRedoLogWriterCallback *>(ddl_redo_callback_)->init(
-          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn, data_format_version, -1/*row_id_offset*/))) {
+          ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id, start_scn, data_format_version, direct_load_type, -1/*row_id_offset*/))) {
         LOG_WARN("fail to init full ddl_redo_callback_", K(ret));
       }
     }
@@ -1359,7 +1359,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
       LOG_WARN("init sstable index builder failed", K(ret), K(ls_id), K(table_key), K(data_desc_));
     } else if (FALSE_IT(data_desc_.get_desc().sstable_index_builder_ = &index_builder_)) { // for build the tail index block in macro block
     } else if (OB_FAIL(flush_callback_.init(ls_id, table_key.tablet_id_, DDL_MB_DATA_TYPE, table_key, ddl_task_id,
-            start_scn, data_format_version, row_id_offset))) {
+        start_scn, data_format_version, tablet_direct_load_mgr->get_direct_load_type(), row_id_offset))) {
       LOG_WARN("fail to init redo log writer callback", KR(ret));
     } else if (OB_FAIL(macro_block_writer_.open(data_desc_.get_desc(), start_seq, &flush_callback_))) {
       LOG_WARN("fail to open macro block writer", K(ret), K(ls_id), K(table_key), K(data_desc_), K(start_seq));
