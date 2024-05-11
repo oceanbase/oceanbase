@@ -467,8 +467,10 @@ int ObPLObjectValue::check_value_version(share::schema::ObSchemaGetterGuard *sch
           OZ (obtain_new_column_infos(*schema_guard, schema_obj2, column_infos));
           OX (is_old_version = !schema_obj1->match_columns(column_infos));
         } else {
-          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
           is_old_version = true;
+        }
+        if (OB_SUCC(ret) && is_old_version) {
+          LOG_WARN("mismatched schema objs", K(*schema_obj1), K(schema_obj2), K(i));
         }
       }
     }
@@ -742,6 +744,7 @@ int ObPLObjectValue::match_dep_schema(const ObPLCacheCtx &pc_ctx,
                  && !stored_schema_objs_.at(i)->match_compare(schema_array.at(i))) {
         // check whether common table name is same as system table in oracle mode
         is_same = false;
+        LOG_WARN("mismatched schema objs", K(*stored_schema_objs_.at(i)), K(stored_schema_objs_.at(i)), K(i));
       } else {
         // do nothing
       }
