@@ -1,0 +1,34 @@
+site_name: OceanBase Developer Guide
+site_url: https://oceanbase.github.io/oceanbase
+repo_url: https://github.com/oceanbase/oceanbase
+repo_name: oceanbase/oceanbase
+plugins:
+  #- search
+  #- material-relative-language-selector
+  #- mdpo
+  - i18n:
+      docs_structure: folder
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: Chinese
+          build: true
+          link: /zh/
+nav:
+  - HOME: README.md
+theme:
+  name: material
+  language: en
+  features:
+    - search.highlight
+    - navigation.sections
+    - navigation.path
+    - navigation.top
+  icon:
+    repo: fontawesome/brands/github
