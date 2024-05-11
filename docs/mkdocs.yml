@@ -21,7 +21,19 @@ plugins:
           build: true
           link: /zh/
 nav:
-  - HOME: README.md
+  - README.md
+  - toolchain.md
+  - build-and-run.md
+  - ide-settings.md
+  - coding-convension.md
+  - unittest.md
+  - mysqltest.md
+  - debug.md
+  - logging.md
+  - memory.md
+  - container.md
+  - coding_standard.md
+
 theme:
   name: material
   language: en
