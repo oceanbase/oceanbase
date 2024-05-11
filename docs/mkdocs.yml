@@ -20,6 +20,8 @@ plugins:
           name: 中文
           build: true
           link: /zh/
+  - git-committers:
+      branch: developer
 nav:
   - README.md
   - toolchain.md
