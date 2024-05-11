@@ -25,7 +25,8 @@
     1. [日志系统](logging.md)
     2. [内存管理](memory.md)
     3. [基础数据结构](container.md)
-    4. [编程规范](coding_standard.md)
+    4. [架构](architecture.md)
+    5. [编程规范](coding_standard.md)
 
 ## 用户文档
 
