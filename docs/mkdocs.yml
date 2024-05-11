@@ -17,7 +17,7 @@ plugins:
           name: English
           build: true
         - locale: zh
-          name: Chinese
+          name: 中文
           build: true
           link: /zh/
 nav:
@@ -33,6 +33,13 @@ nav:
   - memory.md
   - container.md
   - coding_standard.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
 
 theme:
   name: material
