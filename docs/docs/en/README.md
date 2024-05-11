@@ -22,7 +22,7 @@ At present, the guide is composed of the following parts:
     More information before you start a big feature developing, you should read content below and it can help you understand oceanbase better.
     1. [Logging System](logging.md)
     2. [Memory Management](memory.md)
-    3. [Containers](container.md)
+    3. [Bais Data Structures](container.md)
     4. [Coding Standard](coding_standard.md)
 3. **Contribute to OceanBase**: helps you quickly get involved in the OceanBase community, which illustrates what contributions you can make and how to quickly make one.
 
