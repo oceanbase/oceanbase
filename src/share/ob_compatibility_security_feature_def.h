@@ -16,4 +16,8 @@
 #ifdef DEF_COMPAT_CONTROL_FEATURE
 DEF_COMPAT_CONTROL_FEATURE(MYSQL_PRIV_ENHANCE, "add privilege check to some command",
     CLUSTER_VERSION_4_2_3_0)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_SET_VAR_PRIV_ENHANCE, "check privilege for set var subquery",
+    CLUSTER_VERSION_4_2_4_0)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_USER_REVOKE_ALL_ENHANCE, "use create_user to check privilege for revoke all from user",
+    CLUSTER_VERSION_4_2_4_0)
 #endif

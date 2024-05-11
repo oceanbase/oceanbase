@@ -482,12 +482,21 @@ int ObRevokeResolver::resolve_mysql(const ParseNode &parse_tree)
               } else {
                 uint64_t user_id = OB_INVALID_ID;
                 //0: user name; 1: host name
-                ObString user_name(static_cast<int32_t>(user_hostname_node->children_[0]->str_len_),
-                                   user_hostname_node->children_[0]->str_value_);
+                ObString user_name;
                 ObString host_name;
+                if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                  user_name = params_.session_info_->get_user_name();
+                } else {
+                  user_name = ObString(static_cast<int32_t>(user_hostname_node->children_[0]->str_len_),
+                                   user_hostname_node->children_[0]->str_value_);
+                }
                 if (NULL == user_hostname_node->children_[1]) {
-                  host_name.assign_ptr(OB_DEFAULT_HOST_NAME, 
+                  if (user_hostname_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                    host_name = params_.session_info_->get_host_name();
+                  } else {
+                    host_name.assign_ptr(OB_DEFAULT_HOST_NAME,
                                        static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+                  }
                 } else {
                   host_name.assign_ptr(user_hostname_node->children_[1]->str_value_,
                             static_cast<int32_t>(user_hostname_node->children_[1]->str_len_));

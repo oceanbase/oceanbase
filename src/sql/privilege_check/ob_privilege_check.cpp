@@ -69,6 +69,7 @@
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
 #include "pl/ob_pl_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/optimizer/ob_optimizer_util.h"
 
 namespace oceanbase {
 using namespace share;
@@ -843,8 +844,53 @@ int add_seqs_priv_in_dml(
   CK (ctx.schema_guard_ != NULL);
   CK (ctx.session_info_ != NULL);
   CK (dml_stmt != NULL);
-  const common::ObIArray<uint64_t> &nextval_sequence_ids = dml_stmt->get_nextval_sequence_ids();
-  const common::ObIArray<uint64_t> &currval_sequence_ids = dml_stmt->get_currval_sequence_ids();
+  common::ObArray<uint64_t> nextval_sequence_ids;
+  common::ObArray<uint64_t> currval_sequence_ids;
+  ObArray<const ObRawExpr *> exprs;
+  if (dml_stmt->is_update_stmt()) {
+    const ObUpdateStmt *stmt = static_cast<const ObUpdateStmt *>(dml_stmt);
+    for (int64_t k = 0; k < dml_stmt->get_column_items().count() && OB_SUCC(ret); k++) {
+      for (int i = 0; OB_SUCC(ret) && i < stmt->get_update_table_info().count(); i++) {
+        CK (stmt->get_update_table_info().at(i) != NULL);
+        for (int j = 0; OB_SUCC(ret) && j < stmt->get_update_table_info().at(i)->assignments_.count(); j++) {
+          if (stmt->get_update_table_info().at(i)->assignments_.at(j).column_expr_ == dml_stmt->get_column_items().at(k).get_expr()) {
+            const ObRawExpr *default_expr = NULL;
+            if (NULL != (default_expr = dml_stmt->get_column_items().at(k).default_value_expr_)
+                && default_expr->has_flag(CNT_SEQ_EXPR)) {
+              OZ (exprs.push_back(default_expr));
+            }
+          }
+        }
+      }
+    }
+    while(OB_SUCC(ret) && !exprs.empty()) {
+      const ObRawExpr *expr = NULL;
+      OZ (exprs.pop_back(expr));
+      CK (expr != NULL);
+      if (OB_SUCC(ret)) {
+        if (expr->has_flag(IS_SEQ_EXPR)) {
+          const ObSequenceRawExpr *seq_raw_expr = static_cast<const ObSequenceRawExpr *>(expr);
+          uint64_t sequence_id = seq_raw_expr->get_sequence_id();
+          const ObString &action = seq_raw_expr->get_action();
+          if (action.case_compare("CURRVAL")) {
+            OZ (currval_sequence_ids.push_back(sequence_id));
+          } else {
+            OZ (nextval_sequence_ids.push_back(sequence_id));
+          }
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
+            const ObRawExpr *child_expr = expr->get_param_expr(i);
+            if (child_expr->has_flag(CNT_SEQ_EXPR)) {
+              OZ (exprs.push_back(child_expr));
+            }
+          }
+        }
+      }
+    }
+  } else {
+    OZ (append(nextval_sequence_ids, dml_stmt->get_nextval_sequence_ids()));
+    OZ (append(currval_sequence_ids, dml_stmt->get_currval_sequence_ids()));
+  }
   if (OB_SUCC(ret)) {
     OZ (add_seqs_priv_in_dml_inner(user_id, ctx, nextval_sequence_ids, OBJ_PRIV_ID_SELECT,
                                need_privs, check_flag));
@@ -1874,6 +1920,7 @@ int get_revoke_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool check_revoke_all_user_create_user = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
@@ -1881,10 +1928,41 @@ int get_revoke_stmt_need_privs(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Stmt type should be T_REVOKE",
              K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                                          ObCompatFeatureType::MYSQL_USER_REVOKE_ALL_ENHANCE, check_revoke_all_user_create_user))) {
+        LOG_WARN("failed to get priv need check", K(ret));
   } else {
     ObNeedPriv need_priv;
     const ObRevokeStmt *stmt = static_cast<const ObRevokeStmt *>(basic_stmt);
-    if (OB_FAIL(ObPrivilegeCheck::can_do_grant_on_db_table(session_priv, stmt->get_priv_set(),
+    if (check_revoke_all_user_create_user &&
+      stmt->get_grant_level() == OB_PRIV_USER_LEVEL && stmt->get_priv_set() == OB_PRIV_ALL) {
+      need_priv.db_ = stmt->get_database_name();
+      need_priv.table_ = stmt->get_table_name();
+      need_priv.priv_set_ = OB_PRIV_CREATE_USER;
+      need_priv.priv_level_ = stmt->get_grant_level();
+      need_priv.obj_type_ = stmt->get_object_type();
+      ADD_NEED_PRIV(need_priv);
+
+      ObSchemaGetterGuard schema_guard;
+      bool need_add = false;
+      CK (GCTX.schema_service_ != NULL);
+      OZ(GCTX.schema_service_->get_tenant_schema_guard(session_priv.tenant_id_, schema_guard));
+      for (int i = 0; OB_SUCC(ret) && i < stmt->get_users().count(); i++) {
+        const ObUserInfo *user_info = NULL;
+        OZ(schema_guard.get_user_info(session_priv.tenant_id_, stmt->get_users().at(i), user_info));
+        CK (user_info != NULL);
+        need_add = (0 != (user_info->get_priv_set() & OB_PRIV_SUPER));
+      }
+      if (OB_FAIL(ret)) {
+      } else if (need_add) { //mysql8.0 if exists dynamic privs, then need SYSTEM_USER dynamic privilge to revoke all, now use SUPER to do so.
+        need_priv.db_ = stmt->get_database_name();
+        need_priv.table_ = stmt->get_table_name();
+        need_priv.priv_set_ = OB_PRIV_SUPER;
+        need_priv.priv_level_ = stmt->get_grant_level();
+        need_priv.obj_type_ = stmt->get_object_type();
+        ADD_NEED_PRIV(need_priv);
+      }
+    } else if (OB_FAIL(ObPrivilegeCheck::can_do_grant_on_db_table(session_priv, stmt->get_priv_set(),
                                          stmt->get_database_name(),
                                          stmt->get_table_name()))) {
       LOG_WARN("Can not grant information_schema database", K(ret));

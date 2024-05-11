@@ -36,7 +36,7 @@
 #include "observer/ob_server.h"
 #include "sql/rewrite/ob_transform_pre_process.h"
 #include "sql/engine/cmd/ob_set_names_executor.h"
-
+#include "sql/privilege_check/ob_privilege_check.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
@@ -473,7 +473,14 @@ int ObVariableSetExecutor::execute_subquery_expr(ObExecContext &ctx,
     ObObj tmp_value;
     SMART_VAR(ObISQLClient::ReadResult, res) {
       common::sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(conn->execute_read(tenant_id, subquery_expr.ptr(), res))) {
+      bool need_check = false;
+      if (OB_FAIL(session_info->check_feature_enable(ObCompatFeatureType::MYSQL_SET_VAR_PRIV_ENHANCE, need_check))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (need_check) {
+        conn->set_check_priv(true);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(conn->execute_read(tenant_id, subquery_expr.ptr(), res))) {
         LOG_WARN("failed to execute sql", K(ret), K(subquery_expr));
       } else if (OB_ISNULL(result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;

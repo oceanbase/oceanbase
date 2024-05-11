@@ -13344,6 +13344,24 @@ user opt_host_name
   need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, NULL, need_enc_node, $2, NULL);
 }
+| CURRENT_USER
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, cur_user, NULL, need_enc_node, NULL, NULL);
+}
+| CURRENT_USER '(' ')'
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, cur_user, NULL, need_enc_node, NULL, NULL);
+}
 ;
 
 user_specification_with_password:
@@ -13360,6 +13378,24 @@ user opt_host_name IDENTIFIED opt_auth_plugin BY password
   malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
   need_enc_node->value_ = 0;
   malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, $1, $7, need_enc_node, $2, $4);
+}
+| CURRENT_USER IDENTIFIED opt_auth_plugin BY password
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, cur_user, $5, need_enc_node, NULL, $3);
+}
+| CURRENT_USER '(' ')' IDENTIFIED opt_auth_plugin BY PASSWORD password
+{
+  ParseNode *need_enc_node = NULL;
+  malloc_terminal_node(need_enc_node, result->malloc_pool_, T_BOOL);
+  need_enc_node->value_ = 0;
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_USER_SPEC, 5, cur_user, $8, need_enc_node, NULL, $5);
 }
 ;
 
@@ -13493,6 +13529,18 @@ user_with_host_name:
 user opt_host_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_USER_WITH_HOST_NAME, 2, $1, $2);
+}
+| CURRENT_USER
+{
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USER_WITH_HOST_NAME, 2, cur_user, NULL);
+}
+| CURRENT_USER '(' ')'
+{
+  ParseNode *cur_user = NULL;
+  malloc_terminal_node(cur_user, result->malloc_pool_, T_FUN_SYS_CURRENT_USER);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USER_WITH_HOST_NAME, 2, cur_user, NULL);
 }
 ;
 

@@ -100,7 +100,8 @@ public:
        last_set_sql_mode_cstr_buf_size_(0),
        last_set_client_charset_cstr_(NULL),
        last_set_connection_charset_cstr_(NULL),
-       last_set_results_charset_cstr_(NULL)
+       last_set_results_charset_cstr_(NULL),
+       check_priv_(false)
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
@@ -255,6 +256,8 @@ public:
   void set_usable(bool flag) { usable_ = flag; }
   bool usable() { return usable_; }
   virtual int ping() { return OB_SUCCESS; }
+  void set_check_priv(bool on) { check_priv_ = on; }
+  bool is_check_priv() { return check_priv_; }
 protected:
   bool oracle_mode_;
   bool is_inited_; // for oracle dblink, we have to init remote env with some sql
@@ -269,6 +272,7 @@ protected:
   const char *last_set_client_charset_cstr_;
   const char *last_set_connection_charset_cstr_;
   const char *last_set_results_charset_cstr_;
+  bool check_priv_;
   common::ObArenaAllocator allocator_;
 };
 

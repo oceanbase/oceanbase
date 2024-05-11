@@ -117,7 +117,8 @@ int ObExprUserCanAccessObj::build_real_obj_type_for_sym(
     uint64_t tenant_id,
     share::schema::ObSchemaGetterGuard *schema_guard,
     uint64_t &obj_type,
-    uint64_t &obj_id)
+    uint64_t &obj_id,
+    uint64_t &owner_id)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObSimpleSynonymSchema *synonym_info = NULL;
@@ -131,6 +132,7 @@ int ObExprUserCanAccessObj::build_real_obj_type_for_sym(
       } else {
         const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = NULL;
         uint64_t db_id = synonym_info->get_object_database_id();
+        owner_id = db_id;
         const ObString &obj_name = synonym_info->get_object_name_str();
         OZ (schema_guard->get_simple_table_schema(tenant_id,
                                                   db_id,
@@ -246,7 +248,7 @@ int ObExprUserCanAccessObj::check_user_access_obj(
   if (OB_SUCC(ret)) {
     if (obj_type == static_cast<uint64_t>(share::schema::ObObjectType::SYNONYM)) {
       OZ (build_real_obj_type_for_sym(session->get_effective_tenant_id(),
-                                      schema_guard, obj_type, obj_id),
+                                      schema_guard, obj_type, obj_id, owner_id),
                                       obj_type, obj_id);
       /* 忽略synonym对于的object不存在的错误 */
       if (ret == OB_TABLE_NOT_EXIST) {

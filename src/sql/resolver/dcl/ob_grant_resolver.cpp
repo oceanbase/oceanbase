@@ -105,8 +105,13 @@ int ObGrantResolver::resolve_grant_user(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Parse node error in grentee ", K(ret));
       } else {
-        user_name.assign_ptr(const_cast<char *>(grant_user->children_[0]->str_value_),
+        if (grant_user->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+          user_name = session_info->get_user_name();
+          host_name = session_info->get_host_name();
+        } else {
+          user_name.assign_ptr(const_cast<char *>(grant_user->children_[0]->str_value_),
           static_cast<int32_t>(grant_user->children_[0]->str_len_));
+        }
         if (NULL != grant_user->children_[3]) {
           // host name is not default 
           host_name.assign_ptr(const_cast<char *>(grant_user->children_[3]->str_value_),
@@ -1488,10 +1493,19 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
                 ret = OB_ERR_PARSE_SQL;
                 LOG_WARN("The child 0 should not be NULL", K(ret));
               } else {
-                user_name.assign_ptr(const_cast<char *>(user_node->children_[0]->str_value_),
-                    static_cast<int32_t>(user_node->children_[0]->str_len_));
+
+                if (user_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                  user_name = session_info_->get_user_name();
+                  host_name = session_info_->get_host_name();
+                } else {
+                  user_name.assign_ptr(const_cast<char *>(user_node->children_[0]->str_value_),
+                      static_cast<int32_t>(user_node->children_[0]->str_len_));
+                }
                 if (NULL == user_node->children_[3]) {
-                  host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+                  if (user_node->children_[0]->type_ == T_FUN_SYS_CURRENT_USER) {
+                  } else {
+                    host_name.assign_ptr(OB_DEFAULT_HOST_NAME, static_cast<int32_t>(STRLEN(OB_DEFAULT_HOST_NAME)));
+                  }
                 } else {
                   host_name.assign_ptr(user_node->children_[3]->str_value_,
                       static_cast<int32_t>(user_node->children_[3]->str_len_));

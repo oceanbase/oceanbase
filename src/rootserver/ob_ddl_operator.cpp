@@ -7803,6 +7803,7 @@ int ObDDLOperator::revoke_table(
   const uint64_t tenant_id = table_priv_key.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  bool is_oracle_mode = false;
   if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schama service_impl and schema manage must not null",
@@ -7813,6 +7814,8 @@ int ObDDLOperator::revoke_table(
     LOG_WARN("db_priv_key is invalid", K(table_priv_key), K(ret));
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
+    LOG_WARN("fail to get compat mode", K(ret));
   } else {
     ObPrivSet table_priv_set = OB_PRIV_SET_EMPTY;
     if (OB_FAIL(schema_guard.get_table_priv_set(table_priv_key, table_priv_set))) {
@@ -7893,6 +7896,8 @@ int ObDDLOperator::revoke_table(
         if (OB_SUCC(ret) && revoke_all_ora) {
           OZ (revoke_table_all(schema_guard, tenant_id, obj_priv_key, ddl_sql, trans));
         }
+      } else if (!is_oracle_mode) {
+        //do nothing
       } else {
         ObSqlString ddl_stmt_str;
         ObString ddl_sql;
