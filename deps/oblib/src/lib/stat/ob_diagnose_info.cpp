@@ -869,17 +869,15 @@ void reset_ash_stat(const int64_t event_no, bool is_idle)
   }
 }
 
-ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di)
-  : prev_wait_(NULL), di_(di)
+ObMaxWaitGuard::ObMaxWaitGuard(ObWaitEventDesc *max_wait)
+  : prev_wait_(NULL), di_(nullptr)
 {
   max_wait_ = max_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != max_wait)) {
       max_wait->reset();
-      if (OB_ISNULL(di_)) {
-        di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
-      }
+      di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
       if (OB_LIKELY(NULL != di_)) {
         prev_wait_ = di_->get_max_wait();
         di_->set_max_wait(max_wait);
@@ -921,17 +919,15 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
   }
 }
 
-ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di)
-  : prev_wait_(NULL), di_(di)
+ObTotalWaitGuard::ObTotalWaitGuard(ObWaitEventStat *total_wait)
+  : prev_wait_(NULL), di_(nullptr)
 {
   total_wait_ = total_wait;
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     need_record_ = true;
     if (OB_LIKELY(NULL != total_wait)) {
       total_wait->reset();
-      if (OB_ISNULL(di_)) {
-        di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
-      }
+      di_ = ObDiagnoseSessionInfo::get_local_diagnose_info();
       if (OB_LIKELY(NULL != di_)) {
         prev_wait_ = di_->get_total_wait();
         di_->set_total_wait(total_wait);

@@ -178,32 +178,33 @@ ObExecutingSqlStatRecord::ObExecutingSqlStatRecord()
 #undef DEF_SQL_STAT_ITEM_INIT
 }
 
-#define RECORD_ITEM(se, di)                                                                                    \
-  do {                                                                                                         \
-      ObDiagnoseSessionInfo *di_info =                                                                         \
-            (NULL != di) ? di : ObDiagnoseSessionInfo::get_local_diagnose_info();                              \
-      if (OB_NOT_NULL(di_info)) {                                                                              \
-        ObStatEventAddStatArray &arr = di_info->get_add_stat_stats();                                          \
-        disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                               \
-        buffer_gets_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::ROW_CACHE_HIT) * 2 +                          \
-                             EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT) * 2 +                     \
-                             EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS) * 2 +                     \
-                             EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT) +                            \
-                             disk_reads_##se##_;                                                               \
-        elapsed_time_##se##_ = ObTimeUtility::current_time();                                                  \
-        cpu_time_##se##_= EVENT_STAT_GET(arr, ObStatEventIds::SYS_TIME_MODEL_DB_CPU);                          \
-        ccwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                                     \
-        userio_wait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                          \
-        apwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                                     \
-        physical_read_requests_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                   \
-        physical_read_bytes_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_BYTES);                      \
-        write_throttle_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME);           \
-        memstore_read_rows_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT);             \
-        minor_ssstore_read_rows_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT);   \
-        major_ssstore_read_rows_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT);   \
-        rpc_##se##_ =  EVENT_STAT_GET(arr, ObStatEventIds::RPC_PACKET_OUT);                                    \
-      }                                                                                                        \
-  } while(0);
+#define RECORD_ITEM(se)                                                                            \
+  do {                                                                                             \
+    ObDiagnoseSessionInfo *di_info = ObDiagnoseSessionInfo::get_local_diagnose_info();             \
+    if (OB_NOT_NULL(di_info)) {                                                                    \
+      ObStatEventAddStatArray &arr = di_info->get_add_stat_stats();                                \
+      disk_reads_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);                     \
+      buffer_gets_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::ROW_CACHE_HIT) * 2 +               \
+                            EVENT_STAT_GET(arr, ObStatEventIds::FUSE_ROW_CACHE_HIT) * 2 +          \
+                            EVENT_STAT_GET(arr, ObStatEventIds::BLOOM_FILTER_FILTS) * 2 +          \
+                            EVENT_STAT_GET(arr, ObStatEventIds::BLOCK_CACHE_HIT) +                 \
+                            disk_reads_##se##_;                                                    \
+      elapsed_time_##se##_ = ObTimeUtility::current_time();                                        \
+      cpu_time_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::SYS_TIME_MODEL_DB_CPU);               \
+      ccwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::CCWAIT_TIME);                           \
+      userio_wait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::USER_IO_WAIT_TIME);                \
+      apwait_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::APWAIT_TIME);                           \
+      physical_read_requests_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_COUNT);         \
+      physical_read_bytes_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::IO_READ_BYTES);            \
+      write_throttle_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME); \
+      memstore_read_rows_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::MEMSTORE_READ_ROW_COUNT);   \
+      minor_ssstore_read_rows_##se##_ =                                                            \
+          EVENT_STAT_GET(arr, ObStatEventIds::MINOR_SSSTORE_READ_ROW_COUNT);                       \
+      major_ssstore_read_rows_##se##_ =                                                            \
+          EVENT_STAT_GET(arr, ObStatEventIds::MAJOR_SSSTORE_READ_ROW_COUNT);                       \
+      rpc_##se##_ = EVENT_STAT_GET(arr, ObStatEventIds::RPC_PACKET_OUT);                           \
+    }                                                                                              \
+  } while (0);
 
 void ObExecutingSqlStatRecord::reset()
 {
@@ -262,15 +263,15 @@ int ObExecutingSqlStatRecord::assign(const ObExecutingSqlStatRecord& other)
   return OB_SUCCESS;
 }
 
-int ObExecutingSqlStatRecord::record_sqlstat_start_value(ObDiagnoseSessionInfo *di)
+int ObExecutingSqlStatRecord::record_sqlstat_start_value()
 {
-  RECORD_ITEM(start, di);
+  RECORD_ITEM(start);
   return OB_SUCCESS;
 }
 
-int ObExecutingSqlStatRecord::record_sqlstat_end_value(ObDiagnoseSessionInfo *di)
+int ObExecutingSqlStatRecord::record_sqlstat_end_value()
 {
-  RECORD_ITEM(end, di);
+  RECORD_ITEM(end);
   return OB_SUCCESS;
 }
 

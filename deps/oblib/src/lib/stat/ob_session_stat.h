@@ -20,28 +20,14 @@ namespace oceanbase
 {
 namespace common
 {
-struct ObSysSessionIds
-{
-  enum ObSysSessionIdEnum
-  {
-    DEFAULT = 1,
-    MERGE,
-    DUMP,
-    MIGRATE,
-    BLOOM_FILTER_BUILD,
-    NETWORK,
-    OMT,
-    MAX_RESERVED
-  };
-};
 
 class ObSessionDIBuffer
 {
 public:
   ObSessionDIBuffer();
   virtual ~ObSessionDIBuffer();
-  int switch_both(const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan);
-  int switch_session(const uint64_t session_id, const bool is_multi_thread_plan = false);
+  int switch_both(const uint64_t tenant_id, const uint64_t session_id);
+  int switch_session(const uint64_t session_id);
   int switch_tenant(const uint64_t tenant_id);
   uint64_t get_tenant_id();
   uint64_t get_session_id();
@@ -51,7 +37,6 @@ public:
   inline ObDIThreadTenantCache &get_tenant_cache() {return tenant_cache_;}
 private:
   ObDIThreadTenantCache tenant_cache_;
-  ObDISessionCollect local_session_collect_;
   ObDISessionCollect *session_collect_;
   ObDITenantCollect *sys_tenant_collect_;
   ObDITenantCollect *curr_tenant_collect_;
@@ -61,9 +46,8 @@ private:
 class ObSessionStatEstGuard
 {
 public:
-  ObSessionStatEstGuard(const uint64_t tenant_id = OB_SYS_TENANT_ID,
-                        const uint64_t session_id = ObSysSessionIds::DEFAULT,
-                        const bool is_multi_thread_plan = false);
+  ObSessionStatEstGuard(const uint64_t tenant_id,
+                        const uint64_t session_id);
   virtual ~ObSessionStatEstGuard();
 private:
   uint64_t prev_tenant_id_;
@@ -105,36 +89,27 @@ private:
 };
 
 inline int ObSessionDIBuffer::switch_both(const uint64_t tenant_id,
-    const uint64_t session_id, const bool is_multi_thread_plan)
+    const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_SUCCESS != (ret = switch_session(session_id, is_multi_thread_plan))) {
+  if (OB_SUCCESS != (ret = switch_session(session_id))) {
   } else {
     ret = switch_tenant(tenant_id);
   }
   return ret;
 }
 
-inline int ObSessionDIBuffer::switch_session(const uint64_t session_id, const bool is_multi_thread_plan)
+inline int ObSessionDIBuffer::switch_session(const uint64_t session_id)
 {
   int ret = OB_SUCCESS;
   if (NULL != session_collect_ && session_id == session_collect_->session_id_) {
   } else {
     if (NULL != session_collect_) {
-      if (session_collect_ != &local_session_collect_) {
-        session_collect_->base_value_.reset_max_wait();
-        session_collect_->base_value_.reset_total_wait();
-        session_collect_->lock_.unlock();
-      } else {
-        local_session_collect_.clean();
-      }
+      session_collect_->base_value_.reset_max_wait();
+      session_collect_->base_value_.reset_total_wait();
+      session_collect_->lock_.unlock();
     }
-    if (is_multi_thread_plan) {
-      local_session_collect_.session_id_ = session_id;
-      session_collect_ = &local_session_collect_;
-    } else {
-      ret = ObDISessionCache::get_instance().get_node(session_id, session_collect_);
-    }
+    ret = ObDISessionCache::get_instance().get_node(session_id, session_collect_);
   }
   return ret;
 }
@@ -176,19 +151,7 @@ inline uint64_t ObSessionDIBuffer::get_session_id()
 inline void ObSessionDIBuffer::reset_session()
 {
   if (NULL != session_collect_) {
-    // Summarize the thread-local session collect into the session cache
-    if (session_collect_ == &local_session_collect_) {
-      const uint64_t session_id = session_collect_->session_id_;
-      ObDISessionCollect *collect = NULL;
-      ObDISessionCache::get_instance().get_node(session_id, collect);
-      if (NULL != collect) {
-        collect->base_value_.add(session_collect_->base_value_);
-        collect->lock_.unlock();
-        local_session_collect_.clean();
-      }
-    } else {
-      session_collect_->lock_.unlock();
-    }
+    session_collect_->lock_.unlock();
     session_collect_ = NULL;
   }
 }

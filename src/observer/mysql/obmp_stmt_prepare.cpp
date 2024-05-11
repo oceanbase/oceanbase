@@ -411,15 +411,14 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
   ObReqTimeGuard req_timeinfo_guard;
   SMART_VAR(ObMySQLResultSet, result, session, THIS_WORKER.get_allocator()) {
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        audit_record.exec_record_.record_start(di);
+        audit_record.exec_record_.record_start();
       }
       if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_start_value(di);
+        sqlstat_record.record_sqlstat_start_value();
         sqlstat_record.set_is_in_retry(session.get_is_in_retry());
         session.sql_sess_record_sql_stat_start_value(sqlstat_record);
       }
@@ -490,7 +489,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
           audit_record.exec_timestamp_.update_stage_time();
 
           if (enable_perf_event) {
-            audit_record.exec_record_.record_end(di);
+            audit_record.exec_record_.record_end();
             audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
             audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
             audit_record.update_event_stage_state();
@@ -501,7 +500,7 @@ int ObMPStmtPrepare::do_process(ObSQLSessionInfo &session,
             }
           }
           if (enable_sqlstat) {
-            sqlstat_record.record_sqlstat_end_value(di);
+            sqlstat_record.record_sqlstat_end_value();
             sqlstat_record.set_rows_processed(result.get_affected_rows() + result.get_return_rows());
             sqlstat_record.set_partition_cnt(result.get_exec_context().get_das_ctx().get_related_tablet_cnt());
             sqlstat_record.set_is_route_miss(result.get_session().partition_hit().get_bool()? 0 : 1);

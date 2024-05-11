@@ -176,18 +176,17 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
   } else {
     ObWaitEventStat total_wait_desc;
     int64_t execution_id = 0;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     ObMaxWaitGuard max_wait_guard(enable_perf_event
-        ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+        ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
     int64_t fetch_limit = OB_INVALID_COUNT == fetch_rows_ ? INT64_MAX : fetch_rows_;
     int64_t true_row_num = 0;
     if (enable_perf_event) {
-      audit_record.exec_record_.record_start(di);
+      audit_record.exec_record_.record_start();
     }
     if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
         OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
-      sqlstat_record.record_sqlstat_start_value(di);
+      sqlstat_record.record_sqlstat_start_value();
       sqlstat_record.set_is_in_retry(session.get_is_in_retry());
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
@@ -233,7 +232,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     audit_record.exec_timestamp_.update_stage_time();
 
     if (enable_perf_event) {
-      audit_record.exec_record_.record_end(di);
+      audit_record.exec_record_.record_end();
       record_stat(stmt::T_EXECUTE, exec_end_timestamp_);
       audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
       audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
@@ -243,7 +242,7 @@ int ObMPStmtFetch::do_process(ObSQLSessionInfo &session,
     if (enable_sqlstat && OB_NOT_NULL(session.get_cur_exec_ctx()) &&
         OB_NOT_NULL(session.get_cur_exec_ctx()->get_sql_ctx())) {
       ObSqlCtx *sql_ctx = session.get_cur_exec_ctx()->get_sql_ctx();
-      sqlstat_record.record_sqlstat_end_value(di);
+      sqlstat_record.record_sqlstat_end_value();
       sqlstat_record.inc_fetch_cnt();
       ObString sql = ObString::make_empty_string();
       if (OB_NOT_NULL(cursor)

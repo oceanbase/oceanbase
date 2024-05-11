@@ -301,7 +301,7 @@ public:
 class ObMaxWaitGuard
 {
 public:
-  explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait, ObDiagnoseSessionInfo *di = NULL);
+  explicit ObMaxWaitGuard(ObWaitEventDesc *max_wait);
   ~ObMaxWaitGuard();
   TO_STRING_KV(K_(prev_wait), K_(di), K_(need_record), K_(max_wait));
 private:
@@ -315,7 +315,7 @@ private:
 class ObTotalWaitGuard
 {
 public:
-  explicit ObTotalWaitGuard(ObWaitEventStat *total_wait, ObDiagnoseSessionInfo *di = NULL);
+  explicit ObTotalWaitGuard(ObWaitEventStat *total_wait);
   ~ObTotalWaitGuard();
   TO_STRING_KV(K_(prev_wait), K_(di), K_(need_record), K_(total_wait));
 private:

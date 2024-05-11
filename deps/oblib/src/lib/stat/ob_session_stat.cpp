@@ -22,7 +22,6 @@ namespace common
 
 ObSessionDIBuffer::ObSessionDIBuffer()
   : tenant_cache_(),
-    local_session_collect_(),
     session_collect_(NULL),
     sys_tenant_collect_(tenant_cache_.get_sys_tenant_node()),
     curr_tenant_collect_(sys_tenant_collect_),
@@ -37,7 +36,7 @@ ObSessionDIBuffer::~ObSessionDIBuffer()
 /**
  *--------------------------------------------------------ObSessionStatEstGuard---------------------------------------------
  */
-ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id, const bool is_multi_thread_plan)
+ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id)
   : prev_tenant_id_(OB_SYS_TENANT_ID),
     prev_session_id_(0),
     prev_max_wait_(nullptr),
@@ -53,7 +52,7 @@ ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uin
         prev_total_wait_ = buffer_->get_curr_session()->base_value_.get_total_wait();
       }
       if (0 < tenant_id && 0 < session_id) {
-        buffer_->switch_both(tenant_id, session_id, is_multi_thread_plan);
+        buffer_->switch_both(tenant_id, session_id);
       }
     }
   } else {

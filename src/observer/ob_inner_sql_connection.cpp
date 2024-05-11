@@ -2325,7 +2325,7 @@ ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(
         }
         if (0 < inner_session_id_ && prev_session_id_ > 1 &&
             (inner_session_id_ != prev_session_id_ && inner_session->get_priv_tenant_id() && prev_tenant_id_)) {
-          di_buffer_->switch_both(inner_session->get_priv_tenant_id(), inner_session_id_, false/*is_multi_thread_plan*/);
+          di_buffer_->switch_both(inner_session->get_priv_tenant_id(), inner_session_id_);
           has_finish_switch_di_ = true;
         }
       }

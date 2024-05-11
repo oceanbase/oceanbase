@@ -664,10 +664,9 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
     // 执行ObTask, 处理结果通过Result返回
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
         exec_record.record_start();
       }
@@ -975,12 +974,11 @@ int ObRpcRemoteExecuteP::process()
     ObPhysicalPlanCtx *plan_ctx = NULL;
     ObWaitEventDesc max_wait_desc;
     ObWaitEventStat total_wait_desc;
-    ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     {
-      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : NULL, di);
-      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+      ObMaxWaitGuard max_wait_guard(enable_perf_event ? &max_wait_desc : nullptr);
+      ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
       if (enable_perf_event) {
-        exec_record.record_start(di);
+        exec_record.record_start();
       }
       if (enable_sqlstat && OB_NOT_NULL(exec_ctx_.get_sql_ctx())) {
         sqlstat_record.record_sqlstat_start_value();

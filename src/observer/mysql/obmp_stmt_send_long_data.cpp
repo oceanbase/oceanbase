@@ -235,16 +235,15 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
   bool is_diagnostics_stmt = false;
 
   ObWaitEventStat total_wait_desc;
-  ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
   {
     ObMaxWaitGuard max_wait_guard(enable_perf_event
-                                    ? &audit_record.exec_record_.max_wait_event_ : NULL, di);
-    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : NULL, di);
+                                    ? &audit_record.exec_record_.max_wait_event_ : nullptr);
+    ObTotalWaitGuard total_wait_guard(enable_perf_event ? &total_wait_desc : nullptr);
     if (enable_perf_event) {
-      audit_record.exec_record_.record_start(di);
+      audit_record.exec_record_.record_start();
     }
     if (enable_sqlstat) {
-      sqlstat_record.record_sqlstat_start_value(di);
+      sqlstat_record.record_sqlstat_start_value();
       sqlstat_record.set_is_in_retry(session.get_is_in_retry());
       session.sql_sess_record_sql_stat_start_value(sqlstat_record);
     }
@@ -272,7 +271,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
       audit_record.exec_timestamp_.update_stage_time();
 
       if (enable_perf_event) {
-        audit_record.exec_record_.record_end(di);
+        audit_record.exec_record_.record_end();
         audit_record.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
         audit_record.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
         audit_record.update_event_stage_state();
@@ -281,7 +280,7 @@ int ObMPStmtSendLongData::do_process(ObSQLSessionInfo &session)
         EVENT_ADD(SQL_PS_PREPARE_TIME, time_cost);
       }
       if (enable_sqlstat) {
-        sqlstat_record.record_sqlstat_end_value(di);
+        sqlstat_record.record_sqlstat_end_value();
 
       }
     }

@@ -33,7 +33,7 @@ public:
   virtual void run(int64_t idx)
   {
     uint64_t session_id = (long)idx % 2 + 1;
-    ObSessionStatEstGuard session_guard(1, session_id, true /*is_multi_thread_plan*/);
+    ObSessionStatEstGuard session_guard(1, session_id);
     ObDiagnoseSessionInfo *di = ObDiagnoseSessionInfo::get_local_diagnose_info();
     ASSERT_TRUE(NULL != di);
     for (int i = 0; i < update_cnt; i++) {
