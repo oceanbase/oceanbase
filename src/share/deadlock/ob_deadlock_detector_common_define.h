@@ -24,6 +24,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_array_serialization.h"
 #include "share/ob_occam_time_guard.h"
+#include "storage/tx/ob_tx_seq.h"
 
 #define DETECT_TIME_GUARD(threshold) TIMEGUARD_INIT(DETECT, threshold, 10_s)
 
@@ -157,6 +158,7 @@ private:
   common::ObString module_name_;// like 'transaction' to transaction module
   common::ObString resource_visitor_;// like 'transaction id' to transaction module
   common::ObString required_resource_;// like 'row key' to transaction module
+  transaction::ObTxSEQ blocked_seq_;// blocked tx holding row's lock by execute sql identified by this seq
   // ObSEArray is not allowed here,
   // cause different template parameter LOCAL_ARRAY_SIZE means different type
   // may influence rpc deserialization in compat scenario

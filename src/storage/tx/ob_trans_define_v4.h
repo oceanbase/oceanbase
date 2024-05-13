@@ -30,6 +30,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "common/ob_simple_iterator.h"
 #include "share/ob_common_id.h"
+#include "storage/memtable/ob_row_conflict_info.h"
 
 namespace oceanbase
 {
@@ -351,12 +352,13 @@ class ObTxExecResult
   bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
-  ObSArray<ObTransIDAndAddr> cflict_txs_;
+  ObSArray<ObTransIDAndAddr> conflict_txs_;
+  ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 public:
   ObTxExecResult();
   ~ObTxExecResult();
   void reset();
-  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(cflict_txs));
+  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(conflict_txs));
   void set_incomplete() {
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
     incomplete_ = true;
@@ -368,7 +370,7 @@ public:
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);
-  const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return cflict_txs_; }
+  const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return conflict_txs_; }
 };
 
 class RollbackMaskSet
@@ -547,12 +549,13 @@ protected:
   int16_t last_branch_id_;           // branch_id allocator, reset when stmt start
   ObTxPartList parts_;               // participant list
   ObTxSavePointList savepoints_;     // savepoints established
-  // cflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
+  // conflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
   // this information will used to detect deadlock
-  // cflict_txs_ is valid when transaction is not executed on local
-  // on scheduler, cflict_txs_ merges all participants executed results on remote
-  // on participant, cflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
-  ObSArray<ObTransIDAndAddr> cflict_txs_;
+  // conflict_txs_ is valid when transaction is not executed on local
+  // on scheduler, conflict_txs_ merges all participants executed results on remote
+  // on participant, conflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
+  ObSArray<ObTransIDAndAddr> conflict_txs_;
+  ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 
   // used during commit
   share::ObLSID coord_id_;           // coordinator ID
@@ -665,7 +668,7 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(can_elr),
-               K_(cflict_txs),
+               K_(conflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
@@ -677,10 +680,10 @@ public:
   int alloc_branch_id(const int64_t count, int16_t &branch_id);
   int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
   void reset_conflict_txs()
-  { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
+  { ObSpinLockGuard guard(lock_); conflict_txs_.reset(); }
   int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
   int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
-  bool has_conflict_txs() const { return cflict_txs_.count() > 0; }
+  bool has_conflict_txs() const { return conflict_txs_.count() > 0; }
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }
