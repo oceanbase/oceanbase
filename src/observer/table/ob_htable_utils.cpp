@@ -310,7 +310,8 @@ int ObHTableUtils::java_bytes_to_int64(const ObString &bytes, int64_t &val)
 {
   int ret = OB_SUCCESS;
   if (bytes.length() != sizeof(int64_t)) {
-    ret = OB_INVALID_DATA;
+    ret = OB_KV_HBASE_CONVERT_INT_ERROR;
+    LOG_USER_ERROR(OB_KV_HBASE_CONVERT_INT_ERROR, bytes.length());
     LOG_WARN("length should be 8 bytes", K(ret), "len", bytes.length());
   } else {
     // In Java, data is stored in big-endian format (also called network order).
