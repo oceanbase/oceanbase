@@ -109,7 +109,7 @@ static ObIOInfo get_random_io_info()
   io_info.fd_.first_id_ = ObRandom::rand(0, 10000);
   io_info.fd_.second_id_ = ObRandom::rand(0, 10000);
   io_info.flag_.set_mode(static_cast<ObIOMode>(ObRandom::rand(0, (int)ObIOMode::MAX_MODE - 1)));
-  io_info.flag_.set_group_id(0); // 0 means default
+  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID); // 0 means default
   io_info.flag_.set_wait_event(ObRandom::rand(1, 9999));
   io_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   io_info.offset_ = ObRandom::rand(1, 1000L * 1000L * 1000L);
@@ -165,7 +165,7 @@ TEST_F(TestIOStruct, IOFlag)
 
   // normal usage
   flag.set_mode(ObIOMode::READ);
-  flag.set_group_id(0);
+  flag.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   flag.set_wait_event(99);
   ASSERT_TRUE(flag.is_valid());
 
@@ -180,7 +180,7 @@ TEST_F(TestIOStruct, IOFlag)
   // test io group
   flag2 = flag;
   ASSERT_TRUE(flag2.is_valid());
-  flag2.set_group_id(-1);
+  flag2.set_resource_group_id(OB_INVALID_GROUP_ID);
   ASSERT_FALSE(flag2.is_valid());
 
   // test wait event number
@@ -211,7 +211,7 @@ TEST_F(TestIOStruct, IOInfo)
   info.tenant_id_ = OB_SERVER_TENANT_ID;
   info.fd_ = fd;
   info.flag_.set_mode(ObIOMode::READ);
-  info.flag_.set_group_id(0);
+  info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   info.flag_.set_wait_event(1);
   info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   info.offset_ = 80;
@@ -326,7 +326,7 @@ TEST_F(TestIOStruct, IORequest)
   read_info.tenant_id_ = OB_SERVER_TENANT_ID;
   read_info.fd_ = fd;
   read_info.flag_.set_mode(ObIOMode::READ);
-  read_info.flag_.set_group_id(0);
+  read_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   read_info.flag_.set_wait_event(1);
   read_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   read_info.offset_ = 89;
@@ -676,7 +676,7 @@ TEST_F(TestIOStruct, IOResult)
   read_info.tenant_id_ = OB_SERVER_TENANT_ID;
   read_info.fd_ = fd;
   read_info.flag_.set_mode(ObIOMode::READ);
-  read_info.flag_.set_group_id(10005);
+  read_info.flag_.set_resource_group_id(10005);
   read_info.flag_.set_wait_event(1);
   read_info.timeout_us_ = DEFAULT_IO_WAIT_TIME_US;
   read_info.offset_ = 89;
@@ -700,8 +700,8 @@ TEST_F(TestIOStruct, IOResult)
   ASSERT_EQ(req->raw_buf_, nullptr); // read buf allocation is delayed
   ASSERT_SUCC(req->prepare());
   ASSERT_NE(req->raw_buf_, nullptr);
-  ASSERT_EQ(result->get_group_id(), 10005);
-  ASSERT_EQ(req->get_group_id(), 10005);
+  ASSERT_EQ(result->get_resource_group_id(), 10005);
+  ASSERT_EQ(req->get_resource_group_id(), 10005);
 
   // test finish
   result->finish_without_accumulate(OB_CANCELED);
@@ -915,7 +915,7 @@ TEST_F(TestIOManager, simple)
   io_info.tenant_id_ = OB_SERVER_TENANT_ID;
   io_info.fd_ = fd;
   io_info.flag_.set_write();
-  io_info.flag_.set_group_id(0);
+  io_info.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
   io_info.flag_.set_wait_event(100);
   io_info.offset_ = 0;
   io_info.size_ = write_io_size;
@@ -2164,7 +2164,7 @@ int IOPerfRunner::do_perf_rolling()
   int ret = OB_SUCCESS;
   ObIOInfo info;
   info.tenant_id_ = load_.tenant_id_;
-  info.flag_.set_group_id(load_.group_id_);
+  info.flag_.set_resource_group_id(load_.group_id_);
   info.flag_.set_mode(load_.mode_);
   info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   info.fd_ = fd_;
@@ -2260,7 +2260,7 @@ int IOPerfRunner::do_batch_io()
   int ret = OB_SUCCESS;
   ObIOInfo info;
   info.tenant_id_ = load_.tenant_id_;
-  info.flag_.set_group_id(load_.group_id_);
+  info.flag_.set_resource_group_id(load_.group_id_);
   info.flag_.set_mode(load_.mode_);
   info.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
   info.fd_ = fd_;

@@ -427,7 +427,8 @@ TEST_F(TestSharedBlockRWriter, test_parse_data_from_macro_block)
   read_info.size_ = io_buf_size;
   read_info.io_desc_.set_mode(ObIOMode::READ);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   read_info.macro_block_id_ = block_id;
   read_info.buf_ = static_cast<char *>(allocator_.alloc(io_buf_size));
   OK(ObBlockManager::read_block(read_info, macro_handle));

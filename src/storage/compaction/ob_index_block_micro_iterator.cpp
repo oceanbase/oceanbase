@@ -182,7 +182,8 @@ int ObIndexBlockMicroIterator::init(
     read_info.offset_ = sstable->get_macro_offset();
     read_info.size_ = sstable->get_macro_read_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator_.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc macro read info buffer", K(ret));

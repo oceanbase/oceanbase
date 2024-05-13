@@ -1653,7 +1653,8 @@ int ObBlockManager::InspectBadBlockTask::check_block(ObMacroBlockHandle &macro_b
     read_info.offset_ = 0;
     read_info.size_ = blk_mgr_.get_macro_block_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

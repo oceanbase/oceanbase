@@ -1097,7 +1097,8 @@ int ObSSTableIndexBuilder::rewrite_small_sstable(ObSSTableMergeRes &res)
   read_info.size_ = upper_align(roots_[0]->last_macro_size_, DIO_READ_ALIGN_SIZE);
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
 
   if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(self_allocator_.alloc(read_info.size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1205,7 +1206,8 @@ int ObSSTableIndexBuilder::load_single_macro_block(
   read_info.size_ = nested_size;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_INDEX_BUILDER_IO);
 
   if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;

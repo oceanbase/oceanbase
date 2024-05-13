@@ -210,7 +210,8 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
       io_info_.tenant_id_ = MTL_ID();
       io_info_.dir_id_ = tmp_file_->get_file_id().dir_id_;
       io_info_.fd_ = tmp_file_->get_file_id().fd_;
-      io_info_.io_desc_.set_group_id(ObIOModule::DIRECT_LOAD_IO);
+      io_info_.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      io_info_.io_desc_.set_sys_module_id(ObIOModule::DIRECT_LOAD_IO);
       io_info_.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
     }
   }
