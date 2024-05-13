@@ -872,7 +872,9 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     LOG_WARN("table schema not exist", K(ret), K(target_object_id_));
   } else if (!table_schema->is_user_hidden_table()) {
     LOG_INFO("target schema took effect", K(target_object_id_));
-  } else if (table_schema->is_heap_table() && !use_heap_table_ddl_plan_ && OB_FAIL(sync_tablet_autoinc_seq())) {
+  } else if (table_schema->is_heap_table()
+      && !(DDL_ALTER_PARTITION_BY == task_type_ || DDL_DROP_PRIMARY_KEY == task_type_)
+      && OB_FAIL(sync_tablet_autoinc_seq())) {
     if (OB_TIMEOUT == ret || OB_NOT_MASTER == ret) {
       ret = OB_SUCCESS;
       new_status = ObDDLTaskStatus::TAKE_EFFECT;
