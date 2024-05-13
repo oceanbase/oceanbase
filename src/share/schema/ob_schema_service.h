@@ -335,7 +335,7 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_DROP_RLS_CONTEXT, = 2053)                           \
   ACT(OB_DDL_RLS_CONTEXT_OPERATION_END, = 2060)                  \
   ACT(OB_DDL_ROUTINE_PRIV_OPERATION_BEGIN, = 2061)               \
-  ACT(OB_DDL_GRANT_REVOKE_ROUTINE_PRIV, = 2062)                  \
+  ACT(OB_DDL_GRANT_ROUTINE_PRIV, = 2062)                  \
   ACT(OB_DDL_DEL_ROUTINE_PRIV, = 2063)                           \
   ACT(OB_DDL_ROUTINE_PRIV_OPERATION_END, = 2070)                 \
   ACT(OB_DDL_COLUMN_PRIV_OPERATION_BEGIN, = 2071)               \
