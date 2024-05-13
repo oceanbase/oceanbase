@@ -1322,7 +1322,8 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
       } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_WAIT != status
             && ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_WAIT != status
-            && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status) {
+            && ObMigrationStatus::OB_MIGRATION_STATUS_ADD_WAIT != status
+            && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != status) {
         if (ObMigrationStatus::OB_MIGRATION_STATUS_ADD_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_MIGRATE_FAIL == status
             || ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL == status) {

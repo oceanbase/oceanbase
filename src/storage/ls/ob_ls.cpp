@@ -2232,6 +2232,7 @@ int ObLS::set_migration_status(
   share::ObLSRestoreStatus restore_status;
   int64_t read_lock = LSLOCKLS;
   int64_t write_lock = LSLOCKLOGMETA;
+  bool allow_read = false;
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
 
   if (IS_NOT_INIT) {
@@ -2253,8 +2254,9 @@ int ObLS::set_migration_status(
     LOG_WARN("failed to get restore status", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_meta_.set_migration_status(migration_status, write_slog))) {
     LOG_WARN("failed to set migration status", K(ret), K(migration_status));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-      && restore_status.is_restore_none()) {
+  } else if (OB_FAIL(inner_check_allow_read_(migration_status, restore_status, allow_read))) {
+    LOG_WARN("failed to check allow to read", K(ret), K(migration_status), K(restore_status));
+  } else if (allow_read) {
     ls_tablet_svr_.enable_to_read();
   } else {
     ls_tablet_svr_.disable_to_read();
@@ -2270,6 +2272,7 @@ int ObLS::set_restore_status(
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   int64_t read_lock = LSLOCKLS;
   int64_t write_lock = LSLOCKLOGMETA;
+  bool allow_read = false;
   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
 
   if (IS_NOT_INIT) {
@@ -2291,8 +2294,9 @@ int ObLS::set_restore_status(
     LOG_WARN("failed to get migration status", K(ret), K(ls_meta_));
   } else if (OB_FAIL(ls_meta_.set_restore_status(restore_status))) {
     LOG_WARN("failed to set restore status", K(ret), K(restore_status));
-  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-      && restore_status.is_restore_none()) {
+  } else if (OB_FAIL(inner_check_allow_read_(migration_status, restore_status, allow_read))) {
+    LOG_WARN("failed to check allow to read", K(ret), K(migration_status), K(restore_status));
+  } else if (allow_read) {
     ls_tablet_svr_.enable_to_read();
   } else {
     ls_tablet_svr_.disable_to_read();
@@ -2400,4 +2404,43 @@ int ObLS::set_ls_migration_gc(
 
 
 }
+
+int ObLS::check_allow_read(bool &allow_to_read)
+{
+  int ret = OB_SUCCESS;
+  share::ObLSRestoreStatus restore_status;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+  allow_to_read = false;
+  int64_t read_lock = LSLOCKLOGMETA;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+  //allow ls is not init because create ls will schedule this interface
+  if (OB_FAIL(ls_meta_.get_migration_and_restore_status(migration_status, restore_status))) {
+    LOG_WARN("failed to get migration and restore status");
+  } else if (OB_FAIL(inner_check_allow_read_(migration_status, restore_status, allow_to_read))) {
+    LOG_WARN("failed to do inner check allow read", K(ret), K(migration_status), K(restore_status));
+  }
+  return ret;
+}
+
+int ObLS::inner_check_allow_read_(
+    const ObMigrationStatus &migration_status,
+    const share::ObLSRestoreStatus &restore_status,
+    bool &allow_read)
+{
+  int ret = OB_SUCCESS;
+  allow_read = false;
+  if (!ObMigrationStatusHelper::is_valid(migration_status) || !restore_status.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
+  }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
+      || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
+    && restore_status.is_restore_none()) {
+    allow_read = true;
+  } else {
+    allow_read = false;
+  }
+  return ret;
+}
+
 }

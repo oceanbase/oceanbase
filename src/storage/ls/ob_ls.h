@@ -352,6 +352,7 @@ public:
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
+  int check_allow_read(bool &allow_read);
 
   TO_STRING_KV(K_(ls_meta), K_(switch_epoch), K_(log_handler), K_(restore_handler), K_(is_inited), K_(tablet_gc_handler), K_(startup_transfer_info));
 private:
@@ -849,6 +850,10 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
   int set_ls_migration_gc(bool &allow_gc);
+  int inner_check_allow_read_(
+      const ObMigrationStatus &migration_status,
+      const share::ObLSRestoreStatus &restore_status,
+      bool &allow_read);
 
 private:
   // StorageBaseUtil
