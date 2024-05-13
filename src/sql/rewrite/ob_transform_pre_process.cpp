@@ -364,7 +364,7 @@ int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
-  } else if (ctx_->session_info_->is_inner()) {
+  } else if (ctx_->session_info_->get_ddl_info().is_refreshing_mview()) {
     // when refresh mview, do not expand rt-mv
   } else if (NULL != (hint = stmt->get_stmt_hint().get_normal_hint(T_MV_REWRITE))
              && hint->is_disable_hint()) {
