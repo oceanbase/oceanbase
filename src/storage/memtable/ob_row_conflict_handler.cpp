@@ -140,10 +140,15 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
             TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
           } else if (lock_state.is_locked_) {
             break;
-          } else if (max_trans_version < row_state.max_trans_version_) {
-            max_trans_version = row_state.max_trans_version_;
+          } else {
+            if (max_trans_version < lock_state.trans_version_) {
+              max_trans_version = lock_state.trans_version_;
+            }
+            if (max_trans_version < row_state.max_trans_version_) {
+              max_trans_version = row_state.max_trans_version_;
+            }
           }
-          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(row_state), K(*sstable));
+          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(rowkey), K(lock_state), K(row_state), K(*sstable));
         } else {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unknown store type", K(ret));
