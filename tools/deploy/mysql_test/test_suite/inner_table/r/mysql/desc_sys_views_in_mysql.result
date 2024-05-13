@@ -4376,11 +4376,11 @@ cnt
 1
 desc oceanbase.DBA_OB_DATABASE_PRIVILEGE;
 Field	Type	Null	Key	Default	Extra
-USER_ID	bigint(20)	NO		NULL	
+USER_ID	bigint(20)	NO			
 USERNAME	varchar(128)	NO		NULL	
-DATABASE_NAME	varchar(128)	NO		NULL	
-GMT_CREATE	timestamp(6)	YES			
-GMT_MODIFIED	timestamp(6)	YES			
+DATABASE_NAME	varchar(128)	NO			
+GMT_CREATE	timestamp(6)	NO			
+GMT_MODIFIED	timestamp(6)	NO			
 PRIV_ALTER	varchar(3)	NO			
 PRIV_CREATE	varchar(3)	NO			
 PRIV_DELETE	varchar(3)	NO			

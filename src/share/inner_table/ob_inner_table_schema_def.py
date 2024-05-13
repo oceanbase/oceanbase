@@ -28349,6 +28349,28 @@ def_table_schema(
   in_tenant_space = True,
   view_definition =
   """
+  WITH DB_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.GMT_CREATE GMT_CREATE,
+           A.GMT_MODIFIED GMT_MODIFIED,
+           A.priv_others PRIV_OTHERS
+    from oceanbase.__all_database_privilege_history A,
+        (select tenant_id, user_id, database_name, max(schema_version) schema_version from oceanbase.__all_database_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.is_deleted = 0
+  )
   SELECT A.USER_ID USER_ID,
           B.USER_NAME USERNAME,
           A.DATABASE_NAME DATABASE_NAME,
@@ -28368,7 +28390,7 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
-  FROM OCEANBASE.__all_database_privilege A INNER JOIN OCEANBASE.__all_user B
+  FROM DB_PRIV A INNER JOIN OCEANBASE.__all_user B
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " ")
 )
@@ -28383,6 +28405,28 @@ def_table_schema(
   normal_columns  = [],
   view_definition =
   """
+  WITH DB_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.GMT_CREATE GMT_CREATE,
+           A.GMT_MODIFIED GMT_MODIFIED,
+           A.PRIV_OTHERS PRIV_OTHERS
+    from oceanbase.__all_virtual_database_privilege_history A,
+        (select tenant_id, user_id, database_name, max(schema_version) schema_version from oceanbase.__all_virtual_database_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.is_deleted = 0
+  )
   SELECT A.TENANT_ID,
           A.USER_ID USER_ID,
           B.USER_NAME USERNAME,
@@ -28403,7 +28447,7 @@ def_table_schema(
           (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
-  FROM OCEANBASE.__all_virtual_database_privilege A INNER JOIN OCEANBASE.__all_virtual_user B
+  FROM DB_PRIV A INNER JOIN OCEANBASE.__all_virtual_user B
         ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
   """.replace("\n", " ")
 )
@@ -28698,6 +28742,49 @@ def_table_schema(
   in_tenant_space = True,
 
   view_definition = """
+  WITH DB_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.GMT_CREATE GMT_CREATE,
+           A.GMT_MODIFIED GMT_MODIFIED,
+           A.PRIV_OTHERS PRIV_OTHERS
+    from oceanbase.__all_database_privilege_history A,
+        (select tenant_id, user_id, database_name, max(schema_version) schema_version from oceanbase.__all_database_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.is_deleted = 0
+  ),
+  TABLE_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.table_name TABLE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.PRIV_OTHERS PRIV_OTHERS
+    from oceanbase.__all_table_privilege_history A,
+        (select tenant_id, user_id, database_name, table_name, max(schema_version) schema_version from oceanbase.__all_table_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin, table_name, table_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.table_name collate utf8mb4_bin = B.table_name collate utf8mb4_bin and A.is_deleted = 0
+  )
   SELECT
          CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,
          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,
@@ -28737,7 +28824,7 @@ def_table_schema(
                 WHEN TP.PRIV_GRANT_OPTION = 1 THEN 'YES'
                 WHEN TP.PRIV_GRANT_OPTION = 0 THEN 'NO'
             END IS_GRANTABLE
-     FROM oceanbase.__all_table_privilege TP,
+     FROM TABLE_PRIV TP,
                       oceanbase.__all_user U,
        (SELECT 1 AS C1
         UNION ALL SELECT 2 AS C1
@@ -28755,7 +28842,7 @@ def_table_schema(
           AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR
      LEFT JOIN
        (SELECT USER_ID
-        FROM oceanbase.__all_database_privilege
+        FROM DB_PRIV
         WHERE TENANT_ID = 0
           AND DATABASE_NAME = 'mysql'
           AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID
@@ -28962,6 +29049,26 @@ def_table_schema(
   in_tenant_space = True,
 
   view_definition = """
+  WITH DB_PRIV AS (
+    select A.tenant_id TENANT_ID,
+           A.user_id USER_ID,
+           A.database_name DATABASE_NAME,
+           A.priv_alter PRIV_ALTER,
+           A.priv_create PRIV_CREATE,
+           A.priv_delete PRIV_DELETE,
+           A.priv_drop PRIV_DROP,
+           A.priv_grant_option PRIV_GRANT_OPTION,
+           A.priv_insert PRIV_INSERT,
+           A.priv_update PRIV_UPDATE,
+           A.priv_select PRIV_SELECT,
+           A.priv_index PRIV_INDEX,
+           A.priv_create_view PRIV_CREATE_VIEW,
+           A.priv_show_view PRIV_SHOW_VIEW,
+           A.priv_others PRIV_OTHERS
+    from oceanbase.__all_database_privilege_history A,
+        (select tenant_id, user_id, database_name, max(schema_version) schema_version from oceanbase.__all_database_privilege_history group by tenant_id, user_id, database_name, database_name collate utf8mb4_bin) B
+    where A.tenant_id = B.tenant_id and A.user_id = B.user_id and A.database_name collate utf8mb4_bin = B.database_name collate utf8mb4_bin and A.schema_version = B.schema_version and A.is_deleted = 0
+  )
   SELECT CAST(CONCAT('''', V.USER_NAME, '''', '@', '''', V.HOST, '''') AS CHAR(81)) AS GRANTEE ,
          CAST('def' AS CHAR(512)) AS TABLE_CATALOG ,
          CAST(V.DATABASE_NAME AS CHAR(128)) collate utf8mb4_name_case AS TABLE_SCHEMA ,
@@ -29004,7 +29111,7 @@ def_table_schema(
                 WHEN DP.PRIV_GRANT_OPTION = 1 THEN 'YES'
                 WHEN DP.PRIV_GRANT_OPTION = 0 THEN 'NO'
             END IS_GRANTABLE
-     FROM oceanbase.__all_database_privilege DP,
+     FROM DB_PRIV DP,
                       oceanbase.__all_user U,
        (SELECT 1 AS C1
         UNION ALL SELECT 2 AS C1
@@ -29025,7 +29132,7 @@ def_table_schema(
           AND CONCAT(USER_NAME, '@', HOST) = CURRENT_USER()) CURR
      LEFT JOIN
        (SELECT USER_ID
-        FROM oceanbase.__all_database_privilege
+        FROM DB_PRIV
         WHERE TENANT_ID = 0
           AND DATABASE_NAME = 'mysql'
           AND PRIV_SELECT = 1) DB ON CURR.USER_ID = DB.USER_ID
