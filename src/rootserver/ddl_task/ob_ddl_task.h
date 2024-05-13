@@ -594,6 +594,7 @@ public:
   static int push_execution_id(
       const uint64_t tenant_id,
       const int64_t task_id,
+      const share::ObDDLType task_type,
       const bool ddl_can_retry,
       const int64_t data_format_version,
       int64_t &new_execution_id);

@@ -1439,13 +1439,14 @@ int64_t ObDDLTask::get_execution_id() const
   return execution_id_;
 }
 
-int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
+int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType task_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObRootService *root_service = nullptr;
   int64_t task_status = 0;
   int64_t execution_id = 0;
+  new_execution_id = 0;
   int64_t ret_code = OB_SUCCESS;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1456,19 +1457,20 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else {
-      LOG_INFO("push execution id", K(tenant_id), K(task_id), K(task_status), K(execution_id), K(ret_code));
-      if (ObDDLUtil::use_idempotent_mode(data_format_version)) {
-        if (0 == execution_id) {
+      if (ObDDLUtil::use_idempotent_mode(data_format_version, task_type)) {
+        if (1 == execution_id) {
           // has been executed before
           if (!ddl_can_retry) {
-            ret = OB_NOT_SUPPORTED;
+            ret = OB_TASK_EXPIRED; //task can not be retry
             LOG_WARN("do not retry for heap table ddl plan", K(tenant_id), K(task_id), K(ddl_can_retry));
           } else {
-            if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, 0L/*execution id*/))) {
-              LOG_WARN("update task status failed", K(ret));
-            } else {
-              new_execution_id = 0L;
-            }
+            new_execution_id = 1L;
+          }
+        } else {
+          if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, 1L/*execution id*/))) {
+            LOG_WARN("update task status failed", K(ret));
+          } else {
+            new_execution_id = 1L;
           }
         }
       } else {
@@ -1479,6 +1481,7 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
         }
       }
     }
+    LOG_INFO("push execution id", K(ret), K(tenant_id), K(task_id), K(task_type), K(task_status), K(execution_id), K(ret_code), K(new_execution_id));
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
     if (OB_SUCCESS != tmp_ret) {

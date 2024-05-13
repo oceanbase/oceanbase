@@ -272,7 +272,7 @@ int ObTableRedefinitionTask::send_build_replica_request_by_sql()
     LOG_WARN("ddl sim failure", K(tenant_id_), K(task_id_));
   } else if (OB_FAIL(check_modify_autoinc(modify_autoinc))) {
     LOG_WARN("failed to check modify autoinc", K(ret));
-  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, is_ddl_retryable_, data_format_version_, new_execution_id))) {
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, is_ddl_retryable_, data_format_version_, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     ObSQLMode sql_mode = alter_table_arg_.sql_mode_;
@@ -356,10 +356,10 @@ int ObTableRedefinitionTask::check_ddl_can_retry(const bool ddl_need_retry_at_ex
     LOG_WARN("invalid arguments", K(ret), KP(table_schema));
   } else if (OB_FAIL(check_use_heap_table_ddl_plan(table_schema))) {
     LOG_WARN("check use heap table ddl plan failed", K(ret));
-  } else if (DDL_MVIEW_COMPLETE_REFRESH == task_type_) {
+  } else if (data_format_version_ >= DATA_VERSION_4_3_1_0 && DDL_MVIEW_COMPLETE_REFRESH == task_type_) {
     is_ddl_retryable_ = false;
   } else {
-    if (ObDDLUtil::use_idempotent_mode(data_format_version_)) {
+    if (ObDDLUtil::use_idempotent_mode(data_format_version_, task_type_)) {
       if (use_heap_table_ddl_plan_) {
         is_ddl_retryable_ = false;
         LOG_INFO("ddl schedule will not retry for heap table", K(use_heap_table_ddl_plan_), K_(task_id));
@@ -413,6 +413,9 @@ int ObTableRedefinitionTask::table_redefinition(const ObDDLTaskStatus next_task_
     } else if (!need_exec_new_inner_sql) {
       is_build_replica_end = true;
     } else if (OB_FAIL(send_build_replica_request())) {
+      if (OB_TASK_EXPIRED == ret) {
+        is_build_replica_end = true;
+      }
       LOG_WARN("fail to send build replica request", K(ret));
     } else {
       TCWLockGuard guard(lock_);

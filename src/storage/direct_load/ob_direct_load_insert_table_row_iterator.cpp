@@ -59,7 +59,8 @@ int ObDirectLoadInsertTableRowIterator::inner_init(
 int ObDirectLoadInsertTableRowIterator::get_next_row(const ObDatumRow *&result_row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(get_next_row(false, result_row))) {
+  ret = get_next_row(false, result_row);
+  if (ret != OB_ITER_END && ret != OB_SUCCESS) {
     LOG_WARN("fail to get next row", KR(ret));
   }
   return ret;
