@@ -684,6 +684,7 @@ int ObDDLIncRedoLogWriterCallback::init(
     task_id_ = task_id;
     start_scn_ = start_scn;
     data_format_version_ = data_format_version;
+    direct_load_type_ = direct_load_type;
     tx_desc_ = tx_desc;
     trans_id_ = trans_id;
     is_inited_ = true;
