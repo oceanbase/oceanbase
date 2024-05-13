@@ -1468,8 +1468,18 @@ int ObDDLKV::decide_right_boundary()
     LOG_ERROR("tablet memtable mgr of ddl kv is unexpected null", KR(ret), K(ls_id), KPC(this));
   } else if (OB_FAIL(mgr->freeze_direct_load_memtable(this))) {
     LOG_WARN("fail to freeze direct load memtable", K(ret));
+  } else if (OB_ISNULL(freezer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid freezer", KR(ret), KPC(this));
+  } else {
+    SCN snapshot_version = freezer_->get_freeze_snapshot_version();
+    if (snapshot_version.is_max() || snapshot_version.is_min() || !snapshot_version.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid snapshot version", KR(ret), K(ls_id), K(snapshot_version), KP(freezer_));
+    } else {
+      set_snapshot_version(snapshot_version);
+    }
   }
-
   return ret;
 }
 
