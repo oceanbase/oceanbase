@@ -1,16 +1,14 @@
-result_format: 4
-
-
-drop table if exists t1;
-
+drop database if exists lyk;
+create database lyk;
+use lyk;
 create table t1(c1 int, c2 varbinary(8000), c3 int);
 create index idx1 on t1(c2, c3);
 alter table t1 modify column c3 varbinary(10000);
-ERROR 42000: Row size too large
-
+ERROR 42000: Specified key was too long
 drop table t1;
-
 create table t1(c1 int, c2 varchar(1000), c3 int);
 create index idx1 on t1(c2, c3);
 alter table t1 modify column c3 varchar(10000);
-ERROR 42000: Row size too large
+ERROR 42000: Specified key was too long
+drop table t1;
+drop database lyk;

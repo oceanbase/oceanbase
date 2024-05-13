@@ -1806,31 +1806,30 @@ int ObTableSchema::assign_column_group(const ObTableSchema &other)
   return ret;
 }
 
-bool ObTableSchema::is_valid() const
-{
-  bool valid_ret = true;
+int ObTableSchema::check_valid(bool count_varchar_size_by_byte) const {
+  int ret = OB_SUCCESS;
 
   if (!ObSimpleTableSchemaV2::is_valid()) {
-    valid_ret = false;
+    ret = OB_INVALID_ERROR;
     LOG_WARN_RET(OB_INVALID_ERROR, "schema is invalid", K_(error_ret));
   }
 
-  if (!valid_ret || is_view_table()) {
+  if (OB_FAIL(ret) || is_view_table()) {
     // no need checking other options for view
     // XIYU: TODO for materialized view
   } else {
     if (is_virtual_table(table_id_) && 0 > rowkey_column_num_) {
-      valid_ret = false;
+      ret = OB_INVALID_ERROR;
       LOG_WARN_RET(OB_INVALID_ERROR, "invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
       //TODO:(xiyu) confirm to delte it
     } else if (!is_virtual_table(table_id_) && 1 > rowkey_column_num_ && OB_INVALID_ID == dblink_id_) {
-      valid_ret = false;
+      ret = OB_INVALID_ERROR;
       LOG_WARN_RET(OB_INVALID_ERROR, "no primary key specified:", K_(table_name));
     } else if (index_column_num_ < 0 || index_column_num_ > OB_MAX_ROWKEY_COLUMN_NUMBER) {
-      valid_ret = false;
+      ret = OB_INVALID_ERROR;
       LOG_WARN_RET(OB_INVALID_ERROR, "invalid index_column_num", K_(table_name), K_(index_column_num));
     } else if (part_key_column_num_ > OB_MAX_PARTITION_KEY_COLUMN_NUMBER) {
-      valid_ret = false;
+      ret = OB_INVALID_ERROR;
       LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num invalid", K_(table_name),
           K_(part_key_column_num), K(OB_MAX_PARTITION_KEY_COLUMN_NUMBER));
     } else {
@@ -1843,19 +1842,19 @@ bool ObTableSchema::is_valid() const
       ObColumnSchemaV2 *column = NULL;
 
       if (NULL == column_array_) {
-        valid_ret = false;
+        ret = OB_INVALID_ERROR;
         LOG_WARN_RET(OB_INVALID_ERROR, "The column_array is NULL.");
       }
-      for (int64_t i = 0; valid_ret && i < column_cnt_; ++i) {
+      for (int64_t i = 0; !OB_FAIL(ret) && i < column_cnt_; ++i) {
         if (NULL == (column = column_array_[i])) {
-          valid_ret = false;
+          ret = OB_INVALID_ERROR;
           LOG_WARN_RET(OB_INVALID_ERROR, "The column is NULL.");
         } else {
           if (column->get_rowkey_position() > 0) {
             ++def_rowkey_col;
             if ((column->get_column_id() > max_used_column_id_)
                 && (column->get_column_id() <= common::OB_MAX_TMP_COLUMN_ID)) {
-              valid_ret = false;
+              ret = OB_INVALID_ERROR;
               LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
                         "column_name", column->get_column_name(),
                         "column_id", column->get_column_id(),
@@ -1866,7 +1865,7 @@ bool ObTableSchema::is_valid() const
           if (column->is_index_column()) {
             ++def_index_col;
             if (column->get_column_id() > max_used_column_id_) {
-              valid_ret = false;
+              ret = OB_INVALID_ERROR;
               LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
                        "column_name", column->get_column_name(),
                        "column_id", column->get_column_id(),
@@ -1894,14 +1893,23 @@ bool ObTableSchema::is_valid() const
                     "data_length", column->get_data_length(),
                     "column_name", column->get_column_name(),
                     K(OB_MAX_VARCHAR_LENGTH));
-                valid_ret = false;
+                ret = OB_INVALID_ERROR;
               }
-              varchar_col_total_length += column->get_data_length();
+              int64_t len;
+              if (count_varchar_size_by_byte) {
+                if (OB_FAIL(ret = column->get_byte_length(len, lib::is_oracle_mode(), false))) {
+                  LOG_WARN("get_byte_length failed ", K(ret));
+                  break;
+                }
+              } else {
+                len = column->get_data_length();
+              }
+              varchar_col_total_length += len;
               if (column->is_rowkey_column() && !column->is_hidden()) {
                 if (is_index_table() && 0 == column->get_index_position()) {
                   // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
                 } else {
-                  rowkey_varchar_col_length += column->get_data_length();
+                  rowkey_varchar_col_length += len;
                 }
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
@@ -1912,7 +1920,7 @@ bool ObTableSchema::is_valid() const
                 LOG_WARN_RET(OB_INVALID_ERROR, "length of text/blob column is larger than the max allowed length, ",
                     "data_length", column->get_data_length(), "column_name",
                     column->get_column_name(), K(max_length));
-                valid_ret = false;
+                ret = OB_INVALID_ERROR;
               } else if (!column->is_shadow_column()) {
                 // TODO @hanhui need seperate inline memtable length from store length
                 varchar_col_total_length += min(column->get_data_length(), get_lob_inrow_threshold());
@@ -1922,24 +1930,24 @@ bool ObTableSchema::is_valid() const
         }
       }
 
-      if (valid_ret) {
+      if (!OB_FAIL(ret)) {
         ObColumnGroupSchema *column_group = NULL;
-        for (int64_t i = 0; valid_ret && (i < column_group_cnt_); ++i) {
+        for (int64_t i = 0; !OB_FAIL(ret) && (i < column_group_cnt_); ++i) {
           if (OB_ISNULL(column_group = column_group_arr_[i])) {
-            valid_ret = false;
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group should not be null", K(i), K_(column_group_cnt));
           } else if (!column_group->is_valid()) {
-            valid_ret = false;
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group is invalid", K(i), KPC(column_group));
           } else if (column_group->get_column_group_id() > max_used_column_group_id_) {
-            valid_ret = false;
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group id should not be greater than max_used_column_group_id",
               "cg_id", column_group->get_column_group_id(), K_(max_used_column_group_id));
           }
         }
       }
 
-      if (valid_ret) {
+      if (!OB_FAIL(ret)) {
         //TODO oushen confirm the length
         //
         // jiage: inner table shouldn't check VARCHAR length for
@@ -1954,38 +1962,222 @@ bool ObTableSchema::is_valid() const
           const ObString &col_name = column->get_column_name_str();
           LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
                          static_cast<int>(varchar_col_total_length), max_row_length, col_name.ptr());
-          valid_ret = false;
+          ret = OB_ERR_VARCHAR_TOO_LONG;
         } else if (max_rowkey_length < rowkey_varchar_col_length) {
           LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar primary key columns is larger than the max allowed length",
                    K(rowkey_varchar_col_length), K(max_rowkey_length));
           LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, max_rowkey_length);
-          valid_ret = false;
+          ret = OB_ERR_TOO_LONG_KEY_LENGTH;
         }
       }
-      if (valid_ret) {
+      if (!OB_FAIL(ret)) {
         if (def_rowkey_col != rowkey_column_num_) {
-          valid_ret = false;
+          ret = OB_INVALID_ERROR;
           LOG_WARN_RET(OB_INVALID_ERROR, "rowkey_column_num not equal with defined_num",
                    K_(rowkey_column_num), K(def_rowkey_col), K_(table_name));
         }
       }
-      if (valid_ret) {
+      if (!OB_FAIL(ret)) {
         if (def_index_col != index_column_num_) {
-          valid_ret = false;
+          ret = OB_INVALID_ERROR;
           LOG_WARN_RET(OB_INVALID_ERROR, "index_column_num not equal with defined_num",
                    K_(index_column_num), K(def_index_col), K_(table_name));
         }
       }
-      if (valid_ret) {
+      if (!OB_FAIL(ret)) {
         if (def_part_key_col != part_key_column_num_ || def_subpart_key_col != subpart_key_column_num_) {
-          valid_ret = false;
+          ret = OB_INVALID_ERROR;
           LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num not equal with the defined num",
                    K_(part_key_column_num), K(def_part_key_col), K_(table_name));
         }
       }
     }
   }
-  return valid_ret;
+  return ret;
+}
+
+// return false if invalid, if you care invalid reason, please use check_valid() rather than this one
+bool ObTableSchema::is_valid() const
+{
+  return check_valid(false) == OB_SUCCESS;
+  // bool valid_ret = true;
+
+  // if (!ObSimpleTableSchemaV2::is_valid()) {
+  //   valid_ret = false;
+  //   LOG_WARN_RET(OB_INVALID_ERROR, "schema is invalid", K_(error_ret));
+  // }
+
+  // if (!valid_ret || is_view_table()) {
+  //   // no need checking other options for view
+  //   // XIYU: TODO for materialized view
+  // } else {
+  //   if (is_virtual_table(table_id_) && 0 > rowkey_column_num_) {
+  //     valid_ret = false;
+  //     LOG_WARN_RET(OB_INVALID_ERROR, "invalid rowkey_column_num:", K_(table_name), K_(rowkey_column_num));
+  //     //TODO:(xiyu) confirm to delte it
+  //   } else if (!is_virtual_table(table_id_) && 1 > rowkey_column_num_ && OB_INVALID_ID == dblink_id_) {
+  //     valid_ret = false;
+  //     LOG_WARN_RET(OB_INVALID_ERROR, "no primary key specified:", K_(table_name));
+  //   } else if (index_column_num_ < 0 || index_column_num_ > OB_MAX_ROWKEY_COLUMN_NUMBER) {
+  //     valid_ret = false;
+  //     LOG_WARN_RET(OB_INVALID_ERROR, "invalid index_column_num", K_(table_name), K_(index_column_num));
+  //   } else if (part_key_column_num_ > OB_MAX_PARTITION_KEY_COLUMN_NUMBER) {
+  //     valid_ret = false;
+  //     LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num invalid", K_(table_name),
+  //         K_(part_key_column_num), K(OB_MAX_PARTITION_KEY_COLUMN_NUMBER));
+  //   } else {
+  //     int64_t def_rowkey_col = 0;
+  //     int64_t def_index_col = 0;
+  //     int64_t def_part_key_col = 0;
+  //     int64_t def_subpart_key_col = 0;
+  //     int64_t varchar_col_total_length = 0;
+  //     int64_t rowkey_varchar_col_length = 0;
+  //     ObColumnSchemaV2 *column = NULL;
+
+  //     if (NULL == column_array_) {
+  //       valid_ret = false;
+  //       LOG_WARN_RET(OB_INVALID_ERROR, "The column_array is NULL.");
+  //     }
+  //     for (int64_t i = 0; valid_ret && i < column_cnt_; ++i) {
+  //       if (NULL == (column = column_array_[i])) {
+  //         valid_ret = false;
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "The column is NULL.");
+  //       } else {
+  //         if (column->get_rowkey_position() > 0) {
+  //           ++def_rowkey_col;
+  //           if ((column->get_column_id() > max_used_column_id_)
+  //               && (column->get_column_id() <= common::OB_MAX_TMP_COLUMN_ID)) {
+  //             valid_ret = false;
+  //             LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
+  //                       "column_name", column->get_column_name(),
+  //                       "column_id", column->get_column_id(),
+  //                       K_(max_used_column_id));
+  //           }
+  //         }
+
+  //         if (column->is_index_column()) {
+  //           ++def_index_col;
+  //           if (column->get_column_id() > max_used_column_id_) {
+  //             valid_ret = false;
+  //             LOG_WARN_RET(OB_INVALID_ERROR, "column id is greater than max_used_column_id, ",
+  //                      "column_name", column->get_column_name(),
+  //                      "column_id", column->get_column_id(),
+  //                      K_(max_used_column_id));
+  //           }
+  //         }
+  //         if (column->is_part_key_column()) {
+  //           ++def_part_key_col;
+  //         }
+  //         if (column->is_subpart_key_column()) {
+  //           ++def_subpart_key_col;
+  //         }
+
+  //         // TODO@nijia.nj data_length should be checked according specified charset
+  //         if ((is_table() || is_tmp_table() || is_external_table()) && !column->is_column_stored_in_sstable()) {
+  //           // When the column is a virtual generated column in the table, the column will not be stored,
+  //           // so there is no need to calculate its length
+  //         } else if (is_storage_index_table() && column->is_fulltext_column()) {
+  //           // The full text column in the index only counts the length of one word segment
+  //           varchar_col_total_length += OB_MAX_OBJECT_NAME_LENGTH;
+  //         } else {
+  //           if (ObVarcharType == column->get_data_type()) {
+  //             if (OB_MAX_VARCHAR_LENGTH < column->get_data_length()) {
+  //               LOG_WARN_RET(OB_INVALID_ERROR, "length of varchar column is larger than the max allowed length, ",
+  //                   "data_length", column->get_data_length(),
+  //                   "column_name", column->get_column_name(),
+  //                   K(OB_MAX_VARCHAR_LENGTH));
+  //               valid_ret = false;
+  //             }
+  //             varchar_col_total_length += column->get_data_length();
+  //             if (column->is_rowkey_column() && !column->is_hidden()) {
+  //               if (is_index_table() && 0 == column->get_index_position()) {
+  //                 // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
+  //               } else {
+  //                 rowkey_varchar_col_length += column->get_data_length();
+  //               }
+  //             }
+  //           } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
+  //                      || ob_is_geometry_tc(column->get_data_type())) {
+  //             ObLength max_length = 0;
+  //             max_length = ObAccuracy::MAX_ACCURACY[column->get_data_type()].get_length();
+  //             if (max_length < column->get_data_length()) {
+  //               LOG_WARN_RET(OB_INVALID_ERROR, "length of text/blob column is larger than the max allowed length, ",
+  //                   "data_length", column->get_data_length(), "column_name",
+  //                   column->get_column_name(), K(max_length));
+  //               valid_ret = false;
+  //             } else if (!column->is_shadow_column()) {
+  //               // TODO @hanhui need seperate inline memtable length from store length
+  //               varchar_col_total_length += min(column->get_data_length(), get_lob_inrow_threshold());
+  //             }
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     if (valid_ret) {
+  //       ObColumnGroupSchema *column_group = NULL;
+  //       for (int64_t i = 0; valid_ret && (i < column_group_cnt_); ++i) {
+  //         if (OB_ISNULL(column_group = column_group_arr_[i])) {
+  //           valid_ret = false;
+  //           LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group should not be null", K(i), K_(column_group_cnt));
+  //         } else if (!column_group->is_valid()) {
+  //           valid_ret = false;
+  //           LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group is invalid", K(i), KPC(column_group));
+  //         } else if (column_group->get_column_group_id() > max_used_column_group_id_) {
+  //           valid_ret = false;
+  //           LOG_WARN_RET(OB_ERR_UNEXPECTED, "column_group id should not be greater than max_used_column_group_id",
+  //             "cg_id", column_group->get_column_group_id(), K_(max_used_column_group_id));
+  //         }
+  //       }
+  //     }
+
+  //     if (valid_ret) {
+  //       //TODO oushen confirm the length
+  //       //
+  //       // jiage: inner table shouldn't check VARCHAR length for
+  //       // compatibility.  VARCHAR length in previous version means
+  //       // maximum bytes of column, whereas new version changes to chars
+  //       // of column.
+  //       const int64_t max_row_length = is_sys_table() || is_vir_table() ? INT64_MAX : OB_MAX_USER_ROW_LENGTH;
+  //       const int64_t max_rowkey_length = is_sys_table() || is_vir_table() ? OB_MAX_ROW_KEY_LENGTH : OB_MAX_USER_ROW_KEY_LENGTH;
+  //       if (max_row_length < varchar_col_total_length) {
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar columns is larger than the max allowed length",
+  //                  K(varchar_col_total_length), K(max_row_length));
+  //         const ObString &col_name = column->get_column_name_str();
+  //         LOG_USER_ERROR(OB_ERR_VARCHAR_TOO_LONG,
+  //                        static_cast<int>(varchar_col_total_length), max_row_length, col_name.ptr());
+  //         valid_ret = false;
+  //       } else if (max_rowkey_length < rowkey_varchar_col_length) {
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "total length of varchar primary key columns is larger than the max allowed length",
+  //                  K(rowkey_varchar_col_length), K(max_rowkey_length));
+  //         LOG_USER_ERROR(OB_ERR_TOO_LONG_KEY_LENGTH, max_rowkey_length);
+  //         valid_ret = false;
+  //       }
+  //     }
+  //     if (valid_ret) {
+  //       if (def_rowkey_col != rowkey_column_num_) {
+  //         valid_ret = false;
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "rowkey_column_num not equal with defined_num",
+  //                  K_(rowkey_column_num), K(def_rowkey_col), K_(table_name));
+  //       }
+  //     }
+  //     if (valid_ret) {
+  //       if (def_index_col != index_column_num_) {
+  //         valid_ret = false;
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "index_column_num not equal with defined_num",
+  //                  K_(index_column_num), K(def_index_col), K_(table_name));
+  //       }
+  //     }
+  //     if (valid_ret) {
+  //       if (def_part_key_col != part_key_column_num_ || def_subpart_key_col != subpart_key_column_num_) {
+  //         valid_ret = false;
+  //         LOG_WARN_RET(OB_INVALID_ERROR, "partition key column num not equal with the defined num",
+  //                  K_(part_key_column_num), K(def_part_key_col), K_(table_name));
+  //       }
+  //     }
+  //   }
+  // }
+  // return valid_ret;
 }
 
 int ObTableSchema::set_compress_func_name(const char *compressor)

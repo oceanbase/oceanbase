@@ -17643,7 +17643,9 @@ int ObDDLService::rebuild_hidden_table_index(
     for (int64_t i = 0; i < new_table_schemas.count() && OB_SUCC(ret); i++) {
       ObTableSchema &tmp_schema = new_table_schemas.at(i);
       tmp_schema.set_in_offline_ddl_white_list(true); // allow rebuild table index of hidden table
-      if (OB_FAIL(ddl_operator.create_table(tmp_schema, trans, NULL, true))) {
+      if(OB_FAIL(ret = tmp_schema.check_valid(true))) {
+        LOG_WARN("schema is invalid", K(tmp_schema), K(ret));
+      } else if (OB_FAIL(ddl_operator.create_table(tmp_schema, trans, NULL, true))) {
         LOG_WARN("failed to create table schema, ", K(ret));
       }
     }

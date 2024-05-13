@@ -1207,6 +1207,7 @@ public:
   inline void set_auto_increment_cache_size(const int64_t auto_increment_cache_size)
   { auto_increment_cache_size_ = auto_increment_cache_size; }
 //get methods
+  int check_valid(bool count_varchar_size_by_byte) const;
   bool is_valid() const;
 
   int get_generated_column_by_define(const common::ObString &col_def,

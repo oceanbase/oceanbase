@@ -1,26 +1,32 @@
-# owner: zhuoran.zzr
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : kunxing.lyk
 # owner group: storage
-# description: previous index build do not check row length in index table, which may lead to table invalid in following operatiton
-
---result_format 4
-connect (obsys,$OBMYSQL_MS0,root@sys,,Oceanbase,$OBMYSQL_PORT);
-
-connection obsys;
+# description: test alter index rowkey col size exceeds MAX
+#--disable_abort_on_error
 
 --disable_warnings
-drop table if exists t1;
+drop database if exists lyk;
 --enable_warnings
+
+create database lyk;
+
+use lyk;
 
 
 # check index length, while 
 create table t1(c1 int, c2 varbinary(8000), c3 int);
 create index idx1 on t1(c2, c3);
---error 1118
+--error 1071
 alter table t1 modify column c3 varbinary(10000);
 
 drop table t1;
 
 create table t1(c1 int, c2 varchar(1000), c3 int);
 create index idx1 on t1(c2, c3);
---error 1118
+--error 1071
 alter table t1 modify column c3 varchar(10000);
+
+drop table t1;
+drop database lyk;
