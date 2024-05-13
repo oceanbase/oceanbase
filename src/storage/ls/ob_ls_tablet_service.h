@@ -269,6 +269,16 @@ public:
   int ha_get_tablet(
       const common::ObTabletID &tablet_id,
       ObTabletHandle &handle);
+  int get_tablet_without_memtables(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObTabletHandle &handle);
+  int ha_get_tablet_without_memtables(
+      const WashTabletPriority &priority,
+      const ObTabletMapKey &key,
+      common::ObArenaAllocator &allocator,
+      ObTabletHandle &handle);
   int update_tablet_mstx(
       const ObTabletMapKey &key,
       const ObMetaDiskAddr &old_addr,

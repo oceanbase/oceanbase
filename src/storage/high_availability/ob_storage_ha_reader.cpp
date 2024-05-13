@@ -571,6 +571,7 @@ ObCopyMacroBlockObProducer::ObCopyMacroBlockObProducer()
     macro_idx_(0),
     handle_idx_(0),
     prefetch_meta_time_(0),
+    tablet_allocator_("HaTabletHdl"),
     tablet_handle_(),
     sstable_handle_(),
     sstable_(nullptr),
@@ -606,6 +607,9 @@ int ObCopyMacroBlockObProducer::init(
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObSSTableMetaHandle meta_handle;
   common::ObSafeArenaAllocator allocator(allocator_);
+  ObTabletMapKey map_key;
+  map_key.ls_id_ = ls_id;
+  map_key.tablet_id_ = table_key.get_tablet_id();
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -625,8 +629,9 @@ int ObCopyMacroBlockObProducer::init(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", KR(ret), K(tenant_id), K(ls_id), KPC(ls));
-  } else if (OB_FAIL(ls->ha_get_tablet(table_key.get_tablet_id(), tablet_handle_))) {
-    LOG_WARN("failed to get tablet handle", K(ret), K(table_key), K(ls_id));
+  } else if (OB_FAIL(ls->ha_get_tablet_without_memtables(
+      WashTabletPriority::WTP_LOW, map_key, tablet_allocator_, tablet_handle_))) {
+    LOG_WARN("failed to ha get tablet with allocator without memtables", K(ret), K(map_key));
   } else if (OB_UNLIKELY(nullptr == (tablet = tablet_handle_.get_obj()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet not be NULL", KR(ret), K(tenant_id), K(ls_id), KPC(tablet));
