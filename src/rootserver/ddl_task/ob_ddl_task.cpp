@@ -133,7 +133,9 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const uint64_t data_format_version,
                                                  const int64_t consumer_group_id,
                                                  const bool is_abort,
-                                                 const int32_t sub_task_trace_id)
+                                                 const int32_t sub_task_trace_id,
+                                                 const bool is_unique_index,
+                                                 const bool is_global_index)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
@@ -141,6 +143,8 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   consumer_group_id_ = consumer_group_id;
   is_abort_ = is_abort;
   sub_task_trace_id_ = sub_task_trace_id;
+  is_unique_index_ = is_unique_index;
+  is_global_index_ = is_global_index;
 }
 
 void ObDDLTaskSerializeField::reset()
@@ -151,6 +155,8 @@ void ObDDLTaskSerializeField::reset()
   consumer_group_id_ = 0;
   is_abort_ = false;
   sub_task_trace_id_ = 0;
+  is_unique_index_ = false;
+  is_global_index_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
@@ -159,7 +165,9 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     data_format_version_,
                     consumer_group_id_,
                     is_abort_,
-                    sub_task_trace_id_);
+                    sub_task_trace_id_,
+                    is_unique_index_,
+                    is_global_index_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
