@@ -393,6 +393,10 @@ public:
     ObSpinLockGuard guard(lock_);
     return mask_set_.mask(part);
   }
+  int unmask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.unmask(part);
+  }
   bool is_all_mask() {
     ObSpinLockGuard guard(lock_);
     return mask_set_.is_all_mask();

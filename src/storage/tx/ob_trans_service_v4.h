@@ -360,6 +360,7 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const ObTxDesc *tx,
                               const bool for_transfer,
                               const ObTxSEQ from_scn,
+                              const int64_t request_id,
                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
@@ -388,6 +389,7 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const int64_t tx_seq_base,
                                  const int64_t expire_ts,
                                  const ObTxSEQ specified_from_scn,
+                                 const int64_t request_id,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);

@@ -308,6 +308,11 @@ void ObPartTransCtx::destroy()
     timeout_task_.destroy();
     trace_info_.reset();
     block_frozen_memtable_ = nullptr;
+
+    last_rollback_to_request_id_ = 0;
+    last_rollback_to_timestamp_ = 0;
+    last_transfer_in_timestamp_ = 0;
+
     is_inited_ = false;
   }
 }
@@ -371,6 +376,9 @@ void ObPartTransCtx::default_init_()
   standby_part_collected_.reset();
   trace_log_.reset();
   transfer_deleted_ = false;
+  last_rollback_to_request_id_ = 0;
+  last_rollback_to_timestamp_ = 0;
+  last_transfer_in_timestamp_ = 0;
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
@@ -8237,6 +8245,7 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
                                           ObTxSEQ from_scn,
                                           const ObTxSEQ to_scn,
                                           const int64_t seq_base,
+                                          const int64_t request_id,
                                           ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
@@ -8273,13 +8282,49 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   } else if (to_scn.get_branch() == 0) {
     last_scn_ = to_scn;
   }
-  // must add downstream parts when return success
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < exec_info_.intermediate_participants_.count(); idx++) {
-    if (OB_FAIL(downstream_parts.push_back(ObTxLSEpochPair(exec_info_.intermediate_participants_.at(idx).ls_id_,
-                                                           exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
-      TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
+
+  if (OB_SUCC(ret)) {
+    bool need_downstream = true;
+    int64_t current_rollback_to_timestamp = ObTimeUtility::current_time();
+    if (request_id != 0 && // come from rollback to request
+        request_id == last_rollback_to_request_id_) { // the same rollback to with the last one
+      if (last_transfer_in_timestamp_ != 0 &&
+          last_rollback_to_timestamp_ != 0 &&
+          // encounter transfer between two same rollback to
+          last_transfer_in_timestamp_ > last_rollback_to_timestamp_) {
+        need_downstream = true;
+        TRANS_LOG(INFO, "transfer between rollback to happened", K(ret), K(request_id),
+                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
+                  K(last_rollback_to_request_id_), KPC(this));
+      } else {
+        need_downstream = false;
+        TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret), K(request_id),
+                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
+                  K(last_rollback_to_request_id_), KPC(this));
+      }
+    } else {
+      need_downstream = true;
+    }
+
+    // must add downstream parts when return success
+    for (int64_t idx = 0;
+         OB_SUCC(ret) &&
+           need_downstream &&
+           idx < exec_info_.intermediate_participants_.count();
+         idx++) {
+      if (OB_FAIL(downstream_parts.push_back(
+                    ObTxLSEpochPair(exec_info_.intermediate_participants_.at(idx).ls_id_,
+                                    exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
+        TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      last_rollback_to_request_id_ = request_id;
+      last_rollback_to_timestamp_ = current_rollback_to_timestamp;
     }
   }
+
   REC_TRANS_TRACE_EXT(tlog_, rollback_savepoint,
                       OB_ID(ret), ret,
                       OB_ID(from), from_scn.cast_to_int(),
@@ -9838,6 +9883,8 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         exec_info_.is_transfer_blocking_ = false;
         if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
           TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
+        } else {
+          last_transfer_in_timestamp_ = ObTimeUtility::current_time();
         }
       }
     }
