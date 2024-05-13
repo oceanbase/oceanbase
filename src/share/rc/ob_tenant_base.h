@@ -231,6 +231,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
 #define MTL_MEMBERS                                  \
   MTL_LIST(                                          \
       omt::ObSharedTimer*,                           \
+      oceanbase::sql::ObTenantSQLSessionMgr*,        \
       storage::ObTenantMetaMemMgr*,                  \
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
@@ -321,7 +322,6 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObHeartbeatService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
-      oceanbase::sql::ObTenantSQLSessionMgr*,       \
       oceanbase::common::ObOptStatMonitorManager*,  \
       omt::ObTenantSrs*,                            \
       table::ObHTableLockMgr*,                      \

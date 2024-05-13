@@ -131,18 +131,22 @@ int ObTenantSQLSessionMgr::mtl_new(ObTenantSQLSessionMgr *&t_session_mgr)
 int ObTenantSQLSessionMgr::mtl_init(ObTenantSQLSessionMgr *&t_session_mgr)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(t_session_mgr->init())) {
-    LOG_WARN("failed to init tenant session manager", K(ret));
+  if (t_session_mgr != NULL) {
+    if (OB_FAIL(t_session_mgr->init())) {
+      LOG_WARN("failed to init tenant session manager", K(ret));
+    }
   }
   return ret;
 }
 
 void ObTenantSQLSessionMgr::mtl_wait(ObTenantSQLSessionMgr *&t_session_mgr)
 {
-  while (t_session_mgr->count() != 0) {
-    LOG_WARN_RET(OB_NEED_RETRY, "tenant session mgr should be empty",
-                 K(t_session_mgr->count()));
-    usleep(1000 * 1000);
+  if (t_session_mgr != NULL) {
+    while (t_session_mgr->count() != 0) {
+      LOG_WARN_RET(OB_NEED_RETRY, "tenant session mgr should be empty",
+                   K(t_session_mgr->count()));
+      usleep(1000 * 1000);
+    }
   }
   LOG_INFO("success to wait tenant session mgr");
 }
@@ -165,7 +169,9 @@ ObSQLSessionInfo *ObTenantSQLSessionMgr::alloc_session()
     OX (session = op_instance_alloc_args(&session_allocator_,
                                          ObSQLSessionInfo,
                                          tenant_id_));
-    OX (ATOMIC_FAA(&count_, 1));
+    if (session != NULL) {
+      OX (ATOMIC_FAA(&count_, 1));
+    }
   }
   OV (OB_NOT_NULL(session));
   OX (session->set_tenant_session_mgr(this));
