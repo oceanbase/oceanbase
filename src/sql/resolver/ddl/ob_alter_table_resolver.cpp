@@ -4519,6 +4519,10 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
     if (OB_ISNULL(alter_table_stmt)) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "alter table stmt should not be null", K(ret));
+    } else if (table_schema_->is_materialized_view()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("alter partition of materialized view is not supported", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of materialized view is");
     }
 
     if (OB_SUCC(ret)) {
