@@ -1173,6 +1173,25 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprCanAccessTrigger::can_access_trigger,                /* 694 */
   NULL, //ObRelationalExprOperator::eval_min_max_compare,             /* 695 */
   NULL, //ObRelationalExprOperator::min_max_row_eval,                 /* 696 */
+  NULL, // ObExprRbBuildEmpty::eval_rb_build_empty,                   /* 697 */
+  NULL, // ObExprRbIsEmpty::eval_rb_is_empty,                         /* 698 */
+  NULL, // ObExprRbBuildVarbinary::eval_rb_build_varbinary,           /* 699 */
+  NULL, // ObExprRbToVarbinary::eval_rb_to_varbinary,                 /* 700 */
+  NULL, // ObExprRbCardinality::eval_rb_cardinality,                  /* 701 */
+  NULL, // ObExprRbAndCardinality::eval_rb_and_cardinality,           /* 702 */
+  NULL, // ObExprRbOrCardinality::eval_rb_or_cardinality,             /* 703 */
+  NULL, // ObExprRbXorCardinality::eval_rb_xor_cardinality,           /* 704 */
+  NULL, // ObExprRbAndnotCardinality::eval_rb_andnot_cardinality,     /* 705 */
+  NULL, // ObExprRbAndNull2emptyCardinality::eval_rb_and_null2empty_cardinality, /* 706 */
+  NULL, // ObExprRbOrNull2emptyCardinality::eval_rb_or_null2empty_cardinality, /* 707 */
+  NULL, // ObExprRbAndnotNull2emptyCardinality::eval_rb_andnot_null2empty_cardinality, /* 708 */
+  NULL, // ObExprRbAnd::eval_rb_and,                                  /* 709 */
+  NULL, // ObExprRbOr::eval_rb_or,                                    /* 710 */
+  NULL, // ObExprRbXor::eval_rb_xor,                                  /* 711 */
+  NULL, // ObExprRbAndnot::eval_rb_andnot,                            /* 712 */
+  NULL, // ObExprRbAndNull2empty::eval_rb_and_null2empty,             /* 713 */
+  NULL, // ObExprRbOrNull2empty::eval_rb_or_null2empty,               /* 714 */
+  NULL, // ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,       /* 715 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
