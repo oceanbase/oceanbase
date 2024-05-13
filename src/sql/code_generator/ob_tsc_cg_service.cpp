@@ -1206,6 +1206,7 @@ int ObTscCgService::generate_text_ir_ctdef(const ObLogTableScan &op,
   }
 
   if (OB_SUCC(ret)) {
+    root_ctdef = ir_scan_ctdef;
     if (OB_FAIL(generate_text_ir_spec_exprs(op, *ir_scan_ctdef))) {
       LOG_WARN("failed to generate text ir spec exprs", K(ret), KPC(match_against));
     } else {
@@ -1235,10 +1236,12 @@ int ObTscCgService::generate_text_ir_ctdef(const ObLogTableScan &op,
         ir_scan_ctdef,
         sort_ctdef))) {
       LOG_WARN("generate sort ctdef failed", K(ret));
+    } else {
+      root_ctdef = sort_ctdef;
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && op.get_index_back()) {
     ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
     ObDASBaseCtDef *ir_output_ctdef = nullptr == sort_ctdef ?
         static_cast<ObDASBaseCtDef *>(ir_scan_ctdef) : static_cast<ObDASBaseCtDef *>(sort_ctdef);
@@ -1359,9 +1362,7 @@ int ObTscCgService::generate_text_ir_pushdown_expr_ctdef(
   int ret = OB_SUCCESS;
   const uint64_t scan_table_id = scan_ctdef.ref_table_id_;
   const ObTextRetrievalInfo &tr_info = op.get_text_retrieval_info();
-  if (OB_FAIL(cg_.mark_expr_self_produced(tr_info.match_expr_))) {
-    LOG_WARN("failed to mark raw agg expr", K(ret), KPC(tr_info.match_expr_));
-  } else if (!scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown()) {
+  if (!scan_ctdef.pd_expr_spec_.pd_storage_flag_.is_aggregate_pushdown()) {
     // this das scan do not need aggregate pushdown
   } else {
     ObSEArray<ObAggFunRawExpr *, 2> agg_expr_arr;
@@ -1441,6 +1442,8 @@ int ObTscCgService::generate_text_ir_spec_exprs(const ObLogTableScan &op,
       OB_ISNULL(tr_info.doc_id_column_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(cg_.mark_expr_self_produced(tr_info.match_expr_))) {
+    LOG_WARN("failed to mark raw agg expr", K(ret), KPC(tr_info.match_expr_));
   } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.match_expr_->get_search_key(), text_ir_scan_ctdef.search_text_))) {
     LOG_WARN("cg rt expr for search text failed", K(ret));
   } else if (OB_ISNULL(tr_info.pushdown_match_filter_)) {
@@ -1483,13 +1486,17 @@ int ObTscCgService::generate_text_ir_spec_exprs(const ObLogTableScan &op,
       LOG_WARN("unexpected null relevance expr", K(ret));
     } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.relevance_expr_, text_ir_scan_ctdef.relevance_expr_))) {
       LOG_WARN("cg rt expr for relevance expr failed", K(ret));
-    } else if (OB_FAIL(cg_.generate_rt_expr(*tr_info.match_expr_,
+    }
+  }
+
+  if (OB_SUCC(ret) && (op.need_text_retrieval_calc_relevance() || nullptr != tr_info.pushdown_match_filter_)) {
+    if (OB_FAIL(cg_.generate_rt_expr(*tr_info.match_expr_,
                                             text_ir_scan_ctdef.relevance_proj_col_))) {
       LOG_WARN("cg rt expr for relevance score proejction failed", K(ret));
     } else if (OB_ISNULL(text_ir_scan_ctdef.relevance_proj_col_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected relevance pseudo score colum not found", K(ret));
-    } else if (OB_FAIL(result_output.push_back(text_ir_scan_ctdef.relevance_expr_))) {
+    } else if (OB_FAIL(result_output.push_back(text_ir_scan_ctdef.relevance_proj_col_))) {
       LOG_WARN("failed to append relevance expr", K(ret));
     }
   }

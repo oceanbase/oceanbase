@@ -1942,6 +1942,16 @@ public:
                                            bool &is_ref);
 
   static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
+  // check whether the score calculated by match expr is actually utilized
+  static int check_need_calc_match_score(ObExecContext *exec_ctx,
+                                        const ObDMLStmt* stmt,
+                                        ObRawExpr* match_expr,
+                                        bool &need_calc,
+                                        ObIArray<ObExprConstraint> &constraints);
+  static int check_expr_eq_zero(ObExecContext *ctx,
+                                ObRawExpr *expr,
+                                bool &eq_zero,
+                                ObIArray<ObExprConstraint> &constraints);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1991,6 +2001,11 @@ private:
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
                                          bool &is_safe);
+  static int inner_check_need_calc_match_score(ObExecContext *exec_ctx,
+                                              ObRawExpr* expr,
+                                              ObRawExpr* match_expr,
+                                              bool &need_calc,
+                                              ObIArray<ObExprConstraint> &constraints);
 };
 
 class StmtUniqueKeyProvider

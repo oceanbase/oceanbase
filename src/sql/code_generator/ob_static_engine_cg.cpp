@@ -361,7 +361,8 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
         || is_virtual_table(tsc.get_ref_table_id())
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
         || (NULL != spec.get_parent() && PHY_DELETE == spec.get_parent()->type_)
-        || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_) {
+        || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_
+        || tsc.is_text_retrieval_scan()) {
       use_rich_format = false;
       LOG_DEBUG("tsc disable use rich format", K(tsc.get_index_back()), K(tsc.use_batch()),
                 K(is_virtual_table(tsc.get_ref_table_id())));

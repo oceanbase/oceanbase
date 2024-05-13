@@ -12006,6 +12006,7 @@ int ObJoinOrder::check_subquery_in_join_condition(const ObJoinType join_type,
 int ObJoinOrder::extract_used_columns(const uint64_t table_id,
                                       const uint64_t ref_table_id,
                                       bool only_normal_ref_expr,
+                                      bool consider_rowkey,
                                       ObIArray<uint64_t> &column_ids,
                                       ObIArray<ColumnItem> &columns)
 {
@@ -12031,15 +12032,18 @@ int ObJoinOrder::extract_used_columns(const uint64_t table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null table item", K(ret));
     } else {
-      // add all rowkey info, always used when merge ss-table and mem-table
-      const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-      uint64_t column_id = OB_INVALID_ID;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-        if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-          LOG_WARN("Fail to get column id", K(ret));
-        } else if (OB_FAIL(column_ids.push_back(column_id))) {
-          LOG_WARN("Fail to add column id", K(ret));
-        } else { /*do nothing*/ }
+      if (consider_rowkey) {
+        // for normal index, add all rowkey info, always used when merge ss-table and mem-table
+        // for fulltext index, rowkey info is not necessary
+        const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+        uint64_t column_id = OB_INVALID_ID;
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+          if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+            LOG_WARN("Fail to get column id", K(ret));
+          } else if (OB_FAIL(column_ids.push_back(column_id))) {
+            LOG_WARN("Fail to add column id", K(ret));
+          } else { /*do nothing*/ }
+        }
       }
       // add common column ids
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
@@ -12096,6 +12100,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
   } else if (OB_FAIL(extract_used_columns(table_id,
                                           ref_table_id,
                                           true,
+                                          !index_schema->is_fts_index_aux(),
                                           column_ids,
                                           dummy_columns))) {
     LOG_WARN("failed to extract column ids", K(table_id), K(ref_table_id), K(ret));
@@ -12500,6 +12505,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
       if (OB_FAIL(extract_used_columns(table_id,
                                       ref_table_id,
                                       index_id != ref_table_id && !ap->est_cost_info_.index_meta_info_.is_index_back_,
+                                      !index_meta_info.is_fulltext_index_,
                                       ap->est_cost_info_.access_columns_,
                                       dummy_columns))) {
         LOG_WARN("failed to extract used column ids", K(ret));

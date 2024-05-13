@@ -9495,10 +9495,10 @@ int ObRawExprUtils::extract_match_against_filters(const ObIArray<ObRawExpr *> &f
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null expr", K(ret));
     } else if (expr->has_flag(CNT_MATCH_EXPR)) {
-      if (OB_FAIL(match_filters.push_back(expr))) {
+      if (OB_FAIL(add_var_to_array_no_dup(match_filters, expr))) {
         LOG_WARN("failed to push text ir filters", K(ret));
       }
-    } else if (OB_FAIL(other_filters.push_back(expr))) {
+    } else if (OB_FAIL(add_var_to_array_no_dup(other_filters, expr))) {
       LOG_WARN("failed to push other filters", K(ret));
     }
   }

@@ -123,7 +123,7 @@ int ObTextRetrievalIterator::init(
     retrieval_param_ = &retrieval_param;
     tx_desc_ = tx_desc;
     snapshot_ = snapshot;
-    need_fwd_idx_agg_ = retrieval_param.get_ir_ctdef()->has_fwd_agg_;
+    need_fwd_idx_agg_ = retrieval_param.get_ir_ctdef()->has_fwd_agg_ && retrieval_param.need_relevance();
     need_inv_idx_agg_ = retrieval_param.need_relevance();
 
     if (OB_ISNULL(mem_context_)) {
@@ -206,18 +206,22 @@ int ObTextRetrievalIterator::get_next_row()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("retrieval iterator not inited", K(ret));
-  } else if (!inv_idx_agg_evaluated_) {
+  } else if (!inv_idx_agg_evaluated_ && retrieval_param_->need_relevance()) {
     if (OB_FAIL(do_doc_cnt_agg())) {
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("Fail to do document count aggregation", K(ret), K_(inv_idx_agg_param));
       }
     } else if (OB_FAIL(tsc_service->revert_scan_iter(inverted_idx_iter_))) {
       LOG_WARN("Fail to revert inverted index scan iterator after count aggregation", K(ret));
-    } else if (FALSE_IT(inverted_idx_iter_ = nullptr)) {
-    } else if (OB_FAIL(tsc_service->table_scan(inv_idx_scan_param_, inverted_idx_iter_))) {
-      LOG_WARN("failed to init inverted index scan iterator", K(ret));
     } else {
+      inverted_idx_iter_ = nullptr;
       inv_idx_agg_evaluated_ = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && nullptr == inverted_idx_iter_) {
+    if (OB_FAIL(tsc_service->table_scan(inv_idx_scan_param_, inverted_idx_iter_))) {
+      LOG_WARN("failed to init inverted index scan iterator", K(ret));
     }
   }
 
@@ -230,13 +234,15 @@ int ObTextRetrievalIterator::get_next_row()
     LOG_DEBUG("get one invert index scan row", "row",
         ROWEXPR2STR(*retrieval_param_->get_ir_rtdef()->get_inv_idx_scan_rtdef()->eval_ctx_,
         *inv_idx_scan_param_.output_exprs_));
-    clear_row_wise_evaluated_flag();
-    if (OB_FAIL(get_next_doc_token_cnt(need_fwd_idx_agg_))) {
-      LOG_WARN("failed to get next doc token count", K(ret));
-    } else if (OB_FAIL(fill_token_doc_cnt())) {
-      LOG_WARN("failed to get token doc cnt", K(ret));
-    } else if (OB_FAIL(project_relevance_expr())) {
-      LOG_WARN("failed to evaluate simarity expr", K(ret));
+    if (retrieval_param_->need_relevance()) {
+      clear_row_wise_evaluated_flag();
+      if (OB_FAIL(get_next_doc_token_cnt(need_fwd_idx_agg_))) {
+        LOG_WARN("failed to get next doc token count", K(ret));
+      } else if (OB_FAIL(fill_token_doc_cnt())) {
+        LOG_WARN("failed to get token doc cnt", K(ret));
+      } else if (OB_FAIL(project_relevance_expr())) {
+        LOG_WARN("failed to evaluate simarity expr", K(ret));
+      }
     }
   }
   return ret;
