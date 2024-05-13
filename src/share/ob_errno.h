@@ -1469,6 +1469,7 @@ constexpr int OB_ERR_OPERATOR_NOT_EXIST = -7298;
 constexpr int OB_INVALID_MASK = -7299;
 constexpr int OB_GEO_IN_DIFFERENT_COORDINATE = -7300;
 constexpr int OB_ERR_DOMAIN_COLUMN_DUPLICATE = -7301;
+constexpr int OB_ERR_PARSING_SPATIAL_PARAM = -7302;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -3684,6 +3685,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MASK__USER_ERROR_MSG "operator binding does not exist"
 #define OB_GEO_IN_DIFFERENT_COORDINATE__USER_ERROR_MSG "geometry objects are in different coordinate systems"
 #define OB_ERR_DOMAIN_COLUMN_DUPLICATE__USER_ERROR_MSG "cannot create multiple domain indexes on a column list using same"
+#define OB_ERR_PARSING_SPATIAL_PARAM__USER_ERROR_MSG "internal error while parsing spatial parameters"
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "XPATH syntax error: ''"
@@ -5948,6 +5950,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MASK__ORA_USER_ERROR_MSG "ORA-20000: operator binding does not exist"
 #define OB_GEO_IN_DIFFERENT_COORDINATE__ORA_USER_ERROR_MSG "ORA-13295: geometry objects are in different coordinate systems"
 #define OB_ERR_DOMAIN_COLUMN_DUPLICATE__ORA_USER_ERROR_MSG "ORA-29879: cannot create multiple domain indexes on a column list using same"
+#define OB_ERR_PARSING_SPATIAL_PARAM__ORA_USER_ERROR_MSG "ORA-13205: internal error while parsing spatial parameters"
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -6417,7 +6420,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2260];
+extern int g_all_ob_errnos[2261];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

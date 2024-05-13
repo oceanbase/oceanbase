@@ -2069,6 +2069,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_OPERATOR_NOT_EXIST, -7298, -1, "42000", "operator bin
 DEFINE_ORACLE_ERROR(OB_INVALID_MASK, -7299, -1, "42000", "operator binding does not exist", 20000, "operator binding does not exist");
 DEFINE_ORACLE_ERROR(OB_GEO_IN_DIFFERENT_COORDINATE, -7300, -1, "42000", "geometry objects are in different coordinate systems", 13295, "geometry objects are in different coordinate systems");
 DEFINE_ORACLE_ERROR(OB_ERR_DOMAIN_COLUMN_DUPLICATE, -7301, -1, "42000", "cannot create multiple domain indexes on a column list using same", 29879, "cannot create multiple domain indexes on a column list using same");
+DEFINE_ORACLE_ERROR(OB_ERR_PARSING_SPATIAL_PARAM, -7302, -1, "42000", "internal error while parsing spatial parameters", 13205, "internal error while parsing spatial parameters");
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GIS错误码值域  [-7201, -7400)
