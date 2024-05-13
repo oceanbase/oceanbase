@@ -1079,7 +1079,7 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &s
   session_priv.db_ = get_database_name();
   session_priv.user_priv_set_ = user_priv_set_;
   session_priv.db_priv_set_ = db_priv_set_;
-  session_priv.enable_role_id_array_.assign(enable_role_array_);
+  session_priv.enable_role_id_array_.assign(get_enable_role_array());
 }
 
 ObPlanCache *ObSQLSessionInfo::get_plan_cache()
@@ -2870,7 +2870,7 @@ int ObSQLSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 int ObSQLSessionInfo::set_enable_role_array(const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  ret = enable_role_array_.assign(role_id_array);
+  ret = set_enable_role_ids(role_id_array);
   return ret;
 }
 

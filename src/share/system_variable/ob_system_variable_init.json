@@ -6880,5 +6880,18 @@
       "background_cn": "",
       "ref_url": "",
       "placeholder": true
+  },
+  "_ob_enable_role_ids": {
+      "id": 10386,
+      "name": "_ob_enable_role_ids",
+      "default_value": "",
+      "base_value": "",
+      "data_type": "varchar",
+      "info": "enabled roles for current session",
+      "flags": "SESSION | NEED_SERIALIZE | INVISIBLE",
+      "publish_version": "432",
+      "info_cn": "",
+      "background_cn": "",
+      "ref_url": ""
   }
 }

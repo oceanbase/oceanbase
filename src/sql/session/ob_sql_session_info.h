@@ -1226,7 +1226,8 @@ public:
 
   ObTenantCachedSchemaGuardInfo &get_cached_schema_guard_info() { return cached_schema_guard_info_; }
   int set_enable_role_array(const common::ObIArray<uint64_t> &role_id_array);
-  common::ObIArray<uint64_t>& get_enable_role_array() { return enable_role_array_; }
+  common::ObIArray<uint64_t>& get_enable_role_array() { return get_enable_role_ids(); }
+  const common::ObIArray<uint64_t>& get_enable_role_array() const { return get_enable_role_ids(); }
   void set_in_definer_named_proc(bool in_proc) {in_definer_named_proc_ = in_proc; }
   bool get_in_definer_named_proc() {return in_definer_named_proc_; }
   bool get_prelock() { return prelock_; }

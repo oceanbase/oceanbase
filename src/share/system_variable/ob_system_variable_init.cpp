@@ -5796,13 +5796,26 @@ static struct VarsInit{
     ObSysVars[410].alias_ = "OB_SV__ENABLE_OLD_CHARSET_AGGREGATION" ;
     }();
 
+    [&] (){
+      ObSysVars[411].default_value_ = "" ;
+      ObSysVars[411].info_ = "enabled roles for current session" ;
+      ObSysVars[411].name_ = "_ob_enable_role_ids" ;
+      ObSysVars[411].data_type_ = ObVarcharType ;
+      ObSysVars[411].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INVISIBLE ;
+      ObSysVars[411].id_ = SYS_VAR__OB_ENABLE_ROLE_IDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__OB_ENABLE_ROLE_IDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__OB_ENABLE_ROLE_IDS] = 411 ;
+      ObSysVars[411].base_value_ = "" ;
+    ObSysVars[411].alias_ = "OB_SV__OB_ENABLE_ROLE_IDS" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 411;
+static int64_t var_amount = 412;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

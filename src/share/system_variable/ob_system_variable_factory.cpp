@@ -420,6 +420,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_force_parallel_query_dop",
   "_groupby_nopushdown_cut_ratio",
   "_nlj_batching_enabled",
+  "_ob_enable_role_ids",
   "_ob_ols_policy_session_labels",
   "_ob_proxy_session_temporary_table_used",
   "_ob_proxy_weakread_feedback",
@@ -834,6 +835,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
   SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO,
   SYS_VAR__NLJ_BATCHING_ENABLED,
+  SYS_VAR__OB_ENABLE_ROLE_IDS,
   SYS_VAR__OB_OLS_POLICY_SESSION_LABELS,
   SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED,
   SYS_VAR__OB_PROXY_WEAKREAD_FEEDBACK,
@@ -1641,7 +1643,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "slave_skip_errors",
   "innodb_sync_debug",
   "default_collation_for_utf8mb4",
-  "_enable_old_charset_aggregation"
+  "_enable_old_charset_aggregation",
+  "_ob_enable_role_ids"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2221,6 +2224,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbSyncDebug)
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
+        + sizeof(ObSysVarObEnableRoleIds)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -5926,6 +5930,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarEnableOldCharsetAggregation));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRoleIds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableRoleIds", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OB_ENABLE_ROLE_IDS))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableRoleIds));
       }
     }
 
@@ -10456,6 +10469,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEnableOldCharsetAggregation())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarEnableOldCharsetAggregation", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__OB_ENABLE_ROLE_IDS: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObEnableRoleIds)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObEnableRoleIds)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRoleIds())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObEnableRoleIds", K(ret));
       }
       break;
     }
