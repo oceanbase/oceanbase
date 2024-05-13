@@ -543,6 +543,7 @@ int ObHashGroupByOp::inner_get_next_row()
       if (OB_FAIL(load_one_row())) {
         LOG_WARN("failed to load one row", K(ret));
       }
+    } else if (FALSE_IT(clear_evaluated_flag())) {
     } else if (OB_FAIL(restore_groupby_datum())) {
       LOG_WARN("failed to restore_groupby_datum", K(ret));
     } else if (OB_FAIL(aggr_processor_.collect(curr_group_id_))) {
@@ -1601,6 +1602,7 @@ int ObHashGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
       if (OB_FAIL(by_pass_prepare_one_batch(op_max_batch_size))) {
         LOG_WARN("failed to prepare batch", K(ret));
       }
+    } else if (FALSE_IT(clear_evaluated_flag())) {
     } else if (OB_FAIL(aggr_processor_.collect_result_batch(all_groupby_exprs_,
                                                             op_max_batch_size,
                                                             brs_,
