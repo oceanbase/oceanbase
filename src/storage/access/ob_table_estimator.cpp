@@ -156,6 +156,7 @@ int ObTableEstimator::estimate_multi_scan_row_count(
           static_cast<const memtable::ObMemtable*>(current_table), range, tmp_cost))) {
         LOG_WARN("failed to estimate memtable row count", K(ret), K(*current_table));
       } else if (tmp_cost.is_invalid_memtable_result()) {
+        ObPartitionEst sub_range_cost;
         const static int64_t sub_range_cnt = 3;
         ObSEArray<ObStoreRange, sub_range_cnt> store_ranges;
         if (OB_FAIL((static_cast<memtable::ObMemtable*>(current_table))->get_split_ranges(
@@ -163,10 +164,11 @@ int ObTableEstimator::estimate_multi_scan_row_count(
             &range.get_end_key().get_store_rowkey(),
             sub_range_cnt,
             store_ranges))) {
-          LOG_WARN("Failed to split ranges", K(ret));
+          if (OB_ENTRY_NOT_EXIST != ret) {
+            LOG_WARN("Failed to split ranges", K(ret), K(tmp_cost));
+          }
         } else if (store_ranges.count() > 1) {
           LOG_TRACE("estimated logical row count may be not right, split range and do estimating again", K(tmp_cost), K(store_ranges));
-          tmp_cost.reset();
           common::ObArenaAllocator allocator("OB_STORAGE_EST", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           for (int64_t i = 0; OB_SUCC(ret) && i < store_ranges.count(); ++i) {
             ObPartitionEst sub_cost;
@@ -177,9 +179,16 @@ int ObTableEstimator::estimate_multi_scan_row_count(
                 static_cast<const memtable::ObMemtable*>(current_table), datum_range, sub_cost))) {
               LOG_WARN("failed to estimate memtable row count", K(ret), K(*current_table));
             } else {
-              tmp_cost.add(sub_cost);
+              sub_range_cost.add(sub_cost);
             }
           }
+        }
+        if (OB_FAIL(ret)) {
+          LOG_WARN("Failed to estimate memtable row count, ignore ret", K(ret), K(tmp_cost));
+          ret = OB_SUCCESS;
+        } else {
+          tmp_cost.reset();
+          tmp_cost.add(sub_range_cost);
         }
       }
     } else if (current_table->is_direct_load_memtable()) {

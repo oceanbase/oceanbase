@@ -27,7 +27,7 @@ struct ObPartitionEst
 {
   int64_t logical_row_count_;
   int64_t physical_row_count_;
-  OB_INLINE bool is_invalid_memtable_result() const { return logical_row_count_ <= 0 && physical_row_count_ > 1000; }
+  OB_INLINE bool is_invalid_memtable_result() const { return logical_row_count_ <= 0 && physical_row_count_ > 1024; }
   TO_STRING_KV(K_(logical_row_count), K_(physical_row_count));
 
   ObPartitionEst();
