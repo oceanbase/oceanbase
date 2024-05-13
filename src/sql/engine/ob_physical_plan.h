@@ -125,7 +125,6 @@ public:
    */
   void update_plan_stat(const ObAuditRecordData &record,
                         const bool is_first,
-                        const bool is_evolution,
                         const ObIArray<ObTableRowCount> *table_row_count_list);
   void update_cache_access_stat(const ObTableScanStat &scan_stat)
   {

@@ -600,12 +600,10 @@ void ObRemoteBaseExecuteP<T>::record_sql_audit_and_plan_stat(
         if (!exec_ctx_.get_sql_ctx()->self_add_plan_ && exec_ctx_.get_sql_ctx()->plan_cache_hit_) {
           mutable_plan->update_plan_stat(audit_record,
                                         false, // false mean not first update plan stat
-                                        exec_ctx_.get_is_evolution(),
                                         table_row_count_list);
         } else if (exec_ctx_.get_sql_ctx()->self_add_plan_ && !exec_ctx_.get_sql_ctx()->plan_cache_hit_) {
           mutable_plan->update_plan_stat(audit_record,
                                         true,
-                                        exec_ctx_.get_is_evolution(),
                                         table_row_count_list);
 
         }
