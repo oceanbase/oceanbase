@@ -325,7 +325,7 @@ public:
       ObCOMajorSSTableStatus &major_sstable_status);
   static int estimate_row_cnt_for_major_merge(
       const uint64_t table_id,
-      const ObTablesHandleArray &tables_handle,
+      const ObIArray<ObITable *> &tables,
       const ObStorageSchema &storage_schema,
       const ObTabletHandle &tablet_handle,
       int64_t &estimate_row_cnt);
@@ -337,7 +337,8 @@ public:
       const int64_t &estimate_row_cnt,
       const int64_t &column_cnt);
   static int decide_co_major_merge_type(
-      const ObGetMergeTablesResult &result,
+      const ObCOSSTableV2 &co_sstable,
+      const ObIArray<ObITable *> &tables,
       const ObStorageSchema &storage_schema,
       const ObTabletHandle &tablet_handle,
       ObCOMajorMergeType &major_merge_type);
