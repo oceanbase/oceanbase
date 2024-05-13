@@ -6815,6 +6815,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
     } else if (is_get ||
                has_npd_filter ||
                scan_op->get_index_back() ||
+               scan_op->is_text_retrieval_scan() ||
                scan_op->is_sample_scan() ||
                (is_descending_direction(scan_op->get_scan_direction()) && !groupby_columns.empty())) {
       //aggr func cannot be pushed down to the storage layer in these scenarios:
@@ -6822,6 +6823,7 @@ int ObLogPlan::try_push_aggr_into_table_scan(ObLogicalOperator *top,
       //2. TSC is sample scan operator
       //3. TSC contains filters that cannot be pushed down to the storage
       //4. TSC is point get
+      //5. TSC is text retrieval scan
     } else if (OB_FAIL(scan_op->get_pushdown_aggr_exprs().assign(aggr_items))) {
       LOG_WARN("failed to assign group exprs", K(ret));
     } else if (OB_FAIL(scan_op->get_pushdown_groupby_columns().assign(groupby_columns))) {
@@ -7286,7 +7288,7 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
              is_virtual_table(table_item->ref_id_) ||
              EXTERNAL_TABLE == table_item->table_type_) {
     /*do nothing*/
-  } else if (OB_FAIL(stmt->has_virtual_generated_column(table_item->table_id_, has_virtual_col))) {
+  } else if (OB_FAIL(stmt->has_virtual_generated_column(table_item->table_id_, has_virtual_col, true))) {
     LOG_WARN("failed to check has virtual generated column", K(ret), K(*table_item));
   } else if (has_virtual_col) {
     /* do not push down when exists virtual generated column */
@@ -12738,9 +12740,16 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
         } else if (tsc_op.need_doc_id_index_back() &&
             OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_doc_id_index_table_id()))) {
           LOG_WARN("store doc id index back aux tid failed", K(ret));
-        } else if (tsc_op.is_text_retrieval_scan() &&
-            OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_text_retrieval_info().fwd_idx_tid_))) {
-          LOG_WARN("store forward index id for text retrieval failed", K(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && tsc_op.is_text_retrieval_scan()) {
+        if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().fwd_idx_tid_))) {
+          LOG_WARN("failed to append forward index table id", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_text_retrieval_info().doc_id_idx_tid_))) {
+          LOG_WARN("failed to append doc id idx table id", K(ret));
+        } else if (OB_FAIL(add_var_to_array_no_dup(rel_info.related_ids_, tsc_op.get_real_ref_table_id()))) {
+          LOG_WARN("failed to append main table id", K(ret));
         }
       }
 
@@ -15187,9 +15196,15 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, O
   uint64_t fwd_idx_tid = OB_INVALID_ID;
   uint64_t inv_idx_tid = OB_INVALID_ID;
   ObSEArray<ObAuxTableMetaInfo, 4> index_infos;
+  bool need_calc_relevance = true;
+  ObSEArray<ObExprConstraint, 2> constraints;
 
-  if (OB_UNLIKELY(1 != exprs.count()) || OB_ISNULL(match_pred = exprs.at(0)) || OB_ISNULL(scan) ||
-      OB_ISNULL(get_stmt())) {
+  if (OB_UNLIKELY(1 != exprs.count())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("multi match filters not supported yet", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "more than one match filter");
+  } else if (OB_ISNULL(match_pred = exprs.at(0)) || OB_ISNULL(scan) ||
+      OB_ISNULL(get_stmt()) || OB_ISNULL(get_optimizer_context().get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argumsnts", K(ret), KPC(match_pred), KP(scan));
   } else if (OB_ISNULL(get_stmt())
@@ -15274,14 +15289,26 @@ int ObLogPlan::prepare_text_retrieval_scan(const ObIArray<ObRawExpr *> &exprs, O
     }
   }
   if (OB_SUCC(ret)) {
+    /*
+    if (OB_FAIL(ObTransformUtils::check_need_calc_match_score(get_optimizer_context().get_exec_ctx(),
+                                                              get_stmt(),
+                                                              match_against,
+                                                              need_calc_relevance,
+                                                              constraints))) {
+      LOG_WARN("failed to check need calc relevance", K(ret));
+    } else if (!need_calc_relevance &&
+               OB_FAIL(append_array_no_dup(get_optimizer_context().get_query_ctx()->all_expr_constraints_, constraints))) {
+      LOG_WARN("failed to append array no dup", K(ret));
+    }
+    */
     ObTextRetrievalInfo &tr_info = table_scan->get_text_retrieval_info();
     tr_info.match_expr_ = match_against;
     tr_info.inv_idx_tid_ = inv_idx_tid;
     tr_info.fwd_idx_tid_ = fwd_idx_tid;
     tr_info.doc_id_idx_tid_ = doc_id_rowkey_tid;
     tr_info.pushdown_match_filter_ = match_pred;
+    tr_info.need_calc_relevance_ = need_calc_relevance;
     table_scan->set_doc_id_index_table_id(doc_id_rowkey_tid);
-    table_scan->set_index_back(true);
   }
   return ret;
 }

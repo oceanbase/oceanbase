@@ -1708,7 +1708,8 @@ enum ExplicitedRefType {
   REF_BY_NORMAL = 1 << 0,
   REF_BY_PART_EXPR = 1 << 1,
   REF_BY_VIRTUAL_GEN_COL = 1<< 2,
-  REF_BY_STORED_GEN_COL = 1 << 3
+  REF_BY_STORED_GEN_COL = 1 << 3,
+  REF_BY_MATCH_EXPR = 1 << 4
 };
 class ObRawExpr : virtual public jit::expr::ObIRawExpr
 {

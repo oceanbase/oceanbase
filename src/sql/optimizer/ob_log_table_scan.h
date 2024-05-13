@@ -35,6 +35,7 @@ struct ObTextRetrievalInfo
     topk_limit_expr_(NULL),
     topk_offset_expr_(NULL),
     with_ties_(false),
+    need_calc_relevance_(true),
     inv_idx_tid_(OB_INVALID_ID),
     fwd_idx_tid_(OB_INVALID_ID),
     doc_id_idx_tid_(OB_INVALID_ID),
@@ -50,7 +51,8 @@ struct ObTextRetrievalInfo
   ~ObTextRetrievalInfo() {}
 
   TO_STRING_KV(K_(match_expr), K_(pushdown_match_filter), K_(sort_key), K_(topk_limit_expr),
-               K_(topk_offset_expr), K_(with_ties), K_(inv_idx_tid), K_(fwd_idx_tid), K_(doc_id_idx_tid));
+               K_(topk_offset_expr), K_(with_ties), K_(need_calc_relevance), K_(inv_idx_tid),
+               K_(fwd_idx_tid), K_(doc_id_idx_tid));
 
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
 
@@ -60,6 +62,7 @@ struct ObTextRetrievalInfo
   ObRawExpr *topk_limit_expr_;
   ObRawExpr *topk_offset_expr_;
   bool with_ties_;
+  bool need_calc_relevance_;  // match expr just for retireval (accurate score is not required)
   uint64_t inv_idx_tid_;  // choosed aux inverted index table id (word-doc)
   uint64_t fwd_idx_tid_;  // choosed aux forward index table id (doc-word)
   uint64_t doc_id_idx_tid_; // choosed aux doc_id index table id (doc-rowkey)
@@ -547,8 +550,7 @@ public:
   inline ObTextRetrievalInfo &get_text_retrieval_info() { return text_retrieval_info_; }
   inline const ObTextRetrievalInfo &get_text_retrieval_info() const { return text_retrieval_info_; }
   int prepare_text_retrieval_dep_exprs();
-  // jinmao TODO: 之后要判断这个标，一期统一设置为 true
-  inline bool need_text_retrieval_calc_relevance() const { return true; }
+  inline bool need_text_retrieval_calc_relevance() const { return text_retrieval_info_.need_calc_relevance_; }
   inline bool need_doc_id_index_back() const { return is_text_retrieval_scan() || is_multivalue_index_scan() ; }
   inline void set_doc_id_index_table_id(const uint64_t doc_id_index_table_id) { doc_id_table_id_ = doc_id_index_table_id; }
   inline uint64_t get_doc_id_index_table_id() const { return doc_id_table_id_; }

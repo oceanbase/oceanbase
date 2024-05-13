@@ -1384,6 +1384,7 @@ struct NullAwareAntiJoinInfo {
     int extract_used_columns(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             bool only_normal_ref_expr,
+                            bool consider_rowkey,
                             ObIArray<uint64_t> &column_ids,
                             ObIArray<ColumnItem> &columns);
 

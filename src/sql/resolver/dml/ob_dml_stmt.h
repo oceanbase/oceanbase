@@ -1141,7 +1141,9 @@ public:
   virtual bool is_returning() const { return false; }
   virtual bool has_instead_of_trigger() const { return false; }
   int has_lob_column(int64_t table_id, bool &has_lob)const;
-  int has_virtual_generated_column(int64_t table_id, bool &has_virtual_col) const;
+  int has_virtual_generated_column(int64_t table_id,
+                                   bool &has_virtual_col,
+                                   bool ignore_fulltext_gen_col = false) const;
 
   struct TempTableInfo {
     TempTableInfo()
