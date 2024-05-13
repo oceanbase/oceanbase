@@ -668,7 +668,7 @@ struct signalfd_siginfo
 
 #ifndef ECB_MEMORY_FENCE
   #if ECB_GCC_VERSION(2,5) || defined __INTEL_COMPILER || (__llvm__ && __GNUC__) || __SUNPRO_C >= 0x5110 || __SUNPRO_CC >= 0x5110
-    #if __i386 || __i386__
+    #if defined __i386 || defined __i386__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("lock; orb $0, -1(%%esp)" : : : "memory")
       #define ECB_MEMORY_FENCE_ACQUIRE __asm__ __volatile__ (""                        : : : "memory")
       #define ECB_MEMORY_FENCE_RELEASE __asm__ __volatile__ ("")
@@ -676,7 +676,7 @@ struct signalfd_siginfo
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("mfence"   : : : "memory")
       #define ECB_MEMORY_FENCE_ACQUIRE __asm__ __volatile__ (""         : : : "memory")
       #define ECB_MEMORY_FENCE_RELEASE __asm__ __volatile__ ("")
-    #elif __powerpc__ || __ppc__ || __powerpc64__ || __ppc64__
+    #elif defined __powerpc__ || defined __ppc__ || defined __powerpc64__ || defined __ppc64__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("sync"     : : : "memory")
     #elif defined __ARM_ARCH_2__ \
       || defined __ARM_ARCH_3__  || defined __ARM_ARCH_3M__  \
@@ -692,7 +692,7 @@ struct signalfd_siginfo
     #elif defined __ARM_ARCH_7__  || defined __ARM_ARCH_7A__  \
        || defined __ARM_ARCH_7R__ || defined __ARM_ARCH_7M__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("dmb"      : : : "memory")
-    #elif __aarch64__
+    #elif defined __aarch64__
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("dmb ish"  : : : "memory")
     #elif (__sparc || __sparc__) && !(__sparc_v8__ || defined __sparcv8)
       #define ECB_MEMORY_FENCE         __asm__ __volatile__ ("membar #LoadStore | #LoadLoad | #StoreStore | #StoreLoad" : : : "memory")

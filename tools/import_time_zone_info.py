@@ -3,6 +3,7 @@ import sys
 import re
 import os
 import getopt
+import textwrap
 import mysql.connector
 import argparse
 from mysql.connector import errorcode
@@ -13,7 +14,10 @@ class TimeZoneInfoImporter:
         parser.add_argument("-h", "--host", help="Connect to host", required=True)
         parser.add_argument("-P", "--port", help="Port number to use for connection", required=True)
         parser.add_argument("-p", "--password", help="Password of sys tenant")
-        parser.add_argument("-f", "--file", help="The script generate from MySQL mysql_tzinfo_to_sql", required=True)
+        parser.add_argument("-f", "--file", help=textwrap.dedent(''' \
+                                            The script generate from MySQL mysql_tzinfo_to_sql binary
+                                            Please use mysql_tzinfo_to_sql on x86 architecture and mysql_tzinfo_to_sql_ppc64le on ppc64le architecture.'''),
+                                            required=True)
         parser.add_argument("-t", "--tenant", help="Tenant for import data if not sys")
         args = parser.parse_args()
         self.host=args.host

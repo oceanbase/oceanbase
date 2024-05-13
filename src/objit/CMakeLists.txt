@@ -27,9 +27,14 @@ add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0 -g -O2 -frtti)
 # that we wish to use
 if( ${ARCHITECTURE} STREQUAL "x86_64" )
   LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit X86CodeGen X86AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
-else()
+elseif( ${ARCHITECTURE} STREQUAL "aarch64" )
   LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit AArch64CodeGen AArch64AsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+elseif( ${ARCHITECTURE} STREQUAL "ppc64le")
+  LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit PowerPCCodeGen PowerPCAsmParser runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
+else()
+  LLVM_MAP_COMPONENTS_TO_LIBNAMES(llvm_libs Support Core IRReader ExecutionEngine OrcJit McJit runtimedyld bitreader bitwriter object objectyaml target DebugInfoDWARF Symbolize)
 endif()
+
 set(CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 include(${LLVM_CMAKE_DIR}/HandleLLVMOptions.cmake)
 

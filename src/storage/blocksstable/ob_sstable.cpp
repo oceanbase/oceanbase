@@ -816,7 +816,11 @@ int ObSSTable::deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&v
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < deep_copy_size)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(buf), K(buf_len), K(deep_copy_size));
-#if __aarch64__
+#if defined(__powerpc64__)
+  } else if (OB_UNLIKELY(0 != (reinterpret_cast<int64_t>(buf) % PPC64LE_CP_BUF_ALIGN))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deep copy buffer on powerpc64 platform not alighed", K(ret), KP(buf));
+#elif __aarch64__
   } else if (OB_UNLIKELY(0 != (reinterpret_cast<int64_t>(buf) % AARCH64_CP_BUF_ALIGN))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("deep copy buffer on aarch64 platform not alighed", K(ret), KP(buf));

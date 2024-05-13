@@ -167,6 +167,29 @@ uint64_t ObTscTimestamp::get_cpufreq_khz_(void)
   LIB_LOG(INFO, "TSC freq : ", "freq", timer_frequency/1000);
   return timer_frequency/1000;
 }
+#elif defined(__powerpc64__)
+uint64_t ObTscTimestamp::get_cpufreq_khz_()
+{
+    char line[256];
+    FILE *stream = NULL;
+    double freq_mhz = 0.0;
+    uint64_t freq_khz = 0;
+
+    stream = fopen("/proc/cpuinfo", "r");
+    if (NULL == stream) {
+    } else {
+        while (fgets(line, sizeof(line), stream)) {
+            if (sscanf(line, "clock             :%lfMHz", &freq_mhz) == 1) {
+                freq_khz = (uint64_t)(freq_mhz * 1000UL);
+                break;
+            }
+        }
+        fclose(stream);
+    }
+
+    return freq_khz;
+}
+
 
 #else
 

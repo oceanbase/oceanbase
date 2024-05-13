@@ -374,6 +374,11 @@ int64_t BlockSet::sync_wash(int64_t wash_size)
   return 0;
 #endif
   const ssize_t ps = get_page_size();
+  if(ps != OS_NORMAL_PAGE_SIZE) {
+    // Power ppc64le and aarch64 support medium page 65536(default) and small page 4096
+    // ABLOCK_SIZE is 8192, ps is medium page 65536(default)
+    return 0;
+  }
   bool has_ignore = false;
   int64_t washed_size = 0;
   int64_t washed_blks = 0;
