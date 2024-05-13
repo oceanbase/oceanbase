@@ -374,6 +374,7 @@ public:
       const int64_t task_id,
       const share::SCN &start_scn,
       const uint64_t data_format_version,
+      const storage::ObDirectLoadType direct_load_type,
       const int64_t row_id_offset = -1);
   void reset();
   int write(
@@ -397,6 +398,7 @@ private:
   int64_t task_id_;
   share::SCN start_scn_;
   uint64_t data_format_version_;
+  storage::ObDirectLoadType direct_load_type_;
   // if has one macro block with 100 rows before, this macro block's ddl_start_row_offset will be 100.
   // if current macro block finish with 50 rows, current macro block's end_row_offset will be 149.
   // end_row_offset = ddl_start_row_offset + curr_row_count - 1.

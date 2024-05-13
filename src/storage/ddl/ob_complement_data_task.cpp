@@ -1484,7 +1484,8 @@ int ObComplementWriteTask::append_row(ObScan *scan)
                                        hidden_table_key,
                                        param_->task_id_,
                                        context_->start_scn_,
-                                       param_->data_format_version_))) {
+                                       param_->data_format_version_,
+                                       direct_load_hdl.get_full_obj()->get_direct_load_type()))) {
         LOG_WARN("fail to init data callback", K(ret), K(hidden_table_key));
       } else if (OB_FAIL(writer.open(data_desc.get_desc(), macro_start_seq, &callback))) {
         LOG_WARN("fail to open macro block writer", K(ret), K(data_desc));

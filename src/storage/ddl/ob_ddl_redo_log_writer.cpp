@@ -1500,7 +1500,8 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), redo_info_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),
-    table_key_(), macro_block_id_(), task_id_(0), data_format_version_(0), row_id_offset_(-1)
+    table_key_(), macro_block_id_(), task_id_(0), data_format_version_(0),
+    direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1)
 {
 }
 
@@ -1516,6 +1517,7 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
                                      const int64_t task_id,
                                      const share::SCN &start_scn,
                                      const uint64_t data_format_version,
+                                     const ObDirectLoadType direct_load_type,
                                      const int64_t row_id_offset/*=-1*/)
 {
   int ret = OB_SUCCESS;
@@ -1527,9 +1529,11 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
     ret = OB_INIT_TWICE;
     LOG_WARN("ddl redo log writer has been inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || !table_key.is_valid() ||
-                         DDL_MB_INVALID_TYPE == block_type || 0 == task_id || data_format_version < 0)) {
+                         DDL_MB_INVALID_TYPE == block_type || 0 == task_id || data_format_version < 0 ||
+                         !is_valid_direct_load(direct_load_type))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(table_key), K(block_type), K(data_format_version), K(task_id));
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(table_key), K(block_type), K(data_format_version),
+        K(direct_load_type), K(task_id));
   } else if (OB_UNLIKELY(table_key.is_column_store_sstable() && row_id_offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument of column group data", K(ret), K(table_key), K(row_id_offset));
@@ -1541,6 +1545,7 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
     task_id_ = task_id;
     start_scn_ = start_scn;
     data_format_version_ = data_format_version;
+    direct_load_type_ = direct_load_type;
     row_id_offset_ = row_id_offset;
     is_inited_ = true;
   }
@@ -1558,6 +1563,7 @@ void ObDDLRedoLogWriterCallback::reset()
   task_id_ = 0;
   start_scn_.reset();
   data_format_version_ = 0;
+  direct_load_type_ = DIRECT_LOAD_INVALID;
   row_id_offset_ = -1;
 }
 
@@ -1587,7 +1593,7 @@ int ObDDLRedoLogWriterCallback::write(const ObMacroBlockHandle &macro_handle,
     redo_info_.logic_id_ = logic_id;
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
-    redo_info_.type_ = ObDirectLoadType::DIRECT_LOAD_LOAD_DATA;
+    redo_info_.type_ = direct_load_type_;
     if (is_column_group_info_valid()) {
       redo_info_.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;
