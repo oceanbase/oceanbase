@@ -129,8 +129,13 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
         if (OB_SUCC(ret)) {
           if (lock_state.is_locked_) {
             break;
-          } else if (max_trans_version < lock_state.trans_version_) {
-            max_trans_version = lock_state.trans_version_;
+          } else {
+            if (max_trans_version < lock_state.trans_version_) {
+              max_trans_version = lock_state.trans_version_;
+            }
+            if (max_trans_version < row_state.max_trans_version_) {
+              max_trans_version = row_state.max_trans_version_;
+            }
           }
         }
       }
