@@ -93,6 +93,7 @@ ObTextRetrievalIterator::ObTextRetrievalIterator()
     forward_idx_iter_(nullptr),
     fwd_range_objs_(nullptr),
     doc_token_cnt_expr_(nullptr),
+    token_doc_cnt_(0),
     need_fwd_idx_agg_(false),
     need_inv_idx_agg_(false),
     inv_idx_agg_evaluated_(false),
@@ -185,6 +186,7 @@ void ObTextRetrievalIterator::reset()
   retrieval_param_ = nullptr;
   tx_desc_ = nullptr;
   snapshot_ = nullptr;
+  token_doc_cnt_ = 0;
   need_fwd_idx_agg_ = false;
   need_inv_idx_agg_ = false;
   inv_idx_agg_evaluated_ = false;
@@ -231,6 +233,8 @@ int ObTextRetrievalIterator::get_next_row()
     clear_row_wise_evaluated_flag();
     if (OB_FAIL(get_next_doc_token_cnt(need_fwd_idx_agg_))) {
       LOG_WARN("failed to get next doc token count", K(ret));
+    } else if (OB_FAIL(fill_token_doc_cnt())) {
+      LOG_WARN("failed to get token doc cnt", K(ret));
     } else if (OB_FAIL(project_relevance_expr())) {
       LOG_WARN("failed to evaluate simarity expr", K(ret));
     }
@@ -414,6 +418,15 @@ int ObTextRetrievalIterator::do_doc_cnt_agg()
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("failed to get aggregated row from iter", K(ret));
       }
+    } else {
+      const sql::ObExpr *inv_idx_agg_expr = inv_idx_agg_param_.aggregate_exprs_->at(0);
+      sql::ObEvalCtx *eval_ctx = retrieval_param_->get_ir_rtdef()->get_inv_idx_agg_rtdef()->eval_ctx_;
+      ObDatum *doc_cnt_datum = nullptr;
+      if (OB_FAIL(inv_idx_agg_expr->eval(*eval_ctx, doc_cnt_datum))) {
+        LOG_WARN("failed to evaluate aggregated expr", K(ret));
+      } else {
+        token_doc_cnt_ = doc_cnt_datum->get_int();
+      }
     }
   }
   return ret;
@@ -531,6 +544,22 @@ int ObTextRetrievalIterator::fill_token_cnt_with_doc_len()
   } else {
     ObDatum &agg_datum = agg_expr->locate_datum_for_write(*eval_ctx);
     agg_datum.set_decimal_int(doc_length_datum->get_uint());
+  }
+  return ret;
+}
+
+int ObTextRetrievalIterator::fill_token_doc_cnt()
+{
+  int ret = OB_SUCCESS;
+  const sql::ObExpr *inv_idx_agg_expr = inv_idx_agg_param_.aggregate_exprs_->at(0);
+  sql::ObEvalCtx *eval_ctx = retrieval_param_->get_ir_rtdef()->get_inv_idx_agg_rtdef()->eval_ctx_;
+  if (OB_ISNULL(inv_idx_agg_expr) || OB_ISNULL(eval_ctx)
+      || OB_UNLIKELY(inv_idx_agg_expr->datum_meta_.get_type() != ObIntType)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret), KP(inv_idx_agg_expr), KP(eval_ctx));
+  } else {
+    ObDatum &doc_cnt_datum = inv_idx_agg_expr->locate_datum_for_write(*eval_ctx);
+    doc_cnt_datum.set_int(token_doc_cnt_);
   }
   return ret;
 }
