@@ -315,9 +315,10 @@ int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBacku
     file_id_ = file_id;
     file_offset_ = 0;
     backup_data_type_ = backup_data_type;
-    is_inited_ = true;
     if (OB_FAIL(prepare_file_write_ctx_(param, backup_data_type, file_id))) {
       LOG_WARN("failed to prepare file write ctx", K(ret), K(param), K(backup_data_type), K(file_id));
+    } else {
+      is_inited_ = true;
     }
   }
   return ret;
@@ -408,7 +409,7 @@ int ObBackupDataCtx::close()
       LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
     }
   } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }

@@ -5684,7 +5684,7 @@ int ObLSBackupComplementLogTask::transfer_clog_file_(const ObBackupPath &src_pat
         LOG_WARN("fail to complete multipart upload", K(ret), K(device_handle), K(fd));
       }
     } else {
-      if (OB_TMP_FAIL(device_handle->abort(fd))) {
+      if (OB_NOT_NULL(device_handle) && OB_TMP_FAIL(device_handle->abort(fd))) {
         ret = COVER_SUCC(tmp_ret);
         LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
       }
