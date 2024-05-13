@@ -1328,6 +1328,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
   NULL,//ObExprTopNFilter::eval_topn_filter_batch,                    /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
+  NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
