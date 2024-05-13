@@ -39,7 +39,7 @@ int64_t get_logic_res_type_by_name(const char *type_name)
 {
   int64_t out_type = INVALID_LOGIC_RESOURCE;
 #define DEF_RESOURCE_LIMIT_CALCULATOR(n, type, name, subhandler)   \
-  if (strcmp(type_name, #name) == 0) {                             \
+  if (strcasecmp(type_name, #name) == 0) {                             \
     out_type = n;                                                  \
   }
 #include "share/resource_limit_calculator/ob_resource_limit_calculator_def.h"
