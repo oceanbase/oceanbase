@@ -16,6 +16,8 @@
 #include "storage/memtable/mvcc/ob_mvcc_iterator.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 #include "storage/tx_table/ob_tx_table_guards.h"
+#include "storage/access/ob_rows_info.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase {
 using namespace common;
@@ -122,6 +124,16 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
           } else if (max_trans_version < lock_state.trans_version_) {
             max_trans_version = lock_state.trans_version_;
           }
+        } else if (stores->at(i)->is_direct_load_memtable()) {
+          ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(stores->at(i));
+          if (OB_FAIL(ddl_kv->check_row_locked(param, rowkey, context, lock_state, row_state))) {
+            TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(rowkey));
+          } else if (lock_state.is_locked_) {
+            break;
+          } else if (max_trans_version < row_state.max_trans_version_) {
+            max_trans_version = row_state.max_trans_version_;
+          }
+          TRANS_LOG(DEBUG, "check_row_locked meet direct load memtable", K(ret), K(rowkey), K(row_state), K(*ddl_kv));
         } else if (stores->at(i)->is_sstable()) {
           blocksstable::ObSSTable *sstable = static_cast<blocksstable::ObSSTable *>(stores->at(i));
           if (OB_FAIL(sstable->check_row_locked(param, rowkey, context, lock_state, row_state))) {

@@ -87,6 +87,7 @@
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -974,14 +975,14 @@ int ObDumpMemtableP::process()
       } else if (OB_FAIL(tablet_handle.get_obj()->get_all_memtables(tables_handle))) {
         LOG_WARN("failed to get all memtable", K(ret), KPC(tablet_handle.get_obj()));
       } else {
-        memtable::ObMemtable *mt;
+        ObITabletMemtable *tablet_memtable = nullptr;
         mkdir("/tmp/dump_memtable/", S_IRWXU | S_IRGRP | S_IXGRP | S_IROTH | S_IXOTH);
         for (int64_t i = 0; OB_SUCC(ret) && i < tables_handle.count(); i++) {
-          if (OB_FAIL(tables_handle.at(i).get_data_memtable(mt))) {
-            SERVER_LOG(WARN, "fail to get data memtables", K(ret));
+          if (OB_FAIL(tables_handle.at(i).get_tablet_memtable(tablet_memtable))) {
+            SERVER_LOG(WARN, "fail to get tablet memtables", K(ret));
           } else {
-            TRANS_LOG(INFO, "start dump memtable", K(*mt), K(arg_));
-            mt->dump2text("/tmp/dump_memtable/memtable.txt");
+            TRANS_LOG(INFO, "start dump memtable", K(*tablet_memtable), K(arg_));
+            tablet_memtable->dump2text("/tmp/dump_memtable/memtable.txt");
           }
         }
       }

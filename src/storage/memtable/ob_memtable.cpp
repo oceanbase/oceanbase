@@ -52,6 +52,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/access/ob_row_sample_iterator.h"
 #include "storage/concurrency_control/ob_trans_stat_row.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 #include "logservice/ob_log_service.h"
 
@@ -98,6 +99,41 @@ ObGlobalMtAlloc &get_global_mt_alloc()
   static ObGlobalMtAlloc s_alloc;
   return s_alloc;
 }
+
+class ObDirectLoadMemtableRowsLockedChecker
+{
+public:
+  ObDirectLoadMemtableRowsLockedChecker(ObMemtable &memtable,
+                                        const bool check_exist,
+                                        const storage::ObTableIterParam &param,
+                                        storage::ObTableAccessContext &context,
+                                        ObRowsInfo &rows_info)
+    : memtable_(memtable),
+      check_exist_(check_exist),
+      param_(param),
+      context_(context),
+      rows_info_(rows_info)
+  {
+  }
+  int operator()(ObDDLMemtable *ddl_memtable)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(ddl_memtable)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected ddl memtable is null", K(ret));
+    } else if (OB_FAIL(memtable_.check_rows_locked_on_ddl_merge_sstable(
+                  ddl_memtable, check_exist_, param_, context_, rows_info_))) {
+      TRANS_LOG(WARN, "Failed to check rows locked for sstable", K(ret), KPC(ddl_memtable));
+    }
+    return ret;
+  }
+private:
+  ObMemtable &memtable_;
+  const bool check_exist_;
+  const storage::ObTableIterParam &param_;
+  storage::ObTableAccessContext &context_;
+  ObRowsInfo &rows_info_;
+};
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Public Functions
@@ -1209,21 +1245,6 @@ int ObMemtable::multi_scan(
   return ret;
 }
 
-int ObMemtable::replay_schema_version_change_log(const int64_t schema_version)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    TRANS_LOG(WARN, "not init", K(*this));
-    ret = OB_NOT_INIT;
-  } else if (schema_version < 0) {
-    ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid argument", K(ret), K(schema_version));
-  } else {
-    set_max_schema_version(schema_version);
-  }
-  return ret;
-}
-
 int ObMemtable::replay_row(ObStoreCtx &ctx,
                            const share::SCN &scn,
                            ObMemtableMutatorIterator *mmi)
@@ -1432,7 +1453,33 @@ int ObMemtable::internal_lock_row_on_frozen_stores_(const bool check_exist,
                 K(tmp_lock_state),
                 K(row_state));
     } else if (iter_tables.at(i)->is_direct_load_memtable()) {
-      TRANS_LOG(DEBUG, "skip check direct load memtable", KPC(iter_tables.at(i)));
+      ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(iter_tables.at(i));
+      blocksstable::ObDatumRowkeyHelper rowkey_converter;
+      blocksstable::ObDatumRowkey datum_rowkey;
+      if (OB_FAIL(rowkey_converter.convert_datum_rowkey(key->get_rowkey()->get_rowkey(), datum_rowkey))) {
+        STORAGE_LOG(WARN, "Failed to convert datum rowkey", K(ret), KPC(key));
+      } else if (OB_FAIL(ddl_kv->check_row_locked(
+                     param, datum_rowkey, context, tmp_lock_state, row_state, check_exist))) {
+        TRANS_LOG(WARN,
+                  "direct load memtable check row lock fail",
+                  K(ret),
+                  KPC(key),
+                  K(check_exist),
+                  K(datum_rowkey),
+                  K(lock_state),
+                  K(tmp_lock_state),
+                  K(row_state));
+      }
+      TRANS_LOG(DEBUG,
+                "direct load memtable check row lock debug",
+                K(ret),
+                KPC(key),
+                KPC(ddl_kv),
+                K(check_exist),
+                K(datum_rowkey),
+                K(lock_state),
+                K(tmp_lock_state),
+                K(row_state));
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "unknown store type", K(ret), K(iter_tables), K(i));
@@ -1673,8 +1720,16 @@ int ObMemtable::internal_lock_rows_on_frozen_stores_(
           TRANS_LOG(WARN, "Failed to check rows locked for sstable", K(ret), K(i), K(iter_tables));
         }
       }
-    } else if (iter_tables.at(i)->is_direct_load_memtable()) {
-      TRANS_LOG(DEBUG, "skip check direct load memtable", KPC(iter_tables.at(i)));
+    } else if (i_table->is_direct_load_memtable()) {
+      ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(i_table);
+      ObDirectLoadMemtableRowsLockedChecker checker(*this, check_exist, param, context, rows_info);
+      if (OB_FAIL(ddl_kv->access_first_ddl_memtable(checker))) {
+        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+          STORAGE_LOG(WARN, "fail to access first ddl memtable", K(ret), K(i), K(iter_tables));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "Unknown store type", K(ret), K(iter_tables), K(i));
@@ -1868,12 +1923,12 @@ bool ObMemtable::ready_for_flush_()
   } else if (is_frozen && get_logging_blocked()) {
     // ensure unset all frozen memtables'logging_block
     ObTableHandleV2 handle;
-    ObMemtable *first_frozen_memtable = nullptr;
+    ObITabletMemtable *first_frozen_memtable = nullptr;
     ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr();
     if (OB_ISNULL(memtable_mgr)) {
     } else if (OB_FAIL(memtable_mgr->get_first_frozen_memtable(handle))) {
       TRANS_LOG(WARN, "fail to get first_frozen_memtable", K(ret));
-    } else if (OB_FAIL(handle.get_data_memtable(first_frozen_memtable))) {
+    } else if (OB_FAIL(handle.get_tablet_memtable(first_frozen_memtable))) {
       TRANS_LOG(WARN, "fail to get memtable", K(ret));
     } else if (first_frozen_memtable == this) {
       (void)clear_logging_blocked();

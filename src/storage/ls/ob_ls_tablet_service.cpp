@@ -77,6 +77,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -6067,7 +6068,19 @@ int ObLSTabletService::estimate_block_count_and_row_count(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(tablet_iter.table_iter()));
     } else if (table->is_direct_load_memtable()) {
-      // FIXME : @suzhi.yt
+      ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(table);
+      int64_t macro_block_count_in_ddl_kv = 0;
+      int64_t micro_block_count_in_ddl_kv = 0;
+      int64_t row_count_in_ddl_kv = 0;
+      if (OB_FAIL(ddl_kv->get_block_count_and_row_count(macro_block_count_in_ddl_kv,
+                                                        micro_block_count_in_ddl_kv,
+                                                        row_count_in_ddl_kv))) {
+        LOG_WARN("fail to get block count and row count", K(ret));
+      } else {
+        macro_block_count += macro_block_count_in_ddl_kv;
+        micro_block_count += micro_block_count_in_ddl_kv;
+        sstable_row_count += row_count_in_ddl_kv;
+      }
     } else if (table->is_data_memtable()) {
       memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
     } else if (table->is_sstable()) {

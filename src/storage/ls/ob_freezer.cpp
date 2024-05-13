@@ -1061,6 +1061,7 @@ int ObFreezer::do_direct_load_memtable_tablet_freeze_(ObITabletMemtable *tablet_
   ObDDLKV *direct_load_memtable = static_cast<ObDDLKV*>(tablet_memtable);
   if (OB_FAIL(direct_load_memtable->decide_right_boundary())) {
     STORAGE_LOG(WARN, "freeze direct load memtable failed", KR(ret), K(ls_id), KPC(tablet_memtable));
+  } else if (FALSE_IT(direct_load_memtable->set_snapshot_version(get_freeze_snapshot_version()))) {
   } else {
     int64_t read_lock = LSLOCKALL;
     int64_t write_lock = 0;

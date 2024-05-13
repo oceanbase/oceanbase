@@ -250,6 +250,7 @@ public:
   int set_migration_clog_checkpoint_scn(const share::SCN &clog_checkpoint_scn);
   int resolve_left_boundary(share::SCN end_scn) { return set_start_scn(end_scn); }
   int resolve_right_boundary();
+  int replay_schema_version_change_log(const int64_t schema_version);
   int set_start_scn(const share::SCN start_scn);
   int set_end_scn(const share::SCN end_scn);
   int set_max_end_scn(const share::SCN scn, bool allow_backoff = false);
@@ -289,6 +290,11 @@ public:
   virtual void print_ready_for_flush() = 0;
   virtual void set_allow_freeze(const bool allow_freeze) = 0;
   virtual int set_frozen() = 0;
+  virtual int get_schema_info(
+    const int64_t input_column_cnt,
+    int64_t &max_schema_version_on_memtable,
+    int64_t &max_column_cnt_on_memtable) const = 0;
+  virtual int dump2text(const char *fname) = 0;
   // *************** pure virtual functions *****************
 
 public:
