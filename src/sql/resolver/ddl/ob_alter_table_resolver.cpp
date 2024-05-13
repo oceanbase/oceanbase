@@ -6320,6 +6320,10 @@ int ObAlterTableResolver::resolve_drop_column(const ParseNode &node, ObReducedVi
           }
           if (OB_FAIL(ret)) {
             SQL_RESV_LOG(WARN, "set col_key to hash set failed", K(ret), K(column_name));
+            if (ret == OB_HASH_FULL) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop more than 4096 columns in a single ddl is not supported");
+            }
           }
         }
       }
