@@ -418,6 +418,9 @@ void ObIndexTreeMultiPrefetcher::reset()
 
 void ObIndexTreeMultiPrefetcher::reuse()
 {
+  for (int64_t i = 0; is_rowkey_sorted_ && i < index_tree_height_; ++i) {
+    level_handles_.at(i).reset();
+  }
   inner_reset();
   ObIndexTreePrefetcher::reuse();
 }
