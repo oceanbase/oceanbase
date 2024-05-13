@@ -719,6 +719,7 @@ int ObMicroBlockReader::get_row_count(
     const int64_t *row_ids,
     const int64_t row_cap,
     const bool contains_null,
+    const share::schema::ObColumnParam *col_param,
     int64_t &count)
 {
   int ret = OB_SUCCESS;
@@ -746,6 +747,15 @@ int ObMicroBlockReader::get_row_count(
           col_idx,
           datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
+      } else if (datum.is_nop()) {
+        if (OB_UNLIKELY(nullptr == col_param || col_param->get_orig_default_value().is_nop_value())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null col param or default value", K(ret), KPC(col_param));
+        } else if (col_param->get_orig_default_value().is_null()) {
+          datum.set_null();
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (!datum.is_null()) {
         ++count;
       }

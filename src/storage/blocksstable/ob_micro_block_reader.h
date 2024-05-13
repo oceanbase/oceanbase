@@ -106,6 +106,7 @@ public:
       const int64_t *row_ids,
       const int64_t row_cap,
       const bool contains_null,
+      const share::schema::ObColumnParam *col_param,
       int64_t &count) override final;
   virtual int64_t get_column_count() const override
   {
