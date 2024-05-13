@@ -191,7 +191,7 @@ public:
                                        ObLogicalOperator *op,
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                         bool &found);
+                                                 const bool is_column_store_tbl, bool &found);
   inline uint64_t get_cur_cluster_version() { return cur_cluster_version_; }
 
   // detect physical operator type from logic operator.

@@ -531,20 +531,21 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 }
 
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                       bool &found)
+                                                   const bool is_column_store_tbl, bool &found)
 {
   FOREACH_CNT_X(e, exprs, !found) {
     if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
       auto col = static_cast<ObColumnRefRawExpr *>(*e);
       if (col->get_result_type().is_urowid()) {
         found = true;
-      } else if (col->get_result_type().is_lob_locator()
-                 || col->get_result_type().is_json()
-                 || col->get_result_type().is_geometry()
-                 || col->get_result_type().get_type() == ObLongTextType
-                 || col->get_result_type().get_type() == ObMediumTextType
-                 || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
-                     && ob_is_text_tc(col->get_result_type().get_type()))) {
+      } else if (!is_column_store_tbl // only disable vectorization for row store table
+                 && (col->get_result_type().is_lob_locator()
+                     || col->get_result_type().is_json()
+                     || col->get_result_type().is_geometry()
+                     || col->get_result_type().get_type() == ObLongTextType
+                     || col->get_result_type().get_type() == ObMediumTextType
+                     || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
+                         && ob_is_text_tc(col->get_result_type().get_type())))) {
         // all lob types not support vectorize in 4.0
         // tinytext and text support vectorize in 4.1
         found = true;
@@ -590,15 +591,20 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
             || is_virtual_table(table_id)) {
           disable_vectorize = true;
         }
+        bool is_col_store_tbl = false;
         if (!support) {
         } else if (OB_FAIL(schema_guard->get_table_schema(tsc->get_table_id(), tsc->get_ref_table_id(), op->get_stmt(), table_schema))) {
           LOG_WARN("get table schema failed", K(tsc->get_table_id()), K(ret));
         } else if (OB_NOT_NULL(table_schema) && 0 < table_schema->get_aux_vp_tid_count()) {
           disable_vectorize = true;
         }
-        exprs_not_support_vectorize(tsc->get_access_exprs(), disable_vectorize);
-        LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
-        scan_cardinality = common::max(scan_cardinality, op->get_card());
+        if (OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
+          LOG_WARN("get column store info failed", K(ret));
+        } else {
+          exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, disable_vectorize);
+          LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
+          scan_cardinality = common::max(scan_cardinality, op->get_card());
+        }
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
         auto spf_op = static_cast<ObLogSubPlanFilter *>(op);
         if (spf_op->is_update_set()) {
