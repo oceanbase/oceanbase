@@ -5062,7 +5062,7 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode &node)
             // 不支持一个 alter table 语句中，同时加列并在该列上加外键，在此检查
             const int64_t child_col_cnt = foreign_key_arg.child_columns_.count();
             const int64_t alter_table_scheme_col_cnt = alter_table_stmt->get_alter_table_schema().get_column_count();
-            for (int64_t i = 0; i < child_col_cnt && ret != OB_NOT_SUPPORTED; i++) {
+            for (int64_t i = 0; i < child_col_cnt && OB_NOT_SUPPORTED != ret; i++) {
               const ObString &child_column_name = foreign_key_arg.child_columns_[i];
               for (int64_t j = 0; j < alter_table_scheme_col_cnt; j++) {
                 if (alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(j)->get_column_name_str() == child_column_name) {
