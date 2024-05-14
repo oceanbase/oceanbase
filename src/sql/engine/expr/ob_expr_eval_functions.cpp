@@ -1446,7 +1446,8 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_vector  /* 111 */
   NULL,//ObExprTopNFilter::eval_topn_filter_vector,             /* 112 */
   NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
-  NULL,//ObExprCeilFloor::calc_ceil_floor_vector                /* 114 */
+  NULL,//ObExprCeilFloor::calc_ceil_floor_vector,               /* 114 */
+  NULL,//ObExprRepeat::eval_repeat_vector,                      /* 115 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
