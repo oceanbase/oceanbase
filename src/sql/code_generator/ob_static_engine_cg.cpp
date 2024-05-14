@@ -598,7 +598,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         } else if (OB_NOT_NULL(table_schema) && 0 < table_schema->get_aux_vp_tid_count()) {
           disable_vectorize = true;
         }
-        if (OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
+        if (OB_NOT_NULL(table_schema) && OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
           LOG_WARN("get column store info failed", K(ret));
         } else {
           exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, disable_vectorize);
