@@ -3077,6 +3077,52 @@ int ObDMLStmt::get_table_rel_ids(const ObIArray<TableItem*> &tables,
   return ret;
 }
 
+int ObDMLStmt::get_table_rel_ids(const uint64_t table_id,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = get_table_bit_index(table_id);
+  if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect idx", K(ret));
+  } else if (OB_FAIL(table_set.add_member(idx))) {
+    LOG_WARN("failed to add members", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const TableItem &target,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  if (target.is_joined_table()) {
+    const JoinedTable &cur_table = static_cast<const JoinedTable &>(target);
+    for (int64_t i = 0; OB_SUCC(ret) && i < cur_table.single_table_ids_.count(); ++i) {
+      if (OB_FAIL(table_set.add_member(get_table_bit_index(cur_table.single_table_ids_.at(i))))) {
+        LOG_WARN("failed to add member", K(ret), K(cur_table.single_table_ids_.at(i)));
+      }
+    }
+  } else if (OB_FAIL(table_set.add_member(get_table_bit_index(target.table_id_)))) {
+    LOG_WARN("failed to add member", K(ret), K(target.table_id_));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const ObIArray<TableItem*> &tables,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    if (OB_ISNULL(tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret));
+    } else if (OB_FAIL(get_table_rel_ids(*tables.at(i), table_set))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObDMLStmt::get_from_tables(ObRelIds &table_set) const
 {
   int ret = OB_SUCCESS;

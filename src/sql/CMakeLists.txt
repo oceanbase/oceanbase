@@ -910,6 +910,7 @@ ob_set_subtarget(ob_sql monitor
 
 ob_set_subtarget(ob_sql optimizer
   optimizer/ob_access_path_estimation.cpp
+  optimizer/ob_conflict_detector.cpp
   optimizer/ob_del_upd_log_plan.cpp
   optimizer/ob_delete_log_plan.cpp
   optimizer/ob_explain_log_plan.cpp

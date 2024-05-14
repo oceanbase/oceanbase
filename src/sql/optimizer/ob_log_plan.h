@@ -32,6 +32,7 @@
 #include "share/client_feedback/ob_feedback_int_struct.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_optimizer_stats_gathering.h"
+#include "sql/optimizer/ob_conflict_detector.h"
 #include "sql/ob_sql_define.h"
 
 namespace test
@@ -71,7 +72,6 @@ class ObJoinOrder;
 class ObOptimizerContext;
 class ObLogJoin;
 struct JoinInfo;
-struct ConflictDetector;
 struct TableDependInfo;
 class ObLogSort;
 class ObLogJoinFilter;
@@ -325,49 +325,8 @@ public:
                              const ObIArray<TableItem*> &table_items,
                              ObIArray<SemiInfo*> &current_semi_infos);
 
-  int get_table_ids(TableItem *table_item,
-                    ObRelIds& table_ids);
-
-  int get_table_ids(const ObIArray<uint64_t> &table_ids,
-                    ObRelIds& rel_ids);
-
-  int get_table_ids(const ObIArray<TableItem*> &table_items,
-                    ObRelIds& table_ids);
-
-  int get_table_ids(const ObIArray<ObRawExpr*> &exprs,
-                    ObRelIds& table_ids);
-
-  int is_joined_table_filter(const ObIArray<TableItem*> &table_items,
-                             const ObRawExpr *expr,
-                             bool &is_filter);
-
-  int find_inner_conflict_detector(const ObIArray<ConflictDetector*> &inner_conflict_detectors,
-                                  const ObRelIds &rel_ids,
-                                  ConflictDetector* &detector);
-
-  int satisfy_associativity_rule(const ConflictDetector &left,
-                                const ConflictDetector &right,
-                                bool &is_satisfy);
-
-  int satisfy_left_asscom_rule(const ConflictDetector &left,
-                              const ConflictDetector &right,
-                              bool &is_satisfy);
-
-  int satisfy_right_asscom_rule(const ConflictDetector &left,
-                                const ConflictDetector &right,
-                                bool &is_satisfy);
-
-  int add_conflict_rule(const ObRelIds &left,
-                        const ObRelIds &right,
-                        ObIArray<std::pair<ObRelIds, ObRelIds>> &rules);
-
-  int generate_conflict_rule(ConflictDetector *left,
-                             ConflictDetector *right,
-                             bool is_left_child,
-                             ObIArray<std::pair<ObRelIds, ObRelIds>> &rules);
-
-  inline ObIArray<ConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
-  inline const ObIArray<ConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
+  inline ObIArray<ObConflictDetector*>& get_conflict_detectors() { return conflict_detectors_; }
+  inline const ObIArray<ObConflictDetector*>& get_conflict_detectors() const { return conflict_detectors_; }
 
   int get_base_table_items(const ObDMLStmt &stmt,
                            const ObIArray<TableItem*> &table_items,
@@ -1075,13 +1034,6 @@ public:
                                    bool &for_cursor_expr,
                                    bool for_on_condition);
 
-  int adjust_expr_with_onetime(ObRawExpr *&expr);
-
-  int adjust_exprs_with_onetime(const ObIArray<ObRawExpr *> &exprs,
-                                ObIArray<ObRawExpr *> &new_exprs);
-
-  int adjust_exprs_with_onetime(ObIArray<ObRawExpr *> &exprs);
-
   int get_subplan_filter_distributed_method(ObLogicalOperator *&top,
                                             const ObIArray<ObLogicalOperator*> &subquery_ops,
                                             const ObIArray<ObExecParamRawExpr *> &params,
@@ -1466,17 +1418,6 @@ protected:
                                common::ObIArray<ObJoinOrder *> &baserels,
                                common::ObIArray<ObRawExpr*> &quals);
 
-  int try_split_or_qual(const ObRelIds &table_ids,
-                        ObOpRawExpr &or_qual,
-                        ObIArray<ObRawExpr*> &table_quals);
-
-  int split_or_quals(const ObIArray<TableItem*> &table_items,
-                    ObIArray<ObRawExpr*> &quals);
-
-  int split_or_quals(const ObIArray<TableItem*> &table_items,
-                    ObRawExpr *qual,
-                    ObIArray<ObRawExpr*> &new_quals);
-
   int pre_process_quals(const ObIArray<TableItem*> &table_items,
                       const ObIArray<SemiInfo*> &semi_infos,
                       ObIArray<ObRawExpr*> &quals);
@@ -1485,63 +1426,7 @@ protected:
 
   int pre_process_quals(TableItem *table_item);
 
-  int generate_conflict_detectors(const ObIArray<TableItem*> &table_items,
-                                  const ObIArray<SemiInfo*> &semi_infos,
-                                  ObIArray<ObRawExpr*> &quals,
-                                  ObIArray<ObJoinOrder *> &baserels);
-
-  int generate_semi_join_detectors(const ObIArray<SemiInfo*> &semi_infos,
-                                  ObRelIds &left_rel_ids,
-                                  const ObIArray<ConflictDetector*> &inner_join_detectors,
-                                  ObIArray<ConflictDetector*> &semi_join_detectors);
-
-  int generate_inner_join_detectors(const ObIArray<TableItem*> &table_items,
-                                    ObIArray<ObRawExpr*> &quals,
-                                    ObIArray<ObJoinOrder *> &baserels,
-                                    ObIArray<ConflictDetector*> &inner_join_detectors);
-
-  int generate_outer_join_detectors(TableItem *table_item,
-                                    ObIArray<ObRawExpr*> &table_filter,
-                                    ObIArray<ObJoinOrder *> &baserels,
-                                    ObIArray<ConflictDetector*> &outer_join_detectors);
-
   int mock_base_rel_detectors(ObJoinOrder *&base_rel);
-
-  int distribute_quals(TableItem *table_item,
-                      const ObIArray<ObRawExpr*> &table_filter,
-                      ObIArray<ObJoinOrder *> &baserels);
-
-  int flatten_inner_join(TableItem *table_item,
-                        ObIArray<ObRawExpr*> &table_filter,
-                        ObIArray<TableItem*> &table_items);
-
-  int inner_generate_outer_join_detectors(JoinedTable *joined_table,
-                                          ObIArray<ObRawExpr*> &table_filter,
-                                          ObIArray<ObJoinOrder *> &baserels,
-                                          ObIArray<ConflictDetector*> &outer_join_detectors);
-
-  int pushdown_where_filters(JoinedTable* joined_table,
-                            ObIArray<ObRawExpr*> &table_filter,
-                            ObIArray<ObRawExpr*> &left_quals,
-                            ObIArray<ObRawExpr*> &right_quals);
-
-  int pushdown_on_conditions(JoinedTable* joined_table,
-                            ObIArray<ObRawExpr*> &left_quals,
-                            ObIArray<ObRawExpr*> &right_quals,
-                            ObIArray<ObRawExpr*> &join_quals);
-
-  int generate_cross_product_detector(const ObIArray<TableItem*> &table_items,
-                                      ObIArray<ObRawExpr*> &quals,
-                                      ObIArray<ConflictDetector*> &cross_product_detectors);
-
-  int check_join_info(const ObRelIds &left,
-                      const ObRelIds &right,
-                      const ObIArray<ObRelIds> &base_table_ids,
-                      bool &is_connected);
-
-  int generate_cross_product_conflict_rule(ConflictDetector *cross_product_detector,
-                                          const ObIArray<TableItem*> &table_items,
-                                          const ObIArray<ObRawExpr*> &join_conditions);
 
   int init_bushy_tree_info(const ObIArray<TableItem*> &table_items);
 
@@ -1605,22 +1490,22 @@ protected:
 
   int is_detector_used(ObJoinOrder *left_tree,
                       ObJoinOrder *right_tree,
-                      ConflictDetector *detector,
+                      ObConflictDetector *detector,
                       bool &is_used);
 
   int choose_join_info(ObJoinOrder *left_tree,
                       ObJoinOrder *right_tree,
-                      ObIArray<ConflictDetector*> &valid_detectors,
+                      ObIArray<ObConflictDetector*> &valid_detectors,
                       bool delay_cross_product,
                       bool &is_strict_order);
 
-  int check_join_info(const ObIArray<ConflictDetector*> &valid_detectors,
+  int check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
                       ObJoinType &join_type,
                       bool &is_valid);
 
   int merge_join_info(ObJoinOrder *left_tree,
                       ObJoinOrder *right_tree,
-                      const ObIArray<ConflictDetector*> &valid_detectors,
+                      const ObIArray<ObConflictDetector*> &valid_detectors,
                       JoinInfo &join_info);
 
   int remove_redundancy_pred(ObJoinOrder *left_tree,
@@ -1740,13 +1625,6 @@ protected:
                                const ObJoinOrder *right_tree,
                                bool &need_gen);
 
-  int check_join_legal(const ObRelIds &left_set,
-                       const ObRelIds &right_set,
-                       const ObRelIds &combined_set,
-                       ConflictDetector *detector,
-                       bool delay_cross_product,
-                       bool &legal);
-
   int check_join_hint(const ObRelIds &left_set,
                       const ObRelIds &right_set,
                       bool &match_hint,
@@ -1806,7 +1684,6 @@ private: // member functions
                      const common::ObIArray<LocationConstraint> &base_location_cons,
                      ObStrictPwjComparer &pwj_comparer,
                      PWJTabletIdMap &pwj_map) const;
-  bool has_depend_table(const ObRelIds& table_ids);
   int get_histogram_by_join_exprs(ObOptimizerContext &optimizer_ctx,
                                   const ObDMLStmt *stmt,
                                   const ObRawExpr &expr,
@@ -1827,13 +1704,6 @@ public:
   bool has_added_win_dist() const { return outline_print_flags_ & ADDED_WIN_DIST_HINT; }
   void set_added_win_dist() { outline_print_flags_ |= ADDED_WIN_DIST_HINT; }
   const common::ObIArray<ObRawExpr*> &get_onetime_query_refs() const { return onetime_query_refs_; }
-  int deduce_redundant_join_conds(const ObIArray<ObRawExpr*> &quals,
-                                  const ObIArray<TableItem*> &table_items,
-                                  ObIArray<ObRawExpr*> &redundancy_quals);
-  int deduce_redundant_join_conds_with_equal_set(const ObIArray<ObRawExpr*> &equal_set,
-                                                 ObIArray<ObRelIds> &connect_infos,
-                                                 ObIArray<ObRelIds> &single_table_ids,
-                                                 ObIArray<ObRawExpr*> &redundancy_quals);
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
@@ -1924,7 +1794,7 @@ private:
   common::ObSEArray<ObRelIds, 8, common::ModulePageAllocator, true> bushy_tree_infos_;
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> onetime_exprs_; // allocated onetime exprs
   common::ObSEArray<TableDependInfo, 8, common::ModulePageAllocator, true> table_depend_infos_;
-  common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> conflict_detectors_;
+  common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> conflict_detectors_;
   ObJoinOrder *join_order_;
   IdOrderMapAllocer id_order_map_allocer_;
   common::ObWrapperAllocator bucket_allocator_wrapper_;

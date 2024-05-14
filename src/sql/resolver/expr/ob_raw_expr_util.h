@@ -1245,6 +1245,14 @@ public:
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
 
+  static int copy_and_formalize(ObRawExpr *&expr,
+                                ObRawExprCopier *copier,
+                                ObSQLSessionInfo *session_info);
+  static int copy_and_formalize(const ObIArray<ObRawExpr *> &exprs,
+                                ObIArray<ObRawExpr *> &new_exprs,
+                                ObRawExprCopier *copier,
+                                ObSQLSessionInfo *session_info);
+
 private :
   static int create_real_cast_expr(ObRawExprFactory &expr_factory,
                               ObRawExpr *src_expr,

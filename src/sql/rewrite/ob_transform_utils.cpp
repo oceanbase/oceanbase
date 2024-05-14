@@ -5240,6 +5240,22 @@ int ObTransformUtils::extract_table_exprs(const ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTransformUtils::extract_table_rel_ids(const ObIArray<ObRawExpr*> &exprs,
+                                            ObRelIds& table_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(table_ids.add_members(expr->get_relation_ids()))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::get_table_joined_exprs(const ObDMLStmt &stmt,
                                              const TableItem &source,
                                              const TableItem &target,

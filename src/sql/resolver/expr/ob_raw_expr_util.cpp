@@ -9616,5 +9616,54 @@ int ObRawExprUtils::check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &c
   return ret;
 }
 
+int ObRawExprUtils::copy_and_formalize(ObRawExpr *&expr,
+                                       ObRawExprCopier *copier,
+                                       ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *new_expr = NULL;
+  if (OB_ISNULL(copier) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(copier), K(session_info));
+  } else if (OB_FAIL(copier->copy_on_replace(expr, new_expr))) {
+    LOG_WARN("failed to copy expr");
+  } else if (OB_ISNULL(new_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (new_expr == expr) {
+    // do nothing
+  } else if (OB_FAIL(new_expr->formalize(session_info))) {
+    LOG_WARN("failed to formalize expr", K(ret));
+  } else {
+    expr = new_expr;
+  }
+  return ret;
+}
+
+int ObRawExprUtils::copy_and_formalize(const ObIArray<ObRawExpr *> &exprs,
+                                       ObIArray<ObRawExpr *> &new_exprs,
+                                       ObRawExprCopier *copier,
+                                       ObSQLSessionInfo *session_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(copier) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(copier), K(session_info));
+  } else if (OB_FAIL(copier->copy_on_replace(exprs, new_exprs))) {
+    LOG_WARN("failed to copy expr");
+  } else if (OB_UNLIKELY(exprs.count() != new_exprs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr number mismatch", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    if (exprs.at(i) == new_exprs.at(i)) {
+      // do nothing
+    } else if (OB_FAIL(new_exprs.at(i)->formalize(session_info))) {
+      LOG_WARN("failed to formalize expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 }
 }

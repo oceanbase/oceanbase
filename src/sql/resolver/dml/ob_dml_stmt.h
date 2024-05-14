@@ -923,6 +923,9 @@ public:
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const uint64_t table_id, ObRelIds &table_set) const;
+  int get_table_rel_ids(const TableItem &target, ObRelIds &table_set) const;
+  int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObRelIds &table_set) const;
   int get_from_tables(ObRelIds &table_set) const;
   int get_from_tables(ObSqlBitSet<> &table_set) const;
   int get_from_tables(common::ObIArray<TableItem*>& from_tables) const;

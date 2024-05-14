@@ -47,18 +47,6 @@ class QueryRangeInfo;
 
 #define OPT_CTX (get_plan()->get_optimizer_context())
 
-int ConflictDetector::build_confict(common::ObIAllocator &allocator, ConflictDetector* &detector)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(detector = static_cast<ConflictDetector*>(allocator.alloc(sizeof(ConflictDetector))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory for conflict detector failed");
-  } else {
-    new(detector) ConflictDetector();
-  }
-  return ret;
-}
-
 ObJoinOrder::~ObJoinOrder()
 {
 
@@ -3467,7 +3455,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
                                                           ordering_directions))) {
     LOG_WARN("failed to split expr direction", K(ret));
   } else {
-    const ObIArray<ConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
+    const ObIArray<ObConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
     // get max prefix count from inner join infos
     for (int64_t i = 0; OB_SUCC(ret) && i < conflict_detectors.count(); i++) {
       related_join_keys.reuse();
@@ -3475,7 +3463,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
       if (OB_ISNULL(conflict_detectors.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null detectors", K(ret));
-      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->join_info_))) {
+      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->get_join_info()))) {
       } else if (!join_info->table_set_.overlap(get_tables()) ||
                   ObOptimizerUtil::find_item(used_conflict_detectors_, conflict_detectors.at(i))) {
         //do nothing
@@ -3528,14 +3516,14 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
                                                           ordering_directions))) {
     LOG_WARN("failed to split expr direction", K(ret));
   } else {
-    const ObIArray<ConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
+    const ObIArray<ObConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
     for (int64_t i = 0; OB_SUCC(ret) && !sort_match && i < conflict_detectors.count(); i++) {
       related_join_keys.reuse();
       other_join_keys.reuse();
       if (OB_ISNULL(conflict_detectors.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null detectors", K(ret));
-      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->join_info_))) {
+      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->get_join_info()))) {
       } else if (!join_info->table_set_.overlap(get_tables()) ||
                   ObOptimizerUtil::find_item(used_conflict_detectors_, conflict_detectors.at(i))) {
         //do nothing
@@ -4445,7 +4433,7 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < used_conflict_detectors_.count(); ++i) {
-    JoinInfo &join_info = used_conflict_detectors_.at(i)->join_info_;
+    JoinInfo &join_info = used_conflict_detectors_.at(i)->get_join_info();
     if (OB_FAIL(append_array_no_dup(excluded_conditions,
                                     join_info.on_conditions_))) {
       LOG_WARN("failed to append on condition exprs", K(ret));
@@ -8680,7 +8668,7 @@ int ObJoinOrder::estimate_size_for_inner_subquery_path(double root_card,
 int ObJoinOrder::init_join_order(const ObJoinOrder *left_tree,
                                  const ObJoinOrder *right_tree,
                                  const JoinInfo *join_info,
-                                 const common::ObIArray<ConflictDetector*> &detectors)
+                                 const common::ObIArray<ObConflictDetector*> &detectors)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) ||
@@ -10639,7 +10627,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                                                                left_exprs,
                                                                right_exprs))) {
       LOG_WARN("failed format equal join conditions", K(ret));
-    } else if (OB_FAIL(get_plan()->get_table_ids(right_exprs, right_tables))) {
+    } else if (OB_FAIL(ObTransformUtils::extract_table_rel_ids(right_exprs, right_tables))) {
       LOG_WARN("failed to get table ids by rexprs", K(ret));
     } else if (OB_FAIL(find_possible_join_filter_tables(
                        get_plan()->get_log_plan_hint(),
@@ -13050,7 +13038,7 @@ int ObJoinOrder::init_est_sel_info_for_subquery(const uint64_t table_id,
 
 int ObJoinOrder::merge_conflict_detectors(ObJoinOrder *left_tree,
                                           ObJoinOrder *right_tree,
-                                          const common::ObIArray<ConflictDetector*>& detectors)
+                                          const common::ObIArray<ObConflictDetector*>& detectors)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {

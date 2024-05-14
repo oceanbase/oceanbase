@@ -961,6 +961,8 @@ public:
                                  const ObIArray<ObRawExpr *> &source_exprs,
                                  const ObSqlBitSet<> &table_set,
                                  ObIArray<ObRawExpr *> &table_exprs);
+  static int extract_table_rel_ids(const ObIArray<ObRawExpr*> &exprs,
+                                   ObRelIds& table_ids);
   static int get_table_joined_exprs(const ObDMLStmt &stmt,
                                     const TableItem &source,
                                     const TableItem &target,
