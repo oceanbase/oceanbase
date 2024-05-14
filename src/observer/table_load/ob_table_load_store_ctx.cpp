@@ -48,6 +48,8 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     task_scheduler_(nullptr),
     merger_(nullptr),
     insert_table_ctx_(nullptr),
+    next_tablet_idx_(0),
+    opened_insert_tablet_count_(0),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
     tmp_file_mgr_(nullptr),
@@ -957,6 +959,28 @@ void ObTableLoadStoreCtx::clear_committed_trans_stores()
     trans_ctx->allocator_.free(trans_store);
   }
   committed_trans_store_array_.reset();
+}
+
+int ObTableLoadStoreCtx::get_next_insert_tablet_ctx(ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(op_lock_);
+  if (next_tablet_idx_ < ls_partition_ids_.count()) {
+    tablet_id = ls_partition_ids_[next_tablet_idx_++].part_tablet_id_.tablet_id_;
+  } else {
+    ret = OB_ITER_END;
+  }
+
+  return ret;
+}
+
+void ObTableLoadStoreCtx::handle_open_insert_tablet_ctx_finish(bool &is_finish)
+{
+  is_finish = false;
+  ObMutexGuard guard(op_lock_);
+  if (++opened_insert_tablet_count_ == ls_partition_ids_.count()) {
+    is_finish = true;
+  }
 }
 
 } // namespace observer

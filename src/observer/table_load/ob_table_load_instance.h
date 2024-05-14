@@ -63,6 +63,7 @@ private:
 private:
   // direct load
   int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
+  int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();
   int start_trans();

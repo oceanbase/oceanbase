@@ -19,6 +19,7 @@
 #include "share/table/ob_table_load_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
+#include "storage/direct_load/ob_direct_load_insert_table_ctx.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_assigned_memory_manager.h"
 
@@ -136,6 +137,8 @@ private:
   int init_sequence();
 public:
   int commit_autoinc_value();
+  int get_next_insert_tablet_ctx(ObTabletID &tablet_id);
+  void handle_open_insert_tablet_ctx_finish(bool &is_finish);
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
@@ -146,6 +149,8 @@ public:
   ObITableLoadTaskScheduler *task_scheduler_;
   ObTableLoadMerger *merger_;
   storage::ObDirectLoadInsertTableContext *insert_table_ctx_;
+  int64_t next_tablet_idx_;
+  int64_t opened_insert_tablet_count_;
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;

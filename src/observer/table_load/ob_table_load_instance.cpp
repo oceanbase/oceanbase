@@ -508,8 +508,48 @@ int ObTableLoadInstance::start_direct_load(const ObTableLoadParam &param,
       LOG_WARN("fail to init coordinator", KR(ret));
     } else if (OB_FAIL(coordinator.begin())) {
       LOG_WARN("fail to coodrinator begin", KR(ret));
+    } else if (OB_FAIL(wait_begin_finish())) {
+      LOG_WARN("fail to wait begin finish", KR(ret));
     }
   }
+
+  return ret;
+}
+
+int ObTableLoadInstance::wait_begin_finish()
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadCoordinator coordinator(table_ctx_);
+
+  if (OB_FAIL(coordinator.init())) {
+    LOG_WARN("fail to init coordinator", KR(ret));
+  } else {
+    ObTableLoadStatusType status = ObTableLoadStatusType::NONE;
+    int error_code = OB_SUCCESS;
+    ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
+    while (OB_SUCC(ret) && ObTableLoadStatusType::LOADING != status && OB_SUCC(execute_ctx_->check_status())) {
+      if (OB_FAIL(coordinator.get_status(status, error_code))) {
+        LOG_WARN("fail to coordinator get status", KR(ret));
+      } else {
+        switch (status) {
+          case ObTableLoadStatusType::INITED:
+            wait_obj.wait();
+            break;
+          case ObTableLoadStatusType::LOADING:
+            break;
+          case ObTableLoadStatusType::ERROR:
+            ret = error_code;
+            LOG_WARN("table load has error", KR(ret));
+            break;
+          default:
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected status", KR(ret), K(status));
+            break;
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

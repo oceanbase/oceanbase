@@ -571,10 +571,163 @@ int ObTableLoadCoordinator::begin()
       LOG_WARN("fail to pre begin peers", KR(ret));
     } else if (OB_FAIL(confirm_begin_peers())) {
       LOG_WARN("fail to confirm begin peers", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_loading())) {
-      LOG_WARN("fail to set coordinator status loading", KR(ret));
     } else {
       coordinator_ctx_->set_enable_heart_beat(true);
+      if (OB_FAIL(add_check_begin_result_task())) {
+        LOG_WARN("fail to add check begin result task", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+/**
+ * check begin result
+ */
+
+int ObTableLoadCoordinator::check_peers_begin_result(bool &is_finish)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadArray<ObAddr> all_addr_array;
+  if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader(all_addr_array))) {
+    LOG_WARN("fail to get all addr", KR(ret));
+  } else {
+    LOG_INFO("check_peers_begin_result begin", K(all_addr_array.count()));
+    ObDirectLoadControlGetStatusArg arg;
+    ObDirectLoadControlGetStatusRes res;
+    arg.table_id_ = param_.table_id_;
+    arg.task_id_ = ctx_->ddl_param_.task_id_;
+    is_finish = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_addr_array.count(); ++i) {
+      const ObAddr &addr = all_addr_array.at(i);
+      if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
+        ObTableLoadStore store(ctx_);
+        if (OB_FAIL(store.init())) {
+          LOG_WARN("fail to init store", KR(ret));
+        } else if (OB_FAIL(store.get_status(res.status_, res.error_code_))) {
+          LOG_WARN("fail to store get status", KR(ret));
+        }
+      } else { // 远端, 发送rpc
+        TABLE_LOAD_CONTROL_RPC_CALL(get_status, addr, arg, res);
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == res.status_)) {
+          ret = res.error_code_;
+          LOG_WARN("store has error", KR(ret), K(addr), K(res.status_));
+        } else if (OB_UNLIKELY(ObTableLoadStatusType::ABORT == res.status_)) {
+          ret = OB_SUCCESS != res.error_code_ ? res.error_code_ : OB_CANCELED;
+          LOG_WARN("store has abort", KR(ret), K(addr), K(res.status_));
+        } else if (OB_UNLIKELY(ObTableLoadStatusType::INITED != res.status_ &&
+                               ObTableLoadStatusType::LOADING != res.status_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected peer status", KR(ret), K(addr), K(res.status_));
+        } else if (ObTableLoadStatusType::LOADING != res.status_) {
+          is_finish = false;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+class ObTableLoadCoordinator::CheckBeginResultTaskProcessor : public ObITableLoadTaskProcessor
+{
+public:
+  CheckBeginResultTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx)
+    : ObITableLoadTaskProcessor(task), ctx_(ctx)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~CheckBeginResultTaskProcessor()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  int process() override
+  {
+    int ret = OB_SUCCESS;
+    bool is_finish = false;
+    ObTableLoadCoordinator coordinator(ctx_);
+    if (OB_FAIL(coordinator.init())) {
+      LOG_WARN("fail to init coordinator", KR(ret));
+    }
+    ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
+    while (OB_SUCC(ret)) {
+      // 确认状态
+      if (OB_FAIL(ctx_->coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+        LOG_WARN("fail to check coordinator status inited", KR(ret));
+      }
+      // 查询合并状态
+      else if (OB_FAIL(coordinator.check_peers_begin_result(is_finish))) {
+        LOG_WARN("fail to check peers begin result", KR(ret));
+      } else if (!is_finish) {
+        wait_obj.wait();
+      } else {
+        break;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ctx_->coordinator_ctx_->set_status_loading())) {
+        LOG_WARN("fail to set coordinator status loading", KR(ret));
+      }
+    }
+    return ret;
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+};
+
+class ObTableLoadCoordinator::CheckBeginResultTaskCallback : public ObITableLoadTaskCallback
+{
+public:
+  CheckBeginResultTaskCallback(ObTableLoadTableCtx *ctx)
+    : ctx_(ctx)
+  {
+    ctx_->inc_ref_count();
+  }
+  virtual ~CheckBeginResultTaskCallback()
+  {
+    ObTableLoadService::put_ctx(ctx_);
+  }
+  void callback(int ret_code, ObTableLoadTask *task) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(ret_code)) {
+      ctx_->coordinator_ctx_->set_status_error(ret);
+    }
+    ctx_->free_task(task);
+  }
+private:
+  ObTableLoadTableCtx * const ctx_;
+};
+
+int ObTableLoadCoordinator::add_check_begin_result_task()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
+  } else {
+    ObTableLoadTask *task = nullptr;
+    // 1. 分配task
+    if (OB_FAIL(ctx_->alloc_task(task))) {
+      LOG_WARN("fail to alloc task", KR(ret));
+    }
+    // 2. 设置processor
+    else if (OB_FAIL(task->set_processor<CheckBeginResultTaskProcessor>(ctx_))) {
+      LOG_WARN("fail to set check begin result task processor", KR(ret));
+    }
+    // 3. 设置callback
+    else if (OB_FAIL(task->set_callback<CheckBeginResultTaskCallback>(ctx_))) {
+      LOG_WARN("fail to set check begin result task callback", KR(ret));
+    }
+    // 4. 把task放入调度器
+    else if (OB_FAIL(coordinator_ctx_->task_scheduler_->add_task(0, task))) {
+      LOG_WARN("fail to add task", KR(ret), KPC(task));
+    }
+    if (OB_FAIL(ret)) {
+      if (nullptr != task) {
+        ctx_->free_task(task);
+      }
     }
   }
   return ret;
