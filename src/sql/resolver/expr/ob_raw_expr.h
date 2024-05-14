@@ -1166,7 +1166,7 @@ public:
 
   int check_param_num() const;
 
-  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params));
+  TO_STRING_KV(K_(access_name), K_(access_index), K_(type), K_(params), K_(udf_info));
 
   AccessNameType type_;
   common::ObString access_name_;
