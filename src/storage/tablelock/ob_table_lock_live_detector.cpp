@@ -464,6 +464,7 @@ int ObTableLockDetector::do_detect_and_clear()
   if (OB_FAIL(func1.call_function_directly())) {
     LOG_WARN("do session_alive detect failed", K(ret));
   }
+  remove_expired_lock_id();
 
   return ret;
 }
@@ -474,6 +475,16 @@ int ObTableLockDetector::remove_lock_by_owner_id(const int64_t raw_owner_id)
   ObReleaseAllLockExecutor executor;
   if (OB_FAIL(executor.execute(raw_owner_id))) {
     LOG_WARN("remove lock by owner_id failed", K(raw_owner_id));
+  }
+  return ret;
+}
+
+int ObTableLockDetector::remove_expired_lock_id()
+{
+  int ret =OB_SUCCESS;
+  ObLockFuncExecutor executor;
+  if (OB_FAIL(executor.remove_expired_lock_id())) {
+    LOG_WARN("remove expired lock_id failed", K(ret));
   }
   return ret;
 }

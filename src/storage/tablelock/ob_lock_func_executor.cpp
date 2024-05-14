@@ -285,12 +285,12 @@ int ObLockFuncExecutor::check_lock_exist_(const uint64_t &lock_id)
   char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
   bool is_existed = false;
 
-  OZ(databuff_printf(where_cond,
-                     WHERE_CONDITION_BUFFER_SIZE,
-                     "WHERE obj_id = %" PRIu64
-                     " and obj_type = %d",
-                     lock_id,
-                     static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
+  OZ (databuff_printf(where_cond,
+                      WHERE_CONDITION_BUFFER_SIZE,
+                      "WHERE obj_id = %" PRIu64
+                      " and obj_type = %d",
+                      lock_id,
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
   OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                       "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DETECT_LOCK_INFO_TNAME));
   OZ (ObTableAccessHelper::read_single_row(tenant_id,
@@ -617,6 +617,32 @@ void ObLockFuncExecutor::mark_lock_session_(sql::ObSQLSessionInfo *session, cons
   }
 }
 
+int ObLockFuncExecutor::remove_expired_lock_id()
+{
+  int ret = OB_SUCCESS;
+  char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
+  char where_cond[WHERE_CONDITION_BUFFER_SIZE] = {0};
+  const int64_t now = ObTimeUtility::current_time();
+  // delete 10 rows each time, to avoid causing abnormal delays due to deleting too many rows
+  const int delete_limit = 10;
+
+  OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
+                      "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DBMS_LOCK_ALLOCATED_TNAME));
+  OZ (databuff_printf(where_cond,
+                      WHERE_CONDITION_BUFFER_SIZE,
+                      "expiration <= usec_to_time(%" PRId64
+                      ") AND lockid NOT IN (SELECT obj_id FROM %s.%s where obj_type = %d or obj_type = %d)"
+                      "LIMIT %d",
+                      now,
+                      OB_SYS_DATABASE_NAME,
+                      OB_ALL_DETECT_LOCK_INFO_TNAME,
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC),
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_DBMS_LOCK),
+                      delete_limit));
+  OZ (ObTableAccessHelper::delete_row(MTL_ID(), table_name, where_cond));
+  return ret;
+}
+
 int ObGetLockExecutor::execute(ObExecContext &ctx,
                                const ObString &lock_name,
                                const int64_t timeout_us)
@@ -788,17 +814,6 @@ int ObGetLockExecutor::write_lock_id_(ObLockFuncContext &ctx,
                                           insert_sql));
   OZ (ctx.execute_write(insert_sql, affected_rows));
   CK (OB_LIKELY(1 == affected_rows || 2 == affected_rows));
-
-  // clean lock_id which is expired and not locked
-  OZ(delete_sql.assign_fmt("DELETE FROM %s WHERE expiration <= usec_to_time(%" PRId64
-                           ") AND lockid NOT IN (SELECT obj_id FROM %s.%s where obj_type = %d)",
-                           table_name,
-                           now,
-                           OB_SYS_DATABASE_NAME,
-                           OB_ALL_DETECT_LOCK_INFO_TNAME,
-                           static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
-  affected_rows = 0;
-  OZ (ctx.execute_write(delete_sql, affected_rows));
 
   return ret;
 }
