@@ -278,7 +278,8 @@ int ObSharedMacroBlockMgr::write_block(
   read_info.size_ = size;
   read_info.offset_ = offset;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   const int64_t io_timeout_ms = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
   ObMacroBlockHandle read_handle;
   ObSSTableMacroBlockChecker macro_block_checker;
@@ -846,7 +847,8 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.offset_ = sstable.get_macro_offset();
     read_info.size_ = upper_align(sstable.get_macro_read_size(), DIO_READ_ALIGN_SIZE);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   }
 
   if (FAILEDx(ObBlockManager::read_block(read_info, block_handle))) {

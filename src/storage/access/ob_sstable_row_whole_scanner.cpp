@@ -253,7 +253,8 @@ int ObSSTableRowWholeScanner::open(
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
       read_info.io_callback_ = access_ctx_->io_callback_;
-      read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
+      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block", K(ret), K(read_info));
       } else {
@@ -363,7 +364,8 @@ int ObSSTableRowWholeScanner::prefetch()
       read_info.offset_ = sstable_->get_macro_offset();
       read_info.size_ = sstable_->get_macro_read_size();
       read_info.io_desc_.set_wait_event(common::ObWaitEventIds::DB_FILE_COMPACT_READ);
-      read_info.io_desc_.set_group_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
+      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+read_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_WHOLE_SCANNER_IO);
       read_info.io_callback_ = access_ctx_->io_callback_;
       if (OB_FAIL(ObBlockManager::async_read_block(read_info, scan_handle.macro_io_handle_))) {
         LOG_WARN("Fail to read macro block, ", K(ret), K(read_info));

@@ -789,7 +789,8 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.offset_ = align_offset_;
       macro_info.size_ = align_store_size;
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
-      macro_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+      macro_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      macro_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
       // io_callback
       if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
                                       offset_,
@@ -902,7 +903,8 @@ int ObSharedBlockReaderWriter::async_read(
   ObMacroBlockReadInfo macro_read_info;
   ObMacroBlockHandle macro_handle;
   macro_read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-  macro_read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+  macro_read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  macro_read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
   macro_read_info.io_callback_ = read_info.io_callback_;
   if (OB_UNLIKELY(!read_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

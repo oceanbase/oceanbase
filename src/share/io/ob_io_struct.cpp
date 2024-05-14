@@ -679,10 +679,10 @@ int ObSysIOUsage::init()
 
 void ObSysIOUsage::accumulate(ObIORequest &req)
 {
-  if (OB_UNLIKELY(!is_sys_group(req.get_group_id()))) {
+  if (OB_UNLIKELY(!req.is_sys_module())) {
     // ignore
   } else if (req.time_log_.return_ts_ > 0) {
-    const int64_t idx = req.get_group_id() - SYS_RESOURCE_GROUP_START_ID;
+    const int64_t idx = req.get_sys_module_id() - SYS_RESOURCE_GROUP_START_ID;
     const int64_t device_delay = get_io_interval(req.time_log_.return_ts_, req.time_log_.submit_ts_);
     io_stats_.at(idx).at(static_cast<int>(req.get_mode()))
       .accumulate(1, req.io_size_, device_delay);
@@ -1153,7 +1153,7 @@ int ObIOSender::enqueue_request(ObIORequest &req)
         LOG_WARN("get_refactored tenant_map failed", K(ret), K(req));
       } else {
         uint64_t index = INT_MAX64;
-        const int64_t group_id = tmp_req->get_group_id();
+        const int64_t group_id = tmp_req->get_resource_group_id();
         if (!is_user_group(group_id)) { //other
           tmp_phy_queue = &(io_group_queues->other_phy_queue_);
         } else if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->get_group_index(group_id, index))) {
@@ -3090,7 +3090,8 @@ int ObIOFaultDetector::record_timing_task(const int64_t first_id, const int64_t 
     //todo qilu: after column store merge, add allocator for user_data_buf
     retry_task->io_info_.buf_ = nullptr;
     retry_task->io_info_.flag_.set_mode(ObIOMode::READ);
-    retry_task->io_info_.flag_.set_group_id(0);
+    retry_task->io_info_.flag_.set_resource_group_id(USER_RESOURCE_OTHER_GROUP_ID);
+    retry_task->io_info_.flag_.set_sys_module_id(OB_INVALID_ID);
     retry_task->io_info_.flag_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
     retry_task->io_info_.flag_.set_time_detect();
     retry_task->io_info_.fd_.first_id_ = first_id;
@@ -3141,7 +3142,8 @@ int ObIOFaultDetector::record_read_failure(const ObIORequest &req)
     LOG_WARN("alloc RetryTask failed", K(ret));
   } else {
     retry_task->io_info_ = req.io_info_;
-    retry_task->io_info_.flag_.set_group_id(ObIOModule::DETECT_IO);
+    retry_task->io_info_.flag_.set_resource_group_id(THIS_WORKER.get_group_id());
+    retry_task->io_info_.flag_.set_sys_module_id(ObIOModule::DETECT_IO);
     retry_task->io_info_.callback_ = nullptr;
     retry_task->timeout_ms_ = 5000L; // 5s
     if (OB_FAIL(TG_PUSH_TASK(TGDefIDs::IO_HEALTH, retry_task))) {

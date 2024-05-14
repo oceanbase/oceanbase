@@ -132,7 +132,9 @@ const char *oceanbase::common::get_io_sys_group_name(ObIOModule module)
 
 /******************             IOFlag              **********************/
 ObIOFlag::ObIOFlag()
-  : flag_(0)
+  : flag_(0),
+    group_id_(USER_RESOURCE_OTHER_GROUP_ID),
+    sys_module_id_(OB_INVALID_ID)
 {
 
 }
@@ -145,12 +147,14 @@ ObIOFlag::~ObIOFlag()
 void ObIOFlag::reset()
 {
   flag_ = 0;
+  group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
+  sys_module_id_ = OB_INVALID_ID;
 }
 
 bool ObIOFlag::is_valid() const
 {
   return mode_ >= 0 && mode_ < static_cast<int>(ObIOMode::MAX_MODE)
-    && group_id_ >= 0
+    && is_valid_group(group_id_)
     && wait_event_id_ > 0;
 }
 
@@ -164,12 +168,7 @@ ObIOMode ObIOFlag::get_mode() const
   return static_cast<ObIOMode>(mode_);
 }
 
-void ObIOFlag::set_group_id(ObIOModule module)
-{
-  group_id_ = THIS_WORKER.get_group_id() != 0 ? THIS_WORKER.get_group_id() : static_cast<int64_t>(module);
-}
-
-void ObIOFlag::set_group_id(int64_t group_id)
+void ObIOFlag::set_resource_group_id(const uint64_t group_id)
 {
   group_id_ = group_id;
 }
@@ -179,14 +178,26 @@ void ObIOFlag::set_wait_event(int64_t wait_event_id)
   wait_event_id_ = wait_event_id;
 }
 
-int64_t ObIOFlag::get_group_id() const
+uint64_t ObIOFlag::get_resource_group_id() const
 {
   return group_id_;
 }
 
-ObIOModule ObIOFlag::get_io_module() const
+uint64_t ObIOFlag::get_sys_module_id() const
 {
-  return static_cast<ObIOModule>(group_id_);
+  return sys_module_id_;
+}
+
+void ObIOFlag::set_sys_module_id(const uint64_t sys_module_id)
+{
+  sys_module_id_ = sys_module_id;
+}
+
+bool ObIOFlag::is_sys_module() const
+{
+  return USER_RESOURCE_OTHER_GROUP_ID == group_id_
+          && sys_module_id_ >= SYS_RESOURCE_GROUP_START_ID
+          && sys_module_id_ < SYS_RESOURCE_GROUP_END_ID;
 }
 
 int64_t ObIOFlag::get_wait_event() const
@@ -520,18 +531,28 @@ int64_t ObIORequest::get_data_size() const
   return data_size;
 }
 
-int64_t ObIORequest::get_group_id() const
+uint64_t ObIORequest::get_resource_group_id() const
 {
-  return io_info_.flag_.get_group_id();
+  return io_info_.flag_.get_resource_group_id();
+}
+
+uint64_t ObIORequest::get_sys_module_id() const
+{
+  return io_info_.flag_.get_sys_module_id();
+}
+
+bool ObIORequest::is_sys_module() const
+{
+  return io_info_.flag_.is_sys_module();
 }
 
 uint64_t ObIORequest::get_io_usage_index()
 {
   uint64_t index = 0;
-  if (!is_user_group(get_group_id())) {
+  if (USER_RESOURCE_OTHER_GROUP_ID == get_resource_group_id()) {
     //other group or sys group , do nothing
   } else {
-    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_group_id());
+    index = tenant_io_mgr_.get_ptr()->get_usage_index(get_resource_group_id());
   }
   return index;
 }
@@ -725,7 +746,7 @@ void ObIORequest::finish(const ObIORetCode &ret_code)
       ret_code_ = ret_code;
       is_finished_ = true;
       if (OB_NOT_NULL(tenant_io_mgr_.get_ptr())) {
-        if (is_sys_group(get_group_id())) {
+        if (is_sys_module()) {
           tenant_io_mgr_.get_ptr()->io_backup_usage_.accumulate(*this);
         } else {
           tenant_io_mgr_.get_ptr()->io_usage_.accumulate(*this);

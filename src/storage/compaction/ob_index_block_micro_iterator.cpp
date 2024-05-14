@@ -174,7 +174,8 @@ int ObIndexBlockMicroIterator::init(
     read_info.offset_ = sstable->get_macro_offset();
     read_info.size_ = sstable->get_macro_read_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_MICRO_ITER_IO);
     if (OB_FAIL(ObBlockManager::async_read_block(read_info, macro_handle_))) {
       LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_id));
     } else if (OB_FAIL(macro_handle_.wait(io_timeout_ms))) {

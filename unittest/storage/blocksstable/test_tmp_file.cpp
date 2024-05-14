@@ -1783,7 +1783,7 @@ TEST_F(TestTmpFile, test_tmp_file_sync)
   }
   io_info.fd_ = fd;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = write_buf;
   io_info.size_ = write_size;
@@ -1820,7 +1820,7 @@ TEST_F(TestTmpFile, test_tmp_file_sync_same_block)
   ObTmpFileIOHandle handle;
   ObTmpFileIOInfo io_info;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.io_desc_.set_wait_event(2);
   int64_t write_size = 16 *1024;
   char *write_buf = (char *)malloc(write_size);
@@ -1881,7 +1881,7 @@ TEST_F(TestTmpFile, test_tmp_file_wash)
   ObTmpFileIOHandle handle;
   ObTmpFileIOInfo io_info, io_info_2;
   io_info.tenant_id_ = 1;
-  io_info.io_desc_.set_group_id(THIS_WORKER.get_group_id());
+  io_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
   io_info.io_desc_.set_wait_event(2);
   int64_t write_size = 1024 *1024;
   char *write_buf = (char *)malloc(write_size);

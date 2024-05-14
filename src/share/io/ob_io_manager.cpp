@@ -729,7 +729,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (NULL != detector && detector->is_data_disk_has_fatal_error()) {
+  } else if (SLOG_IO != info.flag_.get_sys_module_id() && NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
     LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "data disk has fatal error");

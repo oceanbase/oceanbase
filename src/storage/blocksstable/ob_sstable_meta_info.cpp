@@ -252,7 +252,8 @@ int ObRootBlockInfo::read_block_data(
     handle.reset();
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::ROOT_BLOCK_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::ROOT_BLOCK_IO);
     if (OB_FAIL(addr.get_block_addr(read_info.macro_block_id_, read_info.offset_, read_info.size_))) {
       LOG_WARN("fail to get block address", K(ret), K(addr));
     } else if (OB_FAIL(ObBlockManager::read_block(read_info, handle))) {

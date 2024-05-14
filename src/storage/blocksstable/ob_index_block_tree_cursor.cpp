@@ -1016,7 +1016,8 @@ int ObIndexBlockTreeCursor::get_next_level_block(
       read_info.offset_ = absolute_offset;
       read_info.size_ = idx_row_header.get_block_size();
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      read_info.io_desc_.set_group_id(ObIOModule::INDEX_BLOCK_TREE_CURSOR_IO);
+      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      read_info.io_desc_.set_sys_module_id(ObIOModule::INDEX_BLOCK_TREE_CURSOR_IO);
       idx_row_header.fill_deserialize_meta(block_des_meta);
       if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
         LOG_WARN("Fail to read micro block from sync io", K(ret));
