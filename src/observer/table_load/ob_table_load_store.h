@@ -47,6 +47,11 @@ private:
 public:
   int pre_begin();
   int confirm_begin();
+private:
+  int open_insert_table_ctx();
+  class OpenInsertTabletTaskProcessor;
+  class OpenInsertTabletTaskCallback;
+public:
   int pre_merge(const table::ObTableLoadArray<table::ObTableLoadTransId> &committed_trans_id_array);
   int start_merge();
   int commit(table::ObTableLoadResultInfo &result_info,
