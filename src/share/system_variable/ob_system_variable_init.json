@@ -6893,5 +6893,73 @@
       "info_cn": "",
       "background_cn": "",
       "ref_url": ""
+  },
+  "innodb_read_only": {
+    "id": 10387,
+    "name": "innodb_read_only",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Starts InnoDB in read-only mode. For distributing database applications or data sets on read-only media. Can also be used in data warehouses to share the same data directory between multiple instances.",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_api_disable_rowlock": {
+    "id": 10388,
+    "name": "innodb_api_disable_rowlock",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Use this option to disable row locks when InnoDB memcached performs DML operations. By default, innodb_api_disable_rowlock is disabled, which means that memcached requests row locks for get and set operations.",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "innodb_autoinc_lock_mode": {
+    "id": 10389,
+    "name": "innodb_autoinc_lock_mode",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "int",
+    "info": "The lock mode to use for generating auto-increment values. Permissible values are 0, 1, or 2, for traditional, consecutive, or interleaved, respectively. The default setting is 1 (consecutive).",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "min_val": "0",
+    "max_val": "2",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "skip_external_locking": {
+    "id": 10390,
+    "name": "skip_external_locking",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "This is OFF if mysqld uses external locking (system locking), ON if external locking is disabled.",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "super_read_only": {
+    "id": 10391,
+    "name": "super_read_only",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "If the read_only system variable is enabled, the server permits no client updates except from users who have the SUPER privilege. If the super_read_only system variable is also enabled, the server prohibits client updates even from users who have SUPER.",
+    "flags": "GLOBAL | MYSQL_ONLY | READONLY",
+    "publish_version": "424",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+
   }
 }

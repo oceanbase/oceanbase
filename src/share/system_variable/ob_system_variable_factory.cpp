@@ -544,8 +544,10 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_adaptive_hash_index_parts",
   "innodb_adaptive_max_sleep_delay",
   "innodb_api_bk_commit_interval",
+  "innodb_api_disable_rowlock",
   "innodb_api_trx_level",
   "innodb_autoextend_increment",
+  "innodb_autoinc_lock_mode",
   "innodb_background_drop_list_empty",
   "innodb_buffer_pool_chunk_size",
   "innodb_buffer_pool_dump_at_shutdown",
@@ -593,6 +595,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_max_purge_lag_delay",
   "innodb_merge_threshold_set_all_debug",
   "innodb_page_size",
+  "innodb_read_only",
   "innodb_replication_delay",
   "innodb_rollback_on_timeout",
   "innodb_saved_page_number_debug",
@@ -746,6 +749,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "session_track_state_change",
   "session_track_system_variables",
   "session_track_transaction_info",
+  "skip_external_locking",
   "skip_slave_start",
   "slave_allow_batching",
   "slave_checkpoint_group",
@@ -785,6 +789,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ssl_crlpath",
   "ssl_key",
   "stored_program_cache",
+  "super_read_only",
   "system_time_zone",
   "table_open_cache_instances",
   "time_format",
@@ -959,8 +964,10 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_ADAPTIVE_HASH_INDEX_PARTS,
   SYS_VAR_INNODB_ADAPTIVE_MAX_SLEEP_DELAY,
   SYS_VAR_INNODB_API_BK_COMMIT_INTERVAL,
+  SYS_VAR_INNODB_API_DISABLE_ROWLOCK,
   SYS_VAR_INNODB_API_TRX_LEVEL,
   SYS_VAR_INNODB_AUTOEXTEND_INCREMENT,
+  SYS_VAR_INNODB_AUTOINC_LOCK_MODE,
   SYS_VAR_INNODB_BACKGROUND_DROP_LIST_EMPTY,
   SYS_VAR_INNODB_BUFFER_POOL_CHUNK_SIZE,
   SYS_VAR_INNODB_BUFFER_POOL_DUMP_AT_SHUTDOWN,
@@ -1008,6 +1015,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_MAX_PURGE_LAG_DELAY,
   SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG,
   SYS_VAR_INNODB_PAGE_SIZE,
+  SYS_VAR_INNODB_READ_ONLY,
   SYS_VAR_INNODB_REPLICATION_DELAY,
   SYS_VAR_INNODB_ROLLBACK_ON_TIMEOUT,
   SYS_VAR_INNODB_SAVED_PAGE_NUMBER_DEBUG,
@@ -1161,6 +1169,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SESSION_TRACK_STATE_CHANGE,
   SYS_VAR_SESSION_TRACK_SYSTEM_VARIABLES,
   SYS_VAR_SESSION_TRACK_TRANSACTION_INFO,
+  SYS_VAR_SKIP_EXTERNAL_LOCKING,
   SYS_VAR_SKIP_SLAVE_START,
   SYS_VAR_SLAVE_ALLOW_BATCHING,
   SYS_VAR_SLAVE_CHECKPOINT_GROUP,
@@ -1200,6 +1209,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_SSL_CRLPATH,
   SYS_VAR_SSL_KEY,
   SYS_VAR_STORED_PROGRAM_CACHE,
+  SYS_VAR_SUPER_READ_ONLY,
   SYS_VAR_SYSTEM_TIME_ZONE,
   SYS_VAR_TABLE_OPEN_CACHE_INSTANCES,
   SYS_VAR_TIME_FORMAT,
@@ -1644,7 +1654,12 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_sync_debug",
   "default_collation_for_utf8mb4",
   "_enable_old_charset_aggregation",
-  "_ob_enable_role_ids"
+  "_ob_enable_role_ids",
+  "innodb_read_only",
+  "innodb_api_disable_rowlock",
+  "innodb_autoinc_lock_mode",
+  "skip_external_locking",
+  "super_read_only"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2225,6 +2240,11 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
         + sizeof(ObSysVarObEnableRoleIds)
+        + sizeof(ObSysVarInnodbReadOnly)
+        + sizeof(ObSysVarInnodbApiDisableRowlock)
+        + sizeof(ObSysVarInnodbAutoincLockMode)
+        + sizeof(ObSysVarSkipExternalLocking)
+        + sizeof(ObSysVarSuperReadOnly)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -5939,6 +5959,51 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__OB_ENABLE_ROLE_IDS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnableRoleIds));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadOnly", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_READ_ONLY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbReadOnly));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbApiDisableRowlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbApiDisableRowlock", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_API_DISABLE_ROWLOCK))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbApiDisableRowlock));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbAutoincLockMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbAutoincLockMode", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_AUTOINC_LOCK_MODE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbAutoincLockMode));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipExternalLocking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipExternalLocking", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SKIP_EXTERNAL_LOCKING))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSkipExternalLocking));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSuperReadOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSuperReadOnly", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SUPER_READ_ONLY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarSuperReadOnly));
       }
     }
 
@@ -10480,6 +10545,61 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnableRoleIds())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnableRoleIds", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_READ_ONLY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbReadOnly)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbReadOnly)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbReadOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbReadOnly", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_API_DISABLE_ROWLOCK: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbApiDisableRowlock)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbApiDisableRowlock)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbApiDisableRowlock())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbApiDisableRowlock", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_AUTOINC_LOCK_MODE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbAutoincLockMode)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbAutoincLockMode)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbAutoincLockMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbAutoincLockMode", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SKIP_EXTERNAL_LOCKING: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSkipExternalLocking)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSkipExternalLocking)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSkipExternalLocking())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSkipExternalLocking", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_SUPER_READ_ONLY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarSuperReadOnly)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarSuperReadOnly)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSuperReadOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarSuperReadOnly", K(ret));
       }
       break;
     }
