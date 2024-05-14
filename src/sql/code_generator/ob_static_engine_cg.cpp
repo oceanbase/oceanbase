@@ -605,6 +605,10 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
           LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
           scan_cardinality = common::max(scan_cardinality, op->get_card());
         }
+        if (tsc->is_multivalue_index_scan()) {
+          // TODO: @yunyi enable vectorization in multivalue index
+          disable_vectorize = true;
+        }
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
         auto spf_op = static_cast<ObLogSubPlanFilter *>(op);
         if (spf_op->is_update_set()) {

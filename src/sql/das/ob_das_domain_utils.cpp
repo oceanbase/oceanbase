@@ -364,11 +364,12 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
         ObObjMeta col_type = das_ctdef.column_types_.at(j);
         const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
         int64_t projector_idx = row_projector.at(j);
+
         if (multivalue_idx == projector_idx) {
           if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
             LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
           } else {
-            if (ob_is_numeric_type(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+            if (ob_is_number_or_decimal_int_tc(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
               col_type.set_collation_level(CS_LEVEL_NUMERIC);
             } else {
               col_type.set_collation_level(CS_LEVEL_IMPLICIT);

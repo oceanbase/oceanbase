@@ -205,12 +205,14 @@ extern ObRawExpr *USELESS_POINTER;
    || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
    || ((op) == T_FUN_SYS_JSON_VALUE))
 
-// JSON_CONTAINS & JSON_OVERLAPS not support yet
+// used in transform only
 #define IS_JSON_DOMAIN_OP(op) \
-  (((op) == T_FUN_SYS_JSON_MEMBER_OF) /*\
-    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
-    || ((op) == T_FUN_SYS_JSON_CONTAINS)*/) \
+  ((op) == T_FUN_SYS_JSON_MEMBER_OF)
 
+#define IS_MULTIVALUE_EXPR(op) \
+  (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
+   || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
+   || ((op) == T_FUN_SYS_JSON_CONTAINS))
 
 // ObSqlBitSet is a simple bitset, in order to avoid memory exposure
 // ObBitSet is too large just for a simple bitset
@@ -1954,6 +1956,9 @@ public:
   bool is_bool_expr() const;
   bool is_spatial_expr() const;
   bool is_json_domain_expr() const;
+
+  bool is_multivalue_expr() const;
+
   ObRawExpr* get_json_domain_param_expr();
   bool is_geo_expr() const;
   bool is_domain_expr() const;

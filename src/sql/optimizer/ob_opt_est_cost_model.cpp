@@ -2234,6 +2234,11 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
       if (need_scale) {
         factor /= 10.0;
       }
+    } else if (qual->is_multivalue_expr()) {
+      cost_per_row += cost_params_.get_comparison_cost(sys_stat_, ObJsonTC) * factor;
+      if (need_scale) {
+        factor /= 10.0;
+      }
     } else {
       ObObjTypeClass calc_type = qual->get_result_type().get_calc_type_class();
       cost_per_row += cost_params_.get_comparison_cost(sys_stat_, calc_type) * factor;

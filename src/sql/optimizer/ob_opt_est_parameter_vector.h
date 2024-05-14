@@ -78,6 +78,7 @@ const static double VECTOR_CMP_INT_COST = 0.0084782994043 * DEFAULT_CPU_SPEED;
 const static double VECTOR_CMP_NUMBER_COST = 0.0144099836801 * DEFAULT_CPU_SPEED;
 const static double VECTOR_CMP_CHAR_COST = 0.03754351606603 * DEFAULT_CPU_SPEED;
 const static double VECTOR_CMP_SPATIAL_COST = 19.311884382850465 * DEFAULT_CPU_SPEED;  // gis vector is not supported
+const static double VECTOR_CMP_JSON_COST = 0.25191475191475193 * DEFAULT_CPU_SPEED;    // json vector is not supported
 const static double VECTOR_INVALID_CMP_COST = -1;
 
 //hash cost params
@@ -114,7 +115,7 @@ const static double comparison_params_vector[ObMaxTC+1] = {
   VECTOR_CMP_INT_COST,            // interval
   VECTOR_CMP_INT_COST,            // rowid
   VECTOR_CMP_CHAR_COST,           // lob
-  VECTOR_CMP_CHAR_COST,           // json
+  VECTOR_CMP_JSON_COST,           // json
   VECTOR_CMP_CHAR_COST,           // geometry
   VECTOR_CMP_CHAR_COST,           // user defined type
   VECTOR_CMP_NUMBER_COST,         // ObDecimalIntTC

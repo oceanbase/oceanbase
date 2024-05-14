@@ -4088,6 +4088,7 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
         LOG_WARN("get json array element result is null.", K(i), K(ret));
       } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
                                                                   col_res_type, val))) {
+        ret = OB_SUCCESS;
         GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
         always_true = true;
       } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, *key_pos, val, cmp))) {
@@ -4143,9 +4144,12 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
         ObObj val;
         tmp_key_part->id_ = out_key_part->id_;
         tmp_key_part->pos_ = out_key_part->pos_;
-        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
-                                                            tmp_key_part->pos_.column_type_, val))) {
-          if (OB_NOT_NULL(query_range_ctx_)) {
+        ObExprResType& column_type = tmp_key_part->pos_.column_type_;
+        if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base, column_type, val))) {
+          ret = OB_SUCCESS;
+          if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+            LOG_WARN("failed set normal key", K(ret));
+          } else if (OB_NOT_NULL(query_range_ctx_)) {
             query_range_ctx_->cur_expr_is_precise_ = false;
           }
         } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params))) {
@@ -4170,14 +4174,22 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
   if (OB_ISNULL(out_key_part)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
-  } else if (OB_FAIL(ObJsonExprHelper::get_json_val(const_param, exec_ctx,  false, &allocator_, j_base))) {
-    LOG_WARN("fail to get json val", K(ret));
+  } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+    LOG_WARN("fail to get json val", K(ret), K(const_param));
   } else if (OB_ISNULL(j_base)) {
     ret = OB_BAD_NULL_ERROR;
     LOG_WARN("fail to get json base", K(ret));
   } else if (j_base->is_json_scalar(j_base->json_type())) {
-    // if is scalar, equal to member of
-    if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
+    ObObj cast_obj = const_param;
+    if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+        j_base, out_key_part->pos_.column_type_, cast_obj))) {
+      ret = OB_SUCCESS;
+      if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+        LOG_WARN("failed set normal key", K(ret));
+      } else if (OB_NOT_NULL(query_range_ctx_)) {
+        query_range_ctx_->cur_expr_is_precise_ = false;
+      }
+    } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params))) {
       LOG_WARN("fail to get member of keyparts", K(ret));
     }
   } else if (j_base->json_type() == common::ObJsonNodeType::J_ARRAY) {
@@ -4211,9 +4223,32 @@ int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, c
   int ret = OB_SUCCESS;
   switch(op_type) {
     case ObDomainOpType::T_JSON_MEMBER_OF: {
-      if (OB_FAIL(get_member_of_keyparts(const_param, out_key_part, dtc_params))) {
+      ObIJsonBase* j_base = nullptr;
+      ObObj cast_obj = const_param;
+      if (ob_is_json(const_param.get_type())) {
+        if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
+          LOG_WARN("fail to get json val", K(ret), K(const_param));
+        } else if (OB_ISNULL(j_base)) {
+          ret = OB_BAD_NULL_ERROR;
+          LOG_WARN("fail to get json base", K(ret));
+        } else if (j_base->is_json_scalar(j_base->json_type())) {
+          if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx,
+              j_base, out_key_part->pos_.column_type_, cast_obj))) {
+            ret = OB_SUCCESS;
+            if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+              LOG_WARN("failed set normal key", K(ret));
+            } else if (OB_NOT_NULL(query_range_ctx_)) {
+              query_range_ctx_->cur_expr_is_precise_ = false;
+            }
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params))) {
         LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
-      } else if (OB_NOT_NULL(query_range_ctx_) && !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
+      } else if (OB_NOT_NULL(query_range_ctx_) &&
+          !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
         query_range_ctx_->cur_expr_is_precise_ = true;
       }
       break;

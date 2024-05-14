@@ -162,6 +162,7 @@ public:
                                          ObCollationType collation,
                                          ObAccuracy &accuracy,
                                          ObObjType obj_type,
+                                         ObScale scale,
                                          ObObj &res_obj);
 
   typedef int (*ObItemMethodValid)(ObIJsonBase*& in,

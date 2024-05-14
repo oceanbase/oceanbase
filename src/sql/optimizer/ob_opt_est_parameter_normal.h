@@ -78,6 +78,7 @@ const static double NORMAL_CMP_INT_COST = 0.0100087103407539 * DEFAULT_CPU_SPEED
 const static double NORMAL_CMP_NUMBER_COST = 0.0227412012152380952380952381 * DEFAULT_CPU_SPEED;
 const static double NORMAL_CMP_CHAR_COST = 0.09707028746051587301587301588 * DEFAULT_CPU_SPEED;
 const static double NORMAL_CMP_SPATIAL_COST = 19.311884382850465 * DEFAULT_CPU_SPEED;
+const static double NORMAL_CMP_JSON_COST = 0.25191475191475193 * DEFAULT_CPU_SPEED;
 const static double NORMAL_INVALID_CMP_COST = -1;
 
 //hash cost params
@@ -115,7 +116,7 @@ const static double comparison_params_normal[ObMaxTC+1] = {
   NORMAL_CMP_INT_COST,            // interval
   NORMAL_CMP_INT_COST,            // rowid
   NORMAL_CMP_CHAR_COST,           // lob
-  NORMAL_CMP_CHAR_COST,           // json
+  NORMAL_CMP_JSON_COST,           // json
   NORMAL_CMP_CHAR_COST,           // geometry
   NORMAL_CMP_CHAR_COST,           // user defined type
   NORMAL_CMP_NUMBER_COST,         // ObDecimalIntTC

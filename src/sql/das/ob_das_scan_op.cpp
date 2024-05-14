@@ -798,6 +798,11 @@ int ObDASScanOp::reuse_iter()
         && OB_FAIL(static_cast<ObFullTextIndexLookupOp *>(lookup_op)->reuse_scan_iter())) {
       LOG_WARN("failed to reuse text lookup iters", K(ret));
     }
+  } else if (scan_param_.table_param_->is_multivalue_index() && attach_ctdef_ != nullptr) {
+    if (nullptr != lookup_op
+        && OB_FAIL(static_cast<ObMulValueIndexLookupOp *>(lookup_op)->reuse_scan_iter(scan_param_.need_switch_param_))) {
+      LOG_WARN("failed to reuse text lookup iters", K(ret));
+    }
   } else if (OB_FAIL(tsc_service.reuse_scan_iter(scan_param_.need_switch_param_, get_storage_scan_iter()))) {
     LOG_WARN("reuse scan iterator failed", K(ret));
   } else if (lookup_op != nullptr

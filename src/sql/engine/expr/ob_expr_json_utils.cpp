@@ -1497,6 +1497,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
                                             ObCollationType collation,
                                             ObAccuracy &accuracy,
                                             ObObjType obj_type,
+                                            ObScale scale,
                                             ObObj &res_obj)
 {
   INIT_SUCC(ret);
@@ -1504,20 +1505,35 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("expr is null.", K(ret));
   } else {
-
+    bool is_use_dynamic_buffer = (ob_is_number_or_decimal_int_tc(obj_type));
     ObDatum res_datum;
     char datum_buffer[OBJ_DATUM_STRING_RES_SIZE] = {0};
     res_datum.ptr_ = datum_buffer;
+
+    if (is_use_dynamic_buffer) {
+      void* buffer = allocator->alloc(OBJ_DATUM_STRING_RES_SIZE);
+      if (OB_ISNULL(buffer)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate tmp buffer failed.", K(ret));
+      } else {
+        res_datum.ptr_ = static_cast<char*>(buffer);
+      }
+    }
+
     ObJsonCastParam cast_param(obj_type, ObCollationType::CS_TYPE_UTF8MB4_BIN, collation, false);
     uint8_t is_type_mismatch = false;
-    if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(cast_to_res(allocator, ctx, j_base, accuracy, cast_param, res_datum, is_type_mismatch))) {
       LOG_WARN("fail to cast.", K(ret));
     } else {
       res_obj.set_type(obj_type);
       res_obj.set_collation_type(collation);
+      res_obj.set_scale(scale);
 
-      res_datum.to_obj(res_obj, res_obj.meta_);
-      res_obj.set_collation_type(collation);
+      if (OB_FAIL(res_datum.to_obj(res_obj, res_obj.meta_))) {
+        LOG_WARN("fail datum to obj.", K(ret));
+      }
     }
   }
   return ret;
@@ -1540,6 +1556,7 @@ int ObJsonUtil::cast_json_scalar_to_sql_obj(common::ObIAllocator *allocator,
                                       col_res_type.get_collation_type(),
                                       temp_accuracy,
                                       col_res_type.get_type(),
+                                      col_res_type.get_scale(),
                                       res_obj);
   }
   return ret;

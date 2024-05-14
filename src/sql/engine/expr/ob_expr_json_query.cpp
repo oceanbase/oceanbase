@@ -425,10 +425,12 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
 {
   INIT_SUCC(ret);
 
-  ParseNode node;
   ObDatum *opt_type = nullptr;
   int32_t dst_len = 0;
   ObObjType dest_type;
+  int32_t precision = -1;
+  int32_t scale = -1;
+  ObLengthSemantics length_semantics = 0;
 
   ObVector<uint8_t> opt_mismatch_value;
   ObVector<uint8_t> opt_mismatch_type;
@@ -441,15 +443,9 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
   } else if (OB_NOT_NULL(origin_result)
     && OB_FAIL(ObJsonBaseFactory::transform(&allocator, origin_result, ObJsonInType::JSON_BIN, json_base))) { // to tree
     LOG_WARN("fail to transform to tree", K(ret));
-  } else {
-    node.value_ = opt_type->get_int();
-    dest_type = static_cast<ObObjType>(node.int16_values_[0]);
-    dst_len = node.int32_values_[OB_NODE_CAST_C_LEN_IDX];
-    ObLengthSemantics length_semantics = 0;
-    if (ob_is_string_tc(dest_type) &&
-        OB_FAIL(ObJsonUtil::get_accuracy_internal(accuracy, ctx, dest_type, node.value_, length_semantics))) {
-      LOG_WARN("failed to get accuracy", K(ret));
-    }
+  } else if (OB_FAIL(ObJsonExprHelper::get_sql_scalar_type(
+    ctx, opt_type->get_int(), dest_type, dst_len, precision, scale, accuracy, length_semantics))) {
+    LOG_WARN("fail to get_sql_scalar_type.", K(ret));
   }
 
   ObString str_bin;
@@ -503,8 +499,6 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
       ObIJsonBase* iter = bin_array + i;
       ObObj tmp_obj;
       int64_t pos = str_buff.length();
-      tmp_obj.set_collation_type(dst_collation);
-      tmp_obj.set_type(dest_type);
       if (ob_is_numeric_type(dest_type) || ob_is_temporal_type(dest_type)) {
         tmp_obj.set_collation_level(CS_LEVEL_NUMERIC);
       } else {
@@ -527,9 +521,8 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(check_enable_cast_index_array(iter, true))) {
         LOG_WARN("failed to check index array size", K(ret));
-      } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator, ctx, iter,
-                                                                 dst_collation, accuracy, dest_type,
-                                                                 tmp_obj))) {
+      } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator, ctx, iter, dst_collation,
+                                                                 accuracy, dest_type, scale, tmp_obj))) {
         LOG_WARN("failed to cast to res", K(ret), K(dest_type));
         ret = OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
         LOG_USER_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX);
@@ -550,8 +543,7 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
   } else if (element_count > 0) {
     ObObj tmp_obj;
     int64_t pos = str_buff.length();
-    tmp_obj.set_collation_type(dst_collation);
-    tmp_obj.set_type(dest_type);
+
     if (ob_is_numeric_type(dest_type) || ob_is_temporal_type(dest_type)) {
       tmp_obj.set_collation_level(CS_LEVEL_NUMERIC);
     } else {
@@ -560,9 +552,8 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
 
     if (OB_FAIL(check_enable_cast_index_array(json_base, true))) {
       LOG_WARN("failed to check index array size", K(ret));
-    } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator, ctx, json_base,
-                                                        dst_collation, accuracy, dest_type,
-                                                        tmp_obj))) {
+    } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator, ctx, json_base, dst_collation,
+                                                               accuracy, dest_type, scale, tmp_obj))) {
       LOG_WARN("failed to cast to res", K(ret), K(dest_type));
       ret = OB_ERR_JSON_CONTAINER_CAST_SCALAR;
       LOG_USER_ERROR(OB_ERR_JSON_CONTAINER_CAST_SCALAR);
