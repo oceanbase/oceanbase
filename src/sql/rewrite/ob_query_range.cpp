@@ -5352,7 +5352,8 @@ int ObQueryRange::union_single_equal_cond(ObExecContext *exec_ctx,
 // do two path and operation
 int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                                         ObExecContext *exec_ctx,
-                                        const ObDataTypeCastParams &dtc_params)
+                                        const ObDataTypeCastParams &dtc_params,
+                                        const bool& need_geo_rebuild)
 {
   int ret = OB_SUCCESS;
   bool is_stack_overflow = false;
@@ -5526,6 +5527,11 @@ int ObQueryRange::or_single_head_graphs(ObKeyPartList &or_list,
                 cur1 = cur1_next;
               }
             }
+          } else if (need_geo_rebuild) {
+            // if need geo rebuild, the normal keypart must have or_next_
+            // can't use key_node_is_equal
+            // if it's single geo keypart, already make sure there is no duplicate keypart
+            // if not single geo keypart, will do or_range_graph again
           } else if (cur1->key_node_is_equal(cur2)) {
             if (OB_FAIL(union_single_equal_cond(exec_ctx, dtc_params, cur1, cur2))) {
               LOG_WARN("union single equal cond failed", K(ret));
@@ -5947,7 +5953,7 @@ int ObQueryRange::or_range_graph(ObKeyPartList &ranges,
           } else {
             out_key_part = find_false;
           }
-        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params)))) {
+        } else if (OB_FAIL(SMART_CALL(or_single_head_graphs(or_list, exec_ctx, dtc_params, need_geo_rebuild)))) {
           LOG_WARN("Or single head graphs failed", K(ret));
         } else {
           bool has_geo_key = false;
