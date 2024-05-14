@@ -690,12 +690,12 @@ int ObMemtable::lock(
   ObMvccWriteGuard guard(ret);
   ObStoreRowkey tmp_key;
   ObMemtableKey mtk;
+  ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
     ret = OB_NOT_INIT;
-  } else if (!context.store_ctx_->mvcc_acc_ctx_.is_write()
-             || row.count_ < param.get_schema_rowkey_count()) {
+  } else if (!acc_ctx.is_write() || row.count_ < param.get_schema_rowkey_count()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(row), K(param));
   } else if (OB_UNLIKELY(param.is_non_unique_local_index_)) {
@@ -703,12 +703,18 @@ int ObMemtable::lock(
     // actually, there is no circumstance in where locking the index table is need.
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(row), K(param));
-  } else if (OB_FAIL(guard.write_auth(*context.store_ctx_))) {
-    TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
   } else if (OB_FAIL(tmp_key.assign(row.cells_, param.get_schema_rowkey_count()))) {
     TRANS_LOG(WARN, "Failed to assign rowkey", K(row), K(param));
   } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &tmp_key))) {
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
+  } else if (acc_ctx.write_flag_.is_check_row_locked()) {
+    if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint(param, context, tmp_key))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+        TRANS_LOG(WARN, "meet unexpected return code in check_row_locked", K(ret), K(context), K(mtk));
+      }
+    }
+  } else if (OB_FAIL(guard.write_auth(*context.store_ctx_))) {
+    TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
   } else if (OB_FAIL(lock_(param, context, tmp_key, mtk))) {
     TRANS_LOG(WARN, "lock_ failed", K(ret), K(param));
   } else {
@@ -739,11 +745,12 @@ int ObMemtable::lock(
   int ret = OB_SUCCESS;
   ObMvccWriteGuard guard(ret);
   ObMemtableKey mtk;
+  ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
 
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "not init", K(*this));
     ret = OB_NOT_INIT;
-  } else if (!context.store_ctx_->mvcc_acc_ctx_.is_write() || !rowkey.is_memtable_valid()) {
+  } else if (!acc_ctx.is_write() || !rowkey.is_memtable_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(rowkey));
   } else if (OB_UNLIKELY(param.is_non_unique_local_index_)) {
@@ -751,10 +758,16 @@ int ObMemtable::lock(
     // actually, there is no circumstance in where locking the index table is need.
     ret = OB_NOT_SUPPORTED;
     TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(param));
-  } else if (OB_FAIL(guard.write_auth(*context.store_ctx_))) {
-    TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
   } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
+  } else if (acc_ctx.write_flag_.is_check_row_locked()) {
+    if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint(param, context, rowkey.get_store_rowkey()))) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+        TRANS_LOG(WARN, "meet unexpected return code in check_row_locked", K(ret), K(context), K(mtk));
+      }
+    }
+  } else if (OB_FAIL(guard.write_auth(*context.store_ctx_))) {
+    TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
   } else if (OB_FAIL(lock_(param, context, rowkey.get_store_rowkey(), mtk))) {
     TRANS_LOG(WARN, "lock_ failed", K(ret), K(param));
   } else {
@@ -2788,19 +2801,13 @@ int ObMemtable::lock_(
                     init_timestamp_,              /*memstore_version*/
                     acc_ctx.tx_scn_,         /*seq_no*/
                     rowkey.get_obj_cnt());   /*column_cnt*/
-    if (acc_ctx.write_flag_.is_check_row_locked()) {
-      if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint(param, context, rowkey))) {
-        if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-          TRANS_LOG(WARN, "meet unexpected return code in check_row_locked", K(ret), K(context), K(mtk));
-        }
-      }
-    } else if (OB_FAIL(mvcc_write_(param,
-                                   context,
-                                   &mtk,
-                                   arg,
-                                   false, /*check_exist*/
-                                   is_new_locked,
-                                   nullptr /*mvcc_row*/))) {
+    if (OB_FAIL(mvcc_write_(param,
+                            context,
+                            &mtk,
+                            arg,
+                            false, /*check_exist*/
+                            is_new_locked,
+                            nullptr /*mvcc_row*/))) {
     } else if (OB_UNLIKELY(!is_new_locked)) {
       TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node");
     }
