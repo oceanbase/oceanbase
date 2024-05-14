@@ -1007,8 +1007,8 @@ bool ObDupTableLSHandler::is_dup_table_lease_valid()
     if (!is_inited() || OB_ISNULL(lease_mgr_ptr_)) {
       is_dup_lease_ls = false;
     } else if (ls_state_helper_.is_leader()) {
-      is_dup_lease_ls = true;
-      DUP_TABLE_LOG(INFO, "the lease is always valid for a dup ls leader", K(is_dup_lease_ls),
+      is_dup_lease_ls = false;
+      DUP_TABLE_LOG(INFO, "None valid lease on dup ls leader", K(is_dup_lease_ls),
                     KPC(this));
     } else {
       is_dup_lease_ls = lease_mgr_ptr_->is_follower_lease_valid();
@@ -1332,6 +1332,16 @@ int ObDupTableLSHandler::switch_to_leader()
   return ret;
 }
 
+OB_NOINLINE int ObDupTableLSHandler::errsim_leader_revoke_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ret)) {
+    DUP_TABLE_LOG(WARN, "errsim leader revoke", K(ret), K(ls_id_));
+  }
+  return ret;
+}
+
 int ObDupTableLSHandler::leader_revoke_(const bool is_forcedly)
 {
   int ret = OB_SUCCESS;
@@ -1339,12 +1349,19 @@ int ObDupTableLSHandler::leader_revoke_(const bool is_forcedly)
 
   bool is_logging = false;
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(errsim_leader_revoke_())) {
+      DUP_TABLE_LOG(WARN, "errsim for dup table leader revoke", K(ret), K(ls_id_), K(is_forcedly));
+    }
+  }
+
   if (is_inited_) {
     if (OB_NOT_NULL(log_operator_)) {
       log_operator_->rlock_for_log();
       is_logging = log_operator_->check_is_busy_without_lock();
     }
-    if (OB_NOT_NULL(tablets_mgr_ptr_) && OB_TMP_FAIL(tablets_mgr_ptr_->leader_revoke(is_logging))) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(tablets_mgr_ptr_))
+      if(OB_TMP_FAIL(tablets_mgr_ptr_->leader_revoke(is_logging))) {
       DUP_TABLE_LOG(WARN, "tablets_mgr switch to follower failed", K(ret), K(tmp_ret), KPC(this));
       if (!is_forcedly) {
         ret = tmp_ret;
