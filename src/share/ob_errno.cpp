@@ -26865,17 +26865,17 @@ static const _error _error_OB_KV_REDIS_PARSE_ERROR = {
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -10515, OBKV redis protocol parse error",
       .oracle_str_user_error = "ORA-00600: internal error code, arguments: -10515, Redis protocol parse errror, the input redis string is: '%.*s'"
 };
-static const _error _error_OB_KV_HBASE_CONVERT_INT_ERROR = {
-      .error_name            = "OB_KV_HBASE_CONVERT_INT_ERROR",
+static const _error _error_OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG = {
+      .error_name            = "OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG",
       .error_cause           = "Internal Error",
       .error_solution        = "Contact OceanBase Support",
       .mysql_errno           = -1,
       .sqlstate              = "HY000",
-      .str_error             = "cannot convert hbase cell value to int64",
-      .str_user_error        = "cannot convert hbase cell value to int64, the cell value length is '%d'",
+      .str_error             = "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t",
+      .str_user_error        = "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.",
       .oracle_errno          = 600,
-      .oracle_str_error      = "ORA-00600: internal error code, arguments: -10516, cannot convert hbase cell value to int64",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -10516, cannot convert hbase cell value to int64, the cell value length is '%d'"
+      .oracle_str_error      = "ORA-00600: internal error code, arguments: -10516, When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t",
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -10516, When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 };
 static const _error _error_OB_KV_ODP_TIMEOUT = {
       .error_name            = "OB_KV_ODP_TIMEOUT",
@@ -29433,7 +29433,7 @@ struct ObStrErrorInit
     _errors[-OB_KV_SCAN_RANGE_MISSING] = &_error_OB_KV_SCAN_RANGE_MISSING;
     _errors[-OB_KV_FILTER_PARSE_ERROR] = &_error_OB_KV_FILTER_PARSE_ERROR;
     _errors[-OB_KV_REDIS_PARSE_ERROR] = &_error_OB_KV_REDIS_PARSE_ERROR;
-    _errors[-OB_KV_HBASE_CONVERT_INT_ERROR] = &_error_OB_KV_HBASE_CONVERT_INT_ERROR;
+    _errors[-OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG] = &_error_OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG;
     _errors[-OB_KV_ODP_TIMEOUT] = &_error_OB_KV_ODP_TIMEOUT;
     _errors[-OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN] = &_error_OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN;
     _errors[-OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES] = &_error_OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES;
