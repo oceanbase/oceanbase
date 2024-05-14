@@ -1803,7 +1803,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   if (OB_SUCC(ret)
       && !strict_compat_
       && ObDuplicateScopeChecker::is_valid_replicate_scope(table_schema.get_duplicate_scope())
-      && !is_no_table_options(sql_mode)) {
+      && !is_no_table_options(sql_mode)
+      && table_schema.is_user_table()) {
     // 目前只支持cluster
     if (table_schema.get_duplicate_scope() == ObDuplicateScope::DUPLICATE_SCOPE_CLUSTER) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos, "DUPLICATE_SCOPE = 'CLUSTER' "))) {
