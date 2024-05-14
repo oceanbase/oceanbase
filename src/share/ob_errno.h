@@ -3586,6 +3586,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQUENCE_NOT_MATCH__USER_ERROR_MSG "compare sequence not match"
 #define OB_SEQUENCE_TOO_SMALL__USER_ERROR_MSG "compare sequence too small"
 #define OB_TRANSFER_CANNOT_START__USER_ERROR_MSG "transfer cannot start"
+#define OB_PARTITION_ALREADY_BALANCED__USER_ERROR_MSG "partitions are already balanced, %s"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -5852,6 +5853,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQUENCE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7121, compare sequence not match"
 #define OB_SEQUENCE_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7122, compare sequence too small"
 #define OB_TRANSFER_CANNOT_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7123, transfer cannot start"
+#define OB_PARTITION_ALREADY_BALANCED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -6423,7 +6425,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2262];
+extern int g_all_ob_errnos[2263];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

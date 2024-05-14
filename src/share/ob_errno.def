@@ -1951,6 +1951,7 @@ DEFINE_ERROR(OB_TABLET_GC_LOCK_CONFLICT, -7120, -1, "HY000", "tablet GC lock con
 DEFINE_ERROR(OB_SEQUENCE_NOT_MATCH, -7121, -1, "HY000", "compare sequence not match");
 DEFINE_ERROR(OB_SEQUENCE_TOO_SMALL, -7122, -1, "HY000", "compare sequence too small");
 DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot start");
+DEFINE_ERROR_EXT_DEP(OB_PARTITION_ALREADY_BALANCED, -7124, -1, "HY000", "partitions are already balanced", "partitions are already balanced, %s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
