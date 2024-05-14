@@ -386,6 +386,7 @@ public:
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   int check_can_replay_clog(bool &can_replay);
   int check_ls_need_online(bool &need_online);
+  int check_allow_read(bool &allow_read);
 
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle() const;
@@ -936,6 +937,10 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
   int set_ls_migration_gc(bool &allow_gc);
+  int inner_check_allow_read_(
+      const ObMigrationStatus &migration_status,
+      const share::ObLSRestoreStatus &restore_status,
+      bool &allow_read);
 
 private:
   // StorageBaseUtil

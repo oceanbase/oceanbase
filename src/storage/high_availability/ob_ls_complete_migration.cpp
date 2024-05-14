@@ -1459,6 +1459,8 @@ int ObStartCompleteMigrationTask::change_member_list_()
     const int64_t cost_ts = ObTimeUtility::current_time() - start_ts;
     LOG_INFO("succeed change member list", "cost", cost_ts, "tenant_id", ctx_->tenant_id_, "ls_id", ctx_->arg_.ls_id_);
   }
+
+  DEBUG_SYNC(AFTER_MEMBERLIST_CHANGED);
   return ret;
 }
 
