@@ -352,7 +352,7 @@ class ObTxExecResult
   bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
-  ObSArray<ObTransIDAndAddr> conflict_txs_;
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST
   ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 public:
   ObTxExecResult();
@@ -554,7 +554,7 @@ protected:
   // conflict_txs_ is valid when transaction is not executed on local
   // on scheduler, conflict_txs_ merges all participants executed results on remote
   // on participant, conflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
-  ObSArray<ObTransIDAndAddr> conflict_txs_;
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST
   ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 
   // used during commit
