@@ -1169,7 +1169,6 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "session is null", K(ret));
   } else  {
-    stat_.plan_id_ = get_plan_id();
     stat_.plan_hash_value_ = get_signature();
     stat_.gen_time_ = ObTimeUtility::current_time();
     stat_.schema_version_ = get_tenant_schema_version();
