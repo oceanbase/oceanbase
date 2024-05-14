@@ -112,6 +112,7 @@ void ObIOManager::destroy()
   server_io_manager_ = nullptr;
   allocator_.destroy();
   is_inited_ = false;
+  LOG_INFO("io manager is destroyed");
 }
 
 int ObIOManager::start()
@@ -547,7 +548,7 @@ int ObTenantIOManager::mtl_new(ObTenantIOManager *&io_service)
   io_service = nullptr;
   if (is_virtual_tenant_id(MTL_ID())) {
     // do nothing
-  } else if (OB_ISNULL(buf = OB_IO_MANAGER.allocator_.alloc(sizeof(ObTenantIOManager)))) {
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObTenantIOManager), ObMemAttr(MTL_ID(), "IO_MGR")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     FLOG_WARN("failed to alloc tenant io mgr", K(ret));
   } else {
@@ -581,7 +582,7 @@ void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(io_service)) {
     io_service->~ObTenantIOManager();
-    OB_IO_MANAGER.allocator_.free(io_service);
+    ob_free(io_service);
     io_service = nullptr;
     FLOG_INFO("mtl destroy tenant io manager success", K(MTL_ID()));
   }
