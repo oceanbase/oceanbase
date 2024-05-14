@@ -822,7 +822,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       ObRawExpr *expr,
                                       ObObjType src_type,
                                       uint64_t src_type_id,
-                                      ObPLDataType &dst_pl_type)
+                                      ObPLDataType &dst_pl_type,
+                                      bool is_sys_package)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
@@ -901,7 +902,7 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
       }
     } else {
       OZ (check_type_match(
-        resolve_ctx, match_info, expr, src_type, src_coll_type, src_type_id, dst_pl_type));
+        resolve_ctx, match_info, expr, src_type, src_coll_type, src_type_id, dst_pl_type, is_sys_package));
     }
     LOG_DEBUG("debug for check type match:",
                K(src_type), K(src_type_id), K(dst_pl_type), K(match_info), KPC(expr));
@@ -915,7 +916,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                                       ObObjType src_type,
                                       ObCollationType src_coll_type,
                                       uint64_t src_type_id,
-                                      ObPLDataType &dst_pl_type)
+                                      ObPLDataType &dst_pl_type,
+                                      bool is_sys_package)
 {
   int ret = OB_SUCCESS;
 
@@ -936,6 +938,8 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
             ob_is_oracle_datetime_tc(src_type) &&
             ob_is_oracle_datetime_tc(dst_type)) {
     if (dst_type == src_type) {
+      OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
+    } else if (is_sys_package && ob_is_otimestamp_type(src_type) && ob_is_otimestamp_type(dst_type)) {
       OX (match_info = (ObRoutineMatchInfo::MatchInfo(false, src_type, dst_type)));
     } else {
       OX (match_info = (ObRoutineMatchInfo::MatchInfo(true, src_type, dst_type)));
@@ -1137,6 +1141,7 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                  ObRoutineMatchInfo &match_info)
 {
   int ret = OB_SUCCESS;
+  bool is_sys_package = false;
   CK (OB_NOT_NULL(routine_info));
   if (OB_FAIL(ret)) {
   } else if (expr_params.count() > routine_info->get_param_count()) {
@@ -1149,6 +1154,8 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
   for (int64_t i = 0; OB_SUCC(ret) && i < routine_info->get_param_count(); ++i) {
     OZ (match_info.match_info_.push_back(ObRoutineMatchInfo::MatchInfo()));
   }
+
+  OX (is_sys_package = (get_tenant_id_by_object_id(routine_info->get_package_id()) == OB_SYS_TENANT_ID));
 
   int64_t offset = 0;
   if (OB_FAIL(ret)) {
@@ -1282,7 +1289,8 @@ int ObResolverUtils::check_match(const pl::ObPLResolveCtx &resolve_ctx,
                                                  expr,
                                                  src_type,
                                                  src_type_id,
-                                                 dst_pl_type))) {
+                                                 dst_pl_type,
+                                                 is_sys_package))) {
       LOG_WARN("argument type not match", K(ret), K(i), KPC(expr_params.at(i)), K(src_type), K(dst_pl_type));
     }
   }
