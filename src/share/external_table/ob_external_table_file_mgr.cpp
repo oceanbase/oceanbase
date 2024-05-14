@@ -149,7 +149,7 @@ int ObExternalTableFileManager::clear_inner_table_files(
   OZ (delete_sql.assign_fmt("DELETE FROM %s WHERE TABLE_ID = %lu",
                             OB_ALL_EXTERNAL_TABLE_FILE_TNAME, table_id));
   OZ (trans.write(tenant_id, delete_sql.ptr(), affected_rows));
-  LOG_DEBUG("check clear rows", K(affected_rows));
+  LOG_DEBUG("check clear rows", K(affected_rows), K(delete_sql));
   return ret;
 }
 
@@ -190,7 +190,7 @@ int ObExternalTableFileManager::get_external_files(
     ObIArray<ObExternalFileInfo> &external_files,
     ObIArray<ObNewRange *> *range_filter /*default = NULL*/)
 {
-  return get_external_files_by_part_id(tenant_id, table_id, table_id, is_local_file_on_disk,  allocator, external_files, range_filter);
+  return get_external_files_by_part_id(tenant_id, table_id, 0, is_local_file_on_disk,  allocator, external_files, range_filter);
 }
 
 int ObExternalTableFileManager::get_external_files_by_part_ids(
@@ -204,7 +204,7 @@ int ObExternalTableFileManager::get_external_files_by_part_ids(
 {
   int ret = OB_SUCCESS;
   if (partition_ids.empty()) {
-     OZ (get_external_files_by_part_id(tenant_id, table_id, table_id, is_local_file_on_disk,  allocator, external_files, range_filter));
+     OZ (get_external_files_by_part_id(tenant_id, table_id, 0, is_local_file_on_disk,  allocator, external_files, range_filter));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_ids.count(); i++) {
       OZ (get_external_files_by_part_id(tenant_id, table_id, partition_ids.at(i), is_local_file_on_disk,  allocator, external_files, range_filter));
@@ -241,7 +241,7 @@ int ObExternalTableFileManager::get_external_files_by_part_id(
       LOG_WARN("fail to fill cache from inner table", K(ret));
     }
   }
-
+  LOG_TRACE("get external file list result from table", K(table_id), K(is_local_file_on_disk), KPC(ext_files), K(partition_id), K(lbt()));
   for (int i = 0; OB_SUCC(ret) && i < ext_files->file_urls_.count(); ++i) {
     bool in_ranges = false;
     if (range_filter != NULL && OB_FAIL(ObExternalTableUtils::is_file_id_in_ranges(*range_filter,
@@ -781,7 +781,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
   CK (OB_NOT_NULL(database_schema));
   if (OB_FAIL(ret)) {
   } else if (!table_schema->is_partitioned_table()) {
-    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, table_id, file_infos));
+    OZ (update_inner_table_files_list_by_part(trans, tenant_id, table_id, 0, file_infos));
   } else {
     int64_t max_part_id = 0;
     common::hash::ObHashMap<int64_t, ObArray<ObExternalFileInfoTmp> *> part_id_to_file_urls; //part id to file urls.

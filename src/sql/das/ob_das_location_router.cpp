@@ -233,7 +233,7 @@ int ObDASTabletMapper::get_tablet_and_object_id(
       if (PARTITION_LEVEL_ZERO == part_level) {
         if (OB_FAIL(tmp_tablet_ids.push_back(ObTabletID(table_schema_->get_object_id())))) {
           LOG_WARN("fail to push back tablet_id", KR(ret));
-        } else if (OB_FAIL(tmp_part_ids.push_back(table_schema_->get_object_id()))) {
+        } else if (OB_FAIL(tmp_part_ids.push_back(0))) {
           LOG_WARN("fail to push back object_id", KR(ret));
         }
       } else if (PARTITION_LEVEL_ONE == part_level) {
