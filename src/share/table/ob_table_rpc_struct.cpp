@@ -87,7 +87,7 @@ OB_SERIALIZE_MEMBER(ObTableQueryAndMutateRequest,
                     query_and_mutate_,
                     binlog_row_image_type_);
 
-OB_SERIALIZE_MEMBER((ObTableQuerySyncRequest, ObTableQueryRequest),
+OB_SERIALIZE_MEMBER((ObTableQueryAsyncRequest, ObTableQueryRequest),
                     query_session_id_,
                     query_type_
                     );

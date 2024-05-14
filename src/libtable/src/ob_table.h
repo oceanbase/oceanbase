@@ -45,10 +45,10 @@ public:
   virtual int execute_query_and_mutate(const ObTableQueryAndMutate &query_and_mutate, const ObTableRequestOptions &request_options, ObTableQueryAndMutateResult &result) = 0;
   int execute_query_and_mutate(const ObTableQueryAndMutate &query_and_mutate, ObTableQueryAndMutateResult &result);
   /// executes a sync query on a table
-  virtual int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) = 0;
-  int query_start(const ObTableQuery& query, ObTableQuerySyncResult *&result);
-  virtual int query_next(const ObTableRequestOptions &request_options, ObTableQuerySyncResult *&result) = 0;
-  int query_next(ObTableQuerySyncResult *&result);
+  virtual int query_start(const ObTableQuery& query, const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) = 0;
+  int query_start(const ObTableQuery& query, ObTableQueryAsyncResult *&result);
+  virtual int query_next(const ObTableRequestOptions &request_options, ObTableQueryAsyncResult *&result) = 0;
+  int query_next(ObTableQueryAsyncResult *&result);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTable);
 protected:
@@ -81,12 +81,12 @@ inline int ObTable::execute_query_and_mutate(const ObTableQueryAndMutate &query_
   return this->execute_query_and_mutate(query_and_mutate, request_options_, result);
 }
 
-inline int ObTable::query_start(const ObTableQuery &query, ObTableQuerySyncResult *&result)
+inline int ObTable::query_start(const ObTableQuery &query, ObTableQueryAsyncResult *&result)
 {
   return query_start(query, request_options_, result);
 }
 
-inline int ObTable::query_next(ObTableQuerySyncResult *&result)
+inline int ObTable::query_next(ObTableQueryAsyncResult *&result)
 {
   return query_next(request_options_, result);
 }
