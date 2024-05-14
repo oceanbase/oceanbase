@@ -2095,7 +2095,7 @@ int ObPartTransCtx::compensate_abort_log_()
 
   } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_ABORT_LOG))) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_EAGAIN == ret && OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+    if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
       TRANS_LOG(WARN, "restart_2pc_trans_timer_ for submit abort log fail",
         KR(ret), KR(tmp_ret), KPC(this));
     }
@@ -2113,6 +2113,7 @@ int ObPartTransCtx::abort_(int reason)
   if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
     TRANS_LOG(WARN, "do local tx abort failed", K(ret), K(reason));
   }
+  part_trans_action_ = ObPartTransAction::ABORT;
   // if abort was caused by internal impl reason, don't disturb
   if (ObTxAbortCause::IMPLICIT_ROLLBACK != reason) {
     TRANS_LOG(INFO, "tx abort", K(ret), K(reason), "reason_str", ObTxAbortCauseNames::of(reason), KPC(this));
