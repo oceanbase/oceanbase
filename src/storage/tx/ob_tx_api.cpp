@@ -1658,7 +1658,7 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
     if (verify_epoch > 0 && ctx->epoch_ != verify_epoch) {
       ret = OB_TRANS_CTX_NOT_EXIST;
       TRANS_LOG(WARN, "current ctx illegal, born epoch not match", K(ret), K(ls), K(tx_id),
-                K(verify_epoch), KPC(ctx));
+                K(verify_epoch), K(ctx_born_epoch), KPC(ctx));
     } else if(OB_FAIL(ls_sync_rollback_savepoint__(ctx,
                                                    savepoint,
                                                    op_sn,

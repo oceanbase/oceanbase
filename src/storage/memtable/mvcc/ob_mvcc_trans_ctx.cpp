@@ -792,7 +792,11 @@ int ObTransCallbackMgr::prep_and_fill_from_list_(ObTxFillRedoCtx &ctx,
   return ret;
 }
 
-bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx, const int64_t my_epoch, int64_t &min_epoch, int &min_idx)
+bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx,
+                                                   const int64_t my_epoch,
+                                                   const bool require_min,
+                                                   int64_t &min_epoch,
+                                                   int &min_idx)
 {
   bool ret = true;
   int list_cnt = get_logging_list_count();
@@ -802,10 +806,16 @@ bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx, const int64
       int64_t epoch_i = list->get_log_epoch();
       if (epoch_i < my_epoch) {
         ret = false;
-        min_epoch = epoch_i;
-        min_idx = i;
-        TRANS_LOG(DEBUG, "hit", K(epoch_i), K(i));
-        break;
+        if (require_min) {
+          if (min_epoch == 0 || epoch_i < min_epoch) {
+            min_epoch = epoch_i;
+            min_idx = i;
+          }
+        } else {
+          min_epoch = epoch_i;
+          min_idx = i;
+          break;
+        }
       }
     }
   }
@@ -819,11 +829,11 @@ bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx, const int64
 // - OB_BLOCK_FROZEN: next to logging callback's memtable was logging blocked
 int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
                                       ObCallbackListLogGuard &lock_guard,
-                                      int &list_idx)
+                                      int &ret_list_idx)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(rwlock_);
-  list_idx = (write_seq.get_branch() % MAX_CALLBACK_LIST_COUNT);
+  int list_idx = (write_seq.get_branch() % MAX_CALLBACK_LIST_COUNT);
   ObTxCallbackList *list = get_callback_list_(list_idx, true);
   if (OB_ISNULL(list)) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -831,7 +841,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
     int64_t my_epoch = list->get_log_epoch();
     int64_t min_epoch = 0;
     int min_epoch_idx =-1;
-    bool flush_min_epoch_list = false;
+    bool pending_too_large = false;
     common::ObByteLock *log_lock = NULL;
     if (my_epoch == INT64_MAX) {
       ret = OB_ENTRY_NOT_EXIST;
@@ -839,24 +849,23 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
       ret = OB_BLOCK_FROZEN;
     } else if (OB_ISNULL(log_lock = list->try_lock_log())) {
       ret = OB_NEED_RETRY;
-    } else if (!check_list_has_min_epoch_(list_idx, my_epoch, min_epoch, min_epoch_idx)) {
+      // if current list pending size too large, try to submit the min_epoch list
+    } else if (FALSE_IT(pending_too_large = list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
+    } else if (!check_list_has_min_epoch_(list_idx, my_epoch, pending_too_large, min_epoch, min_epoch_idx)) {
       ret = OB_EAGAIN;
       ObIMemtable *to_log_memtable = list->get_log_cursor()->get_memtable();
       if (TC_REACH_TIME_INTERVAL(1_s)) {
         TRANS_LOG(WARN, "has smaller epoch unlogged", KPC(this),
                   K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
       }
-      // if current list pending size too large, try to submit the min_epoch list
-      if (OB_UNLIKELY(list->pending_log_too_large(GCONF._private_buffer_size * 10))) {
-        flush_min_epoch_list = true;
-      }
     } else {
+      ret_list_idx = list_idx;
       lock_guard.set(log_lock);
     }
     if (OB_FAIL(ret) && log_lock) {
       log_lock->unlock();
     }
-    if (OB_UNLIKELY(flush_min_epoch_list)) {
+    if (OB_EAGAIN == ret && OB_UNLIKELY(pending_too_large)) {
       ObTxCallbackList *min_epoch_list = get_callback_list_(min_epoch_idx, false);
       if (OB_ISNULL(log_lock = min_epoch_list->try_lock_log())) {
         // lock conflict, acquired by others
@@ -864,9 +873,8 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
         if (REACH_TIME_INTERVAL(1_s)) {
           TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
         }
-        list_idx = min_epoch_idx;
+        ret_list_idx = min_epoch_idx;
         lock_guard.set(log_lock);
-        ret = OB_SUCCESS;
       }
     }
   }
@@ -936,7 +944,7 @@ int ObTransCallbackMgr::fill_from_one_list(ObTxFillRedoCtx &ctx,
 // - OB_SUCCESS: all callbacks from all callback-list filled
 // - OB_EAGAIN: due to parallel logging, must return to flush this list and retry others
 // - OB_BLOCK_FROZEN: stopped due to can not logging waiting memtable frozen
-// - OB_ITER_END: stopped due to has smaller write_epoch whos log isn't submitted
+// - OB_ITER_END: stopped due to has smaller write_epoch whose log hasn't submitted
 // - OB_BUF_NOT_ENOUGH: stopped due to buffer can not hold current node
 // return policy:
 // - if parallel_logging, return if need switch to next list and has
