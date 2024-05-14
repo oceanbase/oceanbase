@@ -6495,7 +6495,7 @@ int ObDDLOperator::drop_db_table_privs(
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().delete_db_priv(
-            db_priv->get_original_key(), new_schema_version, trans))) {
+            db_priv->get_original_key(), new_schema_version, trans, schema_guard))) {
           LOG_WARN("Delete database privilege failed", "DB Priv", *db_priv, K(ret));
         }
       }
@@ -6518,7 +6518,7 @@ int ObDDLOperator::drop_db_table_privs(
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().delete_table_priv(
-            table_priv->get_sort_key(), new_schema_version, trans))) {
+            table_priv->get_sort_key(), new_schema_version, trans, schema_guard))) {
           LOG_WARN("Delete table privilege failed", "Table Priv", *table_priv, K(ret));
         }
       }

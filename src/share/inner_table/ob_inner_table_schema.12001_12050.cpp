@@ -2632,7 +2632,7 @@ int ObInnerTableSchema::all_virtual_tenant_memstore_allocator_info_schema(ObTabl
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      32, //column_length
+      OB_MAX_POINTER_ADDR_LEN, //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
