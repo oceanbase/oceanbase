@@ -533,19 +533,19 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                                    const bool is_column_store_tbl, bool &found)
 {
+  bool new_vector_support = is_column_store_tbl && IS_CLUSTER_VERSION_AFTER_4_3_1_0;
   FOREACH_CNT_X(e, exprs, !found) {
     if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
       auto col = static_cast<ObColumnRefRawExpr *>(*e);
       if (col->get_result_type().is_urowid()) {
         found = true;
-      } else if (!is_column_store_tbl // only disable vectorization for row store table
-                 && (col->get_result_type().is_lob_locator()
-                     || col->get_result_type().is_json()
-                     || col->get_result_type().is_geometry()
-                     || col->get_result_type().get_type() == ObLongTextType
-                     || col->get_result_type().get_type() == ObMediumTextType
-                     || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
-                         && ob_is_text_tc(col->get_result_type().get_type())))) {
+      } else if (col->get_result_type().is_lob_locator()
+                 || (!new_vector_support && col->get_result_type().is_json())
+                 || (!new_vector_support && col->get_result_type().get_type() == ObLongTextType)
+                 || (!new_vector_support && col->get_result_type().get_type() == ObMediumTextType)
+                 || col->get_result_type().is_geometry()
+                 || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
+                     && ob_is_text_tc(col->get_result_type().get_type()))) {
         // all lob types not support vectorize in 4.0
         // tinytext and text support vectorize in 4.1
         found = true;
@@ -598,7 +598,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
         } else if (OB_NOT_NULL(table_schema) && 0 < table_schema->get_aux_vp_tid_count()) {
           disable_vectorize = true;
         }
-        if (OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
+        if (OB_NOT_NULL(table_schema) && OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
           LOG_WARN("get column store info failed", K(ret));
         } else {
           exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, disable_vectorize);
