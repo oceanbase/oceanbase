@@ -106,9 +106,9 @@ enum class ObMySQLPacketType
   PKT_PREPARE,   // 9 -> prepare packet;
   PKT_RESHEAD,   // 10 -> result header packet
   PKT_PREXEC,    // 11 -> prepare execute packet;
-  PKT_FILENAME,  // 12 -> send file name to client(load local infile)
-  PKT_AUTH_SWITCH,// 13 -> auth switch request packet;
-  PKT_END        // 13 -> end of packet type
+  PKT_AUTH_SWITCH,// 12 -> auth switch request packet;
+  PKT_FILENAME,  // 13 -> send file name to client(load local infile)
+  PKT_END        // 14 -> end of packet type
 };
 
 union ObServerStatusFlags
