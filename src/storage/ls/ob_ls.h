@@ -353,6 +353,7 @@ public:
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   bool is_stopped() const { return is_stopped_; }
   int check_can_replay_clog(bool &can_replay);
+  int check_allow_read(bool &allow_read);
 
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle() const;
@@ -856,6 +857,10 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, get_min_reserved_snapshot, int64_t);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
+  int inner_check_allow_read_(
+      const ObMigrationStatus &migration_status,
+      const share::ObLSRestoreStatus &restore_status,
+      bool &allow_read);
 
   DELEGATE_WITH_RET(ls_meta_, set_transfer_meta_info, int);
   CONST_DELEGATE_WITH_RET(ls_meta_, get_transfer_meta_info, int);

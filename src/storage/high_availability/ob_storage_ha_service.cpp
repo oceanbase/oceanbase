@@ -20,6 +20,7 @@ namespace oceanbase
 namespace storage
 {
 
+ERRSIM_POINT_DEF(EN_STORAGE_HA_SERVICE_SET_LS_MIGRATION_STATUS_HOLD);
 ObStorageHAService::ObStorageHAService()
   : is_inited_(false),
     thread_cond_(),
@@ -134,6 +135,12 @@ void ObStorageHAService::run1()
       LOG_WARN("failed to do scheduler ls ha handler", K(ret));
     }
 
+#ifdef ERRSIM
+    if (FAILEDx(errsim_set_ls_migration_status_hold_())) {
+      LOG_WARN("failed to errsim set ls migration status hold", K(ret));
+    }
+#endif
+
     ObThreadCondGuard guard(thread_cond_);
     if (has_set_stop() || wakeup_cnt_ > 0) {
       wakeup_cnt_ = 0;
@@ -231,6 +238,53 @@ int ObStorageHAService::do_ha_handler_(const share::ObLSID &ls_id)
   return ret;
 }
 
+#ifdef ERRSIM
+int ObStorageHAService::errsim_set_ls_migration_status_hold_()
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLS *ls = nullptr;
+  const ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_HOLD;
+  const bool write_slog = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha service do not init", K(ret));
+  } else {
+    ret = EN_STORAGE_HA_SERVICE_SET_LS_MIGRATION_STATUS_HOLD ? : OB_SUCCESS;
+    const ObAddr &self = GCONF.self_addr_;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(ERROR, "fake EN_STORAGE_HA_SERVICE_SET_LS_MIGRATION_STATUS_HOLD", K(ret));
+      //overwrite ret
+      ret = OB_SUCCESS;
+      const ObString &errsim_server = GCONF.errsim_migration_src_server_addr.str();
+      if (!errsim_server.empty()) {
+        common::ObAddr tmp_errsim_addr;
+        if (OB_FAIL(tmp_errsim_addr.parse_from_string(errsim_server))) {
+          LOG_WARN("failed to parse from string", K(ret), K(errsim_server));
+        } else if (self != tmp_errsim_addr) {
+          //do nothing
+        } else {
+          const int64_t errsim_migration_ls_id = GCONF.errsim_migration_ls_id;
+          const ObLSID ls_id(errsim_migration_ls_id);
+          if (errsim_migration_ls_id <= 0 || !ls_id.is_valid()) {
+            //do nothing
+          } else if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
+            LOG_WARN("failed to get ls", K(ret), K(ls_id));
+          } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
+          } else if (OB_FAIL(ls->set_migration_status(migration_status, ls->get_rebuild_seq(), write_slog))) {
+            LOG_WARN("failed to set migration status", K(ret), KPC(ls), K(ls_id));
+          }
+        }
+      }
+
+    }
+  }
+  return ret;
+}
+#endif
 
 }
 }
