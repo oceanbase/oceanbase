@@ -1871,7 +1871,7 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
         } else if (is_generated_column && stmt::T_INSERT != type && stmt::T_UPDATE != type
                    && stmt::T_MERGE != type) {
           // do nothing. only generate sequence operator in INSERT/UPDATE stmt.
-        } else {
+        } else if (!is_generated_column) {
           if (0 == q_name.col_name_.case_compare("NEXTVAL")) {
             // 将 sequence id 记录到 plan 里
             if (OB_FAIL(dml_resolver->add_sequence_id_to_stmt(sequence_id))) {
@@ -1882,21 +1882,20 @@ int ObRawExprUtils::resolve_sequence_object(const ObQualifiedName &q_name,
               LOG_WARN("fail add id to stmt", K(sequence_id), K(ret));
             }
           }
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (syn_checker.has_synonym()) {
-            // add synonym depedency schemas
-            if (OB_FAIL(dml_resolver->add_object_versions_to_dependency(DEPENDENCY_SYNONYM,
-                                                                SYNONYM_SCHEMA,
-                                                                syn_checker.get_synonym_ids(),
-                                                                syn_checker.get_database_ids()))) {
-              LOG_WARN("add synonym version failed", K(ret));
-            } else {
-              // do nothing
-            }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (syn_checker.has_synonym()) {
+          // add synonym depedency schemas
+          if (OB_FAIL(dml_resolver->add_object_versions_to_dependency(
+                DEPENDENCY_SYNONYM, SYNONYM_SCHEMA, syn_checker.get_synonym_ids(),
+                syn_checker.get_database_ids()))) {
+            LOG_WARN("add synonym version failed", K(ret));
           } else {
             // do nothing
           }
+        } else {
+          // do nothing
         }
       }
     }

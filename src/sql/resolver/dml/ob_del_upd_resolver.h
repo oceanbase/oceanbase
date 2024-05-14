@@ -51,6 +51,7 @@ public:
   const static uint8_t IS_JSON_CONSTRAINT_RELAX = 1;
   const static uint8_t IS_JSON_CONSTRAINT_STRICT = 4;
   inline bool is_resolve_insert_update() { return is_resolve_insert_update_;}
+  int recursive_search_sequence_expr(const ObRawExpr *default_expr);
 protected:
 
   int resolve_assignments(const ParseNode &parse_node,
@@ -269,7 +270,6 @@ protected:
                             ObIArray<ObColumnRefRawExpr*> &column_exprs);
   int replace_column_ref_for_check_constraint(ObInsertTableInfo& table_info, ObRawExpr *&expr);
   int add_default_sequence_id_to_stmt(const uint64_t table_id);
-  int recursive_search_sequence_expr(const ObRawExpr *default_expr);
   int check_need_match_all_params(const common::ObIArray<ObColumnRefRawExpr*> &value_desc, bool &need_match);
   int resolve_json_partial_update_flag(ObIArray<ObTableAssignment> &table_assigns, ObStmtScope scope);
   int mark_json_partial_update_flag(const ObColumnRefRawExpr *ref_expr, ObRawExpr *expr, int depth, bool &allow_json_partial_update);
