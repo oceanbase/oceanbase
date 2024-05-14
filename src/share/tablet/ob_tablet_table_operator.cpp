@@ -139,8 +139,8 @@ int ObTabletTableOperator::get_tablet_info(
   } else if (OB_FAIL(inner_batch_get_by_sql_(*sql_proxy, tenant_id, tablet_ls_pairs, 0/*start_idx*/, 1/*end_idx*/, tablet_infos))) {
     LOG_WARN("fail to get tablet info", KR(ret), K(tenant_id), K(tablet_ls_pairs));
   } else if (1 != tablet_infos.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet_infos count should be one", KR(ret), "count", tablet_infos.count());
+    ret = OB_STATE_NOT_MATCH;
+    LOG_INFO("tablet_infos count should be one", KR(ret), "count", tablet_infos.count());
   } else if (OB_FAIL(tablet_info.assign(tablet_infos.at(0)))) {
     LOG_WARN("fail to assign tablet info", KR(ret), K(tablet_infos));
   }
