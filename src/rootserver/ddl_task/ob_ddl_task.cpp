@@ -135,7 +135,9 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const int64_t data_format_version,
                                                  const int64_t consumer_group_id,
                                                  const bool is_abort,
-                                                 const int32_t sub_task_trace_id)
+                                                 const int32_t sub_task_trace_id,
+                                                 const bool is_unique_index,
+                                                 const bool is_global_index)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
@@ -143,6 +145,8 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   consumer_group_id_ = consumer_group_id;
   is_abort_ = is_abort;
   sub_task_trace_id_ = sub_task_trace_id;
+  is_unique_index_ = is_unique_index;
+  is_global_index_ = is_global_index;
 }
 
 void ObDDLTaskSerializeField::reset()
@@ -153,6 +157,8 @@ void ObDDLTaskSerializeField::reset()
   consumer_group_id_ = 0;
   is_abort_ = false;
   sub_task_trace_id_ = 0;
+  is_unique_index_ = false;
+  is_global_index_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
@@ -161,7 +167,9 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     data_format_version_,
                     consumer_group_id_,
                     is_abort_,
-                    sub_task_trace_id_);
+                    sub_task_trace_id_,
+                    is_unique_index_,
+                    is_global_index_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0), consumer_group_id_(0), parent_task_id_(0), task_id_(0),
@@ -899,7 +907,8 @@ int ObDDLTask::set_ddl_stmt_str(const ObString &ddl_stmt_str)
 int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_,
+                                          is_abort_, sub_task_trace_id_, is_unique_index_, is_global_index_);
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -927,13 +936,16 @@ int ObDDLTask::deserlize_params_from_message(const uint64_t tenant_id, const cha
     consumer_group_id_ = serialize_field.consumer_group_id_;
     is_abort_ = serialize_field.is_abort_;
     sub_task_trace_id_ = serialize_field.sub_task_trace_id_;
+    is_unique_index_ = serialize_field.is_unique_index_;
+    is_global_index_= serialize_field.is_global_index_;
   }
   return ret;
 }
 
 int64_t ObDDLTask::get_serialize_param_size() const
 {
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_,
+                                          is_abort_, sub_task_trace_id_, is_unique_index_, is_global_index_);
   return serialize_field.get_serialize_size();
 }
 
@@ -957,8 +969,6 @@ int ObDDLTask::convert_to_record(
   task_record.task_version_ = get_task_version();
   task_record.execution_id_ = get_execution_id();
   task_record.ret_code_ = get_ret_code();
-  task_record.is_global_index_ = is_global_index();
-  task_record.is_unique_index_ = is_unique_index();
   task_record.consensus_schema_version_ = get_consensus_schema_version();
   const ObString &ddl_stmt_str = get_ddl_stmt_str();
   if (serialize_param_size > 0) {
@@ -2615,8 +2625,6 @@ void ObDDLTaskRecord::reset()
   task_version_ = 0;
   ret_code_ = OB_SUCCESS;
   execution_id_ = -1;  // -1 is invalid
-  is_unique_index_ = false;
-  is_global_index_ = false;
   consensus_schema_version_ = OB_INVALID_VERSION;
 }
 

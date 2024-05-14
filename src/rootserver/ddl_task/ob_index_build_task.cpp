@@ -505,8 +505,6 @@ int ObIndexBuildTask::init(const ObDDLTaskRecord &task_record)
     snapshot_version_ = task_record.snapshot_version_;
     execution_id_ = task_record.execution_id_;
     task_status_ = static_cast<ObDDLTaskStatus>(task_record.task_status_);
-    is_unique_index_ = task_record.is_unique_index_;
-    is_global_index_ = task_record.is_global_index_;
     consensus_schema_version_ = task_record.consensus_schema_version_;
     if (ObDDLTaskStatus::VALIDATE_CHECKSUM == task_status_) {
       sstable_complete_ts_ = ObTimeUtility::current_time();
@@ -595,6 +593,14 @@ int ObIndexBuildTask::check_health()
     } else if (ObIndexStatus::INDEX_STATUS_INDEX_ERROR == index_schema->get_index_status()) {
       ret = OB_SUCCESS == ret_code_ ? OB_ERR_ADD_INDEX : ret_code_;
       LOG_WARN("index status error", K(ret), K(index_table_id_), K(index_schema->get_index_status()));
+    } else if (data_format_version_ < DATA_VERSION_4_2_4_0) {
+      // Since parallel ddl do not guaranteen the local schema guard could get the index schema when do init(),
+      // the initialization of is_global/unique_index in init() are modified to rely on the persistence of
+      // relative field in task_record.message_.
+      // However, the task_record constructed before the upgrade process do not have the persistence of relative field.
+      // Thus, need to initialize is_global/unique_index here.
+      is_global_index_ = index_schema->is_global_index_table();
+      is_unique_index_ = index_schema->is_unique_index();
     }
     #ifdef ERRSIM
       if (OB_SUCC(ret)) {

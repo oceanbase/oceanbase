@@ -76,7 +76,7 @@ public:
   void reset();
   TO_STRING_KV(K_(task_id), K_(parent_task_id), K_(ddl_type), K_(trace_id), K_(task_status), K_(tenant_id), K_(object_id),
       K_(schema_version), K_(target_object_id), K_(snapshot_version), K_(message), K_(task_version), K_(ret_code), K_(execution_id),
-      K_(is_unique_index), K_(is_global_index), K_(consensus_schema_version));
+      K_(consensus_schema_version));
 public:
   static const int64_t MAX_MESSAGE_LENGTH = 4096;
   typedef common::ObFixedLengthString<MAX_MESSAGE_LENGTH> TaskMessage;
@@ -97,8 +97,6 @@ public:
   int64_t ret_code_;
   int64_t execution_id_;
   ObString ddl_stmt_str_;
-  bool is_unique_index_;
-  bool is_global_index_;
   int64_t consensus_schema_version_;
 };
 
@@ -120,14 +118,19 @@ struct ObDDLTaskSerializeField final
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id), K_(is_abort), K_(sub_task_trace_id));
-  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0) {}
+  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id),
+               K_(is_abort), K_(sub_task_trace_id), K_(is_unique_index), K_(is_global_index));
+  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0),
+                              consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0),
+                              is_unique_index_(false), is_global_index_(false) {}
   ObDDLTaskSerializeField(const int64_t task_version,
                           const int64_t parallelism,
                           const int64_t data_format_version,
                           const int64_t consumer_group_id,
                           const bool is_abort,
-                          const int32_t sub_task_trace_id);
+                          const int32_t sub_task_trace_id,
+                          const bool is_unique_index,
+                          const bool is_global_index);
   ~ObDDLTaskSerializeField() = default;
   void reset();
 public:
@@ -137,6 +140,8 @@ public:
   int64_t consumer_group_id_;
   bool is_abort_;
   int32_t sub_task_trace_id_;
+  bool is_unique_index_;
+  bool is_global_index_;
 };
 
 struct ObCreateDDLTaskParam final
