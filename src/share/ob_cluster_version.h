@@ -217,6 +217,8 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_3_1_0 (oceanbase::common::cal_version(4, 3, 1, 0))
 #define DATA_VERSION_4_3_2_0 (oceanbase::common::cal_version(4, 3, 2, 0))
 
+#define IS_CLUSTER_VERSION_AFTER_4_3_1_0 (oceanbase::common::ObClusterVersion::get_instance().get_cluster_version() >= CLUSTER_VERSION_4_3_1_0)
+
 #define DATA_CURRENT_VERSION DATA_VERSION_4_3_2_0
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
 // LAST_BARRIER_DATA_VERSION should be the latest barrier data version before DATA_CURRENT_VERSION

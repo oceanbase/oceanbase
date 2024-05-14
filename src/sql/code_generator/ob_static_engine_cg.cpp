@@ -533,19 +533,19 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
                                                    const bool is_column_store_tbl, bool &found)
 {
+  bool new_vector_support = is_column_store_tbl && IS_CLUSTER_VERSION_AFTER_4_3_1_0;
   FOREACH_CNT_X(e, exprs, !found) {
     if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
       auto col = static_cast<ObColumnRefRawExpr *>(*e);
       if (col->get_result_type().is_urowid()) {
         found = true;
-      } else if (!is_column_store_tbl // only disable vectorization for row store table
-                 && (col->get_result_type().is_lob_locator()
-                     || col->get_result_type().is_json()
-                     || col->get_result_type().is_geometry()
-                     || col->get_result_type().get_type() == ObLongTextType
-                     || col->get_result_type().get_type() == ObMediumTextType
-                     || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
-                         && ob_is_text_tc(col->get_result_type().get_type())))) {
+      } else if (col->get_result_type().is_lob_locator()
+                 || (!new_vector_support && col->get_result_type().is_json())
+                 || (!new_vector_support && col->get_result_type().get_type() == ObLongTextType)
+                 || (!new_vector_support && col->get_result_type().get_type() == ObMediumTextType)
+                 || col->get_result_type().is_geometry()
+                 || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
+                     && ob_is_text_tc(col->get_result_type().get_type()))) {
         // all lob types not support vectorize in 4.0
         // tinytext and text support vectorize in 4.1
         found = true;

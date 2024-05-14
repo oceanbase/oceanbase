@@ -584,7 +584,7 @@ private:
   static bool skip_type(const ObObjType type);
   static bool not_in_normal_cg_array(const ObObjType type)
   {
-    return skip_type(type) || ob_is_string_type(type) || ob_is_decimal_int(type);
+    return skip_type(type) || is_lob_storage(type) || ob_is_string_type(type) || ob_is_decimal_int(type);
   }
   const static int64_t DEFAULT_CG_READ_INFO_ARRAY_SIZE = 50;
   const static int64_t PRINT_LOG_INVERVAL = 3 * 60 * 1000L * 1000L; // 3 mins
