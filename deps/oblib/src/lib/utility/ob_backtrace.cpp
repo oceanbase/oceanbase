@@ -29,15 +29,20 @@ namespace common
 {
 int light_backtrace(void **buffer, int size)
 {
+  return light_backtrace(buffer, size, (int64_t)__builtin_frame_address(0));
+}
+
+int light_backtrace(void **buffer, int size, int64_t rbp)
+{
   int rv = 0;
   if (rv < size) {
-    buffer[rv++] = (void*)light_backtrace;
+    int (*fp)(void**, int, int64_t) = light_backtrace;
+    buffer[rv++] = (void*)fp;
   }
   void *stack_addr = nullptr;
   size_t stack_size = 0;
   if (OB_LIKELY(OB_SUCCESS == get_stackattr(stack_addr, stack_size))) {
 #define addr_in_stack(addr) (addr >= (int64_t)stack_addr && addr < (int64_t)stack_addr + stack_size)
-    int64_t rbp = (int64_t)__builtin_frame_address(0);
     while (rbp != 0 && rv < size) {
       if (!addr_in_stack(*(int64_t*)rbp) &&
           !FALSE_IT(rbp += 16) &&
