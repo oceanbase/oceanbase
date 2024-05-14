@@ -1026,57 +1026,60 @@ int ObFreezer::handle_frozen_memtable_for_replace_tablet_meta(const ObTabletID &
   return ret;
 }
 
-int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result)
+int ObFreezer::batch_tablet_freeze(const ObIArray<ObTabletID> &,
+                                   ObFuture<int> *)
 {
-  int ret = OB_SUCCESS;
-  share::ObLSID ls_id = get_ls_id();
-  SCN freeze_snapshot_version;
-  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ret), K(ls_id), K(tablet_ids));
-  int64_t start_time = ObTimeUtility::current_time();
-  bool need_freeze = true;
+  return OB_NOT_SUPPORTED;
 
-  ObTabletFreezeGuard guard(*this, true /* try guard */);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_ids));
-  } else if (OB_UNLIKELY(!enable_)) {
-    LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
-  } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
-    // no need freeze now, a ls freeze is running or will be running
-    ret = OB_SUCCESS;
-    FLOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K(ls_id), K(tablet_ids));
-  } else if (OB_FAIL(loop_set_freeze_flag())) {
-    ret = OB_SUCCESS;
-    FLOG_INFO("[Freezer] freeze is running", K(ret), K(ls_id), K(tablet_ids));
-  } else {
-    // succeed to set freeze flag
-    if (OB_FAIL(get_ls_weak_read_scn(freeze_snapshot_version))) {
-      TRANS_LOG(WARN, "[Freezer] get ls weak read scn failure", K(ret), K(ls_id));
-    } else if (ObScnRange::MAX_SCN == freeze_snapshot_version
-               || ObScnRange::MIN_SCN >= freeze_snapshot_version) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("[Freezer] weak read service not inited", K(ret), K(ls_id));
-    } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
-    } else if (FALSE_IT(set_need_resubmit_log(false))) {
-    } else if (FALSE_IT(stat_.reset())) {
-    } else if (OB_FAIL(stat_.begin_set_freeze_stat(get_freeze_clock(),
-                                                   start_time,
-                                                   ObFreezeState::NOT_SUBMIT_LOG,
-                                                   freeze_snapshot_version,
-                                                   ObTabletID(ObTabletID::INVALID_TABLET_ID),
-                                                   false/*is_force*/))) {
-      TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
-    } else if (OB_FAIL(batch_tablet_freeze_(tablet_ids, result, need_freeze))) {
-      TRANS_LOG(WARN, "[Freezer] batch_tablet_freeze failed", K(ret), K(ls_id), K(tablet_ids));
-    }
-    if (OB_FAIL(ret) || !need_freeze) {
-      stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
-      print_freezer_statistics();
-      unset_freeze_();
-    }
-  }
+  // int ret = OB_SUCCESS;
+  // share::ObLSID ls_id = get_ls_id();
+  // SCN freeze_snapshot_version;
+  // FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ret), K(ls_id), K(tablet_ids));
+  // int64_t start_time = ObTimeUtility::current_time();
+  // bool need_freeze = true;
 
-  return ret;
+  // ObTabletFreezeGuard guard(*this, true /* try guard */);
+  // if (IS_NOT_INIT) {
+  //   ret = OB_NOT_INIT;
+  //   TRANS_LOG(WARN, "[Freezer] not inited", K(ret), K(ls_id), K(tablet_ids));
+  // } else if (OB_UNLIKELY(!enable_)) {
+  //   LOG_WARN("freezer is offline, can not freeze now", K(ret), K(ls_id));
+  // } else if (OB_FAIL(guard.try_set_tablet_freeze_begin())) {
+  //   // no need freeze now, a ls freeze is running or will be running
+  //   ret = OB_SUCCESS;
+  //   FLOG_INFO("[Freezer] ls freeze is running, no need freeze again", K(ret), K(ls_id), K(tablet_ids));
+  // } else if (OB_FAIL(loop_set_freeze_flag())) {
+  //   ret = OB_SUCCESS;
+  //   FLOG_INFO("[Freezer] freeze is running", K(ret), K(ls_id), K(tablet_ids));
+  // } else {
+  //   // succeed to set freeze flag
+  //   if (OB_FAIL(get_ls_weak_read_scn(freeze_snapshot_version))) {
+  //     TRANS_LOG(WARN, "[Freezer] get ls weak read scn failure", K(ret), K(ls_id));
+  //   } else if (ObScnRange::MAX_SCN == freeze_snapshot_version
+  //              || ObScnRange::MIN_SCN >= freeze_snapshot_version) {
+  //     ret = OB_NOT_INIT;
+  //     LOG_WARN("[Freezer] weak read service not inited", K(ret), K(ls_id));
+  //   } else if (FALSE_IT(freeze_snapshot_version_ = freeze_snapshot_version)) {
+  //   } else if (FALSE_IT(set_need_resubmit_log(false))) {
+  //   } else if (FALSE_IT(stat_.reset())) {
+  //   } else if (OB_FAIL(stat_.begin_set_freeze_stat(get_freeze_clock(),
+  //                                                  start_time,
+  //                                                  ObFreezeState::NOT_SUBMIT_LOG,
+  //                                                  freeze_snapshot_version,
+  //                                                  ObTabletID(ObTabletID::INVALID_TABLET_ID),
+  //                                                  false/*is_force*/))) {
+  //     TRANS_LOG(WARN, "[Freezer] fail to begin_set_freeze_stat", K(ret), K(ls_id));
+  //   } else if (OB_FAIL(batch_tablet_freeze_(tablet_ids, result, need_freeze))) {
+  //     TRANS_LOG(WARN, "[Freezer] batch_tablet_freeze failed", K(ret), K(ls_id), K(tablet_ids));
+  //   }
+  //   if (OB_FAIL(ret) || !need_freeze) {
+  //     stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObTimeUtility::current_time(), ret);
+  //     print_freezer_statistics();
+  //     unset_freeze_();
+  //   }
+  // }
+
+  // return ret;
 }
 
 int ObFreezer::batch_tablet_freeze_(const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze)

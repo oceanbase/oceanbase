@@ -873,6 +873,7 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
       int64_t wait_flush_num =
         new_create_list_.checkpoint_list_.get_size()
         + active_list_.checkpoint_list_.get_size();
+
       bool logstream_freeze = true;
       ObSArray<ObTabletID> need_flush_tablets;
       if (wait_flush_num > MAX_FREEZE_CHECKPOINT_NUM) {
@@ -885,13 +886,14 @@ int ObDataCheckpoint::freeze_base_on_needs_(share::SCN recycle_scn)
         }
       }
 
-      if (logstream_freeze) {
+      if (logstream_freeze || need_flush_tablets.count() > 1) {
         if (OB_FAIL(ls_->logstream_freeze(false /* !is_sync */))) {
           STORAGE_LOG(WARN, "minor freeze failed", K(ret), K(ls_->get_ls_id()));
         }
-      } else if (OB_FAIL(ls_->batch_tablet_freeze(need_flush_tablets, false /* !is_sync */))) {
-        STORAGE_LOG(WARN, "batch tablet freeze failed",
-                    K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
+      } else if (need_flush_tablets.count() == 1) {
+        if (OB_FAIL(ls_->tablet_freeze(need_flush_tablets[0], false /* !is_sync */))) {
+          STORAGE_LOG(WARN, "tablet freeze failed", K(ret), K(ls_->get_ls_id()), K(need_flush_tablets));
+        }
       }
     }
   }

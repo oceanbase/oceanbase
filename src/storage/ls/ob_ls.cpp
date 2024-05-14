@@ -1837,41 +1837,43 @@ int ObLS::force_tablet_freeze(const ObTabletID &tablet_id, const int64_t abs_tim
   return ret;
 }
 
-int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &tablet_ids,
-                              const bool is_sync,
-                              const int64_t abs_timeout_ts)
+int ObLS::batch_tablet_freeze(const ObIArray<ObTabletID> &,
+                              const bool,
+                              const int64_t)
 {
-  int ret = OB_SUCCESS;
-  ObFuture<int> result;
+  return OB_NOT_SUPPORTED;
 
-  {
-    int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-    int64_t write_lock = 0;
-    ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
-    if (!lock_myself.locked()) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
-    } else if (IS_NOT_INIT) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("ls is not inited", K(ret));
-    } else if (OB_UNLIKELY(is_stopped_)) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-    } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-      ret = OB_NOT_RUNNING;
-      LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-    } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(tablet_ids, &result))) {
-      LOG_WARN("batch tablet freeze failed", K(ret));
-    } else {
-      // do nothing
-    }
-  }
+  // int ret = OB_SUCCESS;
+  // ObFuture<int> result;
 
-  if (OB_SUCC(ret) && is_sync) {
-    ret = ls_freezer_.wait_freeze_finished(result);
-  }
+  // {
+  //   int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
+  //   int64_t write_lock = 0;
+  //   ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock, abs_timeout_ts);
+  //   if (!lock_myself.locked()) {
+  //     ret = OB_TIMEOUT;
+  //     LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
+  //   } else if (IS_NOT_INIT) {
+  //     ret = OB_NOT_INIT;
+  //     LOG_WARN("ls is not inited", K(ret));
+  //   } else if (OB_UNLIKELY(is_stopped_)) {
+  //     ret = OB_NOT_RUNNING;
+  //     LOG_WARN("ls stopped", K(ret), K_(ls_meta));
+  //   } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
+  //     ret = OB_NOT_RUNNING;
+  //     LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
+  //   } else if (OB_FAIL(ls_freezer_.batch_tablet_freeze(tablet_ids, &result))) {
+  //     LOG_WARN("batch tablet freeze failed", K(ret));
+  //   } else {
+  //     // do nothing
+  //   }
+  // }
 
-  return ret;
+  // if (OB_SUCC(ret) && is_sync) {
+  //   ret = ls_freezer_.wait_freeze_finished(result);
+  // }
+
+  // return ret;
 }
 
 int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tennat_freeze)
