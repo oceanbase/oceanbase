@@ -657,8 +657,9 @@ int ObTableCtx::adjust_rowkey()
 int ObTableCtx::adjust_properties()
 {
   int ret = OB_SUCCESS;
-  bool is_get = (ObTableOperationType::Type::GET == operation_type_);
-  if (is_get) {
+  bool need_adjust_prop = (ObTableOperationType::Type::GET == operation_type_ ||
+                          ObTableOperationType::Type::DEL == operation_type_);
+  if (need_adjust_prop) {
     // do nothing
   } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
     ret = OB_ERR_UNEXPECTED;
