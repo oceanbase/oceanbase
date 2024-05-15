@@ -996,7 +996,9 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             } else {
               show_resv_ctx.stmt_type_ = stmt::T_SHOW_TABLE_STATUS;
               GEN_SQL_STEP_1(ObShowSqlSet::SHOW_TABLE_STATUS);
-              if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0) {
+              if (GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_4_2_3_0
+                  || (GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_1_6
+                      && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0)) {
                 if (lib::is_mysql_mode()) {
                   GEN_SQL_STEP_2(ObShowSqlSet::SHOW_TABLE_STATUS, NEW_TABLE_STATUS_SQL, show_db_id);
                 } else {
