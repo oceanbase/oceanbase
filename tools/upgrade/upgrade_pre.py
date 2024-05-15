@@ -614,6 +614,7 @@
 #import upgrade_health_checker
 #import tenant_upgrade_action
 #import upgrade_post_checker
+#import re
 #
 ## 由于用了/*+read_consistency(WEAK) */来查询，因此升级期间不能允许创建或删除租户
 #
@@ -622,6 +623,11 @@
 #  sql_dump_filename = config.post_upgrade_sql_filename
 #  rollback_sql_filename =  config.post_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -629,15 +635,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -747,7 +756,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -770,6 +779,7 @@
 #import mysql.connector
 #from mysql.connector import errorcode
 #import logging
+#import re
 #
 #import config
 #import opts
@@ -785,6 +795,11 @@
 #  sql_dump_filename = config.pre_upgrade_sql_filename
 #  rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 #
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 #def config_logging_module(log_filenamme):
 #  logging.basicConfig(level=logging.INFO,\
 #      format='[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s',\
@@ -792,15 +807,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 #
 #def print_stats():
 #  logging.info('==================================================================================')
@@ -901,7 +919,7 @@
 #        else:
 #          raise MyError('invalid module: {0}'.format(cmd_module))
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, module_set, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
 #      do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -914,90 +932,6 @@
 #
 #
 #
-####====XXXX======######==== I am a splitter ====######======XXXX====####
-#filename:gen_obcdc_compatiable_info.py
-##!/usr/bin/env python3
-## -*- coding: utf-8 -*-
-#
-## RUN THIS SCRIPT AFTER oceanbase_upgrade_dep.yml MODIFIED
-##
-## PREPARE: install yaml with `pip install PyYaml` before run this script
-## RUN: run this script in tools/upgrade/ directory
-#
-#import yaml
-#import os
-#
-#def get_yaml(filename):
-#    yaml_data = None
-#    with open(filename, 'r', encoding='utf-8') as f:
-#        yaml_data = yaml.safe_load(f)
-#    return yaml_data
-#
-#def dump_to_yaml_obj(content):
-#   return yaml.safe_dump(content, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
-#
-#def write_yaml_to_file(content, filename):
-#    with open(filename, 'w',) as f :
-#        yaml.safe_dump(content, f, explicit_start=True, explicit_end=True, default_flow_style=False, encoding="utf-8")
-#        print('Dump yaml format data to file successfully. File path: {0}'.format(filename))
-#
-#def collect_can_upgrade_from(target_ver):
-#    target_set = set()
-#    target_set.add(target_ver)
-#    if target_ver in can_upgrade_from_map.keys():
-#        can_upgrade_to_target_set = can_upgrade_from_map[target_ver]
-#        for target in can_upgrade_to_target_set:
-#            target_set.update(collect_can_upgrade_from(target))
-#    return target_set
-#
-#
-#if __name__ == '__main__':
-#    dir_path = os.path.dirname(os.path.realpath(__file__))
-#    ob_upgrade_deps_file = dir_path + "/oceanbase_upgrade_dep.yml"
-#    obcdc_compatiable_info_file = dir_path + "/obcdc_compatiable_ob_info.yaml"
-#    ob_upgrade_deps = get_yaml(ob_upgrade_deps_file)
-#    support_ob_versions = []
-#    cur_ob_version = ''
-#
-#    # key: upgraded_to_version
-#    # value: direct_upgrade_from_version_set
-#    can_upgrade_from_map = {}
-#    detect_cur_ob_ver_succ = False
-#
-#    if ob_upgrade_deps is not None:
-#        for ob_ver in ob_upgrade_deps:
-#            cur_ver = str(ob_ver['version'])
-#            if 'can_be_upgraded_to' not in ob_ver.keys():
-#                if detect_cur_ob_ver_succ:
-#                    print("duplicate detect cur_ob_version, last_detect_version: {cur_ob_version}, current_decect_info: {ob_ver}")
-#                    break
-#                else:
-#                    detect_cur_ob_ver_succ = True
-#                    cur_ob_version = cur_ver
-#                    if can_upgrade_to not in can_upgrade_from_map.keys():
-#                        can_upgrade_from_set = set()
-#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
-#            else:
-#                can_upgrade_to_list = list(ob_ver['can_be_upgraded_to'])
-#                for can_upgrade_to in can_upgrade_to_list:
-#                    if can_upgrade_to not in can_upgrade_from_map.keys():
-#                        can_upgrade_from_set = set()
-#                        can_upgrade_from_set.add(cur_ver)
-#                        can_upgrade_from_map[can_upgrade_to] = can_upgrade_from_set
-#                    else:
-#                        can_upgrade_from_map[can_upgrade_to].add(cur_ver)
-#
-#
-#        if detect_cur_ob_ver_succ:
-#            can_upgrade_from_set = can_upgrade_from_map[cur_ob_version]
-#            can_upgrade_from_set.update(collect_can_upgrade_from(cur_ob_version))
-#            res_map = {}
-#            res_list = []
-#            res_map["compatiable_ob_version"] = sorted(list(can_upgrade_from_set))
-#            res_map["obcdc_version"] = cur_ob_version
-#            res_list.append(res_map)
-#            print(dump_to_yaml_obj(res_list))
-#            write_yaml_to_file(res_list, obcdc_compatiable_info_file)
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:my_error.py
 ##!/usr/bin/env python
@@ -1726,10 +1660,17 @@
 #import logging
 #import getopt
 #import time
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_checker.log'
 #  old_version = '4.0.0.0'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
+#
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
 #  def __init__(self, value):
@@ -1999,15 +1940,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #
@@ -2446,7 +2390,7 @@
 #      password = get_opt_password()
 #      timeout = int(get_opt_timeout())
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-#          host, port, user, password, timeout, log_filename)
+#          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
 #      do_check(host, port, user, password, timeout, upgrade_params)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
@@ -2466,9 +2410,15 @@
 #from mysql.connector import errorcode
 #import logging
 #import getopt
+#import re
 #
 #class UpgradeParams:
 #  log_filename = 'upgrade_cluster_health_checker.log'
+#
+#class PasswordMaskingFormatter(logging.Formatter):
+#  def format(self, record):
+#    s = super(PasswordMaskingFormatter, self).format(record)
+#    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 #
 ##### --------------start : my_error.py --------------
 #class MyError(Exception):
@@ -2721,15 +2671,18 @@
 #      filename=log_filenamme,\
 #      filemode='w')
 #  # 定义日志打印格式
-#  formatter = logging.Formatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
+#  formatter = PasswordMaskingFormatter('[%(asctime)s] %(levelname)s %(filename)s:%(lineno)d %(message)s', '%Y-%m-%d %H:%M:%S')
 #  #######################################
 #  # 定义一个Handler打印INFO及以上级别的日志到sys.stdout
 #  stdout_handler = logging.StreamHandler(sys.stdout)
 #  stdout_handler.setLevel(logging.INFO)
-#  # 设置日志打印格式
 #  stdout_handler.setFormatter(formatter)
-#  # 将定义好的stdout_handler日志handler添加到root logger
+#  # 定义一个Handler处理文件输出
+#  file_handler = logging.FileHandler(log_filenamme, mode='w')
+#  file_handler.setLevel(logging.INFO)
+#  file_handler.setFormatter(formatter)
 #  logging.getLogger('').addHandler(stdout_handler)
+#  logging.getLogger('').addHandler(file_handler)
 ##### ---------------end----------------------
 #
 #def check_zone_valid(query_cur, zone):
@@ -2892,7 +2845,7 @@
 #      timeout = int(get_opt_timeout())
 #      zone = get_opt_zone()
 #      logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", log-file=\"%s\", timeout=%s, zone=\"%s\"', \
-#          host, port, user, password, log_filename, timeout, zone)
+#          host, port, user, password.replace('"', '\\"'), log_filename, timeout, zone)
 #      do_check(host, port, user, password, upgrade_params, timeout, zone)
 #    except mysql.connector.Error, e:
 #      logging.exception('mysql connctor error')
