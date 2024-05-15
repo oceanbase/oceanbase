@@ -27,7 +27,7 @@ ObIHashPartInfrastructure::~ObIHashPartInfrastructure()
 int ObIHashPartInfrastructure::init(
   uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part, int64_t ways,
   int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;
@@ -53,6 +53,7 @@ int ObIHashPartInfrastructure::init(
     arena_alloc_->set_label("HashPartInfra");
     alloc_ = &mem_context_->get_malloc_allocator();
     sql_mem_processor_ = sql_mem_processor;
+    compressor_type_ = compressor_type;
     init_part_func_ = &ObIHashPartInfrastructure::init_default_part;
     insert_row_func_ = &ObIHashPartInfrastructure::direct_insert_row;
     part_shift_ = sizeof(uint64_t) * CHAR_BIT / 2;
@@ -206,8 +207,8 @@ int ObIHashPartInfrastructure::init_default_part(
     part->part_key_.level_ = cur_level_ + 1;
     part->part_key_.nth_part_ = nth_part;
     ObMemAttr attr(tenant_id_, "HashPartInfra", ObCtxIds::WORK_AREA);
-    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true,
-                                  ObHashPartItem::get_extra_size()))) {
+    if (OB_FAIL(part->store_.init(*exprs_, max_batch_size_, attr, limit, true, /*enable_dump*/
+                                  ObHashPartItem::get_extra_size(), compressor_type_))) {
       SQL_ENG_LOG(WARN, "failed to init row store", K(ret));
     } else if (OB_ISNULL(sql_mem_processor_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1245,7 +1246,7 @@ int64_t ObHashPartInfrastructureVecImpl::get_bucket_size() const
 int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   bool enable_sql_dumped, bool unique, bool need_pre_part,
   int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-  ObSqlMemMgrProcessor *sql_mem_processor)
+  ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -1256,7 +1257,7 @@ int ObHashPartInfrastructureVecImpl::init(uint64_t tenant_id,
   } else if (OB_FAIL(init_hp_infras(tenant_id, exprs, hp_infras_))) {
     LOG_WARN("failed to init hash part infras instance", K(ret));
   } else if (OB_FAIL(hp_infras_->init(tenant_id, enable_sql_dumped, unique,
-      need_pre_part, ways, max_batch_size, exprs, sql_mem_processor))) {
+      need_pre_part, ways, max_batch_size, exprs, sql_mem_processor, compressor_type))) {
     LOG_WARN("failed to init hash part infras", K(ret));
   } else {
     is_inited_ = true;

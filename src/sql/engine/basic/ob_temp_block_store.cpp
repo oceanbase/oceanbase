@@ -1076,7 +1076,7 @@ int ObTempBlockStore::write_file(BlockIndex &bi, void *buf, int64_t size)
         io_.tenant_id_ = tenant_id_;
         io_.io_desc_.set_wait_event(ObWaitEventIds::ROW_STORE_DISK_WRITE);
         io_.io_timeout_ms_ = timeout_ms;
-        LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id));
+        LOG_INFO("open file success", K_(io_.fd), K_(io_.dir_id), K(get_compressor_type()));
       }
     }
     ret = OB_E(EventTable::EN_8) ret;
@@ -1458,9 +1458,10 @@ void ObTempBlockStore::BlockHolder::release()
 OB_DEF_SERIALIZE(ObTempBlockStore)
 {
   int ret = OB_SUCCESS;
-  if (inited_ && enable_dump_) {
+  if (inited_ && (enable_dump_ || need_compress())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("block store not support serialize if enable dump", K(ret));
+    LOG_WARN("block store not support serialize if enable dump", K(ret), K_(enable_dump),
+             K(get_compressor_type()));
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
               tenant_id_,
@@ -1518,7 +1519,8 @@ OB_DEF_DESERIALIZE(ObTempBlockStore)
               mem_limit_,
               label);
   if (!is_inited()) {
-    if (OB_FAIL(init(mem_limit_, false/*enable_dump*/, tenant_id_, ctx_id_, label))) {
+    if (OB_FAIL(init(mem_limit_, false/*enable_dump*/, tenant_id_, ctx_id_, label,
+                     NONE_COMPRESSOR))) {
       LOG_WARN("fail to init Block row store", K(ret));
     }
   }

@@ -317,7 +317,8 @@ int ObTempColumnStore::init(const ObExprPtrIArray &exprs,
                             const lib::ObMemAttr &mem_attr,
                             const int64_t mem_limit,
                             const bool enable_dump,
-                            const bool reuse_vector_array)
+                            const bool reuse_vector_array,
+                            const common::ObCompressorType compressor_type)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
@@ -325,7 +326,7 @@ int ObTempColumnStore::init(const ObExprPtrIArray &exprs,
   max_batch_size_ = max_batch_size;
   ObTempBlockStore::set_inner_allocator_attr(mem_attr);
   OZ(ObTempBlockStore::init(mem_limit, enable_dump, mem_attr.tenant_id_, mem_attr.ctx_id_,
-                            mem_attr_.label_));
+                            mem_attr_.label_, compressor_type));
   reuse_vector_array_ = reuse_vector_array;
   inited_ = true;
   return ret;

@@ -215,7 +215,8 @@ int ObTempTableInsertVecOp::create_interm_result_info(ObDTLIntermResultInfo *&in
                                                  mem_attr,
                                                  0 /*mem_limit*/,
                                                  true /*enable_dump*/,
-                                                 false /*reuse_vector_array*/)) {
+                                                 false /*reuse_vector_array*/,
+                                                 MY_SPEC.compress_type_)) {
       LOG_WARN("failed to init the chunk row store.", K(ret));
     } else if (OB_FAIL(all_interm_res_info_.push_back(interm_res_info))) {
       LOG_WARN("failed to push back row store", K(ret));

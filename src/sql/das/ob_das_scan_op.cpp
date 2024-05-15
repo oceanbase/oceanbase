@@ -1276,10 +1276,11 @@ int ObDASScanResult::init(const ObIDASTaskOp &op, common::ObIAllocator &alloc)
     if (OB_FAIL(vec_row_store_.init(result_output,
                                     max_batch_size,
                                     mem_attr,
-                                    UINT64_MAX,
-                                    false,
-                                    0,
-                                    false))) {
+                                    UINT64_MAX, /*mem_limit*/
+                                    false, /*enable_dump*/
+                                    0, /*row_extra_size*/
+                                    NONE_COMPRESSOR,
+                                    false /*reorder_fixed_expr*/))) {
       LOG_WARN("init vec row store failed", K(ret));
     }
   }

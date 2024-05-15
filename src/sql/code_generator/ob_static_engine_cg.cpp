@@ -197,12 +197,15 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   const bool in_root_job = true;
   const bool is_subplan = false;
   bool check_eval_once = true;
+  ObCompressorType compress_type = NONE_COMPRESSOR;
   if (OB_ISNULL(log_plan.get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("no logical plan root", K(ret));
+  } else if (OB_FAIL(get_query_compress_type(log_plan, compress_type))) {
+    LOG_WARN("fail to get query compress type", K(ret));
   } else if (OB_FAIL(postorder_generate_op(
               *log_plan.get_plan_root(), root_spec, in_root_job, is_subplan,
-              check_eval_once, need_check_output_datum))) {
+              check_eval_once, need_check_output_datum, compress_type))) {
     LOG_WARN("failed to generate plan", K(ret));
   } else if (OB_ISNULL(root_spec)) {
     ret = OB_ERR_UNEXPECTED;
@@ -221,7 +224,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
                                             const bool in_root_job,
                                             const bool is_subplan,
                                             bool &check_eval_once,
-                                            const bool need_check_output_datum)
+                                            const bool need_check_output_datum,
+                                            const ObCompressorType compress_type)
 {
   int ret = OB_SUCCESS;
   const int64_t child_num = op.get_num_of_child();
@@ -252,7 +256,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     } else if (OB_FAIL(SMART_CALL(postorder_generate_op(*child_op, child_spec,
                                                         in_root_job && is_exchange, is_subplan,
                                                         child_op_check_eval_once,
-                                                        need_check_output_datum)))) {
+                                                        need_check_output_datum,
+                                                        compress_type)))) {
       LOG_WARN("generate child op failed", K(ret), K(op.get_name()));
     } else if (OB_ISNULL(child_spec)) {
       ret = OB_ERR_UNEXPECTED;
@@ -319,7 +324,8 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   } else if (OB_FAIL(ObOperatorFactory::generate_spec(*this, op, *spec, in_root_job))) {
     LOG_WARN("generate operator spec failed",
              K(ret), KP(phy_plan_), K(ob_phy_operator_type_str(type)));
-  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum))) {
+  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum,
+                                         compress_type))) {
     LOG_WARN("generate operator spec basic failed", K(ret));
   } else if (OB_FAIL(generate_spec_final(op, *spec))) {
     LOG_WARN("generate operator spec final failed", K(ret));
@@ -773,7 +779,8 @@ int ObStaticEngineCG::generate_rt_exprs(const ObIArray<ObRawExpr *> &src,
 int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
                                           ObOpSpec &spec,
                                           const bool check_eval_once,
-                                          const bool need_check_output_datum)
+                                          const bool need_check_output_datum,
+                                          const common::ObCompressorType compress_type)
 {
   int ret = OB_SUCCESS;
   if (0 == spec.rows_) {
@@ -783,6 +790,7 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
   spec.width_ = op.get_width();
   spec.plan_depth_ = op.get_plan_depth();
   spec.px_est_size_factor_ = op.get_px_est_size_factor();
+  spec.compress_type_ = compress_type;
 
   OZ(generate_rt_exprs(op.get_startup_exprs(), spec.startup_filters_));
 
@@ -875,6 +883,52 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
       }
     }
   }
+  return ret;
+}
+
+int ObStaticEngineCG::get_query_compress_type(const ObLogPlan &log_plan,
+                                             ObCompressorType &compress_type)
+{
+  int ret = OB_SUCCESS;
+  ObString codec_str;
+  const int64_t tenant_id =
+    log_plan.get_optimizer_context().get_session_info()->get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (OB_ISNULL(log_plan.get_stmt()) || OB_ISNULL(log_plan.get_stmt()->get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt or query ctx is null", K(ret));
+  } else {
+    const ObOptParamHint *opt_params =
+      &log_plan.get_stmt()->get_query_ctx()->get_global_hint().opt_params_;
+    ObObj hint_val;
+    if (OB_FAIL(opt_params->get_opt_param(ObOptParamHint::SPILL_COMPRESSION_CODEC, hint_val))) {
+      LOG_WARN("fail to get compression algorithm opt param from hint", K(ret));
+    } else if (hint_val.is_nop_value()) { // get compression algorithm from configure
+      codec_str = ObString::make_string(tenant_config->spill_compression_codec.get_value());
+    } else if (tenant_config.is_valid()) { // get compression algorithm from hint
+      codec_str = hint_val.get_varchar();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected tenant config", K(ret));
+    }
+  }
+  compress_type = NONE_COMPRESSOR;
+  if (OB_FAIL(ret)) {
+  } else if (0 == ObString::make_string("none").case_compare(codec_str)) {
+    compress_type = NONE_COMPRESSOR;
+  } else if (0 == ObString::make_string("zstd").case_compare(codec_str)) {
+    compress_type = ZSTD_COMPRESSOR;
+  } else if (0 == ObString::make_string("lz4").case_compare(codec_str)) {
+    compress_type = LZ4_COMPRESSOR;
+  } else if (0 == ObString::make_string("snappy").case_compare(codec_str)) {
+    compress_type = SNAPPY_COMPRESSOR;
+  } else if (0 == ObString::make_string("zlib").case_compare(codec_str)) {
+    compress_type = ZLIB_COMPRESSOR;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected compression algorithm", K(ret));
+  }
+  LOG_TRACE("check query compress type", K(compress_type));
   return ret;
 }
 

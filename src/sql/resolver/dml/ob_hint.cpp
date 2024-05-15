@@ -838,6 +838,18 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case SPILL_COMPRESSION_CODEC: {
+      is_valid = val.is_varchar();
+      if (is_valid) {
+        bool exist_valid_codec = false;
+        for (int i = 0; i < ARRAYSIZEOF(common::sql_temp_store_compress_funcs) && !exist_valid_codec; ++i) {
+          if (0 == ObString::make_string(sql_temp_store_compress_funcs[i]).case_compare(val.get_varchar())) {
+            exist_valid_codec = true;
+          }
+        }
+        is_valid = exist_valid_codec;
+      }
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;

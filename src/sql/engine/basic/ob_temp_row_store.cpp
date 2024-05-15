@@ -453,9 +453,9 @@ int ObTempRowStore::init(const ObExprPtrIArray &exprs,
                          const int64_t mem_limit,
                          bool enable_dump,
                          uint32_t row_extra_size,
+                         const common::ObCompressorType compressor_type,
                          const bool reorder_fixed_expr /*true*/,
-                         const bool enable_trunc /*false*/,
-                         const common::ObCompressorType compressor_type /*NONE_COMPRESSOR*/)
+                         const bool enable_trunc /*false*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;
@@ -474,8 +474,8 @@ int ObTempRowStore::init(const RowMeta &row_meta,
                          const lib::ObMemAttr &mem_attr,
                          const int64_t mem_limit,
                          bool enable_dump,
-                         const bool enable_trunc /*false*/,
-                         const common::ObCompressorType compressor_type /*NONE_COMPRESSOR*/)
+                         const common::ObCompressorType compressor_type,
+                         const bool enable_trunc /*false*/)
 {
   int ret = OB_SUCCESS;
   mem_attr_ = mem_attr;

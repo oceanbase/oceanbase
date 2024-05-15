@@ -131,7 +131,8 @@ public:
     has_cur_part_dumped_(false), has_create_part_map_(false),
     est_part_cnt_(INT64_MAX), cur_level_(0), part_shift_(0), period_row_cnt_(0),
     left_part_cur_id_(0), right_part_cur_id_(0), my_skip_(nullptr),
-    is_push_down_(false), exprs_(nullptr), is_inited_vec_(false), max_batch_size_(0)
+    is_push_down_(false), exprs_(nullptr), is_inited_vec_(false), max_batch_size_(0),
+    compressor_type_(NONE_COMPRESSOR)
   {}
   virtual ~ObIHashPartInfrastructure();
 public:
@@ -225,7 +226,7 @@ public:
                               int64_t max_bucket = MAX_BUCKET_NUM) = 0;
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
   void switch_left()
   { cur_side_ = InputSide::LEFT; }
   void switch_right()
@@ -502,6 +503,7 @@ protected:
   bool is_inited_vec_;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> vector_ptrs_;
   int64_t max_batch_size_;
+  common::ObCompressorType compressor_type_;
 };
 
 template<typename HashBucket>
@@ -642,7 +644,7 @@ public:
   bool is_inited() const { return is_inited_; }
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
-    ObSqlMemMgrProcessor *sql_mem_processor);
+    ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type);
   int init_mem_context(uint64_t tenant_id);
   int decide_hp_infras_type(const common::ObIArray<ObExpr*> &exprs, BucketType &bkt_type, uint64_t &payload_len);
   template<typename BktType>

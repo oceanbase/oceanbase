@@ -295,6 +295,16 @@ DEF_INT(_max_malloc_sample_interval, OB_CLUSTER_PARAMETER, "256", "[1, 10000]",
 DEF_BOOL(_enable_values_table_folding, OB_CLUSTER_PARAMETER, "True",
          "whether enable values statement folds self params",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+//
+DEF_STR_WITH_CHECKER(spill_compression_codec, OB_TENANT_PARAMETER, "NONE",
+        common::ObConfigSQLSpillCompressionCodecChecker,
+        "specific the compression algorithm type to compress the spilled data in temp block store "\
+        "during the sql execution phase. "\
+        "The supported compression codecs are: ZSTD, LZ4, SNAPPY, ZLIB. NONE means no compression."\
+        "The default value is NONE.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //// tenant config
 DEF_TIME_WITH_CHECKER(max_stale_time_for_weak_consistency, OB_TENANT_PARAMETER, "5s",
                       common::ObConfigStaleTimeChecker,

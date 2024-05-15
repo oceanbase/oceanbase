@@ -735,6 +735,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSQLTlsVersionChecker);
 };
 
+class ObConfigSQLSpillCompressionCodecChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSQLSpillCompressionCodecChecker() {}
+  virtual ~ObConfigSQLSpillCompressionCodecChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSQLSpillCompressionCodecChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:

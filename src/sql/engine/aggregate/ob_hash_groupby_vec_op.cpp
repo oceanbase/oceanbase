@@ -501,7 +501,8 @@ int ObHashGroupByVecOp::init_distinct_info(bool is_part)
     LOG_WARN("unexpected status: distinct origin exprs is empty", K(ret));
   } else if (OB_FAIL(distinct_data_set_.init(
                tenant_id, GCONF.is_sql_operator_dump_enabled(), true, true, 1,
-               MY_SPEC.max_batch_size_, distinct_origin_exprs_, &distinct_sql_mem_processor_))) {
+               MY_SPEC.max_batch_size_, distinct_origin_exprs_, &distinct_sql_mem_processor_,
+               MY_SPEC.compress_type_))) {
     LOG_WARN("failed to init hash partition infrastructure", K(ret));
   } else if (FALSE_IT(distinct_data_set_.set_io_event_observer(&io_event_observer_))) {
   } else if (OB_FAIL(hash_funcs_.init(n_distinct_expr_))) {// TODO: remove hash_funcs_
@@ -816,7 +817,8 @@ int ObHashGroupByVecOp::setup_dump_env(const int64_t part_id, const int64_t inpu
                                               attr,
                                               1/* memory limit, dump immediately */,
                                               true,
-                                              extra_size))) {
+                                              extra_size,
+                                              MY_SPEC.compress_type_))) {
           LOG_WARN("init temp row store failed", K(ret));
         } else {
           parts[i]->row_store_.set_dir_id(sql_mem_processor_.get_dir_id());

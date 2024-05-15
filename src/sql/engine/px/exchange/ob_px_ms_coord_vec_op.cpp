@@ -150,7 +150,8 @@ int ObPxMSCoordVecOp::inner_open()
     ObMemAttr attr(ctx_.get_my_session()->get_effective_tenant_id(),
                     "PxMsOutputStore", ObCtxIds::EXECUTE_CTX_ID);
     if (OB_FAIL(output_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
-                                    attr, 0 /*mem_limit*/, false/*enable_dump*/, 0 /*row_extra_size*/))) {
+                                    attr, 0 /*mem_limit*/, false/*enable_dump*/,
+                                    0 /*row_extra_size*/, NONE_COMPRESSOR))) {
       LOG_WARN("init output store failed", K(ret));
     } else if (OB_ISNULL(mem = ctx_.get_allocator().alloc(
             ObBitVector::memory_size(1)))) {

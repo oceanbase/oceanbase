@@ -68,7 +68,8 @@ public:
     return row_store_.add_row(reinterpret_cast<const ObCompactRow *>(src), stored_row);
   }
 
-  int init(const ObExprPtrIArray &exprs, const int64_t max_batch_size);
+  int init(const ObExprPtrIArray &exprs, const int64_t max_batch_size,
+           const common::ObCompressorType compressor_type);
   int open();
   void close();
 

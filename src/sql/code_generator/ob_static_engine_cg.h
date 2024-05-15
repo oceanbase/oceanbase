@@ -226,7 +226,8 @@ private:
                             const bool in_root_job,
                             const bool is_subplan,
                             bool &check_eval_once,
-                            const bool need_check_output_datum);
+                            const bool need_check_output_datum,
+                            const common::ObCompressorType compress_type);
   int clear_all_exprs_specific_flag(const ObIArray<ObRawExpr *> &exprs, ObExprInfoFlag flag);
   int mark_expr_self_produced(ObRawExpr *expr);
   int mark_expr_self_produced(const ObIArray<ObRawExpr *> &exprs);
@@ -239,7 +240,8 @@ private:
   int generate_spec_basic(ObLogicalOperator &op,
                           ObOpSpec &spec,
                           const bool check_eval_once,
-                          const bool need_check_output_datum);
+                          const bool need_check_output_datum,
+                          const common::ObCompressorType compress_type);
 
   // Invoked after generate_spec() and generate_spec_basic(),
   // some operator need this phase to do some special generation.
@@ -450,6 +452,7 @@ private:
     const ObIArray<ObExpr*> &sort_exprs);
 
   int fill_compress_type(ObLogSort &op, ObCompressorType &compr_type);
+  int get_query_compress_type(const ObLogPlan &log_plan, ObCompressorType &compress_type);
   int check_not_support_cmp_type(
     const ObSortCollations &collations,
     const ObIArray<ObExpr*> &sort_exprs);

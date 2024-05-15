@@ -28,7 +28,7 @@ ObSortVecSpec::ObSortVecSpec(common::ObIAllocator &alloc, const ObPhyOperatorTyp
   sk_exprs_(alloc), addon_exprs_(alloc), sk_collations_(alloc), addon_collations_(alloc),
   minimum_row_count_(0), topk_precision_(0), prefix_pos_(0), is_local_merge_sort_(false),
   is_fetch_with_ties_(false), prescan_enabled_(false), enable_encode_sortkey_opt_(false),
-  has_addon_(false), part_cnt_(0), compress_type_(NONE_COMPRESSOR)
+  has_addon_(false), part_cnt_(0)
 {}
 
 OB_SERIALIZE_MEMBER((ObSortVecSpec, ObOpSpec), topn_expr_, topk_limit_expr_, topk_offset_expr_,
@@ -200,7 +200,7 @@ int ObSortVecOp::init_temp_row_store(const common::ObIArray<ObExpr *> &exprs,
     // do nothing
   } else if (OB_FAIL(row_store.init(exprs, batch_size, mem_attr, 2 * 1024 * 1024, true,
                              sort_op_provider_.get_extra_size(is_sort_key) /* row_extra_size */,
-                             reorder_fixed_expr, enable_trunc, compress_type))) {
+                             compress_type, reorder_fixed_expr, enable_trunc))) {
     LOG_WARN("init row store failed", K(ret));
   } else if (OB_FAIL(row_store.alloc_dir_id())) {
     LOG_WARN("failed to alloc dir id", K(ret));

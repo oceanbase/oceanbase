@@ -351,7 +351,7 @@ public:
            uint64_t tenant_id,
            int64_t mem_ctx_id,
            const char *label,
-           common::ObCompressorType compressor_type = NONE_COMPRESSOR,
+           common::ObCompressorType compressor_type,
            const bool enable_trunc = false);
   void reset();
   void reuse();
@@ -520,6 +520,9 @@ private:
   inline int64_t get_block_raw_size(const Block *blk) const
   { return is_last_block(blk) ? blk->get_buffer()->head_size() : blk->raw_size_; }
   inline bool need_compress() const { return compressor_.get_compressor_type() != NONE_COMPRESSOR; }
+  inline ObCompressorType get_compressor_type() const { return compressor_.get_compressor_type(); }
+
+protected:
   virtual int prepare_blk_for_write(Block *blk) { return OB_SUCCESS; }
   virtual int prepare_blk_for_read(Block *blk) { return OB_SUCCESS; }
 

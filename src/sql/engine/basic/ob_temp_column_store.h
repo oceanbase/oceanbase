@@ -152,7 +152,8 @@ public:
            const lib::ObMemAttr &mem_attr,
            const int64_t mem_limit,
            const bool enable_dump,
-           const bool reuse_vector_array);
+           const bool reuse_vector_array,
+           const common::ObCompressorType compressor_type);
 
   int init_batch_ctx(const ObExprPtrIArray &exprs);
 

@@ -1269,7 +1269,7 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
                               (tmp_batch_round << 32) + part_id, is_left, part))) {
     LOG_WARN("fail to get partition", K(ret), K(part_level_), K(part_id), K(is_left));
   } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
-                                MY_SPEC.max_batch_size_))) {
+                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
   } else {
     part->get_row_store().set_dir_id(sql_mem_processor_.get_dir_id());
