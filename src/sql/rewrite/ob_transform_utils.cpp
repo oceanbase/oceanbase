@@ -12957,130 +12957,6 @@ int ObTransformUtils::check_joined_table_combinable(ObDMLStmt *stmt,
   return ret;
 }
 
-int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
-                                                            TableItem *view_table,
-                                                            ObIArray<ObRawExpr*> &outer_join_conditions,
-                                                            bool &combinable)
-{
-  int ret = OB_SUCCESS;
-  combinable = false;
-  ObSelectStmt *child_stmt = NULL;
-  ObSqlBitSet<> outer_expr_relation_ids;
-  ObSEArray<ObRawExpr*, 4> view_exprs;
-  if (OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) || 
-      !view_table->is_generated_table() || 
-      OB_ISNULL(child_stmt = view_table->ref_query_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  } else if (OB_FAIL(get_view_exprs(parent_stmt, 
-                                    view_table, 
-                                    outer_join_conditions, 
-                                    view_exprs))) {
-    LOG_WARN("failed to get view exprs", K(ret));
-  } else if (OB_FAIL(get_exprs_relation_ids(view_exprs, 
-                                            outer_expr_relation_ids))) {
-    LOG_WARN("failed to add expr relation ids", K(ret));
-  } else if (OB_FAIL(get_exprs_relation_ids(child_stmt->get_condition_exprs(), 
-                                            outer_expr_relation_ids))) {
-    LOG_WARN("failed to add expr relation ids", K(ret));
-  } else {
-    ObIArray<JoinedTable*> &joined_tables = child_stmt->get_joined_tables();
-    ObIArray<SemiInfo*> &semi_infos = child_stmt->get_semi_infos();
-    for (int64_t i = 0; OB_SUCC(ret) && i < semi_infos.count(); ++i) {
-      if (OB_FAIL(get_left_rel_ids_from_semi_info(child_stmt, 
-                                                  semi_infos.at(i), 
-                                                  outer_expr_relation_ids))) {
-        LOG_WARN("failed to get left table ids from semi info", K(ret));
-      }
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !combinable && i < joined_tables.count(); ++i) {
-      if (OB_FAIL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                              joined_tables.at(i), 
-                                                              outer_expr_relation_ids, 
-                                                              combinable))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObTransformUtils::inner_check_left_join_right_table_combinable(ObSelectStmt *child_stmt, 
-                                                                  TableItem *table, 
-                                                                  ObSqlBitSet<> &outer_expr_relation_ids, 
-                                                                  bool &combinable)
-{
-  int ret = OB_SUCCESS;
-  combinable = false;
-  if (OB_ISNULL(child_stmt) || OB_ISNULL(table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (table->is_joined_table()) {
-    JoinedTable *joined_table = static_cast<JoinedTable*>(table);
-    if (LEFT_OUTER_JOIN == joined_table->joined_type_ ||
-        RIGHT_OUTER_JOIN == joined_table->joined_type_) {
-      ObSqlBitSet<> left_table_ids;
-      ObSqlBitSet<> right_table_ids;
-      ObRelIds left_ids;
-      TableItem *left_table = (LEFT_OUTER_JOIN == joined_table->joined_type_) ? 
-                                joined_table->left_table_ : 
-                                joined_table->right_table_;
-      TableItem *right_table = (RIGHT_OUTER_JOIN == joined_table->joined_type_) ? 
-                                joined_table->left_table_ : 
-                                joined_table->right_table_;
-      if (OB_ISNULL(left_table) || OB_ISNULL(right_table)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null table", K(ret));
-      } else if (OB_FAIL(child_stmt->get_table_rel_ids(*right_table, right_table_ids))) {
-        LOG_WARN("failed to get table rel ids", K(ret));
-      } else if (outer_expr_relation_ids.overlap(right_table_ids)) {
-        combinable = false;
-      } else if (OB_FAIL(child_stmt->get_table_rel_ids(*left_table, left_table_ids))) {
-        LOG_WARN("failed to get table rel ids", K(ret));
-      } else if (OB_FAIL(left_ids.add_members(left_table_ids))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (OB_FAIL(is_null_reject_conditions(joined_table->join_conditions_,
-                                                   left_ids,
-                                                   combinable))) {
-        LOG_WARN("failed to check is null reject conditions", K(ret));
-      }
-      if (OB_SUCC(ret) && !combinable) {
-        if (OB_FAIL(ObTransformUtils::get_exprs_relation_ids(joined_table->join_conditions_, 
-                                                             outer_expr_relation_ids))) {
-          LOG_WARN("failed to add expr relation ids", K(ret));
-        } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt, 
-                                                                                  left_table,
-                                                                                  outer_expr_relation_ids, 
-                                                                                  combinable)))) {
-          LOG_WARN("failed to check left join`s right table combinable", K(ret));
-        }
-      }
-    } else if (INNER_JOIN == joined_table->joined_type_) {
-      if (OB_FAIL(get_exprs_relation_ids(joined_table->join_conditions_, 
-                                         outer_expr_relation_ids))) {
-        LOG_WARN("failed to add expr relation ids", K(ret));
-      } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                                                joined_table->left_table_, 
-                                                                                outer_expr_relation_ids, 
-                                                                                combinable)))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      } else if (combinable) {
-        //find
-      } else if (OB_FAIL(SMART_CALL(inner_check_left_join_right_table_combinable(child_stmt,
-                                                                                joined_table->right_table_, 
-                                                                                outer_expr_relation_ids, 
-                                                                                combinable)))) {
-        LOG_WARN("failed to check left join`s right table combinable", K(ret));
-      }
-    } else {
-      //do nothing
-    }
-  } else {
-    //do nothing
-  }
-  return ret;
-}
-
 int ObTransformUtils::get_view_exprs(ObDMLStmt *parent_stmt,
                                     TableItem *view_table,
                                     ObIArray<ObRawExpr*> &from_exprs, 
@@ -15612,6 +15488,250 @@ bool ObTransformUtils::is_const_null(ObRawExpr &expr)
 bool ObTransformUtils::is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode)
 {
   return !stmt.has_order_by() && is_only_full_group_by_on(mode);
+}
+
+// 搜集下层 stmt 中会被上层过滤空值的投影项
+int ObTransformUtils::get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+                                                      ObDMLStmt *stmt,
+                                                      ObIArray<ObRawExpr *> &conditions)
+{
+  int ret = OB_SUCCESS;
+  bool has_rownum = false;
+  TableItem *table_item = NULL;
+  if (OB_ISNULL(parent_stmt)) {
+    // do nothing
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
+    LOG_WARN("failed to check stmt has rownum", K(ret));
+  } else if (stmt->has_limit() ||
+             stmt->has_sequence() ||
+             has_rownum) {
+    // do nothing
+  } else if (OB_FAIL(ObTransformUtils::get_generated_table_item(*parent_stmt, stmt, table_item))) {
+    LOG_WARN("failed to get table_item", K(ret));
+  } else if (OB_NOT_NULL(table_item)) {
+    ObSEArray<ObColumnRefRawExpr *, 8> table_columns;
+    ObSEArray<ObRawExpr *, 16> all_conditions;
+    bool has_null_reject = false;
+    ObColumnRefRawExpr *col = NULL;
+    ObRawExpr *select_expr = NULL;
+    if (OB_FAIL(parent_stmt->get_column_exprs(table_item->table_id_, table_columns))) {
+      LOG_WARN("failed to get column exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::get_table_related_condition(*parent_stmt,
+                                                                     table_item,
+                                                                     all_conditions))) {
+      LOG_WARN("failed to get table related condition", K(ret));
+    } else if (OB_LIKELY(stmt->is_select_stmt())) {
+      ObSelectStmt *child_stmt = static_cast<ObSelectStmt *>(stmt);
+      for (int64_t i = 0; OB_SUCC(ret) && i < table_columns.count(); ++i) {
+        if (OB_ISNULL(col = table_columns.at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (OB_UNLIKELY(col->get_column_id() < OB_APP_MIN_COLUMN_ID ||
+                   col->get_column_id() - OB_APP_MIN_COLUMN_ID >= child_stmt->get_select_item_size())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected view column", K(ret), K(*col));
+        } else if (OB_ISNULL(select_expr = child_stmt->get_select_item(col->get_column_id() - OB_APP_MIN_COLUMN_ID).expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret));
+        } else if (select_expr->has_flag(CNT_AGG) ||
+                   select_expr->has_flag(CNT_WINDOW_FUNC) ||
+                   select_expr->has_flag(CNT_SUB_QUERY)) {
+          // do nothing
+        } else if (OB_FAIL(ObTransformUtils::has_null_reject_condition(all_conditions,
+                                                                       col,
+                                                                       has_null_reject))) {
+          LOG_WARN("faield to check has null reject condition", K(ret));
+        } else if (has_null_reject && OB_FAIL(conditions.push_back(select_expr))) {
+          LOG_WARN("failed to push back expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// left join 右表视图合并后可能会丧失条件下推的机会，需要限制 merge 场景
+// 场景1：view 中只引用唯一一张表，可以直接 merge
+// 场景2：view 中引用多张表，要求合并后能构成 left join 链式连接，即 A ⟕ (B ⟕ C) => (A ⟕ B) ⟕ C
+int ObTransformUtils::check_left_join_right_view_combinable(ObDMLStmt *parent_stmt,
+                                                            TableItem *view_table,
+                                                            ObIArray<ObRawExpr*> &outer_join_conditions,
+                                                            bool &combinable)
+{
+  int ret = OB_SUCCESS;
+  combinable = false;
+  ObSelectStmt *child_stmt = NULL;
+  JoinedTable* view_joined_table = NULL;
+  ObSEArray<ObRawExpr*, 4> conditions;
+  bool is_valid_join_chain = false;
+  ObSqlBitSet<> target_rels;
+  ObSqlBitSet<> upper_join_left_rels; //dummy
+  ObSqlBitSet<> upper_join_right_rels;
+  ObSEArray<ObRawExpr*, 4> view_exprs;
+  ObSqlBitSet<> null_reject_rels;
+  if (OB_ISNULL(parent_stmt) || OB_ISNULL(view_table) ||
+      !view_table->is_generated_table() ||
+      OB_ISNULL(child_stmt = view_table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (child_stmt->get_from_items().count() != 1 ||
+             child_stmt->get_semi_infos().count() > 0) {
+    // view 中存在 semi info 或者超过一个 from item 时，会在 join tree 上层分配 semi 或 inner join，
+    // 整体处于 left join 右侧时，无法进行 reorder，不合并
+  } else if (!child_stmt->get_from_item(0).is_joined_) {
+    combinable = true;
+  } else if (OB_ISNULL(view_joined_table = child_stmt->get_joined_table(child_stmt->get_from_item(0).table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null joined table", K(ret));
+  } else if (!view_joined_table->is_left_join() && !view_joined_table->is_right_join()) {
+    // 无法与上层构成 left/right 链式连接，不合并
+  } else if (OB_FAIL(get_extra_condition_from_parent(parent_stmt, child_stmt, conditions))) {
+    LOG_WARN("failed to get extra condition from parent", K(ret));
+  } else if (OB_FAIL(append(conditions, child_stmt->get_condition_exprs()))) {
+    LOG_WARN("failed to append exprs", K(ret));
+  } else if (OB_FAIL(get_null_reject_rels(conditions, null_reject_rels))) {
+    LOG_WARN("failed to get null reject rels", K(ret));
+  } else if (OB_FAIL(get_view_exprs(parent_stmt,
+                                    view_table,
+                                    outer_join_conditions,
+                                    view_exprs))) {
+    LOG_WARN("failed to get view exprs", K(ret));
+  } else if (OB_FAIL(get_exprs_relation_ids(view_exprs,
+                                            target_rels))) {
+    LOG_WARN("failed to add expr relation ids", K(ret));
+  } else if (OB_FAIL(upper_join_right_rels.add_members(target_rels))) {
+    LOG_WARN("failed to add members", K(ret));
+  } else if (OB_FAIL(get_exprs_relation_ids(child_stmt->get_condition_exprs(), upper_join_right_rels))) {
+    LOG_WARN("failed to add expr relation ids", K(ret));
+  } else if (OB_FAIL(check_left_join_chain_recursively(child_stmt,
+                                                      view_joined_table,
+                                                      target_rels,
+                                                      upper_join_left_rels,
+                                                      upper_join_right_rels,
+                                                      null_reject_rels,
+                                                      true,
+                                                      is_valid_join_chain))) {
+    LOG_WARN("failed to check left join chain", K(ret));
+  } else if (is_valid_join_chain) {
+    combinable = true;
+  }
+  return ret;
+}
+
+// 根据过滤条件集抽取出能空值拒绝的关系集
+int ObTransformUtils::get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
+                                           ObSqlBitSet<> &null_reject_rels)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> column_exprs;
+  bool is_null_reject = false;
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(conditions, column_exprs))) {
+    LOG_WARN("failed to extrace column exprs", K(ret));
+  }
+  int64_t N = column_exprs.count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < N; ++i) {
+    ObRawExpr *expr = column_exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(has_null_reject_condition(conditions,
+                                                 expr,
+                                                 is_null_reject))) {
+      LOG_WARN("failed to check null reject", K(ret));
+    } else if (!is_null_reject) {
+      // do nothing
+    } else if (OB_FAIL(null_reject_rels.add_members(expr->get_relation_ids()))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
+// 检查目标表是否可以 reorder 到 stmt 的 join tree 最上层作为 left join 的驱动表
+int ObTransformUtils::check_left_join_chain_recursively(ObDMLStmt *stmt,
+                                                        JoinedTable *joined_table,
+                                                        const ObSqlBitSet<> &target_relation_ids,
+                                                        const ObSqlBitSet<> &upper_join_left_rels,
+                                                        const ObSqlBitSet<> &upper_join_right_rels,
+                                                        const ObSqlBitSet<> &null_reject_rels,
+                                                        bool check_top_level,
+                                                        bool &is_valid_join_chain)
+{
+  int ret = OB_SUCCESS;
+  bool left_null_reject = false;
+  bool right_null_reject = false;
+  is_valid_join_chain = false;
+  if (OB_ISNULL(stmt) || OB_ISNULL(joined_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else if (joined_table->is_left_join() || joined_table->is_right_join()) {
+    ObSqlBitSet<> left_table_ids;
+    ObSqlBitSet<> right_table_ids;
+    ObRelIds left_ids;
+    ObSqlBitSet<> join_rels;
+    ObSqlBitSet<> join_left_rels;
+    ObSqlBitSet<> join_right_rels;
+    TableItem *left_table = (LEFT_OUTER_JOIN == joined_table->joined_type_) ?
+                              joined_table->left_table_ :
+                              joined_table->right_table_;
+    TableItem *right_table = (RIGHT_OUTER_JOIN == joined_table->joined_type_) ?
+                              joined_table->left_table_ :
+                              joined_table->right_table_;
+    if (OB_ISNULL(left_table) || OB_ISNULL(right_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table", K(ret));
+    } else if (OB_FAIL(stmt->get_table_rel_ids(*right_table, right_table_ids))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    } else if (OB_FAIL(stmt->get_table_rel_ids(*left_table, left_table_ids))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    } else if (OB_FAIL(get_exprs_relation_ids(joined_table->get_join_conditions(),
+                                              join_rels))) {
+      LOG_WARN("failed to add expr relation ids", K(ret));
+    } else if (OB_FAIL(join_left_rels.intersect(join_rels, left_table_ids))) {
+      LOG_WARN("failed to intersect rels", K(ret));
+    } else if (OB_FAIL(join_right_rels.intersect(join_rels, right_table_ids))) {
+      LOG_WARN("failed to intersect rels", K(ret));
+    } else if (check_top_level && upper_join_right_rels.overlap(right_table_ids)) {
+      // 上层 left join 连接条件引用下层 left join 右表中的列，
+      // 存在形如 A LEFT JOIN (B LEFT JOIN C on B.b = C.b) on A.c = B.c and A.f = C.f 的环状连接，无法 reorder
+      is_valid_join_chain = false;
+    } else if (!left_table_ids.is_superset(target_relation_ids)) {
+      // 目标表不位于下层 left join chain 的最左侧，无法 reorder
+      is_valid_join_chain = false;
+    } else if (OB_FAIL(left_ids.add_members(left_table_ids))) {
+      LOG_WARN("failed to add members", K(ret));
+    } else if (OB_FAIL(is_null_reject_conditions(joined_table->get_join_conditions(),
+                                                 left_ids,
+                                                 left_null_reject))) {
+      LOG_WARN("failed to check is null reject conditions", K(ret));
+    } else if (!left_null_reject) {
+      // 链式 left join 应用结合律的必要条件：右侧两表的连接条件空值拒绝中间的表
+      is_valid_join_chain = false;
+    } else if (join_left_rels.bitset_word_count() < 1 || join_right_rels.bitset_word_count() < 1) {
+      // 笛卡尔积无法 reorder
+      is_valid_join_chain = false;
+    } else if (null_reject_rels.overlap(join_right_rels)) {
+      // left join 退化成 inner join，无法 reorder
+      is_valid_join_chain = false;
+    } else if (!left_table->is_joined_table()) {
+      is_valid_join_chain = true;
+    } else if (OB_FAIL(check_left_join_chain_recursively(stmt,
+                                                        static_cast<JoinedTable*>(left_table),
+                                                        target_relation_ids,
+                                                        join_left_rels,
+                                                        join_right_rels,
+                                                        null_reject_rels,
+                                                        false,
+                                                        is_valid_join_chain))) {
+      LOG_WARN("failed to check left join chain recursively", K(ret));
+    }
+  } else {
+    is_valid_join_chain = false;
+  }
+  return ret;
 }
 
 } // namespace sql

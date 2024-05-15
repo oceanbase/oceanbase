@@ -1941,6 +1941,19 @@ public:
   // check if a constant or parameterized constant is NULL.
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
+  static int get_extra_condition_from_parent(ObDMLStmt *parent_stmt,
+                                             ObDMLStmt *stmt,
+                                             ObIArray<ObRawExpr *> &conditions);
+  static int check_left_join_chain_recursively(ObDMLStmt *stmt,
+                                              JoinedTable *joined_table,
+                                              const ObSqlBitSet<> &target_relation_ids,
+                                              const ObSqlBitSet<> &upper_join_left_rels,
+                                              const ObSqlBitSet<> &upper_join_right_rels,
+                                              const ObSqlBitSet<> &null_reject_rels,
+                                              bool check_top_level,
+                                              bool &is_valid_join_chain);
+  static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
+                                  ObSqlBitSet<> &null_reject_rels);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
