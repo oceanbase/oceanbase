@@ -254,7 +254,11 @@ int ObLobLocatorHelper::fill_lob_locator_v2(ObDatumRow &row,
         ObLobLocatorV2 locator;
         if (datum_meta.is_lob_storage()) {
           if (datum.is_null() || datum.is_nop()) {
-          } else if (can_skip_build_mem_lob_locator(datum.get_string())) {
+          // read sys table is changed to mysql mode for normal oracle tenant
+          // and that may return disk lob lob locator to jdbc
+          // and cause jdbc error because jdbc can not handle disk lob locator
+          // so sys table can not skip build mem lob locator
+          } else if (! is_sys_table(access_param.iter_param_.table_id_) && can_skip_build_mem_lob_locator(datum.get_string())) {
           } else if (OB_FAIL(build_lob_locatorv2(locator,
                                                  datum.get_string(),
                                                  out_cols_param->at(i)->get_column_id(),
