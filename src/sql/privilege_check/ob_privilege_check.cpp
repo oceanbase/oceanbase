@@ -872,7 +872,8 @@ int add_seqs_priv_in_dml(
           const ObSequenceRawExpr *seq_raw_expr = static_cast<const ObSequenceRawExpr *>(expr);
           uint64_t sequence_id = seq_raw_expr->get_sequence_id();
           const ObString &action = seq_raw_expr->get_action();
-          if (action.case_compare("CURRVAL")) {
+          if (sequence_id == OB_INVALID_ID) {
+          } else if (action.case_compare("CURRVAL")) {
             OZ (currval_sequence_ids.push_back(sequence_id));
           } else {
             OZ (nextval_sequence_ids.push_back(sequence_id));
