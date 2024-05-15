@@ -172,9 +172,6 @@ ObPlanCacheValue::ObPlanCacheValue()
     sessid_(OB_INVALID_ID),
     sess_create_time_(0),
     contain_sys_name_table_(false),
-#ifdef OB_BUILD_SPM
-    is_spm_closed_(false),
-#endif
     need_param_(true),
     is_nested_sql_(false),
     is_batch_execute_(false),
@@ -263,9 +260,6 @@ int ObPlanCacheValue::init(ObPCVSet *pcv_set, const ObILibCacheObject *cache_obj
     sys_schema_version_ = plan->get_sys_schema_version();
     tenant_schema_version_ = plan->get_tenant_schema_version();
     sql_traits_ = pc_ctx.sql_traits_;
-#ifdef OB_BUILD_SPM
-    is_spm_closed_ = pcv_set->get_spm_closed();
-#endif
     stmt_type_ = plan->get_stmt_type();
     need_param_ = plan->need_param();
     is_nested_sql_ = ObSQLUtils::is_nested_sql(&pc_ctx.exec_ctx_);
@@ -471,8 +465,7 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
   //检查在pcv中缓存的该sql涉及的view 及 table的version，
   //如果不为最新的,在plan cache层会删除该value，并重新add plan
   //TODO shengle 此处拷贝需要想办法处理掉
-  bool enable_baseline = false;
-  bool captrue_baseline = false;
+  int64_t spm_mode = 0;
   bool need_check_schema = (schema_array.count() != 0);
   if (schema_array.count() == 0 && stored_schema_objs_.count() == 0) {
     need_check_schema = true;
@@ -486,11 +479,9 @@ int ObPlanCacheValue::choose_plan(ObPlanCacheCtx &pc_ctx,
     ret = OB_ERR_UNEXPECTED;
     SQL_PC_LOG(ERROR, "got session is NULL", K(ret));
   } else if (FALSE_IT(session->set_stmt_type(stmt_type_))) {
-  } else if (OB_FAIL(session->get_use_plan_baseline(enable_baseline))) {
-    LOG_WARN("fail to get use plan baseline", K(ret));
-  } else if (OB_FAIL(session->get_capture_plan_baseline(captrue_baseline))) {
-    LOG_WARN("failed to capture plan baseline", K(ret));
-  } else if (enable_baseline || captrue_baseline) {
+  } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
+    LOG_WARN("fail to get spm mode", K(ret));
+  } else if (spm_mode > 0) {
     if (OB_FAIL(ob_write_string(pc_ctx.allocator_,
                                 constructed_sql_,
                                 pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_))) {

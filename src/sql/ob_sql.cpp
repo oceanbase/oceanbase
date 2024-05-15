@@ -4820,7 +4820,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
       LOG_WARN("get null physical plan", K(ret), K(result.get_physical_plan()), K(baseline_item));
     } else if (result.get_physical_plan()->get_plan_hash_value() == baseline_item->get_plan_hash_value()) {
       pc_ctx.need_evolution_ = true;
-      if (spm_ctx.cur_baseline_not_enable_ || !spm_ctx.capture_baseline_) {
+      if (spm_ctx.cur_baseline_not_enable_) {
         spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ACCEPT_BASELINE_PLAN;
       } else {
         spm_ctx.spm_stat_ = ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN;

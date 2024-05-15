@@ -11018,7 +11018,7 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
 #ifdef OB_BUILD_SPM
-  bool use_spm = false;
+  int64_t spm_mode = 0;
 #endif
   enable = false;
   if (OB_ISNULL(get_stmt()) ||
@@ -11028,9 +11028,9 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
 #ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(session->get_use_plan_baseline(use_spm))) {
+  } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
     LOG_WARN("failed to check is spm enabled", K(ret));
-  } else if (use_spm) {
+  } else if (spm_mode > 0) {
     // do nothing
 #endif
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&

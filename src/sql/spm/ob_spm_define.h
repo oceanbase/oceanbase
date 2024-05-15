@@ -257,7 +257,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
       offset_(-1),
       check_execute_status_(false),
       is_retry_for_spm_(false),
-      capture_baseline_(false),
       new_plan_hash_(0),
       baseline_guard_(PLAN_BASELINE_HANDLE),
       spm_stat_(STAT_INVALID),
@@ -326,7 +325,6 @@ struct ObSpmCacheCtx : public ObILibCacheCtx
   bool check_execute_status_;
   bool is_retry_for_spm_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
-  bool capture_baseline_;
   uint64_t new_plan_hash_;
   ObCacheObjGuard baseline_guard_;
   SpmStat spm_stat_;

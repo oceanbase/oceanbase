@@ -2079,7 +2079,7 @@ static struct VarsInit{
       ObSysVars[144].info_ = "Enable use sql plan baseline" ;
       ObSysVars[144].name_ = "optimizer_use_sql_plan_baselines" ;
       ObSysVars[144].data_type_ = ObIntType ;
-      ObSysVars[144].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[144].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[144].id_ = SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_USE_SQL_PLAN_BASELINES] = 144 ;
@@ -2092,7 +2092,7 @@ static struct VarsInit{
       ObSysVars[145].info_ = "optimizer_capture_sql_plan_baselines enables or disables automitic capture plan baseline." ;
       ObSysVars[145].name_ = "optimizer_capture_sql_plan_baselines" ;
       ObSysVars[145].data_type_ = ObIntType ;
-      ObSysVars[145].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[145].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
       ObSysVars[145].id_ = SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OPTIMIZER_CAPTURE_SQL_PLAN_BASELINES] = 145 ;

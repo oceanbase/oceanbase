@@ -57,6 +57,7 @@
 #include "observer/ob_sql_client_decorator.h"
 #include "ob_sess_info_verify.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/config/ob_config_helper.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -573,6 +574,26 @@ int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_co
   if (tenant_config.is_valid()) {
     stats_cost_percent = tenant_config->optimizer_index_cost_adj;
     enabled = (0 != stats_cost_percent);
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode) const
+{
+  int ret = OB_SUCCESS;
+  spm_mode = 0;
+  int64_t tenant_id = get_effective_tenant_id();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (tenant_config.is_valid()) {
+    spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
+    if (0 == spm_mode) {
+      bool sysvar_use_baseline = false;
+      get_use_plan_baseline(sysvar_use_baseline);
+      if (sysvar_use_baseline) {
+        spm_mode = 1;
+      }
+    }
   }
   return ret;
 }
