@@ -148,7 +148,10 @@ int ObTableTransUtils::start_trans(ObTableTransParam &trans_param)
     tx_param.isolation_ = ObTxIsolationLevel::RC;
     tx_param.cluster_id_ = ObServerConfig::get_instance().cluster_id;
     tx_param.timeout_us_ = std::max(0l, trans_param.timeout_ts_ - ObClockGenerator::getClock());
-    if (OB_ISNULL(trans_param.trans_state_ptr_)) {
+    if (tx_param.timeout_us_ <= 0l) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("timeout_us is less than 0, it has been timeout", K(ret), K(tx_param.timeout_us_), K(trans_param.timeout_ts_));
+    } else if (OB_ISNULL(trans_param.trans_state_ptr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("trans_state_ptr is null", K(ret));
     } else if (true == trans_param.trans_state_ptr_->is_start_trans_executed()) {
