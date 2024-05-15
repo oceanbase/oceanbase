@@ -3480,6 +3480,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   AlterColumnSchema *alter_column_schema = NULL;
   ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  int64_t drop_lob_cols_cnt = 0;
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
       ret = OB_ERR_UNEXPECTED;
@@ -3527,15 +3528,27 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
           break;
         }
         case OB_DDL_DROP_COLUMN: {
-          if (ObDDLType::DDL_INVALID == ddl_type
-              || ObDDLType::DDL_DROP_COLUMN == ddl_type) {
-            ddl_type = ObDDLType::DDL_DROP_COLUMN;
-          } else if (ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
-                  || ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type
-                  || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
-            ddl_type = ObDDLType::DDL_COLUMN_REDEFINITION;
-          } else {
-            ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+          if (OB_ISNULL(orig_column_schema)) {
+            ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
+            LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, orig_column_name.length(), orig_column_name.ptr());
+            LOG_WARN("fail to find old column schema!", K(ret), K(orig_column_name), KPC(orig_column_schema));
+          } else if (is_lob_storage(orig_column_schema->get_data_type()) && !orig_column_schema->is_udt_hidden_column()) {
+            drop_lob_cols_cnt++;
+          } else if (orig_column_schema->is_xmltype()) {
+            // The implicitly added lob column will be dropped when drop the xml column.
+            drop_lob_cols_cnt++;
+          }
+          if (OB_SUCC(ret)) {
+            if (ObDDLType::DDL_INVALID == ddl_type
+                || ObDDLType::DDL_DROP_COLUMN == ddl_type) {
+              ddl_type = ObDDLType::DDL_DROP_COLUMN;
+            } else if (ObDDLType::DDL_ADD_COLUMN_ONLINE == ddl_type
+                    || ObDDLType::DDL_ADD_COLUMN_OFFLINE == ddl_type
+                    || ObDDLType::DDL_COLUMN_REDEFINITION == ddl_type) {
+              ddl_type = ObDDLType::DDL_COLUMN_REDEFINITION;
+            } else {
+              ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+            }
           }
           break;
         }
@@ -3657,6 +3670,29 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
     LOG_WARN("fail to check is modify partition key", K(ret));
   } else if (is_modify_partition_key) {
     ddl_type = ObDDLType::DDL_ALTER_PARTITION_BY;
+  }
+
+  if (OB_SUCC(ret) && is_oracle_mode && ObDDLType::DDL_DROP_COLUMN == ddl_type && drop_lob_cols_cnt > 0) {
+    // DDL_DROP_COLUMN will be replaced with DDL_DROP_COLUMN_INSTANT by the caller under oracle mode.
+    // And to drop all lob columns needs to change ddl_type to DDL_COLUMN_REDEFINITION,
+    // so as to execute offline drop column.
+    int64_t lob_cols_cnt_in_table = 0;
+    const ObColumnSchemaV2 *col = nullptr;
+    ObColumnIterByPrevNextID iter(orig_table_schema);
+    while (OB_SUCC(ret) && OB_SUCC(iter.next(col))) {
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null column", K(ret), K(lob_cols_cnt_in_table), K(orig_table_schema));
+      } else if (is_lob_storage(col->get_data_type())) {
+        lob_cols_cnt_in_table++;
+      }
+    }
+    if (OB_ITER_END != ret) {
+      LOG_WARN("iter table column failed", K(ret), K(orig_table_schema));
+    } else {
+      ret = OB_SUCCESS;
+      ddl_type = drop_lob_cols_cnt == lob_cols_cnt_in_table ? ObDDLType::DDL_COLUMN_REDEFINITION : ObDDLType::DDL_DROP_COLUMN;
+    }
   }
   return ret;
 }
@@ -15266,12 +15302,15 @@ int ObDDLService::delete_unused_columns_from_schema(
     ObTableSchema &new_table_schema)
 {
   int ret = OB_SUCCESS;
+  bool is_oracle_mode = true;
   ObArray<uint64_t> unused_column_ids;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", K(ret));
   } else if (OB_UNLIKELY(update_all_column_info && (nullptr == ddl_operator || nullptr == trans))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(ddl_operator), KP(trans));
+  } else if (OB_FAIL(orig_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(orig_table_schema.get_unused_column_ids(unused_column_ids))) {
     LOG_WARN("get unused column ids failed", K(ret), K(new_table_schema));
   } else {
@@ -15279,17 +15318,21 @@ int ObDDLService::delete_unused_columns_from_schema(
       const ObColumnSchemaV2 *unused_col_schema = orig_table_schema.get_column_schema(unused_column_ids.at(i));
       if (OB_ISNULL(unused_col_schema)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unused column is null", K(ret));
+        LOG_WARN("unused column is null", K(ret), "column_id", unused_column_ids.at(i));
       } else if (!update_all_column_info) {
-        // remove column from memory, update column info by adding table.
-        if (OB_FAIL(drop_column_update_new_table(unused_col_schema->get_column_name_str(), new_table_schema))) {
+        // Operation on the new table: remove column from memory.
+        if (unused_col_schema->is_udt_hidden_column() && is_lob_storage(unused_col_schema->get_data_type())) {
+          // hidden lob of udt column will be dropped when dropping udt column.
+        } else if (OB_FAIL(drop_column_update_new_table(unused_col_schema->get_column_name_str(), new_table_schema))) {
           LOG_WARN("drop unused column failed", K(ret), KPC(unused_col_schema));
         }
-      } else if (OB_FAIL(ddl_operator->delete_single_column(*trans, new_table_schema.get_schema_version(),
-        new_table_schema, unused_col_schema->get_column_name_str()))) {
-        // remove column from mem and all_column.
-        LOG_WARN("delete column failed", K(ret));
-      } else { /* do nothing. */ }
+      } else {
+        // Operation on the original table: remove column from memory and inner table.
+        if (OB_FAIL(ddl_operator->delete_single_column(*trans, new_table_schema.get_schema_version(),
+          new_table_schema, unused_col_schema->get_column_name_str()))) {
+          LOG_WARN("delete column failed", K(ret));
+        }
+      }
     }
   }
   if (OB_SUCC(ret) && !update_all_column_info && unused_column_ids.count() > 0) {
