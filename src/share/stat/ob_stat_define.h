@@ -590,7 +590,8 @@ struct ObOptStatGatherParam {
     data_table_name_(),
     global_part_id_(-1),
     gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
-    sepcify_scn_(0)
+    sepcify_scn_(0),
+    is_specify_partition_(false)
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -615,6 +616,7 @@ struct ObOptStatGatherParam {
   int64_t global_part_id_;
   int64_t gather_vectorize_;
   uint64_t sepcify_scn_;
+  bool is_specify_partition_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -634,7 +636,8 @@ struct ObOptStatGatherParam {
                K(data_table_name_),
                K(global_part_id_),
                K(gather_vectorize_),
-               K(sepcify_scn_));
+               K(sepcify_scn_),
+               K(is_specify_partition_));
 };
 
 struct ObOptStat

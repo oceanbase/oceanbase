@@ -97,11 +97,20 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
       pl::ObDbmsStats::update_optimizer_gather_stat_info(&task_info, &gather_stat);
     }
   } else {
-    if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, param, true))) {
-      LOG_WARN("failed to drop table stats", K(ret));
-    } else {
-      LOG_TRACE("succeed to drop table stats", K(param));
+    bool cascade_columns = true;
+    bool cascade_indexes = true;
+    if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, param))) {
+      LOG_WARN("failed fill stat locked", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, param, cascade_columns))) {
+      LOG_WARN("failed to delete table stats", K(ret));
+    } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), param))) {
+      LOG_WARN("failed to update stat cache", K(ret));
+    } else if (cascade_indexes && param.part_name_.empty()) {
+      if (OB_FAIL(pl::ObDbmsStats::delete_table_index_stats(ctx, param))) {
+        LOG_WARN("failed to delete index stats", K(ret));
+      } else {/*do nothing*/}
     }
+    LOG_TRACE("succeed to drop table stats", K(param));
   }
   return ret;
 }

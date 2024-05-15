@@ -917,7 +917,7 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis", llc_hex_buf == NULL ? "" : llc_hex_buf)) ||
         OB_FAIL(dml_splicer.add_column("distinct_cnt_synopsis_size", llc_comp_size * 2)) ||
         OB_FAIL(dml_splicer.add_column("sample_size", stat.get_histogram().get_sample_size())) ||
-        OB_FAIL(dml_splicer.add_column("density", stat.get_histogram().get_density())) ||
+        OB_FAIL(dml_splicer.add_long_double_column("density", stat.get_histogram().get_density())) ||
         OB_FAIL(dml_splicer.add_column("bucket_cnt", stat.get_histogram().get_bucket_cnt())) ||
         OB_FAIL(dml_splicer.add_column("histogram_type", stat.get_histogram().get_type())) ||
         OB_FAIL(dml_splicer.add_column("global_stats", 0)) ||

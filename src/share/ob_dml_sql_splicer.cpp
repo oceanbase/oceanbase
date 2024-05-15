@@ -1343,5 +1343,21 @@ int ObDMLExecHelper::check_row_exist(const char *table_name,
   return ret;
 }
 
+int ObDMLSqlSplicer::add_long_double_column(const char *col_name, const double value)
+{
+  int ret = OB_SUCCESS;
+  const bool is_primary_key = false;
+  const bool is_null = false;
+  if (OB_ISNULL(col_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column name", K(ret), KP(col_name));
+  } else if (OB_FAIL(values_.append_fmt("%.17g", value))) {
+    LOG_WARN("append value failed", K(ret));
+  } else if (OB_FAIL(add_column(is_primary_key, is_null, col_name))) {
+    LOG_WARN("add column failed", K(ret), K(is_primary_key), K(is_null), K(col_name));
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase

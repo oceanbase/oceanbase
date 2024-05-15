@@ -1051,8 +1051,10 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.stat_level_ = stat_level;
   if (stat_level == SUBPARTITION_LEVEL) {
     gather_param.need_histogram_ = param.subpart_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.subpart_infos_.count() != param.all_subpart_infos_.count();
   } else if (stat_level == PARTITION_LEVEL) {
     gather_param.need_histogram_ = param.part_stat_param_.gather_histogram_;
+    gather_param.is_specify_partition_ = param.part_infos_.count() != param.all_part_infos_.count();
   } else if (stat_level == TABLE_LEVEL) {
     gather_param.need_histogram_ = param.global_stat_param_.gather_histogram_;
   }
