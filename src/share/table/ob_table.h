@@ -230,6 +230,7 @@ void ObTableEntityFactory<T>::free_all()
 enum class ObQueryOperationType : int {
   QUERY_START = 0,
   QUERY_NEXT = 1,
+  QUERY_END = 2,
   QUERY_MAX
 };
 
