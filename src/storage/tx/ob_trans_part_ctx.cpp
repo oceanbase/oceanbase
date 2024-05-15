@@ -6212,7 +6212,18 @@ int ObPartTransCtx::switch_to_leader(const SCN &start_working_ts)
                       K(contain_mds_table_lock), K(contain_mds_transfer_out), K(need_kill_tx),
                       K(kill_by_append_mode_initial_scn), K(append_mode_initial_scn), KPC(this));
             if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
+              //Temporary fix:
+              //The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.
+              //Do not block the rest of the transactions from taking over.
+              if (OB_TRANS_CANNOT_BE_KILLED == ret) {
+                TRANS_LOG(
+                    INFO,
+                    "The transaction cannot be killed temporarily, waiting for handle_timeout to retry abort.",
+                    K(ret), KPC(this));
+                ret = OB_SUCCESS;
+              }
               TRANS_LOG(WARN, "abort tx failed", KR(ret), KPC(this));
+
             }
           } else {
             if (OB_FAIL(do_local_tx_end_(TxEndAction::DELAY_ABORT_TX))) {
