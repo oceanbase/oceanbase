@@ -205,6 +205,7 @@ int ObTableLoadInstance::write(int32_t session_id, const table::ObTableLoadObjRo
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
   } else {
+    // TODO(suzhi.yt): java客户端调用的时候, 对于相同session_id可能会并发
     uint64_t &next_sequence_no = trans_ctx_.next_sequence_no_array_[session_id - 1];
     ObTableLoadCoordinator coordinator(table_ctx_);
     if (OB_FAIL(coordinator.init())) {
