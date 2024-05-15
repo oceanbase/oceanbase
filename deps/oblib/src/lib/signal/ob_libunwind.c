@@ -21,6 +21,7 @@ static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len, int64
 static ssize_t get_stack_trace_inplace(unw_context_t *context, unw_cursor_t *cursor,
     uintptr_t *addresses, size_t max_addresses);
 static int8_t get_frame_info(unw_cursor_t *cursor, uintptr_t *ip);
+extern int64_t safe_parray_c(char *buf, int64_t len, int64_t *array, int size);
 
 int safe_backtrace(char *buf, int64_t len, int64_t *pos)
 {
@@ -34,7 +35,6 @@ int safe_backtrace(char *buf, int64_t len, int64_t *pos)
   return ret;
 }
 
-extern int64_t get_rel_offset_c(int64_t addr);
 static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
                    int64_t *pos)
 {
@@ -46,19 +46,7 @@ static int safe_backtrace_(unw_context_t *context, char *buf, int64_t len,
   if (n < 0) {
     ret = -1;
   } else {
-    for (int i = 0; i < n; i++) {
-      int64_t addr = get_rel_offset_c(addrs[i]);
-      int count = lnprintf(buf + *pos, len - *pos, "0x%lx", addr);
-      count++; // for space
-      if (count > 0 && *pos + count < len) {
-        *pos += count;
-        buf[*pos - 1] = ' ';
-      } else {
-        // buf not enough
-        break;
-      }
-    }
-    --*pos;
+    *pos += safe_parray_c(buf + *pos, len - *pos, (int64_t*)addrs, n);
   }
   buf[*pos] = '\0';
   return ret;
@@ -109,4 +97,5 @@ int8_t get_frame_info(unw_cursor_t *cursor, uintptr_t *ip)
   *ip = uip - (r == 0);
   return 1;
 }
+
 #endif
