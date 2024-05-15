@@ -751,6 +751,89 @@ int ObTableApiModifyExecutor::insert_upd_new_row_to_das(const ObTableUpdCtDef &u
   return ret;
 }
 
+int ObTableApiModifyExecutor::gen_del_and_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef,
+                                                               ObTableUpdRtDef &upd_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(upd_ctdef.ddel_ctdef_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("upd_ctdef.ddel_ctdef_ is NULL", K(ret));
+  } else if (OB_ISNULL(upd_rtdef.ddel_rtdef_)) {
+    if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_DELETE,
+                                                  allocator_,
+                                                  upd_rtdef.ddel_rtdef_))) {
+      LOG_WARN("fail to create das delete rtdef", K(ret));
+    } else if (OB_FAIL(generate_del_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate delete rtdef", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(upd_ctdef.dins_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("upd_ctdef.dins_ctdef_ is NULL", K(ret));
+  } else if (OB_ISNULL(upd_rtdef.dins_rtdef_)) {
+    if (OB_FAIL(ObDASTaskFactory::alloc_das_rtdef(DAS_OP_TABLE_INSERT,
+                                                  allocator_,
+                                                  upd_rtdef.dins_rtdef_))) {
+      LOG_WARN("fail to create das insert rtdef", K(ret));
+    } else if (OB_FAIL(generate_ins_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate insert rtdef", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTableApiModifyExecutor::update_row_to_das(const ObTableUpdCtDef &upd_ctdef,
+                                                ObTableUpdRtDef &upd_rtdef,
+                                                ObDMLRtCtx &dml_rtctx)
+{
+  int ret = OB_SUCCESS;
+  ObChunkDatumStore::StoredRow *old_row = nullptr;
+  ObChunkDatumStore::StoredRow *new_row = nullptr;
+  ObChunkDatumStore::StoredRow *full_row = nullptr;
+  ObDASTabletLoc *old_tablet_loc = nullptr;
+  ObDASTabletLoc *new_tablet_loc = nullptr;
+  if (upd_ctdef.das_ctdef_.updated_column_ids_.empty()) {
+    // assign column is empty, do nothing
+  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.old_part_id_expr_,
+                              *upd_rtdef.das_rtdef_.table_loc_,
+                              old_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(old_tablet_loc));
+  } else if (OB_FAIL(calc_tablet_loc(upd_ctdef.new_part_id_expr_,
+                                      *upd_rtdef.das_rtdef_.table_loc_,
+                                    new_tablet_loc))) {
+    LOG_WARN("fail to calc tablet loc", K(ret), K(new_tablet_loc));
+  } else if (OB_ISNULL(new_tablet_loc) || OB_ISNULL(old_tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet loc is NULL", K(ret), KPC(new_tablet_loc), KPC(old_tablet_loc));
+  } else if (OB_UNLIKELY(old_tablet_loc != new_tablet_loc)) {
+    if (OB_FAIL(gen_del_and_ins_rtdef_for_update(upd_ctdef, upd_rtdef))) {
+      LOG_WARN("fail to generate delete and insert rfdef", K(ret));
+    } else if (OB_FAIL(ObDMLService::delete_row(*upd_ctdef.ddel_ctdef_,
+                                           *upd_rtdef.ddel_rtdef_,
+                                           old_tablet_loc,
+                                           dml_rtctx,
+                                           upd_ctdef.old_row_,
+                                           old_row))) {
+      LOG_WARN("fail to delete row", K(ret), K(*upd_ctdef.ddel_ctdef_), K(*upd_rtdef.ddel_rtdef_));
+    } else if (OB_FAIL(ObDMLService::insert_row(*upd_ctdef.dins_ctdef_,
+                                                *upd_rtdef.dins_rtdef_,
+                                                new_tablet_loc,
+                                                dml_rtctx,
+                                                upd_ctdef.new_row_,
+                                                new_row))) {
+      LOG_WARN("fail to insert row", K(ret), K(*upd_ctdef.dins_ctdef_), K(*upd_rtdef.dins_rtdef_));
+    }
+  } else if (OB_FAIL(ObDMLService::update_row(upd_ctdef.das_ctdef_,
+                                              upd_rtdef.das_rtdef_,
+                                              old_tablet_loc,
+                                              dml_rtctx_,
+                                              upd_ctdef.full_row_))) { // local das task
+    LOG_WARN("fail to update row to das op", K(ret), K(upd_ctdef), K(upd_rtdef.das_rtdef_));
+  }
+  return ret;
+}
+
 int ObTableApiModifyExecutor::execute_das_task(ObDMLRtCtx &dml_rtctx, bool del_task_ahead)
 {
   int ret = OB_SUCCESS;

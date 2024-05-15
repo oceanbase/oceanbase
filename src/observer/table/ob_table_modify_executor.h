@@ -141,6 +141,12 @@ protected:
                           ObEvalCtx &ctx);
   int check_row_null(const ObExprPtrIArray &row, const ColContentIArray &column_infos);
   void reset_new_row_datum(const ObExprPtrIArray &new_row_exprs);
+  // for update, insertup, ttl executor
+  int gen_del_and_ins_rtdef_for_update(const ObTableUpdCtDef &upd_ctdef, ObTableUpdRtDef &upd_rtdef);
+  int update_row_to_das(const ObTableUpdCtDef &upd_ctdef,
+                        ObTableUpdRtDef &upd_rtdef,
+                        ObDMLRtCtx &dml_rtctx);
+
 protected:
   sql::ObDMLRtCtx dml_rtctx_;
   int64_t affected_rows_;
