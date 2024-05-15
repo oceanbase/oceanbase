@@ -427,7 +427,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
               }
             }
           } else if (ob_is_rowid_tc(data_type)) {
-            int32_t len = static_cast<int32_t>(node->int16_values_[OB_NODE_CAST_C_LEN_IDX]);
+            int32_t len = static_cast<int32_t>(node->int32_values_[OB_NODE_CAST_C_LEN_IDX]);
             if (OB_UNLIKELY(0 == len)) {
               ret = OB_ERR_ZERO_LEN_COL;
               LOG_WARN("Oracle not allowed zero length", K(ret));
@@ -3124,8 +3124,12 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           T_QUESTIONMARK == c_expr->get_expr_type() &&
           c_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type())) {
+           pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_ASSOCIATIVE_ARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_REF_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_OPAQUE_TYPE == c_expr->get_result_type().get_extend_type())) {
         ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
       }
     }

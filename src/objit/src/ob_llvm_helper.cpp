@@ -492,7 +492,7 @@ int ObLLVMSwitch::add_case(const ObLLVMValue &value, ObLLVMBasicBlock &block)
 
 ObLLVMHelper::~ObLLVMHelper()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   final();
   if (nullptr != jit_) {
     jit_->~ObOrcJit();
@@ -503,7 +503,7 @@ ObLLVMHelper::~ObLLVMHelper()
 int ObLLVMHelper::init()
 {
   int ret = OB_SUCCESS;
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -541,7 +541,7 @@ int ObLLVMHelper::init()
 
 void ObLLVMHelper::final()
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   if (nullptr != jc_) {
     jc_->~JitContext();
     allocator_.free(jc_);
@@ -572,8 +572,8 @@ int ObLLVMHelper::initialize()
 int ObLLVMHelper::init_llvm() {
   int ret = OB_SUCCESS;
 
-  OB_LLVM_MALLOC_GUARD("PlJit");
-  ObArenaAllocator alloc("PlJit", OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+  ObArenaAllocator alloc(GET_PL_MOD_STRING(pl::OB_PL_JIT), OB_MALLOC_NORMAL_BLOCK_SIZE, OB_SYS_TENANT_ID);
   ObLLVMHelper helper(alloc);
   ObLLVMDIHelper di_helper(alloc);
   static char init_func_name[] = "pl_init_func";
@@ -611,7 +611,7 @@ void ObLLVMHelper::compile_module(bool optimization)
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
   }
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   jc_->compile();
 }
 
@@ -673,7 +673,7 @@ int ObLLVMHelper::verify_module()
 
 uint64_t ObLLVMHelper::get_function_address(const ObString &name)
 {
-  OB_LLVM_MALLOC_GUARD("PlJit");
+  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
   return jc_->TheJIT->get_function_address(std::string(name.ptr(), name.length()));
 }
 

@@ -317,7 +317,7 @@ int ObImportTableTaskGenerator::check_src_table_schema_(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  if (!table_schema.is_user_table()) {
+  if (!table_schema.is_user_table() || table_schema.mv_container_table()) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("import not user table is not allowed", K(ret), K(table_item));
     ObImportResult::Comment comment;

@@ -220,14 +220,16 @@ public:
                               ObRawExpr *expr,
                               ObObjType src_type,
                               uint64_t src_type_id,
-                              pl::ObPLDataType &dst_pl_type);
+                              pl::ObPLDataType &dst_pl_type,
+                              bool is_sys_package = false);
   static int check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
                               ObRoutineMatchInfo::MatchInfo &match_info,
                               ObRawExpr *expr,
                               ObObjType src_type,
                               ObCollationType src_coll_type,
                               uint64_t src_type_id,
-                              pl::ObPLDataType &dst_pl_type);
+                              pl::ObPLDataType &dst_pl_type,
+                              bool is_sys_package = false);
   static int get_type_and_type_id(ObRawExpr *expr, ObObjType &type, uint64_t &type_id);
   static int check_match(const pl::ObPLResolveCtx &resolve_ctx,
                   const common::ObIArray<sql::ObRawExpr *> &expr_params,

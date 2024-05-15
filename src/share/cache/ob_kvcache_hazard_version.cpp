@@ -232,7 +232,7 @@ int ObKVCacheHazardStation::acquire(int64_t &slot_id)
       curr = (curr + 1) % slot_num_;
       if (curr == end) {
         if (++retry_count >= MAX_ACQUIRE_RETRY_COUNT) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ENTRY_NOT_EXIST;
           COMMON_LOG(WARN, "There is no free slot for current thread", K(ret), K(retry_count));
         } else {
           sched_yield();

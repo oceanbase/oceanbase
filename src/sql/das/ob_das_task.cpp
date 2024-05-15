@@ -361,7 +361,74 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     related_rtdefs_,
                     related_tablet_ids_,
                     attach_ctdef_,
-                    attach_rtdef_);
+                    attach_rtdef_,
+                    das_gts_opt_info_);
+
+OB_DEF_SERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ENCODE(*specify_snapshot_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = false;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    if (OB_FAIL(init(isolation_level_))) {
+      LOG_WARN("fail to init gts_opt_info", K(ret));
+    } else {
+      OB_UNIS_DECODE(*specify_snapshot_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASGTSOptInfo)
+{
+  int64_t len = 0;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ADD_LEN(*specify_snapshot_);
+  }
+  return len;
+}
+
+int ObDASGTSOptInfo::init(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  void *buf2 = nullptr;
+  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else if (OB_ISNULL(buf2 = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else {
+    use_specify_snapshot_ = true;
+    isolation_level_ = isolation_level;
+    specify_snapshot_ = new(buf) ObTxReadSnapshot();
+    response_snapshot_ = new(buf2) ObTxReadSnapshot();
+  }
+  return ret;
+}
 
 ObDASTaskArg::ObDASTaskArg()
   : timeout_ts_(0),

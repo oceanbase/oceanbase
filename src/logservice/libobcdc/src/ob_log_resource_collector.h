@@ -73,6 +73,8 @@ public:
   // @retval other_err_code  Fail to recycle the task
   virtual int revert_log_entry_task(ObLogEntryTask *log_entry_task) = 0;
 
+  virtual int revert_dll_all_binlog_records(const bool is_build_baseline, PartTransTask *part_trans_task) = 0;
+
 public:
   virtual int start() = 0;
   virtual void stop() = 0;
@@ -114,6 +116,7 @@ public:
   int revert(PartTransTask *task);
   int revert(const int record_type, ObLogBR *br);
   int revert_log_entry_task(ObLogEntryTask *log_entry_task);
+  int revert_dll_all_binlog_records(const bool is_build_baseline, PartTransTask *task);
 
 public:
   int start();
@@ -129,7 +132,6 @@ private:
   // Reclaiming resources for partitioned tasks
   // thread_idx is used for log debug info
   int recycle_part_trans_task_(const int64_t thread_idx, PartTransTask *task);
-  int revert_dll_all_binlog_records_(PartTransTask *task);
   int revert_single_binlog_record_(ObLogBR *br);
   int revert_dml_binlog_record_(ObLogBR &br, volatile bool &stop_flag);
   int dec_ref_cnt_and_try_to_revert_task_(PartTransTask *part_trans_task);

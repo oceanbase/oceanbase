@@ -13,6 +13,8 @@
 
 #include "ob_log_meta_data_replayer.h"
 #include "ob_log_part_trans_task.h"
+#include "ob_log_instance.h"
+#include "ob_log_resource_collector.h"
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
@@ -225,6 +227,22 @@ int ObLogMetaDataReplayer::handle_ddl_trans_(
                 }
               }
             } // while
+
+            // revert all binlog records
+            if (OB_SUCC(ret)) {
+              IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+              if (OB_ISNULL(resource_collector)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_ERROR("resource_collector is NULL", KR(ret), K(resource_collector));
+              } else if (OB_FAIL(resource_collector->revert_dll_all_binlog_records(true/*is_build_baseline*/, &part_trans_task))) {
+                LOG_ERROR("revert_ddl_all_binlog_records failed", KR(ret), K(part_trans_task));
+              } else {
+                LOG_INFO("revert_ddl_all_binlog_records success",
+                    "tls_id", part_trans_task.get_tls_id(),
+                    "trans_id", part_trans_task.get_trans_id(),
+                    "commit_version", part_trans_task.get_trans_commit_version());
+              }
+            }
           }
         } // else replay
       }

@@ -7512,6 +7512,7 @@ target_unit_num	bigint(20)	NO		NULL
 target_primary_zone_num	bigint(20)	NO		NULL	
 status	varchar(64)	NO		NULL	
 comment	longtext	YES		NULL	
+max_end_time	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7529,6 +7530,7 @@ status	varchar(64)	NO		NULL
 comment	longtext	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
+max_end_time	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_job_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7552,6 +7554,7 @@ child_list	varchar(1024)	YES		NULL
 current_transfer_task_id	bigint(20)	NO		NULL	
 job_id	bigint(20)	NO		NULL	
 comment	longtext	YES		NULL	
+balance_strategy	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7577,6 +7580,7 @@ job_id	bigint(20)	NO		NULL
 comment	longtext	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
+balance_strategy	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_task_history;
 IF(count(*) >= 0, 1, 0)
 1

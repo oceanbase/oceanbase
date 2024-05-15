@@ -12,25 +12,25 @@ RowFilter(<=, 'binaryprefix:abc') AND RowFilter(!=, 'binaryprefix:abc') OR Value
 RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
 (RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc')) AND ValueFilter(=, 'substring:abc*123')
 Skip While Skip RowFilter(<=, 'binaryprefix:abc') OR RowFilter(!=, 'binaryprefix:abc') AND ValueFilter(=, 'substring:abc*123')
---error 5006
+--error 10514
 RowFilter(<=>, 'binary:abc')
---error 5006
+--error 10514
 RowF(<, 'binary:abc')
---error 5006
+--error 10514
 RowFilter(<, 'binary
---error 5006
+--error 10514
 RowFilter(<, 'binary'')
---error 5006
+--error 10514
 RowFilter(<, 'binary''')
---error 5006
+--error 10514
 RowFilter(<, 'binary:abc'))
---error 5006
+--error 10514
 (RowFilter(<, 'binary:abc')
---error 5006
+--error 10514
 RowFilter(>, 'substring:abc')
---error 5006
+--error 10514
 RowFilter(>=, 'regexstring:abc')
---error 5006
+--error 10514
 ( singlecolumnvaluefilter ( !=, 'substring:abc', 'cf1', 'c1') )
 ( singlecolumnvaluefilter ( 'cf1', 'c1', !=, 'substring:abc') )
 PrefixFilter ( 'abc' )

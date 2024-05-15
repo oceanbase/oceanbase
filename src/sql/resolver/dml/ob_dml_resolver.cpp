@@ -17769,6 +17769,8 @@ int ObDMLResolver::resolve_match_index(
     } else if (OB_ISNULL(inv_idx_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected index schema", K(ret), KPC(inv_idx_schema));
+    } else if (!inv_idx_schema->can_read_index()) {
+      // index unavailable
     } else if (OB_FAIL(ObTransformUtils::check_fulltext_index_match_column(match_column_set,
                                                                            &table_schema,
                                                                            inv_idx_schema,

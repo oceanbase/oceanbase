@@ -2260,6 +2260,9 @@ protected:
   common::ObRowkey low_bound_val_;
   ObTabletID tablet_id_;
   common::ObString external_location_;
+  // split_source_tablet_id_ will not be persisted in inner_table.
+  // it is only used when attempting to split partition.
+  ObTabletID split_source_tablet_id_;
 };
 
 class ObSubPartition;

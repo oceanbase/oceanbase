@@ -365,7 +365,11 @@ private:
   }
   int fill_from_one_list(ObTxFillRedoCtx &ctx, const int list_idx, ObITxFillRedoFunctor &func);
   int fill_from_all_list(ObTxFillRedoCtx &ctx, ObITxFillRedoFunctor &func);
-  bool check_list_has_min_epoch_(const int my_idx, const int64_t my_epoch, int64_t &min_epoch, int &min_idx);
+  bool check_list_has_min_epoch_(const int my_idx,
+                                 const int64_t my_epoch,
+                                 const bool require_min,
+                                 int64_t &min_epoch,
+                                 int &min_idx);
   void calc_list_fill_log_epoch_(const int list_idx, int64_t &epoch_from, int64_t &epoch_to);
   void calc_next_to_fill_log_info_(const ObIArray<RedoLogEpoch> &arr,
                                    int &index,

@@ -1951,6 +1951,7 @@ DEFINE_ERROR(OB_TABLET_GC_LOCK_CONFLICT, -7120, -1, "HY000", "tablet GC lock con
 DEFINE_ERROR(OB_SEQUENCE_NOT_MATCH, -7121, -1, "HY000", "compare sequence not match");
 DEFINE_ERROR(OB_SEQUENCE_TOO_SMALL, -7122, -1, "HY000", "compare sequence too small");
 DEFINE_ERROR(OB_TRANSFER_CANNOT_START, -7123, -1, "HY000", "transfer cannot start");
+DEFINE_ERROR_EXT_DEP(OB_PARTITION_ALREADY_BALANCED, -7124, -1, "HY000", "partitions are already balanced", "partitions are already balanced, %s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2069,6 +2070,7 @@ DEFINE_ORACLE_ERROR(OB_ERR_OPERATOR_NOT_EXIST, -7298, -1, "42000", "operator bin
 DEFINE_ORACLE_ERROR(OB_INVALID_MASK, -7299, -1, "42000", "operator binding does not exist", 20000, "operator binding does not exist");
 DEFINE_ORACLE_ERROR(OB_GEO_IN_DIFFERENT_COORDINATE, -7300, -1, "42000", "geometry objects are in different coordinate systems", 13295, "geometry objects are in different coordinate systems");
 DEFINE_ORACLE_ERROR(OB_ERR_DOMAIN_COLUMN_DUPLICATE, -7301, -1, "42000", "cannot create multiple domain indexes on a column list using same", 29879, "cannot create multiple domain indexes on a column list using same");
+DEFINE_ORACLE_ERROR(OB_ERR_PARSING_SPATIAL_PARAM, -7302, -1, "42000", "internal error while parsing spatial parameters", 13205, "internal error while parsing spatial parameters");
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GIS错误码值域  [-7201, -7400)
@@ -2630,6 +2632,7 @@ DEFINE_ERROR_EXT(OB_KV_COLLATION_MISMATCH, -10512, -1, "HY000", "OBKV collation 
 DEFINE_ERROR_EXT(OB_KV_SCAN_RANGE_MISSING, -10513, -1, "HY000", "OBKV scan range missing", "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'");
 DEFINE_ERROR_EXT(OB_KV_FILTER_PARSE_ERROR, -10514, -1, "HY000", "OBKV filter parse error", "Filter parse errror, the input filter string is: '%.*s'");
 DEFINE_ERROR_EXT(OB_KV_REDIS_PARSE_ERROR, -10515, -1, "HY000", "OBKV redis protocol parse error", "Redis protocol parse errror, the input redis string is: '%.*s'");
+DEFINE_ERROR_EXT(OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG, -10516, -1, "HY000", "When invoking the Increment interface only HBase cells with a length of 8 can be converted to int64_t", "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'.");
 DEFINE_ERROR(OB_KV_ODP_TIMEOUT, -10650, -1, "HY000", "ODP process timeout");
 
 // 余留位置
@@ -2668,8 +2671,9 @@ DEFINE_ORACLE_ERROR(OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR, -11010, -1, "
 DEFINE_ERROR_EXT(OB_ERR_ILLEGAL_USER_VAR, -11013, ER_ILLEGAL_USER_VAR, "42000", "User variable name is illegal", "User variable name %.*s is illegal");
 DEFINE_ERROR(OB_ERR_FT_COLUMN_NOT_INDEXED, -11014, ER_FT_MATCHING_KEY_NOT_FOUND, "HY000", "Can't find FULLTEXT index matching the column list");
 DEFINE_ERROR_EXT(OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, -11015, ER_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT, "HY000", "Can't update table while ctas is being created.", "Can't update table '%s' while '%s' is being created.");
-DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
 DEFINE_ERROR(OB_ERR_PS_NO_RECURSION, -11016, ER_PS_NO_RECURSION, "HY000", "The prepared statement contains a stored routine call that refers to that same statement. It\'s not allowed to execute a prepared statement in such a recursive manner");
+DEFINE_ERROR_EXT(OB_ERR_PARTITION_EXCHANGE_PART_TABLE, -11017, ER_PARTITION_EXCHANGE_PART_TABLE, "HY000", "Table to exchange with partition is partitioned", "Table to exchange with partition is partitioned: \'%.*s\'");
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

@@ -32,6 +32,7 @@ extern void obsql_mysql_parser_fatal_error(int32_t errcoyyde, yyscan_t yyscanner
 %x in_c_comment
 %x sq
 %x hint_sq
+%x hint_dq
 %x dq
 %x bt
 %x hint_bt
@@ -1289,6 +1290,70 @@ Timestamp{whitespace}?\"[^\"]*\" {
 
 <hint_bt><<EOF>>  {
   yyerror(yylloc, yyextra, "unterminated quoted string in hint\n");
+  return PARSER_SYNTAX_ERROR;
+}
+
+<hint>{dquote} {
+  ParseResult *p = (ParseResult *)yyextra;
+  if (!p->is_ignore_token_) {
+    BEGIN(hint_dq);
+    if (IS_FAST_PARAMETERIZE) {
+      COPY_WRITE();
+    } else {
+      check_value(yylval);
+      ParseResult *p = (ParseResult *)yyextra;
+      p->start_col_ = yylloc->first_column;
+      char **tmp_literal = &p->tmp_literal_;
+      if (NULL == *tmp_literal)
+      {
+        *tmp_literal = (char *)parse_malloc(p->input_sql_len_ + 1, p->malloc_pool_);
+        check_malloc(*tmp_literal);
+      }
+      malloc_new_node(yylval->node, p->malloc_pool_, T_IDENT, 0);
+      yylval->node->str_len_ = 0;
+    }
+  }
+}
+
+<hint_dq>{dqcontent} {
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    check_value(yylval);
+    memmove(((ParseResult *)yyextra)->tmp_literal_ + yylval->node->str_len_, yytext, yyleng);
+    yylval->node->str_len_ += yyleng;
+  }
+}
+
+<hint_dq>{dqend} {
+  BEGIN(hint);
+  if (IS_FAST_PARAMETERIZE) {
+    COPY_WRITE();
+  } else {
+    ParseResult *p = (ParseResult *)yyextra;
+    check_value(yylval);
+    yylloc->first_column = p->start_col_;
+    char *tmp_literal = p->tmp_literal_;
+    tmp_literal[yylval->node->str_len_] = '\0';
+    yylval->node->raw_text_ = parse_strndup(tmp_literal, yylval->node->str_len_ + 1, p->malloc_pool_);
+    check_malloc(yylval->node->raw_text_);
+    char *dup_value = NULL;
+    char *well_formed_str = replace_invalid_character(p->charset_info_, p->charset_info_oracle_db_, tmp_literal, &(yylval->node->str_len_), p->malloc_pool_, &(p->extra_errno_));
+    check_identifier_convert_result(p->extra_errno_);
+    if (p->is_not_utf8_connection_) {
+      dup_value = parse_str_convert_utf8(p->charset_info_, well_formed_str, p->malloc_pool_, &(yylval->node->str_len_), &(p->extra_errno_));
+      check_identifier_convert_result(p->extra_errno_);
+    } else {
+      dup_value = parse_strndup(well_formed_str, yylval->node->str_len_ + 1, p->malloc_pool_);
+    }
+    check_malloc(dup_value);
+    yylval->node->str_value_ = dup_value;
+    return NAME_OB;
+  }
+}
+
+<hint_dq><<EOF>>  {
+  yyerror(yylloc, yyextra, "unterminated doublequoted string\n");
   return PARSER_SYNTAX_ERROR;
 }
 

@@ -361,11 +361,14 @@ int ObTransformPreProcess::expand_materialized_view(ObDMLStmt *stmt, bool &trans
   int ret = OB_SUCCESS;
   trans_happened = false;
   const ObHint *hint = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)
+      || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(stmt), K(ctx_));
-  } else if (ctx_->session_info_->is_inner()) {
-    // when refresh mview, do not expand rt-mv
+  } else if (ctx_->session_info_->get_ddl_info().is_refreshing_mview()
+             || stmt->get_query_ctx()->get_global_hint().has_dbms_stats_hint()) {
+    // 1. when refresh mview, do not expand rt-mv
+    // 2. when gather stat, do not expand rt-mv
   } else if (NULL != (hint = stmt->get_stmt_hint().get_normal_hint(T_MV_REWRITE))
              && hint->is_disable_hint()) {
     // use no_mv_rewrite to disable expand rt mview
@@ -9856,6 +9859,14 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     LOG_WARN("unexpected null", K(ret));
   } else if (stmt->get_table_items().count() != 1 || stmt->get_order_item_size() != 0) {
     // do nothing
+  } else if (stmt->is_select_stmt() &&
+             (static_cast<ObSelectStmt*>(stmt)->has_order_by() ||
+              static_cast<ObSelectStmt*>(stmt)->has_group_by() ||
+              static_cast<ObSelectStmt*>(stmt)->has_distinct() ||
+              static_cast<ObSelectStmt*>(stmt)->get_aggr_item_size() != 0 ||
+              static_cast<ObSelectStmt*>(stmt)->has_window_function() ||
+              static_cast<ObSelectStmt*>(stmt)->get_table_items().count() != 1)) {
+    // do nothing
   } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -9871,6 +9882,7 @@ int ObTransformPreProcess::preserve_order_for_fulltext_search(ObDMLStmt *stmt, b
     if (OB_FAIL(stmt->add_order_item(item))) {
       LOG_WARN("failed to add order item", K(ret), K(item));
     }
+    trans_happened = true;
   }
   return ret;
 }

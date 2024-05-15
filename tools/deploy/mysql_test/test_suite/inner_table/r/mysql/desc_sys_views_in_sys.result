@@ -4667,6 +4667,10 @@ COMMENT	varchar(4096)	YES
 PATH	varchar(4096)	YES			
 MINOR_TURN_ID	bigint(20)	NO			
 MAJOR_TURN_ID	bigint(20)	NO			
+DATA_PROGRESS	decimal(26,2)	NO			
+LOG_FILE_COUNT	bigint(20)	NO			
+FINISH_LOG_FILE_COUNT	bigint(20)	NO			
+LOG_PROGRESS	decimal(26,2)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BACKUP_TASKS limit 1);
 cnt
 1
@@ -6157,11 +6161,11 @@ cnt
 1
 desc oceanbase.DBA_OB_DATABASE_PRIVILEGE;
 Field	Type	Null	Key	Default	Extra
-USER_ID	bigint(20)	NO		NULL	
+USER_ID	bigint(20)	NO			
 USERNAME	varchar(128)	NO		NULL	
-DATABASE_NAME	varchar(128)	NO		NULL	
-GMT_CREATE	timestamp(6)	YES			
-GMT_MODIFIED	timestamp(6)	YES			
+DATABASE_NAME	varchar(128)	NO			
+GMT_CREATE	timestamp(6)	NO			
+GMT_MODIFIED	timestamp(6)	NO			
 PRIV_ALTER	varchar(3)	NO			
 PRIV_CREATE	varchar(3)	NO			
 PRIV_DELETE	varchar(3)	NO			
@@ -6181,12 +6185,12 @@ cnt
 1
 desc oceanbase.CDB_OB_DATABASE_PRIVILEGE;
 Field	Type	Null	Key	Default	Extra
-TENANT_ID	bigint(20)	NO		NULL	
-USER_ID	bigint(20)	NO		NULL	
+TENANT_ID	bigint(20)	NO			
+USER_ID	bigint(20)	NO			
 USERNAME	varchar(128)	NO		NULL	
-DATABASE_NAME	varchar(128)	NO		NULL	
-GMT_CREATE	timestamp(6)	NO		NULL	
-GMT_MODIFIED	timestamp(6)	NO		NULL	
+DATABASE_NAME	varchar(128)	NO			
+GMT_CREATE	timestamp(6)	NO			
+GMT_MODIFIED	timestamp(6)	NO			
 PRIV_ALTER	varchar(3)	NO			
 PRIV_CREATE	varchar(3)	NO			
 PRIV_DELETE	varchar(3)	NO			
@@ -7167,6 +7171,7 @@ TARGET_UNIT_NUM	bigint(20)	NO		NULL
 TARGET_PRIMARY_ZONE_NUM	bigint(20)	NO		NULL	
 STATUS	varchar(64)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+MAX_END_TIME	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_JOBS limit 1);
 cnt
 1
@@ -7182,6 +7187,7 @@ TARGET_UNIT_NUM	bigint(20)	NO		NULL
 TARGET_PRIMARY_ZONE_NUM	bigint(20)	NO		NULL	
 STATUS	varchar(64)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+MAX_END_TIME	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BALANCE_JOBS limit 1);
 cnt
 1
@@ -7196,6 +7202,7 @@ TARGET_UNIT_NUM	bigint(20)	NO		NULL
 TARGET_PRIMARY_ZONE_NUM	bigint(20)	NO		NULL	
 STATUS	varchar(64)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+MAX_END_TIME	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_JOB_HISTORY limit 1);
 cnt
 1
@@ -7211,6 +7218,7 @@ TARGET_UNIT_NUM	bigint(20)	NO		NULL
 TARGET_PRIMARY_ZONE_NUM	bigint(20)	NO		NULL	
 STATUS	varchar(64)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+MAX_END_TIME	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BALANCE_JOB_HISTORY limit 1);
 cnt
 1
@@ -7233,6 +7241,7 @@ CHILD_LIST	varchar(1024)	YES		NULL
 CURRENT_TRANSFER_TASK_ID	bigint(20)	NO		NULL	
 JOB_ID	bigint(20)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+BALANCE_STRATEGY	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_TASKS limit 1);
 cnt
 1
@@ -7256,6 +7265,7 @@ CHILD_LIST	varchar(1024)	YES		NULL
 CURRENT_TRANSFER_TASK_ID	bigint(20)	NO		NULL	
 JOB_ID	bigint(20)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+BALANCE_STRATEGY	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BALANCE_TASKS limit 1);
 cnt
 1
@@ -7278,6 +7288,7 @@ CHILD_LIST	varchar(1024)	YES		NULL
 CURRENT_TRANSFER_TASK_ID	bigint(20)	NO		NULL	
 JOB_ID	bigint(20)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+BALANCE_STRATEGY	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_BALANCE_TASK_HISTORY limit 1);
 cnt
 1
@@ -7301,6 +7312,7 @@ CHILD_LIST	varchar(1024)	YES		NULL
 CURRENT_TRANSFER_TASK_ID	bigint(20)	NO		NULL	
 JOB_ID	bigint(20)	NO		NULL	
 COMMENT	longtext	YES		NULL	
+BALANCE_STRATEGY	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_BALANCE_TASK_HISTORY limit 1);
 cnt
 1

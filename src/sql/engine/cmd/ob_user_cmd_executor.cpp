@@ -531,8 +531,7 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
     const uint64_t tenant_id = session->get_effective_tenant_id();
     const uint64_t user_id = lib::is_mysql_mode() ? session->get_priv_user_id() : session->get_user_id();
     const ObUserInfo * user_info = NULL;
-    common::ObIArray<uint64_t> &enable_role_id_array =
-                          session->get_enable_role_array();
+    common::ObArray<uint64_t> enable_role_id_array;
     ObSchemaGetterGuard schema_guard;
 
     obrpc::ObAlterUserProfileArg &arg = static_cast<obrpc::ObAlterUserProfileArg &>(stmt.get_ddl_arg());
@@ -547,7 +546,8 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
     if (OB_SUCC(ret)) {
       switch (arg.default_role_flag_) {
       case OB_DEFAULT_ROLE_ALL:
-        OZ (session->set_enable_role_array(user_info->get_role_id_array()));
+        //OZ (session->set_enable_role_array(user_info->get_role_id_array()));
+        OZ (append(enable_role_id_array, user_info->get_role_id_array()));
         break;
       case OB_DEFAULT_ROLE_NONE:
         OX (enable_role_id_array.reset());
@@ -582,6 +582,7 @@ int ObAlterUserProfileExecutor::set_role_exec(ObExecContext &ctx, ObAlterUserPro
       if (lib::is_oracle_mode()) {
         OZ (enable_role_id_array.push_back(OB_ORA_PUBLIC_ROLE_ID));
       }
+      OZ (session->set_enable_role_array(enable_role_id_array));
     }
   }
   return ret;

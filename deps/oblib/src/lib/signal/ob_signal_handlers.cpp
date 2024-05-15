@@ -185,12 +185,8 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
     char tname[16];
     prctl(PR_GET_NAME, tname);
     // backtrace
-    char bt[512];
+    char bt[512] = {'\0'};
     int64_t len = 0;
-#ifdef __x86_64__
-    safe_backtrace(bt, sizeof(bt) - 1, &len);
-#endif
-    bt[len++] = '\0';
     // extra
     const ObFatalErrExtraInfoGuard *extra_info = nullptr; // TODO: May deadlock, ObFatalErrExtraInfoGuard::get_thd_local_val_ptr();
     auto *trace_id = ObCurTraceId::get_trace_id();
@@ -206,11 +202,18 @@ void coredump_cb(volatile int sig, volatile int sig_code, void* volatile sig_add
 #if defined(__x86_64__)
     int64_t ip = con->uc_mcontext.gregs[REG_RIP];
     int64_t bp = con->uc_mcontext.gregs[REG_RBP]; // stack base
+    safe_backtrace(bt, sizeof(bt) - 1, &len);
+#elif defined(__aarch64__)
+    int64_t ip = con->uc_mcontext.regs[30];
+    int64_t bp = con->uc_mcontext.regs[29];
+    void* addrs[64];
+    int n_addr = light_backtrace(addrs, ARRAYSIZEOF(addrs), bp);
+    len += safe_parray(bt, sizeof(bt) - 1, (int64_t*)addrs, n_addr);
 #else
-    // TODO: ARM
     int64_t ip = -1;
     int64_t bp = -1;
 #endif
+    bt[len++] = '\0';
     char rlimit_core[32] = "unlimited";
     if (UINT64_MAX != g_rlimit_core) {
       lnprintf(rlimit_core, sizeof(rlimit_core), "%lu", g_rlimit_core);

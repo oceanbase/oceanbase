@@ -923,6 +923,9 @@ public:
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const uint64_t table_id, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObSqlBitSet<> &table_set) const;
+  int get_table_rel_ids(const uint64_t table_id, ObRelIds &table_set) const;
+  int get_table_rel_ids(const TableItem &target, ObRelIds &table_set) const;
+  int get_table_rel_ids(const ObIArray<TableItem*> &tables, ObRelIds &table_set) const;
   int get_from_tables(ObRelIds &table_set) const;
   int get_from_tables(ObSqlBitSet<> &table_set) const;
   int get_from_tables(common::ObIArray<TableItem*>& from_tables) const;
@@ -1141,7 +1144,9 @@ public:
   virtual bool is_returning() const { return false; }
   virtual bool has_instead_of_trigger() const { return false; }
   int has_lob_column(int64_t table_id, bool &has_lob)const;
-  int has_virtual_generated_column(int64_t table_id, bool &has_virtual_col) const;
+  int has_virtual_generated_column(int64_t table_id,
+                                   bool &has_virtual_col,
+                                   bool ignore_fulltext_gen_col = false) const;
 
   struct TempTableInfo {
     TempTableInfo()

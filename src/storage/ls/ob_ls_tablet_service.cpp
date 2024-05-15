@@ -77,6 +77,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -6067,7 +6068,19 @@ int ObLSTabletService::estimate_block_count_and_row_count(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(tablet_iter.table_iter()));
     } else if (table->is_direct_load_memtable()) {
-      // FIXME : @suzhi.yt
+      ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(table);
+      int64_t macro_block_count_in_ddl_kv = 0;
+      int64_t micro_block_count_in_ddl_kv = 0;
+      int64_t row_count_in_ddl_kv = 0;
+      if (OB_FAIL(ddl_kv->get_block_count_and_row_count(macro_block_count_in_ddl_kv,
+                                                        micro_block_count_in_ddl_kv,
+                                                        row_count_in_ddl_kv))) {
+        LOG_WARN("fail to get block count and row count", K(ret));
+      } else {
+        macro_block_count += macro_block_count_in_ddl_kv;
+        micro_block_count += micro_block_count_in_ddl_kv;
+        sstable_row_count += row_count_in_ddl_kv;
+      }
     } else if (table->is_data_memtable()) {
       memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
     } else if (table->is_sstable()) {
@@ -6541,6 +6554,58 @@ int ObLSTabletService::ha_get_tablet(
   } else if (OB_ISNULL(tablet = handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
+  } else if (tablet->is_empty_shell()) {
+    // treat empty shell as tablet not exist.
+    ret = OB_TABLET_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObLSTabletService::get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  const bool force_alloc_new = true;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant meta mem mgr should not be null", K(ret), KP(t3m));
+  } else if (OB_FAIL(t3m->get_tablet_with_allocator(
+      priority, key, allocator, handle, force_alloc_new))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to get tablet with allocator", K(ret), K(priority), K(key));
+    }
+  } else if (OB_FAIL(handle.get_obj()->clear_memtables_on_table_store())) {
+    LOG_WARN("failed to clear memtables on table store", K(ret), K(key));
+  }
+  return ret;
+}
+
+int ObLSTabletService::ha_get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_tablet_without_memtables(priority, key, allocator, handle))) {
+    LOG_WARN("failed to get tablet without memtables", K(ret), K(priority), K(key));
+  } else if (OB_ISNULL(tablet = handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(key));
   } else if (tablet->is_empty_shell()) {
     // treat empty shell as tablet not exist.
     ret = OB_TABLET_NOT_EXIST;

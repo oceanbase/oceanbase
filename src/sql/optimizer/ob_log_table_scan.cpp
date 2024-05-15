@@ -457,23 +457,8 @@ int ObLogTableScan::generate_access_exprs()
       LOG_WARN("failed to append exprs", K(ret));
     } else { /*do nothing*/ }
 
-    uint64_t min_cluster_version = GET_MIN_CLUSTER_VERSION();
-    if (OB_SUCC(ret) && lib::is_oracle_mode() && get_contains_fake_cte()
-        && ((min_cluster_version >= CLUSTER_VERSION_4_2_2_0
-             && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
-            || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0))) {
-      ObLogSet *rcte_op = nullptr;
-      if (OB_FAIL(find_nearest_rcte_op(rcte_op))) {
-        LOG_WARN("fail to find recursive cte op", K(ret));
-      } else if (OB_ISNULL(rcte_op_ = rcte_op)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("recursive cte op is NULL", K(ret));
-      } else if (!rcte_op_->is_breadth_search()) {
-        //search depth do nothing
-      } else if (OB_ISNULL(identify_seq_expr_ = rcte_op->get_identify_seq_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("identify seq expr is NULL", K(ret));
-      } else if (OB_FAIL(access_exprs_.push_back(identify_seq_expr_))) {
+    if (OB_SUCC(ret) && NULL != identify_seq_expr_) {
+      if (OB_FAIL(access_exprs_.push_back(identify_seq_expr_))) {
         LOG_WARN("fail to add identify seq expr", K(ret));
       }
     }
@@ -2351,9 +2336,14 @@ int ObLogTableScan::print_text_retrieval_annotation(char *buf, int64_t buf_len, 
   ObRawExpr *limit = tr_info.topk_limit_expr_;
   ObRawExpr *offset = tr_info.topk_offset_expr_;
   ObSEArray<OrderItem, 1> sort_keys;
+  bool calc_relevance = tr_info.need_calc_relevance_;
   if (OB_FAIL(BUF_PRINTF(", "))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else if (OB_FAIL(BUF_PRINTF("\n      "))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF("calc_relevance=%s", calc_relevance ? "true" : "false"))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (OB_FAIL(BUF_PRINTF(", "))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else if (FALSE_IT(EXPLAIN_PRINT_EXPR(match_expr, type))) {
   }

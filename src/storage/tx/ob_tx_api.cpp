@@ -1114,6 +1114,7 @@ int ObTransService::rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
                                                       tx.seq_base_,
                                                       expire_ts,
                                                       from_scn,
+                                                      0, /*request_id, only used for request*/
                                                       downstream_parts))) {
         TRANS_LOG(WARN, "LS rollback savepoint fail", K(ret), K(savepoint), K(tx));
       } else {
@@ -1290,13 +1291,19 @@ int ObTransService::ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                                  const int64_t tx_seq_base,
                                                  const int64_t expire_ts,
                                                  const ObTxSEQ specified_from_scn,
+                                                 const int64_t request_id,
                                                  ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
   bool blockable = expire_ts > 0;
   do {
-    ret = part_ctx->rollback_to_savepoint(op_sn, specified_from_scn, savepoint, tx_seq_base, downstream_parts);
+    ret = part_ctx->rollback_to_savepoint(op_sn,
+                                          specified_from_scn,
+                                          savepoint,
+                                          tx_seq_base,
+                                          request_id,
+                                          downstream_parts);
     if ((OB_NEED_RETRY == ret || OB_EAGAIN == ret) && blockable) {
       if (ObTimeUtility::current_time() >= expire_ts) {
         ret = OB_TIMEOUT;
@@ -1523,6 +1530,7 @@ int ObTransService::rollback_savepoint_(ObTxDesc &tx,
                                           &tx,
                                           false,/*for transfer*/
                                           ObTxSEQ::INVL(),
+                                          0, /*request_id, only for rollback_to request*/
                                           downstream_parts,
                                           -1/*non-blocking*/))) {
       if (common_retryable_error_(ret)) {
@@ -1593,6 +1601,7 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
                                               const ObTxDesc *tx,
                                               const bool for_transfer,
                                               const ObTxSEQ from_scn,
+                                              const int64_t request_id,
                                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                                               int64_t expire_ts)
 {
@@ -1649,13 +1658,14 @@ int ObTransService::ls_rollback_to_savepoint_(const ObTransID &tx_id,
     if (verify_epoch > 0 && ctx->epoch_ != verify_epoch) {
       ret = OB_TRANS_CTX_NOT_EXIST;
       TRANS_LOG(WARN, "current ctx illegal, born epoch not match", K(ret), K(ls), K(tx_id),
-                K(verify_epoch), KPC(ctx));
+                K(verify_epoch), K(ctx_born_epoch), KPC(ctx));
     } else if(OB_FAIL(ls_sync_rollback_savepoint__(ctx,
                                                    savepoint,
                                                    op_sn,
                                                    tx_seq_base,
                                                    expire_ts,
                                                    from_scn,
+                                                   request_id,
                                                    downstream_parts))) {
       TRANS_LOG(WARN, "LS rollback to savepoint fail", K(ret), K(tx_id), K(ls), K(op_sn), K(savepoint), KPC(ctx));
     }

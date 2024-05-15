@@ -119,9 +119,9 @@ int ObStorageHAMacroBlockWriter::process(blocksstable::ObMacroBlocksWriteCtx &co
   int64_t data_size = 0;
   obrpc::ObCopyMacroBlockHeader header;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
-  write_info.io_desc_.set_group_id(ObIOModule::HA_MACRO_BLOCK_WRITER_IO);
   write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-  write_info.io_desc_.set_group_id(ObIOModule::HA_MACRO_BLOCK_WRITER_IO);
+  write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  write_info.io_desc_.set_sys_module_id(ObIOModule::HA_MACRO_BLOCK_WRITER_IO);
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

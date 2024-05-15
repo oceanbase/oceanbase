@@ -440,7 +440,8 @@ int ObTabletReplayCreateHandler::replay_aggregate_tablets(const ObIArray<ObTable
     read_info.io_timeout_ms_ = 20000; // 20s
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::SHARED_BLOCK_RW_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
     read_info.macro_block_id_ = total_tablet_item_arr_[range_arr.at(i).first].addr_.block_id();
     if (OB_FAIL(ObBlockManager::read_block(read_info, macro_handle))) {
       LOG_WARN("fail to read block", K(ret), K(read_info));

@@ -905,8 +905,8 @@ int ObTableQueryAndMutateP::execute_table_mutation(ObTableQueryResultIterator *r
       } else if (OB_FAIL(execute_one_mutation(*one_result, rowkey_column_names, affected_rows))) {
         LOG_WARN("fail to execute one mutation", K(ret), K(rowkey_column_names));
       } else if (arg_.query_and_mutate_.return_affected_entity()) {
-        if (OB_FAIL(result_.affected_entity_.get_property_count() <= 0
-            && result_.affected_entity_.add_all_property(*one_result))) {
+        if (result_.affected_entity_.get_property_count() <= 0
+            && OB_FAIL(result_.affected_entity_.add_all_property(*one_result))) {
           LOG_WARN("fail to add property", K(ret));
         } else if (OB_FAIL(result_.affected_entity_.add_all_row(*one_result))) {
           LOG_WARN("fail to add all rows", K(ret));

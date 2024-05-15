@@ -100,6 +100,11 @@ public:
       const int64_t snapshot_version,
       const bool allow_no_ready_read,
       const bool major_sstable_only = false);
+  int get_read_tables_from_tablet(
+      const int64_t snapshot_version,
+      const bool allow_no_ready_read,
+      const bool major_sstable_only,
+      ObIArray<ObITable *> &tables);
   TO_STRING_KV(K_(tablet_handle), K_(transfer_src_handle), K_(table_store_iter));
 private:
   ObTabletHandle tablet_handle_;

@@ -5240,6 +5240,22 @@ int ObTransformUtils::extract_table_exprs(const ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTransformUtils::extract_table_rel_ids(const ObIArray<ObRawExpr*> &exprs,
+                                            ObRelIds& table_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ObRawExpr *expr = exprs.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null expr", K(ret));
+    } else if (OB_FAIL(table_ids.add_members(expr->get_relation_ids()))) {
+      LOG_WARN("failed to add members", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObTransformUtils::get_table_joined_exprs(const ObDMLStmt &stmt,
                                              const TableItem &source,
                                              const TableItem &target,
@@ -15420,6 +15436,147 @@ int ObTransformUtils::check_table_with_fts_or_multivalue_recursively(TableItem *
 bool ObTransformUtils::is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode)
 {
   return !stmt.has_order_by() && is_only_full_group_by_on(mode);
+}
+
+int ObTransformUtils::check_need_calc_match_score(ObExecContext *exec_ctx,
+                                                  const ObDMLStmt* stmt,
+                                                  ObRawExpr* match_expr,
+                                                  bool &need_calc,
+                                                  ObIArray<ObExprConstraint> &constraints)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 8> relation_exprs;
+  need_calc = false;
+  if (OB_ISNULL(match_expr) || OB_ISNULL(stmt) || OB_ISNULL(exec_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("match expr is null", K(ret));
+  } else if (OB_FAIL(stmt->get_relation_exprs(relation_exprs))) {
+    LOG_WARN("failed to get relation exprs", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_calc && i < relation_exprs.count(); i++) {
+      bool tmp_need_calc = false;
+      if (OB_ISNULL(relation_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("relation expr is null", K(ret));
+      } else if (!relation_exprs.at(i)->has_flag(CNT_MATCH_EXPR)) {
+        /* do nothing */
+      } else if (OB_FAIL(inner_check_need_calc_match_score(exec_ctx,
+                                                           relation_exprs.at(i),
+                                                           match_expr,
+                                                           tmp_need_calc,
+                                                           constraints))) {
+        LOG_WARN("failed to check need calc match score", K(ret));
+      } else if (tmp_need_calc) {
+        need_calc = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::inner_check_need_calc_match_score(ObExecContext *exec_ctx,
+                                                        ObRawExpr* expr,
+                                                        ObRawExpr* match_expr,
+                                                        bool &need_calc,
+                                                        ObIArray<ObExprConstraint> &constraints)
+{
+  int ret = OB_SUCCESS;
+  need_calc = false;
+  bool need_check_child = true;
+  if (OB_ISNULL(expr) || OB_ISNULL(match_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param has null", K(ret), KP(expr), KP(match_expr));
+  } else if (expr == match_expr) {
+    need_calc = true;
+    need_check_child = false;
+  } else if (expr->get_expr_type() == T_OP_GT || expr->get_expr_type() == T_OP_LT) {
+    ObRawExpr *gt_param = NULL;
+    ObRawExpr *lt_param = NULL;
+    bool is_param_zero = false;
+    if (expr->get_param_count() != 2 || OB_ISNULL(expr->get_param_expr(0)) ||
+        OB_ISNULL(expr->get_param_expr(1))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FALSE_IT(gt_param = expr->get_expr_type() == T_OP_GT ? expr->get_param_expr(0) :
+                                                                         expr->get_param_expr(1))) {
+    } else if (OB_FALSE_IT(lt_param = expr->get_expr_type() == T_OP_GT ? expr->get_param_expr(1) :
+                                                                         expr->get_param_expr(0))) {
+    } else if (gt_param != match_expr) {
+      /* do nothing */
+    } else if (OB_FAIL(check_expr_eq_zero(exec_ctx, lt_param, is_param_zero, constraints))) {
+      LOG_WARN("failed to check param eq zero", K(ret));
+    } else if (is_param_zero) {
+      need_calc = false;
+      need_check_child = false;
+    }
+  } else if (expr->get_expr_type() == T_OP_BOOL) {
+    if (expr->get_param_count() == 1 && expr->get_param_expr(0) == match_expr) {
+      need_calc = false;
+      need_check_child = false;
+    }
+  }
+  if (OB_SUCC(ret) && need_check_child) {
+    for (int64_t i = 0; OB_SUCC(ret) && !need_calc && i < expr->get_param_count(); i++) {
+      bool tmp_need_calc = false;
+      if (OB_FAIL(SMART_CALL(inner_check_need_calc_match_score(exec_ctx,
+                                                              expr->get_param_expr(i),
+                                                              match_expr,
+                                                              tmp_need_calc,
+                                                              constraints)))) {
+        LOG_WARN("failed to inner check need calc match score", K(ret));
+      } else if (tmp_need_calc) {
+        need_calc = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::check_expr_eq_zero(ObExecContext *ctx,
+                                         ObRawExpr *expr,
+                                         bool &eq_zero,
+                                         ObIArray<ObExprConstraint> &constraints)
+{
+  int ret = OB_SUCCESS;
+  ObConstRawExpr *zero_expr = NULL;
+  ObRawExpr *eq_zero_expr = NULL;
+  bool got_result = false;
+  ObObj result;
+  eq_zero = false;
+  ObPhysicalPlanCtx *phy_ctx = NULL;
+  if (OB_ISNULL(expr) || OB_ISNULL(ctx) || OB_ISNULL(ctx->get_my_session()) ||
+      OB_ISNULL(ctx->get_expr_factory()) || OB_ISNULL(phy_ctx = ctx->get_physical_plan_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!expr->is_static_const_expr()) {
+    // do nothing
+  } else if (OB_FAIL(ObRawExprUtils::build_const_double_expr(*ctx->get_expr_factory(),
+                                                             ObDoubleType,
+                                                             0.0,
+                                                             zero_expr))) {
+    LOG_WARN("failed to build double expr", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx->get_expr_factory(),
+                                                           ctx->get_my_session(),
+                                                           T_OP_EQ,
+                                                           eq_zero_expr,
+                                                           expr,
+                                                           zero_expr))) {
+    LOG_WARN("failed to build cmp expr", K(ret));
+  } else if (ObSQLUtils::calc_const_or_calculable_expr(ctx,
+                                                       eq_zero_expr,
+                                                       result,
+                                                       got_result,
+                                                       ctx->get_allocator())) {
+    LOG_WARN("failed to calc cosnt or calculable expr", K(ret));
+  } else if (!got_result || result.is_false() || result.is_null()) {
+    // do nothing
+  } else if (OB_FAIL(constraints.push_back(
+             ObExprConstraint(eq_zero_expr, PreCalcExprExpectResult::PRE_CALC_RESULT_TRUE)))) {
+    LOG_WARN("failed to push back constraint", K(ret));
+  } else {
+    eq_zero = true;
+  }
+  return ret;
 }
 
 } // namespace sql

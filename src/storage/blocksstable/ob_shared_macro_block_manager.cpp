@@ -281,7 +281,8 @@ int ObSharedMacroBlockMgr::write_block(
   read_info.offset_ = offset;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
   read_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
-  read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
   ObMacroBlockHandle read_handle;
   ObSSTableMacroBlockChecker macro_block_checker;
   ObArenaAllocator io_allocator("SMBM_IOUB", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
@@ -847,7 +848,8 @@ int ObSharedMacroBlockMgr::read_sstable_block(
     read_info.size_ = upper_align(sstable.get_macro_read_size(), DIO_READ_ALIGN_SIZE);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
     read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
-    read_info.io_desc_.set_group_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_MACRO_BLOCK_MGR_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

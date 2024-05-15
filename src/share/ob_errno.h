@@ -1469,6 +1469,7 @@ constexpr int OB_ERR_OPERATOR_NOT_EXIST = -7298;
 constexpr int OB_INVALID_MASK = -7299;
 constexpr int OB_GEO_IN_DIFFERENT_COORDINATE = -7300;
 constexpr int OB_ERR_DOMAIN_COLUMN_DUPLICATE = -7301;
+constexpr int OB_ERR_PARSING_SPATIAL_PARAM = -7302;
 constexpr int OB_ERR_INVALID_XML_DATATYPE = -7402;
 constexpr int OB_ERR_XML_MISSING_COMMA = -7403;
 constexpr int OB_ERR_INVALID_XPATH_EXPRESSION = -7404;
@@ -1860,6 +1861,7 @@ constexpr int OB_KV_COLLATION_MISMATCH = -10512;
 constexpr int OB_KV_SCAN_RANGE_MISSING = -10513;
 constexpr int OB_KV_FILTER_PARSE_ERROR = -10514;
 constexpr int OB_KV_REDIS_PARSE_ERROR = -10515;
+constexpr int OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG = -10516;
 constexpr int OB_KV_ODP_TIMEOUT = -10650;
 constexpr int OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN = -11000;
 constexpr int OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES = -11001;
@@ -3584,6 +3586,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQUENCE_NOT_MATCH__USER_ERROR_MSG "compare sequence not match"
 #define OB_SEQUENCE_TOO_SMALL__USER_ERROR_MSG "compare sequence too small"
 #define OB_TRANSFER_CANNOT_START__USER_ERROR_MSG "transfer cannot start"
+#define OB_PARTITION_ALREADY_BALANCED__USER_ERROR_MSG "partitions are already balanced, %s"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__USER_ERROR_MSG "Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__USER_ERROR_MSG "Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__USER_ERROR_MSG "Unknown GIS error occurred in function %s."
@@ -3684,6 +3687,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MASK__USER_ERROR_MSG "operator binding does not exist"
 #define OB_GEO_IN_DIFFERENT_COORDINATE__USER_ERROR_MSG "geometry objects are in different coordinate systems"
 #define OB_ERR_DOMAIN_COLUMN_DUPLICATE__USER_ERROR_MSG "cannot create multiple domain indexes on a column list using same"
+#define OB_ERR_PARSING_SPATIAL_PARAM__USER_ERROR_MSG "internal error while parsing spatial parameters"
 #define OB_ERR_INVALID_XML_DATATYPE__USER_ERROR_MSG "inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__USER_ERROR_MSG "missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__USER_ERROR_MSG "XPATH syntax error: ''"
@@ -4124,6 +4128,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_SCAN_RANGE_MISSING__USER_ERROR_MSG "Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_KV_FILTER_PARSE_ERROR__USER_ERROR_MSG "Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_REDIS_PARSE_ERROR__USER_ERROR_MSG "Redis protocol parse errror, the input redis string is: '%.*s'"
+#define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__USER_ERROR_MSG "When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 #define OB_KV_ODP_TIMEOUT__USER_ERROR_MSG "ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__USER_ERROR_MSG "Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__USER_ERROR_MSG "A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -5848,6 +5853,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQUENCE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7121, compare sequence not match"
 #define OB_SEQUENCE_TOO_SMALL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7122, compare sequence too small"
 #define OB_TRANSFER_CANNOT_START__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7123, transfer cannot start"
+#define OB_PARTITION_ALREADY_BALANCED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7124, partitions are already balanced, %s"
 #define OB_ERR_GIS_DIFFERENT_SRIDS__ORA_USER_ERROR_MSG "ORA-00600: Binary geometry function %s given two geometries of different srids: %u and %u, which should have been identical."
 #define OB_ERR_GIS_UNSUPPORTED_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: Calling geometry function %s with unsupported types of arguments."
 #define OB_ERR_GIS_UNKNOWN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: Unknown GIS error occurred in function %s."
@@ -5948,6 +5954,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_MASK__ORA_USER_ERROR_MSG "ORA-20000: operator binding does not exist"
 #define OB_GEO_IN_DIFFERENT_COORDINATE__ORA_USER_ERROR_MSG "ORA-13295: geometry objects are in different coordinate systems"
 #define OB_ERR_DOMAIN_COLUMN_DUPLICATE__ORA_USER_ERROR_MSG "ORA-29879: cannot create multiple domain indexes on a column list using same"
+#define OB_ERR_PARSING_SPATIAL_PARAM__ORA_USER_ERROR_MSG "ORA-13205: internal error while parsing spatial parameters"
 #define OB_ERR_INVALID_XML_DATATYPE__ORA_USER_ERROR_MSG "ORA-00932: inconsistent datatypes: expected %s got %s"
 #define OB_ERR_XML_MISSING_COMMA__ORA_USER_ERROR_MSG "ORA-00917: missing comma"
 #define OB_ERR_INVALID_XPATH_EXPRESSION__ORA_USER_ERROR_MSG "ORA-31013: invalid xpath expression"
@@ -6388,6 +6395,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_KV_SCAN_RANGE_MISSING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10513, Scan range missing, input scan range cell count is '%ld', which should equal to rowkey count '%ld'"
 #define OB_KV_FILTER_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10514, Filter parse errror, the input filter string is: '%.*s'"
 #define OB_KV_REDIS_PARSE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10515, Redis protocol parse errror, the input redis string is: '%.*s'"
+#define OB_KV_HBASE_INCR_FIELD_IS_NOT_LONG__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10516, When invoking the Increment interface, only HBase cells with a length of 8 can be converted to int64_t. the current length of the HBase cell is '%d'."
 #define OB_KV_ODP_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10650, ODP process timeout"
 #define OB_ERR_VALUES_CLAUSE_NEED_HAVE_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11000, Each row of a VALUES clause must have at least one column, unless when used as source in an INSERT statement."
 #define OB_ERR_VALUES_CLAUSE_CANNOT_USE_DEFAULT_VALUES__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11001, A VALUES clause cannot use DEFAULT values, unless used as a source in an INSERT statement."
@@ -6417,7 +6425,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2260];
+extern int g_all_ob_errnos[2263];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

@@ -42,6 +42,49 @@ class ObDasAggregatedTasks;
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
 
+struct ObDASGTSOptInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASGTSOptInfo(common::ObIAllocator &alloc)
+    : alloc_(alloc),
+      use_specify_snapshot_(false),
+      isolation_level_(),
+      specify_snapshot_(nullptr),
+      response_snapshot_(nullptr)
+  {
+  }
+
+  ~ObDASGTSOptInfo()
+  {
+    if (specify_snapshot_ != nullptr) {
+      specify_snapshot_->~ObTxReadSnapshot();
+    }
+    if (response_snapshot_ != nullptr) {
+      response_snapshot_->~ObTxReadSnapshot();
+    }
+  }
+
+  int init(transaction::ObTxIsolationLevel isolation_level);
+  void set_use_specify_snapshot(bool v)
+  {
+    use_specify_snapshot_ = v;
+  }
+  bool get_use_specify_snapshot() { return use_specify_snapshot_; }
+  transaction::ObTxReadSnapshot *get_specify_snapshot() { return specify_snapshot_; }
+  transaction::ObTxReadSnapshot *get_response_snapshot() { return response_snapshot_; }
+
+  TO_STRING_KV(K_(use_specify_snapshot),
+               K_(isolation_level),
+               KPC_(specify_snapshot),
+               KPC_(response_snapshot));
+  common::ObIAllocator &alloc_; // inited by op_alloc_ in das_op
+  bool use_specify_snapshot_;
+  transaction::ObTxIsolationLevel isolation_level_;
+  transaction::ObTxReadSnapshot *specify_snapshot_; // 给task指定snapshot_version
+  transaction::ObTxReadSnapshot *response_snapshot_; // 远端或者本地获取到的snapshot信息
+};
+
 struct ObDASRemoteInfo
 {
   OB_UNIS_VERSION(1);
@@ -124,7 +167,8 @@ public:
       cur_agg_list_(nullptr),
       op_result_(nullptr),
       attach_ctdef_(nullptr),
-      attach_rtdef_(nullptr)
+      attach_rtdef_(nullptr),
+      das_gts_opt_info_(op_alloc)
   {
     das_task_node_.get_data() = this;
   }
@@ -285,6 +329,7 @@ protected:
   //rowkey merging for index merge operations, and so on.
   const ObDASBaseCtDef *attach_ctdef_;
   ObDASBaseRtDef *attach_rtdef_;
+  ObDASGTSOptInfo das_gts_opt_info_;
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;

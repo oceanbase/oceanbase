@@ -308,6 +308,11 @@ void ObPartTransCtx::destroy()
     timeout_task_.destroy();
     trace_info_.reset();
     block_frozen_memtable_ = nullptr;
+
+    last_rollback_to_request_id_ = 0;
+    last_rollback_to_timestamp_ = 0;
+    last_transfer_in_timestamp_ = 0;
+
     is_inited_ = false;
   }
 }
@@ -371,6 +376,9 @@ void ObPartTransCtx::default_init_()
   standby_part_collected_.reset();
   trace_log_.reset();
   transfer_deleted_ = false;
+  last_rollback_to_request_id_ = 0;
+  last_rollback_to_timestamp_ = 0;
+  last_transfer_in_timestamp_ = 0;
 }
 
 int ObPartTransCtx::init_log_cbs_(const ObLSID &ls_id, const ObTransID &tx_id)
@@ -1897,69 +1905,50 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
 #define LOAD_PARALLEL_LOGGING parallel_logging = exec_info_.serial_final_scn_.atomic_load().is_valid()
     LOAD_PARALLEL_LOGGING;
     if (!parallel_logging) {
-      if (force) {
-        // For the frozen memtable, we must guarantee
-        CtxLockGuard guard(lock_);
+      int submitted_cnt = 0;
+      if (force || OB_SUCCESS == lock_.try_lock()) {
+        CtxLockGuard guard(lock_, force /* need lock */);
         // double check parallel_logging is on
         LOAD_PARALLEL_LOGGING;
         if (!parallel_logging) {
-          ret = serial_submit_redo_after_write_();
-        }
-      } else if (OB_SUCCESS == lock_.try_lock()) {
-        CtxLockGuard guard(lock_, false);
-        // double check parallel_logging is on
-        LOAD_PARALLEL_LOGGING;
-        if (!parallel_logging) {
-          ret = serial_submit_redo_after_write_();
+          ret = serial_submit_redo_after_write_(submitted_cnt);
         }
       }
-      if (OB_BUF_NOT_ENOUGH == ret) {
-        // bufer full, try fill after switch to parallel logging
+      if (submitted_cnt > 0 && OB_EAGAIN == ret) {
+        // has remains, try fill after switch to parallel logging
         LOAD_PARALLEL_LOGGING;
       }
     }
 #undef LOAD_PARALLEL_LOGGING
     tg.click("serial_log");
-    if (parallel_logging) {
-      if (force) {
-        CtxLockGuard guard(lock_, CtxLockGuard::MODE::REDO_FLUSH_R);
-        if (OB_SUCC(check_can_submit_redo_()) && !is_committing_()) {
-          // TODO(handora.qc): Currently, parallel_submit might return
-          // OB_SUCCESS without having fully submitted all necessary logs,
-          // resulting in an inability to mark need_resubmit on the freezer.
-          // Therefore, we rely on the fallback mechanism of freezer_task to
-          // retry submitting logs to meet the requirement of freezing that
-          // waiting for all logs to be submitted.
-          //
-          // However, we definitely need to ensure in the future that OB_SUCCESS
-          // is only returned only when the logs are fully submitted.
+    if (parallel_logging && OB_SUCC(lock_.try_rdlock_flush_redo())) {
+      if (OB_SUCC(check_can_submit_redo_())) {
+        if (is_committing_()) {
+          ret = force ? OB_TRANS_HAS_DECIDED : OB_SUCCESS;
+        } else {
           ObTxRedoSubmitter submitter(*this, mt_ctx_);
           if (OB_FAIL(submitter.parallel_submit(write_seq_no))) {
-            if (OB_ITER_END == ret || OB_EAGAIN == ret) {
+            if (!force && (OB_ITER_END == ret          // blocked by others, current remains
+                           || OB_NEED_RETRY == ret     // acquire lock failed
+                           )) {
               ret = OB_SUCCESS;
             }
           }
         }
-      } else if (OB_SUCC(lock_.try_rdlock_flush_redo())) {
-        if (OB_SUCC(check_can_submit_redo_()) && !is_committing_()) {
-          ObTxRedoSubmitter submitter(*this, mt_ctx_);
-          if (OB_FAIL(submitter.parallel_submit(write_seq_no))) {
-            if (OB_ITER_END == ret || OB_EAGAIN == ret) {
-              ret = OB_SUCCESS;
-            }
-          }
-        }
-        lock_.unlock_flush_redo();
       }
+      lock_.unlock_flush_redo();
     }
-  }
-  if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
-    ret = OB_SUCCESS;
+    if (!force && (OB_TRANS_HAS_DECIDED == ret // do committing
+                   || OB_BLOCK_FROZEN == ret   // memtable logging blocked
+                   || OB_EAGAIN == ret         // partial submitted or submit to log-service fail
+                   )) {
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
 
-int ObPartTransCtx::serial_submit_redo_after_write_()
+int ObPartTransCtx::serial_submit_redo_after_write_(int &submitted_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(check_can_submit_redo_())) {
@@ -1967,7 +1956,8 @@ int ObPartTransCtx::serial_submit_redo_after_write_()
     bool should_switch = should_switch_to_parallel_logging_();
     ObTxRedoSubmitter submitter(*this, mt_ctx_);
     ret = submitter.serial_submit(should_switch);
-    if (should_switch && submitter.get_submitted_cnt() > 0) {
+    submitted_cnt = submitter.get_submitted_cnt();
+    if (should_switch && submitted_cnt > 0) {
       const share::SCN serial_final_scn = submitter.get_submitted_scn();
       int tmp_ret = switch_to_parallel_logging_(serial_final_scn, exec_info_.max_submitted_seq_no_);
       TRANS_LOG(INFO, "**leader switch to parallel logging**", K(tmp_ret),
@@ -2087,7 +2077,7 @@ int ObPartTransCtx::compensate_abort_log_()
 
   } else if (OB_FAIL(submit_log_impl_(ObTxLogType::TX_ABORT_LOG))) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_EAGAIN == ret && OB_TMP_FAIL(restart_2pc_trans_timer_())) {
+    if (OB_TMP_FAIL(restart_2pc_trans_timer_())) {
       TRANS_LOG(WARN, "restart_2pc_trans_timer_ for submit abort log fail",
         KR(ret), KR(tmp_ret), KPC(this));
     }
@@ -2105,6 +2095,7 @@ int ObPartTransCtx::abort_(int reason)
   if (OB_FAIL(do_local_tx_end_(TxEndAction::ABORT_TX))) {
     TRANS_LOG(WARN, "do local tx abort failed", K(ret), K(reason));
   }
+  part_trans_action_ = ObPartTransAction::ABORT;
   // if abort was caused by internal impl reason, don't disturb
   if (ObTxAbortCause::IMPLICIT_ROLLBACK != reason) {
     TRANS_LOG(INFO, "tx abort", K(ret), K(reason), "reason_str", ObTxAbortCauseNames::of(reason), KPC(this));
@@ -8237,6 +8228,7 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
                                           ObTxSEQ from_scn,
                                           const ObTxSEQ to_scn,
                                           const int64_t seq_base,
+                                          const int64_t request_id,
                                           ObIArray<ObTxLSEpochPair> &downstream_parts)
 {
   int ret = OB_SUCCESS;
@@ -8273,13 +8265,49 @@ int ObPartTransCtx::rollback_to_savepoint(const int64_t op_sn,
   } else if (to_scn.get_branch() == 0) {
     last_scn_ = to_scn;
   }
-  // must add downstream parts when return success
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < exec_info_.intermediate_participants_.count(); idx++) {
-    if (OB_FAIL(downstream_parts.push_back(ObTxLSEpochPair(exec_info_.intermediate_participants_.at(idx).ls_id_,
-                                                           exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
-      TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
+
+  if (OB_SUCC(ret)) {
+    bool need_downstream = true;
+    int64_t current_rollback_to_timestamp = ObTimeUtility::current_time();
+    if (request_id != 0 && // come from rollback to request
+        request_id == last_rollback_to_request_id_) { // the same rollback to with the last one
+      if (last_transfer_in_timestamp_ != 0 &&
+          last_rollback_to_timestamp_ != 0 &&
+          // encounter transfer between two same rollback to
+          last_transfer_in_timestamp_ > last_rollback_to_timestamp_) {
+        need_downstream = true;
+        TRANS_LOG(INFO, "transfer between rollback to happened", K(ret), K(request_id),
+                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
+                  K(last_rollback_to_request_id_), KPC(this));
+      } else {
+        need_downstream = false;
+        TRANS_LOG(INFO, "no transfer between rollback to happened", K(ret), K(request_id),
+                  K(last_rollback_to_timestamp_), K(last_transfer_in_timestamp_),
+                  K(last_rollback_to_request_id_), KPC(this));
+      }
+    } else {
+      need_downstream = true;
+    }
+
+    // must add downstream parts when return success
+    for (int64_t idx = 0;
+         OB_SUCC(ret) &&
+           need_downstream &&
+           idx < exec_info_.intermediate_participants_.count();
+         idx++) {
+      if (OB_FAIL(downstream_parts.push_back(
+                    ObTxLSEpochPair(exec_info_.intermediate_participants_.at(idx).ls_id_,
+                                    exec_info_.intermediate_participants_.at(idx).transfer_epoch_)))) {
+        TRANS_LOG(WARN, "push parts to array failed", K(ret), KPC(this));
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      last_rollback_to_request_id_ = request_id;
+      last_rollback_to_timestamp_ = current_rollback_to_timestamp;
     }
   }
+
   REC_TRANS_TRACE_EXT(tlog_, rollback_savepoint,
                       OB_ID(ret), ret,
                       OB_ID(from), from_scn.cast_to_int(),
@@ -9731,7 +9759,9 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         // promise redo log before move log
         bool submitted = false;
         ObTxRedoSubmitter submitter(*this, mt_ctx_);
-        if (OB_FAIL(submitter.serial_submit(false))) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(submitter.serial_submit(false)) && submitter.get_submitted_cnt() <= 0) {
+          ret = tmp_ret;
           TRANS_LOG(WARN, "submit redo failed", K(ret), KPC(this));
         } else {
           sub_state_.set_transfer_blocking();
@@ -9838,6 +9868,8 @@ int ObPartTransCtx::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
         exec_info_.is_transfer_blocking_ = false;
         if (OB_FAIL(transfer_op_log_cb_(move_tx_param.op_scn_, move_tx_param.op_type_))) {
           TRANS_LOG(WARN, "transfer op loc_cb failed", KR(ret), K(move_tx_param));
+        } else {
+          last_transfer_in_timestamp_ = ObTimeUtility::current_time();
         }
       }
     }

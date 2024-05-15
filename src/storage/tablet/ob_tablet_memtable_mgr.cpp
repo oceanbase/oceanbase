@@ -247,6 +247,11 @@ int ObTabletMemtableMgr::create_memtable(const CreateMemtableArg &arg)
   } else if (arg.for_replay_ && arg.clog_checkpoint_scn_ != arg.new_clog_checkpoint_scn_) {
     ret = OB_EAGAIN;
     LOG_INFO("clog_checkpoint_scn changed, need retry to replay", K(ls_id), K(tablet_id_), K(arg));
+  } else if (MAX_MEMSTORE_CNT - 1 == get_memtable_count_() && arg.for_inc_direct_load_) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL)) {
+      STORAGE_LOG(INFO, "only data memtable can use the last slot in memtable mgr", K(ret), K(arg), KPC(this));
+    }
   } else if (OB_FAIL(create_memtable_(arg, logstream_freeze_clock, time_guard))) {
     STORAGE_LOG(WARN, "create memtable failed", KR(ret), K(ls_id));
   }

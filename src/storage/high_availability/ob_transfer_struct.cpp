@@ -385,16 +385,20 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else {
     CLICK();
+    ObITabletMemtable *mt = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
-      ObITable *table = memtables.at(i).get_table();
-      if (OB_ISNULL(table)) {
+      if (OB_UNLIKELY(memtables.at(i).get_tablet_memtable(mt))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table in tables_handle is invalid", K(ret), KP(table));
+        LOG_WARN("table in tables_handle is not memtable", K(ret), K(memtables.at(i)));
+      } else if (!mt->is_active_memtable()) {
+        // skip
+      } else if (OB_UNLIKELY(!mt->is_data_memtable())) {
+        // incremental direct load hold table lock will block transfer scheduling, so there will be no active direct load memtable
+        ret = OB_TRANSFER_SYS_ERROR;
+        LOG_WARN("memtable is not data memtable", K(ret), KPC(mt));
       } else {
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-        if (memtable->is_active_memtable()) {
-          memtable->set_transfer_freeze(weak_read_scn);
-        }
+        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(mt);
+        memtable->set_transfer_freeze(weak_read_scn);
       }
     }
     if (OB_SUCC(ret)) {

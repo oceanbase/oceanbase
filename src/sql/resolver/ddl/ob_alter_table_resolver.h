@@ -195,7 +195,6 @@ private:
   int resolve_column_group_for_column();
   int generate_index_arg_cascade();
   int resolve_alter_column_groups(const ParseNode &node);
-  bool is_ttl_column(const common::ObString &orig_column_name, const ObIArray<common::ObString> &ttl_columns);
 
   int check_alter_column_schemas_valid(ObAlterTableStmt &stmt);
 

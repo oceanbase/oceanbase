@@ -338,6 +338,9 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_KV_MULTI_INCREMENT, err_stmt_type_priv, 337)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_KV_MULTI_APPEND, err_stmt_type_priv, 338)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_KV_MULTI_PUT, err_stmt_type_priv, 339)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_KV_QUERY, err_stmt_type_priv, 340)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_XA_RECOVER, no_priv_needed, 341)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_ADMIN_STORAGE, get_sys_tenant_alter_system_priv, 342)
+
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif
 

@@ -136,6 +136,7 @@ ObTxRedoSubmitter::~ObTxRedoSubmitter()
 int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
 {
   int ret = OB_SUCCESS;
+  int save_ret = OB_SUCCESS;
   from_all_list_ = false;
   flush_all_ = false;
   write_seq_no_ = write_seq_no;
@@ -146,20 +147,23 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
   submit_if_not_full_ = true;
   bool do_submit = false;
   memtable::ObCallbackListLogGuard log_lock_guard;
+  submit_cb_list_idx_ = -1;
   if (OB_FAIL(mt_ctx_.get_log_guard(write_seq_no, log_lock_guard, submit_cb_list_idx_))) {
     if (OB_NEED_RETRY == ret) {
-      // give up, lock conflict
-      ret = OB_SUCCESS;
+      // lock conflict
     } else if (OB_BLOCK_FROZEN == ret) {
       // memtable is logging blocked
     } else if (OB_EAGAIN == ret) {
       // others need flush firstly
-      // TODO: try flush others out and retry
       if (TC_REACH_TIME_INTERVAL(5_s)) {
         TRANS_LOG(WARN, "blocked by other list has smaller wirte epoch unlogged",
                   K(write_seq_no), K(tx_ctx_.get_trans_id()));
       }
-      ret = OB_SUCCESS;
+      if (submit_cb_list_idx_ >= 0) {
+        // try to submit blocking list
+        save_ret = OB_EAGAIN;
+        do_submit = true;
+      }
     } else if (OB_ENTRY_NOT_EXIST == ret) {
       // no callback to log
       ret = OB_SUCCESS;
@@ -171,6 +175,7 @@ int ObTxRedoSubmitter::parallel_submit(const ObTxSEQ &write_seq_no)
   }
   if (do_submit) {
     ret = _submit_redo_pipeline_(false);
+    ret = OB_SUCCESS == ret ? save_ret : ret;
   }
   return ret;
 }
@@ -263,7 +268,7 @@ int ObTxRedoSubmitter::_submit_redo_pipeline_(const bool display_blocked_info)
 #endif
           break;
         } else {
-          fill_ret = OB_SUCCESS;
+          fill_ret = OB_EAGAIN;
         }
       } else if (OB_BLOCK_FROZEN == fill_ret) {
         if (is_parallel_logging) {

@@ -653,7 +653,8 @@ public:
     }
     return res;
   }
-  static bool use_idempotent_mode(const int64_t data_format_version);
+  static bool use_idempotent_mode(const int64_t data_format_version, const share::ObDDLType task_type);
+  static int64_t get_real_parallelism(const int64_t parallelism, const bool is_mv_refresh);
 
 private:
   static int batch_check_tablet_checksum(

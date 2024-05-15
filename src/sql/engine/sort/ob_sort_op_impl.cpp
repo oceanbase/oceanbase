@@ -786,7 +786,9 @@ int ObSortOpImpl::init(
       op_monitor_info_->otherstat_2_value_ = 1;
       ObPhysicalPlanCtx *plan_ctx = NULL;
       const ObPhysicalPlan *phy_plan = nullptr;
-      if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx))) {
+      if (!exec_ctx->get_my_session()->get_ddl_info().is_ddl()) {
+        // not ddl
+      } else if (OB_ISNULL(plan_ctx = GET_PHY_PLAN_CTX(*exec_ctx))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("deserialized exec ctx without phy plan ctx set. Unexpected", K(ret));
       } else if (OB_ISNULL(phy_plan = plan_ctx->get_phy_plan())) {

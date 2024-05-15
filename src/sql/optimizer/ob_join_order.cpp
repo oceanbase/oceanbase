@@ -47,18 +47,6 @@ class QueryRangeInfo;
 
 #define OPT_CTX (get_plan()->get_optimizer_context())
 
-int ConflictDetector::build_confict(common::ObIAllocator &allocator, ConflictDetector* &detector)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(detector = static_cast<ConflictDetector*>(allocator.alloc(sizeof(ConflictDetector))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory for conflict detector failed");
-  } else {
-    new(detector) ConflictDetector();
-  }
-  return ret;
-}
-
 ObJoinOrder::~ObJoinOrder()
 {
 
@@ -3467,7 +3455,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
                                                           ordering_directions))) {
     LOG_WARN("failed to split expr direction", K(ret));
   } else {
-    const ObIArray<ConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
+    const ObIArray<ObConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
     // get max prefix count from inner join infos
     for (int64_t i = 0; OB_SUCC(ret) && i < conflict_detectors.count(); i++) {
       related_join_keys.reuse();
@@ -3475,7 +3463,7 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
       if (OB_ISNULL(conflict_detectors.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null detectors", K(ret));
-      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->join_info_))) {
+      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->get_join_info()))) {
       } else if (!join_info->table_set_.overlap(get_tables()) ||
                   ObOptimizerUtil::find_item(used_conflict_detectors_, conflict_detectors.at(i))) {
         //do nothing
@@ -3528,14 +3516,14 @@ int ObJoinOrder::is_join_match(const ObIArray<OrderItem> &ordering,
                                                           ordering_directions))) {
     LOG_WARN("failed to split expr direction", K(ret));
   } else {
-    const ObIArray<ConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
+    const ObIArray<ObConflictDetector*> &conflict_detectors = plan->get_conflict_detectors();
     for (int64_t i = 0; OB_SUCC(ret) && !sort_match && i < conflict_detectors.count(); i++) {
       related_join_keys.reuse();
       other_join_keys.reuse();
       if (OB_ISNULL(conflict_detectors.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null detectors", K(ret));
-      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->join_info_))) {
+      } else if (OB_FALSE_IT(join_info = &(conflict_detectors.at(i)->get_join_info()))) {
       } else if (!join_info->table_set_.overlap(get_tables()) ||
                   ObOptimizerUtil::find_item(used_conflict_detectors_, conflict_detectors.at(i))) {
         //do nothing
@@ -4445,7 +4433,7 @@ int ObJoinOrder::get_excluded_condition_exprs(ObIArray<ObRawExpr *> &excluded_co
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < used_conflict_detectors_.count(); ++i) {
-    JoinInfo &join_info = used_conflict_detectors_.at(i)->join_info_;
+    JoinInfo &join_info = used_conflict_detectors_.at(i)->get_join_info();
     if (OB_FAIL(append_array_no_dup(excluded_conditions,
                                     join_info.on_conditions_))) {
       LOG_WARN("failed to append on condition exprs", K(ret));
@@ -8513,6 +8501,7 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
     LOG_WARN("failed to add pushdown filters", K(ret));
   } else {
     log_plan->set_is_subplan_scan(true);
+    log_plan->set_nonrecursive_plan_for_fake_cte(get_plan()->get_nonrecursive_plan_for_fake_cte());
     if (parent_stmt->is_insert_stmt()) {
       log_plan->set_insert_stmt(static_cast<const ObInsertStmt*>(parent_stmt));
     }
@@ -8679,7 +8668,7 @@ int ObJoinOrder::estimate_size_for_inner_subquery_path(double root_card,
 int ObJoinOrder::init_join_order(const ObJoinOrder *left_tree,
                                  const ObJoinOrder *right_tree,
                                  const JoinInfo *join_info,
-                                 const common::ObIArray<ConflictDetector*> &detectors)
+                                 const common::ObIArray<ObConflictDetector*> &detectors)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) ||
@@ -10638,7 +10627,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const Path &left_path,
                                                                left_exprs,
                                                                right_exprs))) {
       LOG_WARN("failed format equal join conditions", K(ret));
-    } else if (OB_FAIL(get_plan()->get_table_ids(right_exprs, right_tables))) {
+    } else if (OB_FAIL(ObTransformUtils::extract_table_rel_ids(right_exprs, right_tables))) {
       LOG_WARN("failed to get table ids by rexprs", K(ret));
     } else if (OB_FAIL(find_possible_join_filter_tables(
                        get_plan()->get_log_plan_hint(),
@@ -12006,6 +11995,7 @@ int ObJoinOrder::check_subquery_in_join_condition(const ObJoinType join_type,
 int ObJoinOrder::extract_used_columns(const uint64_t table_id,
                                       const uint64_t ref_table_id,
                                       bool only_normal_ref_expr,
+                                      bool consider_rowkey,
                                       ObIArray<uint64_t> &column_ids,
                                       ObIArray<ColumnItem> &columns)
 {
@@ -12031,15 +12021,18 @@ int ObJoinOrder::extract_used_columns(const uint64_t table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null table item", K(ret));
     } else {
-      // add all rowkey info, always used when merge ss-table and mem-table
-      const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
-      uint64_t column_id = OB_INVALID_ID;
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-        if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
-          LOG_WARN("Fail to get column id", K(ret));
-        } else if (OB_FAIL(column_ids.push_back(column_id))) {
-          LOG_WARN("Fail to add column id", K(ret));
-        } else { /*do nothing*/ }
+      if (consider_rowkey) {
+        // for normal index, add all rowkey info, always used when merge ss-table and mem-table
+        // for fulltext index, rowkey info is not necessary
+        const ObRowkeyInfo &rowkey_info = table_schema->get_rowkey_info();
+        uint64_t column_id = OB_INVALID_ID;
+        for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+          if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+            LOG_WARN("Fail to get column id", K(ret));
+          } else if (OB_FAIL(column_ids.push_back(column_id))) {
+            LOG_WARN("Fail to add column id", K(ret));
+          } else { /*do nothing*/ }
+        }
       }
       // add common column ids
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_column_size(); ++i) {
@@ -12096,6 +12089,7 @@ int ObJoinOrder::get_simple_index_info(const uint64_t table_id,
   } else if (OB_FAIL(extract_used_columns(table_id,
                                           ref_table_id,
                                           true,
+                                          !index_schema->is_fts_index_aux(),
                                           column_ids,
                                           dummy_columns))) {
     LOG_WARN("failed to extract column ids", K(table_id), K(ref_table_id), K(ret));
@@ -12500,6 +12494,7 @@ int ObJoinOrder::fill_path_index_meta_info(const uint64_t table_id,
       if (OB_FAIL(extract_used_columns(table_id,
                                       ref_table_id,
                                       index_id != ref_table_id && !ap->est_cost_info_.index_meta_info_.is_index_back_,
+                                      !index_meta_info.is_fulltext_index_,
                                       ap->est_cost_info_.access_columns_,
                                       dummy_columns))) {
         LOG_WARN("failed to extract used column ids", K(ret));
@@ -13043,7 +13038,7 @@ int ObJoinOrder::init_est_sel_info_for_subquery(const uint64_t table_id,
 
 int ObJoinOrder::merge_conflict_detectors(ObJoinOrder *left_tree,
                                           ObJoinOrder *right_tree,
-                                          const common::ObIArray<ConflictDetector*>& detectors)
+                                          const common::ObIArray<ObConflictDetector*>& detectors)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {

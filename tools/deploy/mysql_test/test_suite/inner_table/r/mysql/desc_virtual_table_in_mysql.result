@@ -2180,6 +2180,24 @@ collation_connection	varchar(128)	NO		NULL
 proc_type	bigint(20)	NO		NULL	
 collation_database	varchar(128)	NO		NULL	
 sql_mode	varchar(128)	NO		NULL	
+desc oceanbase.__all_virtual_global_transaction;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gtrid	varbinary(128)	NO	PRI	NULL	
+bqual	varbinary(128)	NO	PRI	NULL	
+format_id	bigint(20)	NO	PRI	1	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+trans_id	bigint(20)	NO		NULL	
+coordinator	bigint(20)	YES		NULL	
+scheduler_ip	varchar(128)	NO		NULL	
+scheduler_port	bigint(20)	NO		NULL	
+is_readonly	tinyint(4)	NO		0	
+state	bigint(20)	NO		NULL	
+flag	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_global_transaction;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_deadlock_event_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

@@ -427,6 +427,12 @@ namespace share
   static const char* const OB_SV_INNODB_SYNC_DEBUG = "innodb_sync_debug";
   static const char* const OB_SV_DEFAULT_COLLATION_FOR_UTF8MB4 = "default_collation_for_utf8mb4";
   static const char* const OB_SV__ENABLE_OLD_CHARSET_AGGREGATION = "_enable_old_charset_aggregation";
+  static const char* const OB_SV__OB_ENABLE_ROLE_IDS = "_ob_enable_role_ids";
+  static const char* const OB_SV_INNODB_READ_ONLY = "innodb_read_only";
+  static const char* const OB_SV_INNODB_API_DISABLE_ROWLOCK = "innodb_api_disable_rowlock";
+  static const char* const OB_SV_INNODB_AUTOINC_LOCK_MODE = "innodb_autoinc_lock_mode";
+  static const char* const OB_SV_SKIP_EXTERNAL_LOCKING = "skip_external_locking";
+  static const char* const OB_SV_SUPER_READ_ONLY = "super_read_only";
 
 }
 }

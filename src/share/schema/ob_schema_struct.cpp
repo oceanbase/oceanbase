@@ -5390,7 +5390,8 @@ ObBasePartition::ObBasePartition()
     partition_type_(PARTITION_TYPE_NORMAL),
     low_bound_val_(),
     tablet_id_(),
-    external_location_()
+    external_location_(),
+    split_source_tablet_id_()
 { }
 
 ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
@@ -5411,7 +5412,8 @@ ObBasePartition::ObBasePartition(common::ObIAllocator *allocator)
     partition_type_(PARTITION_TYPE_NORMAL),
     low_bound_val_(),
     tablet_id_(),
-    external_location_()
+    external_location_(),
+    split_source_tablet_id_()
 { }
 
 void ObBasePartition::reset()
@@ -5420,6 +5422,7 @@ void ObBasePartition::reset()
   table_id_ = OB_INVALID_ID;
   part_id_ = -1;
   tablet_id_.reset();
+  split_source_tablet_id_.reset();
   schema_version_ = OB_INVALID_VERSION;
   status_ = PARTITION_STATUS_ACTIVE;
   projector_ = NULL;
@@ -5445,6 +5448,7 @@ int ObBasePartition::assign(const ObBasePartition & src_part)
     tenant_id_ = src_part.tenant_id_;
     table_id_ = src_part.table_id_;
     tablet_id_ = src_part.tablet_id_;
+    split_source_tablet_id_ = src_part.split_source_tablet_id_;
     part_id_ = src_part.part_id_;
     schema_version_ = src_part.schema_version_;
     status_ = src_part.status_;
@@ -5727,7 +5731,8 @@ OB_DEF_SERIALIZE(ObBasePartition)
               partition_type_,
               low_bound_val_,
               tablet_id_,
-              external_location_);
+              external_location_,
+              split_source_tablet_id_);
   return ret;
 }
 
@@ -5810,7 +5815,7 @@ OB_DEF_DESERIALIZE(ObBasePartition)
     LOG_WARN("fail to deserialze low_bound_val", KR(ret));
   }
   ObString external_location;
-  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_, external_location);
+  LST_DO_CODE(OB_UNIS_DECODE, tablet_id_, external_location, split_source_tablet_id_);
   if (OB_SUCC(ret) && OB_FAIL(set_low_bound_val(low_bound_val))) {
     LOG_WARN("Fail to deep copy low_bound_val", K(ret), K(low_bound_val));
   } else if (OB_FAIL(deep_copy_str(external_location, external_location_))) {
@@ -5825,7 +5830,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasePartition)
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, table_id_, part_id_,
       schema_version_, name_, high_bound_val_, status_,
       part_idx_, is_empty_partition_name_,
-      tablespace_id_, partition_type_, low_bound_val_, tablet_id_, external_location_);
+      tablespace_id_, partition_type_, low_bound_val_, tablet_id_, external_location_, split_source_tablet_id_);
   len += serialization::encoded_length_vi64(list_row_values_.count());
   for (int64_t i = 0; i < list_row_values_.count(); i ++) {
     len += list_row_values_.at(i).get_serialize_size();

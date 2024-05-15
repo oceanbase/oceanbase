@@ -728,7 +728,8 @@ int ObColumnRedefinitionTask::collect_longops_stat(ObLongopsValue &value)
       } else if (OB_FAIL(databuff_printf(stat_info_.message_,
                                   MAX_LONG_OPS_MESSAGE_LENGTH,
                                   pos,
-                                  "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_INSERTED: %ld",
+                                  "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_INSERTED: %ld",
+                                  ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
                                   row_scanned,
                                   row_inserted))) {
         LOG_WARN("failed to print", K(ret));

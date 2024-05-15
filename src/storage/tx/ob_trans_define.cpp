@@ -1024,6 +1024,9 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
     for (int64_t i = 0; i < rollback_parts_->count(); i++) {
       if (rollback_parts_->at(i).ls_id_ == add_ls_id) {
         is_exist = true;
+        if (OB_FAIL(mask_set_.unmask(rollback_parts_->at(i)))) {
+          TRANS_LOG(WARN, "unmask fail", KR(ret), K(add_ls_id));
+        }
         break;
       }
     }

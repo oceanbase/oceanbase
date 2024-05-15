@@ -361,7 +361,8 @@ int ObStaticEngineCG::disable_use_rich_format(const ObLogicalOperator &op, ObOpS
         || is_virtual_table(tsc.get_ref_table_id())
         || (NULL != spec.get_parent() && PHY_UPDATE == spec.get_parent()->type_)
         || (NULL != spec.get_parent() && PHY_DELETE == spec.get_parent()->type_)
-        || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_) {
+        || (static_cast<ObTableScanSpec &>(spec)).tsc_ctdef_.scan_ctdef_.is_get_
+        || tsc.is_text_retrieval_scan()) {
       use_rich_format = false;
       LOG_DEBUG("tsc disable use rich format", K(tsc.get_index_back()), K(tsc.use_batch()),
                 K(is_virtual_table(tsc.get_ref_table_id())));
@@ -530,18 +531,19 @@ int ObStaticEngineCG::clear_all_exprs_specific_flag(
 }
 
 void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,
-                                       bool &found)
+                                                   const bool is_column_store_tbl, bool &found)
 {
+  bool new_vector_support = is_column_store_tbl && IS_CLUSTER_VERSION_AFTER_4_3_1_0;
   FOREACH_CNT_X(e, exprs, !found) {
     if (T_ORA_ROWSCN != (*e)->get_expr_type()) {
       auto col = static_cast<ObColumnRefRawExpr *>(*e);
       if (col->get_result_type().is_urowid()) {
         found = true;
       } else if (col->get_result_type().is_lob_locator()
-                 || col->get_result_type().is_json()
+                 || (!new_vector_support && col->get_result_type().is_json())
+                 || (!new_vector_support && col->get_result_type().get_type() == ObLongTextType)
+                 || (!new_vector_support && col->get_result_type().get_type() == ObMediumTextType)
                  || col->get_result_type().is_geometry()
-                 || col->get_result_type().get_type() == ObLongTextType
-                 || col->get_result_type().get_type() == ObMediumTextType
                  || (IS_CLUSTER_VERSION_BEFORE_4_1_0_0
                      && ob_is_text_tc(col->get_result_type().get_type()))) {
         // all lob types not support vectorize in 4.0
@@ -589,15 +591,20 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
             || is_virtual_table(table_id)) {
           disable_vectorize = true;
         }
+        bool is_col_store_tbl = false;
         if (!support) {
         } else if (OB_FAIL(schema_guard->get_table_schema(tsc->get_table_id(), tsc->get_ref_table_id(), op->get_stmt(), table_schema))) {
           LOG_WARN("get table schema failed", K(tsc->get_table_id()), K(ret));
         } else if (OB_NOT_NULL(table_schema) && 0 < table_schema->get_aux_vp_tid_count()) {
           disable_vectorize = true;
         }
-        exprs_not_support_vectorize(tsc->get_access_exprs(), disable_vectorize);
-        LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
-        scan_cardinality = common::max(scan_cardinality, op->get_card());
+        if (OB_NOT_NULL(table_schema) && OB_FAIL(table_schema->get_is_column_store(is_col_store_tbl))) {
+          LOG_WARN("get column store info failed", K(ret));
+        } else {
+          exprs_not_support_vectorize(tsc->get_access_exprs(), is_col_store_tbl, disable_vectorize);
+          LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
+          scan_cardinality = common::max(scan_cardinality, op->get_card());
+        }
       } else if (log_op_def::LOG_SUBPLAN_FILTER == op->get_type()) {
         auto spf_op = static_cast<ObLogSubPlanFilter *>(op);
         if (spf_op->is_update_set()) {
@@ -1811,7 +1818,10 @@ int ObStaticEngineCG::generate_recursive_union_all_spec(ObLogSet &op, ObRecursiv
   bool bulk_search = (min_cluster_version >= CLUSTER_VERSION_4_2_2_0
                       && min_cluster_version < CLUSTER_VERSION_4_3_0_0)
                      || (min_cluster_version >= CLUSTER_VERSION_4_3_1_0);
-  bool add_extra_column = bulk_search && lib::is_oracle_mode() && op.is_breadth_search();
+  bool add_extra_column = (NULL != op.get_identify_seq_expr());
+  if (lib::is_oracle_mode() && op.is_breadth_search()) {
+    bulk_search &= add_extra_column;
+  }
   if (OB_UNLIKELY(spec.get_child_cnt() != 2)
       || OB_ISNULL(left = spec.get_child(0))
       || OB_ISNULL(right = spec.get_child(1))

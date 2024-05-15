@@ -70,10 +70,18 @@ int ObPrepareExecutor::execute(ObExecContext &ctx, ObPrepareStmt &stmt)
           LOG_WARN("failed to get old prepare id", K(ret), K(stmt_name));
         }
       } else if (OB_INVALID_ID != ps_id) {
-        if (OB_FAIL(ctx.get_my_session()->remove_prepare(stmt_name))) {
-          LOG_WARN("failed to remove old prepare stmt", K(stmt_name), K(ret));
-        } else if (OB_FAIL(ctx.get_my_session()->close_ps_stmt(ps_id))) {
-          LOG_WARN("fail to deallocate old prepare stmt", K(ret), K(ps_id));
+        bool is_in_use = false;
+        if (lib::is_mysql_mode() && OB_FAIL(ctx.get_my_session()->check_ps_stmt_id_in_use(ps_id, is_in_use))) {
+          LOG_WARN("failed to check ps stmt id is in use",  K(ret), K(ps_id), K(is_in_use));
+        } else if(!is_in_use) {
+          if (OB_FAIL(ctx.get_my_session()->remove_prepare(stmt_name))) {
+            LOG_WARN("failed to remove old prepare stmt", K(stmt_name), K(ret));
+          } else if (OB_FAIL(ctx.get_my_session()->close_ps_stmt(ps_id))) {
+            LOG_WARN("fail to deallocate old prepare stmt", K(ret), K(ps_id));
+          }
+        } else {
+          ret = OB_ERR_PS_NO_RECURSION;
+          LOG_WARN("ps stmt id is in use", K(ret), K(ps_id), K(is_in_use));
         }
       }
       if (OB_FAIL(ret)) {

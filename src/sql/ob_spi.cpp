@@ -8399,8 +8399,6 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         } else {
           table->set_count(append_mode ? old_count + row_count : row_count);
           table->set_data(reinterpret_cast<ObObj*>(bulk_addr));
-          table->set_first(1);
-          table->set_last(table->get_count());
         }
 
         //初始化所有的ObObj
@@ -8410,6 +8408,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
         }
 
         if (OB_SUCC(ret)) {
+          int64_t j = 0;
           if (is_type_record) {
             // collection element is type record
             ObArray<ObObj> row;
@@ -8420,7 +8419,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             CK (OB_NOT_NULL(into_user_type));
             CK (into_user_type->is_record_type());
             OX (into_record_type = static_cast<const ObRecordType*>(into_user_type));
-            for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
+            for (; OB_SUCC(ret) && j < row_count; ++j) {
               OX (row.reset());
               CK (table->get_column_count() == into_record_type->get_record_member_count());
               for (int64_t k = 0; OB_SUCC(ret) && k < table->get_column_count(); ++k) {
@@ -8445,7 +8444,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             int64_t current_datum = append_mode ?
                 reinterpret_cast<int64_t>(bulk_addr) + old_count * sizeof(ObObj)
                 : reinterpret_cast<int64_t>(bulk_addr);
-            for (int64_t j = 0; OB_SUCC(ret) && j < row_count; ++j) {
+            for (; OB_SUCC(ret) && j < row_count; ++j) {
               ObObj &current_obj = obj_array.at(j * column_count + start_idx);
               if (OB_UNLIKELY(table->is_not_null())) {
                 if (current_obj.is_null()) {
@@ -8472,34 +8471,27 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
           }
 
           if (OB_SUCC(ret)) {
+            OX (table->set_first(1));
+            OX (table->set_last(table->get_count()));
             OZ (table->shrink());
           } else if (OB_NOT_NULL(bulk_addr)) {
-            allocator->free(bulk_addr);
+            int ret = OB_SUCCESS;
+            ObObj *new_data = reinterpret_cast<ObObj*>(table->get_data());
+            new_data = append_mode ? (new_data + old_count) : new_data;
+            for (int64_t i = 0; i < j; ++i) {
+              if (OB_FAIL(ObUserDefinedType::destruct_obj(*new_data, ctx->exec_ctx_->get_my_session()))) {
+                LOG_WARN("failed to destruct dirty table", K(ret), K(i), KPC(new_data));
+              }
+              new_data++;
+              table->set_count(old_count);
+            }
           }
         }
       } else {
-        // need free memory
-        if (is_type_record) {
-          for (int64_t j = 0; j < row_count; ++j) {
-            for (int64_t k = 0; k < table->get_column_count(); ++k) {
-              int64_t idx = j * column_count + start_idx + k;
-              if (obj_array.at(idx).is_pl_extend()) {
-                int tmp_ret = OB_SUCCESS;
-                if ((tmp_ret = ObUserDefinedType::destruct_obj(obj_array.at(idx), ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
-                  LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(idx), K(obj_array));
-                }
-              }
-            }
-          }
-        } else {
-          for (int64_t j = 0; j < row_count; ++j) {
-            int64_t idx = j * column_count + start_idx;
-            if (obj_array.at(idx).is_pl_extend()) {
-              int tmp_ret = OB_SUCCESS;
-              if ((tmp_ret = ObUserDefinedType::destruct_obj(obj_array.at(idx), ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
-                LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(idx), K(obj_array));
-              }
-            }
+        for (int64_t i = 0; i < obj_array.count(); ++i) {
+          int ret = OB_SUCCESS;
+          if (OB_FAIL(ObUserDefinedType::destruct_obj(obj_array.at(i), ctx->exec_ctx_->get_my_session()))) {
+            LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(i), K(obj_array));
           }
         }
       }

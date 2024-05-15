@@ -236,6 +236,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
   GENERATE_MDS_UNIT(::oceanbase::compaction::ObMediumCompactionInfoKey,\
                     ::oceanbase::compaction::ObMediumCompactionInfo,\
                     false)
+  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  //                   ::oceanbase::storage::ObTabletSplitMdsUserData,\
+  //                   false)
   // # 余留位置（此行之前占位）
 #endif
 

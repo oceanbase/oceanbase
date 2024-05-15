@@ -54,9 +54,6 @@ private:
   int build_tx_param();
   int start_sql_tx();
   int end_sql_tx(const bool commit);
-  // abort tx is async, use rollback savepoint to sync release table lock
-  int create_implicit_savepoint();
-  int rollback_to_implicit_savepoint();
   int lock_table_in_tx();
   int init_ddl_param_for_inc_direct_load();
   // full
@@ -66,6 +63,7 @@ private:
 private:
   // direct load
   int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
+  int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();
   int start_trans();
@@ -94,7 +92,6 @@ private:
       session_info_ = nullptr;
       tx_desc_ = nullptr;
       // tx_param_.reset();
-      savepoint_.reset();
       is_incremental_ = false;
       use_insert_into_select_tx_ = false;
       is_started_ = false;
@@ -107,7 +104,6 @@ private:
                  KP_(session_info),
                  KPC_(tx_desc),
                  K_(tx_param),
-                 K_(savepoint),
                  KP_(is_incremental),
                  KP_(use_insert_into_select_tx),
                  KP_(is_started),
@@ -119,7 +115,6 @@ private:
     sql::ObSQLSessionInfo *session_info_;
     transaction::ObTxDesc *tx_desc_;
     transaction::ObTxParam tx_param_;
-    transaction::ObTxSEQ savepoint_;
     bool is_incremental_;
     bool use_insert_into_select_tx_; // whether use the transaction of insert into select
     bool is_started_;

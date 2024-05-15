@@ -547,16 +547,9 @@ int ObBasicTabletMergeCtx::swap_tablet()
 {
   int ret = OB_SUCCESS;
   const ObTabletMapKey key(get_ls_id(), get_tablet_id());
-  if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet_with_allocator(
-      WashTabletPriority::WTP_LOW, key, mem_ctx_.get_allocator(),
-      tablet_handle_, true /*force_alloc_new*/))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_TABLET_NOT_EXIST;
-    } else {
-      LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
-    }
-  } else if (OB_FAIL(get_tablet()->clear_memtables_on_table_store())) {
-    LOG_WARN("failed to clear memtables on table_store", K(ret), K(tablet_handle_));
+  if (OB_FAIL(get_ls()->get_tablet_svr()->get_tablet_without_memtables(
+      WashTabletPriority::WTP_LOW, key, mem_ctx_.get_allocator(), tablet_handle_))) {
+    LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
   } else {
     static_param_.rowkey_read_info_ = static_cast<const ObRowkeyReadInfo *>(&(get_tablet()->get_rowkey_read_info()));
     LOG_INFO("success to swap tablet handle", K(ret), K(tablet_handle_),

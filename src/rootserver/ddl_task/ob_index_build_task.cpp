@@ -853,7 +853,7 @@ int ObIndexBuildTask::send_build_single_replica_request()
     LOG_WARN("ObIndexBuildTask has not been inited", K(ret));
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_SEND_BUILD_REPLICA_REQUEST_FAILED))) {
     LOG_WARN("ddl sim failure", K(ret), K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, true/*is ddl retryable*/, data_format_version_, new_execution_id))) {
+  } else if (OB_FAIL(ObDDLTask::push_execution_id(tenant_id_, task_id_, task_type_, true/*is ddl retryable*/, data_format_version_, new_execution_id))) {
     LOG_WARN("failed to fetch new execution id", K(ret));
   } else {
     if (OB_FAIL(ObDDLUtil::get_sys_ls_leader_addr(GCONF.cluster_id, tenant_id_, create_index_arg_.inner_sql_exec_addr_))) {
@@ -1550,7 +1550,8 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
         if (OB_FAIL(databuff_printf(stat_info_.message_,
                                     MAX_LONG_OPS_MESSAGE_LENGTH,
                                     pos,
-                                    "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, ROW_INSERTED: %ld out of %ld column group rows",
+                                    "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED_INTO_TMP_FILE: %ld, ROW_INSERTED: %ld out of %ld column group rows",
+                                    ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
                                     row_scanned,
                                     row_sorted,
                                     row_inserted_file,
@@ -1562,7 +1563,8 @@ int ObIndexBuildTask::collect_longops_stat(ObLongopsValue &value)
         if (OB_FAIL(databuff_printf(stat_info_.message_,
                                     MAX_LONG_OPS_MESSAGE_LENGTH,
                                     pos,
-                                    "STATUS: REPLICA BUILD, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                    "STATUS: REPLICA BUILD, PARALLELISM: %ld, ROW_SCANNED: %ld, ROW_SORTED: %ld, ROW_INSERTED: %ld",
+                                    ObDDLUtil::get_real_parallelism(parallelism_, false/*is mv refresh*/),
                                     row_scanned,
                                     row_sorted,
                                     row_inserted_file))) {

@@ -14431,6 +14431,10 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (orig_table_schema.is_materialized_view()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("alter partition of materialized view is not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter partition of materialized view is");
   } else if (orig_table_schema.is_interval_part()) {
     if (PARTITION_LEVEL_TWO == orig_table_schema.get_part_level()
         && !orig_table_schema.has_sub_part_template_def()) {

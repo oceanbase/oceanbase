@@ -357,7 +357,9 @@ int ObAlterRoutineResolver::resolve_routine(
   int ret = OB_SUCCESS;
   ParseNode *crt_tree = NULL;
   CK (OB_NOT_NULL(source_tree));
-  CK (T_SP_SOURCE == source_tree->type_ || T_SF_SOURCE == source_tree->type_);
+  CK (T_SP_SOURCE == source_tree->type_
+      || T_SF_SOURCE == source_tree->type_
+      || T_SF_AGGREGATE_SOURCE == source_tree->type_);
   CK (lib::is_oracle_mode());
   if (OB_SUCC(ret)
       && OB_ISNULL(crt_tree = new_non_terminal_node(

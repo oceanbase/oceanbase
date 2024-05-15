@@ -227,7 +227,8 @@ int ObTextRetrievalMerge::get_next_row(ObNewRow *&row)
   }
 
   bool got_valid_document = false;
-  ObExpr *match_filter = retrieval_param_.get_ir_ctdef()->match_filter_;
+  ObExpr *match_filter = retrieval_param_.need_relevance()
+      ? retrieval_param_.get_ir_ctdef()->match_filter_ : nullptr;
   ObDatum *filter_res = nullptr;
   while (OB_SUCC(ret) && !got_valid_document) {
     clear_evaluated_infos();
@@ -509,8 +510,9 @@ int ObTextRetrievalMerge::next_disjunctive_document()
     }
   }
 
-  if (OB_SUCC(ret) && retrieval_param_.get_ir_ctdef()->need_proj_relevance_score()) {
-    if (OB_FAIL(project_result(*top_item, cur_doc_relevance))) {
+  if (OB_SUCC(ret)) {
+    const double project_relevance = retrieval_param_.need_relevance() ? cur_doc_relevance : 1;
+    if (OB_FAIL(project_result(*top_item, project_relevance))) {
       LOG_WARN("failed to project relevance", K(ret));
     }
   }
@@ -521,7 +523,6 @@ int ObTextRetrievalMerge::next_disjunctive_document()
 int ObTextRetrievalMerge::project_result(const ObIRIterLoserTreeItem &item, const double relevance)
 {
   int ret = OB_SUCCESS;
-  ObExpr *relevance_proj_col = retrieval_param_.get_ir_ctdef()->relevance_proj_col_;
   // TODO: usage of doc id column is somehow weird here, since in single token retrieval iterators,
   //       we use doc id expr to scan doc_id column for scan document. But here after DaaT processing, we use this expr
   //       to record current disjunctive documents. Though current implementation can make sure lifetime is
@@ -529,15 +530,23 @@ int ObTextRetrievalMerge::project_result(const ObIRIterLoserTreeItem &item, cons
   // P.S we cannot allocate multiple doc id expr at cg for every query token since tokenization now is an runtime operation
   ObExpr *doc_id_col = retrieval_param_.get_ir_ctdef()->inv_scan_doc_id_col_;
   ObEvalCtx *eval_ctx = retrieval_param_.get_ir_rtdef()->eval_ctx_;
-  if (OB_ISNULL(relevance_proj_col) || OB_ISNULL(doc_id_col) || OB_ISNULL(eval_ctx)) {
+  if (OB_ISNULL(doc_id_col) || OB_ISNULL(eval_ctx)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr to relevance proejction column",
-        K(ret), KP(relevance_proj_col), KP(doc_id_col), KP(eval_ctx));
+        K(ret), KP(doc_id_col), KP(eval_ctx));
   } else {
-    ObDatum &relevance_proj_datum = relevance_proj_col->locate_datum_for_write(*eval_ctx);
     ObDatum &doc_id_proj_datum = doc_id_col->locate_datum_for_write(*eval_ctx);
-    relevance_proj_datum.set_double(relevance);
     doc_id_proj_datum.set_string(item.doc_id_.get_string());
+    if (retrieval_param_.get_ir_ctdef()->need_proj_relevance_score()) {
+      ObExpr *relevance_proj_col = retrieval_param_.get_ir_ctdef()->relevance_proj_col_;
+      if (OB_ISNULL(relevance_proj_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null relevance proj col", K(ret));
+      } else {
+        ObDatum &relevance_proj_datum = relevance_proj_col->locate_datum_for_write(*eval_ctx);
+        relevance_proj_datum.set_double(relevance);
+      }
+    }
     LOG_DEBUG("project one fulltext search result", K(ret), K(item));
   }
   return ret;
@@ -550,13 +559,14 @@ int ObTextRetrievalMerge::fill_loser_tree_item(
 {
   int ret = OB_SUCCESS;
   item.iter_idx_ = iter_idx;
-  ObExpr *relevance_expr = retrieval_param_.get_ir_ctdef()->relevance_expr_;
   ObExpr *doc_id_expr = retrieval_param_.get_ir_ctdef()->inv_scan_doc_id_col_;
-  const ObDatum &relevance_datum = relevance_expr->locate_expr_datum(*retrieval_param_.get_ir_rtdef()->eval_ctx_);
   const ObDatum &doc_id_datum = doc_id_expr->locate_expr_datum(*retrieval_param_.get_ir_rtdef()->eval_ctx_);
-  item.relevance_ = relevance_datum.get_double();
   if (OB_FAIL(item.doc_id_.from_string(doc_id_datum.get_string()))) {
-    LOG_WARN("failed to get ObDocId from string", K(ret));
+    LOG_WARN("failed to get ObDocId from string", K(ret), K(doc_id_datum), KPC(doc_id_expr));
+  } else if (retrieval_param_.need_relevance()) {
+    ObExpr *relevance_expr = retrieval_param_.get_ir_ctdef()->relevance_expr_;
+    const ObDatum &relevance_datum = relevance_expr->locate_expr_datum(*retrieval_param_.get_ir_rtdef()->eval_ctx_);
+    item.relevance_ = relevance_datum.get_double();
   }
   return ret;
 }
@@ -568,7 +578,9 @@ int ObTextRetrievalMerge::init_total_doc_cnt_param(
   int ret = OB_SUCCESS;
   const ObDASScanCtDef *ctdef = retrieval_param_.get_doc_id_idx_agg_ctdef();
   ObDASScanRtDef *rtdef = retrieval_param_.get_ir_rtdef()->get_doc_id_idx_agg_rtdef();
-  if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
+  if (!retrieval_param_.need_relevance()) {
+    // no need to do total doc cnt
+  } else if (OB_ISNULL(ctdef) || OB_ISNULL(rtdef)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected scan descriptor", K(ret));
   } else {
@@ -629,7 +641,9 @@ int ObTextRetrievalMerge::do_total_doc_cnt()
 {
   int ret = OB_SUCCESS;
 
-  if (retrieval_param_.get_ir_ctdef()->need_do_total_doc_cnt()) {
+  if (!retrieval_param_.need_relevance()) {
+    // skip
+  } else if (retrieval_param_.get_ir_ctdef()->need_do_total_doc_cnt()) {
     // When estimation info not exist, or we found estimation info not accurate, calculate document count by scan
     ObITabletScan *tsc_service = MTL(ObAccessService *);
     if (OB_ISNULL(tsc_service)) {

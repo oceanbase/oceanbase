@@ -874,6 +874,7 @@ ObDDLKV::ObDDLKV()
   : is_inited_(false), is_closed_(false), is_inc_ddl_kv_(false), is_independent_freezed_(false), lock_(),
     arena_allocator_("DDL_CONTAINER", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     tablet_id_(), ddl_start_scn_(SCN::min_scn()), ddl_snapshot_version_(0), data_format_version_(0), trans_id_(),
+    data_schema_version_(0), column_count_(0),
     min_scn_(SCN::max_scn()), max_scn_(SCN::min_scn()), pending_cnt_(0),
     macro_block_count_(0)
 {
@@ -935,6 +936,8 @@ void ObDDLKV::reset()
   ddl_snapshot_version_ = 0;
   data_format_version_ = 0;
   trans_id_.reset();
+  data_schema_version_ = 0;
+  column_count_ = 0;
 
   min_scn_ = SCN::max_scn();
   max_scn_ = SCN::min_scn();
@@ -1011,11 +1014,6 @@ int ObDDLKV::get_ddl_memtable(const int64_t cg_idx, ObDDLMemtable *&ddl_memtable
     ret = OB_ENTRY_NOT_EXIST;
   }
   return ret;
-}
-
-int ObDDLKV::get_first_ddl_memtable(ObDDLMemtable *&ddl_memtable)
-{
-  return get_ddl_memtable(0, ddl_memtable);
 }
 
 int ObDDLKV::set_macro_block(
@@ -1145,6 +1143,12 @@ int ObDDLKV::set_macro_block(
         min_scn_ = SCN::min(min_scn_, macro_block.scn_);
         max_scn_ = SCN::max(max_scn_, macro_block.scn_);
         ++macro_block_count_;
+        if (0 == data_schema_version_) {
+          data_schema_version_ = data_macro_meta->val_.schema_version_;
+        }
+        if (0 == column_count_) {
+          column_count_ = data_macro_meta->val_.column_count_ - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+        }
         LOG_INFO("succeed to set macro block into ddl kv", K(macro_block), K(macro_block_count_), KPC(data_macro_meta));
       }
     }
@@ -1464,8 +1468,18 @@ int ObDDLKV::decide_right_boundary()
     LOG_ERROR("tablet memtable mgr of ddl kv is unexpected null", KR(ret), K(ls_id), KPC(this));
   } else if (OB_FAIL(mgr->freeze_direct_load_memtable(this))) {
     LOG_WARN("fail to freeze direct load memtable", K(ret));
+  } else if (OB_ISNULL(freezer_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid freezer", KR(ret), KPC(this));
+  } else {
+    SCN snapshot_version = freezer_->get_freeze_snapshot_version();
+    if (snapshot_version.is_max() || snapshot_version.is_min() || !snapshot_version.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid snapshot version", KR(ret), K(ls_id), K(snapshot_version), KP(freezer_));
+    } else {
+      set_snapshot_version(snapshot_version);
+    }
   }
-
   return ret;
 }
 
@@ -1585,18 +1599,32 @@ void ObDDLKV::set_allow_freeze(const bool allow_freeze)
 
 int ObDDLKV::get_frozen_schema_version(int64_t &schema_version) const
 {
+  UNUSED(schema_version);
+  return OB_NOT_SUPPORTED;
+}
+
+bool ObDDLKV::can_be_minor_merged()
+{
+  return ready_for_flush() && ObITabletMemtable::can_be_minor_merged();
+}
+
+int ObDDLKV::get_schema_info(
+    const int64_t input_column_cnt,
+    int64_t &max_schema_version_on_memtable,
+    int64_t &max_column_cnt_on_memtable) const
+{
   int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inc_ddl_kv())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support get for full direct load", K(ret));
-  } else if (ddl_memtables_.count() == 0) {
-    schema_version = 0;
-  } else if (OB_UNLIKELY(ddl_memtables_.count() != 1)) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else if (OB_FAIL(ddl_memtables_.at(0)->get_frozen_schema_version(schema_version))) {
-    LOG_WARN("fail to get row", K(ret));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    TCRLockGuard guard(lock_);
+    if (column_count_ >= input_column_cnt) {
+      LOG_INFO("column cnt or schema version is updated by ddl kv", KPC(this),
+                K(max_column_cnt_on_memtable), K(max_schema_version_on_memtable));
+      max_column_cnt_on_memtable = MAX(max_column_cnt_on_memtable, column_count_);
+      max_schema_version_on_memtable = MAX(max_schema_version_on_memtable, data_schema_version_);
+    }
   }
   return ret;
 }
@@ -1625,13 +1653,18 @@ int ObDDLKV::get_frozen_schema_version(int64_t &schema_version) const
     }                                                                                           \
   }
 
-int ObDDLKV::exist(const ObTableIterParam &param, ObTableAccessContext &context,
-	      const blocksstable::ObDatumRowkey &rowkey, bool &is_exist, bool &has_found)
+int ObDDLKV::exist(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObDatumRowkey &rowkey,
+    bool &is_exist,
+    bool &has_found)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
@@ -1653,6 +1686,7 @@ int ObDDLKV::exist(ObRowsInfo &rowsInfo, bool &is_exist, bool &has_found)
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
@@ -1668,13 +1702,16 @@ int ObDDLKV::exist(ObRowsInfo &rowsInfo, bool &is_exist, bool &has_found)
   return ret;
 }
 
-int ObDDLKV::scan(const ObTableIterParam &param, ObTableAccessContext &context,
-      const blocksstable::ObDatumRange &key_range, ObStoreRowIterator *&row_iter)
+int ObDDLKV::scan(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObDatumRange &key_range,
+    ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -1684,26 +1721,22 @@ int ObDDLKV::scan(const ObTableIterParam &param, ObTableAccessContext &context,
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
-  } else if (OB_UNLIKELY(ddl_memtables_.count() == 0)) {
-    if (OB_FAIL(get_empty_iter(param, context, &key_range, row_iter))) {
-      LOG_WARN("fail to get empty iter", K(ret));
-    }
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
   } else {
     ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowScanner, &key_range, row_iter);
   }
   return ret;
 }
 
-int ObDDLKV::get(const storage::ObTableIterParam &param, storage::ObTableAccessContext &context,
-      const blocksstable::ObDatumRowkey &rowkey, ObStoreRowIterator *&row_iter)
+int ObDDLKV::get(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObDatumRowkey &rowkey,
+    ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(
       !param.is_valid()
       || !context.is_valid()
@@ -1713,92 +1746,33 @@ int ObDDLKV::get(const storage::ObTableIterParam &param, storage::ObTableAccessC
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
-  } else if (OB_UNLIKELY(ddl_memtables_.count() == 0)) {
-    if (OB_FAIL(get_empty_iter(param, context, &rowkey, row_iter))) {
-      LOG_WARN("fail to get empty iter", K(ret));
-    }
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
   } else {
     ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowGetter, &rowkey, row_iter);
   }
   return ret;
 }
 
-int ObDDLKV::multi_get(const ObTableIterParam &param, ObTableAccessContext &context,
-      const common::ObIArray<blocksstable::ObDatumRowkey> &rowkeys, ObStoreRowIterator *&row_iter)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(
-      !param.is_valid()
-      || !context.is_valid()
-      || 0 >= rowkeys.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));
-  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support get for full direct load", K(ret));
-  } else if (OB_UNLIKELY(ddl_memtables_.count() == 0)) {
-    if (OB_FAIL(get_empty_iter(param, context, &rowkeys, row_iter))) {
-      LOG_WARN("fail to get empty iter", K(ret));
-    }
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else {
-    ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowMultiGetter, &rowkeys, row_iter);
-  }
-  return ret;
-}
-
-int ObDDLKV::multi_scan(const ObTableIterParam &param, ObTableAccessContext &context,
-      const common::ObIArray<blocksstable::ObDatumRange> &ranges, ObStoreRowIterator *&row_iter)
-{
-  int ret = OB_SUCCESS;
-  TCRLockGuard guard(lock_);
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-  } else if (OB_UNLIKELY(
-      !param.is_valid()
-      || !context.is_valid()
-      || 0 >= ranges.count())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
-  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support get for full direct load", K(ret));
-  } else if (OB_UNLIKELY(ddl_memtables_.count() == 0)) {
-    if (OB_FAIL(get_empty_iter(param, context, &ranges, row_iter))) {
-      LOG_WARN("fail to get empty iter", K(ret));
-    }
-  } else if (ddl_memtables_.count() != 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else {
-    ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowMultiScanner, &ranges, row_iter);
-  }
-  return ret;
-}
-
-int ObDDLKV::get(const storage::ObTableIterParam &param, storage::ObTableAccessContext &context,
-                 const blocksstable::ObDatumRowkey &rowkey, blocksstable::ObDatumRow &row)
+int ObDDLKV::get(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObDatumRowkey &rowkey,
+    ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   ObStoreRowIterator *row_iter = nullptr;
   const ObDatumRow *row_ptr= nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
   } else if (OB_FAIL(get(param, context, rowkey, row_iter))) {
     LOG_WARN("fail to get row", K(ret));
   } else if (OB_FAIL(row_iter->get_next_row(row_ptr))) {
-    LOG_WARN("fail to get row", K(ret));
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to get row", K(ret));
+    }
   } else if (OB_ISNULL(row_ptr) || row_ptr->row_flag_.is_not_exist()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected row", K(ret));
@@ -1812,55 +1786,76 @@ int ObDDLKV::get(const storage::ObTableIterParam &param, storage::ObTableAccessC
   return ret;
 }
 
-int ObDDLKV::get_empty_iter(const ObTableIterParam &param, ObTableAccessContext &context,
-      const void *ranges, ObStoreRowIterator *&row_iter)
+int ObDDLKV::multi_get(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObIArray<ObDatumRowkey> &rowkeys,
+    ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!context.is_valid() || OB_ISNULL(ranges) || !param.is_valid())) {
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(
+      !param.is_valid()
+      || !context.is_valid()
+      || 0 >= rowkeys.count())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(context));
+    LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(rowkeys));
+  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support get for full direct load", K(ret));
   } else {
-    void *buf = nullptr;
-    ObStoreRowIterator *empty_row_iter = nullptr;
-    ALLOCATE_TABLE_STORE_ROW_IETRATOR(context,
-          ObDDLKVEmptyIterator,
-          empty_row_iter);
-
-    if (OB_SUCC(ret)) {
-      if (OB_ISNULL(empty_row_iter)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "unexpected error, row_scanner is nullptr", K(ret), KP(empty_row_iter));
-      } else if (OB_FAIL(empty_row_iter->init(param, context, this, ranges))) {
-        LOG_WARN("Fail to open row scanner", K(ret), K(param), K(context), KP(ranges), K(*this));
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      if (nullptr != empty_row_iter) {
-        empty_row_iter->~ObStoreRowIterator();
-        FREE_TABLE_STORE_ROW_IETRATOR(context, empty_row_iter);
-        empty_row_iter = nullptr;
-      }
-    } else {
-      row_iter = empty_row_iter;
-    }
+    ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowMultiGetter, &rowkeys, row_iter);
   }
   return ret;
 }
 
-int ObDDLKV::check_row_locked(const ObTableIterParam &param, const blocksstable::ObDatumRowkey &rowkey,
-        ObTableAccessContext &context, ObStoreRowLockState &lock_state, ObRowState &row_state, bool check_exist)
+int ObDDLKV::multi_scan(
+    const ObTableIterParam &param,
+    ObTableAccessContext &context,
+    const ObIArray<ObDatumRange> &ranges,
+    ObStoreRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(
+      !param.is_valid()
+      || !context.is_valid()
+      || 0 >= ranges.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument", K(ret), K(param), K(context), K(ranges));
+  } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support get for full direct load", K(ret));
+  } else {
+    ALLOCATE_DDL_KV_MULTI_VERSION_ROW_IETRATOR(ObSSTableMultiVersionRowMultiScanner, &ranges, row_iter);
+  }
+  return ret;
+}
+
+int ObDDLKV::check_row_locked(
+    const ObTableIterParam &param,
+    const ObDatumRowkey &rowkey,
+    ObTableAccessContext &context,
+    ObStoreRowLockState &lock_state,
+    ObRowState &row_state,
+    bool check_exist)
+{
+  int ret = OB_SUCCESS;
+  lock_state.trans_version_ = SCN::min_scn();
+  lock_state.is_locked_ = false;
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
   } else if (ddl_memtables_.count() == 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support to check lock when memtable count is 0", K(ret));
+    // do nothing
   } else if (ddl_memtables_.count() != 1) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("inc direct load do not support column store yet", K(ret));
@@ -1870,24 +1865,95 @@ int ObDDLKV::check_row_locked(const ObTableIterParam &param, const blocksstable:
   return ret;
 }
 
-int ObDDLKV::check_rows_locked(const bool check_exist, ObTableAccessContext &context,
-                               SCN &max_trans_version, ObRowsInfo &rows_info)
+int ObDDLKV::check_rows_locked(
+    const bool check_exist,
+    ObTableAccessContext &context,
+    SCN &max_trans_version,
+    ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
   TCRLockGuard guard(lock_);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
   } else if (OB_UNLIKELY(!is_inc_ddl_kv())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support get for full direct load", K(ret));
   } else if (ddl_memtables_.count() == 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support to check lock when memtable count is 0", K(ret));
+    // do nothing
   } else if (ddl_memtables_.count() != 1) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("inc direct load do not support column store yet", K(ret));
-  } else if (OB_FAIL(ddl_memtables_.at(0)->check_rows_locked(check_exist, context, max_trans_version, rows_info))) {
-    LOG_WARN("fail to get row", K(ret));
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("check_rows_locked in ddl memtable is not supported", K(ret));
+  // } else if (OB_FAIL(ddl_memtables_.at(0)->check_rows_locked(check_exist, context, max_trans_version, rows_info))) {
+  //   LOG_WARN("fail to get row", K(ret));
+  }
+  return ret;
+}
+
+int64_t ObDDLKV::get_occupied_size() const
+{
+  int ret = OB_SUCCESS;
+  int64_t occupied_size = 0;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    TCRLockGuard guard(lock_);
+    ObSSTableMetaHandle sst_meta_hdl;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_memtables_.count(); ++i) {
+      ObDDLMemtable *ddl_memtable = ddl_memtables_.at(i);
+      occupied_size += ddl_memtable->get_occupy_size();
+    }
+  }
+  return occupied_size;
+}
+
+int64_t ObDDLKV::get_row_count() const
+{
+  int ret = OB_SUCCESS;
+  int64_t row_count = 0;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    TCRLockGuard guard(lock_);
+    ObSSTableMetaHandle sst_meta_hdl;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_memtables_.count(); ++i) {
+      ObDDLMemtable *ddl_memtable = ddl_memtables_.at(i);
+      row_count += ddl_memtable->get_row_count();
+    }
+  }
+  return row_count;
+}
+
+int ObDDLKV::get_block_count_and_row_count(
+    int64_t &macro_block_count,
+    int64_t &micro_block_count,
+    int64_t &row_count) const
+{
+  int ret = OB_SUCCESS;
+  macro_block_count = 0;
+  micro_block_count = 0;
+  row_count = 0;
+  if (OB_UNLIKELY(IS_NOT_INIT)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    TCRLockGuard guard(lock_);
+    ObSSTableMetaHandle sst_meta_hdl;
+    for (int64_t i = 0; OB_SUCC(ret) && i < ddl_memtables_.count(); ++i) {
+      ObDDLMemtable *ddl_memtable = ddl_memtables_.at(i);
+      if (OB_FAIL(ddl_memtable->get_meta(sst_meta_hdl))) {
+        LOG_WARN("fail to get meta", K(ret));
+      } else {
+        macro_block_count += sst_meta_hdl.get_sstable_meta().get_data_macro_block_count();
+        micro_block_count += sst_meta_hdl.get_sstable_meta().get_data_micro_block_count();
+        row_count += sst_meta_hdl.get_sstable_meta().get_row_count();
+      }
+    }
   }
   return ret;
 }

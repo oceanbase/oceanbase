@@ -13,6 +13,7 @@
 #include "storage/access/ob_sample_iter_helper.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/access/ob_multiple_multi_scan_merge.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase {
 namespace storage {
@@ -86,7 +87,8 @@ int ObGetSampleIterHelper::can_retire_to_memtable_row_sample_(bool &retire, ObIA
           memtable_row_count += memtable->get_physical_row_cnt();
         }
       } else if (table->is_direct_load_memtable()) {
-        // FIXEM : @suzhi.yt support direct load memtable get_row_count();
+        ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(table);
+        sstable_row_count += ddl_kv->get_row_count();
       } else if (table->is_sstable()) {
         sstable_row_count += static_cast<ObSSTable *>(table)->get_row_count();
       }
