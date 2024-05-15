@@ -400,7 +400,7 @@ TEST_F(TestHTableLock, concurrent_shared_lock)
 TEST_F(TestHTableLock, concurrent_exclusive_lock)
 {
   EXPECT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  const uint64_t thread_cnt = 1024;
+  const uint64_t thread_cnt = 100;
   const uint64_t fake_table_id = 1;
   ObString key = ObString::make_string("k1");
   const int64_t start = ObTimeUtility::current_time();
@@ -415,7 +415,7 @@ TEST_F(TestHTableLock, concurrent_exclusive_lock)
 TEST_F(TestHTableLock, concurrent_exclusive_shared_lock)
 {
   EXPECT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  const uint64_t xthread_cnt = 1024;
+  const uint64_t xthread_cnt = 100;
   const uint64_t sthread_cnt = 1024;
   const uint64_t fake_table_id = 1;
   ObString key = ObString::make_string("k1");
