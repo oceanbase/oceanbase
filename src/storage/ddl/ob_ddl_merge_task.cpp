@@ -416,9 +416,6 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
     } else if (nullptr != first_major_sstable) {
       is_major_exist = true;
       LOG_INFO("major sstable has been created before", K(merge_param_));
-    } else if (tablet.get_tablet_meta().table_store_flag_.with_major_sstable()) {
-      ret = OB_TASK_EXPIRED;
-      LOG_INFO("tablet me says with major but no major, meaning its a migrated deleted tablet, skip");
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr(merge_param_.tablet_id_,
                                                               true /* is_full_direct_load */,
                                                                tablet_mgr_hdl))) {
