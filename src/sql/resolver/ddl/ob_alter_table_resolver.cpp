@@ -5067,6 +5067,7 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode &node)
               for (int64_t j = 0; j < alter_table_scheme_col_cnt; j++) {
                 if (alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(j)->get_column_name_str() == child_column_name) {
                   ret = OB_NOT_SUPPORTED;
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Oceanbase doesn't support adding a column and together with a foreign key on this column in a single ddl");
                   break;
                 }
               }
