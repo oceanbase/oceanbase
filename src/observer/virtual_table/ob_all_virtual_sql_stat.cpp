@@ -202,78 +202,80 @@ int ObAllVirtualSqlStatIter::get_next_sql_stat (
 
   if (OB_SUCC(ret)) {
     tenant_id = cur_tenant_id_;
-    if (sql_stat_cache_id_array_idx_ < sql_stat_cache_id_array_.count()) {
-      ObReqTimeGuard req_timeinfo_guard;
-      ObPlanCache* plan_cache = MTL(ObPlanCache*);
-      if (OB_NOT_NULL(plan_cache)) {
-        uint64_t cur_sql_stat_cache_id = sql_stat_cache_id_array_.at(sql_stat_cache_id_array_idx_);
-        sql_stat_cache_id_array_idx_++;
-        ObCacheObjGuard guard(VT_SQL_STAT_HANDLE);
-        int tmp_ret = plan_cache->ref_cache_obj(cur_sql_stat_cache_id, guard); //plan引用计数加VT_SQL_STAT_HANDLE
-        if (OB_HASH_NOT_EXIST == tmp_ret) {
-          //do nothing;
-        } else if (OB_SUCCESS != tmp_ret) {
-          ret = tmp_ret;
-        } else if (OB_ISNULL(guard.get_cache_obj())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("cache object is NULL", K(ret));
-        } else {
-          bool is_succ_get_stat_value = false;
-          const ObExecutedSqlStatRecord *tmp_sql_stat_value = nullptr;
-          if (ObLibCacheNameSpace::NS_SQLSTAT == guard.get_cache_obj()->get_ns()) {
-            ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
-            if (OB_NOT_NULL(cache_obj) && OB_NOT_NULL(cache_obj->get_record_value()) &&
-                cache_obj->get_record_value()->get_key().is_valid()) {
-              tmp_sql_stat_value = cache_obj->get_record_value();
-              is_succ_get_stat_value = true;
+    MTL_SWITCH(cur_tenant_id_) {
+      if (sql_stat_cache_id_array_idx_ < sql_stat_cache_id_array_.count()) {
+        ObReqTimeGuard req_timeinfo_guard;
+        ObPlanCache* plan_cache = MTL(ObPlanCache*);
+        if (OB_NOT_NULL(plan_cache)) {
+          uint64_t cur_sql_stat_cache_id = sql_stat_cache_id_array_.at(sql_stat_cache_id_array_idx_);
+          sql_stat_cache_id_array_idx_++;
+          ObCacheObjGuard guard(VT_SQL_STAT_HANDLE);
+          int tmp_ret = plan_cache->ref_cache_obj(cur_sql_stat_cache_id, guard); //plan引用计数加VT_SQL_STAT_HANDLE
+          if (OB_HASH_NOT_EXIST == tmp_ret) {
+            //do nothing;
+          } else if (OB_SUCCESS != tmp_ret) {
+            ret = tmp_ret;
+          } else if (OB_ISNULL(guard.get_cache_obj())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("cache object is NULL", K(ret));
+          } else {
+            bool is_succ_get_stat_value = false;
+            const ObExecutedSqlStatRecord *tmp_sql_stat_value = nullptr;
+            if (ObLibCacheNameSpace::NS_SQLSTAT == guard.get_cache_obj()->get_ns()) {
+              ObSqlStatRecordObj *cache_obj = static_cast<ObSqlStatRecordObj *>(guard.get_cache_obj());
+              if (OB_NOT_NULL(cache_obj) && OB_NOT_NULL(cache_obj->get_record_value()) &&
+                  cache_obj->get_record_value()->get_key().is_valid()) {
+                tmp_sql_stat_value = cache_obj->get_record_value();
+                is_succ_get_stat_value = true;
+              }
+            } else if (ObLibCacheNameSpace::NS_CRSR == guard.get_cache_obj()->get_ns()) {
+              ObPhysicalPlan *plan = static_cast<ObPhysicalPlan *>(guard.get_cache_obj());
+              if (OB_NOT_NULL(plan) && plan->sql_stat_record_value_.get_key().is_valid()) {
+                tmp_sql_stat_value = &(plan->sql_stat_record_value_);
+                is_succ_get_stat_value = true;
+              }
             }
-          } else if (ObLibCacheNameSpace::NS_CRSR == guard.get_cache_obj()->get_ns()) {
-            ObPhysicalPlan *plan = static_cast<ObPhysicalPlan *>(guard.get_cache_obj());
-            if (OB_NOT_NULL(plan) && plan->sql_stat_record_value_.get_key().is_valid()) {
-              tmp_sql_stat_value = &(plan->sql_stat_record_value_);
-              is_succ_get_stat_value = true;
-            }
-          }
-          if (OB_SUCC(ret) && is_succ_get_stat_value) {
-            if (OB_ISNULL(tmp_sql_stat_value)) {
-              // continue, do nothing
-            } else {
-              ObExecutedSqlStatRecord *value = nullptr;
-              if (OB_FAIL(sql_stat_value.assign(*(tmp_sql_stat_value)))) {
-                LOG_WARN("failed to assign executed sql stat record", K(ret));
+            if (OB_SUCC(ret) && is_succ_get_stat_value) {
+              if (OB_ISNULL(tmp_sql_stat_value)) {
+                // continue, do nothing
               } else {
-                int tmp_ret = tmp_sql_stat_map_.get_refactored(sql_stat_value.get_key(), value);
-                if (OB_HASH_NOT_EXIST == tmp_ret) {
-                  // do nothing
-                } else if (OB_SUCCESS == tmp_ret) {
-                  if (OB_FAIL(sql_stat_value.sum_stat_value(*value))) {
-                    LOG_WARN("sql_stat_value sum value failed", KR(ret));
-                  } else if (OB_FAIL(tmp_sql_stat_map_.erase_refactored(sql_stat_value.get_key()))) {
-                    LOG_WARN("sql_stat_value earse value failed", KR(ret));
-                  }
+                ObExecutedSqlStatRecord *value = nullptr;
+                if (OB_FAIL(sql_stat_value.assign(*(tmp_sql_stat_value)))) {
+                  LOG_WARN("failed to assign executed sql stat record", K(ret));
                 } else {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("fail to get from refactored", KR(ret), KR(tmp_ret));
+                  int tmp_ret = tmp_sql_stat_map_.get_refactored(sql_stat_value.get_key(), value);
+                  if (OB_HASH_NOT_EXIST == tmp_ret) {
+                    // do nothing
+                  } else if (OB_SUCCESS == tmp_ret) {
+                    if (OB_FAIL(sql_stat_value.sum_stat_value(*value))) {
+                      LOG_WARN("sql_stat_value sum value failed", KR(ret));
+                    } else if (OB_FAIL(tmp_sql_stat_map_.erase_refactored(sql_stat_value.get_key()))) {
+                      LOG_WARN("sql_stat_value earse value failed", KR(ret));
+                    }
+                  } else {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("fail to get from refactored", KR(ret), KR(tmp_ret));
+                  }
                 }
               }
             }
-          }
 
+          }
         }
-      }
-    } else if (!tmp_sql_stat_map_.empty()) {
-      if (OB_ISNULL(tmp_sql_stat_map_.begin()->second)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get sql stat from map", K(ret));
-      } else {
-        const ObExecutedSqlStatRecord *tmp_sql_stat_value = tmp_sql_stat_map_.begin()->second;
-        if (!tmp_sql_stat_value->get_key().is_valid()) {
+      } else if (!tmp_sql_stat_map_.empty()) {
+        if (OB_ISNULL(tmp_sql_stat_map_.begin()->second)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to get sql stat from map", K(ret));
-        } else if (OB_FAIL(sql_stat_value.assign(*(tmp_sql_stat_value)))) {
-          LOG_WARN("failed to assign executed sql stat record", K(ret));
-        } else if (OB_FAIL(tmp_sql_stat_map_.erase_refactored(sql_stat_value.get_key()))) {
-          LOG_WARN("sql_stat_value earse value failed", KR(ret));
+        } else {
+          const ObExecutedSqlStatRecord *tmp_sql_stat_value = tmp_sql_stat_map_.begin()->second;
+          if (!tmp_sql_stat_value->get_key().is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get sql stat from map", K(ret));
+          } else if (OB_FAIL(sql_stat_value.assign(*(tmp_sql_stat_value)))) {
+            LOG_WARN("failed to assign executed sql stat record", K(ret));
+          } else if (OB_FAIL(tmp_sql_stat_map_.erase_refactored(sql_stat_value.get_key()))) {
+            LOG_WARN("sql_stat_value earse value failed", KR(ret));
+          }
         }
       }
     }
