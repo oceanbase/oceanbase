@@ -557,7 +557,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", "{\"key\": \"value\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -574,7 +574,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", "{\"key\": \"value\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", "1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");
@@ -593,7 +593,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
       "col2", "SRID=NULL;POINT(0 1)", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -610,7 +610,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", "{\"key\": \"value\"}", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", "1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");
@@ -629,7 +629,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", "{\"key\": \"new\"}", "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", "SRID=NULL;POINT(2 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", "<a>cba</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", "<a>cba</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", "1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -652,7 +652,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", "{\"key\": \"new\"}", "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", "SRID=NULL;POINT(2 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", "<a>cba</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", "<a>cba</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", "1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", "1", "2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");
@@ -671,7 +671,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", "{\"key\": \"new\"}", "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", nullptr, nullptr, drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", "1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -692,7 +692,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", "{\"key\": \"new\"}", "{\"key\": \"old\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", "SRID=NULL;POINT(0 1)", "SRID=NULL;POINT(2 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", "<a>abc</a>", "<a>cba</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", "<a>abc</a>", "<a>cba</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", "AABB1122", "1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", "1", nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");
@@ -711,7 +711,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", nullptr, "{\"key\": \"value\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", nullptr, "SRID=NULL;POINT(0 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", nullptr, "<a>abc</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", nullptr, "<a>abc</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", nullptr, "AABB1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -728,7 +728,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", nullptr, "{\"key\": \"value\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", nullptr, "SRID=NULL;POINT(0 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", nullptr, "<a>abc</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", nullptr, "<a>abc</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", nullptr, "AABB1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", nullptr, "2", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");
@@ -747,7 +747,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 16,
       "col1", nullptr, "{\"key\": \"value\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", nullptr, "<a>abc</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", nullptr, "<a>abc</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", nullptr, "AABB1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB));
   EXPECT_EQ(OB_SUCCESS, record.init(*br));
   EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
@@ -764,7 +764,7 @@ TEST(test_ob_log_miner_record, LobTypeInOracleMode)
       "tenant2.db2", "tbl2", "utf8mb4", 20,
       "col1", nullptr, "{\"key\": \"value\"}", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_JSON),
       "col2", nullptr, "SRID=NULL;POINT(0 1)", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_GEOMETRY),
-      "col3", nullptr, "<a>abc</a>", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_XML),
+      "col3", nullptr, "<a>abc</a>", drcmsg_field_types::DRCMSG_TYPE_ORA_XML,
       "col4", nullptr, "AABB1122", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_ORA_CLOB),
       "col5", nullptr, "1", static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_LONG));
   br->get_br()->getTableMeta()->setUKs("col5");

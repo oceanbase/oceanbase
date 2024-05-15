@@ -970,13 +970,13 @@ int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("column type or value is unexpected", KP(col_meta), K(col_idx));
   } else {
-    obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+    int type = col_meta->getType();
     if (lib::Worker::CompatMode::ORACLE == compat_mode_) {
       if (obmysql::MYSQL_TYPE_JSON == type) {
         if (OB_FAIL(build_func_cond_(stmt, cols, col_idx, tbl_meta, col_meta, JSON_EQUAL))) {
           LOG_ERROR("build func cond failed", "table_name", tbl_meta->getName(), K(JSON_EQUAL));
         }
-      } else if (obmysql::MYSQL_TYPE_ORA_XML == type ||
+      } else if (drcmsg_field_types::DRCMSG_TYPE_ORA_XML == type ||
           obmysql::MYSQL_TYPE_GEOMETRY == type) {
         if (OB_FAIL(build_normal_cond_(stmt, cols, col_idx, tbl_meta, col_meta))) {
             LOG_ERROR("build xml condition failed", "table_name", tbl_meta->getName(),
@@ -1107,7 +1107,7 @@ int ObLogMinerRecord::build_escape_char_(ObStringBuffer &stmt)
 
 bool ObLogMinerRecord::is_string_type_(IColMeta *col_meta) const
 {
-  obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+  int type = col_meta->getType();
   bool bret = true;
 
   switch(type) {
@@ -1127,7 +1127,7 @@ bool ObLogMinerRecord::is_string_type_(IColMeta *col_meta) const
     case obmysql::MYSQL_TYPE_ENUM:
     case obmysql::MYSQL_TYPE_SET:
     case obmysql::MYSQL_TYPE_ORA_CLOB:
-    case obmysql::MYSQL_TYPE_ORA_XML:
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_XML:
     case obmysql::MYSQL_TYPE_OB_UROWID:
     case obmysql::MYSQL_TYPE_OB_INTERVAL_YM:
     case obmysql::MYSQL_TYPE_OB_INTERVAL_DS:
@@ -1191,7 +1191,7 @@ bool ObLogMinerRecord::is_binary_type_(IColMeta *col_meta) const
 
 bool ObLogMinerRecord::is_number_type_(IColMeta *col_meta) const
 {
-  obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+  int type = col_meta->getType();
   bool bret = false;
   switch(type) {
     case obmysql::MYSQL_TYPE_DECIMAL:
@@ -1205,8 +1205,8 @@ bool ObLogMinerRecord::is_number_type_(IColMeta *col_meta) const
     case obmysql::MYSQL_TYPE_COMPLEX:
     case obmysql::MYSQL_TYPE_OB_NUMBER_FLOAT:
     case obmysql::MYSQL_TYPE_NEWDECIMAL:
-    case obmysql::MYSQL_TYPE_ORA_BINARY_FLOAT:
-    case obmysql::MYSQL_TYPE_ORA_BINARY_DOUBLE:
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_FLOAT:
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_BINARY_DOUBLE:
       bret = true;
       break;
     default:
@@ -1218,7 +1218,7 @@ bool ObLogMinerRecord::is_number_type_(IColMeta *col_meta) const
 
 bool ObLogMinerRecord::is_lob_type_(IColMeta *col_meta) const
 {
-  obmysql::EMySQLFieldType type = static_cast<obmysql::EMySQLFieldType>(col_meta->getType());
+  int type = col_meta->getType();
   bool bret = false;
   switch(type) {
     case obmysql::MYSQL_TYPE_TINY_BLOB:
@@ -1229,7 +1229,7 @@ bool ObLogMinerRecord::is_lob_type_(IColMeta *col_meta) const
     case obmysql::MYSQL_TYPE_ORA_CLOB:
     case obmysql::MYSQL_TYPE_JSON:
     case obmysql::MYSQL_TYPE_GEOMETRY:
-    case obmysql::MYSQL_TYPE_ORA_XML:
+    case drcmsg_field_types::DRCMSG_TYPE_ORA_XML:
       bret = true;
       break;
     default:
