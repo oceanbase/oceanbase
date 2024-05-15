@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_META_H
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_META_H
 
+#include "lib/container/ob_iarray.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
@@ -29,80 +30,49 @@ struct ObTabletCreateSSTableParam;
 }
 namespace blocksstable
 {
-struct ObTxContext
+class ObTxContext final
 {
-  struct ObTxDesc{
+public:
+  struct ObTxDesc final
+  {
     int64_t tx_id_;
     int64_t row_count_;
-    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
-    {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(serialization::encode_i64(buf, buf_len,pos, tx_id_))) {
-        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-      } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, row_count_))) {
-        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-      }
-      return ret;
-    }
-
-    int deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
-    {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &tx_id_))) {
-        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-      } else if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &row_count_))) {
-        STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-      }
-      return ret;
-    }
-
-    int64_t get_serialize_size() const {
-      return serialization::encoded_length_i64(tx_id_) + serialization::encoded_length_i64(row_count_);
-    }
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+    int deserialize(const char *buf, const int64_t buf_len, int64_t &pos);
+    int64_t get_serialize_size() const;
     TO_STRING_KV(K(tx_id_), K(row_count_));
   };
 
+  ObTxContext() : len_(0), count_(0), tx_descs_(nullptr) {};
 
-  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+  int init(const common::ObIArray<ObTxDesc> &tx_descs, common::ObArenaAllocator &allocator);
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size() const;
+  int deserialize(common::ObArenaAllocator &allocator, const char *buf, const int64_t buf_len, int64_t &pos);
+  int deep_copy(
+    char *buf,
+    const int64_t buf_len,
+    int64_t &pos,
+    ObTxContext &dest) const;
+  int64_t get_variable_size() const;
+  OB_INLINE int64_t get_count() const { return count_; }
+  int64_t get_tx_id(const int64_t idx) const;
+  void reset()
   {
-    int ret = OB_SUCCESS;
-    const_cast<ObTxContext *>(this)->len_ = get_serialize_size();
-    if (OB_FAIL(serialization::encode_i32(buf, buf_len,pos, len_))) {
-      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-    } else if (OB_FAIL(tx_descs_.serialize(buf, buf_len, pos))) {
-      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-    }
-    return ret;
-  }
-  int64_t get_serialize_size() const {
-    return serialization::encoded_length_i32(len_) + tx_descs_.get_serialize_size();
-  }
-  int deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
-  {
-    int ret = OB_SUCCESS;
-    const int64_t tmp_pos = pos;
-    if (OB_FAIL(serialization::decode_i32(buf, buf_len, pos, &len_))) {
-      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-    } else if (OB_FAIL(tx_descs_.deserialize(buf, buf_len, pos))) {
-      STORAGE_LOG(WARN, "fail to encode length", K(ret), K(buf_len), K(pos));
-    } else if (OB_UNLIKELY(pos - tmp_pos != len_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "unexpected len_", K(ret), K(len_), K(tmp_pos), K(pos));
-    }
-    return ret;
-  }
-  int assign(const ObTxContext &tx_ctx) {
-    len_ = tx_ctx.len_;
-    return tx_descs_.assign(tx_ctx.tx_descs_);
-  }
-  void reset() {
     len_ = 0;
-    tx_descs_.reset();
+    count_ = 0;
+    tx_descs_ = nullptr;
   }
+  TO_STRING_KV(K_(count), K(ObArrayWrap<ObTxDesc>(tx_descs_, count_)));
+private:
+  int push_back(const ObTxDesc &desc);
+
+private:
   static const int64_t MAX_TX_IDS_COUNT = 16;
-  int32_t len_;
-  ObSEArray<ObTxDesc, MAX_TX_IDS_COUNT> tx_descs_;
-  TO_STRING_KV(K(tx_descs_));
+  int32_t len_; // for compat
+  int64_t count_; // actual item count
+  ObTxDesc *tx_descs_;
+  DISALLOW_COPY_AND_ASSIGN(ObTxContext);
 };
 
 //For compatibility, the variables in this struct MUST NOT be deleted or moved.
@@ -230,8 +200,8 @@ public:
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
   OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
-  OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.tx_descs_.count(); }
-  OB_INLINE int64_t get_tx_ids(int64_t idx) const { return tx_ctx_.tx_descs_.at(idx).tx_id_; }
+  OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.get_count(); }
+  OB_INLINE int64_t get_tx_ids(const int64_t idx) const { return tx_ctx_.get_tx_id(idx); }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
@@ -331,6 +301,9 @@ private:
   int prepare_column_checksum(
       const common::ObIArray<int64_t> &column_checksums,
       common::ObArenaAllocator &allocator);
+  int prepare_tx_context(
+    const ObTxContext::ObTxDesc &tx_desc,
+    common::ObArenaAllocator &allocator);
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
       common::ObArenaAllocator &allocator,

@@ -374,6 +374,182 @@ int ObSSTableBasicMeta::set_upper_trans_version(const int64_t upper_trans_versio
   return ret;
 }
 
+//================================== ObTxDesc & ObTxContext ==================================
+int ObTxContext::ObTxDesc::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialization::encode_i64(buf, buf_len,pos, tx_id_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_i64(buf, buf_len, pos, row_count_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+int ObTxContext::ObTxDesc::deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &tx_id_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_i64(buf, buf_len, pos, &row_count_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+int64_t ObTxContext::ObTxDesc::get_serialize_size() const
+{
+  return serialization::encoded_length_i64(tx_id_) + serialization::encoded_length_i64(row_count_);
+}
+
+int ObTxContext::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t tmp_pos = pos;
+  const_cast<ObTxContext *>(this)->len_ = get_serialize_size();
+  if (OB_FAIL(serialization::encode_i32(buf, buf_len,pos, len_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, count_))) {
+    LOG_WARN("fail to encode count", K(ret), K(buf_len), K(pos));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count_; i ++) {
+    if (OB_FAIL(serialization::encode(buf, buf_len, pos, tx_descs_[i]))) {
+      LOG_WARN("fail to encode item", K(i), K(ret), K(buf_len), K(pos));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pos - tmp_pos != len_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected len_", K(ret), K(len_), K(tmp_pos), K(pos));
+  }
+  return ret;
+}
+
+int64_t ObTxContext::get_serialize_size() const
+{
+  int64_t size = serialization::encoded_length_i32(len_);
+  size += serialization::encoded_length_vi64(count_);
+  for (int64_t i = 0; i < count_; i++) {
+    size += serialization::encoded_length(tx_descs_[i]);
+  }
+  return size;
+}
+
+int ObTxContext::deserialize(
+  common::ObArenaAllocator &allocator,
+  const char *buf,
+  const int64_t buf_len,
+  int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  const int64_t tmp_pos = pos;
+  if (OB_FAIL(serialization::decode_i32(buf, buf_len, pos, &len_))) {
+    LOG_WARN("fail to encode length", K(ret), K(buf_len), K(pos));
+  } else if (OB_FAIL(serialization::decode_vi64(buf, buf_len, pos, &count_))) {
+    LOG_WARN("fail to decode ob array count", K(ret));
+  } else if (count_ > 0) {
+    if (OB_ISNULL(tx_descs_ = static_cast<ObTxDesc *>(allocator.alloc(sizeof(ObTxDesc) * count_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate tx context", K(ret), K(count_));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < count_; i ++) {
+    ObTxDesc &item = tx_descs_[i];
+    if (OB_FAIL(serialization::decode(buf, buf_len, pos, item))) {
+      LOG_WARN("fail to decode array item", K(ret), K(i), K(count_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(pos - tmp_pos != len_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected len_", K(ret), K(len_), K(tmp_pos), K(pos));
+  }
+  return ret;
+}
+
+int ObTxContext::deep_copy(
+  char *buf,
+  const int64_t buf_len,
+  int64_t &pos,
+  ObTxContext &dest) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t variable_size = get_variable_size();
+  if (this == &dest) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("can't deep copy self", K(ret), K(*this));
+  } else if (pos + variable_size > buf_len) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("buf not enough", K(ret), K(pos), K(buf_len), K(*this));
+  } else {
+    dest.len_ = len_;
+    dest.count_ = count_;
+    if (0 == count_) {
+      dest.tx_descs_ = nullptr;
+    } else {
+      dest.tx_descs_ = reinterpret_cast<ObTxDesc *>(buf + pos);
+      for (int64_t i = 0; i < count_; i++) {
+        dest.tx_descs_[i] = tx_descs_[i];
+      }
+    }
+    pos += variable_size;
+  }
+  return ret;
+}
+
+int ObTxContext::init(const common::ObIArray<ObTxDesc> &tx_descs, common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const int64_t cnt = tx_descs.count();
+  if (nullptr != tx_descs_ || count_ > 0) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(*this));
+  } else if (OB_UNLIKELY(MAX_TX_IDS_COUNT < cnt)) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("too many tx desc", K(ret), K(cnt));
+  } else if (0 == cnt) {
+    reset();
+  } else if (OB_ISNULL(tx_descs_ = static_cast<ObTxContext::ObTxDesc *>(allocator.alloc(sizeof(ObTxContext::ObTxDesc) * cnt)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate tx context", K(ret), KP(tx_descs_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < cnt; i++) {
+      if (OB_FAIL(push_back(tx_descs.at(i)))) {
+        LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(i), K(tx_descs.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObTxContext::get_tx_id(const int64_t idx) const
+{
+  OB_ASSERT(idx >=0 && idx < count_);
+  return tx_descs_[idx].tx_id_;
+}
+
+int ObTxContext::push_back(const ObTxDesc &desc)
+{
+  int ret = OB_SUCCESS;
+  if (count_ >= MAX_TX_IDS_COUNT) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("tx desc array overflow", K(ret), K(count_));
+  } else if (OB_ISNULL(tx_descs_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tx desc array is null", K(ret), K(count_), KP(tx_descs_));
+  } else {
+    tx_descs_[count_++] = desc;
+  }
+  return ret;
+}
+
+int64_t ObTxContext::get_variable_size() const
+{
+  return count_ * sizeof(ObTxDesc);
+}
+
 //================================== ObSSTableMeta ==================================
 ObSSTableMeta::ObSSTableMeta()
   : basic_meta_(),
@@ -507,6 +683,20 @@ int ObSSTableMeta::prepare_column_checksum(
   return ret;
 }
 
+int ObSSTableMeta::prepare_tx_context(
+  const ObTxContext::ObTxDesc &tx_desc,
+  common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObTxContext::ObTxDesc, 1> tx_desc_arr;
+  if (OB_FAIL(tx_desc_arr.push_back(tx_desc))) {
+    LOG_WARN("push back tx desc fail", K(ret), K(tx_desc));
+  } else if (OB_FAIL(tx_ctx_.init(tx_desc_arr, allocator))) {
+    LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(tx_desc));
+  }
+  return ret;
+}
+
 bool ObSSTableMeta::check_meta() const
 {
   return basic_meta_.is_valid()
@@ -548,7 +738,7 @@ int ObSSTableMeta::init(
   }
 
   if (OB_SUCC(ret) && transaction::ObTransID(param.uncommitted_tx_id_).is_valid()) {
-    if (OB_FAIL(tx_ctx_.tx_descs_.push_back({param.uncommitted_tx_id_, 0}))) {
+    if (OB_FAIL(prepare_tx_context({param.uncommitted_tx_id_, 0}, allocator))) {
       LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(param));
     }
   }
@@ -694,7 +884,7 @@ int ObSSTableMeta::deserialize_(
       LOG_WARN("fail to deserialize macro info", K(ret), K(data_len), K(pos), K(des_meta));
     } else if (pos < data_len && OB_FAIL(cg_sstables_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize cg sstables", K(ret), K(data_len), K(pos));
-    } else if (pos < data_len && OB_FAIL(tx_ctx_.deserialize(buf, data_len, pos))) {
+    } else if (pos < data_len && OB_FAIL(tx_ctx_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize tx ids", K(ret), K(data_len), K(pos));
     }
   }
@@ -729,7 +919,8 @@ int64_t ObSSTableMeta::get_variable_size() const
   return sizeof(int64_t) * column_checksum_count_ // column checksums
        + data_root_info_.get_variable_size()
        + macro_info_.get_variable_size()
-       + cg_sstables_.get_deep_copy_size();
+       + cg_sstables_.get_deep_copy_size()
+       + tx_ctx_.get_variable_size();
 }
 
 int ObSSTableMeta::deep_copy(
@@ -759,8 +950,11 @@ int ObSSTableMeta::deep_copy(
       LOG_WARN("fail to deep copy macro info", K(ret), KP(buf), K(buf_len), K(pos), K(macro_info_));
     } else if (OB_FAIL(cg_sstables_.deep_copy(buf, buf_len, pos, dest->cg_sstables_))) {
       LOG_WARN("fail to deep copy cg sstables", K(ret), KP(buf), K(buf_len), K(pos), K(cg_sstables_));
-    } else if (OB_FAIL(dest->tx_ctx_.assign(tx_ctx_))) {
+    } else if (OB_FAIL(tx_ctx_.deep_copy(buf, buf_len, pos, dest->tx_ctx_))) {
       LOG_WARN("fail to deep copy cg sstables", K(ret), K(tx_ctx_));
+    } else if (deep_size != pos - tmp_pos) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("deep copy size miss match", K(ret), K(*this), KPC(dest), K(deep_size), K(tmp_pos), K(pos));
     } else {
       dest->is_inited_ = is_inited_;
     }
