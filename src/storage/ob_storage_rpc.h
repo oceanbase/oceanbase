@@ -114,9 +114,11 @@ public:
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size));
+  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size), K_(macro_meta_row));
   bool is_reuse_macro_block_;
   int64_t occupy_size_;
+
+  blocksstable::ObDatumRow macro_meta_row_; // used to get macro meta
 };
 
 struct ObCopyTabletInfoArg
