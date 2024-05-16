@@ -5314,18 +5314,36 @@ bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
-  ObString access_id;
-  ObString access_key;
+  ObString https_header = "https://";
+  ObString http_header = "http://";
+  ObString access_id = url.split_on(':').trim_space_only();
+  ObString access_key = url.split_on('@').trim_space_only();
   ObString host_name;
-  ObString access_info = url.split_on('/').trim_space_only();
-  if (access_info.empty()) {
+  int64_t header_len = 0;
+
+  url = url.trim_space_only();
+  if (url.prefix_match_ci(https_header)) {
+    header_len = https_header.length();
+  } else if (url.prefix_match_ci(http_header)) {
+    header_len = http_header.length();
+  } else {
+    header_len = 0;
+  }
+  if (header_len > 0) {
+    host_name = url;
+    url += header_len;
+    ObString temp = url.split_on('/');
+    host_name.assign_ptr(host_name.ptr(), header_len + temp.length());
+    host_name = host_name.trim_space_only();
+  } else {
+    host_name = url.split_on('/').trim_space_only();
+  }
+  url = url.trim_space_only();
+  if (access_id.empty() || access_key.empty() || host_name.empty() || url.empty()) {
     ret = OB_URI_ERROR;
     LOG_WARN("incorrect uri", K(ret));
-  } else {
-    access_id = access_info.split_on(':').trim_space_only();
-    access_key = access_info.split_on('@').trim_space_only();
-    host_name = access_info.trim_space_only();
   }
+  LOG_DEBUG("check access info", K(access_id), K(access_key), K(host_name), K(url));
 
   //fill storage_info
   if (OB_SUCC(ret)) {
