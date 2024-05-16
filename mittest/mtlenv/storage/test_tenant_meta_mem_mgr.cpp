@@ -17,6 +17,7 @@
 #define protected public
 #define private public
 
+#include "lib/alloc/memory_dump.h"
 #include "storage/tablet/ob_tablet_persister.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/meta_mem/ob_tablet_leak_checker.h"
@@ -1727,6 +1728,34 @@ TEST_F(TestTenantMetaMemMgr, test_show_limit)
   ASSERT_EQ(20000, config_res);
   ASSERT_EQ(20480, memory_res);
 
+  lib::set_tenant_memory_limit(MTL_ID(), before_tenant_mem);
+}
+
+TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
+{
+  static const int64_t tablet_cnt = 155000;
+  ObTabletHandle *tablets = new ObTabletHandle[tablet_cnt];
+  const int64_t before_tenant_mem = lib::get_tenant_memory_limit(MTL_ID());
+  const int64_t this_case_tenant_mem = 3 * 1024 * 1024 * 1024L;  /* 3GB */
+  lib::set_tenant_memory_limit(MTL_ID(), this_case_tenant_mem);
+  for (int64_t i = 0; i < tablet_cnt; ++i) {
+    ObTabletHandle tablet_handle;
+    ASSERT_EQ(OB_SUCCESS, MTL(ObTenantMetaMemMgr *)->acquire_tablet(ObTabletPoolType::TP_NORMAL, tablets[i]));
+  }
+  ObMallocAllocator::get_instance()->print_tenant_memory_usage(MTL_ID());
+  ObMemoryDump::get_instance().init();
+  auto task = ObMemoryDump::get_instance().alloc_task();
+  task->type_ = STAT_LABEL;
+  ObMemoryDump::get_instance().push(task);
+  usleep(1000000);
+  ObTenantCtxAllocatorGuard ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(MTL_ID(), ObCtxIds::META_OBJ_CTX_ID);
+  double fragment_rate = 1.0 * (ta->get_hold() - ta->get_used()) / ta->get_hold();
+  std::cout << "hold: " << ta->get_hold() << " used: " << ta->get_used() << " limit: " << ta->get_limit() << " fragment_rate: " << fragment_rate << std::endl;
+  ASSERT_TRUE(fragment_rate < 0.04);
+  for (int64_t i = 0; i < tablet_cnt; ++i) {
+    tablets[i].reset();
+  }
+  delete [] tablets;
   lib::set_tenant_memory_limit(MTL_ID(), before_tenant_mem);
 }
 
