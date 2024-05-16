@@ -2014,8 +2014,8 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
           }
         } else {
           value->set_null();
-          new_dst_pos += sizeof(ObObj);
         }
+        OX (new_dst_pos += sizeof(ObObj));
       } else if (OB_FAIL(type->deserialize(schema_guard, allocator, charset, cs_type, ncs_type,
                                            tz_info, src, new_dst, new_dst_len, new_dst_pos))) {
         LOG_WARN("deserialize record element type failed", K(i), K(*this), KP(src), KP(dst), K(dst_len), K(dst_pos), K(ret));
