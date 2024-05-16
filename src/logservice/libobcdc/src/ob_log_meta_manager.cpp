@@ -248,8 +248,10 @@ int ObLogMetaManager::get_table_meta(
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("expect valid schema_getter", KR(ret));
         } else {
+          ObTimeGuard time_guard("get_table_meta", 2 * 1000 * 1000);
           RETRY_FUNC(stop_flag, *schema_getter, get_schema_guard_and_full_table_schema, tenant_id, table_id, global_schema_version, GET_SCHEMA_TIMEOUT,
-                  schema_mgr, table_schema);
+              schema_mgr, table_schema);
+          time_guard.click("get_full_table_schema");
 
           if (OB_FAIL(ret)) {
             // caller deal with error code OB_TENANT_HAS_BEEN_DROPPED
