@@ -1,6 +1,5 @@
-drop database if exists lyk;
-create database lyk;
-use lyk;
+drop table if exists schema_authorwithevenlongername;
+drop table if exists schema_bookwithlongname;
 CREATE TABLE `schema_authorwithevenlongername` (
 `id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY,
 `name` varchar(255) NOT NULL,
@@ -18,6 +17,5 @@ ADD
 CONSTRAINT `schema_bookwithlongn_author_other_really__6c36f4d2_fk_schema_au` FOREIGN KEY (
 `author_other_really_long_named_i_mean_so_long_fk_id`
   ) REFERENCES `schema_authorwithevenlongername`(`id`);
-ERROR 0A000: Not supported feature or function
+ERROR 0A000: Adding a column and together with a foreign key on this column in a single ddl is not supported
 drop table schema_authorwithevenlongername, schema_bookwithlongname;
-drop database lyk;

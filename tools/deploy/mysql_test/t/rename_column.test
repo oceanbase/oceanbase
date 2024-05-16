@@ -9,14 +9,6 @@ set @@session.explicit_defaults_for_timestamp=off;
 
 
 --disable_warnings
-drop database if exists lyk;
---enable_warnings
-
-create database lyk;
-
-use lyk;
-
---disable_warnings
 drop table if exists t1;
 --enable_warnings
 
@@ -39,6 +31,5 @@ ALTER TABLE t1 CHANGE COLUMN `a` `aa` VARCHAR(50);
 ALTER TABLE t1 CHANGE COLUMN `b` `bb` VARCHAR(50) AFTER `aa`;
 
 drop table t1;
-drop database lyk;
 
 connection default;

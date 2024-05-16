@@ -7,12 +7,9 @@ set @@session.explicit_defaults_for_timestamp=off;
 #--disable_abort_on_error
 
 --disable_warnings
-drop database if exists lyk;
+drop table if exists t1;
+drop table if exists t2;
 --enable_warnings
-
-create database lyk;
-
-use lyk;
 
 create table t1(x int, y int, UNIQUE INDEX i(x, y));
 
@@ -23,5 +20,4 @@ insert into t2 values(2, 2), (2, 2);
 insert /*+ append enable_parallel_dml parallel(2)*/ into t1 select x2, y2 from t2;
 
 drop table t1;
-
-drop database lyk;
+drop table t2;

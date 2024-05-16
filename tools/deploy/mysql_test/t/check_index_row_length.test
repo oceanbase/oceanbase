@@ -7,13 +7,8 @@ set @@session.explicit_defaults_for_timestamp=off;
 #--disable_abort_on_error
 
 --disable_warnings
-drop database if exists lyk;
+drop table if exists t1;
 --enable_warnings
-
-create database lyk;
-
-use lyk;
-
 
 # check index length, while 
 create table t1(c1 int, c2 varbinary(8000), c3 int);
@@ -29,4 +24,3 @@ create index idx1 on t1(c2, c3);
 alter table t1 modify column c3 varchar(10000);
 
 drop table t1;
-drop database lyk;

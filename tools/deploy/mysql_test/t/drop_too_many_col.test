@@ -7,12 +7,9 @@ set @@session.explicit_defaults_for_timestamp=off;
 #--disable_abort_on_error
 
 --disable_warnings
-drop database if exists lyk;
+drop table if exists t1;
+drop table if exists t2;
 --enable_warnings
-
-create database lyk;
-
-use lyk;
 
 create table t1(column_0 int, column_1 int, column_2 int, column_3 int, column_4 int, column_5 int, column_6 int, column_7 int, column_8 int, column_9 int, column_10 int, column_11 int, column_12 int, column_13 int, column_14 int, column_15 int, column_16 int, column_17 int, column_18 int, column_19 int, column_20 int, column_21 int, column_22 int, column_23 int, column_24 int, column_25 int, column_26 int, column_27 int, column_28 int, column_29 int, column_30 int, column_31 int, column_32 int, column_33 int, column_34 int, column_35 int, column_36 int, column_37 int, column_38 int, column_39 int, column_40 int, column_41 int, column_42 int, column_43 int, column_44 int, column_45 int, column_46 int, column_47 int, column_48 int, column_49 int, column_50 int, column_51 int, column_52 int, column_53 int, column_54 int, column_55 int, column_56 int, column_57 int, column_58 int, column_59 int, column_60 int, column_61 int, column_62 int, column_63 int, column_64 int, column_65 int, column_66 int, column_67 int, column_68 int, column_69 int, column_70 int, column_71 int, column_72 int, column_73 int, column_74 int, column_75 int, column_76 int, column_77 int, column_78 int, column_79 int, column_80 int, column_81 int, column_82 int, column_83 int, column_84 int, column_85 int, column_86 int, column_87 int, column_88 int, column_89 int, column_90 int, column_91 int, column_92 int, column_93 int, column_94 int, column_95 int, column_96 int, column_97 int, column_98 int, column_99 int, column_100 int, column_101 int, column_102 int, column_103 int, column_104 int, column_105 int, column_106 int, column_107 int, column_108 int, column_109 int, column_110 int, column_111 int, column_112 int, column_113 int, column_114 int, column_115 int, column_116 int, column_117 int, column_118 int, column_119 int, column_120 int, column_121 int, column_122 int, column_123 int, column_124 int, column_125 int, column_126 int, column_127 int, column_128 int, column_129 int);
 
@@ -26,4 +23,3 @@ alter table t2 drop column_0, drop column_1, drop column_2, drop column_3, drop 
 
 drop table t1;
 drop table t2;
-drop database lyk;

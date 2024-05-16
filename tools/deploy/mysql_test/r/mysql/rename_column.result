@@ -1,6 +1,3 @@
-drop database if exists lyk;
-create database lyk;
-use lyk;
 drop table if exists t1;
 CREATE TABLE t1(`a` bigint, `b` date)partition by range columns(`b`) 
 (
@@ -14,4 +11,3 @@ ALTER TABLE t1 CHANGE COLUMN `a` `aa` VARCHAR(50);
 ALTER TABLE t1 CHANGE COLUMN `b` `bb` VARCHAR(50) AFTER `aa`;
 ERROR HY000: Column 'b' has a partitioning function dependency and cannot be dropped or renamed.
 drop table t1;
-drop database lyk;

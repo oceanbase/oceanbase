@@ -1896,7 +1896,9 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const {
                 ret = OB_INVALID_ERROR;
               }
               int64_t len = 0;
-              if (count_varchar_size_by_byte) {
+              if (OB_FAIL(ret)) {
+                break;
+              } else if (count_varchar_size_by_byte) {
                 if (OB_FAIL(column->get_byte_length(len, lib::is_oracle_mode(), false))) {
                   LOG_WARN("get_byte_length failed ", K(ret));
                   break;

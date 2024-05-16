@@ -1,6 +1,4 @@
-drop database if exists lyk;
-create database lyk;
-use lyk;
+drop table if exists obschema_t_jAGEm3;
 create table obschema_t_jAGEm3 
 (
 obschema_c_0_pH4WcWj bit(16) NOT NULL default b'1010110110111',
@@ -14,4 +12,3 @@ unique index obschema_i_1_uni_iY(obschema_c_0_pH4WcWj,obschema_c_3_IQK,obschema_
 );
 alter table obschema_t_jAGEm3 change column obschema_c_1_AtBZz1 obschema_c_1_qSt7t3C int(255) auto_increment NOT NULL;
 drop table obschema_t_jAGEm3;
-drop database lyk;

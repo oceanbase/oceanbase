@@ -6,15 +6,10 @@ set @@session.explicit_defaults_for_timestamp=off;
 # description: add a col and add a foreign key to it in a single ddl is not supported.
 #--disable_abort_on_error
 
-
-
 --disable_warnings
-drop database if exists lyk;
+drop table if exists schema_authorwithevenlongername;
+drop table if exists schema_bookwithlongname;
 --enable_warnings
-
-create database lyk;
-
-use lyk;
 
 CREATE TABLE `schema_authorwithevenlongername` (
   `id` integer AUTO_INCREMENT NOT NULL PRIMARY KEY,
@@ -37,4 +32,3 @@ ADD
   ) REFERENCES `schema_authorwithevenlongername`(`id`);
 
 drop table schema_authorwithevenlongername, schema_bookwithlongname;
-drop database lyk;

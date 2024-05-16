@@ -8,12 +8,8 @@ set @@session.explicit_defaults_for_timestamp=off;
 #--disable_abort_on_error
 
 --disable_warnings
-drop database if exists lyk;
+drop table if exists obschema_t_jAGEm3;
 --enable_warnings
-
-create database lyk;
-
-use lyk;
 
 create table obschema_t_jAGEm3 
 (
@@ -30,4 +26,3 @@ create table obschema_t_jAGEm3
 alter table obschema_t_jAGEm3 change column obschema_c_1_AtBZz1 obschema_c_1_qSt7t3C int(255) auto_increment NOT NULL;
 
 drop table obschema_t_jAGEm3;
-drop database lyk;
