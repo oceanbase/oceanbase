@@ -1006,7 +1006,7 @@ void ObAggregateProcessor::HybridHistExtraResult::reuse()
 
 int ObAggregateProcessor::HybridHistExtraResult::init(const uint64_t tenant_id,
     const ObAggrInfo &aggr_info, ObEvalCtx &eval_ctx, const bool need_rewind,
-    ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+    ObIOEventObserver *io_event_observer,
     ObMonitorNode &op_monitor_info)
 {
   int ret = OB_SUCCESS;
@@ -1040,7 +1040,7 @@ int ObAggregateProcessor::HybridHistExtraResult::init(const uint64_t tenant_id,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fall to alloc buff", "size", sizeof(ObMaterialOpImpl));
     } else {
-      new (mat_op_) ObMaterialOpImpl(op_monitor_info, profile);
+      new (mat_op_) ObMaterialOpImpl(op_monitor_info);
       if (OB_FAIL(mat_op_->init(tenant_id,
                                 &eval_ctx,
                                 &eval_ctx.exec_ctx_,
@@ -1279,7 +1279,6 @@ ObAggregateProcessor::ObAggregateProcessor(ObEvalCtx &eval_ctx,
       removal_info_(),
       support_fast_single_row_agg_(false),
       op_eval_infos_(nullptr),
-      profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       op_monitor_info_(op_monitor_info),
       need_advance_collect_(false),
       distinct_count_(0),
@@ -2460,7 +2459,6 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
                                      eval_ctx_,
                                      need_rewind,
                                      io_event_observer_,
-                                     profile_,
                                      op_monitor_info_))) {
               LOG_WARN("init hybrid hist extra result failed");
             }

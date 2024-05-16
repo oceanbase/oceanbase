@@ -485,7 +485,7 @@ public:
 
     int init(const uint64_t tenant_id, const ObAggrInfo &aggr_info,
              ObEvalCtx &eval_ctx, const bool need_rewind,
-             ObIOEventObserver *io_event_observer, ObSqlWorkAreaProfile &profile,
+             ObIOEventObserver *io_event_observer,
              ObMonitorNode &op_monitor_info);
 
     int add_sort_row(const ObIArray<ObExpr *> &expr, ObEvalCtx &eval_ctx);
@@ -1166,7 +1166,6 @@ private:
   RemovalInfo removal_info_;
   bool support_fast_single_row_agg_;
   ObIArray<ObEvalInfo *> *op_eval_infos_;
-  ObSqlWorkAreaProfile profile_;
   ObMonitorNode &op_monitor_info_;
   bool need_advance_collect_;
   int64_t distinct_count_;
