@@ -209,26 +209,6 @@ typedef hash::ObHashMap<ObTabletID, ObTabletCompactionStatus> ObTabletStatusMap;
 typedef common::ObArray<share::ObTabletLSPair> ObTabletLSPairArray;
 typedef hash::ObHashMap<uint64_t, ObTableCompactionInfo> ObTableCompactionInfoMap;
 
-struct ObRSCompactionTimeGuard : public ObCompactionTimeGuard
-{
-public:
-  ObRSCompactionTimeGuard()
-    : ObCompactionTimeGuard(UINT64_MAX, "[RS] ")
-  {}
-  virtual ~ObRSCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
-    PREPARE_UNFINISH_TABLE_IDS = 0,
-    GET_TABLET_LS_PAIRS,
-    GET_TABLET_META_TABLE,
-    CKM_VERIFICATION,
-    COMPACTION_EVENT_MAX,
-  };
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
-private:
-  const static char *CompactionEventStr[];
-  static const char *get_comp_event_str(enum CompactionEvent event);
-};
-
 struct ObCkmValidatorStatistics
 {
   ObCkmValidatorStatistics() { reset(); }
