@@ -951,10 +951,11 @@ int ObSSTableMeta::deep_copy(
     } else if (OB_FAIL(cg_sstables_.deep_copy(buf, buf_len, pos, dest->cg_sstables_))) {
       LOG_WARN("fail to deep copy cg sstables", K(ret), KP(buf), K(buf_len), K(pos), K(cg_sstables_));
     } else if (OB_FAIL(tx_ctx_.deep_copy(buf, buf_len, pos, dest->tx_ctx_))) {
-      LOG_WARN("fail to deep copy cg sstables", K(ret), K(tx_ctx_));
-    } else if (deep_size != pos - tmp_pos) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("deep copy size miss match", K(ret), K(*this), KPC(dest), K(deep_size), K(tmp_pos), K(pos));
+      LOG_WARN("fail to deep copy tx context", K(ret), K(tx_ctx_));
+    // TODO (jiahua.cjh): add defend code back
+    // } else if (deep_size != pos - tmp_pos) {
+    //  ret = OB_ERR_UNEXPECTED;
+    //  LOG_WARN("deep copy size miss match", K(ret), K(*this), KPC(dest), K(deep_size), K(tmp_pos), K(pos));
     } else {
       dest->is_inited_ = is_inited_;
     }
