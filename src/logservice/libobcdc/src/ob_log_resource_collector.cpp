@@ -460,10 +460,10 @@ int ObLogResourceCollector::recycle_part_trans_task_(const int64_t thread_index,
     ret = OB_INVALID_ARGUMENT;
   } else {
     if (task->is_ddl_trans()) {
-      if (OB_FAIL(revert_dll_all_binlog_records_(task))) {
+      if (OB_FAIL(revert_dll_all_binlog_records(false/*is_build_baseline*/, task))) {
         if (OB_IN_STOP_STATE != ret) {
           // Reclaim all Binlog Records within a DDL partitioned transaction
-          LOG_ERROR("revert_dll_all_binlog_records_ fail", KR(ret), K(*task));
+          LOG_ERROR("revert_dll_all_binlog_records fail", KR(ret), K(*task));
         }
       }
     }
@@ -779,7 +779,7 @@ int ObLogResourceCollector::dec_ref_cnt_and_try_to_recycle_log_entry_task_(ObLog
   return ret;
 }
 
-int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
+int ObLogResourceCollector::revert_dll_all_binlog_records(const bool is_build_baseline, PartTransTask *task)
 {
   int ret = OB_SUCCESS;
 
@@ -800,7 +800,7 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
     // FIXME: the Binlog Record contains references to memory allocated by the PartTransTask.
     // They should be actively freed here, but as PartTransTask will release the memory uniformly when it is reclaimed
     // memory in the Binlog Record is not actively freed here
-    while (OB_SUCC(ret) && OB_NOT_NULL(stmt_task) && ! RCThread::is_stoped()) {
+    while (OB_SUCC(ret) && OB_NOT_NULL(stmt_task) &&  (is_build_baseline || ! RCThread::is_stoped())) {
       DdlStmtTask *next = static_cast<DdlStmtTask *>(stmt_task->get_next());
       ObLogBR *br = stmt_task->get_binlog_record();
       stmt_task->set_binlog_record(NULL);
@@ -811,7 +811,7 @@ int ObLogResourceCollector::revert_dll_all_binlog_records_(PartTransTask *task)
 
       stmt_task = next;
     }
-    if (RCThread::is_stoped()) {
+    if (!is_build_baseline && RCThread::is_stoped()) {
       ret = OB_IN_STOP_STATE;
     }
   }
