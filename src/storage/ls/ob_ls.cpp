@@ -1914,6 +1914,27 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
   return ret;
 }
 
+int ObLS::flush_to_recycle_clog()
+{
+  int ret = OB_SUCCESS;
+
+  int64_t read_lock = LSLOCKALL;
+  int64_t write_lock = 0;
+  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_UNLIKELY(is_offline())) {
+    ret = OB_MINOR_FREEZE_NOT_ALLOW;
+    LOG_WARN("offline ls not allowed freeze", K(ret), K_(ls_meta));
+  } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush(SCN::invalid_scn() /*recycle_scn*/))) {
+    STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
+  } else {
+    // do nothing
+  }
+  return ret;
+}
+
 int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,
     ObLSMetaPackage &meta_package,
     common::ObIArray<common::ObTabletID> &tablet_ids)
@@ -2120,45 +2141,6 @@ int ObLS::disable_replay_without_lock()
   }
   return ret;
 }
-
-int ObLS::flush_if_need(const bool need_flush)
-{
-  int ret = OB_SUCCESS;
-
-  int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-  int64_t write_lock = 0;
-  ObLSLockGuard lock_myself(this, lock_, read_lock, write_lock);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ls is not inited", K(ret));
-  } else if (OB_UNLIKELY(is_stopped_)) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("ls stopped", K(ret), K_(ls_meta));
-  } else if (OB_UNLIKELY(!log_handler_.is_replay_enabled())) {
-    ret = OB_NOT_RUNNING;
-    LOG_WARN("log handler not enable replay, should not freeze", K(ret), K_(ls_meta));
-  } else if (OB_FAIL(flush_if_need_(need_flush))) {
-    LOG_WARN("flush if need failed", K(ret), K_(ls_meta));
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
-int ObLS::flush_if_need_(const bool need_flush)
-{
-  int ret = OB_SUCCESS;
-  SCN clog_checkpoint_scn = get_clog_checkpoint_scn();
-  if (!need_flush) {
-    STORAGE_LOG(INFO, "the ls no need flush to advance_checkpoint",
-                K(get_ls_id()),
-                K(need_flush));
-  } else if (OB_FAIL(checkpoint_executor_.advance_checkpoint_by_flush())) {
-    STORAGE_LOG(WARN, "advance_checkpoint_by_flush failed", KR(ret), K(get_ls_id()));
-  }
-  return ret;
-}
-
 
 int ObLS::update_ls_meta(const bool update_restore_status,
                          const ObLSMeta &src_ls_meta)

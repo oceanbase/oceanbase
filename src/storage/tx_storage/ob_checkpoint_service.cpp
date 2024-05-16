@@ -264,7 +264,7 @@ bool ObCheckPointService::cannot_recycle_log_over_threshold_(const int64_t thres
   return cannot_recycle_log_over_threshold;
 }
 
-int ObCheckPointService::flush_if_need_()
+int ObCheckPointService::flush_to_recycle_clog_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -283,8 +283,8 @@ int ObCheckPointService::flush_if_need_()
     int64_t ls_cnt = 0;
     int64_t succ_ls_cnt = 0;
     for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-      if (OB_TMP_FAIL(ls->flush_if_need(true))) {
-        STORAGE_LOG(WARN, "flush ls failed", KR(tmp_ret), KPC(ls));
+      if (OB_TMP_FAIL(ls->flush_to_recycle_clog())) {
+        STORAGE_LOG(WARN, "flush ls to recycle clog failed", KR(tmp_ret), KPC(ls));
         tmp_ret = OB_SUCCESS;
       } else {
         ++succ_ls_cnt;
@@ -358,8 +358,8 @@ void ObCheckPointService::ObCheckClogDiskUsageTask::runTimerTask()
     }
   }
 
-  if (need_flush && OB_FAIL(checkpoint_service_.flush_if_need_())) {
-    STORAGE_LOG(ERROR, "flush if needed failed", K(ret), K(need_flush));
+  if (need_flush && OB_FAIL(checkpoint_service_.flush_to_recycle_clog_())) {
+    STORAGE_LOG(ERROR, "flush to recycle clog failed", K(ret), K(need_flush));
   }
 }
 
