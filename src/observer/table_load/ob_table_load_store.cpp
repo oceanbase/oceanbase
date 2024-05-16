@@ -230,8 +230,11 @@ public:
           } else if (OB_FAIL(ctx_->store_ctx_->check_status(ObTableLoadStatusType::INITED))) {
             LOG_WARN("fail to check status", KR(ret));
           } else if (OB_FAIL(tablet_ctx->open())) {
-            LOG_WARN("fail to open tablet context", KR(ret));
-            ret = OB_SUCCESS;
+            LOG_WARN("fail to open tablet context", KR(ret), K(tablet_id));
+            if (ret == OB_EAGAIN) {
+              LOG_WARN("retry to open tablet context", K(tablet_id));
+              ret = OB_SUCCESS;
+            }
           } else {
             ctx_->store_ctx_->handle_open_insert_tablet_ctx_finish(is_finish);
             break;
