@@ -632,7 +632,17 @@ struct VecTCCmpCalc<VEC_TC_FIXED_DOUBLE, VEC_TC_FIXED_DOUBLE>
     const double l = *reinterpret_cast<const double *>(l_v);
     const double r = *reinterpret_cast<const double *>(r_v);
     const double P = 5 / LOG_10[l_meta.get_scale() + 1];
-    if (l == r || fabs(l - r) < P) {
+    if (isnan(l) || isnan(r)) {
+      if (isnan(l) && isnan(r)) {
+        cmp_ret = 0;
+      } else if (isnan(l)) {
+        // l is nan, r is not nan:left always bigger than right
+        cmp_ret = 1;
+      } else {
+        // l is not nan, r is nan, left always less than right
+        cmp_ret = -1;
+      }
+    } else if (l == r || fabs(l - r) < P) {
       cmp_ret = 0;
     } else {
       cmp_ret = (l < r ? -1: 1);
