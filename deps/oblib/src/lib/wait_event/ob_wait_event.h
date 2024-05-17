@@ -156,6 +156,7 @@ WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called"
 // CONFIGURATION
 WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
+WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", CONCURRENCY, true, true)
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)
