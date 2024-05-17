@@ -119,6 +119,7 @@ public:
   int64_t occupy_size_;
 
   blocksstable::ObDatumRow macro_meta_row_; // used to get macro meta
+  common::ObArenaAllocator allocator_;
 };
 
 struct ObCopyTabletInfoArg

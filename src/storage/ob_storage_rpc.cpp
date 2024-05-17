@@ -200,7 +200,8 @@ OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, da
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
     occupy_size_(0),
-    macro_meta_row_()
+    macro_meta_row_(),
+    allocator_("CMBlockHeader")
 {
 }
 
@@ -209,6 +210,7 @@ void ObCopyMacroBlockHeader::reset()
   is_reuse_macro_block_ = false;
   occupy_size_ = 0;
   macro_meta_row_.reset();
+  allocator_.reset();
 }
 
 bool ObCopyMacroBlockHeader::is_valid() const
