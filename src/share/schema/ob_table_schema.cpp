@@ -1905,12 +1905,15 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const {
               } else {
                 len = column->get_data_length();
               }
-              varchar_col_total_length += len;
-              if (column->is_rowkey_column() && !column->is_hidden()) {
-                if (is_index_table() && 0 == column->get_index_position()) {
-                  // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
-                } else {
-                  rowkey_varchar_col_length += len;
+              if (OB_FAIL(ret)) {
+              } else {
+                varchar_col_total_length += len;
+                if (column->is_rowkey_column() && !column->is_hidden()) {
+                  if (is_index_table() && 0 == column->get_index_position()) {
+                    // Non-user-created index columns in the index table are not counted in rowkey_varchar_col_length
+                  } else {
+                    rowkey_varchar_col_length += len;
+                  }
                 }
               }
             } else if (ob_is_text_tc(column->get_data_type()) || ob_is_json_tc(column->get_data_type())
