@@ -911,6 +911,9 @@ typedef enum ObItemType
   T_FUN_SYS_RB_AND_NULL2EMPTY = 2043,
   T_FUN_SYS_RB_OR_NULL2EMPTY = 2044,
   T_FUN_SYS_RB_ANDNOT_NULL2EMPTY = 2045,
+  T_FUN_SYS_RB_TO_STRING = 2046,
+  T_FUN_SYS_RB_FROM_STRING = 2047,
+  T_FUN_SYS_RB_ITERATE = 2048,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
