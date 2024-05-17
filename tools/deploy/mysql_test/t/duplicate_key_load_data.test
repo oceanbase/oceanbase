@@ -16,7 +16,7 @@ create table t1(x int, y int, UNIQUE INDEX i(x, y));
 create table t2(x2 int, y2 int);
 
 insert into t2 values(2, 2), (2, 2);
-
+-- error 1062
 insert /*+ append enable_parallel_dml parallel(2)*/ into t1 select x2, y2 from t2;
 
 drop table t1;

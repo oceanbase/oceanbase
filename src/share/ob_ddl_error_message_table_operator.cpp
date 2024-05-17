@@ -146,6 +146,65 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
   return ret;
 }
 
+int ObDDLErrorMessageTableOperator::load_child_task_error(const uint64_t tenant_id,
+                                                          const int64_t parent_task_id, 
+                                                          const int target_err_code,                                                         
+                                                          ObMySQLProxy &sql_proxy,
+                                                          ObBuildDDLErrorMessage &error_message) {
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  LOG_INFO("begin to load ddl user error", K(tenant_id), K(parent_task_id));
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    sqlclient::ObMySQLResult *result = NULL;
+    if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || parent_task_id <= 0 || OB_SUCCESS == target_err_code
+        || nullptr != error_message.user_message_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(parent_task_id));
+    } else if (OB_FAIL(sql.assign_fmt(
+        "SELECT ret_code, ddl_type, affected_rows, user_message, dba_message from %s WHERE tenant_id = %ld AND "
+        "parent_task_id = %ld AND ret_code = %d", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+        parent_task_id, target_err_code))) {
+      LOG_WARN("fail to assign sql", K(ret));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("fail to execute sql", K(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ITER_END;
+      LOG_INFO("single replica has not reported before", K(ret));
+    } else {
+      while (OB_SUCC(ret)) {
+        if (OB_FAIL(result->next())) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("result next failed", K(ret));
+          }
+        } else {
+          ObString str_user_message;
+          ObString str_dba_message;
+          int ddl_type = 0;
+          EXTRACT_INT_FIELD_MYSQL(*result, "ddl_type", ddl_type, int);
+          EXTRACT_INT_FIELD_MYSQL(*result, "affected_rows", error_message.affected_rows_, int);
+          error_message.ddl_type_ = static_cast<ObDDLType>(ddl_type);
+          EXTRACT_INT_FIELD_MYSQL(*result, "ret_code", error_message.ret_code_, int);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_message", str_user_message);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "dba_message", str_dba_message);
+          const int64_t buf_len = str_user_message.length() + 1;
+          if (OB_FAIL(error_message.prepare_user_message_buf(buf_len))) {
+            LOG_WARN("failed to prepare buf", K(ret));
+          } else if (OB_FAIL(databuff_printf(error_message.user_message_, buf_len, "%.*s", str_user_message.length(), str_user_message.ptr()))) {
+            LOG_WARN("print to buffer failed", K(ret), K(str_user_message));
+          } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
+            LOG_WARN("print to buffer failed", K(ret), K(str_dba_message));
+          } else if (OB_SUCCESS != error_message.ret_code_ && !str_user_message.empty() && NULL == str_user_message.find('%')) {
+            LOG_INFO("load ddl user error success", K(error_message));
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
 int ObDDLErrorMessageTableOperator::load_ddl_user_error(const uint64_t tenant_id,
                                                         const int64_t task_id,
                                                         const uint64_t table_id,

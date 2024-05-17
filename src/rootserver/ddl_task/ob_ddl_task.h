@@ -518,7 +518,7 @@ public:
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0), is_parent_task_(false)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -692,6 +692,7 @@ protected:
   int64_t start_time_;
   uint64_t data_format_version_;
   int64_t consumer_group_id_;
+  bool is_parent_task_; // if having child task, for the correct error reporting, please set it is_parent_task_ be true
 };
 
 enum ColChecksumStat

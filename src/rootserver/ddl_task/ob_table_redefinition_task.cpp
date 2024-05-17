@@ -772,6 +772,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
       LOG_WARN("copy table foreign keys failed", K(ret));
     } else {
       // copy triggers(at current, not supported, skip it)
+      is_parent_task_ = (dependent_task_result_map_.size() > 0);
     }
   }
 
