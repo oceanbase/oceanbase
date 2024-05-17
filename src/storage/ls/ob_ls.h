@@ -839,6 +839,7 @@ public:
   CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
   DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);
 
+  DELEGATE_WITH_RET(ls_tx_svr_, filter_tx_need_transfer, int);
   // for transfer to modify active tx ctx state
   DELEGATE_WITH_RET(ls_tx_svr_, transfer_out_tx_op, int);
 

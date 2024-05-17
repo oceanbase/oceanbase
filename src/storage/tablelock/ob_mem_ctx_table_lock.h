@@ -91,6 +91,8 @@ public:
       const ObTableLockOpType op_type,
       bool &is_exist,
       uint64_t lock_mode_cnt_in_same_trans[]) const;
+  int64_t get_lock_op_count() { return lock_list_.get_size(); }
+  int check_contain_tablet(ObTabletID tablet_id, bool &contain);
   // wait all the trans that modify with a smaller schema_version finished.
   int check_modify_schema_elapsed(
       const ObLockID &lock_id,

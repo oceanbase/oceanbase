@@ -2541,34 +2541,65 @@ OB_NOINLINE int ObLSTxCtxMgr::errsim_apply_start_working_log()
   return ret;
 }
 
-int ObLSTxCtxMgr::transfer_out_tx_op(int64_t except_tx_id,
-                                     const SCN data_end_scn,
-                                     const SCN op_scn,
-                                     NotifyType op_type,
-                                     bool is_replay,
-                                     ObLSID dest_ls_id,
-                                     int64_t transfer_epoch,
+int ObLSTxCtxMgr::filter_tx_need_transfer(ObIArray<ObTabletID> &tablet_list,
+                                           const share::SCN data_end_scn,
+                                           ObIArray<transaction::ObTransID> &move_tx_ids)
+{
+  int ret = OB_SUCCESS;
+  FilterTransferTxFunctor fn(tablet_list, data_end_scn, move_tx_ids);
+  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+    ret = fn.get_ret();
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+  }
+  return ret;
+}
+
+int ObLSTxCtxMgr::transfer_out_tx_op(const ObTransferOutTxParam &param,
                                      int64_t& active_tx_count,
                                      int64_t &op_tx_count)
 {
   int ret = OB_SUCCESS;
-  const int64_t abs_expired_time = INT64_MAX;
-  TransferOutTxOpFunctor fn(abs_expired_time, except_tx_id,
-                                              data_end_scn,
-                                              op_scn,
-                                              op_type,
-                                              is_replay,
-                                              dest_ls_id,
-                                              transfer_epoch);
-  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
-    ret = fn.get_ret();
+  if (OB_ISNULL(param.move_tx_ids_)) {
+    TransferOutTxOpFunctor fn(param);
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      ret = fn.get_ret();
+      TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
+    } else {
+      active_tx_count = fn.get_count();
+      op_tx_count = fn.get_op_tx_count();
+    }
   } else {
-    active_tx_count = fn.get_count();
-    op_tx_count = fn.get_op_tx_count();
+    active_tx_count = ls_tx_ctx_map_.count();
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < param.move_tx_ids_->count(); idx++) {
+      if (param.move_tx_ids_->at(idx).get_id() == param.except_tx_id_) {
+        continue;
+      }
+      ObPartTransCtx *ctx = nullptr;
+      ObTransCtx *tmp_ctx = nullptr;
+      bool is_operated = false;
+      if (OB_FAIL(ls_tx_ctx_map_.get(param.move_tx_ids_->at(idx), tmp_ctx))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          TRANS_LOG(WARN, "get tx ctx failed", KR(ret), K(param.move_tx_ids_->at(idx)));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (FALSE_IT(ctx = static_cast<ObPartTransCtx*>(tmp_ctx))) {
+      } else if (OB_FAIL(ctx->do_transfer_out_tx_op(param.data_end_scn_,
+                                                    param.op_scn_,
+                                                    param.op_type_,
+                                                    param.is_replay_,
+                                                    param.dest_ls_id_,
+                                                    param.transfer_epoch_,
+                                                    is_operated))) {
+        TRANS_LOG(WARN, "transfer out tx failed", KR(ret), K(param));
+      } else if (is_operated) {
+        op_tx_count++;
+      }
+      if (OB_NOT_NULL(ctx)) {
+        revert_tx_ctx(ctx);
+      }
+    }
   }
-  TRANS_LOG(INFO, "[TRANSFER] transfer_out_tx_op", KR(ret), K(data_end_scn), K(op_scn), K(op_type), K(is_replay), K(dest_ls_id),
-      K(transfer_epoch), K(active_tx_count), K(op_tx_count), K(ls_tx_ctx_map_.count()), K(tenant_id_), K(ls_id_));
   return ret;
 }
 
@@ -2594,23 +2625,43 @@ int ObLSTxCtxMgr::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
 int ObLSTxCtxMgr::collect_tx_ctx(const ObLSID dest_ls_id,
                                  const SCN log_scn,
                                  const ObIArray<ObTabletID> &tablet_list,
-                                 int64_t &tx_count,
+                                 const ObIArray<ObTransID> &move_tx_ids,
                                  int64_t &collect_count,
                                  ObIArray<ObTxCtxMoveArg> &res)
 {
   int ret = OB_SUCCESS;
-
-  const int64_t abs_expired_time = INT64_MAX;
-  CollectTxCtxFunctor fn(abs_expired_time, dest_ls_id, log_scn, tablet_list, tx_count, collect_count, res);
-  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
-    ret = fn.get_ret();
-  } else {
-    tx_count = fn.get_tx_count();
-    collect_count = fn.get_collect_count();
+  ObSEArray<ObTransID, 1> final_move_tx_ids;
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < move_tx_ids.count(); idx++) {
+    ObPartTransCtx *ctx = nullptr;
+    ObTransCtx *tmp_ctx = nullptr;
+    bool is_collected = false;
+    ObTxCtxMoveArg arg;
+    if (OB_FAIL(ls_tx_ctx_map_.get(move_tx_ids.at(idx), tmp_ctx))) {
+      if (OB_ENTRY_NOT_EXIST != ret) {
+        TRANS_LOG(WARN, "get tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (FALSE_IT(ctx = static_cast<ObPartTransCtx*>(tmp_ctx))) {
+    } else if (OB_FAIL(ctx->collect_tx_ctx(dest_ls_id,
+                                           log_scn,
+                                           tablet_list,
+                                           arg,
+                                           is_collected))) {
+      TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
+    } else if (!is_collected) {
+    } else if (OB_FAIL(final_move_tx_ids.push_back(move_tx_ids.at(idx)))) {
+      TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
+    } else if (OB_FAIL(res.push_back(arg))) {
+      TRANS_LOG(WARN, "push to array failed", KR(ret), K(move_tx_ids.at(idx)));
+    } else {
+      collect_count++;
+    }
+    if (OB_NOT_NULL(ctx)) {
+      revert_tx_ctx(ctx);
+    }
   }
-
-  TRANS_LOG(INFO, "collect_tx_ctx", KR(ret), K(tx_count), K(collect_count), K(tenant_id_), K(ls_id_));
+  TRANS_LOG(INFO, "collect_tx_ctx", KR(ret), K(final_move_tx_ids), K(collect_count), K(tenant_id_), K(ls_id_));
   return ret;
 }
 
@@ -2720,11 +2771,10 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
     if (OB_NOT_NULL(ctx)) {
       revert_tx_ctx(ctx);
     }
-    TRANS_LOG(INFO, "move_tx_op", KR(ret), K(arg.tx_id_), K(ls_id_), K(is_replay), K(is_created));
+    TRANS_LOG(INFO, "move_tx_op", KR(ret), K(arg.tx_id_), K(ls_id_), K(is_replay), K(is_created), K(move_tx_param.op_type_));
   }
   return ret;
 }
-
 
 }
 }

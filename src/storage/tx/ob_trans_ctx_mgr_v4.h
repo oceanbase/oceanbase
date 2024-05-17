@@ -41,6 +41,7 @@ class ObTransSubmitLogFunctor;
 class ObTxCtxTable;
 struct ObTxCtxMoveArg;
 struct ObTransferMoveTxParam;
+struct ObTransferOutTxParam;
 }
 
 namespace memtable
@@ -203,20 +204,18 @@ public:
   // Offline the in-memory state of the ObLSTxCtxMgr
   int offline();
 
-  int transfer_out_tx_op(int64_t except_tx_id,
-                         const SCN data_end_scn,
-                         const SCN op_scn,
-                         NotifyType op_type,
-                         bool is_replay,
-                         ObLSID dest_ls_id,
-                         int64_t transfer_epoch,
+  int filter_tx_need_transfer(ObIArray<ObTabletID> &tablet_list,
+                              const share::SCN data_end_scn,
+                              ObIArray<transaction::ObTransID> &move_tx_ids);
+
+  int transfer_out_tx_op(const ObTransferOutTxParam &param,
                          int64_t& active_tx_count,
                          int64_t &op_tx_count);
   int wait_tx_write_end(ObTimeoutCtx &timeout_ctx);
   int collect_tx_ctx(const share::ObLSID dest_ls_id,
                      const SCN log_scn,
                      const ObIArray<ObTabletID> &tablet_list,
-                     int64_t &tx_count,
+                     const ObIArray<ObTransID> &move_tx_ids,
                      int64_t &colllect_count,
                      ObIArray<ObTxCtxMoveArg> &res);
   int move_tx_op(const ObTransferMoveTxParam &move_tx_param,

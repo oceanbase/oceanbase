@@ -1100,7 +1100,8 @@ class ObTxAbortLog
 
 public:
   ObTxAbortLog(ObTxAbortLogTempRef &temp_ref)
-      : multi_source_data_(temp_ref.multi_source_data_), tx_data_backup_()
+      : multi_source_data_(temp_ref.multi_source_data_),
+        tx_data_backup_()
   {
     before_serialize();
   }

@@ -19,10 +19,10 @@
 #include "storage/tx/ob_committer_define.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx_table/ob_tx_data_hash_map.h"
+#include "storage/tx/ob_trans_factory.h"
 
 namespace oceanbase
 {
-
 namespace storage
 {
 class ObTxData;
@@ -30,6 +30,8 @@ class ObTxTable;
 class ObTxDataTable;
 class ObTxDataMemtable;
 class ObTxDataMemtableMgr;
+class ObTxDataOp;
+
 
 // The memory structures associated with tx data are shown below. They are designed for several
 // reasons:
@@ -132,7 +134,6 @@ struct ObTxDataLinkNode
   TO_STRING_KV(KP_(next));
 };
 
-
 struct ObUndoStatusList
 {
 private:
@@ -221,7 +222,6 @@ public:
   share::SCN end_scn_;
 };
 
-
 class ObTxDataLink
 {
 public:
@@ -230,6 +230,29 @@ public:
   ObTxDataLinkNode sort_list_node_;
   // used for hash conflict
   ObTxDataLinkNode hash_node_;
+};
+
+class ObTxDataOpGuard
+{
+public:
+  ObTxDataOpGuard() : tx_data_op_(nullptr) {}
+  ~ObTxDataOpGuard() { reset(); }
+  int init(ObTxDataOp *tx_data_op);
+  bool is_valid() const { return tx_data_op_ != nullptr; }
+  void reset();
+  ObTxDataOp *ptr() const { return tx_data_op_; }
+  ObTxDataOp &operator*() {
+    return *tx_data_op_;
+  }
+  ObTxDataOp* operator->() {
+    return tx_data_op_;
+  }
+  ObTxDataOp* operator->() const {
+    return tx_data_op_;
+  }
+  TO_STRING_KV(KP(tx_data_op_));
+private:
+  ObTxDataOp *tx_data_op_;
 };
 
 // DONT : Modify this definition
@@ -248,8 +271,8 @@ public:
       : ObTxCommitData(),
         ObTxDataLink(),
         tx_data_allocator_(nullptr),
+        op_allocator_(nullptr),
         ref_cnt_(0),
-        undo_status_list_(),
         exclusive_flag_(ExclusiveType::NORMAL) {}
   ObTxData(const ObTxData &rhs);
   ObTxData &operator=(const ObTxData &rhs);
@@ -260,6 +283,8 @@ public:
   void reset();
   OB_INLINE bool contain(const transaction::ObTransID &tx_id) { return tx_id_ == tx_id; }
 
+  int init_tx_op();
+  int reserve_undo(ObTxTable *tx_table);
   int64_t inc_ref()
   {
     int64_t ref_cnt = ATOMIC_AAF(&ref_cnt_, 1);
@@ -275,23 +300,17 @@ public:
       STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid slice allocator", KPC(this));
       ob_abort();
     } else if (0 == ATOMIC_SAF(&ref_cnt_, 1)) {
-      if (OB_UNLIKELY(nullptr != undo_status_list_.head_)) {
-        ObUndoStatusNode *node_ptr = undo_status_list_.head_;
-        ObUndoStatusNode *node_to_free = nullptr;
-        while (nullptr != node_ptr) {
-          node_to_free = node_ptr;
-          node_ptr = node_ptr->next_;
-          tx_data_allocator_->free(node_to_free);
-        }
-      }
+      op_guard_.reset();
       tx_data_allocator_->free(this);
     }
   }
 
+  int check_tx_op_exist(share::SCN op_scn, bool &exist);
+
   /**
    * @brief Add a undo action with dynamically memory allocation.
    * See more details in alloc_undo_status_node() function of class ObTxDataTable
-   * 
+   *
    * @param[in] tx_table, the tx table contains this tx data
    * @param[in & out] undo_action, the undo action which is waiting to be added. If this undo action contains exsiting undo actions, the existing undo actions will be deleted and this undo action will be modified to contain all the deleted undo actions.
    * @param[in] undo_node, the undo status node can be used to extend undo status list if required, otherwise it will be released
@@ -306,7 +325,7 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos, share::ObTenantTxDataAllocator &tx_data_allocator);
   int64_t get_serialize_size() const;
-  int64_t size() const;
+  int64_t size_need_cache() const;
 
   void dump_2_text(FILE *fd) const;
   static void print_to_stderr(const ObTxData &tx_data);
@@ -338,10 +357,13 @@ public:
 
 public:
   share::ObTenantTxDataAllocator *tx_data_allocator_;
+  share::ObTenantTxDataOpAllocator *op_allocator_;
   int64_t ref_cnt_;
-  ObUndoStatusList undo_status_list_;
   ExclusiveType exclusive_flag_;
+  ObTxDataOpGuard op_guard_;
 };
+
+static_assert(sizeof(ObTxData) < storage::TX_DATA_SLICE_SIZE, "ObTxData exceed slice_allocator fixed length");
 
 class ObTxDataGuard
 {
@@ -460,15 +482,19 @@ struct ObReadTxDataArg{
   const transaction::ObTransID tx_id_;
   const int64_t read_epoch_;
   ObTxDataMiniCache &tx_data_mini_cache_;
+  const bool skip_cache_;
 
-  ObReadTxDataArg(const transaction::ObTransID tx_id, const int64_t read_epoch, ObTxDataMiniCache &mini_cache)
-      : tx_id_(tx_id), read_epoch_(read_epoch), tx_data_mini_cache_(mini_cache) {}
+  ObReadTxDataArg(const transaction::ObTransID tx_id,
+                  const int64_t read_epoch,
+                  ObTxDataMiniCache &mini_cache,
+                  const bool skip_cache = false)
+      : tx_id_(tx_id), read_epoch_(read_epoch),
+        tx_data_mini_cache_(mini_cache), skip_cache_(skip_cache) {}
 
-  TO_STRING_KV(K_(tx_id), K_(read_epoch), K_(tx_data_mini_cache));
+  TO_STRING_KV(K_(tx_id), K_(read_epoch), K_(tx_data_mini_cache), K_(skip_cache));
 };
 
 }  // namespace storage
-
 }  // namespace oceanbase
 
 #endif  // OCEANBASE_STORAGE_OB_TX_DATA_DEFINE_

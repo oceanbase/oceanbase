@@ -241,6 +241,15 @@ public:
   observer::VirtualTxDataRow &row_data_;
 };
 
+class LoadTxOpFunctor : public ObITxDataCheckFunctor
+{
+public:
+  LoadTxOpFunctor(ObTxData &tx_data) : tx_data_(tx_data) {}
+  virtual int operator()(const ObTxData &tx_data, ObTxCCCtx *tx_cc_ctx = nullptr) override;
+public:
+  ObTxData &tx_data_;
+};
+
 }  // namespace storage
 }  // namespace oceanbase
 

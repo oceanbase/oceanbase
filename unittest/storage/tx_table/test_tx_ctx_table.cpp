@@ -190,6 +190,7 @@ public:
   ObIMemtableMgr *mt_mgr_;
   ObTxCtxMemtableMgr *ctx_mt_mgr_;
   ObTenantTxDataAllocator tx_data_allocator_;
+  ObTenantTxDataOpAllocator tx_data_op_allocator_;
 
   ObTenantBase tenant_base_;
 };
@@ -304,6 +305,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   attr.tenant_id_ = MTL_ID();
   tx_data_allocator_.init("test");
   tx_data_table.tx_data_allocator_ = &tx_data_allocator_;
+  tx_data_op_allocator_.init();
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
                            (transaction::ObDupTableLSHandler *)(0x02));

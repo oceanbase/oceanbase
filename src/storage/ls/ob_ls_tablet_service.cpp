@@ -5892,6 +5892,11 @@ int ObLSTabletService::get_ls_min_end_scn(
         }
       }
     }
+    // now tx_data contains mds tx_op to remove retain_ctx
+    // so we need wait ls_checkpoint advance to recycle tx_data
+    if (ls_checkpoint < min_end_scn_from_latest_tablets) {
+      min_end_scn_from_latest_tablets = ls_checkpoint;
+    }
     LOG_INFO("get ls min end scn finish", K(ls_checkpoint));
   }
   return ret;

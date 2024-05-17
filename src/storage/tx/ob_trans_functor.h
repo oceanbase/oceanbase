@@ -357,17 +357,53 @@ private:
   ObTxCommitCallback *&cb_list_;
 };
 
+class FilterTransferTxFunctor
+{
+public:
+  FilterTransferTxFunctor(ObIArray<ObTabletID> &tablet_list, const SCN data_end_scn, ObIArray<ObTransID> &move_tx_ids) :
+    tablet_list_(tablet_list), data_end_scn_(data_end_scn),
+    move_tx_ids_(move_tx_ids), count_(0), ret_(OB_SUCCESS)
+  {}
+  ~FilterTransferTxFunctor() { PRINT_FUNC_STAT; }
+  OPERATOR_V4(FilterTransferTxFunctor)
+  {
+    bool bool_ret = false;
+    int ret = OB_SUCCESS;
+    if (!tx_id.is_valid() || OB_ISNULL(tx_ctx)) {
+      ret_ = ret = OB_INVALID_ARGUMENT;
+      TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
+    } else {
+      ++count_;
+    }
+    if (OB_SUCC(ret)) {
+      bool need_transfer = false;
+      if (OB_FAIL(tx_ctx->check_need_transfer(data_end_scn_, tablet_list_, need_transfer))) {
+        TRANS_LOG(WARN, "check need transfer failed", KR(ret), K(*tx_ctx));
+        ret_ = ret;
+      } else if (need_transfer && OB_FAIL(move_tx_ids_.push_back(tx_id))) {
+        ret_ = ret;
+      } else {
+        bool_ret = true;
+      }
+    }
+    return bool_ret;
+  }
+  int get_ret() const { return ret_; }
+  int64_t get_count() const { return count_; }
+private:
+  ObIArray<ObTabletID> &tablet_list_;
+  const SCN data_end_scn_;
+  ObIArray<ObTransID> &move_tx_ids_;
+  int64_t count_;
+  int ret_;
+};
+
 class TransferOutTxOpFunctor
 {
 public:
-  TransferOutTxOpFunctor(const int64_t abs_expired_time, int64_t except_tx_id, const SCN data_end_scn,
-      const SCN op_scn, NotifyType op_type, bool is_replay, ObLSID dest_ls_id, int64_t transfer_epoch)
-     : abs_expired_time_(abs_expired_time), except_tx_id_(except_tx_id), data_end_scn_(data_end_scn),
-       op_scn_(op_scn), op_type_(op_type), is_replay_(is_replay), dest_ls_id_(dest_ls_id),
-       transfer_epoch_(transfer_epoch), count_(0), op_tx_count_(0), ret_(OB_SUCCESS)
+  TransferOutTxOpFunctor(const ObTransferOutTxParam &param)
+     : param_(param), count_(0), op_tx_count_(0), ret_(OB_SUCCESS)
   {
-
-    SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
   ~TransferOutTxOpFunctor() { PRINT_FUNC_STAT; }
   OPERATOR_V4(TransferOutTxOpFunctor)
@@ -379,21 +415,19 @@ public:
       TRANS_LOG(WARN, "invalid argument", K(tx_id), "ctx", OB_P(tx_ctx));
     } else {
       ++count_;
-      if ((count_ % BATCH_CHECK_COUNT) == 0) {
-        const int64_t now = ObTimeUtility::current_time();
-        if (now >= abs_expired_time_) {
-          ret_ = ret = OB_TIMEOUT;
-          TRANS_LOG(WARN, "transfer block tx timeout", K(count_));
-        }
-      }
     }
     if (OB_FAIL(ret)) {
-    } else if (tx_id.get_id() == except_tx_id_) {
+    } else if (tx_id.get_id() == param_.except_tx_id_) {
       bool_ret = true;
     } else {
       bool is_operated = false;
-      if (OB_FAIL(tx_ctx->do_transfer_out_tx_op(data_end_scn_, op_scn_, op_type_, is_replay_,
-              dest_ls_id_, transfer_epoch_, is_operated))) {
+      if (OB_FAIL(tx_ctx->do_transfer_out_tx_op(param_.data_end_scn_,
+                                                param_.op_scn_,
+                                                param_.op_type_,
+                                                param_.is_replay_,
+                                                param_.dest_ls_id_,
+                                                param_.transfer_epoch_,
+                                                is_operated))) {
         TRANS_LOG(WARN, "do_transfer_out_tx_op failed", KR(ret), K(*tx_ctx));
         ret_ = ret;
       } else {
@@ -409,15 +443,7 @@ public:
   int64_t get_count() const { return count_; }
   int64_t get_op_tx_count() const { return op_tx_count_; }
 private:
-  static const int64_t BATCH_CHECK_COUNT = 100;
-  int64_t abs_expired_time_;
-  int64_t except_tx_id_;
-  const SCN data_end_scn_;
-  const SCN op_scn_;
-  NotifyType op_type_;
-  bool is_replay_;
-  ObLSID dest_ls_id_;
-  int64_t transfer_epoch_;
+  const ObTransferOutTxParam &param_;
   int64_t count_;
   int64_t op_tx_count_;
   int ret_;

@@ -368,6 +368,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_2pc_msg_handler.cpp
   tx/ob_tx_2pc_ctx_impl.cpp
   tx/ob_tx_data_define.cpp
+  tx/ob_tx_data_op.cpp
   tx/ob_tx_data_functor.cpp
   tx/ob_tx_serialization.cpp
   tx/ob_tx_log.cpp

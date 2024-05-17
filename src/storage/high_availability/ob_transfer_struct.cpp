@@ -69,6 +69,8 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     LOG_WARN("assign start transfer out info get invalid argument", K(ret), K(start_transfer_out_info));
   } else if (OB_FAIL(tablet_list_.assign(start_transfer_out_info.tablet_list_))) {
     LOG_WARN("failed to assign start transfer out info", K(ret), K(start_transfer_out_info));
+  } else if (OB_FAIL(move_tx_ids_.assign(start_transfer_out_info.move_tx_ids_))) {
+    LOG_WARN("failed to assign move_tx_ids", K(ret), K(start_transfer_out_info));
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
@@ -76,6 +78,7 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     data_end_scn_ = start_transfer_out_info.data_end_scn_;
     transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
     data_version_ = start_transfer_out_info.data_version_;
+    filter_tx_need_transfer_ = start_transfer_out_info.filter_tx_need_transfer_;
   }
   return ret;
 }

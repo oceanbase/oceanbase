@@ -70,6 +70,8 @@ public:
   static int get_ls_end_scn(uint64_t tenant_id, ObLSID ls_id, SCN &end_scn);
   static int wait_replay_advance(uint64_t tenant_id, ObLSID ls_id, SCN end_scn);
   static int wait_checkpoint_newest(uint64_t tenant_id, ObLSID ls_id);
+  static int freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id);
+  static int freeze_tx_data(uint64_t tenant_id, ObLSID ls_id);
   static int wait_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id, ObTxState tx_state);
   static int wait_tx_exit(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id);
   static int wait_flush_finish(uint64_t tenant_id, ObLSID ls_id, ObTabletID tablet_id);

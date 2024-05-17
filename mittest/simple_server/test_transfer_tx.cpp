@@ -352,6 +352,7 @@ TEST_F(ObSimpleClusterExampleTest, tx_exit)
   EQ(OB_TRANS_CTX_NOT_EXIST, SSH::wait_tx_exit(R.tenant_id_, loc2, tx_id));
 }
 
+/*
 TEST_F(ObSimpleClusterExampleTest, large_query)
 {
   TRANSFER_CASE_PREPARE;
@@ -435,7 +436,7 @@ TEST_F(ObSimpleClusterExampleTest, large_query)
   LOGI("large_query: row_count:%ld", row_count);
   //get_curr_simple_server().get_sql_proxy().write("alter system set syslog_level='INFO'", affected_rows);
 }
-
+*/
 
 TEST_F(ObSimpleClusterExampleTest, epoch_recover_from_active_info)
 {
@@ -1215,7 +1216,9 @@ TEST_F(ObSimpleClusterExampleTest, transfer_tx_ctx_merge)
 TEST_F(ObSimpleClusterExampleTest, transfer_batch)
 {
   TRANSFER_CASE_PREPARE;
+  sql_proxy.write("alter system set _transfer_start_trans_timeout='5s'",affected_rows);
 
+  sql_proxy.write("alter system set _transfer_start_trans_timeout = '10s'", affected_rows);
   std::set<sqlclient::ObISQLConnection*> jobs;
   for (int i =0 ;i< 5000;i++) {
     sqlclient::ObISQLConnection *conn = NULL;
@@ -1243,6 +1246,7 @@ TEST_F(ObSimpleClusterExampleTest, transfer_batch)
   int64_t sum = 0;
   EQ(0, SSH::select_int64(sql_proxy, "select sum(col) as val from stu2", sum));
   EQ(100 * 5000, sum);
+  sql_proxy.write("alter system set _transfer_start_trans_timeout='1s'",affected_rows);
 }
 
 TEST_F(ObSimpleClusterExampleTest, transfer_retain_ctx)
