@@ -97,7 +97,9 @@ public:
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
-                               bool set_null = true) const;
+                               bool set_null = true);
+
+  virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
 };
 
 class ObPLFunctionBase
@@ -653,8 +655,8 @@ struct ObPLExecCtx : public ObPLINS
   virtual int get_user_type(uint64_t type_id,
                                 const ObUserDefinedType *&user_type,
                                 ObIAllocator *allocator = NULL) const;
+  virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
 
-  //Note: 不实现虚函数，省得llvm解析的时候需要处理vtable麻烦
   common::ObIAllocator *allocator_;
   sql::ObExecContext *exec_ctx_;
   ParamStore *params_; // param stroe, 对应PL Function的符号表

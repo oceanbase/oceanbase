@@ -7337,6 +7337,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
       }
     }
   }
+
   if (OB_SUCC(ret)) {
     pl::ObPLResolver pl_resolver(allocator,
                                 session_info,
@@ -7374,7 +7375,7 @@ int ObResolverUtils::resolve_external_symbol(common::ObIAllocator &allocator,
                     && T_FUN_PL_GET_CURSOR_ATTR != expr->get_expr_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr type is invalid", K(expr->get_expr_type()));
-        } else if (OB_NOT_NULL(ns) && OB_NOT_NULL(ns->get_external_ns())) {
+        } else if (OB_NOT_NULL(ns) && OB_NOT_NULL(ns->get_external_ns()) && !is_check_mode) {
           ObPLDependencyTable &src_dep_tbl = func_ast.get_dependency_table();
           for (int64_t i = 0; OB_SUCC(ret) && i < src_dep_tbl.count(); ++i) {
             OZ (ns->get_external_ns()->add_dependency_object(src_dep_tbl.at(i)));
