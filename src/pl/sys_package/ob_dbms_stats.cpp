@@ -32,6 +32,7 @@
 #include "share/stat/ob_opt_stat_gather_stat.h"
 #include "sql/engine/expr/ob_expr_uuid.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
+#include "sql/ob_result_set.h"
 
 namespace oceanbase
 {
@@ -76,6 +77,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
   int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_task_executor_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()), K(ctx.get_task_executor_ctx()));
@@ -176,6 +179,8 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
   int64_t start_time = ObTimeUtility::current_time();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_task_executor_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(ctx.get_my_session()), K(ctx.get_task_executor_ctx()));
@@ -309,6 +314,8 @@ int ObDbmsStats::gather_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   empty_cascade.set_null();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(11).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
@@ -528,6 +535,8 @@ int ObDbmsStats::set_table_stats(ObExecContext &ctx, ParamStore &params, ObObj &
   param.table_param_.allocator_ = &ctx.get_allocator();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_set_table_info(ctx,
                                           params.at(0),
                                           params.at(1),
@@ -606,6 +615,8 @@ int ObDbmsStats::set_column_stats(sql::ObExecContext &ctx,
   param.table_param_.allocator_ = &ctx.get_allocator();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (params.at(2).is_null() && !params.at(1).is_null()) {
     //do nothing
   } else if (OB_FAIL(parse_set_column_stats(ctx,
@@ -700,6 +711,8 @@ int ObDbmsStats::set_index_stats(ObExecContext &ctx, ParamStore &params, ObObj &
   number::ObNumber num_nummicroblks;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(22).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
@@ -786,6 +799,8 @@ int ObDbmsStats::delete_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
   bool cascade_indexes = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -866,6 +881,8 @@ int ObDbmsStats::delete_column_stats(ObExecContext &ctx, ParamStore &params, ObO
   bool only_histogram = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -941,6 +958,8 @@ int ObDbmsStats::delete_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (ctx.get_my_session()->get_is_in_retry()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("retry delete schema stats is not allowed", K(ret));
@@ -1029,6 +1048,8 @@ int ObDbmsStats::delete_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   bool only_histogram = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(10).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
@@ -1289,6 +1310,8 @@ int ObDbmsStats::export_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     const share::schema::ObTableSchema *table_schema = NULL;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (OB_FAIL(parse_table_part_info(ctx,
                                             params.at(0),
                                             params.at(1),
@@ -1367,6 +1390,8 @@ int ObDbmsStats::export_column_stats(sql::ObExecContext &ctx,
   stat_param.cascade_ = true;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -1427,6 +1452,8 @@ int ObDbmsStats::export_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObString tmp_str;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (ctx.get_my_session()->get_is_in_retry()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("retry export schema stats is not allowed", K(ret));
@@ -1506,6 +1533,8 @@ int ObDbmsStats::export_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   const share::schema::ObTableSchema *table_schema = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(6).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
@@ -1615,6 +1644,8 @@ int ObDbmsStats::import_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
     const share::schema::ObTableSchema *table_schema = NULL;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (OB_FAIL(parse_table_part_info(ctx,
                                             params.at(0),
                                             params.at(1),
@@ -1712,6 +1743,8 @@ int ObDbmsStats::import_column_stats(sql::ObExecContext &ctx,
   stat_param.cascade_ = true;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -1783,6 +1816,8 @@ int ObDbmsStats::import_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (ctx.get_my_session()->get_is_in_retry()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("retry import schema stats is not allowed", K(ret));
@@ -1885,6 +1920,8 @@ int ObDbmsStats::import_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
   const share::schema::ObTableSchema *table_schema = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode() && !params.at(8).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("table name shouldn't be specified in gather index stats", K(ret));
@@ -2009,6 +2046,8 @@ int ObDbmsStats::lock_table_stats(sql::ObExecContext &ctx,
   ObString stat_type_str;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -2060,6 +2099,8 @@ int ObDbmsStats::lock_partition_stats(sql::ObExecContext &ctx,
   stat_param.stattype_ = StatTypeLocked::PARTITION_ALL_TYPE;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (params.at(2).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("partition not specified", K(ret));
@@ -2108,6 +2149,8 @@ int ObDbmsStats::lock_schema_stats(sql::ObExecContext &ctx,
     ObSEArray<uint64_t, 4> table_ids;
     if (OB_FAIL(check_statistic_table_writeable(ctx))) {
       LOG_WARN("failed to check tenant is restore", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+      LOG_WARN("failed to implicit commit before gather stats", K(ret));
     } else if (ctx.get_my_session()->get_is_in_retry()) {
       ret = OB_ERR_DBMS_STATS_PL;
       LOG_WARN("retry lock schema stats is not allowed", K(ret));
@@ -2218,6 +2261,8 @@ int ObDbmsStats::unlock_table_stats(sql::ObExecContext &ctx,
   stat_param.stattype_ = StatTypeLocked::TABLE_ALL_TYPE;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -2270,6 +2315,8 @@ int ObDbmsStats::unlock_partition_stats(sql::ObExecContext &ctx,
   stat_param.stattype_ = StatTypeLocked::PARTITION_ALL_TYPE;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (params.at(2).is_null()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("partition not specified", K(ret));
@@ -2394,6 +2441,8 @@ int ObDbmsStats::restore_table_stats(sql::ObExecContext &ctx,
   int64_t specify_time = 0;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx,
                                            params.at(0),
                                            params.at(1),
@@ -2500,6 +2549,8 @@ int ObDbmsStats::restore_schema_stats(sql::ObExecContext &ctx,
   int64_t specify_time = 0;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (ctx.get_my_session()->get_is_in_retry()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("retry restore schema stats is not allowed", K(ret));
@@ -2585,6 +2636,8 @@ int ObDbmsStats::purge_stats(sql::ObExecContext &ctx,
   int64_t specify_time = -1;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (lib::is_oracle_mode()) {
     if (!params.at(0).is_null() && !params.at(0).is_timestamp_tz()) {
       ret = OB_INVALID_ARGUMENT;
@@ -2643,6 +2696,8 @@ int ObDbmsStats::alter_stats_history_retention(sql::ObExecContext &ctx,
   double retention_tmp = 0.0; // bugfix:
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_number(num_retention))) {
     LOG_WARN("failed to get epc", K(ret));
   } else if (!params.at(0).is_null() &&
@@ -2764,6 +2819,8 @@ int ObDbmsStats::reset_global_pref_defaults(sql::ObExecContext &ctx,
   UNUSED(result);
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(ObDbmsStatsPreferences::reset_global_pref_defaults(ctx))) {
     LOG_WARN("failed to reset global pref defaults");
   } else {/*do nothing*/}
@@ -2838,6 +2895,8 @@ int ObDbmsStats::set_global_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (!params.at(0).is_null() && OB_FAIL(params.at(0).get_string(opt_name))) {
     LOG_WARN("failed to get string", K(ret), K(params.at(0)));
   } else if (!params.at(0).is_null() &&
@@ -2892,6 +2951,8 @@ int ObDbmsStats::set_schema_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (ctx.get_my_session()->get_is_in_retry()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("retry set schema stats is not allowed", K(ret));
@@ -2956,6 +3017,8 @@ int ObDbmsStats::set_table_prefs(sql::ObExecContext &ctx,
   bool use_size_auto = false;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx, params.at(0), params.at(1), dummy_param, param))) {
     LOG_WARN("failed to get string", K(ret));
   } else if (OB_FAIL(table_ids.push_back(param.table_id_))) {
@@ -3015,6 +3078,8 @@ int ObDbmsStats::delete_schema_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (ctx.get_my_session()->get_is_in_retry()) {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("retry delete schema stats is not allowed", K(ret));
@@ -3067,6 +3132,8 @@ int ObDbmsStats::delete_table_prefs(sql::ObExecContext &ctx,
   ObStatPrefs *stat_pref = NULL;
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(parse_table_part_info(ctx, params.at(0), params.at(1), dummy_param, param))) {
     LOG_WARN("failed to get string", K(ret));
   } else if (OB_FAIL(table_ids.push_back(param.table_id_))) {
@@ -5369,6 +5436,8 @@ int ObDbmsStats::gather_database_stats_job_proc(sql::ObExecContext &ctx,
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     ret = OB_SUCCESS;
     LOG_INFO("auto gather database statistics abort because of statistic table is unwriteable");
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (!ctx.get_my_session()->is_user_session() && no_auto_gather) {
     //do nothing
     LOG_INFO("auto gather stat abort because of the trace point and not user seesion",
@@ -6341,6 +6410,8 @@ int ObDbmsStats::gather_system_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to check is unix connection", K(ret));
   } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
     LOG_WARN("failed to check system stat table ready", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_system_stats(ctx, session->get_effective_tenant_id()))) {
@@ -6373,6 +6444,8 @@ int ObDbmsStats::delete_system_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to check is unix connection", K(ret));
   } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
     LOG_WARN("failed to check system stat table ready", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::delete_system_stats(ctx, session->get_effective_tenant_id()))) {
@@ -6411,6 +6484,8 @@ int ObDbmsStats::set_system_stats(sql::ObExecContext &ctx,
     LOG_WARN("failed to check is unix connection", K(ret));
   } else if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(check_system_stat_table_ready(session->get_effective_tenant_id()))) {
     LOG_WARN("failed to check system stat table ready", K(ret));
   } else if (2 != params.count()) {
@@ -6544,6 +6619,7 @@ int ObDbmsStats::check_system_stat_table_ready(int64_t tenant_id)
  * @param result
  * @return int
  */
+
 int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
                                  sql::ParamStore &params,
                                  common::ObObj &result)
@@ -6560,6 +6636,8 @@ int ObDbmsStats::copy_table_stats(sql::ObExecContext &ctx,
   dummy_part_name.set_null();
   if (OB_FAIL(check_statistic_table_writeable(ctx))) {
     LOG_WARN("failed to check tenant is restore", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
     //do nothing
   } else if (OB_FAIL(parse_table_part_info(ctx,

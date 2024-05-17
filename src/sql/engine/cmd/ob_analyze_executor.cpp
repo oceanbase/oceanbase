@@ -58,6 +58,8 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
              GCTX.is_standby_cluster()) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "analyze table during restore or standby cluster");
+  } else if (OB_FAIL(ObDbmsStatsUtils::implicit_commit_before_gather_stats(ctx))) {
+    LOG_WARN("failed to implicit commit before gather stats", K(ret));
   } else if (OB_FAIL(stmt.fill_table_stat_params(ctx, params))) {
     LOG_WARN("failed to fill table stat param", K(ret));
   } else {
