@@ -123,16 +123,17 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
   int ret = OB_SUCCESS;
   if (is_schema_error(code) && OB_NOT_NULL(exec_ctx) && OB_NOT_NULL(exec_ctx->get_my_session())) {
     uint64_t tenant_id = exec_ctx->get_my_session()->get_effective_tenant_id();
-    ObSchemaGetterGuard schema_guard;
-    int64_t local_schema_version = -1;
     int64_t query_tenant_begin_schema_version =
       exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version();
+    ObSchemaGetterGuard* local_px_executing_schema_guard = exec_ctx->get_sql_ctx()->schema_guard_;
+    int64_t local_schema_version = -1;
     if (query_tenant_begin_schema_version == OB_INVALID_VERSION) {
       code = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid tenant_schema_version", K(ret), K(query_tenant_begin_schema_version));
-    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("get tenant schema guard failed", K(ret));
-    } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, local_schema_version))) {
+    } else if (OB_ISNULL(local_px_executing_schema_guard)) {
+      code = OB_ERR_UNEXPECTED;
+      LOG_WARN("px sqc task executing schema guard should not be NULL!", K(ret));
+    } else if (OB_FAIL(local_px_executing_schema_guard->get_schema_version(tenant_id, local_schema_version))) {
       LOG_WARN("get schema version failed", K(ret));
     }
 
