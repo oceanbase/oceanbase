@@ -1233,32 +1233,37 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     error_message.affected_rows_ = affected_rows;
     const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(task_type_);
     if (OB_SUCCESS != ret_code_) {
-      if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(dst_tenant_id_, task_id_, object_id_,
-              *GCTX.sql_proxy_, error_message))) {
-        LOG_WARN("load ddl user error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(object_id_));
-        if (OB_ITER_END == ret) {     // no single replica error message found, use ret_code_
-          ret = OB_SUCCESS;
-          if (is_oracle_mode && DDL_CREATE_INDEX != task_type_ && OB_ERR_DUPLICATED_UNIQUE_KEY == ret_code_) {
-            ret_code_ = OB_ERR_PRIMARY_KEY_DUPLICATE;
-          }
-          const char *ddl_type_str = nullptr;
-          const char *str_user_error = ob_errpkt_str_user_error(ret_code_, is_oracle_mode);
-          const char *str_error = ob_errpkt_strerror(ret_code_, is_oracle_mode);
-          const int64_t buf_size = is_ddl_retry_task ? forward_user_message.length() + 1 : OB_MAX_ERROR_MSG_LEN;
-          error_message.ret_code_ = ret_code_;
+      if (is_parent_task_) {
+        if (OB_FAIL(ObDDLErrorMessageTableOperator::load_child_task_error(dst_tenant_id_, task_id_, ret_code_, *GCTX.sql_proxy_, error_message))) {
+          LOG_WARN("load child task error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(task_type_), K(ret_code_));
+        } else {
           error_message.ddl_type_ = task_type_;
-          if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
-            LOG_WARN("ddl type to string failed", K(ret));
-          } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "ddl_type:%s", ddl_type_str))) {
-            LOG_WARN("print ddl dba message failed", K(ret));
-          } else if (OB_FAIL(error_message.prepare_user_message_buf(buf_size))) {
-            LOG_WARN("failed to prepare user message buf", K(ret));
-          } else if (is_ddl_retry_task) {
-            // databuff_printf will ignore characters after '\0', thus use memcpy here.
-            MEMCPY(error_message.user_message_, forward_user_message.ptr(), forward_user_message.length());
-          } else if (OB_FAIL(databuff_printf(error_message.user_message_, buf_size, "%s", str_error))) {
-            LOG_WARN("print ddl user message failed", K(ret));
-          }
+        }
+      } else if (OB_FAIL(ObDDLErrorMessageTableOperator::load_ddl_user_error(dst_tenant_id_, task_id_, object_id_, *GCTX.sql_proxy_, error_message))) {
+        LOG_WARN("load ddl user error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(object_id_));
+      }
+      if (OB_ITER_END == ret) {     // no single replica error message found, use ret_code_
+        ret = OB_SUCCESS;
+        if (is_oracle_mode && DDL_CREATE_INDEX != task_type_ && OB_ERR_DUPLICATED_UNIQUE_KEY == ret_code_) {
+          ret_code_ = OB_ERR_PRIMARY_KEY_DUPLICATE;
+        }
+        const char *ddl_type_str = nullptr;
+        const char *str_user_error = ob_errpkt_str_user_error(ret_code_, is_oracle_mode);
+        const char *str_error = ob_errpkt_strerror(ret_code_, is_oracle_mode);
+        const int64_t buf_size = is_ddl_retry_task ? forward_user_message.length() + 1 : OB_MAX_ERROR_MSG_LEN;
+        error_message.ret_code_ = ret_code_;
+        error_message.ddl_type_ = task_type_;
+        if (OB_FAIL(get_ddl_type_str(task_type_, ddl_type_str))) {
+          LOG_WARN("ddl type to string failed", K(ret));
+        } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "ddl_type:%s", ddl_type_str))) {
+          LOG_WARN("print ddl dba message failed", K(ret));
+        } else if (OB_FAIL(error_message.prepare_user_message_buf(buf_size))) {
+          LOG_WARN("failed to prepare user message buf", K(ret));
+        } else if (is_ddl_retry_task) {
+          // databuff_printf will ignore characters after '\0', thus use memcpy here.
+          MEMCPY(error_message.user_message_, forward_user_message.ptr(), forward_user_message.length());
+        } else if (OB_FAIL(databuff_printf(error_message.user_message_, buf_size, "%s", str_error))) {
+          LOG_WARN("print ddl user message failed", K(ret));
         }
       } else if (is_oracle_mode && DDL_CREATE_INDEX != task_type_ && OB_ERR_DUPLICATED_UNIQUE_KEY == error_message.ret_code_) {
         error_message.ret_code_ = OB_ERR_PRIMARY_KEY_DUPLICATE;
