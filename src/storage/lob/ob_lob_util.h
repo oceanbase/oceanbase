@@ -71,7 +71,7 @@ public:
       scan_backward_(false), asscess_ptable_(false), offset_(0), len_(0),
       parent_seq_no_(), seq_no_st_(), used_seq_cnt_(0), total_seq_cnt_(0), checksum_(0), update_len_(0),
       op_type_(ObLobDataOutRowCtx::OpType::SQL), is_fill_zero_(false), from_rpc_(false),
-      inrow_read_nocopy_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+      inrow_read_nocopy_(false), need_read_latest_(false), inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
       schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE), access_ctx_(nullptr), is_store_char_len_(true),
       remote_query_ctx_(nullptr), scan_objs_(nullptr)
   {}
@@ -110,7 +110,8 @@ public:
     KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest),
-    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), KP_(remote_query_ctx), KP_(scan_objs));
+    K_(inrow_read_nocopy), K_(need_read_latest),
+    K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), KP_(remote_query_ctx), KP_(scan_objs));
 
 public:
   transaction::ObTxDesc *tx_desc_; // for write/update/delete
@@ -159,6 +160,8 @@ public:
   bool is_fill_zero_; // fill zero when erase
   bool from_rpc_;
   bool inrow_read_nocopy_;
+  // used for set lob meta table query_flag
+  bool need_read_latest_;
   int64_t inrow_threshold_;
   int64_t schema_chunk_size_;
   ObObj ext_info_log_;

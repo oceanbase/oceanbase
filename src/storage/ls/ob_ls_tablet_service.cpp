@@ -5494,6 +5494,8 @@ int ObLSTabletService::delete_lob_col(
         lob_param.timeout_ = run_ctx.dml_param_.timeout_;
         lob_param.scan_backward_ = false;
         lob_param.offset_ = 0;
+        // delete may not have latest tx read snapshot, so need read_latest lob aux table
+        lob_param.need_read_latest_ = true;
         // use byte size to delete all
         lob_param.len_ = lob_param.byte_size_; //ObCharset::strlen_char(lob_param.coll_type_, sql_data.ptr(), sql_data.length());
         if (lob_param.byte_size_ < 0) {
