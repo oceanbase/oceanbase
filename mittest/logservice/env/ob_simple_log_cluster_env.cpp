@@ -1025,8 +1025,9 @@ int ObSimpleLogClusterTestEnv::raw_write(PalfHandleImplGuard &leader,
     do {
       usleep(10);
       ret = (leader.palf_handle_impl_)->submit_group_log(opts, lsn, buf, buf_len);
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) || OB_ERR_OUT_OF_LOWER_BOUND == ret) {
         PALF_LOG(INFO, "raw_write success", KR(ret), K(lsn));
+        ret = OB_SUCCESS;
       } else {
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           PALF_LOG(WARN, "raw_write failed", KR(ret));
@@ -1167,6 +1168,10 @@ int ObSimpleLogClusterTestEnv::read_and_submit_group_log(PalfHandleImplGuard &le
             PALF_LOG(WARN, "iterator next failed", K(ret), K(iterator_raw_write));
           } else if (OB_FAIL(iterator_raw_write.get_entry(buffer, nbytes, scn, lsn, is_raw_write))) {
             PALF_LOG(WARN, "iterator get_entry failed", K(ret), K(iterator_raw_write), K(is_raw_write));
+          } else if (lsn >= start_lsn && is_raw_write != true) {
+            ret = OB_ERR_UNEXPECTED;
+            PALF_LOG(ERROR, "iterator get_entry failed, is_raw_write must be true", K(ret), K(iterator_raw_write), K(is_raw_write),
+                     K(lsn), K(start_lsn));
           }
         }
       }
