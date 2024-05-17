@@ -137,7 +137,7 @@ static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
 
   {3, true, "DAG_TRANSFER_BACKFILL_TX", {"tenant_id", "ls_id", "start_scn"}},
   {2, true, "TRANSFER_REPLACE_TABLE", {"tenant_id", "ls_id"}},
-  {4, true, "DAG_TTL_TASK", {"tenant_id", "ls_id", "table_id", "tablet_id"}},
+  {4, false, "DAG_TTL_TASK", {"tenant_id", "ls_id", "table_id", "tablet_id"}},
 
   {0, false, "", {}},
 };
