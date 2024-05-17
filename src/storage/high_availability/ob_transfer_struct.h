@@ -38,7 +38,8 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferOutInfo &start_transfer_out_info);
 
-  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id), K_(data_end_scn), K_(transfer_epoch), K_(data_version));
+  TO_STRING_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id), K_(data_end_scn), K_(transfer_epoch), K_(data_version),
+      K_(filter_tx_need_transfer), K_(move_tx_ids));
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
@@ -46,7 +47,9 @@ public:
   share::ObTransferTaskID task_id_;
   share::SCN data_end_scn_;
   int64_t transfer_epoch_;
-  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholder
+  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholde
+  bool filter_tx_need_transfer_;
+  common::ObSEArray<transaction::ObTransID, 1> move_tx_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferOutInfo);
 };
 

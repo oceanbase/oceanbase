@@ -34,7 +34,9 @@ ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
     task_id_(),
     data_end_scn_(),
     transfer_epoch_(0),
-    data_version_(DEFAULT_MIN_DATA_VERSION)
+    data_version_(DEFAULT_MIN_DATA_VERSION),
+    filter_tx_need_transfer_(false),
+    move_tx_ids_()
 {
 }
 
@@ -47,6 +49,8 @@ void ObTXStartTransferOutInfo::reset()
   data_end_scn_.reset();
   transfer_epoch_ = 0;
   data_version_ = 0;
+  filter_tx_need_transfer_ = false;
+  move_tx_ids_.reset();
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
@@ -76,7 +80,8 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_, data_end_scn_, transfer_epoch_, data_version_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_,
+    data_end_scn_, transfer_epoch_, data_version_, filter_tx_need_transfer_, move_tx_ids_);
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
