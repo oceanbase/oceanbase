@@ -695,10 +695,9 @@ int SimpleServerHelper::ls_reboot(uint64_t tenant_id, ObLSID ls_id)
   LOG_INFO("ls_reboot", K(tenant_id), K(ls_id));
   int ret = OB_SUCCESS;
   auto print_mgr_state = [](ObLS *ls) {
-    auto state = ls->ls_tx_svr_.mgr_->state_;
+    const ObTxLSStateMgr &state_mgr = ls->ls_tx_svr_.mgr_->tx_ls_state_mgr_;
     LOG_INFO("print ls ctx mgr state:", K(ls->get_ls_id()),
-                                        "ctx_mgr_state", state,
-                                        K(ObLSTxCtxMgr::State::state_str(state)));
+                                        K(state_mgr));
   };
   auto func = [tenant_id, ls_id, print_mgr_state] () {
     int ret = OB_SUCCESS;

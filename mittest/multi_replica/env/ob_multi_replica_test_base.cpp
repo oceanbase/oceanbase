@@ -898,7 +898,7 @@ int ObMultiReplicaTestBase::check_tenant_exist(bool &bool_ret, const char *tenan
 } // namespace unittest
 } // namespace oceanbase
 
-int ::oceanbase::omt::ObWorkerProcessor::process_err_test()
+OB_NOINLINE int ::oceanbase::omt::ObWorkerProcessor::process_err_test()
 {
   int ret = OB_SUCCESS;
 

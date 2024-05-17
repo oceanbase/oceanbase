@@ -19,6 +19,7 @@
 #include "common/ob_simple_iterator.h"
 #include "storage/tx/ob_trans_ctx.h"
 #include "storage/tx/ob_tx_ls_log_writer.h"
+#include "storage/tx/ob_tx_ls_state_mgr.h"
 #include "storage/tx/ob_tx_retain_ctx_mgr.h"
 #include "storage/tablelock/ob_lock_table.h"
 #include "storage/tx/ob_keep_alive_ls_handler.h"
@@ -515,6 +516,7 @@ public:
   // ObLSTxCtxMgr's status, drive ObLSTxCtxMgr to continue to execute the switch_to_leader routine
   // or resume_leader routine;
   int on_start_working_log_cb_succ(share::SCN start_working_scn);
+  int retry_apply_start_working_log();
 
   // START_WORKING log entry failed to written to the PALF;
   // Break the switch_to_leader routine or resume_leader routine; switch the ObLSTxCtxMgr's state to F_WORKING
@@ -550,9 +552,6 @@ public:
   // Get the tenant_id corresponding to this ObLSTxCtxMgr;
   int64_t get_tenant_id() { return tenant_id_; }
 
-  // Get the state of this ObLSTxCtxMgr
-  int64_t get_state() { return get_state_(); }
-
   // check is master
   bool is_master() const { return is_master_(); }
 
@@ -573,11 +572,14 @@ public:
 
   int do_standby_cleanup();
 
+  int errsim_switch_to_followr_gracefully();
+  int errsim_submit_start_working_log();
+  int errsim_apply_start_working_log();
+
   TO_STRING_KV(KP(this),
                K_(ls_id),
                K_(tenant_id),
-               "state",
-               State::state_str(state_),
+               K_(tx_ls_state_mgr),
                K_(total_tx_ctx_count),
                K_(active_tx_count),
                K_(ls_retain_ctx_mgr),
@@ -611,219 +613,42 @@ public:
   static const int64_t WAIT_SW_CB_INTERVAL = 10 * 1000; // 10 ms
   static const int64_t WAIT_READONLY_REQUEST_TIME = 10 * 1000 * 1000;
   static const int64_t READONLY_REQUEST_TRACE_ID_NUM = 8192;
-private:
-  class State
-  {
-  public:
-    static const int64_t INVALID = -1;
-    static const int64_t INIT = 0;
-    static const int64_t F_WORKING = 1;
-    static const int64_t T_PENDING = 2;
-    static const int64_t R_PENDING = 3;
-    static const int64_t L_WORKING = 4;
-    static const int64_t F_TX_BLOCKED = 5;
-    static const int64_t L_TX_BLOCKED = 6;
-    static const int64_t L_BLOCKED_NORMAL = 7;
-    static const int64_t T_TX_BLOCKED_PENDING = 8;
-    static const int64_t R_TX_BLOCKED_PENDING = 9;
-    static const int64_t F_ALL_BLOCKED = 10;
-    static const int64_t T_ALL_BLOCKED_PENDING = 11;
-    static const int64_t R_ALL_BLOCKED_PENDING = 12;
-    static const int64_t L_ALL_BLOCKED = 13;
-    static const int64_t STOPPED = 14;
-    static const int64_t END = 15;
-    static const int64_t MAX = 16;
-  public:
-    static bool is_valid(const int64_t state)
-    { return state > INVALID && state < MAX; }
-
-    #define TCM_STATE_CASE_TO_STR(state)        \
-      case state:                               \
-        str = #state;                           \
-        break;
-
-    static const char* state_str(uint64_t state)
-    {
-      const char* str = "INVALID";
-      switch (state) {
-        TCM_STATE_CASE_TO_STR(INIT);
-        TCM_STATE_CASE_TO_STR(F_WORKING);
-        TCM_STATE_CASE_TO_STR(T_PENDING);
-        TCM_STATE_CASE_TO_STR(R_PENDING);
-        TCM_STATE_CASE_TO_STR(L_WORKING);
-        TCM_STATE_CASE_TO_STR(F_TX_BLOCKED);
-        TCM_STATE_CASE_TO_STR(L_TX_BLOCKED);
-        TCM_STATE_CASE_TO_STR(L_BLOCKED_NORMAL);
-        TCM_STATE_CASE_TO_STR(T_TX_BLOCKED_PENDING);
-        TCM_STATE_CASE_TO_STR(R_TX_BLOCKED_PENDING);
-
-        TCM_STATE_CASE_TO_STR(F_ALL_BLOCKED);
-        TCM_STATE_CASE_TO_STR(T_ALL_BLOCKED_PENDING);
-        TCM_STATE_CASE_TO_STR(R_ALL_BLOCKED_PENDING);
-        TCM_STATE_CASE_TO_STR(L_ALL_BLOCKED);
-
-        TCM_STATE_CASE_TO_STR(STOPPED);
-        TCM_STATE_CASE_TO_STR(END);
-        default:
-          break;
-      }
-      return str;
-    }
-    #undef TCM_STATE_CASE_TO_STR
-  };
-
-  class Ops
-  {
-  public:
-    static const int64_t INVALID = -1;
-    static const int64_t START = 0;
-    static const int64_t LEADER_REVOKE = 1;
-    static const int64_t SWL_CB_SUCC = 2;// start working log callback success
-    static const int64_t SWL_CB_FAIL = 3;// start working log callback failed
-    static const int64_t LEADER_TAKEOVER = 4;
-    static const int64_t RESUME_LEADER = 5;
-    static const int64_t BLOCK_TX = 6;
-    static const int64_t BLOCK_NORMAL = 7;
-    static const int64_t BLOCK_ALL = 8;
-    static const int64_t STOP = 9;
-    static const int64_t ONLINE = 10;
-    static const int64_t UNBLOCK_NORMAL = 11;
-    static const int64_t MAX = 12;
-  public:
-    static bool is_valid(const int64_t op)
-    { return op > INVALID && op < MAX; }
-
-    #define TCM_OP_CASE_TO_STR(op)              \
-      case op:                                  \
-        str = #op;                              \
-        break;
-
-    static const char* op_str(uint64_t op)
-    {
-      const char* str = "INVALID";
-      switch (op) {
-        TCM_OP_CASE_TO_STR(START);
-        TCM_OP_CASE_TO_STR(LEADER_REVOKE);
-        TCM_OP_CASE_TO_STR(SWL_CB_SUCC);
-        TCM_OP_CASE_TO_STR(SWL_CB_FAIL);
-        TCM_OP_CASE_TO_STR(LEADER_TAKEOVER);
-        TCM_OP_CASE_TO_STR(RESUME_LEADER);
-        TCM_OP_CASE_TO_STR(BLOCK_TX);
-        TCM_OP_CASE_TO_STR(BLOCK_NORMAL);
-        TCM_OP_CASE_TO_STR(BLOCK_ALL);
-        TCM_OP_CASE_TO_STR(STOP);
-        TCM_OP_CASE_TO_STR(ONLINE);
-        TCM_OP_CASE_TO_STR(UNBLOCK_NORMAL);
-      default:
-        break;
-      }
-      return str;
-    }
-    #undef TCM_OP_CASE_TO_STR
-  };
-
-  class StateHelper
-  {
-  public:
-    explicit StateHelper(const share::ObLSID &ls_id, int64_t &state)
-        : ls_id_(ls_id), state_(state), last_state_(State::INVALID), is_switching_(false) {}
-    ~StateHelper() {}
-
-    int switch_state(const int64_t op);
-    void restore_state();
-    int64_t get_state() const { return state_; }
-  private:
-    const share::ObLSID &ls_id_;
-    int64_t &state_;
-    int64_t last_state_;
-    bool is_switching_;
-  };
 
 private:
   inline bool is_master_() const
-  { return is_master_(ATOMIC_LOAD(&state_)); }
-  inline bool is_master_(int64_t state) const
-  { return State::L_WORKING == state ||
-           State::L_TX_BLOCKED == state ||
-           State::L_BLOCKED_NORMAL == state ||
-           State::L_ALL_BLOCKED == state; }
+  { return tx_ls_state_mgr_.is_master(); }
 
   inline bool is_follower_() const
-  { return is_follower_(ATOMIC_LOAD(&state_)); }
-  inline bool is_follower_(int64_t state) const
-  { return State::F_WORKING == state ||
-           State::F_TX_BLOCKED == state ||
-           State::F_ALL_BLOCKED == state; }
+  { return tx_ls_state_mgr_.is_follower(); }
 
   inline bool is_tx_blocked_() const
-  { return is_tx_blocked_(ATOMIC_LOAD(&state_)); }
-  inline bool is_tx_blocked_(int64_t state) const
-  {
-    return State::F_TX_BLOCKED == state ||
-           State::L_TX_BLOCKED == state ||
-           State::T_TX_BLOCKED_PENDING == state ||
-           State::R_TX_BLOCKED_PENDING == state ||
-           State::F_ALL_BLOCKED == state ||
-           State::T_ALL_BLOCKED_PENDING == state ||
-           State::R_ALL_BLOCKED_PENDING == state ||
-           State::L_ALL_BLOCKED == state;
-  }
+  { return tx_ls_state_mgr_.is_block_start_tx(); }
 
   inline bool is_normal_blocked_() const
-  { return is_normal_blocked_(ATOMIC_LOAD(&state_)); }
-  inline bool is_normal_blocked_(int64_t state) const
-  { return State::L_BLOCKED_NORMAL == state; }
+  { return tx_ls_state_mgr_.is_block_start_normal_tx(); }
 
   inline bool is_all_blocked_() const
-  { return is_all_blocked_(ATOMIC_LOAD(&state_)); }
-  inline bool is_all_blocked_(const int64_t state) const
-  {
-    return State::F_ALL_BLOCKED == state ||
-           State::T_ALL_BLOCKED_PENDING == state ||
-           State::R_ALL_BLOCKED_PENDING == state ||
-           State::L_ALL_BLOCKED == state;
-  }
+  { return tx_ls_state_mgr_.is_block_WR(); }
 
   // check pending substate
   inline bool is_t_pending_() const
-  { return is_t_pending_(ATOMIC_LOAD(&state_)); }
-  inline bool is_t_pending_(int64_t state) const
-  {
-    return State::T_PENDING == state ||
-           State::T_TX_BLOCKED_PENDING == state ||
-           State::T_ALL_BLOCKED_PENDING == state;
-  }
+  { return tx_ls_state_mgr_.is_switch_leader_pending(); }
 
   inline bool is_r_pending_() const
-  { return is_r_pending_(ATOMIC_LOAD(&state_)); }
-  inline bool is_r_pending_(int64_t state) const
-  {
-    return State::R_PENDING == state ||
-           State::R_TX_BLOCKED_PENDING == state ||
-           State::R_ALL_BLOCKED_PENDING == state;
-  }
+  { return tx_ls_state_mgr_.is_resume_leader_pending(); }
 
   inline bool is_pending_() const
-  { return is_pending_(ATOMIC_LOAD(&state_)); }
-  inline bool is_pending_(int64_t state) const
-  {
-    return is_t_pending_(state) || is_r_pending_(state);
-  }
+  { return tx_ls_state_mgr_.is_leader_takeover_pending(); }
 
   inline bool is_stopped_() const
-  { return is_stopped_(ATOMIC_LOAD(&state_)); }
-  inline bool is_stopped_(int64_t state) const
-  { return State::STOPPED == state; }
-
-  int64_t get_state_() const
-  { return ATOMIC_LOAD(&state_); }
+  { return tx_ls_state_mgr_.is_stopped(); }
 
 private:
   // Identifies this ObLSTxCtxMgr is inited or not;
   bool is_inited_;
 
   // See the ObLSTxCtxMgr's internal class State
-  int64_t state_;
+  ObTxLSStateMgr tx_ls_state_mgr_;
 
   // A thread-safe hashmap, used to find and traverse TxCtx in this ObLSTxCtxMgr
   ObLSTxCtxMap ls_tx_ctx_map_;

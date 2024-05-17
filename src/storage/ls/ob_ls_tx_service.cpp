@@ -899,6 +899,18 @@ int ObLSTxService::print_all_tx_ctx(const int64_t print_num)
   return ret;
 }
 
+int ObLSTxService::retry_apply_start_working_log()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
+  } else {
+    ret = mgr_->retry_apply_start_working_log();
+  }
+  return ret;
+}
+
 int ObLSTxService::set_max_replay_commit_version(share::SCN commit_version)
 {
   int ret = OB_SUCCESS;

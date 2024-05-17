@@ -10,6 +10,8 @@
  * See the Mulan PubL v2 for more details.
  */
 
+#define USING_LOG_PREFIX TRANS
+
 #include "lib/hash/ob_hashmap.h"
 #include "lib/worker.h"
 #include "lib/list/ob_list.h"
@@ -37,6 +39,12 @@ using namespace observer;
 
 namespace transaction
 {
+
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(EN_SWITCH_TO_FOLLOWER_GRACEFULLY)
+ERRSIM_POINT_DEF(EN_SUBMIT_START_WORKING_LOG)
+ERRSIM_POINT_DEF(EN_APPLY_START_WORKING_LOG)
+#endif
 
 void ObLSTxCtxIterator::reset() {
   is_ready_ = false;
@@ -180,10 +188,13 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(ls_log_writer_.init(tenant_id, ls_id, tx_log_adapter_, this))) {
     TRANS_LOG(WARN, "ls_log_writer init fail", KR(ret));
+  } else if (OB_FAIL(tx_ls_state_mgr_.init(ls_id))) {
+    TRANS_LOG(WARN, "init tx_ls_state_mgr_ failed", KR(ret));
+  } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::START))) {
+    TRANS_LOG(WARN, "start ls_tx_ctx_mgr failed",K(ret),K(tx_ls_state_mgr_));
   } else {
     is_inited_ = true;
     is_leader_serving_ = false;
-    state_ = State::F_ALL_BLOCKED;
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     tx_table_ = tx_table;
@@ -214,7 +225,6 @@ void ObLSTxCtxMgr::destroy()
 void ObLSTxCtxMgr::reset()
 {
   is_inited_ = false;
-  state_ = State::INVALID;
   tenant_id_ = 0;
   ls_id_.reset();
   tx_table_ = NULL;
@@ -230,6 +240,7 @@ void ObLSTxCtxMgr::reset()
   online_ts_ = 0;
   txs_ = NULL;
   ts_mgr_ = NULL;
+  tx_ls_state_mgr_.reset();
   ls_retain_ctx_mgr_.reset();
 
   ObRemoveAllTxCtxFunctor fn;
@@ -270,112 +281,6 @@ void ObLSTxCtxMgr::print_all_tx_ctx_(const int64_t max_print, const bool verbose
   PrintFunctor print_fn(max_print, verbose);
   // ignore ret
   ls_tx_ctx_map_.for_each(print_fn);
-}
-
-// NB: BLOCK_NORMAL only block noraml tran, only leader can block normal trans
-//STATE \ ACTION         START      LEADER_REVOKE   SWL_CB_SUCC      SWL_CB_FAIL           LEADER_TAKEOVER        RESUME_LEADER          BLOCK_TX               BLOCK_NORMAL      BLOCK_ALL              STOP     ONLINE     UNBLOCK_NORMAL
-//-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-//INIT                   F_WORKING  N               N                N                     N                      N                      N                      N                 N                      N        N          N
-//F_WORKING              N          F_WORKING       N                N                     T_PENDING              R_PENDING              F_TX_BLOCKED           N                 F_ALL_BLOCKED          STOPPED  N          N
-//T_PENDING              N          F_WORKING       L_WORKING        T_PENDING             N                      N                      T_TX_BLOCKED_PENDING   N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
-//R_PENDING              N          F_WORKING       L_WORKING        R_PENDING             N                      N                      R_TX_BLOCKED_PENDING   N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
-//L_WORKING              N          F_WORKING       N                N                     N                      N                      L_TX_BLOCKED           L_BLOCKED_NORMAL  L_ALL_BLOCKED          STOPPED  N          N
-//F_TX_BLOCKED           N          F_TX_BLOCKED    N                N                     T_TX_BLOCKED_PENDING   R_TX_BLOCKED_PENDING   F_TX_BLOCKED           N                 F_ALL_BLOCKED          STOPPED  F_WORKING  N
-//L_TX_BLOCKED           N          F_TX_BLOCKED    N                N                     N                      N                      L_TX_BLOCKED           N                 L_ALL_BLOCKED          STOPPED  N          N
-//L_BLOCKED_NORMAL       N          F_WORKING       N                N                     N                      N                      L_TX_BLOCKED           L_BLOCKED_NORMAL  L_ALL_BLOCKED          STOPPED  N          L_WORKING
-//
-//T_TX_BLOCKED_PENDING   N          F_TX_BLOCKED    L_TX_BLOCKED     T_TX_BLOCKED_PENDING  N                      N                      T_TX_BLOCKED_PENDING   N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
-//R_TX_BLOCKED_PENDING   N          F_TX_BLOCKED    L_TX_BLOCKED     R_TX_BLOCKED_PENDING  N                      N                      R_TX_BLOCKED_PENDING   N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
-//
-//F_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     T_ALL_BLOCKED_PENDING  R_ALL_BLOCKED_PENDING  F_ALL_BLOCKED          N                 F_ALL_BLOCKED          STOPPED  N          N
-//T_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    T_ALL_BLOCKED_PENDING N                      N                      T_ALL_BLOCKED_PENDING  N                 T_ALL_BLOCKED_PENDING  STOPPED  N          N
-//R_ALL_BLOCKED_PENDING  N          F_ALL_BLOCKED   L_ALL_BLOCKED    R_ALL_BLOCKED_PENDING N                      N                      R_ALL_BLOCKED_PENDING  N                 R_ALL_BLOCKED_PENDING  STOPPED  N          N
-//L_ALL_BLOCKED          N          F_ALL_BLOCKED   N                N                     N                      N                      L_ALL_BLOCKED          N                 L_ALL_BLOCKED          STOPPED  N          N
-//
-//STOPPED                N          STOPPED         N                N                     N                      N                      N                      N                 N                      STOPPED  N          N
-//END                    N          N               N                N                     N                      N                      N                      N                 N                      N        N          N
-
-// return value:
-//   OB_SUCCESS for success
-//   OB_STATE_NOT_MATCH for switch state fail
-//   others for error
-int ObLSTxCtxMgr::StateHelper::switch_state(const int64_t op)
-{
-  int ret = OB_SUCCESS;
-  static const int64_t N = State::INVALID;
-  static const int64_t F_WORKING = State::F_WORKING;
-  static const int64_t L_WORKING = State::L_WORKING;
-  static const int64_t T_PENDING = State::T_PENDING;
-  static const int64_t R_PENDING = State::R_PENDING;
-  static const int64_t L_TX_BLOCKED = State::L_TX_BLOCKED;
-  static const int64_t F_TX_BLOCKED = State::F_TX_BLOCKED;
-  static const int64_t T_TX_BLOCKED_PENDING = State::T_TX_BLOCKED_PENDING;
-  static const int64_t R_TX_BLOCKED_PENDING = State::R_TX_BLOCKED_PENDING;
-  static const int64_t L_BLOCKED_NORMAL = State::L_BLOCKED_NORMAL;
-
-  static const int64_t F_ALL_BLOCKED = State::F_ALL_BLOCKED;
-  static const int64_t T_ALL_BLOCKED_PENDING = State::T_ALL_BLOCKED_PENDING;
-  static const int64_t R_ALL_BLOCKED_PENDING = State::R_ALL_BLOCKED_PENDING;
-  static const int64_t L_ALL_BLOCKED = State::L_ALL_BLOCKED;
-
-  static const int64_t STOPPED   = State::STOPPED;
-  static const int64_t END       = State::END;
-
-  static const int64_t STATE_MAP[State::MAX][Ops::MAX] = {
-//  START       L_REVOKE          SWL_CB_SUCC       SWL_CB_FAIL               LEADER_TAKEOVER           RESUME_LEADER             BLOCK_TX              BLOCK_NORMAL      BLOCK_ALL              STOP     ONLINE     UNBLOCK_NORMAL
-    {F_WORKING, N,                N,                N,                        N,                        N,                        N,                    N,                N,                     N,       N,         N},
-    {N,         F_WORKING,        N,                N,                        T_PENDING,                R_PENDING,                F_TX_BLOCKED,         N,                F_ALL_BLOCKED,         STOPPED, N,         N},
-    {N,         F_WORKING,        L_WORKING,        T_PENDING,                N,                        N,                        T_TX_BLOCKED_PENDING, N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_WORKING,        L_WORKING,        R_PENDING,                N,                        N,                        R_TX_BLOCKED_PENDING, N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_WORKING,        N,                N,                        N,                        N,                        L_TX_BLOCKED,         L_BLOCKED_NORMAL, L_ALL_BLOCKED,         STOPPED, N,         N},
-    {N,         F_TX_BLOCKED,     N,                N,                        T_TX_BLOCKED_PENDING,     R_TX_BLOCKED_PENDING,     F_TX_BLOCKED,         N,                F_ALL_BLOCKED,         STOPPED, F_WORKING, N},
-    {N,         F_TX_BLOCKED,     N,                N,                        N,                        N,                        L_TX_BLOCKED,         N,                L_ALL_BLOCKED,         STOPPED, N,         N},
-    {N,         F_WORKING,        N,                N,                        N,                        N,                        L_TX_BLOCKED,         L_BLOCKED_NORMAL, L_ALL_BLOCKED,         STOPPED, N,         L_WORKING},
-//
-    {N,         F_TX_BLOCKED,     L_TX_BLOCKED,     T_TX_BLOCKED_PENDING,     N,                        N,                        T_TX_BLOCKED_PENDING, N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_TX_BLOCKED,     L_TX_BLOCKED,     R_TX_BLOCKED_PENDING,     N,                        N,                        R_TX_BLOCKED_PENDING, N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-//
-    {N,         F_ALL_BLOCKED,    N,                N,                        T_ALL_BLOCKED_PENDING,    R_ALL_BLOCKED_PENDING,    F_ALL_BLOCKED,        N,                F_ALL_BLOCKED,         STOPPED, F_WORKING, N},
-    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    T_ALL_BLOCKED_PENDING,    N,                        N,                        T_ALL_BLOCKED_PENDING,N,                T_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_ALL_BLOCKED,    L_ALL_BLOCKED,    R_ALL_BLOCKED_PENDING,    N,                        N,                        R_ALL_BLOCKED_PENDING,N,                R_ALL_BLOCKED_PENDING, STOPPED, N,         N},
-    {N,         F_ALL_BLOCKED,    N,                N,                        N,                        N,                        L_ALL_BLOCKED,        N,                L_ALL_BLOCKED,         STOPPED, N,         N},
-//
-    {N,         STOPPED,          N,                N,                        N,                        N,                        N,                    N,                N,                     STOPPED, N,         N},
-    {N,         N,                N,                N,                        N,                        N,                        N,                    N,                N,                     N,       N,         N}
-  };
-
-  if (OB_UNLIKELY(!Ops::is_valid(op))) {
-    TRANS_LOG(WARN, "invalid argument", K(op));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (OB_UNLIKELY(!State::is_valid(state_))) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr current state is invalid", K_(state), K(op));
-    ret = OB_ERR_UNEXPECTED;
-  } else {
-    const int64_t new_state = STATE_MAP[state_][op];
-    if (OB_UNLIKELY(!State::is_valid(new_state))) {
-      ret = OB_STATE_NOT_MATCH;
-    } else {
-      last_state_ = state_;
-      state_ = new_state;
-      is_switching_ = true;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    _TRANS_LOG(INFO, "ObLSTxCtxMgr switch state success(ls_id=%jd, %s ~> %s, op=%s)",
-               ls_id_.id(), State::state_str(last_state_), State::state_str(state_), Ops::op_str(op));
-  } else {
-    _TRANS_LOG(WARN, "ObLSTxCtxMgr switch state failed(ret=%d, ls_id=%jd, state=%s, op=%s)",
-               ret, ls_id_.id(), State::state_str(state_), Ops::op_str(op));
-  }
-  return ret;
-}
-
-void ObLSTxCtxMgr::StateHelper::restore_state()
-{
-  if (is_switching_) {
-    is_switching_ = false;
-    state_ = last_state_;
-  }
 }
 
 int ObLSTxCtxMgr::create_tx_ctx(const ObTxCreateArg &arg,
@@ -422,7 +327,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
   } else if (!arg.for_replay_ && !is_master_()) {
     ret = OB_NOT_MASTER;
   } else if (!arg.for_replay_ && block) {
-    TRANS_LOG(WARN, "ObLSTxCtxMgr is blocked", K(arg), K(get_state_()));
+    TRANS_LOG(WARN, "ObLSTxCtxMgr is blocked", K(arg), K(tx_ls_state_mgr_));
     ret = OB_PARTITION_IS_BLOCKED;
   } else if (is_stopped_()) {
     TRANS_LOG(WARN, "ObLSTxCtxMgr is stopped", K(arg));
@@ -675,13 +580,51 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN s
 {
   int ret = OB_SUCCESS;
   UNUSED(log);
-  WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-  ReplayTxStartWorkingLogFunctor fn(start_working_ts);
-  if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-    TRANS_LOG(WARN, "[LsTxCtxMgr Role Change] replay start working log failed", KR(ret), K(ls_id_));
+
+  share::SCN tmp_applying_swl_scn;
+  if (OB_FAIL(retry_apply_start_working_log())) {
+    TRANS_LOG(WARN, "retry to apply start working log failed", K(ret), K(log), K(start_working_ts),
+              KPC(this));
+    ret = OB_EAGAIN;
+  } else if (tx_ls_state_mgr_.need_retry_apply_SWL(tmp_applying_swl_scn))
+
+  {
+    if (tmp_applying_swl_scn < start_working_ts) {
+      ret = OB_EAGAIN;
+      TRANS_LOG(WARN, "need retry to apply prev start working log", K(ret), K(tmp_applying_swl_scn),
+                K(start_working_ts), K(log), KPC(this));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "the applying SWL scn is larger than replaying SWL scn", K(ret),
+                K(tmp_applying_swl_scn), K(start_working_ts), K(log), KPC(this));
+    }
+
   } else {
-    TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_), K(ls_id_));
+
+    WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    ReplayTxStartWorkingLogFunctor fn(start_working_ts);
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      FLOG_WARN("[LsTxCtxMgr Role Change] replay start working log failed", KR(ret),
+                K(ls_id_));
+    } else {
+      tx_ls_state_mgr_.replay_SWL_succ(start_working_ts);
+      FLOG_INFO("[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_),
+                K(ls_id_));
+    }
   }
+  return ret;
+}
+
+int ObLSTxCtxMgr::retry_apply_start_working_log()
+{
+  int ret = OB_SUCCESS;
+
+  share::SCN retry_start_working_ts;
+
+  if (tx_ls_state_mgr_.need_retry_apply_SWL(retry_start_working_ts)) {
+    ret = on_start_working_log_cb_succ(retry_start_working_ts);
+  }
+
   return ret;
 }
 
@@ -690,47 +633,73 @@ int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
   int ret = OB_SUCCESS;
   bool ignore_ret = false;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-  StateHelper state_helper(ls_id_, state_);
-  if (is_t_pending_()) {
-    SwitchToLeaderFunctor fn(start_working_ts);
-    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-      TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ls_id_));
-      if (OB_NOT_MASTER == fn.get_ret()) {
-        // ignore ret
-        // PALF will switch to follower when submitting log return OB_NOT_MASTER
-        ignore_ret = true;
+
+  share::SCN retry_start_working_ts;
+  if (!tx_ls_state_mgr_.waiting_SWL_cb()) {
+    TRANS_LOG(INFO, "This ls is not waiting start_working_cb. Skip the on_success operation",
+              K(ret), K(tx_ls_state_mgr_));
+  } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::SWL_CB_SUCC,
+                                                         start_working_ts))) {
+    TRANS_LOG(ERROR, "switch state fail", KR(ret), K(tenant_id_), K(ls_id_));
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(errsim_apply_start_working_log())) {
+    TRANS_LOG(WARN, "errsim in on_start_working_log_cb_succ", K(ret), K(tenant_id_), K(ls_id_));
+  }
+
+  if (!tx_ls_state_mgr_.need_retry_apply_SWL(retry_start_working_ts)) {
+    TRANS_LOG(INFO, "This ls need not retry apply start_working. Skip the apply operation", K(ret),
+              K(tx_ls_state_mgr_));
+  } else {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (is_t_pending_()) {
+      SwitchToLeaderFunctor fn(start_working_ts);
+      if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+        TRANS_LOG(WARN, "switch to leader failed", KR(ret), K(ls_id_));
+        if (OB_NOT_MASTER == fn.get_ret()) {
+          // ignore ret
+          // PALF will switch to follower when submitting log return OB_NOT_MASTER
+          ignore_ret = true;
+        }
+      }
+    } else if (is_r_pending_()) {
+      ResumeLeaderFunctor fn(start_working_ts);
+      if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+        TRANS_LOG(WARN, "resume leader failed", KR(ret), K(ls_id_));
+      }
+    } else {
+      ret = OB_STATE_NOT_MATCH;
+      TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
+    }
+
+    if (OB_FAIL(ret)) {
+      if (ignore_ret) {
+        ret = OB_SUCCESS;
+      }
+      // TODO dingxi, takeover failed, notify palf to revoke itself
+      int tmp_ret = OB_SUCCESS;
+      // restore to follower
+      if (OB_TMP_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(
+              ObTxLSStateMgr::TxLSAction::APPLY_SWL_FAIL, start_working_ts))) {
+        TRANS_LOG(ERROR, "restore follower failed", KR(tmp_ret), K(ls_id_), K(tx_ls_state_mgr_));
+        ret = tmp_ret;
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::APPLY_SWL_SUCC,
+                                                      start_working_ts))) {
+        TRANS_LOG(ERROR, "switch state failed", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
+      } else {
+        leader_takeover_ts_ = MonotonicTs::current_time();
+        try_wait_gts_and_inc_max_commit_ts_();
       }
     }
-  } else if (is_r_pending_()) {
-    ResumeLeaderFunctor fn(start_working_ts);
-    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
-      TRANS_LOG(WARN, "resume leader failed", KR(ret), K(ls_id_));
-    }
-  } else {
-    ret = OB_STATE_NOT_MATCH;
-    TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(state_));
   }
-  if (OB_FAIL(ret)) {
-    if (ignore_ret) {
-      ret = OB_SUCCESS;
-    }
-    // TODO dingxi, takeover failed, notify palf to revoke itself
-    int tmp_ret = OB_SUCCESS;
-    // restore to follower
-    if (OB_TMP_FAIL(state_helper.switch_state(Ops::SWL_CB_FAIL))) {
-      TRANS_LOG(ERROR, "restore follower failed", KR(tmp_ret), K(ls_id_), K(state_));
-      ret = tmp_ret;
-    }
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_FAIL(state_helper.switch_state(Ops::SWL_CB_SUCC))) {
-      TRANS_LOG(ERROR, "switch state failed", KR(ret), K(ls_id_), K(state_));
-    } else {
-      leader_takeover_ts_ = MonotonicTs::current_time();
-      try_wait_gts_and_inc_max_commit_ts_();
-    }
-  }
-  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] on_start_working_log_cb_succ", K(ret), KPC(this));
+  FLOG_INFO("[LsTxCtxMgr Role Change] on_start_working_log_cb_succ", K(ret), K(start_working_ts),
+            KPC(this));
   return ret;
 }
 
@@ -738,11 +707,10 @@ int ObLSTxCtxMgr::on_start_working_log_cb_fail()
 {
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-  StateHelper state_helper(ls_id_, state_);
-  if (OB_FAIL(state_helper.switch_state(Ops::SWL_CB_FAIL))) {
+  if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::SWL_CB_FAIL))) {
     TRANS_LOG(WARN, "switch state fail", KR(ret), K(tenant_id_), K(ls_id_));
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] on_start_working_log_cb_fail", K(ret), KPC(this));
+  FLOG_INFO("[LsTxCtxMgr Role Change] on_start_working_log_cb_fail", K(ret), KPC(this));
   return ret;
 }
 
@@ -751,7 +719,9 @@ int ObLSTxCtxMgr::submit_start_working_log_()
   int ret = OB_SUCCESS;
   SCN scn;
   const int64_t fake_epoch = 0xbaba;
-  if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, scn))) {
+  if (OB_FAIL(errsim_submit_start_working_log())) {
+    TRANS_LOG(WARN, "errsim in submit start working log failed", K(ret), KPC(this));
+  } else if (OB_FAIL(ls_log_writer_.submit_start_working_log(fake_epoch, scn))) {
     TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
   }
   return ret;
@@ -764,13 +734,12 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   ObTxCommitCallback *cb_list = NULL;
   {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-    StateHelper state_helper(ls_id_, state_);
     if (IS_NOT_INIT) {
       TRANS_LOG(ERROR, "ObLSTxCtxMgr not inited", K(ls_id_));
       ret = OB_NOT_INIT;
     } else if (is_follower_()) {
       // already follower, do nothing
-    } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_REVOKE))) {
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::LEADER_REVOKE_FORCEDLLY))) {
       TRANS_LOG(ERROR, "switch state error", KR(ret), "manager", *this);
     } else {
       SwitchToFollowerForcedlyFunctor fn(cb_list);
@@ -781,7 +750,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
       }
 
       if (OB_FAIL(ret)) {
-        state_helper.restore_state();
+        tx_ls_state_mgr_.restore_tx_ls_state();
       }
     }
   }
@@ -791,7 +760,7 @@ int ObLSTxCtxMgr::switch_to_follower_forcedly()
   if (timeguard.get_diff() > 3 * 1000000) {
     TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "switch_to_follower_forcedly use too much time", K(timeguard), "manager", *this);
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] switch_to_follower_forcedly", K(ret), KPC(this));
+  FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_follower_forcedly", K(ret), KPC(this));
   return ret;
 }
 
@@ -833,22 +802,27 @@ int ObLSTxCtxMgr::try_wait_gts_and_inc_max_commit_ts_()
 int ObLSTxCtxMgr::switch_to_leader()
 {
   int ret = OB_SUCCESS;
-  WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-  StateHelper state_helper(ls_id_, state_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
-  } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_TAKEOVER))) {
-    TRANS_LOG(WARN, "switch state failed", KR(ret), K(ls_id_));
+
+  if (OB_FAIL(retry_apply_start_working_log())) {
+    TRANS_LOG(WARN, "retry to apply prev start working log failed", K(ret), KPC(this));
   } else {
-    if (OB_FAIL(submit_start_working_log_())) {
-      TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(ls_id_));
-    }
-    if (OB_FAIL(ret)) {
-      state_helper.restore_state();
+    WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(
+                   ObTxLSStateMgr::TxLSAction::LEADER_TAKEOVER))) {
+      TRANS_LOG(WARN, "switch state failed", KR(ret), K(ls_id_));
+    } else {
+      if (OB_FAIL(submit_start_working_log_())) {
+        TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(ls_id_));
+      }
+      if (OB_FAIL(ret)) {
+        tx_ls_state_mgr_.restore_tx_ls_state();
+      }
     }
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_leader", K(ret), KPC(this));
+  FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_leader", K(ret), KPC(this));
   return ret;
 }
 
@@ -856,13 +830,16 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
 {
   int ret = OB_SUCCESS;
   ObTimeGuard timeguard("switch_to_follower_gracefully");
-  StateHelper state_helper(ls_id_, state_);
   int64_t start_time = ObTimeUtility::current_time();
   int64_t process_count = 0;
   while (OB_SUCC(ret) && is_pending_()) {
     if (ObTimeUtility::current_time() - start_time >= WAIT_SW_CB_TIMEOUT) {
       ret = OB_TIMEOUT;
-      TRANS_LOG(WARN, "start working cb waiting timeout", K(ret));
+      TRANS_LOG(WARN, "start working cb waiting timeout", K(ret), KPC(this));
+      if (tx_ls_state_mgr_.is_start_working_apply_pending()) {
+        ret = OB_LS_NEED_REVOKE;
+        TRANS_LOG(WARN, "apply start working log failed with waiting timeout, need revoke", K(ret), KPC(this));
+      }
     } else {
       ob_usleep(WAIT_SW_CB_INTERVAL);
     }
@@ -870,17 +847,18 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   timeguard.click();
 
   ObTxCommitCallback *cb_list = NULL;
-  {
+  if (OB_SUCC(ret)) {
     WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
     timeguard.click();
 
     if (OB_FAIL(ret)) {
-      //do nothing
+      // do nothing
     } else if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
-    } else if (OB_FAIL(state_helper.switch_state(Ops::LEADER_REVOKE))) {
-      TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(state_));
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(
+                   ObTxLSStateMgr::TxLSAction::LEADER_REVOKE_GRACEFULLY))) {
+      TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(tx_ls_state_mgr_));
     } else {
       timeguard.click();
       // TODO
@@ -889,13 +867,17 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
       if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
         TRANS_LOG(WARN, "for each tx ctx error", KR(ret), "manager", *this);
         ret = fn.get_ret();
+      } else if (OB_FAIL(errsim_switch_to_followr_gracefully())) {
+        TRANS_LOG(WARN, "errsim in switch_to_follower_gracefully", K(ret), K(tenant_id_),
+                  K(ls_id_));
       }
       process_count = fn.get_count();
       timeguard.click();
       if (OB_FAIL(ret)) {
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(state_helper.switch_state(Ops::RESUME_LEADER))) {
-          TRANS_LOG(WARN, "switch state error", KR(ret), K(ls_id_), K(state_));
+        if (OB_TMP_FAIL(
+                tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::RESUME_LEADER))) {
+          TRANS_LOG(WARN, "switch state error", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
         } else if (OB_TMP_FAIL(submit_start_working_log_())) {
           TRANS_LOG(WARN, "submit start working log failed", KR(tmp_ret), K(*this));
         }
@@ -912,7 +894,8 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
   }
   (void)process_callback_(cb_list);
   timeguard.click();
-  TRANS_LOG(INFO, "[LsTxCtxMgr] switch_to_follower_gracefully", K(ret), KPC(this), K(process_count));
+  FLOG_INFO("[LsTxCtxMgr Role Change] switch_to_follower_gracefully", K(ret), KPC(this),
+            K(process_count));
   if (timeguard.get_diff() > 1000000) {
     TRANS_LOG(WARN, "use too much time", K(timeguard), K(process_count));
   }
@@ -923,27 +906,31 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
 int ObLSTxCtxMgr::resume_leader()
 {
   int ret = OB_SUCCESS;
-  WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
-  StateHelper state_helper(ls_id_, state_);
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
-  } else if (OB_FAIL(state_helper.switch_state(Ops::RESUME_LEADER))) {
-    TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(state_));
+  if (OB_FAIL(retry_apply_start_working_log())) {
+    TRANS_LOG(WARN, "retry to apply prev start working log failed", K(ret), KPC(this));
   } else {
-    // TODO dingxi, previous logs need to be applied done before submit start working log
-    if (OB_FAIL(submit_start_working_log_())) {
-      TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
-    }
-    if (OB_FAIL(ret)) {
-      state_helper.restore_state();
-      TRANS_LOG(WARN, "resume leader failed", KR(ret), K(*this));
+    WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      TRANS_LOG(WARN, "not init", KR(ret), K(ls_id_));
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(
+                   ObTxLSStateMgr::TxLSAction::RESUME_LEADER))) {
+      TRANS_LOG(WARN, "switch state error", KR(ret), K(tenant_id_), K(ls_id_), K(tx_ls_state_mgr_));
     } else {
-      is_leader_serving_ = true;
-      TRANS_LOG(INFO, "resume leader success", K(*this));
+      // previous active info logs will be filter by start_working_ts in part_ctx
+      if (OB_FAIL(submit_start_working_log_())) {
+        TRANS_LOG(WARN, "submit start working log failed", KR(ret), K(*this));
+      }
+      if (OB_FAIL(ret)) {
+        tx_ls_state_mgr_.restore_tx_ls_state();
+        TRANS_LOG(WARN, "resume leader failed", KR(ret), K(*this));
+      } else {
+        is_leader_serving_ = true;
+        TRANS_LOG(INFO, "resume leader success", K(*this));
+      }
     }
   }
-  TRANS_LOG(INFO, "[LsTxCtxMgr] resume_leader", K(ret), KPC(this));
+  TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] resume_leader", K(ret), KPC(this));
   return ret;
 }
 
@@ -968,7 +955,6 @@ bool ObLSTxCtxMgr::in_leader_serving_state()
 int ObLSTxCtxMgr::stop(const bool graceful)
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   ObTxCommitCallback *cb_list = NULL;
   const KillTransArg arg(graceful);
   ObTimeGuard timeguard("ctxmgr stop");
@@ -983,7 +969,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
     } else {
       {
         WLockGuard guard(minor_merge_lock_);
-        if (OB_FAIL(state_helper.switch_state(Ops::STOP))) {
+        if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::STOP))) {
           TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
         }
       }
@@ -997,7 +983,7 @@ int ObLSTxCtxMgr::stop(const bool graceful)
           TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
         }
         if (OB_FAIL(ret)) {
-          state_helper.restore_state();
+          tx_ls_state_mgr_.restore_tx_ls_state();
         }
       }
     }
@@ -1038,12 +1024,11 @@ int ObLSTxCtxMgr::kill_all_tx(const bool graceful, bool &is_all_tx_cleaned_up)
 int ObLSTxCtxMgr::block_tx(bool &is_all_tx_cleaned_up)
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
   if (is_stopped_()) {
     TRANS_LOG(WARN, "ls_tx_ctx_mgr is stopped, not need block");
-  } else if (OB_FAIL(state_helper.switch_state(Ops::BLOCK_TX))) {
+  } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::BLOCK_START_TX))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
@@ -1055,12 +1040,11 @@ int ObLSTxCtxMgr::block_tx(bool &is_all_tx_cleaned_up)
 int ObLSTxCtxMgr::block_all(bool &is_all_tx_cleaned_up)
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
   if (is_stopped_()) {
     TRANS_LOG(WARN, "ls_tx_ctx_mgr is stopped, not need block");
-  } else if (OB_FAIL(state_helper.switch_state(Ops::BLOCK_ALL))) {
+  } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::BLOCK_START_WR))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
@@ -1072,10 +1056,9 @@ int ObLSTxCtxMgr::block_all(bool &is_all_tx_cleaned_up)
 int ObLSTxCtxMgr::block_normal(bool &is_all_tx_cleaned_up)
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
-  if (OB_FAIL(state_helper.switch_state(Ops::BLOCK_NORMAL))) {
+  if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::BLOCK_START_NORMAL_TX))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   } else {
     is_all_tx_cleaned_up = (get_tx_ctx_count() == 0);
@@ -1087,10 +1070,9 @@ int ObLSTxCtxMgr::block_normal(bool &is_all_tx_cleaned_up)
 int ObLSTxCtxMgr::online()
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
-  if (OB_FAIL(state_helper.switch_state(Ops::ONLINE))) {
+  if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::ONLINE))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   } else {
     online_ts_ = ObTimeUtility::current_time();
@@ -1102,10 +1084,9 @@ int ObLSTxCtxMgr::online()
 int ObLSTxCtxMgr::unblock_normal()
 {
   int ret = OB_SUCCESS;
-  StateHelper state_helper(ls_id_, state_);
   WLockGuardWithRetryInterval guard(rwlock_, TRY_THRESOLD_US, RETRY_INTERVAL_US);
 
-  if (OB_FAIL(state_helper.switch_state(Ops::UNBLOCK_NORMAL))) {
+  if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::UNBLOCK_NORMAL_TX))) {
     TRANS_LOG(WARN, "switch state error", KR(ret), "manager", *this);
   }
   TRANS_LOG(INFO, "unblock ls normally", K(ret), "manager", *this);
@@ -2510,6 +2491,51 @@ int ObLSTxCtxMgr::do_standby_cleanup()
       ret = fn.get_ret();
       TRANS_LOG(WARN, "for each transaction context error", KR(ret), "manager", *this);
     }
+  }
+
+  return ret;
+}
+
+OB_NOINLINE int ObLSTxCtxMgr::errsim_switch_to_followr_gracefully()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_SWITCH_TO_FOLLOWER_GRACEFULLY;
+#endif
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim for switch_to_follower_gracefully", K(ret), KPC(this));
+  }
+
+  return ret;
+}
+
+OB_NOINLINE int ObLSTxCtxMgr::errsim_submit_start_working_log()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_SUBMIT_START_WORKING_LOG;
+#endif
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim for submit_start_working_log", K(ret), KPC(this));
+  }
+
+  return ret;
+}
+
+OB_NOINLINE int ObLSTxCtxMgr::errsim_apply_start_working_log()
+{
+  int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_APPLY_START_WORKING_LOG;
+#endif
+
+  if (OB_FAIL(ret)) {
+    TRANS_LOG(WARN, "errsim for apply_start_working_log", K(ret), KPC(this));
   }
 
   return ret;

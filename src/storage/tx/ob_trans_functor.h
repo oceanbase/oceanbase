@@ -684,13 +684,17 @@ public:
         tmp_ret = OB_INVALID_ARGUMENT;
         TRANS_LOG_RET(WARN, tmp_ret, "invalid ls id", K(ls_id), KP(ls_tx_ctx_mgr));
       } else {
-        uint64_t mgr_state = ls_tx_ctx_mgr->get_state_();
+        uint64_t mgr_state;
+        bool is_master = false;
+        bool is_stopped = true;
+        const char *state_str =
+        ls_tx_ctx_mgr->tx_ls_state_mgr_.iter_ctx_mgr_stat_info(mgr_state, is_master, is_stopped);
         tmp_ret = ls_tx_ctx_mgr_stat.init(addr_,
                                           ls_tx_ctx_mgr->ls_id_,
-                                          ls_tx_ctx_mgr->is_master_(mgr_state),
-                                          ls_tx_ctx_mgr->is_stopped_(mgr_state),
+                                          is_master,
+                                          is_stopped,
                                           mgr_state,
-                                          ObLSTxCtxMgr::State::state_str(mgr_state),
+                                          state_str,
                                           ls_tx_ctx_mgr->total_tx_ctx_count_,
                                           (int64_t)(&(*ls_tx_ctx_mgr)));
         if (OB_SUCCESS != tmp_ret) {

@@ -158,6 +158,8 @@ public:
   int get_active_tx_count(int64_t &active_tx_count);
   int print_all_tx_ctx(const int64_t print_num);
 
+  int retry_apply_start_working_log();
+
 public:
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const share::SCN &scn);
 
