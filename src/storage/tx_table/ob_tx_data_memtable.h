@@ -288,8 +288,7 @@ public: /* derived from ObIMemtable */
                                 int64_t &total_bytes,
                                 int64_t &total_rows) override;
 
-  virtual int get_split_ranges(const ObStoreRowkey *start_key,
-                               const ObStoreRowkey *end_key,
+  virtual int get_split_ranges(const ObStoreRange &input_range,
                                const int64_t part_cnt,
                                common::ObIArray<common::ObStoreRange> &range_array) override;
   // not supported

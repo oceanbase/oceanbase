@@ -2505,17 +2505,17 @@ int ObMemtable::estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreR
   return ret;
 }
 
-int ObMemtable::get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, const int64_t part_cnt, ObIArray<ObStoreRange> &range_array)
+int ObMemtable::get_split_ranges(const ObStoreRange &input_range,
+                                 const int64_t part_cnt,
+                                 ObIArray<ObStoreRange> &range_array)
 {
   int ret = OB_SUCCESS;
+  range_array.reuse();
+  const ObStoreRowkey *start_key = &input_range.get_start_key();
+  const ObStoreRowkey *end_key = &input_range.get_end_key();
   ObMemtableKey start_mtk;
   ObMemtableKey end_mtk;
-  if (NULL == start_key) {
-    start_key = &ObStoreRowkey::MIN_STORE_ROWKEY;
-  }
-  if (NULL == end_key) {
-    end_key = &ObStoreRowkey::MAX_STORE_ROWKEY;
-  }
+
   if (part_cnt < 1) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "part cnt need be greater than 1", K(ret), K(part_cnt));
@@ -2523,6 +2523,25 @@ int ObMemtable::get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRo
     TRANS_LOG(WARN, "encode key fail", K(ret), K_(key));
   } else if (OB_FAIL(query_engine_.split_range(&start_mtk, &end_mtk, part_cnt, range_array))) {
     TRANS_LOG(WARN, "estimate row count fail", K(ret), K_(key));
+  }
+
+  if (OB_ENTRY_NOT_EXIST == ret) {
+    // construct a single range if split failed
+    ret = OB_SUCCESS;
+    ObStoreRange merge_range;
+    merge_range.set_start_key(*start_key);
+    merge_range.set_end_key(*end_key);
+    if (OB_FAIL(range_array.push_back(merge_range))) {
+      STORAGE_LOG(WARN, "push back merge range to range array failed", KR(ret), K(merge_range));
+    }
+  }
+
+  if (OB_SUCC(ret) && !range_array.empty()) {
+    // set range closed or open
+    ObStoreRange &first_range = range_array.at(0);
+    ObStoreRange &last_range = range_array.at(range_array.count() - 1);
+    input_range.get_border_flag().inclusive_start() ? first_range.set_left_closed() : first_range.set_left_open();
+    input_range.get_border_flag().inclusive_end() ? last_range.set_right_closed() : last_range.set_right_open();
   }
   return ret;
 }
@@ -2573,11 +2592,14 @@ int ObMemtable::split_ranges_for_sample(const blocksstable::ObDatumRange &table_
     while (!split_succ && total_split_range_count > ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT) {
       int tmp_ret = OB_SUCCESS;
       sample_memtable_ranges.reuse();
-      if (OB_TMP_FAIL(try_split_range_for_sample_(table_scan_range.get_start_key().get_store_rowkey(),
-                                                  table_scan_range.get_end_key().get_store_rowkey(),
-                                                  total_split_range_count,
-                                                  allocator,
-                                                  sample_memtable_ranges))) {
+      ObStoreRange input_range;
+      input_range.set_start_key(table_scan_range.get_start_key().get_store_rowkey());
+      input_range.set_end_key(table_scan_range.get_end_key().get_store_rowkey());
+      input_range.is_left_open()  ? input_range.set_left_open()  : input_range.set_left_closed();
+      input_range.is_right_open() ? input_range.set_right_open() : input_range.set_right_closed();
+
+      if (OB_TMP_FAIL(
+              try_split_range_for_sample_(input_range, total_split_range_count, allocator, sample_memtable_ranges))) {
         total_split_range_count = total_split_range_count / 10;
         TRANS_LOG(WARN,
                   "try split range for sampling failed, shrink split range count and retry",
@@ -2598,19 +2620,18 @@ int ObMemtable::split_ranges_for_sample(const blocksstable::ObDatumRange &table_
   return ret;
 }
 
-int64_t ObMemtable::try_split_range_for_sample_(const ObStoreRowkey &start_key,
-                                                const ObStoreRowkey &end_key,
+int64_t ObMemtable::try_split_range_for_sample_(const ObStoreRange &input_range,
                                                 const int64_t range_count,
                                                 ObIAllocator &allocator,
                                                 ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges)
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObStoreRange, 64> store_range_array;
-  if (OB_FAIL(get_split_ranges(&start_key, &end_key, range_count, store_range_array))) {
+  if (OB_FAIL(get_split_ranges(input_range, range_count, store_range_array))) {
     TRANS_LOG(WARN, "try split ranges for sample failed", KR(ret));
   } else if (store_range_array.count() != range_count) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(ERROR, "store array count is not equal with range_count", KR(ret), K(range_count), KPC(this));
+    ret = OB_ENTRY_NOT_EXIST;
+    TRANS_LOG(INFO, "memtable row is not enough for splitting", KR(ret), K(range_count), KPC(this));
   } else {
     const int64_t range_count_each_chosen =
         range_count / (ObMemtableRowSampleIterator::SAMPLE_MEMTABLE_RANGE_COUNT - 1);

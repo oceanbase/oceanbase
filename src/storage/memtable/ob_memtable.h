@@ -478,7 +478,9 @@ public:
   void set_contain_hotspot_row() { return ATOMIC_STORE(&contain_hotspot_row_, true); }
   virtual int64_t get_upper_trans_version() const override;
   virtual int estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows) override;
-  virtual int get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, const int64_t part_cnt, common::ObIArray<common::ObStoreRange> &range_array) override;
+  virtual int get_split_ranges(const ObStoreRange &input_range,
+                               const int64_t part_cnt,
+                               ObIArray<ObStoreRange> &range_array) override;
   int split_ranges_for_sample(const blocksstable::ObDatumRange &table_scan_range,
                               const double sample_rate_percentage,
                               ObIAllocator &allocator,
@@ -734,8 +736,7 @@ private:
   int64_t dec_unsubmitted_cnt_();
   int64_t inc_unsynced_cnt_();
   int64_t dec_unsynced_cnt_();
-  int64_t try_split_range_for_sample_(const ObStoreRowkey &start_key,
-                                      const ObStoreRowkey &end_key,
+  int64_t try_split_range_for_sample_(const ObStoreRange &input_range,
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);

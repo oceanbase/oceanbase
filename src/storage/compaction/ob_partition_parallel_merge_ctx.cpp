@@ -267,6 +267,8 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObTabletMergeCtx &m
       } else if (OB_FAIL(MTL(ObTenantDagScheduler *)->get_up_limit(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, mini_merge_thread))) {
         STORAGE_LOG(WARN, "failed to get uplimit", K(ret), K(mini_merge_thread));
       } else {
+        ObStoreRange input_range;
+        input_range.set_whole_range();
         ObArray<ObStoreRange> store_ranges;
         mini_merge_thread = MAX(mini_merge_thread, PARALLEL_MERGE_TARGET_TASK_CNT);
         concurrent_cnt_ = MIN((total_bytes + tablet_size - 1) / tablet_size, mini_merge_thread);
@@ -274,18 +276,17 @@ int ObParallelMergeCtx::init_parallel_mini_merge(compaction::ObTabletMergeCtx &m
           if (OB_FAIL(init_serial_merge())) {
             STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
           }
-        } else if (OB_FAIL(memtable->get_split_ranges(nullptr, nullptr, concurrent_cnt_, store_ranges))) {
-          if (OB_ENTRY_NOT_EXIST == ret) {
+        } else if (OB_FAIL(memtable->get_split_ranges(input_range, concurrent_cnt_, store_ranges))) {
+          STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
+        } else if (OB_UNLIKELY(store_ranges.count() != concurrent_cnt_)) {
+          if (1 == store_ranges.count()) {
             if (OB_FAIL(init_serial_merge())) {
               STORAGE_LOG(WARN, "Failed to init serialize merge", K(ret));
             }
           } else {
-            STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "Unexpected range array and concurrent_cnt", K(ret), K_(concurrent_cnt), K(store_ranges));
           }
-        } else if (OB_UNLIKELY(store_ranges.count() != concurrent_cnt_)) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "Unexpected range array and concurrent_cnt", K(ret), K_(concurrent_cnt),
-                      K(store_ranges));
         } else {
           for (int64_t i = 0; OB_SUCC(ret) && i < store_ranges.count(); i++) {
             ObDatumRange datum_range;

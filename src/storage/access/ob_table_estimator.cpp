@@ -127,14 +127,14 @@ int ObTableEstimator::estimate_multi_scan_row_count(
         ObPartitionEst sub_range_cost;
         const static int64_t sub_range_cnt = 3;
         ObSEArray<ObStoreRange, sub_range_cnt> store_ranges;
-        if (OB_FAIL((static_cast<memtable::ObMemtable*>(current_table))->get_split_ranges(
-            &range.get_start_key().get_store_rowkey(),
-            &range.get_end_key().get_store_rowkey(),
-            sub_range_cnt,
-            store_ranges))) {
-          if (OB_ENTRY_NOT_EXIST != ret) {
-            LOG_WARN("Failed to split ranges", K(ret), K(tmp_cost));
-          }
+        ObStoreRange input_range;
+        input_range.set_start_key(range.get_start_key().get_store_rowkey());
+        input_range.set_end_key(range.get_end_key().get_store_rowkey());
+        range.is_left_closed() ? input_range.set_left_closed() : input_range.set_left_open();
+        range.is_right_closed() ? input_range.set_right_closed() : input_range.set_right_open();
+        if (OB_FAIL((static_cast<memtable::ObMemtable *>(current_table))
+                        ->get_split_ranges(input_range, sub_range_cnt, store_ranges))) {
+          LOG_WARN("Failed to split ranges", K(ret), K(tmp_cost));
         } else if (store_ranges.count() > 1) {
           LOG_TRACE("estimated logical row count may be not right, split range and do estimating again", K(tmp_cost), K(store_ranges));
           common::ObArenaAllocator allocator("OB_STORAGE_EST", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
