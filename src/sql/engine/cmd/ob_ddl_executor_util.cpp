@@ -83,9 +83,6 @@ int ObDDLExecutorUtil::wait_ddl_finish(
           if (ddl_need_retry_at_executor) {
             ret = ObIDDLTask::in_ddl_retry_white_list(ret) ? OB_EAGAIN : ret;
             LOG_WARN("is ddl need retry at user", K(ret));
-            if (ret != OB_EAGAIN) {
-              FORWARD_USER_ERROR(ret, error_message.user_message_);
-            }
           } else {
             FORWARD_USER_ERROR(ret, error_message.user_message_);
           }
