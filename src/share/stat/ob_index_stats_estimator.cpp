@@ -294,16 +294,21 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
             //do nothing
           } else {
             index_stat->set_avg_row_size(avg_len);
-            BolckNumPair block_num_pair;
-            if (OB_FAIL(partition_id_block_map.get_refactored(idx_part_id, block_num_pair))) {
+            BlockNumStat *block_num_stat = NULL;
+            if (OB_FAIL(partition_id_block_map.get_refactored(idx_part_id, block_num_stat))) {
               if (OB_LIKELY(OB_HASH_NOT_EXIST == ret)) {
                 ret = OB_SUCCESS;
               } else {
                 LOG_WARN("failed to get refactored", K(ret));
               }
+            } else if (OB_ISNULL(block_num_stat)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("get unexpected error", K(ret), K(block_num_stat));
             } else {
-              index_stat->set_macro_block_num(block_num_pair.first);
-              index_stat->set_micro_block_num(block_num_pair.second);
+              index_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
+              index_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
+              index_stat->set_sstable_row_count(block_num_stat->sstable_row_cnt_);
+              index_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(index_table_stats.push_back(index_stat))) {

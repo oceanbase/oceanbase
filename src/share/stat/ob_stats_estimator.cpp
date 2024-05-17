@@ -95,7 +95,7 @@ int ObStatsEstimator::fill_sample_info(common::ObIAllocator &alloc,
                                        bool block_sample)
 {
   int ret = OB_SUCCESS;
-  if (est_percent>= 0.000001 && est_percent <= 100.0) {
+  if (est_percent>= 0.000001 && est_percent < 100.0) {
     char *buf = NULL;
     int32_t buf_len = 50;//double类型一般15～16位，加上字符长度16左右，因此数组长度为50足够用
     int64_t real_len = -1;

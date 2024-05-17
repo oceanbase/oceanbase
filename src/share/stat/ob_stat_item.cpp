@@ -500,6 +500,21 @@ void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int
   }
 }
 
+void ObGlobalTableStat::add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic, int64_t scnt, int64_t mcnt)
+{
+  // skip empty partition
+  if (rc > 0) {
+    row_count_ += rc;
+    row_size_ += rs;
+    data_size_ += ds;
+    macro_block_count_ += mac;
+    micro_block_count_ += mic;
+    part_cnt_ ++;
+    sstable_row_cnt_ += scnt;
+    memtable_row_cnt_ += mcnt;
+  }
+}
+
 int64_t ObGlobalTableStat::get_row_count() const
 {
   return row_count_;

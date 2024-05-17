@@ -330,7 +330,7 @@ int ObDbmsStatsExecutor::split_gather_partition_stats(ObExecContext &ctx,
         }
       }
       if (OB_SUCC(ret)) {
-        if (gather_helper.maximum_gather_col_cnt_ >= param.column_params_.count()) {
+        if (gather_helper.maximum_gather_col_cnt_ >= param.get_need_gather_column()) {
           ObSEArray<ObOptTableStat *, 4> all_tstats;
           ObSEArray<ObOptColumnStat *, 4> all_cstats;
           ObSEArray<ObOptStat, 4> opt_stats;
@@ -664,12 +664,13 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
                                                  GatherHelper &gather_helper)
 {
   int ret = OB_SUCCESS;
-  int64_t column_cnt = param.column_params_.count();
+  int64_t column_cnt = param.get_need_gather_column();
   int64_t partition_cnt = param.subpart_stat_param_.need_modify_ ? param.subpart_infos_.count() :
                             (param.part_stat_param_.need_modify_ ? param.part_infos_.count() + param.approx_part_infos_.count() : 1);
   bool need_histgoram = param.subpart_stat_param_.need_modify_ ? param.subpart_stat_param_.gather_histogram_ :
                             (param.part_stat_param_.need_modify_ ? param.part_stat_param_.gather_histogram_ : param.global_stat_param_.gather_histogram_);
   partition_cnt = partition_cnt == 0 ? 1 : partition_cnt;
+  int64_t origin_partition_cnt = partition_cnt;
   int64_t gather_vectorize = DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE;
   //cache table stat size
   int64_t tab_stat_size = sizeof(ObOptTableStat) * partition_cnt;
@@ -705,7 +706,7 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
     if (max_memory_used <= max_wa_memory_size) {
       gather_helper.maximum_gather_col_cnt_ = column_cnt;
       gather_helper.maximum_gather_part_cnt_ = partition_cnt;
-      gather_helper.is_split_gather_ = true;
+      gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt;
       gather_helper.gather_vectorize_ = gather_vectorize;
     } else {
       const int64_t MINIMUM_OF_VECTOR_SIZE = 8;
@@ -718,7 +719,7 @@ int ObDbmsStatsExecutor::check_need_split_gather(const ObTableStatParam &param,
       if (max_memory_used <= max_wa_memory_size) {
         gather_helper.maximum_gather_col_cnt_ = column_cnt;
         gather_helper.maximum_gather_part_cnt_ = partition_cnt;
-        gather_helper.is_split_gather_ = true;
+        gather_helper.is_split_gather_ = origin_partition_cnt != partition_cnt;
         gather_helper.gather_vectorize_ = gather_vectorize;
       } else {
         //lastly, split according the column
@@ -900,7 +901,7 @@ int ObDbmsStatsExecutor::set_column_stats(ObExecContext &ctx,
       col_stat->set_column_id(key.column_id_);
       col_stat->set_collation_type(param.table_param_.column_params_.at(0).cs_type_);
       col_stat->set_last_analyzed(0);
-      if (OB_FAIL(do_set_column_stats(param, col_stat))) {
+      if (OB_FAIL(do_set_column_stats(*alloc, ctx.get_my_session()->get_dtc_params(), param, col_stat))) {
         LOG_WARN("failed to do set table stats", K(ret));
       } else if (OB_FAIL(column_stats.push_back(col_stat))) {
         LOG_WARN("failed to push back column stat", K(ret));
@@ -973,7 +974,9 @@ int ObDbmsStatsExecutor::do_set_table_stats(const ObSetTableStatParam &param,
   return ret;
 }
 
-int ObDbmsStatsExecutor::do_set_column_stats(const ObSetColumnStatParam &param,
+int ObDbmsStatsExecutor::do_set_column_stats(ObIAllocator &allocator,
+                                             const ObDataTypeCastParams &dtc_params,
+                                             const ObSetColumnStatParam &param,
                                              ObOptColumnStat *&column_stat)
 {
   int ret = OB_SUCCESS;
@@ -1004,9 +1007,21 @@ int ObDbmsStatsExecutor::do_set_column_stats(const ObSetColumnStatParam &param,
     if (param.avgclen_ > 0) {
       column_stat->set_avg_len(param.avgclen_);
     }
-    //5.set hist_param TODO @jiangxiu.wt
+    //5.set max/val value
+    if (param.hist_param_.minval_ != NULL || param.hist_param_.maxval_ != NULL) {
+      ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, param.col_meta_.get_collation_type());
+      if ((param.hist_param_.minval_ != NULL &&
+           OB_FAIL(ObObjCaster::to_type(param.col_meta_.get_type(), cast_ctx, *param.hist_param_.minval_, column_stat->get_min_value()))) ||
+          (param.hist_param_.maxval_ != NULL &&
+           OB_FAIL(ObObjCaster::to_type(param.col_meta_.get_type(), cast_ctx, *param.hist_param_.maxval_, column_stat->get_max_value())))) {
+        ret = OB_ERR_DBMS_STATS_PL;
+        LOG_WARN("Invalid or inconsistent input values", K(ret), K(param));
+        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,"Invalid or inconsistent input values");
+      }
+    }
+    //6.set hist_param TODO @jiangxiu.wt
     //other options support later.
-    LOG_TRACE("succeed to do set column stats", K(*column_stat));
+    LOG_TRACE("succeed to do set column stats", K(param), K(*column_stat));
   }
   return ret;
 }

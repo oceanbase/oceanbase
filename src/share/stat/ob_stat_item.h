@@ -305,6 +305,7 @@ public:
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
+  void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic, int64_t scnt, int64_t mcnt);
 
   int64_t get_row_count() const;
   int64_t get_avg_row_size() const;
@@ -315,6 +316,8 @@ public:
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
   void set_stat_locked(bool locked) { stat_locked_ = locked; }
   bool get_stat_locked() const { return stat_locked_; }
+  int64_t get_sstable_row_cnt() const { return sstable_row_cnt_; }
+  int64_t get_memtable_row_cnt() const { return memtable_row_cnt_; }
 
 
   TO_STRING_KV(K(row_count_),
@@ -324,7 +327,9 @@ public:
                K(micro_block_count_),
                K(part_cnt_),
                K(last_analyzed_),
-               K(stat_locked_));
+               K(stat_locked_),
+               K(sstable_row_cnt_),
+               K(memtable_row_cnt_));
 
 private:
   int64_t row_count_;
@@ -335,6 +340,8 @@ private:
   int64_t part_cnt_;
   int64_t last_analyzed_;
   bool stat_locked_;
+  int64_t sstable_row_cnt_;
+  int64_t memtable_row_cnt_;
 };
 
 class ObGlobalNullEval

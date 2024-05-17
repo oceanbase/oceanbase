@@ -28,9 +28,9 @@ namespace common
 {
 class ObOptTableStat;
 class ObOptColumnStat;
+struct BlockNumStat;
 
-typedef std::pair<int64_t, int64_t> BolckNumPair;
-typedef hash::ObHashMap<int64_t, BolckNumPair, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
+typedef hash::ObHashMap<int64_t, BlockNumStat *, common::hash::NoPthreadDefendMode> PartitionIdBlockMap;
 typedef common::hash::ObHashMap<ObOptTableStat::Key, ObOptTableStat *, common::hash::NoPthreadDefendMode> TabStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, common::hash::NoPthreadDefendMode> OSGColStatIndMap;
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
@@ -56,7 +56,7 @@ enum StatOptionFlags
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
 const static int64_t OPT_STATS_MAX_VALUE_CHAR_LEN = 128;
-const static int64_t OPT_STATS_BIG_TABLE_ROWS = 10000000;
+const int64_t MAX_AUTO_GATHER_FULL_TABLE_ROWS = 100000000;
 const int64_t MAGIC_SAMPLE_SIZE = 5500;
 const int64_t MAGIC_MAX_AUTO_SAMPLE_SIZE = 22000;
 const int64_t MAGIC_MIN_SAMPLE_SIZE = 2500;
@@ -130,6 +130,24 @@ enum ObGranularityType
   GRANULARITY_AUTO,
   GRANULARITY_GLOBAL_AND_PARTITION,
   GRANULARITY_APPROX_GLOBAL_AND_PARTITION
+};
+
+struct BlockNumStat
+{
+  BlockNumStat() :
+    tab_macro_cnt_(0),
+    tab_micro_cnt_(0),
+    sstable_row_cnt_(0),
+    memtable_row_cnt_(0)
+  {}
+  int64_t tab_macro_cnt_;
+  int64_t tab_micro_cnt_;
+  int64_t sstable_row_cnt_;
+  int64_t memtable_row_cnt_;
+  TO_STRING_KV(K(tab_macro_cnt_),
+               K(tab_micro_cnt_),
+               K(sstable_row_cnt_),
+               K(memtable_row_cnt_))
 };
 
 //TODO@jiangxiu.wt: improve the expression of PartInfo, use the map is better.
@@ -446,6 +464,12 @@ struct ObTableStatParam {
 
   bool is_specify_column() const;
 
+  int64_t get_need_gather_column() const;
+
+  bool need_gather_stats() const { return global_stat_param_.need_modify_ ||
+                                          part_stat_param_.need_modify_ ||
+                                          subpart_stat_param_.need_modify_; }
+
   uint64_t tenant_id_;
 
   ObString db_name_;
@@ -569,6 +593,7 @@ struct ObOptStatGatherParam {
     sepcify_scn_(0)
   {}
   int assign(const ObOptStatGatherParam &other);
+  int64_t get_need_gather_column() const;
   uint64_t tenant_id_;
   ObString db_name_;
   ObString tab_name_;
@@ -627,9 +652,20 @@ struct ObOptStat
 
 struct ObHistogramParam
 {
+  ObHistogramParam():
+    epc_(0),
+    minval_(NULL),
+    maxval_(NULL),
+    bkvals_(),
+    novals_(),
+    chvals_(),
+    eavals_(),
+    rpcnts_(),
+    eavs_(0)
+  {}
   int64_t epc_;                       //Number of buckets in histogram
-  ObString minval_;                   //Minimum value
-  ObString maxval_;                   //Maximum value
+  const ObObj *minval_;               //Minimum value
+  const ObObj *maxval_;               //Maximum value
   ObSEArray<int64_t, 4> bkvals_;      //Array of bucket numbers
   ObSEArray<int64_t, 4> novals_;      //Array of normalized end point values
   ObSEArray<ObString, 4> chvals_;     //Array of dumped end point values
@@ -675,14 +711,24 @@ struct ObSetTableStatParam
 
 struct ObSetColumnStatParam
 {
+  ObSetColumnStatParam():
+  table_param_(),
+  distcnt_(0),
+  density_(0.0),
+  nullcnt_(0),
+  hist_param_(),
+  avgclen_(0),
+  flags_(0),
+  col_meta_()
+  {}
   ObTableStatParam table_param_;
-
   int64_t distcnt_;
   double density_;
   int64_t nullcnt_;
   ObHistogramParam hist_param_;
   int64_t avgclen_;
   int64_t flags_;
+  common::ObObjMeta col_meta_;
 
   TO_STRING_KV(K(table_param_),
                K(distcnt_),
@@ -690,7 +736,8 @@ struct ObSetColumnStatParam
                K(nullcnt_),
                K(hist_param_),
                K(avgclen_),
-               K(flags_));
+               K(flags_),
+               K(col_meta_));
 
 };
 

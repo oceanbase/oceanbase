@@ -13,7 +13,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       tabname            VARCHAR(65535),
       partname           VARCHAR(65535) DEFAULT NULL,
       estimate_percent   DECIMAL DEFAULT AUTO_SAMPLE_SIZE,
-      block_sample       BOOLEAN DEFAULT FALSE,
+      block_sample       BOOLEAN DEFAULT NULL,
       method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
       degree             DECIMAL DEFAULT NULL,
       granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,
@@ -29,7 +29,7 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
     PROCEDURE gather_schema_stats (
       ownname            VARCHAR(65535),
       estimate_percent   DECIMAL DEFAULT AUTO_SAMPLE_SIZE,
-      block_sample       BOOLEAN DEFAULT FALSE,
+      block_sample       BOOLEAN DEFAULT NULL,
       method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
       degree             DECIMAL DEFAULT NULL,
       granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,

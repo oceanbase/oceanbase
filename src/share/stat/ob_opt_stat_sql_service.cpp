@@ -874,11 +874,11 @@ int ObOptStatSqlService::get_table_stat_sql(const uint64_t tenant_id,
       OB_FAIL(dml_splicer.add_column("object_type", stat.get_object_type())) ||
       OB_FAIL(dml_splicer.add_time_column("last_analyzed", stat.get_last_analyzed() == 0 ?
                                                         current_time : stat.get_last_analyzed())) ||
-      OB_FAIL(dml_splicer.add_column("sstable_row_count", -1)) ||
+      OB_FAIL(dml_splicer.add_column("sstable_row_count", stat.get_sstable_row_count())) ||
       OB_FAIL(dml_splicer.add_column("sstable_avg_row_len", -1)) ||
       OB_FAIL(dml_splicer.add_column("macro_blk_cnt", stat.get_macro_block_num())) ||
       OB_FAIL(dml_splicer.add_column("micro_blk_cnt", stat.get_micro_block_num())) ||
-      OB_FAIL(dml_splicer.add_column("memtable_row_cnt", -1)) ||
+      OB_FAIL(dml_splicer.add_column("memtable_row_cnt", stat.get_memtable_row_count())) ||
       OB_FAIL(dml_splicer.add_column("memtable_avg_row_len", -1)) ||
       OB_FAIL(dml_splicer.add_column("row_cnt", stat.get_row_count())) ||
       OB_FAIL(dml_splicer.add_column("avg_row_len", stat.get_avg_row_size())) ||

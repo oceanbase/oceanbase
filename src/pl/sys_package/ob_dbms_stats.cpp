@@ -623,6 +623,7 @@ int ObDbmsStats::set_column_stats(sql::ObExecContext &ctx,
                                             params.at(1),
                                             params.at(2),
                                             params.at(3),
+                                            param.col_meta_,
                                             param.table_param_))) {
     LOG_WARN("failed to parse set column stats", K(ret));
   } else if (OB_FAIL(parse_set_column_stats_options(ctx,
@@ -3638,6 +3639,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
                                         const ObObjParam &tab_name,
                                         const ObObjParam &colname,
                                         const ObObjParam &part_name,
+                                        ObObjMeta &col_meta,
                                         ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
@@ -3693,6 +3695,7 @@ int ObDbmsStats::parse_set_column_stats(ObExecContext &ctx,
       } else {
         col_param.column_id_ = col->get_column_id();
         col_param.cs_type_   = col->get_collation_type();
+        col_meta = col->get_meta_type();
         col_param.gather_flag_ = 0;
         col_param.bucket_num_ = -1;
         if (col->is_index_column()) {
@@ -4146,7 +4149,12 @@ int ObDbmsStats::get_default_stat_options(ObExecContext &ctx,
     }
   }
   if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_BLOCK_SAMPLE) {
-    param.sample_info_.set_is_block_sample(false);
+     ObBlockSamplePrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
   }
   if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_METHOD_OPT) {
     ObMethodOptPrefs *tmp_pref = NULL;
@@ -4844,10 +4852,8 @@ int ObDbmsStats::parse_set_hist_stats_options(ObExecContext &ctx,
   number::ObNumber num_eavs;
   if (!epc.is_null() && OB_FAIL(epc.get_number(num_epc))) {
     LOG_WARN("failed to get epc", K(ret));
-  } else if (!minval.is_null() && OB_FAIL(minval.get_raw(hist_param.minval_))) {
-    LOG_WARN("failed to get minval", K(ret));
-  } else if (!maxval.is_null() && OB_FAIL(maxval.get_raw(hist_param.maxval_))) {
-    LOG_WARN("failed to get maxval", K(ret));
+  } else if (!minval.is_null() && FALSE_IT(hist_param.minval_ = &minval)) {
+  } else if (!maxval.is_null() && FALSE_IT(hist_param.maxval_ = &maxval)) {
   } else if (OB_FAIL(parser_pl_numarray(bkvals, hist_param.bkvals_))) {
     LOG_WARN("failed to parser pl numarray", K(ret));
   } else if (OB_FAIL(parser_pl_numarray(novals, hist_param.novals_))) {
@@ -5477,53 +5483,28 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
   } else if (OB_FALSE_IT(tenant_id = session->get_effective_tenant_id())) {
   } else if (is_virtual_tenant_id(tenant_id)) {
     // do nothing
-  } else if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_table_cnt(ctx, tenant_id,
-                                                                     task_info.task_table_count_))) {
-    LOG_WARN("failed to get all tables count", K(ret));
   } else {
     int64_t slice_cnt = 10000; // maximum tables we can gather stats at each iteration
-    int64_t tmp_succeed = 0;
+    int64_t offset = 0;
     do {
       table_ids.reuse();
-      tmp_succeed = succeed_cnt;
-      if (OB_FAIL(THIS_WORKER.check_status())) {
-          LOG_WARN("check status failed", KR(ret));
-      } else if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, table_ids, slice_cnt))) {
-        LOG_WARN("failed to get tables that need gather stats", K(ret));
-      } else if (OB_FAIL(do_gather_tables_stats(ctx, tenant_id, table_ids,
-                                                duration_time, succeed_cnt, task_info))) {
-        LOG_WARN("failed to gather table stats", K(ret));
-      }
-      LOG_INFO("succeed to gather table stats", K(ret), K(table_ids.count()), K(slice_cnt),
-              K(tmp_succeed), K(duration_time), K(succeed_cnt));
-      // case that we can break the loop:
-      // 1. #table_ids < slice_cnt, which means that we have fetched all the tables we need to gather stats
-      // 2. duration_time_ = -1, and has reached the ob_query_timeout session variable limit
-      // 3. duration_time is not -1, and the time we cost to gather stats has reached duration_time
-    } while (OB_SUCC(ret) && table_ids.count() == slice_cnt && (succeed_cnt - tmp_succeed) != 0);
-    // gather virtual table stats
-    ObSEArray<uint64_t, 256> all_table_ids;
-    if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(ctx.get_virtual_table_ctx().schema_guard_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected error", K(ret), K(ctx.get_virtual_table_ctx().schema_guard_));
-    } else if (OB_FAIL(ctx.get_virtual_table_ctx().schema_guard_->get_table_ids_in_tenant(tenant_id, all_table_ids))) {
-      LOG_WARN("failed to get virtual table ids in tenant", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < all_table_ids.count(); ++i) {
-        int64_t table_id = static_cast<int64_t>(all_table_ids.at(i));
-        if (is_virtual_table(table_id) && !ObDbmsStatsUtils::is_no_stat_virtual_table(table_id)) {
-          if (OB_FAIL(refresh_tenant_schema_guard(ctx, tenant_id))) {
+      if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, offset, slice_cnt, table_ids))) {
+        LOG_WARN("failed to get need stats tables", K(ret));
+      } else {
+        task_info.task_table_count_ += table_ids.count();
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); ++i) {
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("failed to check status", K(ret));
+          } else if (OB_FAIL(refresh_tenant_schema_guard(ctx, tenant_id))) {
             LOG_WARN("refresh tenant schema guard failed", K(ret));
-          } else if (OB_FAIL(do_gather_table_stats(ctx, table_id, tenant_id,
+          } else if (OB_FAIL(do_gather_table_stats(ctx, table_ids.at(i), tenant_id,
                                                    duration_time, succeed_cnt, task_info))) {
-            LOG_WARN("failed to gather virtual table stats", K(ret));
-          } else {
-            ++task_info.task_table_count_;
+            LOG_WARN("failed to gather table stats", K(ret));
           }
         }
       }
-    }
+      offset += slice_cnt;
+    } while (OB_SUCC(ret) && table_ids.count() == slice_cnt);
   }
   return ret;
 }
@@ -5573,6 +5554,9 @@ int ObDbmsStats::do_gather_table_stats(sql::ObExecContext &ctx,
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (is_recyclebin_database_id(table_schema->get_database_id()) ||
+             (lib::is_oracle_mode() && is_oceanbase_sys_database_id(table_schema->get_database_id()))) {
+    //do nothing
   } else {
     StatTable stat_table(table_schema->get_database_id(), table_id);
     double stale_percent_threshold = OPT_DEFAULT_STALE_PERCENT;
@@ -5771,6 +5755,8 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_WARN("failed to use default gather stat optitions", K(ret));
   } else if (OB_FAIL(adjust_auto_gather_stat_option(stat_table.partition_stat_infos_, stat_param))) {
     LOG_WARN("failed to use default gather stat optitions", K(ret));
+  } else if (!stat_param.need_gather_stats()) {
+    //do nothing
   } else if (OB_FAIL(running_monitor.add_table_info(stat_param, stat_table.stale_percent_))) {
     LOG_WARN("failed to add table info", K(ret));
   } else if (OB_FAIL(ObDbmsStatsExecutor::gather_table_stats(ctx, stat_param, running_monitor))) {
@@ -5804,7 +5790,9 @@ int ObDbmsStats::gather_table_stats_with_default_param(ObExecContext &ctx,
     LOG_TRACE("Succeed to gather table stats", K(stat_param));
   }
   running_monitor.set_monitor_result(ret, ObTimeUtility::current_time(), stat_param.allocator_->used());
-  update_optimizer_gather_stat_info(NULL, &gather_stat);
+  if (stat_param.need_gather_stats()) {
+    update_optimizer_gather_stat_info(NULL, &gather_stat);
+  }
   ObOptStatGatherStatList::instance().remove(gather_stat);
   task_info.completed_table_count_ ++;
   return ret;
@@ -5920,13 +5908,21 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
+  } else if (0 == opt_name.case_compare("BLOCK_SAMPLE")) {
+    ObBlockSamplePrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid input values for pname, Only Support CASCADE |"\
-                                       "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
-                                       "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS"\
-                                      "STALE_PERCENT | ESTIMATE_BLOCK | APPROXIMATE_NDV(global prefs unique) prefs");
+                                          "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
+                                          "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS |"\
+                                          "STALE_PERCENT | ESTIMATE_BLOCK | BLOCK_SAMPLE |"\
+                                          "APPROXIMATE_NDV(global prefs unique) prefs");
   }
   return ret;
 }
@@ -6509,11 +6505,18 @@ int ObDbmsStats::adjust_auto_gather_stat_option(const ObIArray<ObPartitionStatIn
       }
     }
   }
-  if (OB_SUCC(ret) &&
-      param.global_stat_param_.need_modify_ &&
-      param.global_stat_param_.gather_approx_ &&
-      (has_part_locked || !param.part_stat_param_.need_modify_)) {
-    param.global_stat_param_.gather_approx_ = false;
+  if (OB_SUCC(ret) && param.global_stat_param_.need_modify_) {
+    bool is_locked = false;
+    if (param.global_stat_param_.gather_approx_ &&
+        (has_part_locked || !param.part_stat_param_.need_modify_)) {
+      param.global_stat_param_.gather_approx_ = false;
+      if (is_partition_no_regather(param.global_part_id_, partition_stat_infos, is_locked)) {
+        param.global_stat_param_.need_modify_ = false;
+      }
+    } else if (!param.global_stat_param_.gather_approx_ &&
+               is_partition_no_regather(param.global_part_id_, partition_stat_infos, is_locked)) {
+      param.global_stat_param_.need_modify_ = false;
+    }
   }
   LOG_TRACE("succeed to adjust auto gather stat option", K(partition_stat_infos), K(param));
   return ret;
