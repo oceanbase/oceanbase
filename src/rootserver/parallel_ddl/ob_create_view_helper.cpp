@@ -907,10 +907,12 @@ int ObCreateViewHelper::drop_trigger_schemas_() {
                                                                            trigger_info->get_object_type()))) {
         LOG_WARN("fail to delete schema object dependency", KR(ret), KPC(trigger_info));
       } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans_, tenant_id_,
-                 share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info->get_trigger_id())))) {
+                 share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info->get_trigger_id()),
+                                                                           trigger_info->get_database_id()))) {
         LOG_WARN("fail to delete ddl from disk", KR(ret), K_(tenant_id), KPC(trigger_info));
       } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans_, tenant_id_,
-                 share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info->get_trigger_id())))) {
+                 share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info->get_trigger_id()),
+                                                                          trigger_info->get_database_id()))) {
         LOG_WARN("fail to delete ddl from disk", KR(ret), K_(tenant_id), KPC(trigger_info));
       }
       if (OB_SUCC(ret)) {
