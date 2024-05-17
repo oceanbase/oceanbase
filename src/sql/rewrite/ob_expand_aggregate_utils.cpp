@@ -2101,8 +2101,11 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObAggFunRawExpr *aggr_expr,
     LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
   } else {
     ObSysFunRawExpr *sqrt_expr = NULL;
-    ObRawExpr *sqrt_param_expr = NULL;
+    ObRawExpr *expand_var_expr_inner = NULL;
+    ObRawExpr *case_when_expr = NULL;
+    ObConstRawExpr *zero_expr = NULL;
     ObAggFunRawExpr *var_expr = NULL;
+    ObRawExpr *lt_expr = NULL;
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
                                                        session_info_,
                                                        T_FUN_VAR_SAMP,
@@ -2111,19 +2114,49 @@ int ObExpandAggregateUtils::expand_stddev_samp_expr(ObAggFunRawExpr *aggr_expr,
       LOG_WARN("failed to build common aggr expr", K(ret));
     } else {
       if (OB_FAIL(expand_var_expr(var_expr,
-                                  sqrt_param_expr, new_aggr_items))) {
+                                  expand_var_expr_inner, new_aggr_items))) {
         LOG_WARN("fail to expand keep variance expr", K(ret));
       } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_SYS_SQRT, sqrt_expr))) {
         LOG_WARN("failed to crate sqrt expr", K(ret));
       } else if (OB_ISNULL(sqrt_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("add expr is null", K(ret), K(sqrt_expr));
-      } else if (OB_FAIL(sqrt_expr->add_param_expr(sqrt_param_expr))) {
-        LOG_WARN("add text expr to add expr failed", K(ret));
       } else {
-        ObString func_name = ObString::make_string("sqrt");
-        sqrt_expr->set_func_name(func_name);
-        replace_expr = sqrt_expr;
+        if (is_oracle_mode()) {
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(sqrt_expr->add_param_expr(expand_var_expr_inner))) {
+              LOG_WARN("add text expr to add expr failed", K(ret));
+            }
+          }
+        } else {
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory_,
+                                                            ObIntType,
+                                                            0,
+                                                            zero_expr))) {
+              LOG_WARN("failed to build const int expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_,
+                                                                          T_OP_LT,
+                                                                          expand_var_expr_inner,
+                                                                          zero_expr,
+                                                                          lt_expr))) {
+              LOG_WARN("failed to build common binary op expr", K(ret));
+            } else if (OB_FAIL(ObRawExprUtils::build_case_when_expr(expr_factory_,
+                                                                    lt_expr,
+                                                                    zero_expr,
+                                                                    expand_var_expr_inner,
+                                                                    case_when_expr))) {
+              LOG_WARN("failed to build the case when expr", K(ret));
+            } else if (OB_FAIL(sqrt_expr->add_param_expr(case_when_expr))) {
+              LOG_WARN("add text expr to add expr failed", K(ret));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ObString func_name = ObString::make_string("sqrt");
+          sqrt_expr->set_func_name(func_name);
+          replace_expr = sqrt_expr;
+        }
       }
     }
   }
