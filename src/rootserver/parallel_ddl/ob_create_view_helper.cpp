@@ -251,6 +251,10 @@ int ObCreateViewHelper::lock_and_check_view_name_()
         if (USER_VIEW == table_type
             || (GCONF.enable_sys_table_ddl && SYSTEM_VIEW == table_type)) {
           // do nothing
+        } else if (SYSTEM_VIEW == table_type) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("not allowed to replace sys view when enable_sys_table_ddl is false", KR(ret), K(table_type));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "replace sys view when enable_sys_table_ddl is false");
         } else {
           ret = OB_ERR_EXIST_OBJECT;
           LOG_WARN("name is already used by an existing object", KR(ret), K(table_name));
@@ -303,6 +307,10 @@ int ObCreateViewHelper::lock_and_check_view_name_()
       } else if (USER_VIEW == table_type
                  || (GCONF.enable_sys_table_ddl && SYSTEM_VIEW == table_type)) {
         // do nothing
+      } else if (SYSTEM_VIEW == table_type) {
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("not allowed to replace sys view when enable_sys_table_ddl is false", KR(ret), K(table_type));
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, "replace sys view when enable_sys_table_ddl is false");
       } else {
         ret = OB_ERR_WRONG_OBJECT;
         LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
