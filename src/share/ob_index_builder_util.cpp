@@ -660,11 +660,15 @@ int ObIndexBuilderUtil::adjust_expr_index_args(
       LOG_WARN("push back mbr column to gen columns failed", K(ret));
     }
   } else if (is_fts_index(arg.index_type_)) {
-    if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, gen_columns))) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
+      LOG_WARN("fail to check fts index allowed", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(arg, data_schema, gen_columns))) {
       LOG_WARN("failed to adjust fts args", K(ret));
     }
   } else if (is_multivalue_index(arg.index_type_)) {
-    if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, gen_columns))) {
+    if (OB_FAIL(ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(data_schema))) {
+      LOG_WARN("fail to check multivalue index allowed", K(ret));
+    } else if (OB_FAIL(ObMulValueIndexBuilderUtil::adjust_mulvalue_index_args(arg, data_schema, gen_columns))) {
       LOG_WARN("failed to adjust multivalue args", K(ret));
     }
   } else if (OB_FAIL(adjust_ordinary_index_column_args(arg, data_schema, allocator, gen_columns))) {

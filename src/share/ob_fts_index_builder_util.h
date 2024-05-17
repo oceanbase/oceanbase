@@ -68,6 +68,8 @@ public:
   static int get_doc_id_col(
       const ObTableSchema &data_schema,
       const ObColumnSchemaV2 *&doc_id_col);
+  static int check_fts_or_multivalue_index_allowed(
+      ObTableSchema &data_schema);
 private:
   static int check_ft_cols(
       const obrpc::ObCreateIndexArg *index_arg,
