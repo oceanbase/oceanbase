@@ -2612,9 +2612,11 @@ int ObPLResolver::collect_dep_info_by_schema(const ObPLResolveCtx &ctx,
     if (table_schema->is_view_table() && !table_schema->is_materialized_view()) {
       OZ (collect_dep_info_by_view_schema(ctx, table_schema, dependency_objects));
     } else {
-      OZ(dependency_objects.push_back(ObSchemaObjVersion(table_schema->get_table_id(),
-                                                         table_schema->get_schema_version(),
-                                                         ObDependencyTableType::DEPENDENCY_TABLE)));
+      ObSchemaObjVersion version(table_schema->get_table_id(),
+                                  table_schema->get_schema_version(),
+                                  ObDependencyTableType::DEPENDENCY_TABLE);
+      version.is_db_explicit_ = ctx.session_info_.get_database_id() != table_schema->get_database_id();
+      OZ(dependency_objects.push_back(version));
     }
   }
   return ret;
@@ -2651,9 +2653,11 @@ int ObPLResolver::build_record_type_by_schema(
       OZ (build_record_type_by_table_schema(
         resolve_ctx.schema_guard_, resolve_ctx.allocator_, table_schema, record_type, with_rowid));
       if (OB_NOT_NULL(dependency_objects)) {
-        OZ(dependency_objects->push_back(ObSchemaObjVersion(table_schema->get_table_id(),
-                                                            table_schema->get_schema_version(),
-                                                            ObDependencyTableType::DEPENDENCY_TABLE)));
+        ObSchemaObjVersion version(table_schema->get_table_id(),
+                                  table_schema->get_schema_version(),
+                                  ObDependencyTableType::DEPENDENCY_TABLE);
+        version.is_db_explicit_ = resolve_ctx.session_info_.get_database_id() != table_schema->get_database_id();
+        OZ(dependency_objects->push_back(version));
       }
     }
   }
