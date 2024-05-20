@@ -70,12 +70,23 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
     }
     if (OB_SUCC(ret)) {
       if (stmt.is_delete_histogram()) {
-        //must be only one param
-        if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, params.at(0), true))) {
-          LOG_WARN("failed to drop table stats", K(ret));
-        } else {
-          LOG_TRACE("succeed to drop table stats", K(params));
+        bool cascade_columns = true;
+        bool cascade_indexes = true;
+        if (OB_UNLIKELY(params.count() != 1)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected error", K(ret), K(params));
+        } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, params.at(0)))) {
+          LOG_WARN("failed fill stat locked", K(ret));
+        } else if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, params.at(0), cascade_columns))) {
+          LOG_WARN("failed to delete table stats", K(ret));
+        } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), params.at(0)))) {
+          LOG_WARN("failed to update stat cache", K(ret));
+        } else if (cascade_indexes && params.at(0).part_name_.empty()) {
+          if (OB_FAIL(pl::ObDbmsStats::delete_table_index_stats(ctx, params.at(0)))) {
+            LOG_WARN("failed to delete index stats", K(ret));
+          } else {/*do nothing*/}
         }
+        LOG_TRACE("succeed to drop table stats", K(params));
       } else {
         int64_t task_cnt = params.count();
         int64_t start_time = ObTimeUtility::current_time();

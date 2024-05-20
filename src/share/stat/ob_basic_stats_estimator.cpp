@@ -92,6 +92,9 @@ int ObBasicStatsEstimator::estimate(const ObOptStatGatherParam &param,
         LOG_WARN("failed to add group by info", K(ret));
       } else if (OB_FAIL(add_stat_item(ObPartitionId(src_tab_stat, calc_part_id_str, -1)))) {
         LOG_WARN("failed to add partition id", K(ret));
+      } else if (param.is_specify_partition_ &&
+                 OB_FAIL(fill_partition_info(allocator, param.partition_infos_))) {
+        LOG_WARN("failed to add partition info", K(ret));
       }
     } else if (OB_UNLIKELY(param.partition_infos_.count() > 1) ||
                OB_ISNULL(dst_opt_stats.at(0).table_stat_)) {

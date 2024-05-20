@@ -1001,7 +1001,7 @@ int ObDbmsStatsExportImport::get_opt_stat(ObExecContext &ctx,
             } else if (OB_FAIL(num_val.extract_valid_int64_with_trunc(int_val))) {
               LOG_WARN("extract_valid_int64_with_trunc failed", K(ret), K(num_val));
             } else if (int_val > 0) {
-              if (OB_UNLIKELY(col_stat->get_histogram().get_density() <= 0.0)) {
+              if (OB_UNLIKELY(col_stat->get_histogram().get_density() < 0.0)) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("get unexpected error", K(result_objs), K(ret), KPC(col_stat));
               } else if (col_stat->get_histogram().get_buckets().empty()) {
