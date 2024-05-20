@@ -1753,6 +1753,9 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
     ObSelectLogPlan *nonrecursive_plan = NULL;
+    if (!select_stmt->is_recursive_union()) {
+      nonrecursive_plan = get_nonrecursive_plan_for_fake_cte();
+    }
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
       child_rename_filters.reuse();

@@ -81,7 +81,6 @@ public:
         tablet_id_type_(0),
         calc_part_id_expr_(NULL),
         trans_info_expr_(NULL),
-        rcte_op_(nullptr),
         identify_seq_expr_(nullptr),
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
@@ -497,11 +496,12 @@ public:
   int adjust_print_access_info(ObIArray<ObRawExpr*> &access_exprs);
   static int replace_gen_column(ObLogPlan *plan, ObRawExpr *part_expr, ObRawExpr *&new_part_expr);
   int extract_file_column_exprs_recursively(ObRawExpr *expr);
-  inline ObLogSet *get_rcte_op() { return rcte_op_; }
   inline ObRawExpr *get_identify_seq_expr() { return identify_seq_expr_; }
+  void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
   int copy_gen_col_range_exprs();
   inline bool need_replace_gen_column() { return !(is_index_scan() && !(get_index_back())); }
   virtual int get_card_without_filter(double &card) override;
+
 private: // member functions
   //called when index_back_ set
   int pick_out_query_range_exprs();
@@ -621,7 +621,6 @@ protected: // memeber variables
   ObRawExpr *trans_info_expr_;
 
   //for batch search recursive cte
-  ObLogSet *rcte_op_;
   ObRawExpr *identify_seq_expr_;
 
   // begin for global index lookup

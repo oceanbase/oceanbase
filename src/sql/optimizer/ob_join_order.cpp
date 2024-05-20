@@ -8118,6 +8118,7 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
     LOG_WARN("failed to add pushdown filters", K(ret));
   } else {
     log_plan->set_is_subplan_scan(true);
+    log_plan->set_nonrecursive_plan_for_fake_cte(get_plan()->get_nonrecursive_plan_for_fake_cte());
     if (parent_stmt->is_insert_stmt()) {
       log_plan->set_insert_stmt(static_cast<const ObInsertStmt*>(parent_stmt));
     }

@@ -252,6 +252,10 @@ public:
 
   int adjust_final_plan_info(ObLogicalOperator *&op);
 
+  int set_identify_seq_expr_for_recursive_union_all(ObLogicalOperator *op);
+
+  int set_identify_seq_expr_for_fake_cte(ObLogicalOperator *op, ObRawExpr *expr, bool &is_valid);
+
   int update_re_est_cost(ObLogicalOperator *op);
 
   int collect_table_location(ObLogicalOperator *op);
