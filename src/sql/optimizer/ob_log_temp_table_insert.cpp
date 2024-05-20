@@ -111,6 +111,7 @@ int ObLogTempTableInsert::do_re_est_cost(EstimateCostInfo &param, double &card, 
                                           child->get_width(),
                                           opt_ctx);
     cost += op_cost;
+    card = 0;
   }
   return ret;
 }
