@@ -3691,7 +3691,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
       LOG_WARN("iter table column failed", K(ret), K(orig_table_schema));
     } else {
       ret = OB_SUCCESS;
-      ddl_type = drop_lob_cols_cnt == lob_cols_cnt_in_table ? ObDDLType::DDL_COLUMN_REDEFINITION : ObDDLType::DDL_DROP_COLUMN;
+      alter_table_arg.alter_algorithm_ = drop_lob_cols_cnt == lob_cols_cnt_in_table ?
+        obrpc::ObAlterTableArg::AlterAlgorithm::INPLACE : alter_table_arg.alter_algorithm_; // to execute offline.
     }
   }
   return ret;
@@ -11100,6 +11101,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support to drop column instant under non-instant mode", K(ret), K(alter_table_arg));
       } else if (!is_oracle_mode) {
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support to drop column instant under mysql mode now", K(ret), K(alter_table_arg));
       }
     }
