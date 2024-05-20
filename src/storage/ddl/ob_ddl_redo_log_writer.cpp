@@ -1492,6 +1492,7 @@ int ObDDLRedoLogWriter::remote_write_ddl_commit_redo(const obrpc::ObRpcRemoteWri
 
 ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 {
+  ddl_redo_handle_.reset();
   if (nullptr != buffer_) {
     ob_free(buffer_);
     buffer_ = nullptr;
