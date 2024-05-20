@@ -2840,6 +2840,7 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
       }
     }
     if (OB_SUCC(ret) && is_dup) {
+      LOG_WARN("fafafa");
       del_ctdef.distinct_algo_ = T_HASH_DISTINCT;
     }
   }
