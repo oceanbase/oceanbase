@@ -2640,19 +2640,6 @@ int ObMemtable::multi_set_(
     }
   }
 
-  // 3. Roll back all rows that have been inserted if meet failure.
-  if (OB_FAIL(ret)) {
-    for (int64_t i = 0; i < mvcc_rows.count(); ++i) {
-      if (conflict_idx != i) {
-        ObMvccWriteResult &write_result = mvcc_rows[i].write_result_;
-        ObMvccRow* mvcc_row = mvcc_rows[i].mvcc_row_;
-        if (write_result.has_insert()) {
-          (void)mvcc_engine_.mvcc_undo(mvcc_row);
-        }
-      }
-    }
-  }
-
   if (OB_TRANSACTION_SET_VIOLATION == ret) {
     ObTxIsolationLevel iso = ctx.mvcc_acc_ctx_.tx_desc_->get_isolation_level();
     if (ObTxIsolationLevel::SERIAL == iso || ObTxIsolationLevel::RR == iso) {
