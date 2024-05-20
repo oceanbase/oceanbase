@@ -47,7 +47,9 @@ ObAllBalanceGroupBuilder::ObAllBalanceGroupBuilder() :
     schema_service_(NULL),
     schema_guard_(schema::ObSchemaMgrItem::MOD_PARTITION_BALANCE),
     tablet_to_ls_(),
-    tablet_data_size_()
+    tablet_data_size_(),
+    allocator_("AllBGBuilder"),
+    related_tablets_map_()
 {
 }
 
@@ -73,6 +75,12 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
     LOG_WARN("create map for tablet to LS fail", KR(ret), K(tenant_id));
   } else if (OB_FAIL(tablet_data_size_.create(MAP_BUCKET_NUM, lib::ObLabel("TabletSizeMap")))) {
     LOG_WARN("create map for tablet data size fail", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(related_tablets_map_.create(
+      MAP_BUCKET_NUM,
+      lib::ObLabel("RelatedTbltMap"),
+      ObModIds::OB_HASH_NODE,
+      tenant_id))) {
+    LOG_WARN("create map for related tablet map failed", KR(ret), K(tenant_id));
   } else {
     mod_ = mod;
     tenant_id_ = tenant_id;
@@ -80,6 +88,7 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
     sql_proxy_ = &sql_proxy;
     schema_service_ = &schema_service;
     schema_guard_.reset();
+    allocator_.set_tenant_id(tenant_id);
     inited_ = true;
   }
   return ret;
@@ -88,6 +97,12 @@ int ObAllBalanceGroupBuilder::init(const int64_t tenant_id,
 void ObAllBalanceGroupBuilder::destroy()
 {
   inited_ = false;
+  FOREACH(iter, related_tablets_map_) {
+    if (OB_NOT_NULL(iter->second)) {
+      iter->second->~ObIArray<ObTabletID>();
+    }
+  }
+  related_tablets_map_.destroy();
   tablet_data_size_.destroy();
   tablet_to_ls_.destroy();
   schema_guard_.reset();
@@ -96,6 +111,7 @@ void ObAllBalanceGroupBuilder::destroy()
   callback_ = NULL;
   tenant_id_ = OB_INVALID_TENANT_ID;
   mod_ = "";
+  allocator_.reset();
 }
 
 int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
@@ -115,8 +131,12 @@ int ObAllBalanceGroupBuilder::prepare(bool need_load_tablet_size)
   } else if (OB_FAIL(tablet_to_ls_.build(tenant_id_, *sql_proxy_))) {
     LOG_WARN("build tablet to LS info fail", KR(ret), K(tenant_id_));
   } else if (FALSE_IT(step_time = ObTimeUtility::current_time())) {
-  } else if (need_load_tablet_size && OB_FAIL(prepare_tablet_data_size_())) {
-    LOG_WARN("prepare tablet data size fail", KR(ret));
+  } else if (!need_load_tablet_size) {
+    // finish
+  } else if (OB_FAIL(prepare_related_tablets_map_())) {
+    LOG_WARN("prepare related tablets map failed", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(prepare_tablet_data_size_())) {
+    LOG_WARN("prepare tablet data size fail", KR(ret), K(tenant_id_));
   }
 
   int64_t finish_time = ObTimeUtility::current_time();
@@ -628,11 +648,7 @@ int ObAllBalanceGroupBuilder::add_new_part_(
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls_id;
-
-  // Tablet data size may not exist, as meta table may not be reported or tablet be dropped
-  // Ignore tablet size not exist error
-  const uint64_t *tablet_size_ptr = tablet_data_size_.get(tablet_id);
-  const uint64_t tablet_size = (tablet_size_ptr != nullptr ? *tablet_size_ptr : 0);
+  uint64_t tablet_size = 0;
 
   if (OB_ISNULL(callback_)) {
     ret = OB_NOT_INIT;
@@ -652,6 +668,10 @@ int ObAllBalanceGroupBuilder::add_new_part_(
         K(dest_ls_id), K(bg), K(table_id), K(part_object_id), K(tablet_id), K(part_group_uid));
   } else if (in_new_partition_group && FALSE_IT(dest_ls_id = src_ls_id)) {
     // use first partition's LS as all other partitions' LS in same partition group
+  } else if (OB_FAIL(get_data_size_with_related_tablets_(tablet_id, tablet_size))) {
+    LOG_WARN("get data size with related tablets failed", KR(ret), K(bg),
+        K(table_id), K(part_object_id), K(tablet_id), K(src_ls_id), K(dest_ls_id),
+        K(tablet_size), K(in_new_partition_group), K(part_group_uid));
   } else if (OB_FAIL(callback_->on_new_partition(
       bg,
       table_id,
@@ -709,6 +729,145 @@ int ObAllBalanceGroupBuilder::prepare_tablet_data_size_()
 
   int64_t finish_time = ObTimeUtility::current_time();
   ISTAT("prepare tablet data_size", KR(ret), K_(tenant_id), "cost", finish_time - start_time, "count", tablet_data_size_.size());
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::prepare_related_tablets_map_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<const ObSimpleTableSchemaV2 *> tenant_table_schemas;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(schema_guard_.get_table_schemas_in_tenant(tenant_id_, tenant_table_schemas))) {
+    LOG_WARN("get table schemas fail", KR(ret), K(tenant_id_));
+  } else {
+    uint64_t data_table_id = OB_INVALID_ID;
+    ARRAY_FOREACH(tenant_table_schemas, idx) {
+      const ObSimpleTableSchemaV2 *table_schema = tenant_table_schemas.at(idx);
+      const ObSimpleTableSchemaV2 *data_table_schema = NULL;
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret), K(tenant_id_), K(idx));
+      } else if (is_inner_table(table_schema->get_table_id())
+          || !is_related_table(table_schema->get_table_type(), table_schema->get_index_type())) {
+        // skip
+      } else if (FALSE_IT(data_table_id = table_schema->get_data_table_id())) {
+      } else if (OB_FAIL(schema_guard_.get_simple_table_schema(
+          tenant_id_,
+          data_table_id,
+          data_table_schema))) {
+        LOG_WARN("get simple table schema failed", KR(ret), K(tenant_id_), K(data_table_id));
+      } else if (OB_ISNULL(data_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data table schema can't be null", KR(ret),
+            K(tenant_id_), K(data_table_id), KP(data_table_schema));
+      } else if (OB_FAIL(add_to_related_tablets_map_(*data_table_schema, *table_schema))) {
+        LOG_WARN("build related tablets map failed",
+            KR(ret), KPC(data_table_schema), KPC(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::add_to_related_tablets_map_(
+    const ObSimpleTableSchemaV2 &primary_table_schema,
+    const ObSimpleTableSchemaV2 &related_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (!is_related_table(related_table_schema.get_table_type(), related_table_schema.get_index_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("not related table", KR(ret), K(primary_table_schema), K(related_table_schema));
+  } else if (OB_UNLIKELY(primary_table_schema.get_all_part_num() != related_table_schema.get_all_part_num())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("part_num of primary_table_schema and related_table_schema not match",
+        KR(ret), K(primary_table_schema), K(related_table_schema));
+  } else {
+    ObPartitionSchemaIter primary_iter(primary_table_schema, CHECK_PARTITION_MODE_NORMAL);
+    ObPartitionSchemaIter related_iter(related_table_schema, CHECK_PARTITION_MODE_NORMAL);
+    while (OB_SUCC(ret)) {
+      ObPartitionSchemaIter::Info primary_info;
+      ObPartitionSchemaIter::Info related_info;
+      ObIArray<ObTabletID> *tablet_array = NULL;
+      if (OB_FAIL(primary_iter.next_partition_info(primary_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter next partition partition info failed", KR(ret));
+        }
+      } else if (OB_FAIL(related_iter.next_partition_info(related_info))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("iter next partition info failed", KR(ret));
+        }
+      } else if (OB_FAIL(related_tablets_map_.get_refactored(primary_info.tablet_id_, tablet_array))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // create new tablet_array
+          void *ptr = allocator_.alloc(sizeof(ObArray<ObTabletID, ObIAllocator &>));
+          if (OB_ISNULL(ptr)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail alloc memory", KR(ret));
+          } else {
+            tablet_array = new (ptr)ObArray<ObTabletID, ObIAllocator &>(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_);
+            if (OB_FAIL(related_tablets_map_.set_refactored(primary_info.tablet_id_, tablet_array))) {
+              LOG_WARN("set refactored failed", KR(ret), K(primary_info));
+            }
+          }
+        } else {
+          LOG_WARN("get_refactored failed", KR(ret), K(primary_info));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(tablet_array)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet_array can not be null", KR(ret), K(primary_info), KP(tablet_array));
+      } else if (OB_FAIL(tablet_array->push_back(related_info.tablet_id_))) {
+        LOG_WARN("push back failed", KR(ret), K(primary_info), K(related_info));
+      }
+    }
+    if (OB_ITER_END == ret) {
+      ret = OB_SUCCESS;
+    }
+  }
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::get_data_size_with_related_tablets_(
+    const ObTabletID &tablet_id,
+    uint64_t &data_size)
+{
+  int ret = OB_SUCCESS;
+  data_size = 0;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet_id", KR(ret), K(tablet_id));
+  } else {
+    // tablet data size may not exist, as meta table may not be reported or tablet be dropped
+    const uint64_t *tablet_size_ptr = tablet_data_size_.get(tablet_id);
+    data_size = (tablet_size_ptr != NULL ? *tablet_size_ptr : 0);
+    // related tablets may not exist
+    ObIArray<ObTabletID> *related_tablets = NULL;
+    if (OB_FAIL(related_tablets_map_.get_refactored(tablet_id, related_tablets))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // ignore
+      } else {
+        LOG_WARN("get_refactored failed", KR(ret), K(tablet_id));
+      }
+    } else if (OB_ISNULL(related_tablets)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("related_tablets can not be null", KR(ret), K(tablet_id), KP(related_tablets));
+    } else {
+      ARRAY_FOREACH(*related_tablets, idx) {
+        const ObTabletID &related_tablet = related_tablets->at(idx);
+        const uint64_t *related_size_ptr = tablet_data_size_.get(related_tablet);
+        data_size += (related_size_ptr != NULL ? *related_size_ptr : 0);
+      }
+    }
+  }
   return ret;
 }
 
