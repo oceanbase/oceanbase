@@ -306,7 +306,7 @@ int ObMultipleMerge::project2output_exprs(ObDatumRow &unprojected_row, ObDatumRo
               nop_pos_.nops_, nop_pos_.count_))) {
     LOG_WARN("Fail to project row", K(unprojected_row), K(cur_row));
   } else {
-    LOG_DEBUG("Project row", K(unprojected_row), K(cur_row));
+    LOG_DEBUG("Project row", K(unprojected_row));
   }
   return ret;
 }
