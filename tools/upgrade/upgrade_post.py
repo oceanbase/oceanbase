@@ -842,6 +842,10 @@
 #    try:
 #      query_cur = actions.QueryCursor(cur)
 #      actions.check_server_version_by_cluster(cur)
+#      current_version = actions.fetch_observer_version(cur)
+#      check_major = False;
+#      if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+#          check_major = True;
 #
 #      if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:
 #        logging.info('================begin to run begin upgrade action===============')
@@ -869,7 +873,7 @@
 #
 #      if run_modules.MODULE_HEALTH_CHECK in my_module_set:
 #        logging.info('================begin to run health check action ===============')
-#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+#        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, check_major) # need_check_major_status = True
 #        logging.info('================succeed to run health check action ===============')
 #
 #    except Exception, e:
@@ -1359,10 +1363,11 @@
 #    actions.set_tenant_parameter(cur, '_enable_adaptive_compaction', 'False', timeout)
 #    # wait scheduler in storage to notice adaptive_compaction is switched to false
 #    time.sleep(60 * 2)
-#    query_cur = actions.QueryCursor(cur)
-#    wait_major_timeout = 600
-#    upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
-#    actions.do_suspend_merge(cur, timeout)
+#    if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+#        query_cur = actions.QueryCursor(cur)
+#        wait_major_timeout = 600
+#        upgrade_health_checker.check_major_merge(query_cur, wait_major_timeout)
+#        actions.do_suspend_merge(cur, timeout)
 #  # When upgrading from a version prior to 4.2 to version 4.2, the bloom_filter should be disabled.
 #  # The param _bloom_filter_enabled is no longer in use as of version 4.2, there is no need to enable it again.
 #  if actions.get_version(current_version) < actions.get_version('4.2.0.0')\

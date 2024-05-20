@@ -69,6 +69,10 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
     try:
       query_cur = actions.QueryCursor(cur)
       actions.check_server_version_by_cluster(cur)
+      current_version = actions.fetch_observer_version(cur)
+      check_major = False;
+      if actions.get_version(current_version) < actions.get_version('4.2.0.0'):
+          check_major = True;
 
       if run_modules.MODULE_BEGIN_UPGRADE in my_module_set:
         logging.info('================begin to run begin upgrade action===============')
@@ -96,7 +100,7 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
 
       if run_modules.MODULE_HEALTH_CHECK in my_module_set:
         logging.info('================begin to run health check action ===============')
-        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, check_major) # need_check_major_status = True
         logging.info('================succeed to run health check action ===============')
 
     except Exception, e:
