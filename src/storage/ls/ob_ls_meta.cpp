@@ -45,7 +45,8 @@ WriteSlog ObLSMeta::write_slog_ = [](ObLSMeta &ls_meta) {
 };
 
 ObLSMeta::ObLSMeta()
-  : lock_(common::ObLatchIds::LS_META_LOCK),
+  : rw_lock_(common::ObLatchIds::LS_META_LOCK),
+    update_lock_(common::ObLatchIds::LS_META_LOCK),
     tenant_id_(OB_INVALID_TENANT_ID),
     ls_id_(),
     unused_replica_type_(REPLICA_TYPE_FULL),
@@ -68,7 +69,8 @@ ObLSMeta::ObLSMeta()
 }
 
 ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
-  : lock_(),
+  : rw_lock_(),
+    update_lock_(),
     tenant_id_(ls_meta.tenant_id_),
     ls_id_(ls_meta.ls_id_),
     unused_replica_type_(ls_meta.unused_replica_type_),
@@ -93,7 +95,8 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
 
 void ObLSMeta::set_ls_create_status(const ObInnerLSStatus &status)
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
+  ObReentrantWLockGuard guard(rw_lock_);
   ls_create_status_ = status;
 }
 
@@ -104,9 +107,9 @@ ObInnerLSStatus ObLSMeta::get_ls_create_status() const
 
 ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
 {
-  ObSpinLockTimeGuard guard(other.lock_);
-  ObSpinLockTimeGuard guard_myself(lock_);
-  int ret = OB_SUCCESS;
+  ObReentrantWLockGuard update_guard_myself(update_lock_);
+  ObReentrantRLockGuard guard(other.rw_lock_);
+  ObReentrantWLockGuard guard_myself(rw_lock_);
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
@@ -132,7 +135,8 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
 
 void ObLSMeta::reset()
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
+  ObReentrantWLockGuard guard(rw_lock_);
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_id_.reset();
   unused_replica_type_ = REPLICA_TYPE_FULL;
@@ -153,14 +157,14 @@ void ObLSMeta::reset()
 
 LSN &ObLSMeta::get_clog_base_lsn()
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   return clog_base_lsn_;
 }
 
 SCN ObLSMeta::get_clog_checkpoint_scn() const
 {
-  ObSpinLockTimeGuard guard(lock_);
-	return clog_checkpoint_scn_;
+  ObReentrantRLockGuard guard(rw_lock_);
+  return clog_checkpoint_scn_;
 }
 
 int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
@@ -168,7 +172,7 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
                                   const bool write_slog)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else {
@@ -182,6 +186,7 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
       }
     }
 
+    ObReentrantWLockGuard guard(rw_lock_);
     clog_base_lsn_ = clog_checkpoint_lsn;
     clog_checkpoint_scn_ = clog_checkpoint_scn;
   }
@@ -191,12 +196,12 @@ int ObLSMeta::set_clog_checkpoint(const LSN &clog_checkpoint_lsn,
 
 SCN ObLSMeta::get_tablet_change_checkpoint_scn() const
 {
-	return tablet_change_checkpoint_scn_;
+  return tablet_change_checkpoint_scn_;
 }
 
 int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoint_scn)
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
@@ -211,6 +216,7 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoi
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       LOG_INFO("update tablet change checkpoint scn", K(tenant_id_), K(ls_id_),
           "old_scn", tablet_change_checkpoint_scn_, "new_scn", tablet_change_checkpoint_scn);
       tablet_change_checkpoint_scn_ = tablet_change_checkpoint_scn;
@@ -222,13 +228,13 @@ int ObLSMeta::set_tablet_change_checkpoint_scn(const SCN &tablet_change_checkpoi
 
 share::SCN ObLSMeta::get_transfer_scn() const
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   return transfer_scn_;
 }
 
 int ObLSMeta::inc_update_transfer_scn(const share::SCN &transfer_scn)
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
@@ -241,6 +247,7 @@ int ObLSMeta::inc_update_transfer_scn(const share::SCN &transfer_scn)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret), K(*this));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       transfer_scn_ = transfer_scn;
     }
   }
@@ -259,7 +266,7 @@ bool ObLSMeta::is_valid() const
 
 int64_t ObLSMeta::get_rebuild_seq() const
 {
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   return rebuild_seq_;
 }
 
@@ -268,7 +275,7 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
 {
   int ret = OB_SUCCESS;
   bool can_change = false;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!ObMigrationStatusHelper::is_valid(migration_status)) {
@@ -291,10 +298,11 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
     if (write_slog && OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("migration_status write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       ObMigrationStatus original_status = migration_status_;
       migration_status_ = migration_status;
       FLOG_INFO("succeed to set ls migration status", K(ls_id_), "original status",
-          original_status, "current status", migration_status);
+                original_status, "current status", migration_status);
     }
   }
   return ret;
@@ -303,7 +311,7 @@ int ObLSMeta::set_migration_status(const ObMigrationStatus &migration_status,
 int ObLSMeta::get_migration_status(ObMigrationStatus &migration_status) const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get migration status", K(ret), K(*this));
@@ -316,7 +324,7 @@ int ObLSMeta::get_migration_status(ObMigrationStatus &migration_status) const
 int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!ObGCHandler::is_valid_ls_gc_state(gc_state)
@@ -331,6 +339,7 @@ int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("gc_state write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       gc_state_ = gc_state;
       offline_scn_ = scn;
     }
@@ -341,7 +350,7 @@ int ObLSMeta::set_gc_state(const logservice::LSGCState &gc_state, const SCN &scn
 int ObLSMeta::get_gc_state(logservice::LSGCState &gc_state)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get_gc_state", K(ret), K(*this));
@@ -354,7 +363,7 @@ int ObLSMeta::get_gc_state(logservice::LSGCState &gc_state)
 int ObLSMeta::get_offline_scn(SCN &offline_scn)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get_offline_scn", K(ret), K(*this));
@@ -367,7 +376,7 @@ int ObLSMeta::get_offline_scn(SCN &offline_scn)
 int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!restore_status.is_valid()) {
@@ -381,10 +390,11 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("restore_status write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       ObLSRestoreStatus original_status = restore_status_;
       restore_status_ = restore_status;
       FLOG_INFO("succeed to set ls restore status", K(ls_id_), "original status",
-          original_status, "current status", restore_status);
+                original_status, "current status", restore_status);
     }
   }
   return ret;
@@ -393,7 +403,7 @@ int ObLSMeta::set_restore_status(const ObLSRestoreStatus &restore_status)
 int ObLSMeta::get_restore_status(ObLSRestoreStatus &restore_status) const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get restore status", K(ret), K(*this));
@@ -406,7 +416,7 @@ int ObLSMeta::get_restore_status(ObLSRestoreStatus &restore_status) const
 int ObLSMeta::update_ls_replayable_point(const SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!replayable_point.is_valid()
@@ -421,6 +431,7 @@ int ObLSMeta::update_ls_replayable_point(const SCN &replayable_point)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("replayable_point_ write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       replayable_point_ = replayable_point;
     }
   }
@@ -430,7 +441,7 @@ int ObLSMeta::update_ls_replayable_point(const SCN &replayable_point)
 int ObLSMeta::get_ls_replayable_point(SCN &replayable_point)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get_gc_state", K(ret), K(*this));
@@ -448,7 +459,7 @@ int ObLSMeta::update_ls_meta(
   int ret = OB_SUCCESS;
   ObLSRestoreStatus ls_restore_status;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!src_ls_meta.is_valid()) {
@@ -470,7 +481,7 @@ int ObLSMeta::update_ls_meta(
     }
     tmp.gc_state_ = src_ls_meta.gc_state_;
     tmp.offline_scn_ = src_ls_meta.offline_scn_;
-    guard.click();
+    update_guard.click();
     tmp.all_id_meta_.update_all_id_meta(src_ls_meta.all_id_meta_);
     tmp.transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
     if (tmp.clog_checkpoint_scn_ < clog_checkpoint_scn_) {
@@ -480,7 +491,8 @@ int ObLSMeta::update_ls_meta(
     } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
-      guard.click();
+      update_guard.click();
+      ObReentrantWLockGuard guard(rw_lock_);
       clog_base_lsn_ = src_ls_meta.clog_base_lsn_;
       clog_checkpoint_scn_ = src_ls_meta.clog_checkpoint_scn_;
       replayable_point_ = src_ls_meta.replayable_point_;
@@ -506,14 +518,16 @@ int ObLSMeta::set_ls_rebuild()
   const ObMigrationStatus change_status = ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD;
   bool can_change = false;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (change_status == migration_status_) {
     //do nothing
   } else {
     ObLSMeta tmp(*this);
-    if (OB_FAIL(ObMigrationStatusHelper::check_can_change_status(tmp.migration_status_, change_status, can_change))) {
+    if (OB_FAIL(ObMigrationStatusHelper::check_can_change_status(tmp.migration_status_,
+                                                                 change_status,
+                                                                 can_change))) {
       LOG_WARN("failed to check can change status", K(ret), K(migration_status_), K(change_status));
     } else if (!can_change) {
       ret = OB_OP_NOT_ALLOW;
@@ -524,6 +538,7 @@ int ObLSMeta::set_ls_rebuild()
       if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("clog_checkpoint write slog failed", K(ret));
       } else {
+        ObReentrantWLockGuard guard(rw_lock_);
         migration_status_ = change_status;
         rebuild_seq_ = tmp.rebuild_seq_;
         FLOG_INFO("succeed to set ls rebuild", "ls_id", ls_id_, KPC(this));
@@ -536,7 +551,7 @@ int ObLSMeta::set_ls_rebuild()
 int ObLSMeta::check_valid_for_backup() const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid", K(ret), KPC(this));
@@ -553,7 +568,7 @@ int ObLSMeta::check_valid_for_backup() const
 int ObLSMeta::get_saved_info(ObLSSavedInfo &saved_info)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream meta is not valid, cannot get_offline_ts_ns", K(ret), K(*this));
@@ -566,7 +581,7 @@ int ObLSMeta::get_saved_info(ObLSSavedInfo &saved_info)
 int ObLSMeta::set_saved_info(const ObLSSavedInfo &saved_info)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!saved_info.is_valid()) {
@@ -578,6 +593,7 @@ int ObLSMeta::set_saved_info(const ObLSSavedInfo &saved_info)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       saved_info_ = saved_info;
     }
   }
@@ -589,7 +605,7 @@ int ObLSMeta::build_saved_info()
   int ret = OB_SUCCESS;
   ObLSSavedInfo saved_info;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!saved_info_.is_empty()) {
@@ -604,6 +620,7 @@ int ObLSMeta::build_saved_info()
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       saved_info_ = saved_info;
     }
   }
@@ -615,7 +632,7 @@ int ObLSMeta::clear_saved_info()
   int ret = OB_SUCCESS;
   ObLSSavedInfo saved_info;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else {
@@ -625,6 +642,7 @@ int ObLSMeta::clear_saved_info()
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("clog_checkpoint write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       saved_info_ = saved_info;
     }
   }
@@ -672,18 +690,22 @@ int ObLSMeta::update_id_meta(const int64_t service_type,
 {
   int ret = OB_SUCCESS;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else {
     // TODO: write slog may failed, but the content is updated.
-    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
-    guard.click();
+    ObLSMeta tmp(*this);
+    tmp.all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
+    update_guard.click();
     if (write_slog) {
-      if (OB_FAIL(write_slog_(*this))) {
+      if (OB_FAIL(write_slog_(tmp))) {
         LOG_WARN("id service flush write slog failed", K(ret));
       }
     }
+    ObReentrantWLockGuard guard(rw_lock_);
+    update_guard.click();
+    all_id_meta_.update_id_meta(service_type, limited_id, latest_scn);
   }
   LOG_INFO("update id meta", K(ret), K(service_type), K(limited_id), K(latest_scn),
            K(*this));
@@ -695,7 +717,7 @@ int ObLSMeta::get_all_id_meta(ObAllIDMeta &all_id_meta) const
 {
   int ret = OB_SUCCESS;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   all_id_meta.update_all_id_meta(all_id_meta_);
   return ret;
 }
@@ -722,7 +744,7 @@ int ObLSMeta::get_migration_and_restore_status(
   migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   ls_restore_status = ObLSRestoreStatus::LS_RESTORE_STATUS_MAX;
 
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls meta is not valid, cannot get", K(ret), K(*this));
@@ -736,7 +758,7 @@ int ObLSMeta::get_migration_and_restore_status(
 int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!rebuild_info.is_valid()) {
@@ -756,6 +778,7 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
     if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       rebuild_info_ = rebuild_info;
       FLOG_INFO("succeed to set rebuild info", K(ls_id_), K(rebuild_info));
     }
@@ -766,7 +789,7 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
 int ObLSMeta::get_rebuild_info(ObLSRebuildInfo &rebuild_info) const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
@@ -788,7 +811,7 @@ int ObLSMeta::set_transfer_meta_info(
   //TX_END has two stages : COMMIT or ABORT, using transfer out scn to as replay scn to set transfer meta info.
   int ret = OB_SUCCESS;
   bool need_update = true;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(update_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!replay_scn.is_valid() || !src_ls.is_valid() || !src_scn.is_valid()
@@ -825,6 +848,7 @@ int ObLSMeta::set_transfer_meta_info(
     } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       transfer_meta_info_ = tmp.transfer_meta_info_;
       transfer_scn_ = tmp.transfer_scn_;
     }
@@ -835,7 +859,7 @@ int ObLSMeta::set_transfer_meta_info(
 int ObLSMeta::get_transfer_meta_info(ObLSTransferMetaInfo &transfer_meta_info) const
 {
   int ret = OB_SUCCESS;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantRLockGuard guard(rw_lock_);
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls meta is not valid, cannot get rebuild info", K(ret), K(*this));
@@ -850,7 +874,7 @@ int ObLSMeta::cleanup_transfer_meta_info(
 {
   int ret = OB_SUCCESS;
   bool need_update = true;
-  ObSpinLockTimeGuard guard(lock_);
+  ObReentrantWLockGuard update_guard(rw_lock_);
   if (OB_FAIL(check_can_update_())) {
     LOG_WARN("ls meta cannot update", K(ret), K(*this));
   } else if (!replay_scn.is_valid()) {
@@ -880,6 +904,7 @@ int ObLSMeta::cleanup_transfer_meta_info(
     } else if (OB_FAIL(write_slog_(tmp))) {
       LOG_WARN("rebuild_info write slog failed", K(ret));
     } else {
+      ObReentrantWLockGuard guard(rw_lock_);
       transfer_meta_info_ = tmp.transfer_meta_info_;
       transfer_scn_ = tmp.transfer_scn_;
     }
@@ -887,13 +912,78 @@ int ObLSMeta::cleanup_transfer_meta_info(
   return ret;
 }
 
-
-ObLSMeta::ObSpinLockTimeGuard::ObSpinLockTimeGuard(common::ObSpinLock &lock,
-                                                   const int64_t warn_threshold)
-  : time_guard_("ls_meta", warn_threshold),
-    lock_guard_(lock)
+ObLSMeta::ObReentrantWLockGuard::ObReentrantWLockGuard(ObLatch &lock,
+                                                       const bool try_lock,
+                                                       const int64_t warn_threshold)
+  : first_locked_(false),
+    time_guard_("ls_meta", warn_threshold),
+    lock_(lock),
+    ret_(OB_SUCCESS)
 {
+  if (lock_.is_wrlocked_by()) {
+    // I have locked with W, do nothing
+  } else if (try_lock) {
+    if (OB_UNLIKELY(OB_SUCCESS !=
+                    (ret_ = lock_.try_wrlock(ObLatchIds::LS_META_LOCK)))) {
+    } else {
+      first_locked_ = true;
+    }
+  } else {
+    if (OB_UNLIKELY(OB_SUCCESS !=
+                    (ret_ = lock_.wrlock(ObLatchIds::LS_META_LOCK)))) {
+      LOG_ERROR_RET(ret_, "Fail to lock");
+    } else {
+      first_locked_ = true;
+    }
+  }
+
   time_guard_.click("after lock");
+}
+
+ObLSMeta::ObReentrantWLockGuard::~ObReentrantWLockGuard()
+{
+  if (OB_LIKELY(OB_SUCCESS == ret_) && first_locked_) {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
+      LOG_ERROR_RET(ret_, "Fail to unlock");
+    }
+  }
+}
+
+ObLSMeta::ObReentrantRLockGuard::ObReentrantRLockGuard(ObLatch &lock,
+                                                       const bool try_lock,
+                                                       const int64_t warn_threshold)
+  : first_locked_(false),
+    time_guard_("ls_meta", warn_threshold),
+    lock_(lock),
+    ret_(OB_SUCCESS)
+{
+  if (lock_.is_wrlocked_by()) {
+    // I have locked with W, do nothing
+  } else if (try_lock) {
+    if (OB_UNLIKELY(OB_SUCCESS !=
+                    (ret_ = lock_.try_rdlock(ObLatchIds::LS_META_LOCK)))) {
+    } else {
+      first_locked_ = true;
+    }
+  } else {
+    if (OB_UNLIKELY(OB_SUCCESS !=
+                    (ret_ = lock_.rdlock(ObLatchIds::LS_META_LOCK)))) {
+      LOG_ERROR_RET(ret_, "Fail to lock");
+    } else {
+      first_locked_ = true;
+    }
+  }
+
+  time_guard_.click("after lock");
+}
+
+ObLSMeta::ObReentrantRLockGuard::~ObReentrantRLockGuard()
+{
+  if (OB_LIKELY(OB_SUCCESS == ret_) && first_locked_) {
+    if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.unlock()))) {
+      LOG_ERROR_RET(ret_, "Fail to unlock");
+    }
+  }
 }
 
 // add field should also consider ObLSMeta::update_ls_meta function
