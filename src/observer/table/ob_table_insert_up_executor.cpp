@@ -437,7 +437,6 @@ int ObTableApiInsertUpExecutor::do_update(const ObConflictValue &constraint_valu
                                           insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_))) {
         LOG_WARN("fail to load row to new row exprs", K(ret), KPC(constraint_value.current_datum_row_));
       } else {
-        clear_evaluated_flag();
         for (int i = 0; i < insert_up_rtdefs_.count() && OB_SUCC(ret); i++) {
           const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdefs().at(i)->upd_ctdef_;
           ObTableUpdRtDef &upd_rtdef = insert_up_rtdefs_.at(i).upd_rtdef_;

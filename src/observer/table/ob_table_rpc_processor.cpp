@@ -486,7 +486,10 @@ int ObTableApiProcessorBase::start_trans_(bool is_readonly,
     tx_param.isolation_ = transaction::ObTxIsolationLevel::RC;
     tx_param.cluster_id_ = ObServerConfig::get_instance().cluster_id;
     tx_param.timeout_us_ = std::max(0l, timeout_ts - ObClockGenerator::getClock());
-    if (true == trans_state_ptr->is_start_trans_executed()) {
+    if (tx_param.timeout_us_ <= 0l) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("timeout_us is less than 0, it has been timeout", K(ret), K(tx_param.timeout_us_), K(timeout_ts));
+    } else if (true == trans_state_ptr->is_start_trans_executed()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("start_trans is executed", K(ret));
     } else {
