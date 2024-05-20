@@ -14,7 +14,7 @@
 
 #define private public
 #define protected public
-
+#include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/memtable/mvcc/ob_mvcc_trans_ctx.h"
 #include "storage/memtable/ob_memtable_context.h"
@@ -36,15 +36,21 @@ public:
                    bool need_fill_redo = true,
                    share::SCN scn = share::SCN::max_scn(),
                    transaction::ObTxSEQ seq_no = transaction::ObTxSEQ::MAX_VAL())
-    : ObITransCallback(need_fill_redo, need_submit_log),
-      mt_(mt), seq_no_(seq_no) { scn_ = scn; }
+    : ObITransCallback(),
+      mt_(mt),
+      seq_no_(seq_no)
+  {
+    scn_ = scn;
+    need_submit_log_ = need_submit_log;
+    need_fill_redo_ = need_fill_redo;
+  }
 
   virtual ObIMemtable* get_memtable() const override { return mt_; }
   virtual transaction::ObTxSEQ get_seq_no() const override { return seq_no_; }
   virtual int checkpoint_callback() override;
   virtual int rollback_callback() override;
   virtual int calc_checksum(const share::SCN checksum_scn,
-                            ObBatchChecksum *checksumer) override;
+                            TxChecksum *checksumer) override;
 
   ObMemtable *mt_;
   transaction::ObTxSEQ seq_no_;
@@ -99,12 +105,12 @@ class TestTxCallbackList : public ::testing::Test
 {
 public:
   TestTxCallbackList()
-    : seq_counter_(),
+    : seq_counter_(100, 0),
       mt_counter_(0),
       mt_ctx_(),
       cb_allocator_(),
       mgr_(mt_ctx_, cb_allocator_, mt_ctx_.mem_ctx_obj_pool_),
-      callback_list_(mgr_) {}
+      callback_list_(mgr_, 101) {}
   virtual void SetUp() override
   {
     mt_counter_ = 0;
@@ -121,6 +127,12 @@ public:
   {
     mt_counter_ = 0;
     fast_commit_reserve_cnt_ = 0;
+    callback_list_.appended_ = 0;
+    callback_list_.removed_ = 0;
+    callback_list_.length_ = 0;
+    callback_list_.synced_ = 0;
+    callback_list_.logged_ = 0;
+    callback_list_.unlog_removed_ = 0;
     callback_list_.reset();
     mgr_.reset();
     TRANS_LOG(INFO, "teardown success");
@@ -162,6 +174,9 @@ public:
     EXPECT_EQ(OB_SUCCESS, callback_list_.append_callback(cb, false/*for_replay*/));
     cb->need_submit_log_ = need_submit_log;
     cb->need_fill_redo_ = need_fill_redo;
+    if (!need_submit_log && !need_fill_redo) {
+      callback_list_.sync_scn_ = scn;
+    }
     return cb;
   }
 
@@ -182,7 +197,7 @@ public:
     other.reset();
     for (int64_t i = 1; i <= no; i++)
     {
-      other.add_bit(i);
+      other.add_bit(i + 100 /*seq's base is 100*/);
     }
 
     return res.equal(other);
@@ -206,6 +221,8 @@ int64_t TestTxCallbackList::checkpoint_cnt_;
 int64_t TestTxCallbackList::rollback_cnt_;
 ObMockBitSet TestTxCallbackList::checksum_;
 
+static bool has_remove = false;
+
 int ObMockTxCallback::checkpoint_callback()
 {
   TestTxCallbackList::checkpoint_cnt_++;
@@ -219,7 +236,7 @@ int ObMockTxCallback::rollback_callback()
 }
 
 int ObMockTxCallback::calc_checksum(const share::SCN checksum_scn,
-                                    ObBatchChecksum *)
+                                    TxChecksum *)
 {
   if (checksum_scn <= scn_) {
     TestTxCallbackList::checksum_.add_bit(seq_no_.get_seq());
@@ -423,30 +440,31 @@ TEST_F(TestTxCallbackList, remove_callback_by_fast_commit)
                              false, /*need_submit_log*/
                              false,  /*need_fill_redo*/
                              scn_100 /*scn*/);
-
+  int sync_cnt = 9;
+  callback_list_.sync_log_succ(scn_100, sync_cnt);
   EXPECT_EQ(9, callback_list_.get_length());
 
   fast_commit_reserve_cnt_ = 16;
-  bool has_remove = false;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
+  has_remove = false;
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(8, callback_list_.get_length());
   EXPECT_EQ(1, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 14;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(6, callback_list_.get_length());
   EXPECT_EQ(3, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(true, has_remove);
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(4, callback_list_.get_length());
   EXPECT_EQ(5, mgr_.get_callback_remove_for_fast_commit_count());
   EXPECT_EQ(false, has_remove);
@@ -504,24 +522,75 @@ TEST_F(TestTxCallbackList, remove_callback_by_rollback_to)
                              true  /*need_fill_redo*/);
 
   EXPECT_EQ(9, callback_list_.get_length());
+  auto from = get_seq_no() + 1;
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint3));
+  from.set_branch(savepoint3.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint3, from, share::SCN::invalid_scn()));
   EXPECT_EQ(8, callback_list_.get_length());
   EXPECT_EQ(1, mgr_.get_callback_remove_for_rollback_to_count());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint2));
+  from.set_branch(savepoint2.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint2, from, share::SCN::invalid_scn()));
   EXPECT_EQ(7, callback_list_.get_length());
   EXPECT_EQ(2, mgr_.get_callback_remove_for_rollback_to_count());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint1));
+  from.set_branch(savepoint1.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint1, from, share::SCN::invalid_scn()));
   EXPECT_EQ(3, callback_list_.get_length());
   EXPECT_EQ(6, mgr_.get_callback_remove_for_rollback_to_count());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint0));
+  from.set_branch(savepoint0.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint0, from, share::SCN::invalid_scn()));
   EXPECT_EQ(0, callback_list_.get_length());
   EXPECT_EQ(9, mgr_.get_callback_remove_for_rollback_to_count());
 
   EXPECT_EQ(9, rollback_cnt_);
+}
+
+TEST_F(TestTxCallbackList, remove_callback_by_branch_rollback_to)
+{
+  ObMemtable *memtable1 = create_memtable();
+  share::SCN scn;
+  scn.convert_for_logservice(1);
+#define SP(branch, i) auto sp_##i = get_seq_no(); sp_##i.set_branch(branch);
+#define APPEND_CB(branch, i)                                            \
+  seq_counter_.set_branch(branch);                                      \
+  auto cb_##i = create_and_append_callback(memtable1,                   \
+                                           false, /*need_submit_log*/   \
+                                           false, /*need_fill_redo*/    \
+                                           share::SCN::plus(scn, i)/*scn*/);
+  SP(0, 0);
+  APPEND_CB(1,1);
+  SP(1, 1);
+  APPEND_CB(2,2);
+  SP(2, 2);
+  APPEND_CB(0,3);
+  APPEND_CB(1,4);
+  APPEND_CB(1,5);
+  APPEND_CB(2,6);
+  seq_counter_.set_branch(0);
+#undef APPEND_CB
+#undef SP
+#define RB_TO(i) {                                                      \
+    auto from = (seq_counter_ + 1);                                     \
+    from.set_branch(sp_##i.get_branch());                               \
+    EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(sp_##i, from, share::SCN::invalid_scn())); \
+  }
+  EXPECT_EQ(6, callback_list_.get_length());
+
+  RB_TO(2); // rollback branch 2
+  EXPECT_EQ(5, callback_list_.get_length());
+  EXPECT_EQ(1, mgr_.get_callback_remove_for_rollback_to_count());
+
+  RB_TO(1); // rollback branch 1
+  EXPECT_EQ(3, callback_list_.get_length());
+  EXPECT_EQ(3, mgr_.get_callback_remove_for_rollback_to_count());
+
+  RB_TO(0); // rollback to head
+  EXPECT_EQ(0, callback_list_.get_length());
+  EXPECT_EQ(6, mgr_.get_callback_remove_for_rollback_to_count());
+
+  EXPECT_EQ(6, rollback_cnt_);
 }
 
 TEST_F(TestTxCallbackList, remove_callback_by_clean_unlog_callbacks)
@@ -631,7 +700,7 @@ TEST_F(TestTxCallbackList, remove_callback_by_replay_fail)
 
   EXPECT_EQ(9, callback_list_.get_length());
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.replay_fail(scn_4 /*log_timestamp*/));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.replay_fail(scn_4 /*log_timestamp*/, true));
   EXPECT_EQ(6, callback_list_.get_length());
 
   EXPECT_EQ(3, rollback_cnt_);
@@ -883,29 +952,28 @@ TEST_F(TestTxCallbackList, checksum_fast_commit_and_tx_end)
   EXPECT_EQ(9, callback_list_.get_length());
 
   fast_commit_reserve_cnt_ = 16;
-  bool has_remove = false;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
-  EXPECT_EQ(true, is_checksum_equal(1, checksum_));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(scn_2, callback_list_.checksum_scn_);
+  EXPECT_EQ(true, is_checksum_equal(1, checksum_));
 
   fast_commit_reserve_cnt_ = 14;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
-  EXPECT_EQ(true, is_checksum_equal(3, checksum_));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(scn_3, callback_list_.checksum_scn_);
+  EXPECT_EQ(true, is_checksum_equal(3, checksum_));
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
-  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
+  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
 
   fast_commit_reserve_cnt_ = 1;
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
-  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
+  EXPECT_EQ(true, is_checksum_equal(5, checksum_));
 
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_calc_checksum_all());
-  EXPECT_EQ(true, is_checksum_equal(9, checksum_));
   EXPECT_EQ(share::SCN::max_scn(), callback_list_.checksum_scn_);
+  EXPECT_EQ(true, is_checksum_equal(9, checksum_));
 }
 
 TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
@@ -961,20 +1029,25 @@ TEST_F(TestTxCallbackList, checksum_rollback_to_and_tx_end)
                              true  /*need_fill_redo*/);
 
   EXPECT_EQ(9, callback_list_.get_length());
+  auto from = get_seq_no() + 1;
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint3));
+  from.set_branch(savepoint3.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint3, from, share::SCN::invalid_scn()));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint2));
+  from.set_branch(savepoint2.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint2, from, share::SCN::invalid_scn()));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint1));
+  from.set_branch(savepoint1.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint1, from, share::SCN::invalid_scn()));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
-  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint0));
+  from.set_branch(savepoint0.get_branch());
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_rollback_to(savepoint0, from, share::SCN::invalid_scn()));
   EXPECT_EQ(true, is_checksum_equal(5, checksum_));
   EXPECT_EQ(scn_4, callback_list_.checksum_scn_);
 
@@ -1024,6 +1097,8 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         enable = true;
         need_submit_head = it;
         my_calculate.add_bit(it->get_seq_no().get_seq());
+        int64_t c = 1;
+        callback_list_.sync_log_succ(it->scn_, c);
       }
 
       if (!enable) {
@@ -1071,10 +1146,10 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         enable = true;
       }
 
-      bool has_remove = false;
+      has_remove = false;
       if (enable) {
         EXPECT_EQ(OB_SUCCESS,
-                  callback_list_.remove_callbacks_for_fast_commit(nullptr, has_remove));
+                  callback_list_.remove_callbacks_for_fast_commit());
         EXPECT_EQ(true, has_remove);
       }
 
@@ -1091,12 +1166,17 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
         auto seq = from + ObRandom::rand(1, range_cnt - 1);
         enable = true;
         if (enable) {
+          bool reset_need_submit_head = false;
           if (need_submit_head->get_seq_no() > seq) {
+            reset_need_submit_head = true;
+          }
+          auto from0 = get_seq_no() + 1;
+          EXPECT_EQ(OB_SUCCESS,
+                    callback_list_.remove_callbacks_for_rollback_to(seq, from0, share::SCN::invalid_scn()));
+          EXPECT_EQ(false, callback_list_.empty());
+          if (reset_need_submit_head) {
             need_submit_head = callback_list_.head_.prev_;
           }
-          EXPECT_EQ(OB_SUCCESS,
-                    callback_list_.remove_callbacks_for_rollback_to(seq));
-          EXPECT_EQ(false, callback_list_.empty());
         }
       }
 
@@ -1132,14 +1212,16 @@ TEST_F(TestTxCallbackList, checksum_all_and_tx_end_test) {
        it = it->next_) {
     EXPECT_EQ(it->need_submit_log_, true);
     EXPECT_EQ(it->need_fill_redo_, true);
-    my_calculate.add_bit(it->get_seq_no().get_seq());
+    // set scn because tx_commit will do check
+    it->scn_.convert_for_logservice(10000);
   }
-
+  // calc checksum of remains by fast_commit
+  fast_commit_reserve_cnt_ = 0;
+  EXPECT_EQ(OB_SUCCESS, callback_list_.remove_callbacks_for_fast_commit());
   EXPECT_EQ(OB_SUCCESS, callback_list_.tx_commit());
   EXPECT_EQ(true, my_calculate.equal(checksum_));
 
 }
-
 } // namespace unittest
 
 namespace memtable
@@ -1158,27 +1240,23 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   }
 }
 
-int ObTxCallbackList::remove_callbacks_for_fast_commit(const ObITransCallback *callback,
-                                                       bool &has_remove)
+int ObTxCallbackList::remove_callbacks_for_fast_commit(const share::SCN stop_scn)
 {
   int ret = OB_SUCCESS;
-  has_remove = false;
-  ObByteLockGuard guard(latch_);
-
+  LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
   const int64_t fast_commit_callback_count = unittest::TestTxCallbackList::fast_commit_reserve_cnt_;
   const int64_t recommand_reserve_count = (fast_commit_callback_count + 1) / 2;
   const int64_t need_remove_count = length_ - recommand_reserve_count;
-
-  ObRemoveCallbacksForFastCommitFunctor functor(callback, need_remove_count);
+  ObRemoveCallbacksForFastCommitFunctor functor(need_remove_count, sync_scn_);
   functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
-  if (OB_FAIL(callback_(functor))) {
+  if (OB_FAIL(callback_(functor, guard.state_))) {
     TRANS_LOG(ERROR, "remove callbacks for fast commit wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_fast_commit_callback_remove_cnt(functor.get_remove_cnt());
     ensure_checksum_(functor.get_checksum_last_scn());
-    has_remove = share::SCN::min_scn() != functor.get_checksum_last_scn();
-    if (has_remove) {
+    unittest::has_remove = share::SCN::min_scn() != functor.get_checksum_last_scn();
+    if (unittest::has_remove) {
       TRANS_LOG(INFO, "remove callbacks for fast commit", K(functor), K(*this));
     }
   }
@@ -1191,14 +1269,15 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
   const share::SCN)
 {
   int ret = OB_SUCCESS;
-  ObByteLockGuard guard(latch_);
+  LockGuard guard(*this, LOCK_MODE::LOCK_ITERATE);
 
-  ObRemoveSyncCallbacksWCondFunctor functor(
-    // condition for remove
-    [memtable_set](ObITransCallback *callback) -> bool {
+  struct Functor : public ObRemoveSyncCallbacksWCondFunctor {
+    Functor(const bool need_remove_data = true, const bool is_reverse = false)
+      : ObRemoveSyncCallbacksWCondFunctor(need_remove_data, is_reverse) {}
+    bool cond_for_remove(ObITransCallback *callback) {
       int ret = OB_SUCCESS;
       int bool_ret = true;
-      if (OB_HASH_EXIST == (ret = memtable_set->exist_refactored((uint64_t)callback->get_memtable()))) {
+      if (OB_HASH_EXIST == (ret = memtable_set_->exist_refactored((uint64_t)callback->get_memtable()))) {
         bool_ret = true;
       } else if (OB_HASH_NOT_EXIST == ret) {
         bool_ret = false;
@@ -1207,14 +1286,16 @@ int ObTxCallbackList::remove_callbacks_for_remove_memtable(
         ob_abort();
       }
       return bool_ret;
-    }, // condition for stop
-    [](ObITransCallback *) -> bool {
+    }
+    bool cond_for_stop(ObITransCallback *) const {
       return false;
-    },
-    false /*need_remove_data*/);
+    }
+    const memtable::ObMemtableSet *memtable_set_;
+  } functor(false /*need_remove_data*/);
+  functor.memtable_set_ = memtable_set;
   functor.set_checksumer(checksum_scn_, &batch_checksum_);
 
-  if (OB_FAIL(callback_(functor))) {
+  if (OB_FAIL(callback_(functor, guard.state_))) {
     TRANS_LOG(ERROR, "remove callbacks for remove memtable wont report error", K(ret), K(functor));
   } else {
     callback_mgr_.add_release_memtable_callback_remove_cnt(functor.get_remove_cnt());

@@ -32,15 +32,6 @@ using namespace share;
 using namespace storage;
 using namespace memtable;
 
-namespace memtable
-{
-
-void ObMemtableCtx::update_max_submitted_seq_no(const ObTxSEQ seq_no)
-{
-  UNUSEDx(seq_no);
-}
-
-}
 namespace transaction
 {
 namespace tablelock
@@ -103,14 +94,11 @@ private:
   void create_callback(const ObTableLockOp &lock_op, ObOBJLockCallback *&cb)
   {
     int ret = OB_SUCCESS;
-    bool is_replay = false;
     ObMemCtxLockOpLinkNode *lock_op_node = nullptr;
     static ObFakeStoreRowKey tablelock_fake_rowkey("tbl", 3);
     const ObStoreRowkey &rowkey = tablelock_fake_rowkey.get_rowkey();
     ObMemtableKey mt_key;
-    ret = mt_ctx_.lock_mem_ctx_.add_lock_record(lock_op,
-                                                lock_op_node,
-                                                is_replay);
+    ret = mt_ctx_.lock_mem_ctx_.add_lock_record(lock_op, lock_op_node);
     ASSERT_EQ(OB_SUCCESS, ret);
     cb = mt_ctx_.create_table_lock_callback(mt_ctx_,
                                            &memtable_);
@@ -228,12 +216,11 @@ TEST_F(TestLockTableCallback, basic)
   create_callback(lock_op, cb);
   ASSERT_EQ(lock_op.lock_seq_no_, cb->get_seq_no());
   ASSERT_EQ(false, cb->must_log());
-  ASSERT_EQ(false, cb->log_synced());
-  share::SCN scn_10;
-  scn_10.convert_for_logservice(10);
-  ret = cb->log_sync(scn_10);
+  ASSERT_EQ(true, cb->need_submit_log());
+  ObIMemtable *mt = NULL;
+  ret = cb->log_submitted_cb();
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(true, cb->log_synced());
+  ASSERT_EQ(false, cb->need_submit_log());
   ASSERT_EQ(LS_LOCK_TABLET, cb->get_tablet_id());
 
   TableLockRedoDataNode redo_node;

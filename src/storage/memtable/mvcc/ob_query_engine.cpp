@@ -244,7 +244,7 @@ int ObQueryEngine::get(const ObMemtableKey *parameter_key,
     } else if (OB_ISNULL(row)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "get NULL value from keyhash", KR(ret), KPC(parameter_key));
-    } else {
+    } else if (returned_key) {
       ret = returned_key->encode(copy_inner_key_wrapper->get_rowkey());
     }
   }

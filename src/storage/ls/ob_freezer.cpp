@@ -386,6 +386,8 @@ ObFreezer::ObFreezer()
     empty_memtable_cnt_(0),
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
+    pend_replay_cnt_(0),
+    byte_lock_(),
     need_resubmit_log_(false),
     enable_(true),
     is_inited_(false)
@@ -400,6 +402,8 @@ ObFreezer::ObFreezer(ObLS *ls)
     empty_memtable_cnt_(0),
     high_priority_freeze_cnt_(0),
     low_priority_freeze_cnt_(0),
+    pend_replay_cnt_(0),
+    byte_lock_(),
     need_resubmit_log_(false),
     enable_(true),
     is_inited_(false)
@@ -420,6 +424,7 @@ void ObFreezer::reset()
   empty_memtable_cnt_ = 0;
   high_priority_freeze_cnt_ = 0;
   low_priority_freeze_cnt_ = 0;
+  pend_replay_cnt_ = 0;
   need_resubmit_log_ = false;
   enable_ = true;
   is_inited_ = false;
@@ -441,6 +446,7 @@ int ObFreezer::init(ObLS *ls)
     empty_memtable_cnt_ = 0;
     high_priority_freeze_cnt_ = 0;
     low_priority_freeze_cnt_ = 0;
+    pend_replay_cnt_ = 0;
     need_resubmit_log_ = false;
     enable_ = true;
 
@@ -585,6 +591,7 @@ int ObFreezer::ls_freeze_task()
   const int64_t start = ObTimeUtility::current_time();
   int64_t last_submit_log_time = start;
   uint32_t freeze_clock = get_freeze_clock();
+  PendTenantReplayGuard pend_replay_guard;
   TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ls_id), K(freeze_clock));
 
   // wait till all memtables are moved from frozen_list to prepare_list
@@ -1794,12 +1801,57 @@ void ObFreezer::set_ls_freeze_end_()
   ATOMIC_DEC(&high_priority_freeze_cnt_);
 }
 
+int ObFreezer::pend_ls_replay()
+{
+  int ret = OB_SUCCESS;
+  common::ObByteLockGuard guard(byte_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "[Freezer] not inited", KR(ret), K(get_ls_id()), KP(this));
+  } else if (pend_replay_cnt_ < 0) {
+    TRANS_LOG(ERROR, "[Freezer] invalid pend_replay_cnt", KR(ret), K(get_ls_id()), KP(this), K(pend_replay_cnt_));
+  } else if (FALSE_IT(pend_replay_cnt_++)) {
+  } else if (1 == pend_replay_cnt_) {
+    if (OB_FAIL(get_ls_log_handler()->pend_submit_replay_log())) {
+      pend_replay_cnt_--;
+      TRANS_LOG(WARN, "[Freezer] pend ls replay failed", KR(ret), K(get_ls_id()), KP(this));
+    }
+  }
+  return ret;
+}
+
+int ObFreezer::restore_ls_replay()
+{
+  int ret = OB_SUCCESS;
+  common::ObByteLockGuard guard(byte_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "[Freezer] not inited", KR(ret), K(get_ls_id()), KP(this));
+  } else if (0 >= pend_replay_cnt_) {
+    TRANS_LOG(INFO,
+              "[Freezer] no need restore replay cause pend replay may failed",
+              KR(ret),
+              K(get_ls_id()),
+              KP(this),
+              K(pend_replay_cnt_));
+  } else if (FALSE_IT(pend_replay_cnt_--)) {
+  } else if (0 == pend_replay_cnt_) {
+    if (OB_FAIL(get_ls_log_handler()->restore_submit_replay_log())) {
+      if (get_ls_log_handler()->is_valid()) {
+        TRANS_LOG(ERROR, "restore replay failed. please check if logstream is removed", KR(ret), K(get_ls_id()));
+      } else {
+        TRANS_LOG(WARN, "restore replay failed. ls log handler is invalid", KR(ret), K(get_ls_id()));
+      }
+    }
+  }
+  return ret;
+}
+
 ObFreezer::ObLSFreezeGuard::ObLSFreezeGuard(ObFreezer &parent)
   : parent_(parent)
 {
   parent_.set_ls_freeze_begin_();
 }
-
 ObFreezer::ObLSFreezeGuard::~ObLSFreezeGuard()
 {
   parent_.set_ls_freeze_end_();
@@ -1832,6 +1884,42 @@ int ObFreezer::ObTabletFreezeGuard::try_set_tablet_freeze_begin()
     need_release_ = true;
   }
   return ret;
+}
+
+ObFreezer::PendTenantReplayGuard::PendTenantReplayGuard()
+{
+  int ret = OB_SUCCESS;
+  common::ObSharedGuard<ObLSIterator> iter;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
+    STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
+  } else {
+    ObLS *ls = nullptr;
+    while (OB_SUCC(iter->get_next(ls))) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ls->get_freezer()->pend_ls_replay())) {
+        STORAGE_LOG(WARN, "[ObFreezer] pend replay failed", KR(ret), KPC(ls));
+      }
+    }
+  }
+}
+
+ObFreezer::PendTenantReplayGuard::~PendTenantReplayGuard()
+{
+  int ret = OB_SUCCESS;
+  common::ObSharedGuard<ObLSIterator> iter;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
+    STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
+  } else {
+    ObLS *ls = nullptr;
+    while (OB_SUCC(iter->get_next(ls))) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(ls->get_freezer()->restore_ls_replay())) {
+        STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
+      }
+    }
+  }
 }
 
 } // namespace storage

@@ -41,7 +41,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag ,
   return OB_SUCCESS;
 }
 }
-
 class ObTestTx : public ::testing::Test
 {
 public:
@@ -49,8 +48,8 @@ public:
   {
     oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
     ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
-    const uint64_t tv = ObTimeUtility::current_time();
-    ObCurTraceId::set(&tv);
+    ObAddr ip_port(ObAddr::VER::IPV4, "119.119.0.1",2023);
+    ObCurTraceId::init(ip_port);
     GCONF._ob_trans_rpc_timeout = 500;
     ObClockGenerator::init();
     const testing::TestInfo* const test_info =
@@ -2362,6 +2361,10 @@ TEST_F(ObTestTx, interrupt_get_read_snapshot)
 
 int main(int argc, char **argv)
 {
+  uint64_t checksum = 1100101;
+  uint64_t c = 0;
+  uint64_t checksum1 = ob_crc64(checksum, (void*)&c, sizeof(uint64_t));
+  uint64_t checksum2 = ob_crc64(c, (void*)&checksum, sizeof(uint64_t));
   int64_t tx_id = 21533427;
   uint64_t h = murmurhash(&tx_id, sizeof(tx_id), 0);
   system("rm -rf test_tx.log*");
@@ -2372,6 +2375,6 @@ int main(int argc, char **argv)
                        "test_tx.log"); // audit
   logger.set_log_level(OB_LOG_LEVEL_DEBUG);
   ::testing::InitGoogleTest(&argc, argv);
-  TRANS_LOG(INFO, "mmhash:", K(h));
+  TRANS_LOG(INFO, "mmhash:", K(h), K(checksum1), K(checksum2));
   return RUN_ALL_TESTS();
 }

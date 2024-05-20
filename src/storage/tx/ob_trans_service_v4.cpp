@@ -920,7 +920,7 @@ int ObTransService::handle_trans_keepalive(const ObTxKeepaliveMsg &msg, ObTransR
   resp.sender_ = share::SCHEDULER_LS;
   resp.receiver_ = msg.sender_;
   resp.status_ = ret_status;
-  if (OB_FAIL(rpc_->post_msg(resp.receiver_, resp))) {
+  if (OB_FAIL(rpc_->post_msg(msg.sender_addr_, resp))) {
     TRANS_LOG(WARN, "post tx keepalive resp fail", K(ret), K(resp), KPC(this));
   }
   result.reset();
@@ -1123,6 +1123,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = store_ctx.ls_id_;
   ObPartTransCtx *tx_ctx = NULL;
+  const int16_t branch = store_ctx.branch_;
   ObTxSEQ data_scn = spec_seq_no; // for LOB aux table, spec_seq_no is valid
   ObTxSnapshot snap = snapshot.core_;
   ObTxTableGuard tx_table_guard;
@@ -1135,6 +1136,9 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
   } else if (tx.access_mode_ == ObTxAccessMode::STANDBY_RD_ONLY) {
     ret = OB_STANDBY_READ_ONLY;
     TRANS_LOG(WARN, "tx is standby readonly", K(ret), K(ls_id), K(tx), KPC(this));
+  } else if (branch != 0) {
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(ERROR, "do not support branch write", KR(ret), K(store_ctx), K(tx));
   } else if (OB_UNLIKELY(!snapshot.valid_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "snapshot invalid", K(ret), K(snapshot), K(lbt()));
@@ -1152,7 +1156,7 @@ int ObTransService::get_write_store_ctx(ObTxDesc &tx,
     TRANS_LOG(WARN, "use ls snapshot access another ls", K(ret), K(snapshot), K(ls_id));
   } else if (OB_FAIL(acquire_tx_ctx(ls_id, tx, tx_ctx, store_ctx.ls_, special))) {
     TRANS_LOG(WARN, "acquire tx ctx fail", K(ret), K(tx), K(ls_id), KPC(this));
-  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn))) {
+  } else if (OB_FAIL(tx_ctx->start_access(tx, data_scn, branch))) {
     TRANS_LOG(WARN, "tx ctx start access fail", K(ret), K(tx_ctx), K(ls_id), KPC(this));
   } else if (FALSE_IT(access_started = true)) {
   } else if (OB_FAIL(get_tx_table_guard_(store_ctx.ls_, ls_id, tx_table_guard))) {
@@ -2050,6 +2054,7 @@ int ObTransService::handle_sp_rollback_request(ObTxRollbackSPMsg &msg,
                                   msg.epoch_,
                                   msg.op_sn_,
                                   msg.savepoint_,
+                                  msg.tx_seq_base_,
                                   ctx_born_epoch,
                                   msg.tx_ptr_);
   if (msg.use_async_resp()) {
@@ -2691,6 +2696,7 @@ int ObTransService::recover_tx(const ObTxInfo &tx_info, ObTxDesc *&tx)
     tx->flags_.EXPLICIT_ = true;
     tx->tenant_id_ = tx_info.tenant_id_;
     tx->cluster_id_ = tx_info.cluster_id_;
+    tx->seq_base_ = tx_info.seq_base_;
     tx->cluster_version_ = tx_info.cluster_version_;
     tx->addr_ = tx_info.addr_; /*origin scheduler addr*/
     tx->tx_id_ = tx_info.tx_id_;
@@ -2723,6 +2729,7 @@ int ObTransService::get_tx_info(ObTxDesc &tx, ObTxInfo &tx_info)
     tx_info.tenant_id_ = tx.tenant_id_;
     tx_info.cluster_id_ = tx.cluster_id_;
     tx_info.cluster_version_ = tx.cluster_version_;
+    tx_info.seq_base_ = tx.seq_base_;
     tx_info.addr_ = tx.addr_;
     tx_info.tx_id_ = tx.tx_id_;
     tx_info.isolation_ = tx.isolation_;

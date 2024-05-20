@@ -405,6 +405,7 @@ public:
   // decrypt_buf is used for decryption
   virtual int replay_row(
       storage::ObStoreCtx &ctx,
+      const share::SCN &scn,
       ObMemtableMutatorIterator *mmi);
   virtual int replay_schema_version_change_log(
       const int64_t schema_version);

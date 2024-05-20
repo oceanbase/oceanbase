@@ -15,9 +15,37 @@
 
 #include "ob_trans_define.h"
 #include "common/ob_range.h"
+#include "lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
+namespace memtable
+{
+struct ObTxCallbackListStat
+{
+  int id_;
+  share::SCN sync_scn_;
+  int length_;
+  int logged_;
+  int removed_;
+  int branch_removed_;
+  void reset() {}
+  DECLARE_TO_STRING
+  {
+    int64_t pos = 0;
+    BUF_PRINTF("[%d,%d,%d,%d,%d,%ld]",
+               id_,
+               length_,
+               logged_,
+               removed_,
+               branch_removed_,
+               (sync_scn_.is_valid() ? sync_scn_.get_val_for_inner_table_field() : 0));
+    return pos;
+  }
+};
+
+} // memtable namespace
+
 namespace transaction
 {
 
@@ -38,7 +66,10 @@ struct ObTxStat
            const int64_t role_state,
            const int64_t session_id, const common::ObAddr &scheduler,
            const bool is_exiting, const ObXATransID &xid,
-           const share::ObLSID &coord, const int64_t last_request_ts);
+           const share::ObLSID &coord, const int64_t last_request_ts,
+           const int busy_cbs_cnt,
+           int replay_completeness,
+           share::SCN serial_final_scn);
   TO_STRING_KV(K_(addr), K_(tx_id), K_(tenant_id),
       K_(has_decided), K_(ls_id), K_(participants),
       K_(tx_ctx_create_time), K_(tx_expired_time), K_(ref_cnt),
@@ -47,7 +78,11 @@ struct ObTxStat
       K_(pending_log_size), K_(flushed_log_size),
       K_(role_state), K_(session_id),
       K_(scheduler_addr), K_(is_exiting),
-      K_(xid), K_(coord), K_(last_request_ts));
+      K_(xid), K_(coord), K_(last_request_ts),
+      K_(busy_cbs_cnt),
+      K_(serial_final_scn),
+      K_(replay_completeness),
+      K_(callback_list_stats));
 public:
   bool is_inited_;
   common::ObAddr addr_;
@@ -74,6 +109,34 @@ public:
   ObXATransID xid_;
   share::ObLSID coord_;
   int64_t last_request_ts_;
+  int busy_cbs_cnt_;
+  int replay_completeness_;
+  share::SCN serial_final_scn_;
+  ObSEArray<memtable::ObTxCallbackListStat, 1> callback_list_stats_;
+  struct CLStatsDisplay {
+    CLStatsDisplay(ObSEArray<memtable::ObTxCallbackListStat, 1> &stats): stats_(stats) {}
+    ObSEArray<memtable::ObTxCallbackListStat, 1> &stats_;
+    DECLARE_TO_STRING
+    {
+      int64_t pos = 0;
+      if (stats_.count() > 0) {
+        J_ARRAY_START();
+        BUF_PRINTF("\"id, length, logged, removed, branch_removed, sync_scn\"");
+        for (int i =0; i < stats_.count(); i++) {
+          if (stats_.at(i).id_ >= 0) {
+            J_COMMA();
+            BUF_PRINTO(stats_.at(i));
+          }
+        }
+        J_ARRAY_END();
+      }
+      return pos;
+    }
+  };
+  CLStatsDisplay get_callback_list_stats_displayer()
+  {
+    return CLStatsDisplay(callback_list_stats_);
+  }
 };
 
 class ObTxLockStat

@@ -66,8 +66,6 @@ public:
     trans_version_(share::SCN::max_scn()),
     commit_version_(share::SCN::min_scn()),
     lock_start_time_(0),
-    redo_scn_(share::SCN::min_scn()),
-    redo_log_id_(0),
     lock_wait_start_ts_(0),
     replay_compact_version_(share::SCN::min_scn())
   {
@@ -90,9 +88,6 @@ public: // for mvcc engine invoke
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
   virtual int append_callback(ObITransCallback *cb) = 0;
-  virtual void inc_lock_for_read_retry_count() = 0;
-  virtual void add_lock_for_read_elapse(const int64_t n) = 0;
-  virtual int64_t get_lock_for_read_elapse() const = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
                             const share::SCN snapshot_version,
                             const share::SCN max_trans_version,
@@ -100,8 +95,6 @@ public: // for mvcc engine invoke
   virtual void on_wlock_retry(const ObMemtableKey& key, const transaction::ObTransID &conflict_tx_id) = 0;
   virtual void inc_truncate_cnt() = 0;
   virtual void add_trans_mem_total_size(const int64_t size) = 0;
-  virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) = 0;
-  virtual void inc_pending_log_size(const int64_t size) = 0;
   virtual transaction::ObTransID get_tx_id() const = 0;
   virtual transaction::ObPartTransCtx *get_trans_ctx() const = 0;
   // statics maintainness for txn logging
@@ -119,7 +112,11 @@ public:
   inline int64_t get_max_table_version() const { return max_table_version_; }
   inline void set_alloc_type(const int alloc_type) { alloc_type_ = alloc_type; }
   void before_prepare(const share::SCN version = share::SCN::min_scn());
-  bool is_prepared() const;
+  bool is_prepared() const
+  {
+    const share::SCN prepare_version = trans_version_.atomic_get();
+    return (!prepare_version.is_max() && prepare_version >= share::SCN::min_scn());
+  }
   inline void set_prepare_version(const share::SCN version) { set_trans_version(version); }
   inline void set_trans_version(const share::SCN trans_version) { trans_version_.atomic_set(trans_version); }
   inline void set_commit_version(const share::SCN trans_version) { commit_version_.atomic_set(trans_version); }
@@ -146,16 +143,14 @@ public:
   inline bool is_commit_version_valid() const { return commit_version_ != share::SCN::min_scn() && commit_version_ != share::SCN::max_scn(); }
   inline void set_lock_start_time(const int64_t start_time) { lock_start_time_ = start_time; }
   inline int64_t get_lock_start_time() { return lock_start_time_; }
-  inline void set_redo_scn(const share::SCN redo_scn) { redo_scn_ = redo_scn; }
-  inline void set_redo_log_id(const int64_t redo_log_id) { redo_log_id_ = redo_log_id; }
-  inline share::SCN get_redo_scn() const { return redo_scn_; }
-  inline int64_t get_redo_log_id() const { return redo_log_id_; }
+  virtual void set_for_replay(const bool for_replay) = 0;
   inline void set_lock_wait_start_ts(const int64_t lock_wait_start_ts)
   { lock_wait_start_ts_ = lock_wait_start_ts; }
   share::SCN get_replay_compact_version() const { return replay_compact_version_; }
   void  set_replay_compact_version(const share::SCN v) { replay_compact_version_ = v; }
   inline int64_t get_lock_wait_start_ts() const { return lock_wait_start_ts_; }
-
+  virtual int acquire_callback_list(const bool new_epoch, bool need_merge) = 0;
+  virtual void revert_callback_list() = 0;
   int register_row_commit_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,
@@ -188,7 +183,7 @@ public:
       transaction::ObTxSEQ &parent_seq_no,
       ObObj &index_data,
       ObObj &ext_info_data);
-
+  virtual void inc_pending_log_size(const int64_t size) = 0;
 public:
   virtual void reset()
   {
@@ -198,8 +193,6 @@ public:
     trans_version_ = share::SCN::max_scn();
     commit_version_ = share::SCN::min_scn();
     lock_start_time_ = 0;
-    redo_scn_ = share::SCN::min_scn();
-    redo_log_id_ = 0;
     lock_wait_start_ts_ = 0;
     replay_compact_version_ = share::SCN::min_scn();
   }
@@ -232,13 +225,13 @@ public:
                                                         transaction::tablelock::ObLockMemtable *memtable) = 0;
   virtual void free_table_lock_callback(ObITransCallback *cb) = 0;
   ObMvccRowCallback *alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &value, ObMemtable *memtable);
-  ObMvccRowCallback *alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable);
 private:
   void check_row_callback_registration_between_stmt_();
   int register_table_lock_cb_(
       ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op,
-      ObOBJLockCallback *&cb);
+      ObOBJLockCallback *&cb,
+      const share::SCN replay_scn = share::SCN::invalid_scn());
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObIMvccCtx);
   int alloc_type_;
@@ -249,8 +242,6 @@ protected:
   share::SCN trans_version_;
   share::SCN commit_version_;
   int64_t lock_start_time_;
-  share::SCN redo_scn_;
-  int64_t redo_log_id_;
   int64_t lock_wait_start_ts_;
   share::SCN replay_compact_version_;
 };
@@ -264,7 +255,8 @@ public:
       ctx_(NULL),
       memtable_(NULL),
       write_ret_(NULL),
-      try_flush_redo_(true)
+      try_flush_redo_(true),
+      write_seq_no_()
   {}
   ObMvccWriteGuard(const int &ret, const bool exclusive = false)
     : ObMvccWriteGuard(exclusive)
@@ -291,6 +283,7 @@ private:
   ObMemtable *memtable_;
   const int *write_ret_;  // used to sense write result is ok or fail
   bool try_flush_redo_;
+  transaction::ObTxSEQ write_seq_no_;
 };
 }
 }

@@ -416,16 +416,16 @@ int ObLSTxService::replay(const void *buffer,
     LOG_WARN("log base header deserialize error", K(ret));
   } else if (OB_FAIL(ObTxReplayExecutor::execute(parent_, this, log_buf, nbytes,
                                                  tmp_pos, lsn, scn,
-                                                 base_header.get_replay_hint(),
-                                                 ls_id_, parent_->get_tenant_id()))) {
+                                                 base_header,
+                                                 ls_id_))) {
     LOG_WARN("replay tx log error", K(ret), K(lsn), K(scn));
   }
   return ret;
 }
 
-int ObLSTxService::traverse_trans_to_submit_redo_log(ObTransID &fail_tx_id)
+int ObLSTxService::traverse_trans_to_submit_redo_log(ObTransID &fail_tx_id, const uint32_t freeze_clock)
 {
-  return mgr_->traverse_tx_to_submit_redo_log(fail_tx_id);
+  return mgr_->traverse_tx_to_submit_redo_log(fail_tx_id, freeze_clock);
 }
 int ObLSTxService::traverse_trans_to_submit_next_log() { return mgr_->traverse_tx_to_submit_next_log(); }
 

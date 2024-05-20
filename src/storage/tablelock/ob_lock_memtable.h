@@ -134,6 +134,7 @@ public:
 
   // ====================== REPLAY LOCK ======================
   virtual int replay_row(storage::ObStoreCtx &ctx,
+                         const share::SCN &scn,
                          memtable::ObMemtableMutatorIterator *mmi);
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.

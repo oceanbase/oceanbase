@@ -137,11 +137,12 @@ public:
   int read(const ObTxReadSnapshot &snapshot,
            const int64_t key,
            int64_t &value);
-  int write(ObTxDesc &tx, const int64_t key, const int64_t value);
+  int write(ObTxDesc &tx, const int64_t key, const int64_t value, const int16_t branch = 0);
   int write(ObTxDesc &tx,
             const ObTxReadSnapshot &snapshot,
             const int64_t key,
-            const int64_t value);
+            const int64_t value,
+            const int16_t branch = 0);
   int atomic_write(ObTxDesc &tx, const int64_t key, const int64_t value,
                    const int64_t expire_ts, const ObTxParam &tx_param);
   int replay(const void *buffer, const int64_t nbytes, const palf::LSN &lsn, const int64_t ts_ns);

@@ -48,7 +48,7 @@ public:
 private:
   int parse_different_entry_type_(const logservice::ObLogBaseHeader &header);
   int get_entry_header_(logservice::ObLogBaseHeader &header);
-  int parse_trans_service_log_(transaction::ObTxLogBlock &tx_log_block);
+  int parse_trans_service_log_(transaction::ObTxLogBlock &tx_log_block, const logservice::ObLogBaseHeader &base_header);
   int parse_schema_log_();
   int parse_tablet_seq_sync_log_();
   int parse_ddl_log_();

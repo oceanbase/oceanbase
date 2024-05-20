@@ -336,7 +336,10 @@ LATCH_DEF(RESOURCE_SERVICE_LOCK, 315, "resource service lock", LATCH_READ_PREFER
 LATCH_DEF(RESOURCE_SERVICE_SWITCH_LOCK, 316, "resource service switch lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(ASH_LOCK, 317, "ash lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 318, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_ACCESS_LOCK, 328, "trans read/write access latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo log latch", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 330, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

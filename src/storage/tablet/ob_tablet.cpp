@@ -2909,12 +2909,6 @@ int ObTablet::insert_rows(
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(store_ctx.mvcc_acc_ctx_.tx_ctx_->submit_redo_log(false))) {
-      TRANS_LOG(WARN, "Failed to submit log if necessary", K(tmp_ret), K(store_ctx), K(relative_table));
-    }
-  }
   return ret;
 }
 

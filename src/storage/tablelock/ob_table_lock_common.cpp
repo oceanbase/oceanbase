@@ -172,6 +172,11 @@ void ObTableLockOp::set(
   op_type_ = type;
   lock_op_status_ = lock_op_status;
   lock_seq_no_ = seq_no;
+  // here, ensure lock-callback was dispatched to single callback-list
+  // forcedly set the seq_no's branch to zero
+  if (lock_seq_no_.get_branch() != 0) {
+    lock_seq_no_.set_branch(0);
+  }
   create_timestamp_ = create_timestamp;
   create_schema_version_ = create_schema_version;
 }

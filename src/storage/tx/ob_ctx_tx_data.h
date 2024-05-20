@@ -38,9 +38,9 @@ public:
 
   bool is_read_only() const { return read_only_; }
   bool is_decided() const;
+  bool has_recovered_from_tx_table() const { return recovered_from_tx_table_; }
   int insert_into_tx_table();
-  int recover_tx_data(storage::ObTxDataGuard &rhs);
-  int replace_tx_data(storage::ObTxData *tmp_tx_data);
+  int recover_tx_data(storage::ObTxData *tmp_tx_data);
   int deep_copy_tx_data_out(storage::ObTxDataGuard &tmp_tx_data_guard);
   int alloc_tmp_tx_data(storage::ObTxDataGuard &tmp_tx_data);
   int free_tmp_tx_data(storage::ObTxData *&tmp_tx_data);
@@ -109,6 +109,7 @@ private:
   ObLSTxCtxMgr *ctx_mgr_;
   storage::ObTxDataGuard tx_data_guard_;
   bool read_only_;
+  bool recovered_from_tx_table_;
   // lock for tx_data_ pointer
   RWLock lock_;
 };

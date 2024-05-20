@@ -114,7 +114,7 @@ public:
   virtual ~ObTransCtx() { }
   void reset() { }
 public:
-  void get_ctx_guard(CtxLockGuard &guard);
+  void get_ctx_guard(CtxLockGuard &guard, uint8_t mode = CtxLockGuard::MODE::ALL);
   void print_trace_log();
   // ATTENTION! There is no lock protect
   bool is_too_long_transaction() const
@@ -165,7 +165,6 @@ public:
   int acquire_ctx_ref() { return acquire_ctx_ref_(); }
   void release_ctx_ref();
   ObITransRpc *get_trans_rpc() const { return rpc_; }
-  void test_lock(ObTxLogCb *log_cb);
 public:
   virtual bool is_inited() const = 0;
   virtual int handle_timeout(const int64_t delay) = 0;

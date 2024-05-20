@@ -84,6 +84,7 @@ ObMPQuery::~ObMPQuery()
 {
 }
 
+extern int register_query_trace(int64_t tenant_id, int64_t session_id);
 
 int ObMPQuery::process()
 {
@@ -126,6 +127,7 @@ int ObMPQuery::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL or invalid", K_(sql), K(sess), K(ret));
   } else {
+    register_query_trace(MTL_ID(), sess->get_sessid());
     lib::CompatModeGuard g(sess->get_compatibility_mode() == ORACLE_MODE ?
                              lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
     THIS_WORKER.set_session(sess);

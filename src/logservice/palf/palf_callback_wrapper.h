@@ -38,7 +38,7 @@ public:
   ~PalfFSCbWrapper();
   virtual int add_cb_impl(PalfFSCbNode *cb_impl);
   virtual void del_cb_impl(PalfFSCbNode *cb_impl);
-  virtual int update_end_lsn(int64_t id, const LSN &end_lsn, const int64_t proposal_id);
+  virtual int update_end_lsn(int64_t id, const LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id);
 private:
   // The head of list
   ObDList<PalfFSCbNode> list_;

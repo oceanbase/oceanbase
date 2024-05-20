@@ -45,7 +45,7 @@ struct ObTableLockInfo;
 
 namespace memtable
 {
-
+class ObTxCallbackListStat;
 struct RetryInfo
 {
   RetryInfo() : retry_cnt_(0), last_retry_ts_(0) {}
@@ -334,7 +334,6 @@ public:
   virtual void *old_row_alloc(const int64_t size) override;
   virtual void old_row_free(void *row) override;
   virtual common::ObIAllocator &get_query_allocator();
-  virtual void inc_lock_for_read_retry_count();
   // When row lock conflict occurs in a remote execution, record the trans id in
   // transaction context, and carries it back after execution, for dead lock detect use
   virtual int add_conflict_trans_id(const transaction::ObTransID conflict_trans_id);
@@ -345,21 +344,22 @@ public:
     return ATOMIC_LOAD(&end_code_);
   }
   virtual int write_lock_yield();
-
-  virtual void update_max_submitted_seq_no(const transaction::ObTxSEQ seq_no) override;
 public:
-  virtual void set_read_only();
   virtual void inc_ref();
   virtual void dec_ref();
   void wait_pending_write();
   virtual int write_auth(const bool exclusive);
   virtual int write_done();
   virtual int trans_begin();
-  virtual int replay_begin(const share::SCN scn);
+  virtual int replay_begin(const bool parallel_replay, const share::SCN scn);
   virtual int replay_end(const bool is_replay_succ,
+                         const int16_t callback_list_idx,
                          const share::SCN scn);
-  int rollback_redo_callbacks(const share::SCN scn);
-  virtual uint64_t calc_checksum_all();
+  int rollback_redo_callbacks(const int16_t callback_list_idx, const share::SCN scn);
+  virtual int calc_checksum_all(ObSEArray<uint64_t, 1> &checksum);
+  static void convert_checksum_for_commit_log(const ObIArray<uint64_t> &arr,
+                                              uint64_t &checksum,
+                                              ObIArray<uint8_t> &sig);
   virtual void print_callbacks();
   virtual int trans_end(const bool commit,
                         const share::SCN trans_version,
@@ -372,50 +372,54 @@ public:
   virtual int trans_replay_end(const bool commit,
                                const share::SCN trans_version,
                                const share::SCN final_scn,
-                               const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0);
   //method called when leader takeover
   virtual int replay_to_commit(const bool is_resume);
   //method called when leader revoke
   virtual int commit_to_replay();
-  virtual int fill_redo_log(char *buf,
-                            const int64_t buf_len,
-                            int64_t &buf_pos,
-                            ObRedoLogSubmitHelper &helper,
-                            const bool log_for_lock_node = true);
+  virtual int fill_redo_log(ObTxFillRedoCtx &ctx);
+  bool is_logging_blocked(bool &has_pending_log) const {
+    return trans_mgr_.is_logging_blocked(has_pending_log);
+  }
+  void check_all_redo_flushed();
+  int get_log_guard(const transaction::ObTxSEQ &write_seq,
+                    ObCallbackListLogGuard &log_guard,
+                    int &cb_list_idx);
   int calc_checksum_before_scn(const share::SCN scn,
-                               uint64_t &checksum,
-                               share::SCN &checksum_scn);
-  void update_checksum(const uint64_t checksum,
-                       const share::SCN checksum_scn);
+                               ObIArray<uint64_t> &checksum,
+                               ObIArray<share::SCN> &checksum_scn);
+  int update_checksum(const ObIArray<uint64_t> &checksum,
+                      const ObIArray<share::SCN> &checksum_scn);
   int log_submitted(const ObRedoLogSubmitHelper &helper);
-  // the function apply the side effect of dirty txn and return whether
-  // remaining pending callbacks.
-  // NB: the fact whether there remains pending callbacks currently is only used
-  // for continuing logging when minor freeze
-  int sync_log_succ(const share::SCN scn, const ObCallbackScope &callbacks);
-  void sync_log_fail(const ObCallbackScope &callbacks);
+  int sync_log_succ(const share::SCN scn, const ObCallbackScopeArray &callbacks);
+  void sync_log_fail(const ObCallbackScopeArray &callbacks);
   bool is_slow_query() const;
   virtual void set_trans_ctx(transaction::ObPartTransCtx *ctx);
   virtual transaction::ObPartTransCtx *get_trans_ctx() const { return ctx_; }
   virtual void inc_truncate_cnt() override { truncate_cnt_++; }
   int get_memtable_key_arr(transaction::ObMemtableKeyArray &memtable_key_arr);
-  uint64_t get_lock_for_read_retry_count() const { return lock_for_read_retry_count_; }
   virtual void add_trans_mem_total_size(const int64_t size);
   int64_t get_ref() const { return ATOMIC_LOAD(&ref_); }
   uint64_t get_tenant_id() const;
   inline bool has_row_updated() const { return has_row_updated_; }
   inline void set_row_updated() { has_row_updated_ = true; }
-  int remove_callbacks_for_fast_commit();
-  int remove_callback_for_uncommited_txn(
-    const memtable::ObMemtableSet *memtable_set,
-    const share::SCN max_applied_scn);
-  int rollback(const transaction::ObTxSEQ seq_no, const transaction::ObTxSEQ from_seq_no);
-  bool is_all_redo_submitted();
+  int remove_callbacks_for_fast_commit(const ObCallbackScopeArray &callbacks);
+  int remove_callbacks_for_fast_commit(const int16_t callback_list_idx, const share::SCN stop_scn);
+  int remove_callback_for_uncommited_txn(const memtable::ObMemtableSet *memtable_set);
+  int rollback(const transaction::ObTxSEQ seq_no,
+               const transaction::ObTxSEQ from_seq_no,
+               const share::SCN replay_scn);
+  void set_parallel_logging(const share::SCN serial_final_scn,
+                            const transaction::ObTxSEQ serial_final_seq_no)
+  {
+    trans_mgr_.set_parallel_logging(serial_final_scn, serial_final_seq_no);
+  }
+  void set_skip_checksum_calc()
+  {
+    trans_mgr_.set_skip_checksum_calc();
+  }
   int64_t get_trans_mem_total_size() const { return trans_mem_total_size_; }
-  void add_lock_for_read_elapse(const int64_t elapse) { lock_for_read_elapse_ += elapse; }
-  int64_t get_lock_for_read_elapse() const { return lock_for_read_elapse_; }
-  bool pending_log_size_too_large();
+  bool pending_log_size_too_large(const transaction::ObTxSEQ &write_seq_no);
   void merge_multi_callback_lists_for_changing_leader();
   void merge_multi_callback_lists_for_immediate_logging();
   void reset_pdml_stat();
@@ -461,12 +465,18 @@ public: // callback
   int64_t get_checksum() const { return trans_mgr_.get_checksum(); }
   int64_t get_tmp_checksum() const { return trans_mgr_.get_tmp_checksum(); }
   share::SCN get_checksum_scn() const { return trans_mgr_.get_checksum_scn(); }
-  void acquire_callback_list() { trans_mgr_.acquire_callback_list(); }
+  int acquire_callback_list(const bool new_epoch, bool need_merge)
+  {
+    return trans_mgr_.acquire_callback_list(new_epoch, need_merge);
+  }
   void revert_callback_list() { trans_mgr_.revert_callback_list(); }
   void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   void inc_pending_log_size(const int64_t size) { trans_mgr_.inc_pending_log_size(size); }
   void inc_flushed_log_size(const int64_t size) { trans_mgr_.inc_flushed_log_size(size); }
-
+  int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const
+  {
+    return trans_mgr_.get_tx_seq_replay_idx(seq);
+  }
 public:
   // tx_status
   enum ObTxStatus {
@@ -483,6 +493,7 @@ public:
   int enable_lock_table(transaction::ObLSTxCtxMgr *ls_tx_ctx_mgr);
   // for mintest
   int enable_lock_table(ObTableHandleV2 &handle);
+  transaction::tablelock::ObLockMemCtx &get_lock_mem_ctx() { return lock_mem_ctx_; }
   int check_lock_exist(const ObLockID &lock_id,
                        const ObTableLockOwnerID &owner_id,
                        const ObTableLockMode mode,
@@ -501,7 +512,6 @@ public:
   int replay_add_lock_record(const transaction::tablelock::ObTableLockOp &lock_op,
                              const share::SCN &scn);
   void remove_lock_record(ObMemCtxLockOpLinkNode *lock_op);
-  void set_log_synced(ObMemCtxLockOpLinkNode *lock_op, const share::SCN &scn);
   // replay lock to lock map and trans part ctx.
   // used by the replay process of multi data source.
   int replay_lock(const transaction::tablelock::ObTableLockOp &lock_op,
@@ -523,7 +533,7 @@ public:
   {
     return lock_mem_ctx_.get_lock_memtable(memtable);
   }
-
+  int get_callback_list_stat(ObIArray<ObTxCallbackListStat> &stats);
 private:
   int do_trans_end(
       const bool commit,
@@ -533,14 +543,12 @@ private:
   int clear_table_lock_(const bool is_commit,
                         const share::SCN &commit_version,
                         const share::SCN &commit_scn);
-  int rollback_table_lock_(transaction::ObTxSEQ seq_no);
+  int rollback_table_lock_(const transaction::ObTxSEQ to_seq_no,
+                           const transaction::ObTxSEQ from_seq_no);
   int register_multi_source_data_if_need_(
-      const transaction::tablelock::ObTableLockOp &lock_op,
-      const bool is_replay);
+      const transaction::tablelock::ObTableLockOp &lock_op);
   static int64_t get_us() { return ::oceanbase::common::ObTimeUtility::current_time(); }
   int reset_log_generator_();
-  int reuse_log_generator_();
-
 public:
   inline ObRedoLogGenerator &get_redo_generator() { return log_gen_; }
 private:
@@ -557,10 +565,6 @@ private:
   RetryInfo retry_info_;
   transaction::ObPartTransCtx *ctx_;
   int64_t truncate_cnt_;
-  // the retry count of lock for read
-  uint64_t lock_for_read_retry_count_;
-  // Time cost of lock for read
-  int64_t lock_for_read_elapse_;
   int64_t trans_mem_total_size_;
   // statistics for txn logging
   int64_t unsynced_cnt_;
@@ -568,7 +572,6 @@ private:
   int64_t callback_mem_used_;
   int64_t callback_alloc_count_;
   int64_t callback_free_count_;
-  bool is_read_only_;
   bool is_master_;
   // Used to indicate whether mvcc row is updated or not.
   // When a statement is update or select for update, the value can be set ture;

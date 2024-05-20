@@ -50,7 +50,7 @@ public:
       logservice::ObReplayBarrierType &cache_final_barrier_type);
   int earse_from_cache(const ObTxBufferNode &node) { return mds_list_.erase(node); }
 
-  int reserve_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr);
+  int reserve_final_notify_array(const int durable_cnt);
   int generate_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr,
                                    bool need_merge_cache,
                                    bool allow_log_overflow);

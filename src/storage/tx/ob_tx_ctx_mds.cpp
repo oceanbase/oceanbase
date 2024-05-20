@@ -193,13 +193,12 @@ int ObTxMDSCache::decide_cache_state_log_mds_barrier_type(
   return ret;
 }
 
-int ObTxMDSCache::reserve_final_notify_array(const ObTxBufferNodeArray &mds_durable_arr)
+int ObTxMDSCache::reserve_final_notify_array(const int durable_cnt)
 {
   int ret = OB_SUCCESS;
-
-  if (OB_FAIL(final_notify_array_.reserve(mds_list_.size() + mds_durable_arr.count()))) {
-    TRANS_LOG(WARN, "reserve notify array space failed", K(ret), K(mds_list_.size()),
-              K(mds_durable_arr.count()));
+  int64_t size = mds_list_.size() + durable_cnt;
+  if (size > 0 && OB_FAIL(final_notify_array_.reserve(size))) {
+    TRANS_LOG(WARN, "reserve notify array space failed", K(ret), K(size));
   }
 
   return ret;

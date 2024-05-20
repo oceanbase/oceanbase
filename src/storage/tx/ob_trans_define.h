@@ -89,7 +89,7 @@ class ObXACtx;
 class ObITxCallback;
 class ObTxMultiDataSourceLog;
 typedef palf::LSN LogOffSet;
-
+enum { MAX_CALLBACK_LIST_COUNT = 64 };
 class ObTransErrsim
 {
 public:
@@ -311,10 +311,10 @@ public:
   void reset() { raw_val_ = 0; }
   bool is_valid() const { return raw_val_ > 0; }
   bool is_max() const { return *this == MAX_VAL(); }
-  ObTxSEQ clone_with_seq(int64_t seq_n) const
+  ObTxSEQ clone_with_seq(int64_t seq_abs, int64_t seq_base) const
   {
     ObTxSEQ n = *this;
-    if (n_format_) { n.seq_ = seq_n; } else { n.seq_v0_ = seq_n; }
+    if (n_format_) { n.seq_ = seq_abs - seq_base; } else { n.seq_v0_ = seq_abs; }
     return n;
   }
   bool operator>(const ObTxSEQ &b) const
@@ -354,9 +354,11 @@ public:
   int64_t inc_update(const ObTxSEQ &b) { return common::inc_update(&raw_val_, b.raw_val_); }
   uint64_t cast_to_int() const { return raw_val_; }
   static ObTxSEQ cast_from_int(int64_t seq) { return ObTxSEQ(seq); }
+  bool support_branch() const { return n_format_; }
   // return sequence number
   int64_t get_seq() const { return n_format_ ? seq_ : seq_v0_; }
   int16_t get_branch() const { return n_format_ ? branch_ : 0; }
+  ObTxSEQ &set_branch(int16_t branch) { branch_ = branch; return *this; }
   // atomic Load/Store
   void atomic_reset() { ATOMIC_SET(&raw_val_, 0); }
   ObTxSEQ atomic_load() const { auto v = ATOMIC_LOAD(&raw_val_); ObTxSEQ s; s.raw_val_ = v; return s; }
@@ -380,6 +382,19 @@ private:
   };
 };
 static_assert(sizeof(ObTxSEQ) == sizeof(int64_t), "ObTxSEQ should sizeof(int64_t)");
+
+inline OB_DEF_SERIALIZE_SIMPLE(ObTxSEQ)
+{
+  return serialization::encode_vi64(buf, buf_len, pos, raw_val_);
+}
+inline OB_DEF_SERIALIZE_SIZE_SIMPLE(ObTxSEQ)
+{
+  return serialization::encoded_length_vi64(raw_val_);
+}
+inline OB_DEF_DESERIALIZE_SIMPLE(ObTxSEQ)
+{
+  return serialization::decode_vi64(buf, data_len, pos, &raw_val_);
+}
 
 struct ObLockForReadArg
 {
@@ -797,6 +812,14 @@ public:
           true, common::ObLatchIds::TRANS_TRACE_RECORDER_LOCK) {}
   ~ObTransTraceLog() {}
   void destroy() {}
+  int64_t to_string(char *buf, const int64_t buf_len) const
+  {
+    int64_t ret = 0;
+    check_lock();
+    ret = ObTraceEventRecorder::to_string(buf, buf_len);
+    check_unlock();
+    return ret;
+  }
 };
 
 class ObStmtInfo  // unreferenced, need remove
@@ -1548,6 +1571,34 @@ private:
   palf::LSN offset_;
 };
 
+struct ObTxExecPart
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTxExecPart() : ls_id_(),
+                   exec_epoch_(-1),
+                   transfer_epoch_(-1) {}
+  ObTxExecPart(share::ObLSID ls_id, int64_t epoch, int64_t transfer_epoch)
+    : ls_id_(ls_id),
+      exec_epoch_(epoch),
+      transfer_epoch_(transfer_epoch) {}
+  inline bool operator==(const ObTxExecPart &other) const {
+    return other.ls_id_ == ls_id_ &&
+      other.exec_epoch_ == exec_epoch_ &&
+      other.transfer_epoch_ == transfer_epoch_;
+  }
+  bool is_valid() const {
+    return    ls_id_.is_valid()
+      && (exec_epoch_ > 0
+          || transfer_epoch_ > 0);
+  }
+  share::ObLSID ls_id_;
+  int64_t exec_epoch_;
+  int64_t transfer_epoch_;
+
+  TO_STRING_KV(K_(ls_id), K_(exec_epoch), K_(transfer_epoch));
+};
+
 class ObStateInfo
 {
 public:
@@ -1617,6 +1668,10 @@ static const int64_t MAX_PART_CTX_COUNT = 700 * 1000;
 static const int DUP_TABLE_LEASE_LIST_MAX_COUNT = 8;
 #define TRANS_AGGRE_LOG_TIMESTAMP OB_INVALID_TIMESTAMP
 
+
+
+typedef common::ObSEArray<ObTxExecPart, share::OB_DEFAULT_LS_COUNT> ObTxCommitParts;
+
 class ObEndParticipantsRes
 {
 public:
@@ -1641,6 +1696,22 @@ enum class RetainCause : int16_t
 
 static const int64_t MAX_TABLET_MODIFY_RECORD_COUNT = 16;
 // exec info need to be persisted by "trans context table"
+template<typename T>
+struct ObIArrayPrintTrait {
+  const ObIArray<T> &arr_;
+  ObIArrayPrintTrait(const ObIArray<T> &arr): arr_(arr) {}
+  DECLARE_TO_STRING
+  {
+    int64_t pos = 0;
+    J_ARRAY_START();
+    for(int i =0; i < arr_.count(); i++) {
+      BUF_PRINTO(arr_.at(i));
+      if (i != arr_.count() - 1) { J_COMMA(); }
+    }
+    J_ARRAY_END();
+    return pos;
+  }
+};
 struct ObTxExecInfo
 {
   OB_UNIS_VERSION(1);
@@ -1651,7 +1722,13 @@ public:
       incremental_participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "INC_PART`")),
       redo_lsns_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "REDO_LSNS")),
       multi_data_source_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MDS_ARRAY")),
-      prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO")) {}
+      checksum_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "TX_CHECKSUM")),
+      checksum_scn_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "TX_CHECKSUM")),
+      prepare_log_info_arr_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PREPARE_INFO"))
+  {
+    checksum_.push_back(0);
+    checksum_scn_.push_back(share::SCN());
+  }
 public:
   int generate_mds_buffer_ctx_array();
   void mrege_buffer_ctx_array_to_multi_data_source() const;
@@ -1665,7 +1742,11 @@ private:
   ObTxExecInfo &operator=(const ObTxExecInfo &info);
 
 public:
-  TO_STRING_KV(K_(state),
+  DECLARE_TO_STRING {
+//    const_cast<ObIArray<uint64_t>>(checksum_).set_max_print_count(512);
+//    const_cast<ObIArray<share::SCN>>(checksum_scn_).set_max_print_count(512);
+    int64_t pos = 0;
+    J_KV(K_(state),
                K_(upstream),
                K_(participants),
                K_(incremental_participants),
@@ -1690,16 +1771,22 @@ public:
                K_(prepare_log_info_arr),
                K_(xid),
                K_(need_checksum),
-               K_(is_sub2pc));
+               K_(is_sub2pc),
+               K_(serial_final_scn),
+               K_(serial_final_seq_no));
+    return pos;
+  }
   ObTxState state_;
   share::ObLSID upstream_;
   share::ObLSArray participants_;
+  ObTxCommitParts commit_parts_;                   // serialization compatible padding
   share::ObLSArray incremental_participants_;
+  ObTxCommitParts intermediate_participants_;      // serialization compatible padding
+  ObTxCommitParts transfer_parts_;                 // serialization compatible padding
   LogOffSet prev_record_lsn_;
   ObRedoLSNArray redo_lsns_;
   ObTxBufferNodeArray multi_data_source_;
   ObTxBufferCtxArray mds_buffer_ctx_array_;
-  // check
   common::ObAddr scheduler_;
   share::SCN prepare_version_;
   int64_t trans_type_;
@@ -1708,8 +1795,8 @@ public:
   share::SCN max_applying_log_ts_;
   int64_t max_applying_part_log_no_; // start from 0 on follower and always be INT64_MAX on leader
   ObTxSEQ max_submitted_seq_no_; // maintains on Leader and transfer to Follower via ActiveInfoLog
-  uint64_t checksum_;
-  share::SCN checksum_scn_;
+  ObSEArray<uint64_t,1> checksum_;
+  ObSEArray<share::SCN,1> checksum_scn_;
   palf::LSN max_durable_lsn_;
   bool data_complete_;
   bool is_dup_tx_;
@@ -1720,6 +1807,16 @@ public:
   ObXATransID xid_;
   bool need_checksum_;
   bool is_sub2pc_;
+  bool is_transfer_blocking_;              // serialization compatible padding
+  bool is_empty_ctx_created_by_transfer_;  // serialization compatible padding
+  int64_t exec_epoch_;                     // serialization compatible padding
+  // if valid, this txCtx is logged by multi parallel thread
+  // since this scn
+  share::SCN serial_final_scn_;
+  // the logic time of serial final log submitted
+  // used to decide whether a branch level savepoint rollback log
+  // need set pre-barrier to wait previous redo replayed
+  ObTxSEQ serial_final_seq_no_;
 };
 
 static const int64_t USEC_PER_SEC = 1000 * 1000;
@@ -1796,7 +1893,64 @@ inline bool IS_CORNER_IMPL(const char *func, const int64_t line, const int64_t p
 }
 
 #define IS_CORNER(ppm) IS_CORNER_IMPL(__FUNCTION__, __LINE__, ppm)
-
+template<typename T>
+struct ObIArraySerDeTrait {
+  ObIArray<T> &arr_;
+  ObIArraySerDeTrait(ObIArray<T> &arr): arr_(arr) {}
+  int64_t get_serialize_size() const
+  {
+    int64_t size = 0;
+    size += serialization::encoded_length_vi64(arr_.count());
+    for (int64_t i = 0; i < arr_.count(); i ++) {
+      size += serialization::encoded_length(arr_.at(i));
+    }
+    return size;
+  }
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    int ret = OB_SUCCESS;
+    int i = -1;
+    if (OB_SUCC(serialization::encode_vi64(buf, buf_len, pos, arr_.count()))) {
+      for (i = 0; i < arr_.count() && OB_SUCC(ret); i ++) {
+        ret = serialization::encode(buf, buf_len, pos, arr_.at(i));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      TRANS_LOG(WARN, "", K(i), K(ret));
+    }
+    return ret;
+  }
+  int deserialize(const char *buf, int64_t data_len, int64_t &pos)
+  {
+    int ret = OB_SUCCESS;
+    arr_.reuse();
+    bool need_push_back = true;
+    int64_t count = 0;
+    if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &count))) {
+      TRANS_LOG(WARN, "decode count fail", K(ret));
+    } else if (OB_FAIL(arr_.prepare_allocate(count))) {
+      if (OB_NOT_SUPPORTED == ret) {
+        ret = arr_.reserve(count);
+      }
+      if (OB_FAIL(ret)) {
+        TRANS_LOG(WARN, "pre-allocate fail", K(ret), K(count));
+      }
+    } else { need_push_back = false; }
+    for (int i = 0; i < count && OB_SUCC(ret); i++) {
+      if (need_push_back) {
+        T it;
+        if (OB_FAIL(serialization::decode(buf, data_len, pos, it))) {
+          TRANS_LOG(WARN, "item decode fail", K(ret), K(i));
+        } else if (OB_FAIL(arr_.push_back(it))) {
+          TRANS_LOG(WARN, "push fail", K(ret), K(i));
+        }
+      } else if (OB_FAIL(serialization::decode(buf, data_len, pos, arr_.at(i)))) {
+        TRANS_LOG(WARN, "item decode fail", K(ret), K(i));
+      }
+    }
+    return ret;
+  }
+};
 } // transaction
 } // oceanbase
 

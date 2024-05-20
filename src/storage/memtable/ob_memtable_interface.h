@@ -41,7 +41,7 @@ class ObTransID;
 }
 namespace memtable
 {
-
+class ObTxFillRedoCtx;
 class ObRedoLogSubmitHelper;
 class ObMemtableCtxCbAllocator;
 
@@ -56,7 +56,6 @@ public:
   ObIMemtableCtx() : ObIMvccCtx() {}
   virtual ~ObIMemtableCtx() {}
 public:
-  virtual void set_read_only() = 0;
   virtual void inc_ref() = 0;
   virtual void dec_ref() = 0;
   virtual int trans_begin() = 0;
@@ -69,7 +68,6 @@ public:
   virtual int trans_replay_end(const bool commit,
                                const share::SCN trans_version,
                                const share::SCN final_scn,
-                               const uint64_t log_cluster_version = 0,
                                const uint64_t checksum = 0) = 0;
   virtual void print_callbacks() = 0;
   //method called when leader takeover
@@ -83,11 +81,7 @@ public:
   VIRTUAL_TO_STRING_KV("", "");
 public:
   // return OB_AGAIN/OB_SUCCESS
-  virtual int fill_redo_log(char *buf,
-                            const int64_t buf_len,
-                            int64_t &buf_pos,
-                            ObRedoLogSubmitHelper &helper,
-                            const bool log_for_lock_node = true) = 0;
+  virtual int fill_redo_log(ObTxFillRedoCtx &ctx) = 0;
   common::ActiveResource resource_link_;
 };
 

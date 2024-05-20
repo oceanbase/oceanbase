@@ -217,7 +217,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "snapshot_barrier=%ld "
                           "snapshot_barrier_flag=%ld "
                           "mtd=%s "
-                          "seq_no=%ld",
+                          "seq_no=%s",
                           this,
                           to_cstring(trans_version_),
                           to_cstring(scn_),
@@ -233,7 +233,7 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          seq_no_.cast_to_int());
+                          to_cstring(seq_no_));
   return pos;
 }
 
@@ -506,8 +506,13 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
         if (OB_SUCC(ret)) {
           if (OB_UNLIKELY(prev->scn_ > node.scn_ || prev->trans_version_ > node.trans_version_)) {
             ret = OB_ERR_UNEXPECTED;
-            TRANS_LOG(ERROR, "meet unexpected index_node", KR(ret), K(*prev), K(node), K(*index_node), K(*this));
+            TRANS_LOG(ERROR, "scn partially order break", KR(ret), KPC(prev), K(node), KPC(index_node), KPC(this));
             abort_unless(0);
+          } else if (prev->tx_id_ == node.tx_id_ && (OB_UNLIKELY(prev->seq_no_ > node.seq_no_))) {
+            ret = OB_ERR_UNEXPECTED;
+            TRANS_LOG(ERROR, "same txn prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
+            usleep(1000);
+            ob_abort();
           } else {
             next_node = next;
             ATOMIC_STORE(&(node.next_), next);
@@ -542,6 +547,14 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
           next_node = tmp;
           prev = &(tmp->prev_);
           tmp = ATOMIC_LOAD(prev);
+        }
+      }
+      if (OB_SUCC(ret) && OB_NOT_NULL(tmp) && tmp->tx_id_ == node.tx_id_) {
+        if (OB_UNLIKELY(tmp->seq_no_ > node.seq_no_)) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "same txn prev node seq_no > this node", KR(ret), "prev", PC(tmp), K(node), KPC(this));
+          usleep(1000);
+          ob_abort();
         }
       }
       if (OB_SUCC(ret)) {
@@ -881,6 +894,7 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
   return ret;
 }
 
+__attribute__((noinline))
 int ObMvccRow::check_double_insert_(const SCN snapshot_version,
                                     ObMvccTransNode &node,
                                     ObMvccTransNode *prev)

@@ -307,6 +307,7 @@ _enable_new_sql_nio
 _enable_oracle_priv_check
 _enable_parallel_das_dml
 _enable_parallel_minor_merge
+_enable_parallel_redo_logging
 _enable_parallel_table_creation
 _enable_partition_level_retry
 _enable_persistent_compiled_routine
@@ -395,6 +396,7 @@ _optimizer_sortmerge_join_enabled
 _parallel_ddl_control
 _parallel_max_active_sessions
 _parallel_min_message_pool
+_parallel_redo_logging_trigger
 _parallel_server_sleep_time
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination

@@ -60,6 +60,8 @@ OB_SERIALIZE_MEMBER(ObLSLogInfo, id_, offset_);
 OB_SERIALIZE_MEMBER(ObStateInfo, ls_id_, state_, version_, snapshot_version_);
 OB_SERIALIZE_MEMBER(ObTransDesc, a_);
 
+OB_SERIALIZE_MEMBER(ObTxExecPart, ls_id_, exec_epoch_, transfer_epoch_);
+
 // class ObStartTransParam
 void ObStartTransParam::reset()
 {
@@ -720,8 +722,10 @@ void ObTxExecInfo::reset()
   max_applying_log_ts_.reset();
   max_applying_part_log_no_ = INT64_MAX;
   max_submitted_seq_no_.reset();
-  checksum_ = 0;
-  checksum_scn_.set_min();
+  checksum_.reset();
+  checksum_.push_back(0);
+  checksum_scn_.reset();
+  checksum_scn_.push_back(share::SCN::min_scn());
   max_durable_lsn_.reset();
   data_complete_ = false;
   is_dup_tx_ = false;
@@ -731,6 +735,8 @@ void ObTxExecInfo::reset()
   xid_.reset();
   need_checksum_ = true;
   is_sub2pc_ = false;
+  serial_final_scn_.reset();
+  serial_final_seq_no_.reset();
 }
 
 void ObTxExecInfo::destroy()
@@ -837,14 +843,19 @@ int ObTxExecInfo::assign(const ObTxExecInfo &exec_info)
     max_applying_log_ts_ = exec_info.max_applying_log_ts_;
     max_applying_part_log_no_ = exec_info.max_applying_part_log_no_;
     max_submitted_seq_no_ = exec_info.max_submitted_seq_no_;
-    checksum_ = exec_info.checksum_;
-    checksum_scn_ = exec_info.checksum_scn_;
+    if (OB_FAIL(checksum_.assign(exec_info.checksum_))) {
+      TRANS_LOG(WARN, "assign failed", K(ret));
+    } else if (OB_FAIL(checksum_scn_.assign(exec_info.checksum_scn_))) {
+      TRANS_LOG(WARN, "assign failed", K(ret));
+    }
     max_durable_lsn_ = exec_info.max_durable_lsn_;
     data_complete_ = exec_info.data_complete_;
     is_dup_tx_ = exec_info.is_dup_tx_;
     xid_ = exec_info.xid_;
     need_checksum_ = exec_info.need_checksum_;
     is_sub2pc_ = exec_info.is_sub2pc_;
+    serial_final_scn_ = exec_info.serial_final_scn_;
+    serial_final_seq_no_ = exec_info.serial_final_seq_no_;
   }
   return ret;
 }
@@ -865,8 +876,8 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     max_applied_log_ts_,
                     max_applying_part_log_no_,
                     max_submitted_seq_no_,
-                    checksum_,
-                    checksum_scn_,
+                    checksum_[0],
+                    checksum_scn_[0],
                     max_durable_lsn_,
                     data_complete_,
                     is_dup_tx_,
@@ -875,7 +886,19 @@ OB_SERIALIZE_MEMBER(ObTxExecInfo,
                     xid_,
                     need_checksum_,
                     is_sub2pc_,
-                    mds_buffer_ctx_array_);
+                    mds_buffer_ctx_array_,
+                    /*begin padding master*/
+                    intermediate_participants_,
+                    is_transfer_blocking_,
+                    commit_parts_,
+                    transfer_parts_,
+                    is_empty_ctx_created_by_transfer_,
+                    exec_epoch_,
+                    /*end padding master */
+                    checksum_,
+                    checksum_scn_,
+                    serial_final_scn_,
+                    serial_final_seq_no_);
 
 bool ObMulSourceDataNotifyArg::is_redo_submitted() const { return redo_submitted_; }
 

@@ -682,7 +682,6 @@ int ObMemtable::exist(
 {
   int ret = OB_SUCCESS;
   ObMemtableKey parameter_mtk;
-  ObMemtableKey returned_mtk;
   ObMvccValueIterator value_iter;
   ObQueryFlag query_flag;
   ObStoreRowLockState lock_state;
@@ -703,7 +702,7 @@ int ObMemtable::exist(
   } else if (OB_FAIL(mvcc_engine_.get(context.store_ctx_->mvcc_acc_ctx_,
                                       query_flag,
                                       &parameter_mtk,
-                                      &returned_mtk,
+                                      NULL,
                                       value_iter,
                                       lock_state))) {
     TRANS_LOG(WARN, "get value iter fail, ", K(ret));
@@ -1140,6 +1139,7 @@ int ObMemtable::replay_schema_version_change_log(const int64_t schema_version)
 }
 
 int ObMemtable::replay_row(ObStoreCtx &ctx,
+                           const share::SCN &scn,
                            ObMemtableMutatorIterator *mmi)
 {
   int ret = OB_SUCCESS;
@@ -1158,8 +1158,6 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   ObMemtableCtx *mt_ctx = ctx.mvcc_acc_ctx_.mem_ctx_;
   ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(mt_ctx->get_trans_ctx());
-  const SCN scn = mt_ctx->get_redo_scn();
-  const int64_t log_id = mt_ctx->get_redo_log_id();
   common::ObTimeGuard timeguard("ObMemtable::replay_row", 5 * 1000);
 
   if (OB_FAIL(mmi->get_mutator_row().copy(table_id, rowkey, table_version, row,
@@ -1180,7 +1178,9 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
     lib::CompatModeGuard compat_guard(mode_);
     ObMemtableData mtd(dml_flag, row.size_, row.data_);
     ObMemtableKey mtk;
-    ObTxNodeArg arg(&mtd,         /*memtable_data*/
+    const transaction::ObTransID tx_id = ctx.mvcc_acc_ctx_.tx_id_;
+    ObTxNodeArg arg(tx_id,        /*trans id*/
+                    &mtd,         /*memtable_data*/
                     NULL,         /*old_row*/
                     version,      /*memstore_version*/
                     seq_no,       /*seq_no*/
@@ -1202,9 +1202,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
                   K(modify_count), K(acc_checksum));
       }
     } else {
-      if (part_ctx->need_update_schema_version(log_id, scn)) {
-        ctx.mvcc_acc_ctx_.mem_ctx_->set_table_version(table_version);
-      }
+      ctx.mvcc_acc_ctx_.mem_ctx_->set_table_version(table_version);
       if (dml_flag != blocksstable::ObDmlFlag::DF_LOCK) {
         set_max_data_schema_version(table_version);
         set_max_column_cnt(column_cnt);
@@ -1737,11 +1735,12 @@ int64_t ObMemtable::dec_write_ref()
   bool is_frozen = is_frozen_memtable();
   int64_t new_write_ref_cnt = get_write_ref();
   int64_t unsubmitted_cnt = get_unsubmitted_cnt();
+  int64_t unsynced_cnt = get_unsynced_cnt();
   if (is_frozen &&
       0 == new_write_ref_cnt &&
-      0 == unsubmitted_cnt) {
+      (0 == unsubmitted_cnt || 0 == unsynced_cnt)) {
     (void)unset_logging_blocked_for_active_memtable();
-    if (0 == get_unsynced_cnt()) {
+    if (0 == unsynced_cnt) {
       resolve_right_boundary();
       (void)resolve_left_boundary_for_active_memtable();
     }
@@ -3068,7 +3067,9 @@ int ObMemtable::set_(
       TRANS_LOG(ERROR, "Unexpected not exist trans node", K(ret), K(new_row));
     } else {
       ObMemtableData mtd(new_row.flag_.get_dml_flag(), len, buf);
-      ObTxNodeArg arg(&mtd,        /*memtable_data*/
+      ObTxNodeArg arg(
+          ctx.mvcc_acc_ctx_.tx_id_, /*trans id*/
+          &mtd,        /*memtable_data*/
           NULL == old_row ? NULL : &old_row_data,
           timestamp_,  /*memstore_version*/
           ctx.mvcc_acc_ctx_.tx_scn_,  /*seq_no*/
@@ -3140,13 +3141,15 @@ int ObMemtable::lock_(
   if (OB_FAIL(row_writer.write_rowkey(rowkey, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
+    ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
     ObMemtableData mtd(blocksstable::ObDmlFlag::DF_LOCK, len, buf);
-    ObTxNodeArg arg(&mtd,                                      /*memtable_data*/
-                    NULL,                                      /*old_data*/
-                    timestamp_,                                /*memstore_version*/
-                    context.store_ctx_->mvcc_acc_ctx_.tx_scn_, /*seq_no*/
-                    rowkey.get_obj_cnt());                     /*column_cnt*/
-    if (context.store_ctx_->mvcc_acc_ctx_.write_flag_.is_check_row_locked()) {
+    ObTxNodeArg arg(acc_ctx.tx_id_,          /*trans id*/
+                    &mtd,                    /*memtable_data*/
+                    NULL,                    /*old_data*/
+                    timestamp_,              /*memstore_version*/
+                    acc_ctx.tx_scn_,         /*seq_no*/
+                    rowkey.get_obj_cnt());   /*column_cnt*/
+    if (acc_ctx.write_flag_.is_check_row_locked()) {
       if (OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint(param, context, rowkey))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
           TRANS_LOG(WARN, "meet unexpected return code in check_row_locked", K(ret), K(context), K(mtk));
@@ -3182,11 +3185,7 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
                                      is_new_add))) {
     TRANS_LOG(WARN, "prepare kv before lock fail", K(ret));
   } else if (FALSE_IT(timeguard.click("mvcc_engine_.create_kv"))) {
-  } else if (OB_FAIL(mvcc_engine_.mvcc_replay(*mem_ctx,
-                                              &stored_key,
-                                              *value,
-                                              arg,
-                                              res))) {
+  } else if (OB_FAIL(mvcc_engine_.mvcc_replay(arg, res))) {
     TRANS_LOG(WARN, "mvcc replay fail", K(ret));
   } else if (FALSE_IT(timeguard.click("mvcc_engine_.mvcc_replay"))) {
   } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {

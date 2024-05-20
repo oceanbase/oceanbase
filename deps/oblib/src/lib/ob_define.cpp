@@ -12,3 +12,23 @@
 
 #include "lib/ob_define.h"
 __thread uint64_t tl_thread_tenant_id = oceanbase::common::OB_SERVER_TENANT_ID;
+
+extern int register_query_trace(int64_t tenant_id, int64_t session_id)
+{
+  return 0;
+}
+
+extern int register_transaction_trace(int64_t tenant_id, int64_t trans_id)
+{
+  return 0;
+}
+
+extern int register_logstream_trace(int64_t tenant_id, int64_t ls_id)
+{
+  return 0;
+}
+
+extern int register_tablet_trace(int64_t tenant_id, int64_t tablet_id)
+{
+  return 0;
+}

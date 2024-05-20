@@ -246,6 +246,7 @@ public:
   virtual int advance_base_info(const int64_t id, const PalfBaseInfo &base_info);
   virtual int get_palf_env(const int64_t server_idx, PalfEnv *&palf_env);
   virtual int wait_until_has_committed(PalfHandleImplGuard &leader, const LSN &lsn);
+  virtual int wait_lsn_until_slide(const LSN &lsn, PalfHandleImplGuard &guard);
   virtual int wait_lsn_until_flushed(const LSN &lsn, PalfHandleImplGuard &guard);
   //wait until all log task pushed into queue of LogIOWorker
   virtual int wait_lsn_until_submitted(const LSN &lsn, PalfHandleImplGuard &guard);

@@ -783,9 +783,16 @@ public:
         tx_ctx->print_trace_log();
       }
       if (OB_SUCC(ret)) {
+        int tmp_ret = OB_SUCCESS;
         share::ObLSArray participants_arr;
-        if (OB_FAIL(tx_ctx->get_2pc_participants_copy(participants_arr))) {
+        int busy_cbs_cnt = -1;
+        if (OB_TMP_FAIL(tx_ctx->get_stat_for_virtual_table(participants_arr, busy_cbs_cnt))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStat get participants copy error", K(ret));
+          // push an invalid ls id to hint the failure
+          participants_arr.push_back(share::ObLSID());
+        }
+        if (OB_FAIL(tx_ctx->mt_ctx_.get_callback_list_stat(tx_stat.callback_list_stats_))) {
+          TRANS_LOG_RET(WARN, ret, "ObTxStat get callback lists stat error", K(ret));
         } else if (OB_FAIL(tx_stat.init(tx_ctx->addr_,
                                             tx_id,
                                             tx_ctx->tenant_id_,
@@ -809,7 +816,10 @@ public:
                                             tx_ctx->is_exiting_,
                                             tx_ctx->exec_info_.xid_,
                                             tx_ctx->exec_info_.upstream_,
-                                            tx_ctx->last_request_ts_))) {
+                                            tx_ctx->last_request_ts_,
+                                            busy_cbs_cnt,
+                                            (int)tx_ctx->replay_completeness_.complete_,
+                                            tx_ctx->exec_info_.serial_final_scn_))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStat init error", K(ret), KPC(tx_ctx));
         } else if (OB_FAIL(tx_stat_iter_.push(tx_stat))) {
           TRANS_LOG_RET(WARN, ret, "ObTxStatIterator push trans stat error", K(ret));
@@ -1105,8 +1115,8 @@ private:
 class ObTxSubmitLogFunctor
 {
 public:
-  explicit ObTxSubmitLogFunctor(const int action)
-    : action_(action), result_(common::OB_SUCCESS), fail_tx_id_()
+  explicit ObTxSubmitLogFunctor(const int action, const uint32_t freeze_clock = UINT32_MAX)
+    : action_(action), freeze_clock_(freeze_clock), result_(common::OB_SUCCESS), fail_tx_id_()
   {
     SET_EXPIRED_LIMIT(100 * 1000 /*100ms*/, 3 * 1000 * 1000 /*3s*/);
   }
@@ -1125,7 +1135,7 @@ public:
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", K(ret), K(tx_id), "ctx", OB_P(tx_ctx));
     } else if (ObTxSubmitLogFunctor::SUBMIT_REDO_LOG == action_) {
-      if (OB_FAIL(tx_ctx->submit_redo_log(true))) {
+      if (OB_FAIL(tx_ctx->submit_redo_log_for_freeze(freeze_clock_))) {
         TRANS_LOG(WARN, "failed to submit redo log", K(ret), K(tx_id));
       }
     } else if (ObTxSubmitLogFunctor::SUBMIT_NEXT_LOG == action_) {
@@ -1150,6 +1160,7 @@ public:
 
 private:
   int action_;
+  uint32_t freeze_clock_;
   int result_;
   ObTransID fail_tx_id_;
 };
