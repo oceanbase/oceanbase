@@ -8934,7 +8934,7 @@ int ObStaticEngineCG::check_only_one_unique_key(const ObLogPlan& log_plan,
   return ret;
 }
 
-bool ObStaticEngineCG::has_cycle_reference(DASTableIdList &parent_tables, const uint64_t table_id)
+bool ObStaticEngineCG::table_exists_in_list(DASTableIdList &parent_tables, const uint64_t table_id)
 {
   bool ret = false;
   if (!parent_tables.empty()) {
@@ -8986,7 +8986,7 @@ int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
       if (root_table_id == parent_table_id && child_table_id != common::OB_INVALID_ID && del_act == ACTION_CASCADE) {
         if (child_table_id == table_id) {
           is_dup = true;
-        } else if (has_cycle_reference(parent_tables, child_table_id)) {
+        } else if (table_exists_in_list(parent_tables, child_table_id)) {
           LOG_DEBUG("This schema has a circular foreign key dependencies");
         } else if (OB_FAIL(SMART_CALL(check_fk_nested_dup_del(table_id, child_table_id, parent_tables, is_dup)))) {
           LOG_WARN("failed deep search nested duplicate delete table", K(ret), K(table_id), K(root_table_id), K(child_table_id));

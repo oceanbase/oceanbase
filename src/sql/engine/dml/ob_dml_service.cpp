@@ -203,6 +203,52 @@ int ObDMLService::check_rowkey_is_null(const ObExprPtrIArray &row,
   return ret;
 }
 
+int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, const uint64_t table_id, bool &exist) 
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (OB_NOT_NULL(parent_table_set)) {
+    DASTableIdList::const_iterator it = parent_table_set->begin();
+    LOG_WARN("asdfasdf check table id", K(table_id));
+    for (; it != parent_table_set->end(); it++) {
+      LOG_WARN("asdfasdf table id in table set", K(*it));
+      if (*it == table_id) {
+        exist = true;
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext* root_ctx;
+  if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_rtctx.get_exec_ctx(), root_ctx))) {
+    LOG_WARN("get root ExecContext failed", K(ret));
+  } else if (OB_ISNULL(root_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the root ctx of foreign key nested session is null", K(ret));
+  } else {
+    DASTableIdList& parent_table_set = root_ctx->get_das_ctx().get_parent_table_set();
+    DASTableIdList::iterator it = parent_table_set.begin();
+    bool found = false;
+    LOG_WARN("asdfasdf delete table id from table set", K(dml_ctdef.das_base_ctdef_.index_tid_));
+    for (; it != parent_table_set.end(); it++) {
+      if (*it == dml_ctdef.das_base_ctdef_.index_tid_) {
+        found = true;
+        parent_table_set.erase(it);
+        break;
+      }
+    }
+    if (!found) {
+      ret = OB_ERR_UNEXPECTED;
+    }
+  }
+  return ret;
+}
+
 int ObDMLService::check_rowkey_whether_distinct(const ObExprPtrIArray &row,
                                                 DistinctType distinct_algo,
                                                 ObEvalCtx &eval_ctx,
@@ -895,6 +941,11 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
     }
   }
 
+  if (!is_skipped && upd_rtdef.has_table_cycle_) {
+    ret = OB_ERR_ROW_IS_REFERENCED;
+    LOG_WARN("A cycle reference is detected in foreign key cascade update.");
+  }
+
   if (OB_FAIL(ret) && dml_op.is_error_logging_ && should_catch_err(ret) && !has_instead_of_trg) {
     dml_op.err_log_rt_def_.first_err_ret_ = ret;
     // cover the err_ret  by design
@@ -1575,6 +1626,31 @@ int ObDMLService::init_upd_rtdef(
       LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
     }
   }
+
+  if (OB_SUCC(ret) && upd_ctdef.is_primary_index_) {
+    ObTableModifyOp &dml_op = dml_rtctx.op_;
+    const uint64_t upd_table_id = upd_ctdef.das_base_ctdef_.index_tid_;
+    ObExecContext *root_ctx = nullptr;
+    if (OB_FAIL(get_exec_ctx_for_duplicate_rowkey_check(&dml_op.get_exec_ctx(), root_ctx))) {
+      LOG_WARN("failed to get root exec ctx", K(ret));
+    } else if (OB_ISNULL(root_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the root exec ctx is nullptr", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      DASTableIdList* parent_table_set = &root_ctx->get_das_ctx().get_parent_table_set();
+      if (OB_FAIL(check_table_cycle(parent_table_set, upd_table_id, upd_rtdef.has_table_cycle_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table cycle reference check failed", K(ret));
+      } else if (!upd_rtdef.has_table_cycle_ && upd_ctdef.need_check_table_cycle_) {
+        if (OB_FAIL(parent_table_set->push_front(upd_table_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to push to parent table set", K(ret));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
