@@ -862,7 +862,6 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     bool has_alter_column_option = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
-    // ObReducedVisibleColSet reduced_visible_col_set;
     HEAP_VAR(ObReducedVisibleColSet, reduced_visible_col_set) {
       for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
         ParseNode *action_node = node.children_[i];
