@@ -5638,7 +5638,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, bacause the column does not exist in the schema.
       } else if (column_schema->is_tbl_part_key_column()) {
-        if (lib::is_oracle_mode() && !is_same) {
+        if (!is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
         } else if (cur_table_schema.is_global_index_table()) {
