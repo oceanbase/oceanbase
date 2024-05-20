@@ -826,6 +826,7 @@ int ObMigrateLSReplicaTask::clone(
     } else {
       my_task->set_src_member(get_src_member());
       my_task->set_data_src_member(get_data_src_member());
+      my_task->set_force_data_src_member(get_force_data_src_member());
       my_task->set_paxos_replica_number(get_paxos_replica_number());
       output_task = my_task;
     }
@@ -1338,6 +1339,7 @@ int ObAddLSReplicaTask::clone(
       LOG_WARN("fail to set dst replica", KR(ret));
     } else {
       my_task->set_data_src_member(get_data_src_member());
+      my_task->set_force_data_src_member(get_force_data_src_member());
       my_task->set_orig_paxos_replica_number(get_orig_paxos_replica_number());
       my_task->set_paxos_replica_number(get_paxos_replica_number());
       output_task = my_task;
