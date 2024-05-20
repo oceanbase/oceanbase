@@ -43,7 +43,12 @@ int ObExprNot::calc_result_type1(ObExprResType &type,
     if (ObMaxType == type1.get_type()) {
       ret = OB_ERR_UNEXPECTED;
     } else {
-      type.set_int();
+      if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_2_1_7 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) ||
+          GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_4_0) {
+        type.set_int32();
+      } else {
+        type.set_int();
+      }
       ObExprOperator::calc_result_flag1(type, type1);
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
       type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
