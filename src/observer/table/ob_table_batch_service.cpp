@@ -642,8 +642,7 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  // hbase put use 'put' in TABLE_API_EXEC_INSERT
-  tb_ctx.set_client_use_put(true);
+  bool can_use_put = true;
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -655,15 +654,37 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
                                                      *trans_lock_handle,
                                                      ObHTableLockMode::SHARED))) {
     LOG_WARN("fail to lock htable rows", K(ret), K(tb_ctx.get_table_id()), K(ctx.ops_));
-  } else if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
-    LOG_WARN("fail to get insert spec", K(ret));
-  } else {
-    if (OB_FAIL(multi_op_in_executor(ctx, *spec))) {
-      LOG_WARN("fail to do multi operarion in executor", K(ret));
+  } else if (OB_FAIL(tb_ctx.check_insert_up_can_use_put(can_use_put))) {
+    LOG_WARN("fail to check htable put can use table api put", K(ret));
+  } else if (can_use_put) {
+    tb_ctx.set_client_use_put(true);
+    if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get insert spec", K(ret));
     } else {
-      for (int64_t i = 0; i < ctx.results_->count(); ++i) {
-        const ObTableOperationResult &single_op_result = ctx.results_->at(i);
-        affected_rows += single_op_result.get_affected_rows();
+      if (OB_FAIL(multi_op_in_executor(ctx, *spec))) {
+        LOG_WARN("fail to do multi operarion in executor", K(ret));
+      } else {
+        for (int64_t i = 0; i < ctx.results_->count(); ++i) {
+          const ObTableOperationResult &single_op_result = ctx.results_->at(i);
+          affected_rows += single_op_result.get_affected_rows();
+        }
+      }
+    }
+  } else {
+    if (OB_FAIL(ObTableOpWrapper::get_insert_up_spec(tb_ctx, cache_guard, spec))) {
+      LOG_WARN("fail to get insert up spec", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx.ops_->count(); ++i) {
+        const ObTableOperation &op = ctx.ops_->at(i);
+        ObTableOperationResult single_op_result;
+        tb_ctx.set_entity(&op.entity());
+        if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
+          LOG_WARN("fail to adjust entity", K(ret));
+        } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, single_op_result))) {
+          LOG_WARN("fail to process op with spec", K(ret));
+        } else {
+          affected_rows += single_op_result.get_affected_rows();
+        }
       }
     }
   }
