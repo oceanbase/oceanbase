@@ -350,7 +350,7 @@ public:
     ObDatumRowkey row_key;
     ObMemtableKey mtk;
     ObMemtableKey stored_key;
-    if (OB_FAIL(ret = write(key, val, mt, row_key, snapshot_version))) {
+    if (OB_FAIL(write(key, val, mt, row_key, snapshot_version))) {
     } else if (OB_FAIL(mtk.encode(tm_->columns_, &row_key.get_store_rowkey()))) {
     } else if (OB_FAIL(mt.query_engine_.get(&mtk, mvcc_row, &stored_key))) {
     }

@@ -9087,6 +9087,8 @@ int ObDDLService::alter_shadow_column_for_index(
               LOG_WARN("fail to assgin new_aux_column_schema", K(ret), KPC(origin_shadow_column_schema));
             } else if (OB_FAIL(fill_new_column_attributes(*alter_column_schema, new_aux_column_schema))) {
               LOG_WARN("failed to fill new column attributes", K(ret), KPC(alter_column_schema), K(new_aux_column_schema));
+            } else if (FALSE_IT(new_aux_column_schema.set_autoincrement(false))) {
+              // shadow column of index table should not be auto_increment
             } else if (OB_FAIL(ObIndexBuilderUtil::set_shadow_column_info(origin_shadow_column_schema->get_column_name(), origin_shadow_column_schema->get_column_id(), new_aux_column_schema))) {
               LOG_WARN("fail to set shadow_column_info", K(ret), K(new_aux_column_schema), K(origin_shadow_column_schema->get_column_name()));
             } else if (OB_FAIL(ddl_operator.update_single_column(trans,
@@ -17649,7 +17651,9 @@ int ObDDLService::rebuild_hidden_table_index(
     for (int64_t i = 0; i < new_table_schemas.count() && OB_SUCC(ret); i++) {
       ObTableSchema &tmp_schema = new_table_schemas.at(i);
       tmp_schema.set_in_offline_ddl_white_list(true); // allow rebuild table index of hidden table
-      if (OB_FAIL(ddl_operator.create_table(tmp_schema, trans, NULL, true))) {
+      if(OB_FAIL(tmp_schema.check_valid(true))) {
+        LOG_WARN("schema is invalid", K(tmp_schema), K(ret));
+      } else if (OB_FAIL(ddl_operator.create_table(tmp_schema, trans, NULL, true))) {
         LOG_WARN("failed to create table schema, ", K(ret));
       }
     }

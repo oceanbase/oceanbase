@@ -1,0 +1,35 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : kunxing.lyk
+# owner group: storage
+# description: check for unsupported tenant names
+#--disable_abort_on_error
+
+
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+CREATE TABLE t1(`a` bigint, `b` date)partition by range columns(`b`) 
+(
+partition part_1 values less than ('2016-09-01'),
+partition part_2 values less than ('2020-09-01')
+);
+
+INSERT INTO t1 VALUES(1,'2010-11-21');
+INSERT INTO t1 VALUES(2,'2011-12-23');
+INSERT INTO t1 VALUES(3,'2018-12-23');
+
+
+# ========= alter exist tenant config ========
+ALTER TABLE t1 CHANGE COLUMN `a` `aa` VARCHAR(50);
+
+# ========= alter non-exist tenant config ========
+-- error 3855
+ALTER TABLE t1 CHANGE COLUMN `b` `bb` VARCHAR(50) AFTER `aa`;
+
+drop table t1;
+
+connection default;
