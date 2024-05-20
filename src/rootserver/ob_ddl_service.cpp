@@ -3094,7 +3094,7 @@ int ObDDLService::set_raw_table_options(
           break;
         }
         case ObAlterTableArg::PRIMARY_ZONE: {
-          LOG_INFO("changing table's primay_zone does not take effect");
+          LOG_INFO("changing table's primary_zone does not take effect");
           ret = OB_SUCCESS; // do nothing
           break;
         }
@@ -3663,6 +3663,12 @@ int ObDDLService::drop_primary_key(
 int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObTableSchema &new_table_schema)
 {
   int ret = OB_SUCCESS;
+  if (pk_column_names.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
+    ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
+    LOG_WARN("primary key count exceeds limit", K(pk_column_names.count()));
+    // LOG_USER_ERROR(OB_ERR_TOO_MANY_ROWKEY_COLUMNS, OB_USER_MAX_ROWKEY_COLUMN_NUMBER);
+  }
+
   // step1: clear origin primary key
   ObTableSchema::const_column_iterator tmp_begin = new_table_schema.column_begin();
   ObTableSchema::const_column_iterator tmp_end = new_table_schema.column_end();
@@ -5024,7 +5030,7 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   bool is_oracle_mode = false;
   const ObIArray<ObForeignKeyInfo> &fk_infos = origin_table_schema.get_foreign_key_infos();
   if (origin_table_schema.is_heap_table()) {
-    const ObString pk_name = "PRIMAY";
+    const ObString pk_name = "PRIMARY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), K(origin_table_schema));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());

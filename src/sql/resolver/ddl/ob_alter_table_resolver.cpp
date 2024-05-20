@@ -3444,7 +3444,7 @@ int ObAlterTableResolver::resolve_alter_primary(const ParseNode &action_node_lis
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "table_schema is null", K(ret));
   } else if (table_schema_->is_heap_table()) {
-    const ObString pk_name = "PRIMAY";
+    const ObString pk_name = "PRIMARY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
@@ -3668,7 +3668,7 @@ int ObAlterTableResolver::resolve_drop_primary(const ParseNode &action_node_list
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schema is null", K(ret));
   } else if (table_schema_->is_heap_table()) {
-    const ObString pk_name = "PRIMAY";
+    const ObString pk_name = "PRIMARY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), KPC(table_schema_));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
