@@ -2003,11 +2003,11 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const {
 // return false if invalid, if you care invalid reason, please use check_valid() rather than this one
 bool ObTableSchema::is_valid() const
 {
-  /* 
-    old version of is_valid() calculate varchar column length by char count rather 
-    than byte count. The param of check_valid() is count_varchar_size_by_byte, 
+  /*
+    old version of is_valid() calculate varchar column length by char count rather
+    than byte count. The param of check_valid() is count_varchar_size_by_byte,
     so in new version of is_valid, set the param to false for compatiblity
-  */ 
+  */
   return check_valid(false) == OB_SUCCESS;
 }
 
