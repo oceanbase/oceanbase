@@ -859,501 +859,503 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     bool is_modify_column_visibility = false;
     int64_t alter_column_times = 0;
     int64_t alter_column_visibility_times = 0;
-    ObReducedVisibleColSet reduced_visible_col_set;
     bool has_alter_column_option = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
-    for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
-      ParseNode *action_node = node.children_[i];
-      if (OB_ISNULL(action_node)) {
-        ret = OB_ERR_UNEXPECTED;
-        SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
-      } else if (lib::is_oracle_mode() && is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
-        ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
-        SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
-      } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
-      } else {
-        switch (action_node->type_) {
-        //deal with alter table option
-        case T_ALTER_TABLE_OPTION: {
-            alter_table_stmt->set_alter_table_option();
-            if (OB_ISNULL(action_node->children_)) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
-            } else if (OB_FAIL(resolve_table_option(action_node->children_[0], false))) {
-              SQL_RESV_LOG(WARN, "Resolve table option failed!", K(ret));
-            }
-            break;
-          }
-        case T_TABLE_OPTION_LIST: {
-            alter_table_stmt->set_alter_table_option();
-            if (OB_FAIL(resolve_alter_table_option_list(*action_node))) {
-              SQL_RESV_LOG(WARN, "Resolve table option failed!", K(ret));
-            }
-            break;
-          }
-        case T_CONVERT_TO_CHARACTER: {
-          alter_table_stmt->set_convert_to_character();
-          if (OB_FAIL(resolve_convert_to_character(*action_node))) {
-            SQL_RESV_LOG(WARN, "Resolve convert to character failed!", K(ret));
-          }
-          break;
-        }
-        //deal with add column, alter column, drop column, change column, modify column
-        case T_ALTER_COLUMN_OPTION: {
-            alter_table_stmt->set_alter_table_column();
-            bool temp_is_modify_column_visibility = false;
-            bool is_drop_column = false;
-            has_alter_column_option = true;
-            if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, reduced_visible_col_set))) {
-              SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
-            } else {
-              if (temp_is_modify_column_visibility) {
-                is_modify_column_visibility = temp_is_modify_column_visibility;
-                ++alter_column_visibility_times;
+    // ObReducedVisibleColSet reduced_visible_col_set;
+    HEAP_VAR(ObReducedVisibleColSet, reduced_visible_col_set) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
+        ParseNode *action_node = node.children_[i];
+        if (OB_ISNULL(action_node)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
+        } else if (lib::is_oracle_mode() && is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
+          ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
+          SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
+        } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
+        } else {
+          switch (action_node->type_) {
+          //deal with alter table option
+          case T_ALTER_TABLE_OPTION: {
+              alter_table_stmt->set_alter_table_option();
+              if (OB_ISNULL(action_node->children_)) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
+              } else if (OB_FAIL(resolve_table_option(action_node->children_[0], false))) {
+                SQL_RESV_LOG(WARN, "Resolve table option failed!", K(ret));
               }
-              if (is_drop_column) {
-                drop_col_act_position_list.push_back(i);
+              break;
+            }
+          case T_TABLE_OPTION_LIST: {
+              alter_table_stmt->set_alter_table_option();
+              if (OB_FAIL(resolve_alter_table_option_list(*action_node))) {
+                SQL_RESV_LOG(WARN, "Resolve table option failed!", K(ret));
               }
-              ++alter_column_times;
+              break;
+            }
+          case T_CONVERT_TO_CHARACTER: {
+            alter_table_stmt->set_convert_to_character();
+            if (OB_FAIL(resolve_convert_to_character(*action_node))) {
+              SQL_RESV_LOG(WARN, "Resolve convert to character failed!", K(ret));
             }
             break;
           }
-        case T_ALTER_COLUMN_GROUP_OPTION: {
-            if (OB_FAIL(resolve_alter_column_groups(*action_node))) {
-                SQL_RESV_LOG(WARN, "Resolve column group option failed!", K(ret));
-            }
-            break;
-          }
-        case T_ALTER_INDEX_OPTION_ORACLE: {
-            alter_table_stmt->set_alter_table_index();
-            if (OB_FAIL(resolve_index_options_oracle(*action_node))) {
-              SQL_RESV_LOG(WARN, "Resolve index option oracle failed!", K(ret));
-            }
-            break;
-          }
-        //deal with add index drop index rename index
-        case T_ALTER_INDEX_OPTION: {
-            // mysql对应alter index
-            bool is_add_index = false;
-            alter_table_stmt->set_alter_table_index();
-            if (OB_FAIL(resolve_index_options(node, *action_node, is_add_index))) {
-              SQL_RESV_LOG(WARN, "Resolve index option failed!", K(ret));
-            } else if (is_add_index) {
-              if (OB_FAIL(add_index_action_idxs.push_back(i))) {
-                LOG_WARN("push back add index failed", K(ret));
+          //deal with add column, alter column, drop column, change column, modify column
+          case T_ALTER_COLUMN_OPTION: {
+              alter_table_stmt->set_alter_table_column();
+              bool temp_is_modify_column_visibility = false;
+              bool is_drop_column = false;
+              has_alter_column_option = true;
+              if (OB_FAIL(resolve_column_options(*action_node, temp_is_modify_column_visibility, is_drop_column, reduced_visible_col_set))) {
+                SQL_RESV_LOG(WARN, "Resolve column option failed!", K(ret));
+              } else {
+                if (temp_is_modify_column_visibility) {
+                  is_modify_column_visibility = temp_is_modify_column_visibility;
+                  ++alter_column_visibility_times;
+                }
+                if (is_drop_column) {
+                  drop_col_act_position_list.push_back(i);
+                }
+                ++alter_column_times;
               }
+              break;
             }
-            break;
-          }
-        case T_ALTER_PARTITION_OPTION: {
-            alter_table_stmt->set_alter_table_partition();
-            if (lib::is_mysql_mode() && alter_table_stmt->get_alter_table_arg().is_alter_columns_) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(
-                OB_NOT_SUPPORTED,
-                "specify alter_column_action and alter_partition_action in a single alter table stmt");
-              LOG_WARN(
-                "alter_column_action and alter_partition_action in a single alter table stmt",
-                K(ret));
-            } else if (OB_FAIL(resolve_partition_options(*action_node))) {
-              SQL_RESV_LOG(WARN, "Resolve partition option failed!", K(ret));
+          case T_ALTER_COLUMN_GROUP_OPTION: {
+              if (OB_FAIL(resolve_alter_column_groups(*action_node))) {
+                  SQL_RESV_LOG(WARN, "Resolve column group option failed!", K(ret));
+              }
+              break;
             }
-            break;
-          }
-        // 仅处理 mysql 模式下的 alter table add check constraint
-        // oracle 模式下的 alter table add check constraint 在 resolve_index_options 里面处理
-        case T_ALTER_CHECK_CONSTRAINT_OPTION: {
-            if (OB_FAIL(resolve_constraint_options(*action_node, node.num_child_ > 1))) {
-              SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
+          case T_ALTER_INDEX_OPTION_ORACLE: {
+              alter_table_stmt->set_alter_table_index();
+              if (OB_FAIL(resolve_index_options_oracle(*action_node))) {
+                SQL_RESV_LOG(WARN, "Resolve index option oracle failed!", K(ret));
+              }
+              break;
             }
-            break;
-          }
-        case T_ALTER_TABLEGROUP_OPTION: {
-            alter_table_stmt->set_alter_table_option();
-            if (OB_FAIL(resolve_tablegroup_options(*action_node))) {
-              SQL_RESV_LOG(WARN, "failed to resolve tablegroup options!", K(ret));
+          //deal with add index drop index rename index
+          case T_ALTER_INDEX_OPTION: {
+              // mysql对应alter index
+              bool is_add_index = false;
+              alter_table_stmt->set_alter_table_index();
+              if (OB_FAIL(resolve_index_options(node, *action_node, is_add_index))) {
+                SQL_RESV_LOG(WARN, "Resolve index option failed!", K(ret));
+              } else if (is_add_index) {
+                if (OB_FAIL(add_index_action_idxs.push_back(i))) {
+                  LOG_WARN("push back add index failed", K(ret));
+                }
+              }
+              break;
             }
-            break;
-          }
-        case T_ALTER_FOREIGN_KEY_OPTION: {
-            alter_table_stmt->set_alter_table_index();
-            if (OB_FAIL(resolve_foreign_key_options(*action_node))) {
-              SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+          case T_ALTER_PARTITION_OPTION: {
+              alter_table_stmt->set_alter_table_partition();
+              if (lib::is_mysql_mode() && alter_table_stmt->get_alter_table_arg().is_alter_columns_) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(
+                  OB_NOT_SUPPORTED,
+                  "specify alter_column_action and alter_partition_action in a single alter table stmt");
+                LOG_WARN(
+                  "alter_column_action and alter_partition_action in a single alter table stmt",
+                  K(ret));
+              } else if (OB_FAIL(resolve_partition_options(*action_node))) {
+                SQL_RESV_LOG(WARN, "Resolve partition option failed!", K(ret));
+              }
+              break;
             }
-            break;
-          }
-        case T_DROP_CONSTRAINT: {
-            // drop check constraint/foreign key/index in oracle mode, drop check constraint/foreign key in mysql mode
-            ObString constraint_name;
-            uint64_t constraint_id = OB_INVALID_ID;
-            bool is_constraint = false; // 表示除去外键及唯一键以外的其他 constraint
-            bool is_foreign_key = false;
-            bool is_unique_key = false;
-            bool is_primary_key = false;
-            ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+          // 仅处理 mysql 模式下的 alter table add check constraint
+          // oracle 模式下的 alter table add check constraint 在 resolve_index_options 里面处理
+          case T_ALTER_CHECK_CONSTRAINT_OPTION: {
+              if (OB_FAIL(resolve_constraint_options(*action_node, node.num_child_ > 1))) {
+                SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
+              }
+              break;
+            }
+          case T_ALTER_TABLEGROUP_OPTION: {
+              alter_table_stmt->set_alter_table_option();
+              if (OB_FAIL(resolve_tablegroup_options(*action_node))) {
+                SQL_RESV_LOG(WARN, "failed to resolve tablegroup options!", K(ret));
+              }
+              break;
+            }
+          case T_ALTER_FOREIGN_KEY_OPTION: {
+              alter_table_stmt->set_alter_table_index();
+              if (OB_FAIL(resolve_foreign_key_options(*action_node))) {
+                SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+              }
+              break;
+            }
+          case T_DROP_CONSTRAINT: {
+              // drop check constraint/foreign key/index in oracle mode, drop check constraint/foreign key in mysql mode
+              ObString constraint_name;
+              uint64_t constraint_id = OB_INVALID_ID;
+              bool is_constraint = false; // 表示除去外键及唯一键以外的其他 constraint
+              bool is_foreign_key = false;
+              bool is_unique_key = false;
+              bool is_primary_key = false;
+              ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
 
-            if (OB_ISNULL(action_node->children_[0])) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
-            } else if (OB_ISNULL(action_node->children_[0]->str_value_) || action_node->children_[0]->str_len_ <= 0) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "invalid parse tree", K(ret), KP(action_node->children_[0]->str_value_), K(action_node->children_[0]->str_len_));
-            } else {
-              constraint_name.assign_ptr(action_node->children_[0]->str_value_, static_cast<int32_t>(action_node->children_[0]->str_len_));
-            }
-            if (OB_SUCC(ret)) {
-              if (!table_schema_->is_mysql_tmp_table()) {
-                if (OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
-                                                            table_schema_->get_database_id(),
-                                                            constraint_name,
-                                                            constraint_id))) {
-                  LOG_WARN("get constraint id failed", K(ret),
-                                                       K(table_schema_->get_tenant_id()),
-                                                       K(table_schema_->get_database_id()),
-                                                       K(constraint_name));
-                } else {
-                  is_constraint = OB_INVALID_ID != constraint_id;
-                  is_primary_key = lib::is_oracle_mode() && nullptr != table_schema_->get_constraint(constraint_id)
-                    && CONSTRAINT_TYPE_PRIMARY_KEY == table_schema_->get_constraint(constraint_id)->get_constraint_type();
-                }
-              } else { // tmp table in mysql mode
-                ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
-                for (; OB_SUCC(ret) && iter != table_schema_->constraint_end(); ++iter) {
-                  if (0 == constraint_name.case_compare((*iter)->get_constraint_name_str())) {
-                    is_constraint = true;
-                    break;
-                  }
-                }
+              if (OB_ISNULL(action_node->children_[0])) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
+              } else if (OB_ISNULL(action_node->children_[0]->str_value_) || action_node->children_[0]->str_len_ <= 0) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_RESV_LOG(WARN, "invalid parse tree", K(ret), KP(action_node->children_[0]->str_value_), K(action_node->children_[0]->str_len_));
+              } else {
+                constraint_name.assign_ptr(action_node->children_[0]->str_value_, static_cast<int32_t>(action_node->children_[0]->str_len_));
               }
-              if (OB_SUCC(ret) && (lib::is_mysql_mode() || !is_constraint)) { // drop foreign key
-                // 在 drop constraint 的时候检查约束类型是否是 foreign key 或者 unique constraint
-                if (OB_FAIL(schema_guard->get_foreign_key_id(table_schema_->get_tenant_id(),
-                                                             table_schema_->get_database_id(),
-                                                             constraint_name,
-                                                             constraint_id))) {
-                  LOG_WARN("get foreign key id failed", K(ret),
+              if (OB_SUCC(ret)) {
+                if (!table_schema_->is_mysql_tmp_table()) {
+                  if (OB_FAIL(schema_guard->get_constraint_id(table_schema_->get_tenant_id(),
+                                                              table_schema_->get_database_id(),
+                                                              constraint_name,
+                                                              constraint_id))) {
+                    LOG_WARN("get constraint id failed", K(ret),
                                                         K(table_schema_->get_tenant_id()),
                                                         K(table_schema_->get_database_id()),
                                                         K(constraint_name));
-                } else if (OB_INVALID_ID != constraint_id) {
-                  if (is_constraint) {
-                    ObString action("drop");
-                    ret = OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME;
-                    LOG_USER_ERROR(OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME,
-                                   constraint_name.length(), constraint_name.ptr(),
-                                   action.length(), action.ptr());
-                    LOG_WARN("drop colum failed : muti-column constraint", K(ret), K(constraint_name));
+                  } else {
+                    is_constraint = OB_INVALID_ID != constraint_id;
+                    is_primary_key = lib::is_oracle_mode() && nullptr != table_schema_->get_constraint(constraint_id)
+                      && CONSTRAINT_TYPE_PRIMARY_KEY == table_schema_->get_constraint(constraint_id)->get_constraint_type();
                   }
-                  is_foreign_key = true;
+                } else { // tmp table in mysql mode
+                  ObTableSchema::const_constraint_iterator iter = table_schema_->constraint_begin();
+                  for (; OB_SUCC(ret) && iter != table_schema_->constraint_end(); ++iter) {
+                    if (0 == constraint_name.case_compare((*iter)->get_constraint_name_str())) {
+                      is_constraint = true;
+                      break;
+                    }
+                  }
+                }
+                if (OB_SUCC(ret) && (lib::is_mysql_mode() || !is_constraint)) { // drop foreign key
+                  // 在 drop constraint 的时候检查约束类型是否是 foreign key 或者 unique constraint
+                  if (OB_FAIL(schema_guard->get_foreign_key_id(table_schema_->get_tenant_id(),
+                                                              table_schema_->get_database_id(),
+                                                              constraint_name,
+                                                              constraint_id))) {
+                    LOG_WARN("get foreign key id failed", K(ret),
+                                                          K(table_schema_->get_tenant_id()),
+                                                          K(table_schema_->get_database_id()),
+                                                          K(constraint_name));
+                  } else if (OB_INVALID_ID != constraint_id) {
+                    if (is_constraint) {
+                      ObString action("drop");
+                      ret = OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME;
+                      LOG_USER_ERROR(OB_ERR_MULTIPLE_CONSTRAINTS_WITH_SAME_NAME,
+                                    constraint_name.length(), constraint_name.ptr(),
+                                    action.length(), action.ptr());
+                      LOG_WARN("drop colum failed : muti-column constraint", K(ret), K(constraint_name));
+                    }
+                    is_foreign_key = true;
+                  }
+                }
+                if (OB_SUCC(ret) && lib::is_oracle_mode() && !is_constraint && !is_foreign_key) {
+                  // drop unique index (only in oracle mode)
+                  const ObSimpleTableSchemaV2* simple_table_schema = nullptr;
+                  ObString unique_index_name_with_prefix;
+                  if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
+                              table_schema_->get_table_id(),
+                              constraint_name,
+                              unique_index_name_with_prefix))) {
+                    LOG_WARN("build_index_table_name failed", K(ret), K(table_schema_->get_table_id()), K(constraint_name));
+                  } else if (OB_FAIL(schema_guard->get_simple_table_schema(table_schema_->get_tenant_id(),
+                                    table_schema_->get_database_id(),
+                                    unique_index_name_with_prefix,
+                                    true,
+                                    simple_table_schema))) {
+                    LOG_WARN("failed to get simple table schema",
+                              K(ret),
+                              K(table_schema_->get_tenant_id()),
+                              K(table_schema_->get_database_id()),
+                              K(unique_index_name_with_prefix));
+                  } else if (OB_NOT_NULL(simple_table_schema) && simple_table_schema->is_unique_index()) {
+                    is_unique_key = true;
+                  }
                 }
               }
-              if (OB_SUCC(ret) && lib::is_oracle_mode() && !is_constraint && !is_foreign_key) {
-                // drop unique index (only in oracle mode)
-                const ObSimpleTableSchemaV2* simple_table_schema = nullptr;
-                ObString unique_index_name_with_prefix;
-                if (OB_FAIL(ObTableSchema::build_index_table_name(*allocator_,
-                            table_schema_->get_table_id(),
-                            constraint_name,
-                            unique_index_name_with_prefix))) {
-                  LOG_WARN("build_index_table_name failed", K(ret), K(table_schema_->get_table_id()), K(constraint_name));
-                } else if (OB_FAIL(schema_guard->get_simple_table_schema(table_schema_->get_tenant_id(),
-                                   table_schema_->get_database_id(),
-                                   unique_index_name_with_prefix,
-                                   true,
-                                   simple_table_schema))) {
-                  LOG_WARN("failed to get simple table schema",
-                            K(ret),
-                            K(table_schema_->get_tenant_id()),
-                            K(table_schema_->get_database_id()),
-                            K(unique_index_name_with_prefix));
-                } else if (OB_NOT_NULL(simple_table_schema) && simple_table_schema->is_unique_index()) {
-                  is_unique_key = true;
+              if (OB_SUCC(ret)) {
+                if (is_primary_key) {
+                  alter_table_stmt->set_alter_table_index();
+                  if (action_node->num_child_ <= 0) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected err", K(ret));
+                  } else if (OB_FALSE_IT(action_node->children_[0]->type_ = T_PRIMARY_KEY_DROP)) {
+                  } else if (OB_FAIL(resolve_drop_primary(node))) {
+                    LOG_WARN("resolve drop primary key failed", K(ret), K(constraint_name));
+                  }
+                } else if (is_constraint) {
+                  if (OB_FAIL(resolve_constraint_options(*action_node, node.num_child_ > 1))) {
+                    SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
+                  }
+                } else if(is_foreign_key) {
+                  alter_table_stmt->set_alter_table_index();
+                  if (OB_FAIL(resolve_foreign_key_options(*action_node))) {
+                    SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+                  }
+                } else if (is_unique_key) {
+                  action_node->type_ = T_INDEX_DROP;
+                  alter_table_stmt->set_alter_table_index();
+                  if (OB_FAIL(resolve_drop_index(*action_node))) {
+                    SQL_RESV_LOG(WARN, "Resolve drop index error!", K(ret));
+                  }
+                } else {
+                  ret = OB_ERR_NONEXISTENT_CONSTRAINT;
+                  if (lib::is_mysql_mode()) {
+                    LOG_USER_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
+                  }
+                  SQL_RESV_LOG(WARN,
+                      "Cannot drop constraint  - nonexistent constraint",
+                      K(ret),
+                      K(*table_schema_),
+                      K(constraint_name));
                 }
+              }
+              break;
+          }
+          case T_MODIFY_ALL_TRIGGERS: {
+              alter_table_stmt->set_is_alter_triggers(true);
+              if (OB_FAIL(resolve_modify_all_trigger(*action_node))) {
+                SQL_RESV_LOG(WARN, "failed to resolve trigger option!", K(ret));
+              }
+              break;
+          }
+          case T_SET_INTERVAL: {
+              if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
+                SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+              }
+              break;
+          }
+          case T_REMOVE_TTL: {
+            uint64_t tenant_data_version = 0;
+            if (OB_ISNULL(session_info_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null", K(ret));
+            } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
+              LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
+            } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("REMOVE TTL is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
+            } else {
+              ttl_definition_.reset();
+              if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
+                SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
               }
             }
-            if (OB_SUCC(ret)) {
-              if (is_primary_key) {
-                alter_table_stmt->set_alter_table_index();
-                if (action_node->num_child_ <= 0) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("unexpected err", K(ret));
-                } else if (OB_FALSE_IT(action_node->children_[0]->type_ = T_PRIMARY_KEY_DROP)) {
-                } else if (OB_FAIL(resolve_drop_primary(node))) {
-                  LOG_WARN("resolve drop primary key failed", K(ret), K(constraint_name));
-                }
-              } else if (is_constraint) {
-                if (OB_FAIL(resolve_constraint_options(*action_node, node.num_child_ > 1))) {
-                  SQL_RESV_LOG(WARN, "Resolve check constraint option in mysql mode failed!", K(ret));
-                }
-              } else if(is_foreign_key) {
-                alter_table_stmt->set_alter_table_index();
-                if (OB_FAIL(resolve_foreign_key_options(*action_node))) {
-                  SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
-                }
-              } else if (is_unique_key) {
-                action_node->type_ = T_INDEX_DROP;
-                alter_table_stmt->set_alter_table_index();
-                if (OB_FAIL(resolve_drop_index(*action_node))) {
-                  SQL_RESV_LOG(WARN, "Resolve drop index error!", K(ret));
-                }
+            break;
+          }
+          case T_ALTER_REFRESH_EXTERNAL_TABLE : {
+            alter_table_stmt->set_alter_external_table_type(action_node->type_);
+            if (table_schema_->is_external_table()) {
+              if (table_schema_->is_user_specified_partition_for_external_table()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter refresh user-specified partition external table");
+                LOG_WARN("alter refresh user-specified partition external table not supported", K(ret), K(action_node->type_));
               } else {
-                ret = OB_ERR_NONEXISTENT_CONSTRAINT;
-                if (lib::is_mysql_mode()) {
-                  LOG_USER_ERROR(OB_ERR_NONEXISTENT_CONSTRAINT, constraint_name.length(), constraint_name.ptr());
-                }
-                SQL_RESV_LOG(WARN,
-                    "Cannot drop constraint  - nonexistent constraint",
-                    K(ret),
-                    K(*table_schema_),
-                    K(constraint_name));
+                ObString origin_table_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_table_name();
+                ObString origin_db_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_database_name();
+                OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
+                alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_table_name(origin_table_name);
+                alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_database_name(origin_db_name);
               }
+            } else {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid to alter non external table", K(ret));
             }
             break;
-        }
-        case T_MODIFY_ALL_TRIGGERS: {
-            alter_table_stmt->set_is_alter_triggers(true);
-            if (OB_FAIL(resolve_modify_all_trigger(*action_node))) {
-              SQL_RESV_LOG(WARN, "failed to resolve trigger option!", K(ret));
-            }
+          }
+          case T_ALTER_EXTERNAL_PARTITION_OPTION: {
+            alter_table_stmt->set_alter_external_table_type(action_node->type_);
+            OZ (resolve_external_partition_options(*action_node));
             break;
-        }
-        case T_SET_INTERVAL: {
-            if (OB_FAIL(resolve_set_interval(alter_table_stmt, *action_node))) {
-              SQL_RESV_LOG(WARN, "failed to resolve foreign key options in mysql mode!", K(ret));
+          }
+          default: {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "Unknown alter table action %d", K_(action_node->type), K(ret));
+              /* won't be here */
+              break;
             }
-            break;
+          }
         }
-        case T_REMOVE_TTL: {
-          uint64_t tenant_data_version = 0;
-          if (OB_ISNULL(session_info_)) {
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(resolve_column_group_for_column())) {
+        LOG_WARN("failed to resolve column group", K(ret));
+      } else if (OB_FAIL(check_skip_index(alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
+        LOG_WARN("failed to resolve skip index", K(ret));
+      }
+      //deal with drop column affer drop constraint (mysql mode)
+      if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
+        for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
+          if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
+            SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < add_index_action_idxs.count(); ++i) {
+          ParseNode *action_node = NULL;
+          if (add_index_action_idxs.at(i) < 0 || add_index_action_idxs.at(i) > node.num_child_) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid id", K(ret), K(node.num_child_), K(add_index_action_idxs));
+          } else if (OB_ISNULL(action_node = node.children_[add_index_action_idxs.at(i)])) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected null", K(ret));
-          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), tenant_data_version))) {
-            LOG_WARN("get tenant data version failed", K(ret), K(session_info_->get_effective_tenant_id()));
-          } else if (tenant_data_version < DATA_VERSION_4_2_1_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("REMOVE TTL is not supported in data version less than 4.2.1", K(ret), K(tenant_data_version));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "REMOVE TTL in data version less than 4.2.1");
-          } else {
-            ttl_definition_.reset();
-            if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
-              SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
-            }
-          }
-          break;
-        }
-        case T_ALTER_REFRESH_EXTERNAL_TABLE : {
-          alter_table_stmt->set_alter_external_table_type(action_node->type_);
-          if (table_schema_->is_external_table()) {
-            if (table_schema_->is_user_specified_partition_for_external_table()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter refresh user-specified partition external table");
-              LOG_WARN("alter refresh user-specified partition external table not supported", K(ret), K(action_node->type_));
-            } else {
-              ObString origin_table_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_table_name();
-              ObString origin_db_name = alter_table_stmt->get_alter_table_arg().alter_table_schema_.get_origin_database_name();
-              OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.assign(*table_schema_));
-              alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_table_name(origin_table_name);
-              alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_origin_database_name(origin_db_name);
-            }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid to alter non external table", K(ret));
-          }
-          break;
-        }
-        case T_ALTER_EXTERNAL_PARTITION_OPTION: {
-          alter_table_stmt->set_alter_external_table_type(action_node->type_);
-          OZ (resolve_external_partition_options(*action_node));
-          break;
-        }
-        default: {
+          } else if (action_node->num_child_ <= 0
+                    || OB_ISNULL(action_node->children_)
+                    || OB_ISNULL(action_node->children_[0])) {
             ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "Unknown alter table action %d", K_(action_node->type), K(ret));
-            /* won't be here */
-            break;
+            LOG_WARN("unexpected action node", K(ret));
+          } else if (OB_FAIL(resolve_add_index(*(action_node->children_[0])))) {
+            LOG_WARN("resolve add index failed", K(ret));
           }
         }
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(resolve_column_group_for_column())) {
-      LOG_WARN("failed to resolve column group", K(ret));
-    } else if (OB_FAIL(check_skip_index(alter_table_stmt->get_alter_table_arg().alter_table_schema_))) {
-      LOG_WARN("failed to resolve skip index", K(ret));
-    }
-    //deal with drop column affer drop constraint (mysql mode)
-    if (OB_SUCC(ret) && lib::is_mysql_mode() && drop_col_act_position_list.count() > 0) {
-      for (uint64_t i = 0; OB_SUCC(ret) && i < drop_col_act_position_list.count(); ++i) {
-        if (OB_FAIL(resolve_drop_column_nodes_for_mysql(*node.children_[drop_col_act_position_list.at(i)], reduced_visible_col_set))) {
-          SQL_RESV_LOG(WARN, "Resolve drop column error!", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < add_index_action_idxs.count(); ++i) {
-        ParseNode *action_node = NULL;
-        if (add_index_action_idxs.at(i) < 0 || add_index_action_idxs.at(i) > node.num_child_) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid id", K(ret), K(node.num_child_), K(add_index_action_idxs));
-        } else if (OB_ISNULL(action_node = node.children_[add_index_action_idxs.at(i)])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret));
-        } else if (action_node->num_child_ <= 0
-                   || OB_ISNULL(action_node->children_)
-                   || OB_ISNULL(action_node->children_[0])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected action node", K(ret));
-        } else if (OB_FAIL(resolve_add_index(*(action_node->children_[0])))) {
-          LOG_WARN("resolve add index failed", K(ret));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (lib::is_oracle_mode() && is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
-        ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
-        SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
-      } else {
-        bool has_visible_col = false;
-        bool has_hidden_gencol = false;
-        ObColumnIterByPrevNextID iter(*table_schema_);
-        const ObColumnSchemaV2 *column_schema = NULL;
-        while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_visible_col) {
-          if (OB_ISNULL(column_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "The column is null", K(ret));
-          } else if (column_schema->is_shadow_column()) {
-            // skip shadow column
-            continue;
-          } else if (column_schema->is_invisible_column()) {
-            // skip invisible column
-            continue;
-          } else if (column_schema->is_hidden()) {
-            // skip hidden column
-            has_hidden_gencol |= column_schema->is_virtual_generated_column();
-            continue;
-          } else { // is visible column
-            ObColumnNameHashWrapper col_key(column_schema->get_column_name_str());
-            if (OB_HASH_NOT_EXIST == reduced_visible_col_set.exist_refactored(col_key)) {
-              has_visible_col = true;
-              ret = OB_SUCCESS; // change ret from OB_HASH_NOT_EXIST to OB_SUCCESS
-            } else { // OB_HASH_EXIST
-              ret = OB_SUCCESS; // change ret from OB_HASH_EXIST to OB_SUCCESS
-            }
-          }
-        }
-        if (OB_FAIL(ret) && OB_ITER_END != ret) {
-          SQL_RESV_LOG(WARN, "failed to check column visibility", K(ret));
-          if (NULL != column_schema) {
-            SQL_RESV_LOG(WARN, "failed column schema", K(*column_schema),
-                                                       K(column_schema->is_hidden()));
-          }
+      if (OB_SUCC(ret)) {
+        if (lib::is_oracle_mode() && is_modify_column_visibility && (alter_column_times != alter_column_visibility_times)) {
+          ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
+          SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
         } else {
-          ret = OB_SUCCESS;
-        }
-        if (OB_SUCC(ret)) {
-          if (lib::is_oracle_mode() && alter_column_visibility_times > reduced_visible_col_set.count()) {
-            // 走到这里说明存在 alter table modify column visible，则至少有一个 visible column，不应该报错
-          } else if (!has_visible_col && (is_oracle_mode() || has_hidden_gencol)) {
-            //If there's no hidden generated columns, OB will check if all fields are dropped on rootserver
-            ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
-            SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible", K(ret));
+          bool has_visible_col = false;
+          bool has_hidden_gencol = false;
+          ObColumnIterByPrevNextID iter(*table_schema_);
+          const ObColumnSchemaV2 *column_schema = NULL;
+          while (OB_SUCC(ret) && OB_SUCC(iter.next(column_schema)) && !has_visible_col) {
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "The column is null", K(ret));
+            } else if (column_schema->is_shadow_column()) {
+              // skip shadow column
+              continue;
+            } else if (column_schema->is_invisible_column()) {
+              // skip invisible column
+              continue;
+            } else if (column_schema->is_hidden()) {
+              // skip hidden column
+              has_hidden_gencol |= column_schema->is_virtual_generated_column();
+              continue;
+            } else { // is visible column
+              ObColumnNameHashWrapper col_key(column_schema->get_column_name_str());
+              if (OB_HASH_NOT_EXIST == reduced_visible_col_set.exist_refactored(col_key)) {
+                has_visible_col = true;
+                ret = OB_SUCCESS; // change ret from OB_HASH_NOT_EXIST to OB_SUCCESS
+              } else { // OB_HASH_EXIST
+                ret = OB_SUCCESS; // change ret from OB_HASH_EXIST to OB_SUCCESS
+              }
+            }
+          }
+          if (OB_FAIL(ret) && OB_ITER_END != ret) {
+            SQL_RESV_LOG(WARN, "failed to check column visibility", K(ret));
+            if (NULL != column_schema) {
+              SQL_RESV_LOG(WARN, "failed column schema", K(*column_schema),
+                                                        K(column_schema->is_hidden()));
+            }
+          } else {
+            ret = OB_SUCCESS;
+          }
+          if (OB_SUCC(ret)) {
+            if (lib::is_oracle_mode() && alter_column_visibility_times > reduced_visible_col_set.count()) {
+              // 走到这里说明存在 alter table modify column visible，则至少有一个 visible column，不应该报错
+            } else if (!has_visible_col && (is_oracle_mode() || has_hidden_gencol)) {
+              //If there's no hidden generated columns, OB will check if all fields are dropped on rootserver
+              ret = OB_ERR_ONLY_HAVE_INVISIBLE_COL_IN_TABLE;
+              SQL_RESV_LOG(WARN, "table must have at least one column that is not invisible", K(ret));
+            }
           }
         }
       }
-    }
-    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-      if (alter_table_stmt->get_alter_table_action_count() > 1) {
-        // 由于alter table add index将会使用在observer端进行同步建索引
-        // 而其他已经在rs端执行过的ddl无法rollback，
-        // 因此add index前, 禁掉其他ddl
-        ObSArray<obrpc::ObCreateIndexArg*> &index_arg_list = alter_table_stmt->get_index_arg_list();
-        for (int32_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
-          const ObCreateIndexArg *index_arg = index_arg_list.at(i);
-          if (NULL == index_arg) {
-            ret = OB_ERR_UNEXPECTED;
-            SQL_RESV_LOG(WARN, "index arg is null", K(ret));
-          } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
-            // supported in mysql.
+      if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+        if (alter_table_stmt->get_alter_table_action_count() > 1) {
+          // 由于alter table add index将会使用在observer端进行同步建索引
+          // 而其他已经在rs端执行过的ddl无法rollback，
+          // 因此add index前, 禁掉其他ddl
+          ObSArray<obrpc::ObCreateIndexArg*> &index_arg_list = alter_table_stmt->get_index_arg_list();
+          for (int32_t i = 0; OB_SUCC(ret) && i < index_arg_list.count(); ++i) {
+            const ObCreateIndexArg *index_arg = index_arg_list.at(i);
+            if (NULL == index_arg) {
+              ret = OB_ERR_UNEXPECTED;
+              SQL_RESV_LOG(WARN, "index arg is null", K(ret));
+            } else if (obrpc::ObIndexArg::ADD_INDEX == index_arg->index_action_type_) {
+              // supported in mysql.
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("add index together with other ddls not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add index together with other DDLs");
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (alter_table_stmt->get_alter_table_action_count() > 1) {
+          if(0 != alter_table_stmt->get_foreign_key_arg_list().count()) {
+            // suppored in mysql
             ret = OB_NOT_SUPPORTED;
-            LOG_WARN("add index together with other ddls not supported", K(ret));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add index together with other DDLs");
+            LOG_WARN("add/modify foreign key together with other ddls not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify foreign key together with other DDLs");
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (alter_table_stmt->get_alter_table_action_count() > 1) {
-        if(0 != alter_table_stmt->get_foreign_key_arg_list().count()) {
-          // suppored in mysql
+      LOG_DEBUG("check add/modify cst allowed", K(alter_table_stmt->get_alter_table_action_count()), K(add_or_modify_check_cst_times_),
+                K(add_not_null_constraint_), K(add_column_cnt_));
+      const AlterTableSchema &table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
+      if (OB_SUCC(ret)) {
+        if (alter_table_stmt->get_alter_table_action_count() > 1) {
+          if (0 != add_or_modify_check_cst_times_) {
+            // suppored in mysql
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("add/modify constraint together with other ddls not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify constraint together with other DDLs");
+          } else if (lib::is_oracle_mode() && add_not_null_constraint_ && alter_table_stmt->get_alter_table_action_count() != add_column_cnt_) {
+            // A ddl can't contain "add/modify column not null" with other clauses, except
+            // multiple "add column (not null)"
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("add/modify not null constraint together with other ddls not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
+          }
+        } else if (lib::is_oracle_mode()
+                && OB_UNLIKELY(1 == alter_table_stmt->get_alter_table_action_count()
+                && table_schema.get_column_count() > 1
+                && OB_DDL_MODIFY_COLUMN ==
+                    (static_cast<const AlterColumnSchema*>(*table_schema.column_begin()))->alter_type_
+                && add_not_null_constraint_)) {
+          // alter table t modify(c1 not null, c2 varchar(100));
+          // supported in mysql && oracle
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("add/modify foreign key together with other ddls not supported", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify foreign key together with other DDLs");
-        }
-      }
-    }
-    LOG_DEBUG("check add/modify cst allowed", K(alter_table_stmt->get_alter_table_action_count()), K(add_or_modify_check_cst_times_),
-              K(add_not_null_constraint_), K(add_column_cnt_));
-    const AlterTableSchema &table_schema = alter_table_stmt->get_alter_table_arg().alter_table_schema_;
-    if (OB_SUCC(ret)) {
-      if (alter_table_stmt->get_alter_table_action_count() > 1) {
-        if (0 != add_or_modify_check_cst_times_) {
-          // suppored in mysql
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("add/modify constraint together with other ddls not supported", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify constraint together with other DDLs");
-        } else if (lib::is_oracle_mode() && add_not_null_constraint_ && alter_table_stmt->get_alter_table_action_count() != add_column_cnt_) {
-          // A ddl can't contain "add/modify column not null" with other clauses, except
-          // multiple "add column (not null)"
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("add/modify not null constraint together with other ddls not supported", K(ret));
+          LOG_WARN("add/modify not null constraint together with other ddls", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
         }
-      } else if (lib::is_oracle_mode()
-              && OB_UNLIKELY(1 == alter_table_stmt->get_alter_table_action_count()
-              && table_schema.get_column_count() > 1
-              && OB_DDL_MODIFY_COLUMN ==
-                  (static_cast<const AlterColumnSchema*>(*table_schema.column_begin()))->alter_type_
-              && add_not_null_constraint_)) {
-        // alter table t modify(c1 not null, c2 varchar(100));
-        // supported in mysql && oracle
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("add/modify not null constraint together with other ddls", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Add/modify not null constraint together with other DDLs");
       }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(check_alter_column_schemas_valid(*alter_table_stmt))) {
-      LOG_WARN("failed to check alter column schemas valid", K(ret));
-    }
+      if (OB_SUCC(ret) && OB_FAIL(check_alter_column_schemas_valid(*alter_table_stmt))) {
+        LOG_WARN("failed to check alter column schemas valid", K(ret));
+      }
 
-    if (OB_SUCC(ret)) {
-      // modify/change definition ttl column is not allowed currently
-      if (has_alter_column_option && alter_table_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET/REMOVE TTL together with other Alter Column DDL");
-      } else if (has_alter_column_option) {
-        ObTableSchema tbl_schema;
-        ObSEArray<ObString, 8> ttl_columns;
-        if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
-          LOG_WARN("fail to get table schema", K(ret));
-        } else if (OB_FAIL(get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
-          LOG_WARN("fail to get ttl column", K(ret));
-        } else if (ttl_columns.empty()) {
-          // do nothing
-        } else {
-          AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
-          ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
-          ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
-          for (; OB_SUCC(ret) && iter != end; ++iter) {
-            const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
-            if (OB_ISNULL(column)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null alter column", K(ret));
-            } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
+      if (OB_SUCC(ret)) {
+        // modify/change definition ttl column is not allowed currently
+        if (has_alter_column_option && alter_table_bitset_.has_member(ObAlterTableArg::TTL_DEFINITION)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "SET/REMOVE TTL together with other Alter Column DDL");
+        } else if (has_alter_column_option) {
+          ObTableSchema tbl_schema;
+          ObSEArray<ObString, 8> ttl_columns;
+          if (OB_FAIL(get_table_schema_for_check(tbl_schema))) {
+            LOG_WARN("fail to get table schema", K(ret));
+          } else if (OB_FAIL(get_ttl_columns(tbl_schema.get_ttl_definition(), ttl_columns))) {
+            LOG_WARN("fail to get ttl column", K(ret));
+          } else if (ttl_columns.empty()) {
+            // do nothing
+          } else {
+            AlterTableSchema &alter_table_schema = get_alter_table_stmt()->get_alter_table_arg().alter_table_schema_;
+            ObTableSchema::const_column_iterator iter = alter_table_schema.column_begin();
+            ObTableSchema::const_column_iterator end = alter_table_schema.column_end();
+            for (; OB_SUCC(ret) && iter != end; ++iter) {
+              const AlterColumnSchema *column = static_cast<AlterColumnSchema *>(*iter);
+              if (OB_ISNULL(column)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null alter column", K(ret));
+              } else if (is_ttl_column(column->get_origin_column_name(), ttl_columns)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("Modify/Change TTL column is not allowed", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Modify/Change TTL column");
+              }
             }
           }
         }
