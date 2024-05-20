@@ -1120,13 +1120,13 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
           } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             LOG_WARN("fail to get data table tablet checksum items", KR(ret), K(data_table_schema));
           }
-        } else if (need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
-                                         need_verify, index_ckm_tablet_cnt)) {
+        } else if (OB_FAIL(need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
+                                         need_verify, index_ckm_tablet_cnt))) {
           LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
         } else if (!need_verify) {
           LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
-        } else if (need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
-                                         need_verify, data_ckm_tablet_cnt)) {
+        } else if (OB_FAIL(need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
+                                         need_verify, data_ckm_tablet_cnt))) {
           LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
         } else if (!need_verify) {
           LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
@@ -1197,13 +1197,13 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet count of local index table is not same with data table", KR(ret), "data_table_tablet_cnt",
           data_table_tablets.count(), "index_table_tablet_cnt", index_table_tablets.count());
-      } else if (need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
-                                       need_verify, index_ckm_tablet_cnt)) {
+      } else if (OB_FAIL(need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
+                                       need_verify, index_ckm_tablet_cnt))) {
         LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
       } else if (!need_verify) {
         LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
-      } else if (need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
-                                       need_verify, data_ckm_tablet_cnt)) {
+      } else if (OB_FAIL(need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
+                                       need_verify, data_ckm_tablet_cnt))) {
         LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
       } else if (!need_verify) {
         LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
