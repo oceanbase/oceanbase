@@ -81,11 +81,10 @@ int ObExprXmlElement::calc_result_typeN(ObExprResType& type,
           } else if (types_stack[i].get_charset_type() != CHARSET_UTF8MB4) {
             types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
           }
-        } else if (ObUserDefinedSQLType == types_stack[i].get_type()) { // xmltype
-          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
+        } else if (ObUserDefinedSQLType == types_stack[i].get_type()) {
+          // xmltype, do noting
         } else if (ObExtendType == types_stack[i].get_type()) {
           types_stack[i].set_calc_type(ObUserDefinedSQLType);
-          types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
         } else {
           types_stack[i].set_calc_type(ObVarcharType);
           types_stack[i].set_calc_collation_type(CS_TYPE_UTF8MB4_BIN);
