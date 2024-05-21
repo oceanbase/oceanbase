@@ -1025,7 +1025,8 @@ void ObBlockManager::mark_and_sweep()
         skip_mark = true;
         LOG_INFO("no block alloc/free, no need to mark blocks", K(ret));
       } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
-        if (OB_EAGAIN == ret) {
+        if (OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_INFO("mark blocks meet memory issue or space pressure, still countinue sweep to lease compaction space", K(ret));
           tmp_status.mark_finished_ = false;
           ret = OB_SUCCESS;
           // skip marking
