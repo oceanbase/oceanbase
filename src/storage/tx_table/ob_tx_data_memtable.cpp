@@ -626,13 +626,11 @@ int ObTxDataMemtable::estimate_phy_size(const ObStoreRowkey *start_key,
   return ret;
 }
 
-int ObTxDataMemtable::get_split_ranges(const ObStoreRowkey *start_key,
-                                       const ObStoreRowkey *end_key,
+int ObTxDataMemtable::get_split_ranges(const ObStoreRange &input_range,
                                        const int64_t part_cnt,
                                        common::ObIArray<common::ObStoreRange> &range_array)
 {
-  UNUSED(start_key);
-  UNUSED(end_key);
+  UNUSED(input_range);
   int ret = OB_SUCCESS;
 
   if (!pre_process_done_) {
