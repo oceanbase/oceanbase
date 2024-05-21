@@ -1200,7 +1200,7 @@ int ObBalanceTaskExecuteService::get_ls_offline_scn_by_rpc_(
       } else {
         offline_ls_count++;
         const int64_t timeout = ctx.get_timeout();
-        if (OB_FAIL(arg.init(tenant_id_, info.ls_id_))) {
+        if (OB_FAIL(arg.init(tenant_id_, info.ls_id_, false))) {
           LOG_WARN("failed to init arg", KR(ret), K(arg));
           //实际上没有必要一定是leader副本，只是去leader上比较方面，所以只要
           //获取回来就不用校验

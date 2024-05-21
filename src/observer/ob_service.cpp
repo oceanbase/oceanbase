@@ -88,6 +88,7 @@
 #include "observer/ob_heartbeat_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
+#include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn
 
 namespace oceanbase
 {
@@ -3233,10 +3234,20 @@ int ObService::get_ls_replayed_scn(
       LOG_WARN("log stream is null", KR(ret), K(arg), K(ls_handle));
     } else if (OB_FAIL(ls->get_max_decided_scn(cur_readable_scn))) {
       LOG_WARN("failed to get_max_decided_scn", KR(ret), K(arg), KPC(ls));
-    } else if (OB_FAIL(ls->get_offline_scn(offline_scn))) {
+    } else if (arg.is_all_replica()) {
+      if (OB_ISNULL(ls->get_ls_recovery_stat_handler())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get ls recovery stat", KR(ret), K(arg));
+      } else if (OB_FAIL(ls->get_ls_recovery_stat_handler()
+            ->get_all_replica_min_readable_scn(cur_readable_scn))) {
+        LOG_WARN("failed to get all replica min readable_scn", KR(ret), K(arg));
+      }
+
+    }
+    if (FAILEDx(ls->get_offline_scn(offline_scn))) {
       LOG_WARN("failed to get offline scn", KR(ret), K(arg), KPC(ls));
     } else if (OB_FAIL(result.init(arg.get_tenant_id(), arg.get_ls_id(),
-            cur_readable_scn, offline_scn))) {
+            cur_readable_scn, offline_scn, GCTX.self_addr()))) {
       LOG_WARN("failed to init res", KR(ret), K(arg), K(cur_readable_scn), K(offline_scn));
     } else {
       LOG_INFO("finish get_ls_replayed_scn", KR(ret), K(cur_readable_scn),

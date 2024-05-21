@@ -483,6 +483,7 @@ int ObTenantInfoLoader::check_is_prepare_flashback_for_switch_to_primary_status(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR);
 int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
 {
   int ret = OB_SUCCESS;
@@ -492,6 +493,9 @@ int ObTenantInfoLoader::get_replayable_scn(share::SCN &replayable_scn)
     // there isn't replayable_scn for SYS/META tenant
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("there isn't replayable_scn for SYS/META tenant", KR(ret));
+  } else if (ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR) {
+    ret = ERRSIM_UPDATE_TENANT_INFO_CACHE_ERROR;
+    LOG_WARN("failed to get replayable scn for errsim", KR(ret));
   } else {
     // user tenant
     share::ObAllTenantInfo tenant_info;

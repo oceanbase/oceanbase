@@ -264,6 +264,14 @@ int ObLSRecoveryReportor::update_ls_recovery_stat_()
           } else if (OB_TMP_FAIL(ls->update_ls_replayable_point(replayable_scn))) {
             LOG_WARN("failed to update_ls_replayable_point", KR(tmp_ret), KPC(ls), K(replayable_scn));
           }
+          //兼容性和是否为leader的判断包在了接口中
+          if (OB_TMP_FAIL(ls->gather_replica_readable_scn())) {
+            if (OB_NOT_MASTER == tmp_ret) {
+            } else {
+              const ObLSID ls_id = ls->get_ls_id();
+              LOG_WARN("failed to gather replica readable scn", KR(tmp_ret), K(ls_id));
+            }
+          }
 
           if (ls->is_sys_ls() && !MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
             // nothing todo
@@ -293,10 +301,21 @@ int ObLSRecoveryReportor::update_ls_recovery(
   int ret = OB_SUCCESS;
   ObLSRecoveryStat ls_recovery_stat;
   ObMySQLTransaction trans;
+  ObLSHandle ls_handle;
+  ObLSRecoveryGuard guard(ls_handle);
   const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
   if (OB_ISNULL(ls) || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls or sql proxy is null", KR(ret), KP(ls),  KP(sql_proxy));
+  } else if (OB_FAIL(guard.init(tenant_id_, ls->get_ls_id()))) {
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("failed to init ls recovery guard", KR(ret), K(tenant_id_), "ls_id", ls->get_ls_id());
+    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000)) {
+      //Reduce Exception Throwing
+      LOG_WARN("can not report recovery stat, maybe member_list change", KR(ret), K(tenant_id_),
+          "ls_id", ls->get_ls_id());
+      ret = OB_SUCCESS;
+    }
   } else if (OB_FAIL(ls->get_ls_level_recovery_stat(ls_recovery_stat))) {
     if (OB_NOT_MASTER == ret) {
       LOG_TRACE("follower doesn't need to report ls recovery stat", KR(ret), KPC(ls));
@@ -321,7 +340,6 @@ int ObLSRecoveryReportor::update_ls_recovery(
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-
   if (ls_recovery_stat.is_valid()) {
     const int64_t PRINT_INTERVAL = 10 * 1000 * 1000L;
     if (REACH_TIME_INTERVAL(PRINT_INTERVAL)) {

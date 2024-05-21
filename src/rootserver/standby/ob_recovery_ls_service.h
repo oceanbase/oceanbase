@@ -36,6 +36,7 @@ class ObMySQLTransaction;
 namespace transaction
 {
 class ObTxBufferNode;
+class ObTxLogBlock;
 }
 namespace share
 {
@@ -50,14 +51,15 @@ class ObMultiVersionSchemaService;
 class ObTenantSchema;
 }
 }
+namespace storage
+{
+class ObLS;
+class ObLSHandle;
+}
 namespace logservice
 {
 class ObLogHandler;
 class ObGCLSLog;
-}
-namespace transaction
-{
-class ObTxLogBlock;
 }
 namespace palf
 {
@@ -98,8 +100,6 @@ private:
                      palf::PalfBufferIterator &iterator);
  int process_upgrade_log_(const share::SCN &sync_scn,
      const transaction::ObTxBufferNode &node);
- int process_gc_log_(logservice::ObGCLSLog &gc_log,
-                     const share::SCN &syn_scn);
  int process_ls_tx_log_(transaction::ObTxLogBlock &tx_log,
                         const share::SCN &syn_scn);
  int process_ls_table_in_trans_(const transaction::ObTxBufferNode &node,
@@ -145,7 +145,7 @@ private:
                                common::ObMySQLTransaction &trans);
 
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
-
+ int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
  int decompress_log_payload_(const char *in_buf, const int64_t in_buf_len, char *&decompress_buf, int64_t &decompressed_len);
  #endif
