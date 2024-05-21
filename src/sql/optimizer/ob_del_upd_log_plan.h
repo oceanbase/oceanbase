@@ -245,7 +245,8 @@ protected:
   virtual int generate_normal_raw_plan() override;
   virtual int generate_dblink_raw_plan() override;
   int allocate_optimizer_stats_gathering_as_top(ObLogicalOperator *&old_top,
-                                                OSGShareInfo &info);
+                                                OSGShareInfo &info,
+                                                OSG_TYPE type);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDelUpdLogPlan);
 
