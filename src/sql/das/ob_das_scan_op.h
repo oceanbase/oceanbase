@@ -384,6 +384,8 @@ public:
 protected:
   virtual int init_scan_param();
 protected:
+  void print_trans_info_and_key_range_();
+protected:
   const ObDASScanCtDef *lookup_ctdef_; //lookup ctdef
   ObDASScanRtDef *lookup_rtdef_; //lookup rtdef
   const ObDASScanCtDef *index_ctdef_;
