@@ -12165,7 +12165,9 @@ int ObJoinOrder::init_est_sel_info_for_access_path(const uint64_t table_id,
                       stat_type,
                       global_part_ids,
                       scale_ratio,
-                      last_analyzed))) {
+                      last_analyzed,
+                      table_partition_info_,
+                      &table_meta_info_))) {
           LOG_WARN("failed to add base table meta info", K(ret));
         }
       }
