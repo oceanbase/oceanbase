@@ -688,7 +688,7 @@ int ObModifyTenantExecutor::execute(ObExecContext &ctx, ObModifyTenantStmt &stmt
     LOG_WARN("fail to get tenant info", K(ret));
   } else if (OB_ISNULL(tenant_schema)) {
     ret = OB_TENANT_NOT_EXIST;
-    LOG_WARN("tenant not exist", K(ret));
+    LOG_WARN("tenant not exist", K(ret), "tenant_name", modify_tenant_arg.tenant_schema_.get_tenant_name_str());
   }
   if (OB_FAIL(ret)) {
   } else if (-1 != stmt.get_progressive_merge_num()) {

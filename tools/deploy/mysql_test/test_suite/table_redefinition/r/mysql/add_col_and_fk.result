@@ -17,5 +17,5 @@ ADD
 CONSTRAINT `schema_bookwithlongn_author_other_really__6c36f4d2_fk_schema_au` FOREIGN KEY (
 `author_other_really_long_named_i_mean_so_long_fk_id`
   ) REFERENCES `schema_authorwithevenlongername`(`id`);
-ERROR 0A000: Adding a column and together with a foreign key on this column in a single ddl is not supported
+ERROR 0A000: Altering a column and altering a foreign key related to it in a single ddl is not supported
 drop table schema_authorwithevenlongername, schema_bookwithlongname;

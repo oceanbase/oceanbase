@@ -5068,7 +5068,7 @@ int ObAlterTableResolver::resolve_foreign_key_options(const ParseNode &node)
               for (int64_t j = 0; j < alter_table_scheme_col_cnt; j++) {
                 if (alter_table_stmt->get_alter_table_schema().get_column_schema_by_idx(j)->get_column_name_str() == child_column_name) {
                   ret = OB_NOT_SUPPORTED;
-                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Adding a column and together with a foreign key on this column in a single ddl is");
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "Altering a column and altering a foreign key related to it in a single ddl is");
                   break;
                 }
               }
