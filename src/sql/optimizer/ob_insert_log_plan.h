@@ -71,6 +71,11 @@ protected:
   int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
   int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
+  int get_osg_type(bool is_multi_part_dml,
+                   ObShardingInfo *insert_table_sharding,
+                   int64_t distributed_method,
+                   OSG_TYPE &type);
+
   virtual int get_best_insert_dist_method(ObLogicalOperator &top,
                                           ObTablePartitionInfo *insert_table_partition,
                                           ObShardingInfo *insert_table_sharding,

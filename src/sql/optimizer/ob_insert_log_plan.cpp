@@ -562,6 +562,31 @@ int ObInsertLogPlan::build_lock_row_flag_expr(ObConstRawExpr *&lock_row_flag_exp
   return ret;
 }
 
+int ObInsertLogPlan::get_osg_type(bool is_multi_part_dml,
+                                  ObShardingInfo *insert_table_sharding,
+                                  int64_t distributed_method,
+                                  OSG_TYPE &type)
+{
+  int ret = OB_SUCCESS;
+  type = OSG_TYPE::NORMAL_OSG;
+  if (DIST_PARTITION_WISE == distributed_method ||
+      DIST_PULL_TO_LOCAL == distributed_method) {
+    //need merge stats
+    type = OSG_TYPE::GATHER_OSG;
+  } else if (DIST_BASIC_METHOD == distributed_method) {
+    if (is_multi_part_dml) {
+      type = OSG_TYPE::NORMAL_OSG;
+    } else if (OB_ISNULL(insert_table_sharding)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null sharding", K(ret));
+    } else if (insert_table_sharding->is_remote()) {
+      //need merge stats
+      type = OSG_TYPE::GATHER_OSG;
+    }
+  }
+  return ret;
+}
+
 int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
                                          ObTablePartitionInfo *insert_table_part,
                                          ObShardingInfo *insert_table_sharding,
@@ -575,6 +600,7 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
   ObExchangeInfo exch_info;
   bool is_multi_part_dml = false;
   CandidatePlan candi_plan;
+  OSG_TYPE osg_type = OSG_TYPE::NORMAL_OSG;
   int64_t inherit_sharding_index = OB_INVALID_INDEX;
   ObShardingInfo *insert_op_sharding = NULL;
   ObSEArray<ObShardingInfo*, 2> input_shardings;
@@ -598,10 +624,15 @@ int ObInsertLogPlan::create_insert_plans(ObIArray<CandidatePlan> &candi_plans,
     } else if (0 == distributed_methods) {
       /*do nothing*/
     } else if (osg_info != NULL &&
+               OB_FAIL(get_osg_type(is_multi_part_dml,
+                                    insert_table_sharding,
+                                    distributed_methods,
+                                    osg_type))) {
+      LOG_WARN("failed to get osg type", K(ret));
+    } else if (osg_info != NULL &&
                OB_FAIL(allocate_optimizer_stats_gathering_as_top(candi_plan.plan_tree_,
                                                                  *osg_info,
-                                                                 (DIST_BASIC_METHOD == distributed_methods &&
-                                                                 insert_table_sharding->is_remote())))) {
+                                                                 osg_type))) {
       LOG_WARN("failed to allocate sequence as top", K(ret));
     } else if (DIST_PULL_TO_LOCAL == distributed_methods) {
       if (OB_FAIL(allocate_exchange_as_top(candi_plan.plan_tree_, exch_info))) {
@@ -1680,7 +1711,8 @@ int ObInsertLogPlan::candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info
           LOG_WARN("failed to allocate exchange as top", K(ret));
         } else if (OB_FAIL(allocate_optimizer_stats_gathering_as_top(
                                                                 best_candidates.at(i).plan_tree_,
-                                                                *osg_info))) {
+                                                                *osg_info,
+                                                                OSG_TYPE::MERGE_OSG))) {
           LOG_WARN("failed to allocate sequence as top", K(ret));
         }
       }
