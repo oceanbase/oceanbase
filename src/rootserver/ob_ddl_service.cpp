@@ -3665,7 +3665,7 @@ int ObDDLService::add_primary_key(const ObIArray<ObString> &pk_column_names, ObT
   int ret = OB_SUCCESS;
   if (pk_column_names.count() > OB_USER_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_ERR_TOO_MANY_ROWKEY_COLUMNS;
-    LOG_WARN("primary key count exceeds limit", K(pk_column_names.count()));
+    LOG_WARN("primary key column count exceeds limit", K(ret), K(pk_column_names.count()));
   }
 
   // step1: clear origin primary key
