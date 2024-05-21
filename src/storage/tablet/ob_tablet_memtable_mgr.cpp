@@ -663,7 +663,7 @@ int ObTabletMemtableMgr::set_is_tablet_freeze_for_active_memtable(
   return ret;
 }
 
-int ObTabletMemtableMgr::get_memtable_for_replay(SCN replay_scn, ObTableHandleV2 &handle)
+int ObTabletMemtableMgr::get_memtable_for_replay(const SCN &replay_scn, ObTableHandleV2 &handle)
 {
   int ret = OB_SUCCESS;
   ObITabletMemtable *tablet_memtable = nullptr;

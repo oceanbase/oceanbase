@@ -347,8 +347,10 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
+  // ATTENTION!!!
+  // - The `get_all_memtables()` is that get all memtables from memtable mgr, not from this tablet.
   int get_all_memtables(ObTableHdlArray &handle) const;
-  int get_boundary_memtable(ObTableHandleV2 &handle) const;
+  int get_boundary_memtable_from_memtable_mgr(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;
 
   // get the active memtable for write or replay.

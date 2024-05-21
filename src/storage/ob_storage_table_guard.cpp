@@ -146,7 +146,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   int64_t warn_interval = DEFAULT_REFRESH_WARN_INTERVAL;
 
   do {
-    if (OB_FAIL(tablet_->get_boundary_memtable(handle))) {
+    if (OB_FAIL(tablet_->get_boundary_memtable_from_memtable_mgr(handle))) {
       // if there is no memtable, create a new one
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = create_data_memtable_(ls_id, tablet_id, need_retry);
