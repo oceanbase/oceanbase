@@ -14382,6 +14382,7 @@ def_table_schema(
 )
 
 # 12488: __all_virtual_scheduler_job_run_detail_v2
+# 12489: __all_virtual_deadlock_detector_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
