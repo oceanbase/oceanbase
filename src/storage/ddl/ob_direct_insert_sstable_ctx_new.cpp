@@ -2250,7 +2250,11 @@ void ObTabletDirectLoadMgr::unlock(const uint32_t tid)
 int ObTabletDirectLoadMgr::prepare_storage_schema(ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
-  sqc_build_ctx_.storage_schema_ = nullptr;
+  if (nullptr != sqc_build_ctx_.storage_schema_) {
+    ObTabletObjLoadHelper::free(sqc_build_ctx_.schema_allocator_, sqc_build_ctx_.storage_schema_);
+    sqc_build_ctx_.storage_schema_ = nullptr;
+    sqc_build_ctx_.schema_allocator_.reset();
+  }
   if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
