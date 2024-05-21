@@ -412,7 +412,9 @@ void TestTxDataTable::do_basic_test()
   int64_t inserted_cnt_after_pre_process = freezing_memtable->get_tx_data_count();
   ASSERT_EQ(inserted_cnt_before_pre_process + 1, inserted_cnt_after_pre_process);
 
-  ASSERT_EQ(OB_SUCCESS, freezing_memtable->get_split_ranges(nullptr, nullptr, range_cnt, range_array));
+  ObStoreRange input_range;
+  input_range.set_whole_range();
+  ASSERT_EQ(OB_SUCCESS, freezing_memtable->get_split_ranges(input_range, range_cnt, range_array));
   int64_t pre_range_end_key = 0;
   for (int i = 0; i < range_cnt; i++) {
     auto &range = range_array[i];
