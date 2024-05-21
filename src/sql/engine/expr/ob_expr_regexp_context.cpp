@@ -855,7 +855,9 @@ int ObExprRegexContext::check_need_utf8(ObRawExpr *expr, bool &need_utf8)
   } else {
     need_utf8 = real_expr->get_result_type().is_nchar() ||
                 real_expr->get_result_type().is_nvarchar2() ||
-                real_expr->get_result_type().is_blob();
+                real_expr->get_result_type().is_blob() ||
+                real_expr->get_result_type().is_binary() ||
+                real_expr->get_result_type().is_varbinary();
   }
   return ret;
 }
