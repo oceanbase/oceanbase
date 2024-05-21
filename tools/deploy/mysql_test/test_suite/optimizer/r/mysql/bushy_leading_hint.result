@@ -945,7 +945,7 @@ Query Plan
 |ID|OPERATOR                           |NAME        |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
 |0 |TEMP TABLE TRANSFORMATION          |            |2       |158         |
-|1 |├─TEMP TABLE INSERT                |TEMP1       |42      |153         |
+|1 |├─TEMP TABLE INSERT                |TEMP1       |0       |153         |
 |2 |│ └─HASH JOIN                      |            |42      |145         |
 |3 |│   ├─HASH JOIN                    |            |272     |57          |
 |4 |│   │ ├─HASH JOIN                  |            |19      |21          |
