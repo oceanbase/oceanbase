@@ -1002,9 +1002,11 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
             ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, op_result);
             break;
           case ObTableOperationType::INSERT_OR_UPDATE:
+            ret = ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result);
+            break;
           case ObTableOperationType::APPEND:
           case ObTableOperationType::INCREMENT:
-            ret = ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result);
+            ret = ObTableOpWrapper::process_incr_or_append_op(tb_ctx, op_result);
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

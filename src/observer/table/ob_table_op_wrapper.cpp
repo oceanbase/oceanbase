@@ -49,8 +49,8 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
   if (OB_SUCC(ret)) {
     ObTableApiModifyExecutor *modify_executor = static_cast<ObTableApiModifyExecutor *>(executor);
     op_result.set_affected_rows(modify_executor->get_affected_rows());
-    if (tb_ctx.return_affected_entity()
-        && OB_FAIL(process_affected_entity(tb_ctx, *spec, *executor, op_result))) {
+    if (tb_ctx.return_affected_entity() && op_result.get_affected_rows() > 0 &&
+        OB_FAIL(process_affected_entity(tb_ctx, *spec, op_result))) {
       LOG_WARN("fail to process affected entity", K(ret), K(tb_ctx));
     }
   }
@@ -69,36 +69,33 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
 
 int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
                                               const ObTableApiSpec &spec,
-                                              ObTableApiExecutor &executor,
                                               ObTableOperationResult &op_result)
 {
   int ret = OB_SUCCESS;
   ObITableEntity *result_entity = nullptr;
-  if (TABLE_API_EXEC_INSERT_UP != spec.get_type() && TABLE_API_EXEC_TTL != spec.get_type()) {
+  if (TABLE_API_EXEC_UPDATE != spec.get_type() &&
+      TABLE_API_EXEC_INSERT != spec.get_type() &&
+      TABLE_API_EXEC_TTL != spec.get_type()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid spec type", K(ret), K(spec.get_type()));
   } else if (OB_FAIL(op_result.get_entity(result_entity))) {
     LOG_WARN("fail to get result entity", K(ret), K(result_entity));
   } else {
-    const ObIArray<ObExpr *> *ins_exprs = nullptr;
-    const ObIArray<ObExpr *> *upd_exprs = nullptr;
-    bool use_insert_expr = false;
-    if (TABLE_API_EXEC_INSERT_UP == spec.get_type()) {
-      const ObTableApiInsertUpSpec &ins_up_spec = static_cast<const ObTableApiInsertUpSpec&>(spec);
-      if (ins_up_spec.get_ctdefs().count() < 1) {
+    const ObIArray<ObExpr *> *new_row_exprs = nullptr;
+    bool is_update = false;
+    if (TABLE_API_EXEC_UPDATE == spec.get_type()) { // do update
+      is_update = true;
+      const ObTableApiUpdateSpec &update_spec = static_cast<const ObTableApiUpdateSpec&>(spec);
+      if (update_spec.get_ctdefs().count() < 1) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insup ctdef size is less than 1", K(ret));
-      } else if (OB_ISNULL(ins_up_spec.get_ctdefs().at(0))) {
+        LOG_WARN("update ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(update_spec.get_ctdefs().at(0))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insup ctdef is NULL", K(ret));
+        LOG_WARN("update ctdef is NULL", K(ret));
       } else {
-        ins_exprs = &ins_up_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
-        upd_exprs = &ins_up_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
-        use_insert_expr = !static_cast<ObTableApiInsertUpExecutor&>(executor).is_insert_duplicated();
+        new_row_exprs = &update_spec.get_ctdefs().at(0)->new_row_;
       }
-
-    } else {
-      ObTableApiTTLExecutor &ttl_executor = static_cast<ObTableApiTTLExecutor&>(executor);
+    } else if (TABLE_API_EXEC_TTL == spec.get_type()) {
       const ObTableApiTTLSpec &ttl_spec = static_cast<const ObTableApiTTLSpec&>(spec);
       if (ttl_spec.get_ctdefs().count() < 1) {
         ret = OB_ERR_UNEXPECTED;
@@ -107,20 +104,30 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("ttl ctdef is NULL", K(ret));
       } else {
-        ins_exprs = &ttl_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
-        upd_exprs = &ttl_spec.get_ctdefs().at(0)->upd_ctdef_.new_row_;
-        use_insert_expr = !ttl_executor.is_insert_duplicated() || ttl_executor.is_expired();
+        new_row_exprs = &ttl_spec.get_ctdefs().at(0)->ins_ctdef_.new_row_;
+      }
+    } else {
+      const ObTableApiInsertSpec &ins_spec = static_cast<const ObTableApiInsertSpec&>(spec);
+      if (ins_spec.get_ctdefs().count() < 1) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insert ctdef size is less than 1", K(ret));
+      } else if (OB_ISNULL(ins_spec.get_ctdefs().at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("insert ctdef is NULL", K(ret));
+      } else {
+        new_row_exprs = &ins_spec.get_ctdefs().at(0)->new_row_;
       }
     }
 
     ObIArray<ObTableAssignment> &assigns = tb_ctx.get_assignments();
     ObIAllocator &allocator = tb_ctx.get_allocator();
     ObObj *obj_array = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * assigns.count()));
+    ObEvalCtx eval_ctx(tb_ctx.get_exec_ctx());
     if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(obj_array)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("faild to alloc memory for objs", K(ret), K(assigns.count()));
-    } else if (OB_ISNULL(ins_exprs)) {
+    } else if (OB_ISNULL(new_row_exprs)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert exprs is null", K(ret));
     }
@@ -131,18 +138,15 @@ int ObTableOpWrapper::process_affected_entity(ObTableCtx &tb_ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("assign column item is nullptr", K(ret), K(assign));
       } else if (FALSE_IT(project_idx = assign.column_info_->col_idx_)) {
-      } else if (use_insert_expr && ins_exprs->count() <= project_idx) {
+      } else if (new_row_exprs->count() <= project_idx) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected insert index", K(ret), K(ins_exprs), K(assign));
-      } else if (!use_insert_expr && upd_exprs->count() <= project_idx) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected assign index", K(ret), K(upd_exprs), K(assign));
+        LOG_WARN("unexpected insert index", K(ret), KP(new_row_exprs), K(assign));
       } else {
         ObObj &obj = obj_array[i];
-        ObExpr *rt_expr = use_insert_expr ? ins_exprs->at(project_idx) : upd_exprs->at(project_idx);
+        ObExpr *rt_expr = new_row_exprs->at(project_idx);
         ObDatum *datum = nullptr;
         ObObj pro_obj;
-        if (OB_FAIL(rt_expr->eval(executor.get_eval_ctx(), datum))) {
+        if (OB_FAIL(rt_expr->eval(eval_ctx, datum))) {
           LOG_WARN("fail to eval datum", K(ret), K(*rt_expr));
         } else if (OB_FAIL(datum->to_obj(obj, rt_expr->obj_meta_))) {
           LOG_WARN("fail to datum to obj", K(ret), K(*datum), K(rt_expr->obj_meta_));
@@ -294,6 +298,25 @@ int ObTableOpWrapper::process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationR
     }
   }
 
+  return ret;
+}
+
+int ObTableOpWrapper::process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+{
+  int ret = OB_SUCCESS;
+  // 1.do update first;
+  tb_ctx.set_inc_append_stage(ObTableIncAppendStage::TABLE_INCR_APPEND_UPDATE);
+  if (OB_FAIL(process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, op_result))) {
+    LOG_WARN("fail to process update operation", K(ret));
+  } else if (op_result.get_affected_rows() == 0) {
+    // 2.if return empty result, do insert;
+    op_result.reset();
+    if (OB_FAIL(tb_ctx.init_insert_when_inc_append())) {
+      LOG_WARN("fail to int insert when do increment/append", K(ret), K(tb_ctx.get_opertion_type()));
+    } else if (OB_FAIL(process_insert_op(tb_ctx, op_result))) {
+      LOG_WARN("fail to process insert operation", K(ret));
+    }
+  }
   return ret;
 }
 

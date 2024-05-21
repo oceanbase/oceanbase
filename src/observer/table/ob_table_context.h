@@ -152,6 +152,13 @@ enum ObTableExecutorType
   TABLE_API_EXEC_MAX
 };
 
+enum ObTableIncAppendStage
+{
+  TABLE_INCR_APPEND_INVALID = 0,
+  TABLE_INCR_APPEND_UPDATE = 1,
+  TABLE_INCR_APPEND_INSERT = 2
+};
+
 // 1.用于存放整个process过程中需要的通用上下文信息
 // 2.在try_process()中进行初始化
 class ObTableCtx
@@ -204,6 +211,7 @@ public:
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
     ops_ = nullptr;
+    inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INVALID;
     return_affected_entity_ = false;
     return_rowkey_ = false;
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
@@ -267,6 +275,7 @@ public:
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
     ops_ = nullptr;
+    inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INVALID;
     return_affected_entity_ = false;
     return_rowkey_ = false;
     cur_cluster_version_ = GET_MIN_CLUSTER_VERSION();
@@ -461,6 +470,9 @@ public:
   OB_INLINE bool is_client_use_put() const { return is_client_set_put_; }
   // lob column
   OB_INLINE bool has_lob_column() const { return has_lob_column_; }
+  OB_INLINE ObTableIncAppendStage get_inc_append_stage() const { return inc_append_stage_; }
+  OB_INLINE bool is_inc_append_update() const { return is_inc_or_append() && inc_append_stage_ == ObTableIncAppendStage::TABLE_INCR_APPEND_UPDATE; }
+  OB_INLINE bool is_inc_append_insert() const { return is_inc_or_append() && inc_append_stage_ == ObTableIncAppendStage::TABLE_INCR_APPEND_INSERT; }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
@@ -501,18 +513,20 @@ public:
   {
     return operation_type_ == ObTableOperationType::UPDATE ||
            operation_type_ == ObTableOperationType::INSERT_OR_UPDATE ||
-           operation_type_ == ObTableOperationType::INCREMENT ||
-           operation_type_ == ObTableOperationType::APPEND ||
-           (operation_type_ == ObTableOperationType::INSERT && is_ttl_table_);
+           (operation_type_ == ObTableOperationType::INSERT && is_ttl_table_) ||
+           is_inc_append_update() || (is_inc_append_insert() && is_ttl_table_);
   }
   OB_INLINE bool need_lookup_calc_tablet_id_expr()
   {
     return operation_type_ == ObTableOperationType::INSERT_OR_UPDATE ||
-           operation_type_ == ObTableOperationType::INCREMENT ||
-           operation_type_ == ObTableOperationType::APPEND ||
            operation_type_ == ObTableOperationType::REPLACE ||
            (operation_type_ == ObTableOperationType::INSERT && is_ttl_table_) ||
-           (operation_type_ == ObTableOperationType::SCAN && is_global_index_back());
+           (operation_type_ == ObTableOperationType::SCAN && is_global_index_back()) ||
+           is_inc_append_update() || (is_inc_append_insert() && is_ttl_table_);
+  }
+  OB_INLINE void set_inc_append_stage(ObTableIncAppendStage inc_append_stage)
+  {
+    inc_append_stage_ = inc_append_stage;
   }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
@@ -569,6 +583,7 @@ public:
   int cons_column_items_for_cg();
   // only for genarate spec or exprs, to generate full table_schema
   int generate_table_schema_for_cg();
+  int init_insert_when_inc_append();
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
   static int convert_lob(common::ObIAllocator &allocator, ObObj &obj);
@@ -681,6 +696,7 @@ private:
   // for auto inc
   bool has_auto_inc_;
   // for increment/append
+  ObTableIncAppendStage inc_append_stage_;
   bool return_affected_entity_;
   bool return_rowkey_;
   // for dml

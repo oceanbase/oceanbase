@@ -164,6 +164,33 @@ private:
 
     return ret;
   }
+
+  int process_incr_or_append_op(const table::ObITableEntity &new_entity,
+                                int64_t &affected_rows)
+  {
+    int ret = OB_SUCCESS;
+    const table::ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
+    const table::ObTableOperation &mutation = mutations.at(0);
+    SMART_VAR(table::ObTableCtx, tb_ctx, allocator_) {
+      table::ObTableApiSpec *spec = nullptr;
+      table::ObTableApiExecutor *executor = nullptr;
+      table::ObTableOperationResult op_result;
+      if (OB_FAIL(init_tb_ctx(tb_ctx,
+                              mutation.type(),
+                              new_entity))) {
+        SERVER_LOG(WARN, "fail to init table ctx", K(ret));
+      } else if (OB_FAIL(tb_ctx.init_trans(trans_desc_, *tx_snapshot_))) {
+        SERVER_LOG(WARN, "fail to init trans", K(ret), K(tb_ctx));
+      } else if (OB_FAIL(table::ObTableOpWrapper::process_incr_or_append_op(tb_ctx, op_result))) {
+        SERVER_LOG(WARN, "fail to process insert op", K(ret));
+      } else {
+        affected_rows = op_result.get_affected_rows();
+      }
+    }
+
+    return ret;
+  }
+
   int process_insert(const table::ObITableEntity &new_entity,
                      int64_t &affected_rows)
   {

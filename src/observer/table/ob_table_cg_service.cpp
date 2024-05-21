@@ -1070,20 +1070,19 @@ int ObTableExprCgService::refresh_update_exprs_frame(ObTableCtx &ctx,
                                                      const ObIArray<ObExpr *> &new_row,
                                                      const ObTableEntity &entity)
 {
-  return refresh_assign_exprs_frame(ctx, new_row, entity);
+  return ctx.is_inc_or_append() ? refresh_delta_exprs_frame(ctx, new_row, entity) :
+                                  refresh_assign_exprs_frame(ctx, new_row, entity);
 }
 
 int ObTableExprCgService::refresh_ttl_exprs_frame(ObTableCtx &ctx,
                                                   const ObIArray<ObExpr *> &ins_new_row,
-                                                  const ObIArray<ObExpr *> &delta_exprs,
                                                   const ObTableEntity &entity)
 {
-  return refresh_insert_up_exprs_frame(ctx, ins_new_row, delta_exprs, entity);
+  return refresh_insert_up_exprs_frame(ctx, ins_new_row, entity);
 }
 
 int ObTableExprCgService::refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                                         const ObIArray<ObExpr *> &ins_new_row,
-                                                        const ObIArray<ObExpr *> &delta_row,
                                                         const ObTableEntity &entity)
 {
   int ret = OB_SUCCESS;
@@ -1093,8 +1092,6 @@ int ObTableExprCgService::refresh_insert_up_exprs_frame(ObTableCtx &ctx,
     LOG_WARN("fail to init rowkey exprs frame", K(ret), K(ctx), K(rowkey));
   } else if (OB_FAIL(refresh_properties_exprs_frame(ctx, ins_new_row, entity))) {
     LOG_WARN("fail to init properties exprs frame", K(ret), K(ctx), K(ins_new_row), K(entity));
-  } else if (ctx.is_inc_or_append() && OB_FAIL(refresh_delta_exprs_frame(ctx, delta_row, entity))) {
-    LOG_WARN("fail to init delta exprs frame", K(ret), K(ctx), K(delta_row), K(entity));
   }
 
   return ret;

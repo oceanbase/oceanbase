@@ -147,14 +147,12 @@ int ObTableApiInsertUpExecutor::refresh_exprs_frame(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
   const ObTableInsCtDef &ins_ctdef = insert_up_spec_.get_ctdefs().at(0)->ins_ctdef_;
-  const ObTableUpdCtDef &upd_ctdef = insert_up_spec_.get_ctdefs().at(0)->upd_ctdef_;
 
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_insert_up_exprs_frame(tb_ctx_,
                                                                          ins_ctdef.new_row_,
-                                                                         upd_ctdef.delta_row_,
                                                                          *entity))) {
     LOG_WARN("fail to refresh insert up exprs frame", K(ret), K(*entity));
   }

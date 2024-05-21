@@ -767,7 +767,7 @@ int QueryAndMutateHelper::execute_one_mutation(ObIAllocator &allocator,
           }
           case ObTableOperationType::INCREMENT:
           case ObTableOperationType::APPEND: {
-            ret = process_insert_up(*new_entity, tmp_affect_rows);
+            ret = process_incr_or_append_op(*new_entity, tmp_affect_rows);
             if (OB_SUCC(ret)) {
               affected_rows += tmp_affect_rows;
             }

@@ -139,7 +139,6 @@ int ObTableApiTTLExecutor::refresh_exprs_frame(const ObTableEntity *entity)
     LOG_WARN("ttl ctdef is NULL", K(ret));
   } else if (OB_FAIL(ObTableExprCgService::refresh_ttl_exprs_frame(tb_ctx_,
                                                                    ttl_ctdef->ins_ctdef_.new_row_,
-                                                                   ttl_ctdef->upd_ctdef_.delta_row_,
                                                                    *entity))) {
     LOG_WARN("fail to refresh ttl exprs frame", K(ret), K(*entity));
   }
@@ -482,7 +481,10 @@ int ObTableApiTTLExecutor::process_expire()
             insert_rows_ = 1;
           }
         } else { // 未过期, insert操作，则报错OB_ERR_ROWKEY_CONFLICT; insertUp操作，则做update
-          if (tb_ctx_.is_insert()) {
+          if (OB_UNLIKELY(tb_ctx_.is_inc_or_append())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpect execution of increment or append", K(ret), K(tb_ctx_.get_opertion_type()));
+          } else if (tb_ctx_.is_insert()) {
             ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
             LOG_INFO("current insert is primary key duplicate", K(ret));
           } else { // insertUp

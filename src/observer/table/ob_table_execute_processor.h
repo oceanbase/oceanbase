@@ -114,6 +114,7 @@ private:
     }
     return ret;
   }
+  int process_incr_or_append_op();
 private:
   table::ObTableEntity request_entity_;
   table::ObTableEntity result_entity_;

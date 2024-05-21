@@ -69,10 +69,10 @@ public:
   static int get_insert_up_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
   static int process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
   static int process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
+  static int process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
 private:
   static int process_affected_entity(ObTableCtx &tb_ctx,
                                      const ObTableApiSpec &spec,
-                                     ObTableApiExecutor &executor,
                                      ObTableOperationResult &op_result);
 };
 
