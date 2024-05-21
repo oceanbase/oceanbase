@@ -788,11 +788,11 @@ int ObConflictDetectorGenerator::generate_outer_join_detectors(const ObDMLStmt *
     ObSEArray<ObConflictDetector*, 4> detectors;
     if (OB_FAIL(flatten_inner_join(table_item, table_filter, table_items))) {
       LOG_WARN("failed to flatten inner join", K(ret));
-    } else if (OB_FAIL(generate_inner_join_detectors(stmt,
+    } else if (OB_FAIL(SMART_CALL(generate_inner_join_detectors(stmt,
                                                      table_items,
                                                      table_filter,
                                                      baserels,
-                                                     detectors))) {
+                                                     detectors)))) {
       LOG_WARN("failed to generate inner join detectors", K(ret));
     } else if (OB_FAIL(append(outer_join_detectors, detectors))) {
       LOG_WARN("failed to append detectors", K(ret));
@@ -907,20 +907,20 @@ int ObConflictDetectorGenerator::inner_generate_outer_join_detectors(const ObDML
                                             join_quals))) {
     LOG_WARN("failed to pushdown on conditions", K(ret));
     //3. generate left child detectors
-  } else if (OB_FAIL(generate_outer_join_detectors(stmt,
+  } else if (OB_FAIL(SMART_CALL(generate_outer_join_detectors(stmt,
                                                    joined_table->left_table_,
                                                    left_quals,
                                                    baserels,
-                                                   left_detectors))) {
+                                                   left_detectors)))) {
     LOG_WARN("failed to generate outer join detectors", K(ret));
   } else if (OB_FAIL(append(outer_join_detectors, left_detectors))) {
     LOG_WARN("failed to append detectors", K(ret));
     //4. generate right child detectors
-  } else if (OB_FAIL(generate_outer_join_detectors(stmt,
+  } else if (OB_FAIL(SMART_CALL(generate_outer_join_detectors(stmt,
                                                    joined_table->right_table_,
                                                    right_quals,
                                                    baserels,
-                                                   right_detectors))) {
+                                                   right_detectors)))) {
     LOG_WARN("failed to generate outer join detectors", K(ret));
   } else if (OB_FAIL(append(outer_join_detectors, right_detectors))) {
     LOG_WARN("failed to append detectors", K(ret));
