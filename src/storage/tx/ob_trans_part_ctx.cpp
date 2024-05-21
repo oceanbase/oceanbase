@@ -824,12 +824,6 @@ int ObPartTransCtx::commit(const ObTxCommitParts &parts,
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   CtxLockGuard guard(lock_);
-  if (tenant_id_ % 2 == 0) {
-    TRANS_LOG(DEBUG, "commit transaction now!", "trans_id", get_trans_id());
-  }
-  if (is_parallel_logging()) {
-    TRANS_LOG(INFO, "commit transaction now!", KPC(this));
-  }
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
