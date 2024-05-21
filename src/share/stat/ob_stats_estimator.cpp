@@ -407,6 +407,8 @@ int ObStatsEstimator::do_estimate(uint64_t tenant_id,
                             static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool());
     sqlclient::ObISQLConnection *conn = NULL;
     session->set_inner_session();
+    //
+    session->set_autocommit(true);
     SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
       sqlclient::ObMySQLResult *client_result = NULL;
       if (OB_FAIL(pool->acquire(session, conn, lib::is_oracle_mode()))) {
