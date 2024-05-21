@@ -21,6 +21,7 @@
  * @param summary_in_session Stat recorded for user session process mark this flag true.
  * @param can_visible Indicate whether this stat can be queried on gv$sysstat and gv$sesstat.
  * @param enable Indicate whether this stat is enabled. Marked it false it you merely need it as an placeholder.
+ * NOTICE: do not reuse stat id or rename stat event!
 */
 
 // NETWORK
