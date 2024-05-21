@@ -895,12 +895,31 @@ int ObLocalIndexLookupOp::get_next_row(ObNewRow *&row)
   return OB_NOT_IMPLEMENT;
 }
 
+void ObLocalIndexLookupOp::print_trans_info_and_key_range_()
+{
+  int ret = OB_ERR_DEFENSIVE_CHECK;
+  if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
+    for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+      LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
+                KPC(trans_info_array_.at(i)), K(scan_param_.key_ranges_.at(i)));
+    }
+  } else {
+    for (int64_t i = 0; i < scan_param_.key_ranges_.count(); i++) {
+      LOG_ERROR("dump TableLookup DAS Task key_ranges",
+                K(i), K(scan_param_.key_ranges_.at(i)));
+    }
+  }
+}
+
 int ObLocalIndexLookupOp::get_next_row()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObIndexLookupOpImpl::get_next_row())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from index table lookup failed", K(ret));
+      if (OB_ERR_DEFENSIVE_CHECK == ret) {
+        (void)print_trans_info_and_key_range_();
+      }
     } else {
       LOG_DEBUG("get next row from index table lookup", K(ret));
     }
@@ -914,6 +933,9 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
   if (OB_FAIL(ObIndexLookupOpImpl::get_next_rows(count, capacity))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next rows from index table lookup failed", K(ret));
+      if (OB_ERR_DEFENSIVE_CHECK == ret) {
+        (void)print_trans_info_and_key_range_();
+      }
     } else {
       LOG_DEBUG("get next rows from index table lookup ", K(ret));
     }
@@ -1110,17 +1132,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       KPC_(snapshot),
                       KPC_(tx_desc));
       concurrency_control::ObDataValidationService::set_delay_resource_recycle(ls_id_);
-      if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
-        for (int64_t i = 0; i < trans_info_array_.count(); i++) {
-          LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
-              KPC(trans_info_array_.at(i)), K(scan_param_.key_ranges_.at(i)));
-        }
-      } else {
-        for (int64_t i = 0; i < scan_param_.key_ranges_.count(); i++) {
-          LOG_ERROR("dump TableLookup DAS Task key_ranges",
-              K(i), K(scan_param_.key_ranges_.at(i)));
-        }
-      }
+      (void)print_trans_info_and_key_range_();
     }
   }
 
