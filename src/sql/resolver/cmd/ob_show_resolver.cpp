@@ -2805,7 +2805,7 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES,
         
 DEFINE_SHOW_CLAUSE_SET(SHOW_QUERY_RESPONSE_TIME, 
                        NULL, 
-                       "SELECT response_time as RESPONSE_TIME, count as COUNT, total as TOTAL FROM %s.%s where tenant_id = %lu", 
+                       "SELECT response_time as RESPONSE_TIME, sum(count) as COUNT, sum(total) as TOTAL FROM %s.%s where tenant_id = %lu group by response_time",
                        NULL, 
                        NULL);
 

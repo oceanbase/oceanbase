@@ -1411,9 +1411,9 @@ DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "False",
          "enable use das if the sql statement has variable assignment",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // query response time
-DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "False",
-    "Enable or disable QUERY_RESPONSE_TIME statistics collecting"
-    "The default value is False. Value: TRUE: turned on FALSE: turned off",
+DEF_BOOL(query_response_time_stats, OB_TENANT_PARAMETER, "True",
+    "Enable or disable QUERY_RESPONSE_TIME statistics collecting, and need enable_sql_audit is True."
+    "The default value is True. Value: TRUE: turned on FALSE: turned off",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
     "Flush QUERY_RESPONSE_TIME table and re-read query_response_time_range_base"
@@ -1421,7 +1421,7 @@ DEF_BOOL(query_response_time_flush, OB_TENANT_PARAMETER, "False",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(query_response_time_range_base, OB_TENANT_PARAMETER, "10", "[2,10000]",
     "Select base of log for QUERY_RESPONSE_TIME ranges. WARNING: variable change takes affect only after flush."
-    "The default value is False. Value: TRUE: trigger flush FALSE: do not trigger",
+    "The default value is 10. Range: [2,10000]. ",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(arbitration_timeout, OB_TENANT_PARAMETER, "5s", "[3s,]",
         "The timeout before automatically degrading when arbitration member exists. Range: [3s,+∞]",

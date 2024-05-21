@@ -29,8 +29,9 @@ ObInfoSchemaQueryResponseTimeTable::ObInfoSchemaQueryResponseTimeTable()
  addr_(NULL),
  ipstr_(),
  port_(0),
- time_collector_(nullptr),
- utility_iter_(0)
+ time_collector_(),
+ utility_iter_(0),
+ sql_type_iter_(0)
 {
 }
 
@@ -46,8 +47,9 @@ void ObInfoSchemaQueryResponseTimeTable::reset()
   port_ = 0;
   ipstr_.reset();
   start_to_read_ = false;
-  time_collector_ = nullptr;
+  time_collector_.flush();
   utility_iter_ = 0;
+  sql_type_iter_ = 0;
   ObVirtualTableScannerIterator::reset();
 }
 
@@ -126,30 +128,48 @@ int ObInfoSchemaQueryResponseTimeTable::process_curr_tenant(ObNewRow *&row)
   } else if (OB_ISNULL(cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(ERROR, "cur row cell is NULL", K(ret));
-  } else if(0 == ObRSTCollector::get_instance().collector_map_.size()){
-    ret = OB_ITER_END;
-    SERVER_LOG(WARN, "query response time size is 0", K(MTL_ID()), K(time), K(ret));
   } else {
-    if (utility_iter_ == 0){
-      if (OB_FAIL(ObRSTCollector::get_instance().collector_map_.get_refactored(MTL_ID(), time_collector_))){
-          SERVER_LOG(WARN, "time collector of the tenant does not exist", K(MTL_ID()), K(time), K(ret));
-          ret = OB_ITER_END;
-      } else {
-        if (OB_FAIL(process_row_data(row, cells))){
-          SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(time), K(ret));
-        } 
+    if (utility_iter_ == 0 && sql_type_iter_ == 0) {
+      observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(t_query_resp_time_collector)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "t_query_resp_time_collector should not be null", K(ret));
+      } else if (OB_FAIL(t_query_resp_time_collector->get_sum_value(time_collector_))) {
+        SERVER_LOG(WARN, "failed to get sum value",K(ret), K(MTL_ID()));
+      } else if (OB_FAIL(process_row_data(row, cells))){
+        SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(ret));
       }
-    } else if (utility_iter_ == time_collector_->bound_count()){
+    } else if (utility_iter_ == time_collector_.utility().bound_count() && sql_type_iter_ == static_cast<int32_t>(RespTimeSqlType::END) -1 ){
       ret = OB_ITER_END;
     } else {
+      if (utility_iter_ == time_collector_.utility().bound_count()) {
+        sql_type_iter_ ++;
+        utility_iter_ = 0;
+      }
       if (OB_FAIL(process_row_data(row, cells))){
-        SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(time), K(ret));
+        SERVER_LOG(WARN, "process row data of time collector failed", K(MTL_ID()), K(ret));
       } 
     }
   }
   return ret;
 }
-
+static inline const char *sql_type_to_string(RespTimeSqlType type)
+{
+  switch(type)
+  {
+    case(RespTimeSqlType::select_sql): return "SELECT";
+    case(RespTimeSqlType::insert_sql): return "INSERT";
+    case(RespTimeSqlType::delete_sql): return "DELETE";
+    case(RespTimeSqlType::update_sql): return "UPDATE";
+    case(RespTimeSqlType::replace_sql): return "REPLACE";
+    case(RespTimeSqlType::commit_sql): return "COMMIT";
+    case(RespTimeSqlType::other_sql): return "OTHER";
+    case(RespTimeSqlType::inner_sql): return "INNER SQL";
+    default: return "";
+  }
+}
 int ObInfoSchemaQueryResponseTimeTable::process_row_data(ObNewRow *&row, ObObj* cells)
 {
   int ret = OB_SUCCESS;
@@ -165,6 +185,7 @@ int ObInfoSchemaQueryResponseTimeTable::process_row_data(ObNewRow *&row, ObObj* 
         }
         case SVR_IP: {
           cells[cell_idx].set_varchar(ipstr_);
+          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
           break;
         }
         case SVR_PORT: {
@@ -172,15 +193,36 @@ int ObInfoSchemaQueryResponseTimeTable::process_row_data(ObNewRow *&row, ObObj* 
           break;
         }
         case QUERY_RESPPONSE_TIME:{
-          cells[cell_idx].set_int(time_collector_->bound(utility_iter_));
+          cells[cell_idx].set_int(time_collector_.utility().bound(utility_iter_));
+          break;
+        }
+        case SQL_TYPE: {
+          const char* sql_type = sql_type_to_string(static_cast<RespTimeSqlType>(sql_type_iter_));
+          if (strcmp(sql_type, "") == 0) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "invalid sql type, please check sql_type_to_string func", K(ret), K(sql_type_iter_), K(sql_type));
+          } else {
+            cells[cell_idx].set_varchar(sql_type);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
           break;
         }
         case COUNT: {
-          cells[cell_idx].set_int(time_collector_->count(utility_iter_));
+          int64_t val = 0;
+          if (OB_FAIL(time_collector_.get_count_val(static_cast<RespTimeSqlType>(sql_type_iter_), utility_iter_, val))) {
+            SERVER_LOG(WARN, "failed to get count val", K(ret), K(utility_iter_), K(sql_type_iter_));
+          } else {
+            cells[cell_idx].set_int(val);
+          }
           break;
         }
         case TOTAL: {
-          cells[cell_idx].set_int(time_collector_->total(utility_iter_));
+          int64_t val = 0;
+          if (OB_FAIL(time_collector_.get_total_time_val(static_cast<RespTimeSqlType>(sql_type_iter_), utility_iter_, val))) {
+            SERVER_LOG(WARN, "failed to get count val", K(ret), K(utility_iter_), K(sql_type_iter_));
+          } else {
+            cells[cell_idx].set_int(val);
+          }
           break;
         }
         default: {
@@ -205,8 +247,9 @@ int ObInfoSchemaQueryResponseTimeTable::process_row_data(ObNewRow *&row, ObObj* 
 
 void ObInfoSchemaQueryResponseTimeTable::release_last_tenant()
 {
-  time_collector_ = nullptr;
+  time_collector_.flush();
   utility_iter_ = 0;
+  sql_type_iter_ = 0;
 }
 
 }  // namespace observer

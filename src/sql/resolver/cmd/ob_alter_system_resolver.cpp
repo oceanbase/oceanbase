@@ -2098,14 +2098,6 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                     ret = OB_OP_NOT_ALLOW;
                     LOG_WARN("cluster_id is not allowed to modify");
                     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter the parameter cluster_id");
-                  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_FLUSH)) {
-                    if(OB_FAIL(observer::ObRSTCollector::get_instance().flush_query_response_time(item.exec_tenant_id_, item.value_.str()))){
-                      LOG_WARN("set query response time flush", K(ret));
-                    }  
-                  } else if (0 == STRCMP(item.name_.ptr(), QUERY_RESPPONSE_TIME_STATS)) {
-                    if(OB_FAIL(observer::ObRSTCollector::get_instance().control_query_response_time(item.exec_tenant_id_, item.value_.str()))){
-                      LOG_WARN("set query response time stats", K(ret));
-                    }  
                   } else if (!can_set_trace_control_info &&
                               session_info_ != NULL &&
                               0 == STRCMP(item.name_.ptr(), OB_STR_TRC_CONTROL_INFO) &&

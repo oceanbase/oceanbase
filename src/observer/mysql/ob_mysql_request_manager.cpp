@@ -233,7 +233,13 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
 
       // query response time
       if (enable_query_response_time_stats) {
-        observer::ObRSTCollector::get_instance().collect_query_response_time(audit_record.tenant_id_,audit_record.get_elapsed_time());
+        observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector =
+            MTL(observer::ObTenantQueryRespTimeCollector *);
+        if (OB_NOT_NULL(t_query_resp_time_collector)) {
+          t_query_resp_time_collector->collect(audit_record.stmt_type_,
+                                               audit_record.is_inner_sql_,
+                                               audit_record.get_elapsed_time());
+        }
       }
 
       //push into queue

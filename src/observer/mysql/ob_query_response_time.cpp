@@ -9,8 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-
+#define USING_LOG_PREFIX SQL
 #include "ob_query_response_time.h"
+#include "lib/oblog/ob_log.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase;
@@ -32,7 +33,7 @@ ObRSTUtility::ObRSTUtility():base_(0)
 ObRSTUtility::~ObRSTUtility()
 {}
 
-int ObRSTUtility::setup(uint base)
+int ObRSTUtility::setup(uint32_t base)
 {
   int ret = OB_SUCCESS;
   if (base < 2) {
@@ -71,161 +72,277 @@ int ObRSTUtility::setup(uint base)
   return 0;
 }
 
-ObRSTTimeCollector::ObRSTTimeCollector()
+int QueryRespTimeInfo::collect(const int64_t pos, const uint64_t resp_time)
+{
+  int ret = OB_SUCCESS;
+  ATOMIC_INC(&count_[pos]);
+  ATOMIC_FAA(&total_time_[pos], resp_time);
+  return ret;
+}
+
+uint64_t QueryRespTimeInfo::get_count_val(const int64_t pos)
+{
+  return ATOMIC_LOAD(&count_[pos]);
+}
+
+uint64_t QueryRespTimeInfo::get_total_time_val(const int64_t pos)
+{
+  return ATOMIC_LOAD(&total_time_[pos]);
+}
+
+ObRespTimeInfoCollector::ObRespTimeInfoCollector()
 {
   flush();
 }
-ObRSTTimeCollector::~ObRSTTimeCollector()
-{}
 
-int ObRSTTimeCollector::flush()
+int ObRespTimeInfoCollector::setup(uint32_t base)
 {
-  for (int i = 0; i < OB_QRT_OVERALL_COUNT + 1; i++) {
-    ATOMIC_SET(&count_[i], 0);
-    ATOMIC_SET(&total_[i], 0);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(utility_.setup(base))) {
+    LOG_WARN("failed to setup utility",K(ret), K(base));
   }
-  return 0;
+  return ret;
 }
 
-int ObRSTTimeCollector::collect(uint64_t time)
+int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const bool is_inner_sql, const uint64_t resp_time)
 {
-  int i = 0;
-  for (int count = utility_.bound_count(); count > i; ++i) {
-    if(utility_.bound(i) > time) {
-      ATOMIC_INC(&count_[i]);
-      ATOMIC_FAA(&total_[i],time);
+  int ret = OB_SUCCESS;
+  int pos = -1;
+  for (int i = 0; i < utility_.bound_count(); i++) {
+    if(utility_.bound(i) > resp_time) {
+      pos = i;
       break;
     }
   }
+  if (pos < 0 || pos >= utility_.bound_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pos in utility", K(ret), K(pos));
+  } else if (is_inner_sql) {
+    if (OB_FAIL(inner_sql_info_.collect(pos, resp_time))) {
+      LOG_WARN("inner sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+    }
+  } else {
+    switch (sql_type) {
+      case sql::stmt::T_SELECT : {
+        if (OB_FAIL(select_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("select info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_INSERT : {
+        if (OB_FAIL(insert_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("insert info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_DELETE : {
+        if (OB_FAIL(delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("delete info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_UPDATE : {
+        if (OB_FAIL(update_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("update info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_REPLACE : {
+        if (OB_FAIL(replace_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("replace info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_XA_COMMIT : {
+        if (OB_FAIL(commit_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("commit info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      default: {
+        if (OB_FAIL(other_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("other info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRespTimeInfoCollector::flush(int64_t base /*=OB_INVALID_ID*/)
+{
+  int ret = OB_SUCCESS;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (!tenant_config.is_valid()) {
+  } else {
+    if (OB_FAIL(setup(base == OB_INVALID_ID ? tenant_config->query_response_time_range_base : base))) {
+      LOG_WARN("failed to setup utility", K(ret));
+    }
+  }
+
+  for (int i = 0; OB_SUCC(ret) && i < OB_QRT_OVERALL_COUNT + 1; i++) {
+#define DEF_RESP_TIME_SQL_TYPE(name)           \
+  ATOMIC_SET(&name##_info_.count_[i], 0);      \
+  ATOMIC_SET(&name##_info_.total_time_[i], 0);
+#include "observer/mysql/ob_query_response_time.h"
+#undef DEF_RESP_TIME_SQL_TYPE
+  }
   return 0;
 }
 
-ObRSTCollector::ObRSTCollector():inited_(false)
-{}
-
-ObRSTCollector::~ObRSTCollector()
-{
-  inited_ = false;
-  collector_map_.clear();
-}
-
-ObRSTCollector& ObRSTCollector::get_instance()
-{
-  static ObRSTCollector collector_instance_;
-  if (!collector_instance_.inited_){
-    collector_instance_.init();
-  }
-  return collector_instance_;
-}
-
-int ObRSTCollector::init()
+int ObRespTimeInfoCollector::get_count_val(
+  const RespTimeSqlType resp_time_sql_type,
+  const int32_t pos,
+  int64_t &val)
 {
   int ret = OB_SUCCESS;
-  if (inited_) {
-    ret = OB_INIT_TWICE;
-  } else if (!collector_map_.created() && OB_FAIL(collector_map_.create(
-      common::OB_MAX_SERVER_TENANT_CNT, ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_NODE))) {
-    ret = OB_NOT_INIT;
-    SQL_ENG_LOG(WARN, "create time collector map failed", K(ret));
+  if (pos < 0 || pos >= utility_.bound_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pos in utility", K(ret), K(pos));
   } else {
-    inited_ = true;
-  }
-  return ret;
-}
-
-int ObRSTCollector::collect_query_response_time(uint64_t tenant_id, uint64_t time)
-{
-  int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    if (tenant_config->query_response_time_stats) {
-      ObRSTTimeCollector* time_collector;
-      if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))) {
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(tenant_id), K(time), K(ret));
-      } else {
-        if(OB_FAIL(time_collector->collect(time))) {
-          SERVER_LOG(WARN, "time collector of the tenant collect time failed", K(tenant_id), K(time), K(ret));
-        }
+    switch (resp_time_sql_type) {
+#define DEF_RESP_TIME_SQL_TYPE(name)           \
+      case name : {                                \
+        val = name##_info_.get_count_val(pos);     \
+        break;                                     \
+      }
+#include "observer/mysql/ob_query_response_time.h"
+#undef DEF_RESP_TIME_SQL_TYPE
+      default : {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid RespTimeSqlType", K(ret), K(resp_time_sql_type));
+        break;
       }
     }
   }
   return ret;
 }
 
-int ObRSTCollector::flush_query_response_time(uint64_t tenant_id,const ObString& is_enable)
+int ObRespTimeInfoCollector::get_total_time_val(
+  const RespTimeSqlType resp_time_sql_type,
+  const int32_t pos,
+  int64_t &val)
 {
   int ret = OB_SUCCESS;
-  bool is_enable_value = false;
-  bool is_valid = false;
-  is_enable_value = ObConfigBoolParser::get(is_enable.ptr(), is_valid);
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    if (!is_valid) {
-      ret = OB_INVALID_ARGUMENT;
-      SERVER_LOG(WARN, "invalid bool str", K(ret), K(is_enable), K(tenant_id));
-    } else if (is_enable_value) {
-      ObRSTTimeCollector* time_collector;
-      if (!tenant_config->query_response_time_stats) {
-        SERVER_LOG(WARN, "query_response_time_stats already turn off", K(ret), K(tenant_id));
-      } else if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))){
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
-      } else if (OB_FAIL(time_collector->setup(tenant_config->query_response_time_range_base))) {
-        SERVER_LOG(WARN, "time collector of the tenant set range base failed", K(ret), K(tenant_id));
-      } else if (OB_FAIL(time_collector->flush())) {
-        SERVER_LOG(WARN, "time collector of the tenant flush failed", K(ret), K(tenant_id));
+  if (pos < 0 || pos >= utility_.bound_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid pos in utility", K(ret), K(pos));
+  } else {
+    switch (resp_time_sql_type) {
+#define DEF_RESP_TIME_SQL_TYPE(name)                \
+      case name : {                                     \
+        val = name##_info_.get_total_time_val(pos);     \
+        break;                                          \
+      }
+#include "observer/mysql/ob_query_response_time.h"
+#undef DEF_RESP_TIME_SQL_TYPE
+      default : {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid RespTimeSqlType", K(ret), K(resp_time_sql_type));
+        break;
       }
     }
   }
   return ret;
 }
 
-int ObRSTCollector::enable_query_response_time(uint64_t tenant_id)
+int ObTenantQueryRespTimeCollector::init()
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    ObRSTTimeCollector* time_collector;
-    if (OB_SUCC(collector_map_.get_refactored(tenant_id, time_collector))) {
-      SERVER_LOG(INFO, "time collector of the tenant is existed", K(ret), K(tenant_id));
-    } else if (OB_FAIL(collector_map_.set_refactored(tenant_id, new ObRSTTimeCollector()))) {
-      SERVER_LOG(WARN, "create time collector of the tenant failed", K(ret), K(tenant_id));
-    }
+  flush_config_version_ = 0;
+  const int64_t multi_ways_count = MTL_CPU_COUNT() * 4; // 4* max_cpu_cnt
+  multi_collector_.set_tenant_id(MTL_ID());
+  multi_collector_.set_attr(ObMemAttr(MTL_ID(), "RespTimeColl"));
+  multi_collector_.prepare_allocate(multi_ways_count); // Memory is allocated in advance and objects are constructed in advance.
+  ATOMIC_SET(&multi_ways_count_, multi_ways_count);
+  return ret;
+}
+
+void ObTenantQueryRespTimeCollector::destroy()
+{
+  multi_collector_.destroy();
+  flush_config_version_ = 0;
+  ATOMIC_SET(&multi_ways_count_, 0);
+}
+
+int ObTenantQueryRespTimeCollector::mtl_init(ObTenantQueryRespTimeCollector *&t_resp_time_collector)
+{
+  int ret = OB_SUCCESS;
+  t_resp_time_collector = OB_NEW(ObTenantQueryRespTimeCollector, ObMemAttr(MTL_ID(), "RespTime"));
+  if (OB_ISNULL(t_resp_time_collector)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc tenant query response time collector", K(ret));
+  } else if (OB_FAIL(t_resp_time_collector->init())) {
+    LOG_WARN("failed to init tenant query response time collector", K(ret));
   }
   return ret;
 }
 
-int ObRSTCollector::free_query_response_time(uint64_t tenant_id)
+void ObTenantQueryRespTimeCollector::mtl_destroy(ObTenantQueryRespTimeCollector *&t_resp_time_collector)
+{
+  if (nullptr != t_resp_time_collector) {
+    t_resp_time_collector->destroy();
+    OB_DELETE(ObTenantQueryRespTimeCollector, "unused", t_resp_time_collector);
+    t_resp_time_collector = nullptr;
+  }
+}
+
+int ObTenantQueryRespTimeCollector::collect(const sql::stmt::StmtType sql_type, const bool is_inner_sql, const uint64_t resp_time)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    ObRSTTimeCollector* time_collector;
-    if (OB_FAIL(collector_map_.get_refactored(tenant_id, time_collector))) {
-      if(OB_HASH_NOT_EXIST == ret){
-        SERVER_LOG(WARN, "time collector of the tenant does not exist", K(ret), K(tenant_id));
-        ret = OB_SUCCESS;
-      } else {
-        SERVER_LOG(WARN, "query time collector of the tenant failed", K(ret), K(tenant_id));
+  const size_t pos = (GETTID() * 1013) % ATOMIC_LOAD(&multi_ways_count_);
+  if (OB_FAIL(multi_collector_.at(pos).collect(sql_type, is_inner_sql, resp_time))) {
+    LOG_WARN("failed to collect response time",K(ret), K(pos), K(sql_type), K(resp_time), K(is_inner_sql));
+  }
+
+  return ret;
+}
+
+int ObTenantQueryRespTimeCollector::get_sum_value(ObRespTimeInfoCollector &total_collector)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard rlock_guard(rwlock_);
+  if (OB_FAIL(total_collector.flush(multi_collector_.at(0).utility().base()))) {
+    LOG_WARN("failed to flush total collector", K(ret), K(MTL_ID()));
+  } else {
+    const int64_t multi_ways_count = ATOMIC_LOAD(&multi_ways_count_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count; i++) {
+      for (int64_t j = 0; OB_SUCC(ret) && j < total_collector.utility().bound_count(); j++) {
+#define DEF_RESP_TIME_SQL_TYPE(name)           \
+        total_collector.name##_info_.count_[j] +=  \
+                multi_collector_.at(i).name##_info_.get_count_val(j); \
+        total_collector.name##_info_.total_time_[j] +=  \
+                multi_collector_.at(i).name##_info_.get_total_time_val(j);
+#include "observer/mysql/ob_query_response_time.h"
+#undef DEF_RESP_TIME_SQL_TYPE
       }
-    } else if (OB_FAIL(collector_map_.erase_refactored(tenant_id))) {
-      SERVER_LOG(WARN, "erase the time collector failed", K(tenant_id));
+
     }
   }
   return ret;
 }
 
-int ObRSTCollector::control_query_response_time(uint64_t tenant_id, const ObString& is_enable)
+int ObTenantQueryRespTimeCollector::resize()
 {
   int ret = OB_SUCCESS;
-  bool is_enable_value = false;
-  bool is_valid = false;
-  is_enable_value = ObConfigBoolParser::get(is_enable.ptr(), is_valid);
-  if (is_enable_value) {
-    if (OB_FAIL(enable_query_response_time(tenant_id))) {
-      SERVER_LOG(WARN, "enable the query response time failed", K(ret), K(tenant_id));
+  WLockGuard wlock_guard(rwlock_);
+  if (MTL_CPU_COUNT() * 2 >= multi_ways_count_) {
+    const int64_t multi_ways_count = MTL_CPU_COUNT() * 4; // 4* max_cpu_cnt
+    multi_collector_.prepare_allocate(multi_ways_count); // Memory is allocated in advance and objects are constructed in advance.
+    ATOMIC_SET(&multi_ways_count_, multi_ways_count);
+  }
+  return ret;
+}
+int ObTenantQueryRespTimeCollector::flush()
+{
+  int ret = OB_SUCCESS;
+  WLockGuard wlock_guard(rwlock_);
+  const int64_t multi_ways_count = ATOMIC_LOAD(&multi_ways_count_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count; i++) {
+    if (OB_FAIL(multi_collector_.at(i).flush())) {
+      LOG_WARN("failed to flush resp time info collector", K(ret), K(i));
     }
-  } else if (OB_FAIL(free_query_response_time(tenant_id))) {
-    SERVER_LOG(WARN, "free the query response time failed", K(ret), K(tenant_id));
   }
   return ret;
 }

@@ -51,7 +51,7 @@ public:
     addr_ = &addr;
   }
   int process_row_data(ObNewRow *&row, ObObj* cells);
-  
+
 private:
   enum SYS_COLUMN {
     TENANT_ID = common::OB_APP_MIN_COLUMN_ID,
@@ -59,13 +59,15 @@ private:
     SVR_PORT,
     QUERY_RESPPONSE_TIME,
     COUNT,
-    TOTAL
+    TOTAL,
+    SQL_TYPE,
   };
   common::ObAddr* addr_;
   common::ObString ipstr_;
   int32_t port_;
-  ObRSTTimeCollector* time_collector_;
+  ObRespTimeInfoCollector time_collector_;
   int32_t utility_iter_;
+  int32_t sql_type_iter_;
 };
 
 }  // namespace observer

@@ -293,6 +293,7 @@ struct ObAuditRecordData {
     params_value_len_ = 0;
     partition_hit_ = true;
     is_perf_event_closed_ = false;
+    stmt_type_ = sql::stmt::T_NONE;
   }
 
   int64_t get_elapsed_time() const
@@ -413,6 +414,7 @@ struct ObAuditRecordData {
   bool partition_hit_;// flag for need das partition route or not
   bool is_perf_event_closed_;
   char flt_trace_id_[OB_MAX_UUID_STR_LENGTH + 1];
+  stmt::StmtType stmt_type_;
 };
 
 } //namespace sql

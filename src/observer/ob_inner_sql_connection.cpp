@@ -532,6 +532,7 @@ int ObInnerSQLConnection::process_record(sql::ObResultSet &result_set,
 
   if (enable_perf_event) {
     record_stat(session, result_set.get_stmt_type(), is_from_pl);
+    audit_record.stmt_type_ = result_set.get_stmt_type();
     exec_record.max_wait_event_ = max_wait_desc;
     exec_record.wait_time_end_ = total_wait_desc.time_waited_;
     exec_record.wait_count_end_ = total_wait_desc.total_waits_;

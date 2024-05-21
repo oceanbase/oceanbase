@@ -139,6 +139,7 @@
 #include "observer/table/ob_htable_lock_mgr.h"
 #include "observer/table/ob_table_session_pool.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -534,6 +535,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, ObOptStatMonitorManager::mtl_start, ObOptStatMonitorManager::mtl_stop, ObOptStatMonitorManager::mtl_wait, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND(observer::ObTenantQueryRespTimeCollector::mtl_init, observer::ObTenantQueryRespTimeCollector::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {
@@ -1266,6 +1268,12 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_SUCCESS != (tmp_ret = update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_SUCCESS != (tmp_ret = resize_tenant_query_response_time_multi_way_size())) {
+        LOG_WARN("failed to resize tenant query response time multi way size", K(tmp_ret), K(tenant_id));
+      }
+      if (OB_SUCCESS != (tmp_ret = update_tenant_query_response_time_flush_config())) {
+        LOG_WARN("failed to update tenant query response time flush config", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1299,6 +1307,76 @@ int ObMultiTenant::update_tenant_dag_scheduler_config()
   return ret;
 }
 
+int ObMultiTenant::update_tenant_query_response_time_flush_config()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else {
+    int64_t flush_version = 0;
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      uint64_t tenant_id = MTL_ID();
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("select max(config_version) from %s where tenant_id = '%lu' and name = 'query_response_time_flush' ",
+                                  OB_ALL_VIRTUAL_TENANT_PARAMETER_TNAME, tenant_id))) {
+        LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("read config from all_virtual_tenant_parameter_tname failed",
+                KR(ret), K(tenant_id), K(OB_SYS_TENANT_ID), K(sql));
+      } else if (NULL == result.get_result()) {
+        LOG_DEBUG("config result is null", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->get_int(0L, flush_version))) {
+        if (OB_ERR_NULL_VALUE != ret) {
+          LOG_WARN("get config_version failed", K(tenant_id), K(ret));
+        } else {
+          LOG_INFO("tenant has no config", K(tenant_id));
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(t_query_resp_time_collector)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("t_query_resp_time_collector should not be null", K(ret));
+      } else if (flush_version > t_query_resp_time_collector->get_flush_config_version()) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant config is invalid",K(ret), K(MTL_ID()));
+        } else if (tenant_config->query_response_time_flush) {
+          if (OB_FAIL(t_query_resp_time_collector->flush())) {
+            LOG_WARN("failed to refresh tenant query response time", K(ret));
+          } else {
+            t_query_resp_time_collector->set_flush_config_version(flush_version);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+int ObMultiTenant::resize_tenant_query_response_time_multi_way_size()
+{
+  int ret = OB_SUCCESS;
+  observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(t_query_resp_time_collector)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("t_query_resp_time_collector should not be null", K(ret));
+  } else if (t_query_resp_time_collector->get_multi_ways_count() <= MTL_CPU_COUNT() * 2) {
+    if (OB_FAIL(t_query_resp_time_collector->resize())) {
+      LOG_WARN("failed to resize tenant query response time", K(ret));
+    }
+  }
+  return ret;
+}
 int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
                                                 const int64_t tenant_min_mem,
                                                 const int64_t tenant_max_mem)
