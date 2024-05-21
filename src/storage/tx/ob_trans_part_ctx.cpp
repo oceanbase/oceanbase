@@ -8315,6 +8315,8 @@ int ObPartTransCtx::recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const S
           TRANS_LOG(WARN, "deserialize fail", KR(ret), KPC(this));
         } else if (OB_FAIL(mt_ctx_.replay_lock(lock_op, tx_op.get_op_scn()))) {
           TRANS_LOG(WARN, "recover lock_op failed", KR(ret), KPC(this));
+        } else {
+          TRANS_LOG(INFO, "recover lock_op from tx_op", KPC(this), K(lock_op), K(node_wrapper));
         }
       }
     } else {

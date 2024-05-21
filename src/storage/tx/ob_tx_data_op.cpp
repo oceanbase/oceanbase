@@ -180,11 +180,15 @@ int ObTxOpVector::deserialize(const char *buf, const int64_t buf_len, int64_t &p
   } else if (count_ > 0) {
     if (OB_ISNULL(tx_op_ = (ObTxOp*)allocator.alloc(count_ * sizeof(ObTxOp)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "alloc mem fail", KR(ret), K(count_));
+      count_ = 0; // reset count_ make vector clear
     } else {
       capacity_ = count_;
     }
     for (int64_t idx = 0; OB_SUCC(ret) && idx < count_; idx++) {
       new (&tx_op_[idx]) ObTxOp();
+    }
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < count_; idx++) {
       if (OB_FAIL(tx_op_[idx].deserialize(buf, buf_len, pos, allocator))) {
         STORAGE_LOG(WARN, "deserialize fail", KR(ret));
       }
