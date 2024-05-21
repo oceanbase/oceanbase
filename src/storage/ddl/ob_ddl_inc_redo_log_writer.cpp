@@ -85,6 +85,7 @@ ObDDLIncRedoLogWriter::ObDDLIncRedoLogWriter()
 
 ObDDLIncRedoLogWriter::~ObDDLIncRedoLogWriter()
 {
+  ddl_inc_log_handle_.reset();
   if (nullptr != buffer_) {
     ob_free(buffer_);
     buffer_ = nullptr;
