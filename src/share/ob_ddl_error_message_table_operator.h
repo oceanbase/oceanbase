@@ -41,7 +41,7 @@ public:
     int prepare_user_message_buf(const int64_t len);
     bool operator==(const ObBuildDDLErrorMessage &other) const;
     bool operator!=(const ObBuildDDLErrorMessage &other) const;
-    TO_STRING_KV(K_(ret_code), K_(ddl_type), K_(affected_rows), K(ObString(user_message_)), K_(dba_message));
+    TO_STRING_KV(K_(ret_code), K_(ddl_type), K_(affected_rows), "user_message", ObString(user_message_), K_(dba_message));
   public:
     int ret_code_;
     ObDDLType ddl_type_;
