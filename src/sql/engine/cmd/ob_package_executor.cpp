@@ -89,6 +89,7 @@ int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &st
   ObString first_stmt;
   obrpc::ObRoutineDDLRes res;
   bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
@@ -110,7 +111,9 @@ int ObCreatePackageExecutor::execute(ObExecContext &ctx, ObCreatePackageStmt &st
     LOG_WARN("rpc proxy create package failed", K(ret),
              "dst", common_rpc_proxy->get_server());
   }
-  if (OB_SUCC(ret) && !has_error && with_res) {
+  if (OB_SUCC(ret) && !has_error && with_res &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
       get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
@@ -142,6 +145,7 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   ObString first_stmt;
   obrpc::ObRoutineDDLRes res;
   bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
@@ -162,7 +166,9 @@ int ObAlterPackageExecutor::execute(ObExecContext &ctx, ObAlterPackageStmt &stmt
   } else if (with_res && OB_FAIL(common_rpc_proxy->alter_package_with_res(arg, res))) {
     LOG_WARN("rpc proxy drop procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
   }
-  if (OB_SUCC(ret) && !has_error && with_res) {
+  if (OB_SUCC(ret) && !has_error && with_res &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
     get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));

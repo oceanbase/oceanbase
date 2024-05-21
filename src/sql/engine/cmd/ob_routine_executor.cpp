@@ -29,6 +29,7 @@
 #include "share/ob_common_rpc_proxy.h"
 #include "share/ob_rpc_struct.h"
 #include "sql/engine/expr/ob_expr_column_conv.h"
+#include "share/config/ob_config_helper.h"
 
 namespace oceanbase
 {
@@ -112,6 +113,7 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   obrpc::ObRoutineDDLRes res;
   bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0);
   bool has_error = ERROR_STATUS_HAS_ERROR == crt_routine_arg.error_info_.get_error_status();
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
     LOG_WARN("fail to get first stmt" , K(ret));
   } else {
@@ -131,7 +133,9 @@ int ObCreateRoutineExecutor::execute(ObExecContext &ctx, ObCreateRoutineStmt &st
   } else if (with_res && OB_FAIL(common_rpc_proxy->create_routine_with_res(crt_routine_arg, res))) {
     LOG_WARN("rpc proxy create procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
   }
-  if (OB_SUCC(ret) && !has_error && with_res) {
+  if (OB_SUCC(ret) && !has_error && with_res &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
     CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
     OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
     OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
@@ -424,6 +428,7 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
   bool need_create_routine = (lib::is_oracle_mode() && alter_routine_arg.is_or_replace_) ||
                             (lib::is_mysql_mode() && alter_routine_arg.is_need_alter_);
   ObString first_stmt;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   if (need_create_routine) {
     obrpc::ObRoutineDDLRes res;
     bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0);
@@ -449,7 +454,9 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
     } else if (with_res && OB_FAIL(common_rpc_proxy->alter_routine_with_res(alter_routine_arg, res))) {
       LOG_WARN("rpc proxy alter procedure failed", K(ret), "dst", common_rpc_proxy->get_server());
     }
-    if (OB_SUCC(ret) && !has_error && with_res) {
+    if (OB_SUCC(ret) && !has_error && with_res &&
+        tenant_config.is_valid() &&
+        tenant_config->plsql_v2_compatibility) {
       CK (OB_NOT_NULL(ctx.get_sql_ctx()->schema_guard_));
       OZ (ObSPIService::force_refresh_schema(tenant_id, res.store_routine_schema_version_));
       OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
@@ -477,7 +484,9 @@ int ObAlterRoutineExecutor::execute(ObExecContext &ctx, ObAlterRoutineStmt &stmt
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
-    if (OB_SUCC(ret) && !has_error && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0)) {
+    if (OB_SUCC(ret) && !has_error && (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0) &&
+        tenant_config.is_valid() &&
+        tenant_config->plsql_v2_compatibility) {
       OZ (compile_routine(ctx, tenant_id, database_id, routine_name, type,
                           routine_info->get_schema_version()));
       if (OB_FAIL(ret)) {
