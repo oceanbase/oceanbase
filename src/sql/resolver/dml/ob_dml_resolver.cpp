@@ -4234,7 +4234,7 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
     table_node = parse_node.children_[i];
     // nested join case or normal join case
     if (T_JOINED_TABLE == table_node->type_) {
-      if (OB_FAIL(resolve_joined_table(*table_node, child_table))) {
+      if (OB_FAIL(SMART_CALL(resolve_joined_table(*table_node, child_table)))) {
         LOG_WARN("resolve child joined table failed", K(ret));
       } else if (1 == i) {
         cur_table->left_table_ = child_table;
