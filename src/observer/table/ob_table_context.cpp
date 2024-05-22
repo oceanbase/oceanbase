@@ -154,6 +154,8 @@ int ObTableCtx::construct_column_items()
           LOG_WARN("fail to get cascaded column ids", K(ret), K(item), K(*col_schema));
         } else if (OB_FAIL(column_items_.push_back(item))) {
           LOG_WARN("fail to push back column item", K(ret), K_(column_items), K(item));
+        } else if (!has_lob_column_ && is_lob_storage(item.column_type_)) {
+          has_lob_column_ = true;
         }
       }
     }
@@ -2115,6 +2117,9 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
   } else if (has_global_index()) {
     // cannot use put: the global index table will insert a new row insert of covering the old row
     // when the assign value of index column is new.
+    can_use_put = false;
+  } else if (has_lob_column()) {
+    // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
     can_use_put = false;
   } else if (is_htable()) { // htable has no index and alway full filled.
     can_use_put = true;

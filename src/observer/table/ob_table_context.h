@@ -240,6 +240,7 @@ public:
     is_ttl_table_ = false;
     is_skip_scan_ = false;
     is_client_set_put_ = false;
+    has_lob_column_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
   }
@@ -277,6 +278,7 @@ public:
                K_(is_ttl_table),
                K_(is_skip_scan),
                K_(is_client_set_put),
+               K_(has_lob_column),
                K_(binlog_row_image_type));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
@@ -389,6 +391,7 @@ public:
   OB_INLINE bool is_global_index_scan() const { return is_global_index_scan_; }
   OB_INLINE bool is_global_index_back() const { return is_global_index_scan_ && is_index_back_;}
   OB_INLINE bool need_dist_das() { return has_global_index_ || (is_global_index_scan_ && is_index_back_); }
+  OB_INLINE bool has_lob_column() const { return has_lob_column_; }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
@@ -622,6 +625,7 @@ private:
   bool is_skip_scan_;
   // for put
   bool is_client_set_put_;
+  bool has_lob_column_;
   int64_t binlog_row_image_type_;
   // for audit
   bool is_full_table_scan_;
