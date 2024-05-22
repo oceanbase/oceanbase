@@ -63,7 +63,9 @@ if __name__ == '__main__':
   sub_files_dir = cur_file_short_name + sub_files_dir_suffix
   sub_files_short_dir = cur_file_real_name + sub_files_dir_suffix
   split_py_files(sub_files_dir)
-  exec('from ' + sub_files_short_dir + '.{run_module_name} import do_upgrade_by_argv')
+  sub_files_absolute_dir = os.path.abspath(sub_files_dir)
+  sys.path.append(sub_files_absolute_dir)
+  from {run_module_name} import do_upgrade_by_argv
   do_upgrade_by_argv(sys.argv[1:])
 """.format(run_module_name = run_filename[0:run_filename.rfind('.')])
 
@@ -71,6 +73,7 @@ def get_pre_and_post_extra_lines_strs(upgrade_pre_filename, upgrade_post_filenam
     do_upgrade_pre_filename, do_upgrade_post_filename, \
     file_splitter_line, sub_filename_line_prefix, sub_file_module_end_line):
   upgrade_common_lines = """
+from __future__ import print_function, absolute_import
 import os
 import sys
 import datetime
@@ -126,7 +129,7 @@ def split_py_files(sub_files_dir):
       if i >= cur_file_lines_count:
         raise SplitError('invalid line index:' + str(i) + ', lines_count:' + str(cur_file_lines_count))
       elif (sub_file_module_end_line + char_enter) == cur_file_lines[i]:
-        print 'succeed to split all sub py files'
+        print('succeed to split all sub py files')
         break
       else:
         mark_idx = cur_file_lines[i].find(sub_filename_line_prefix)

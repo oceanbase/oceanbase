@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from __future__ import print_function
 import sys
 import os
 import mysql.connector
@@ -9,6 +10,10 @@ import logging
 import getopt
 import time
 import re
+
+if sys.version_info.major == 3:
+    def cmp(a, b):
+        return (a > b) - (a < b)
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
@@ -37,12 +42,12 @@ class Cursor:
       if True == print_when_succ:
         logging.info('succeed to execute sql: %s, rowcount = %d', sql, rowcount)
       return rowcount
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connector error, fail to execute sql: %s', sql)
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error, fail to execute sql: %s', sql)
-      raise e
+      raise
   def exec_query(self, sql, print_when_succ = True):
     try:
       self.__cursor.execute(sql)
@@ -51,12 +56,12 @@ class Cursor:
       if True == print_when_succ:
         logging.info('succeed to execute query: %s, rowcount = %d', sql, rowcount)
       return (self.__cursor.description, results)
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connector error, fail to execute sql: %s', sql)
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error, fail to execute sql: %s', sql)
-      raise e
+      raise
 
 def set_parameter(cur, parameter, value):
   sql = """alter system set {0} = '{1}'""".format(parameter, value)
@@ -74,7 +79,7 @@ def wait_parameter_sync(cur, key, value):
     result = cur.fetchall()
     if len(result) != 1 or len(result[0]) != 1:
       logging.exception('result cnt not match')
-      raise e
+      raise MyError('result cnt not match')
     elif result[0][0] == 0:
       logging.info("""{0} is sync, value is {1}""".format(key, value))
       break
@@ -84,7 +89,7 @@ def wait_parameter_sync(cur, key, value):
     times -= 1
     if times == 0:
       logging.exception("""check {0}:{1} sync timeout""".format(key, value))
-      raise e
+      raise MyError("""check {0}:{1} sync timeout""".format(key, value))
     time.sleep(5)
 
 #### --------------start :  opt.py --------------
@@ -221,10 +226,10 @@ def parse_options(argv):
 def deal_with_local_opt(opt):
   if 'help' == opt.get_long_name():
     global help_str
-    print help_str
+    print(help_str)
   elif 'version' == opt.get_long_name():
     global version_str
-    print version_str
+    print(version_str)
 
 def deal_with_local_opts():
   global g_opts
@@ -307,7 +312,7 @@ def get_version(version_str):
 
   if len(versions) != 4:
     logging.exception("""version:{0} is invalid""".format(version_str))
-    raise e
+    raise MyError("""version:{0} is invalid""".format(version_str))
 
   major = int(versions[0])
   minor = int(versions[1])
@@ -316,7 +321,7 @@ def get_version(version_str):
 
   if major > 0xffffffff or minor > 0xffff or major_patch > 0xff or minor_patch > 0xff:
     logging.exception("""version:{0} is invalid""".format(version_str))
-    raise e
+    raise MyError("""version:{0} is invalid""".format(version_str))
 
   version = (major << 32) | (minor << 16) | (major_patch << 8) | (minor_patch)
   return version
@@ -328,7 +333,7 @@ def check_observer_version(query_cur, upgrade_params):
   if len(results) != 1:
     fail_list.append('min_observer_version is not sync')
   elif cmp(results[0][0], upgrade_params.old_version) < 0 :
-    fail_list.append('old observer version is expected equal or higher then: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
+    fail_list.append('old observer version is expected equal or higher than: {0}, actual version:{1}'.format(upgrade_params.old_version, results[0][0]))
   logging.info('check observer version success, version = {0}'.format(results[0][0]))
 
 def check_data_version(query_cur, input_min_cluster_version):
@@ -656,18 +661,18 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
-    except Exception, e:
+    except Exception as e:
       logging.exception('run error')
-      raise e
+      raise
     finally:
       cur.close()
       conn.close()
-  except mysql.connector.Error, e:
+  except mysql.connector.Error as e:
     logging.exception('connection error')
-    raise e
-  except Exception, e:
+    raise
+  except Exception as e:
     logging.exception('normal error')
-    raise e
+    raise
 
 if __name__ == '__main__':
   upgrade_params = UpgradeParams()
@@ -690,9 +695,9 @@ if __name__ == '__main__':
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
           host, port, user, password.replace('"', '\\"'), timeout, log_filename)
       do_check(host, port, user, password, timeout, upgrade_params)
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connctor error')
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error')
-      raise e
+      raise
