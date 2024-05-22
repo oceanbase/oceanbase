@@ -3283,8 +3283,7 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
       LOG_WARN("fail to reserve", KR(ret), K(column_cnt));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("fail to get min data version", KR(ret), K(tenant_id));
-    } else if (!(compat_version >= DATA_VERSION_4_3_0_0)
-              && can_add_column_group(table_schema)) {
+    } else if (!(compat_version >= DATA_VERSION_4_3_0_0)) {
       if (OB_NOT_NULL(cg_node) && (T_COLUMN_GROUP == cg_node->type_)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't support column store if version less than 4_1_0_0", KR(ret), K(compat_version));
@@ -3303,7 +3302,8 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
       if (OB_SUCC(ret) && OB_LIKELY(tenant_config.is_valid()) && nullptr == cg_node) {
 
         /* force to build each cg*/
-        if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
+        if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+        } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
                     tenant_config->default_table_store_format.get_value_string(),
                     table_store_type))) {
           LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
@@ -3321,6 +3321,7 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
         /* force to build all cg*/
         ObColumnGroupSchema all_cg;
         if (OB_FAIL(ret)) {
+        } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
         } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
           bool is_all_cg_exist = false;
           if (OB_FAIL(table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
@@ -3355,15 +3356,6 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
   return ret;
 }
 
-bool ObCreateTableResolver::can_add_column_group(const ObTableSchema &table_schema)
-{
-  bool can_add_cg = false;
-  if (table_schema.is_user_table()
-      || table_schema.is_tmp_table()) {
-    can_add_cg = true;
-  }
-  return can_add_cg;
-}
 
 int ObCreateTableResolver::add_inner_index_for_heap_gtt() {
   int ret = OB_SUCCESS;

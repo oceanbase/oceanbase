@@ -11929,6 +11929,9 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   if (OB_ISNULL(column_group_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column gorup node should not be null", K(ret));
+  } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported table type to add column group", K(ret));
   } else {
     dst_table_schema.set_max_used_column_group_id(table_schema.get_max_used_column_group_id());
   }

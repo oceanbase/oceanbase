@@ -156,6 +156,7 @@ public:
   static int mock_default_cg(
               const uint64_t tenant_id,
               share::schema::ObTableSchema &new_table_schema);
+  static bool can_add_column_group(const ObTableSchema &table_schema);
 
   // Optimized method to batch get latest table schemas from cache or inner_table automatically.
   //
