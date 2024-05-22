@@ -83,7 +83,6 @@ public:
 
   void run1() override final;
   int submit_io_task(LogIOTask *io_task);
-  int64_t get_last_working_time() const { return ATOMIC_LOAD(&last_working_time_); }
 
  int notify_need_writing_throttling(const bool &need_throtting);
   static constexpr int64_t MAX_THREAD_NUM = 1;
@@ -140,7 +139,6 @@ private:
   int64_t do_task_used_ts_;
   int64_t do_task_count_;
   int64_t print_log_interval_;
-  int64_t last_working_time_;
   LogWritingThrottle *throttle_;
   ObMiniStat::ObStatItem log_io_worker_queue_size_stat_;
   // Each LogIOTask except LogIOFlushLogTask hold a unique sequence, when 'purge_throttling_task_submitted_seq_' minus

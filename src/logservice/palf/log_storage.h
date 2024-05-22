@@ -117,6 +117,11 @@ public:
 
   int get_logical_block_size(int64_t &logical_block_size) const;
 
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const;
   TO_STRING_KV(K_(log_tail),
                K_(readable_log_tail),
                K_(log_block_header),

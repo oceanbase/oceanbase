@@ -128,6 +128,13 @@ public:
   int writev(const offset_t offset,
              const LogWriteBuf &write_buf);
 
+  // @brief get start time of the last ob_pwrite
+  int get_io_statistic_info(int64_t &last_working_time,
+                            int64_t &last_write_size,
+                            int64_t &accum_write_size,
+                            int64_t &accum_write_count,
+                            int64_t &accum_write_rt) const;
+
   TO_STRING_KV(K_(dio_aligned_buf), K_(log_block_size), K_(dir_fd), K_(io_fd));
 private:
   // if timeout, retry until open block return an explicit error code
@@ -161,6 +168,13 @@ private:
   int64_t trace_time_;
   int dir_fd_;
   int io_fd_;
+  // === IO Failure Detection ===
+  int64_t last_pwrite_start_time_us_;
+  int64_t last_pwrite_size_;
+  int64_t accum_write_size_;
+  int64_t accum_write_rt_;
+  int64_t accum_write_count_;
+  // === IO Failure Detection ===
   bool is_inited_;
 };
 } // end of logservice

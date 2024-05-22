@@ -36,7 +36,6 @@ LogIOWorker::LogIOWorker()
       do_task_used_ts_(0),
       do_task_count_(0),
       print_log_interval_(OB_INVALID_TIMESTAMP),
-      last_working_time_(OB_INVALID_TIMESTAMP),
       throttle_(NULL),
       log_io_worker_queue_size_stat_("[PALF STAT LOG IO WORKER QUEUE SIZE]", PALF_STAT_PRINT_INTERVAL_US),
       purge_throttling_task_submitted_seq_(0),
@@ -113,7 +112,6 @@ void LogIOWorker::destroy()
   need_ignoring_throttling_ = false;
   purge_throttling_task_handled_seq_ = 0;
   purge_throttling_task_submitted_seq_ = 0;
-  last_working_time_ = OB_INVALID_TIMESTAMP;
   throttle_ = NULL;
   cb_thread_pool_tg_id_ = -1;
   palf_env_impl_ = NULL;
@@ -239,10 +237,8 @@ int LogIOWorker::run_loop_()
       && false == (OB_NOT_NULL(&lib::Thread::current()) ? lib::Thread::current().has_set_stop() : false)) {
     void *task = NULL;
     if (OB_SUCC(queue_.pop(task, QUEUE_WAIT_TIME))) {
-      ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
       update_throttling_options_();
       ret = reduce_io_task_(task);
-      ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
     }
     if (queue_.size() > 0) {
       log_io_worker_queue_size_stat_.stat(queue_.size());
@@ -256,9 +252,7 @@ int LogIOWorker::run_loop_()
     CLOG_LOG(INFO, "before LogIOWorker destory", KPC(this), KPC(allocator));
     while (OB_SUCC(queue_.pop(task))) {
       LogIOTask *io_task = reinterpret_cast<LogIOTask *>(task);
-      ATOMIC_STORE(&last_working_time_, common::ObTimeUtility::fast_current_time());
       (void)handle_io_task_(io_task);
-      ATOMIC_STORE(&last_working_time_, OB_INVALID_TIMESTAMP);
     }
     CLOG_LOG(INFO, "after LogIOWorker destory", KPC(this), KPC(allocator));
   }
