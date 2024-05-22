@@ -1900,7 +1900,6 @@ int ObTableSchema::check_valid(const bool count_varchar_size_by_byte) const {
               } else if (count_varchar_size_by_byte) {
                 if (OB_FAIL(column->get_byte_length(len, lib::is_oracle_mode(), false))) {
                   LOG_WARN("get_byte_length failed ", K(ret));
-                  break;
                 }
               } else {
                 len = column->get_data_length();
