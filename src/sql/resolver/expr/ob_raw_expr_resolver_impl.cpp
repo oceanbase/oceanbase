@@ -2195,11 +2195,34 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
   if (NULL == ctx_.secondary_namespace_) {
     // do nothing ...
   } else {
+
+class ObPLDependencyGuard
+{
+public:
+  ObPLDependencyGuard(pl::ObPLDependencyTable *dependency_table)
+    : dependency_table_(dependency_table), count_(0) {
+    if (OB_NOT_NULL(dependency_table_)) {
+      count_ = dependency_table_->count();
+    }
+  }
+  ~ObPLDependencyGuard() {
+    if (OB_NOT_NULL(dependency_table_)) {
+      while (dependency_table_->count() > count_) {
+        dependency_table_->pop_back();
+      }
+    }
+  }
+private:
+  pl::ObPLDependencyTable *dependency_table_;
+  int64_t count_;
+};
+
     SET_LOG_CHECK_MODE();
     CK(OB_NOT_NULL(ctx_.secondary_namespace_->get_external_ns()));
     if (OB_SUCC(ret)) {
       ObArray<ObQualifiedName> fake_columns;
       ObArray<ObRawExpr*> fake_exprs;
+      ObPLDependencyGuard dep_guard(ctx_.secondary_namespace_->get_external_ns()->get_dependency_table());
       if (OB_FAIL(ObResolverUtils::resolve_external_symbol(allocator,
                                                            expr_factory,
                                                            ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().session_info_,
