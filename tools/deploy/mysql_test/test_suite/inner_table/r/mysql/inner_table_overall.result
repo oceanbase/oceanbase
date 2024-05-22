@@ -1121,6 +1121,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21543	GV$OB_TRACEPOINT_INFO	1	201001	1
 21544	V$OB_TRACEPOINT_INFO	1	201001	1
 21545	V$OB_COMPATIBILITY_CONTROL	1	201001	1
+21554	INNODB_LOCK_WAITS	1	201002	1
+21555	INNODB_LOCKS	1	201002	1
+21556	INNODB_TRX	1	201002	1
+21557	NDB_TRANSID_MYSQL_CONNECTION_MAP	1	201002	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

@@ -1715,6 +1715,10 @@ public:
   static int gv_ob_tracepoint_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tracepoint_info_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_compatibility_control_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_lock_waits_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_locks_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_trx_schema(share::schema::ObTableSchema &table_schema);
+  static int ndb_transid_mysql_connection_map_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4422,6 +4426,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_tracepoint_info_schema,
   ObInnerTableSchema::v_ob_tracepoint_info_schema,
   ObInnerTableSchema::v_ob_compatibility_control_schema,
+  ObInnerTableSchema::innodb_lock_waits_schema,
+  ObInnerTableSchema::innodb_locks_schema,
+  ObInnerTableSchema::innodb_trx_schema,
+  ObInnerTableSchema::ndb_transid_mysql_connection_map_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6032,6 +6040,10 @@ const uint64_t tenant_space_tables [] = {
   OB_GV_OB_TRACEPOINT_INFO_TID,
   OB_V_OB_TRACEPOINT_INFO_TID,
   OB_V_OB_COMPATIBILITY_CONTROL_TID,
+  OB_INNODB_LOCK_WAITS_TID,
+  OB_INNODB_LOCKS_TID,
+  OB_INNODB_TRX_TID,
+  OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8521,6 +8533,10 @@ const char* const tenant_space_table_names [] = {
   OB_GV_OB_TRACEPOINT_INFO_TNAME,
   OB_V_OB_TRACEPOINT_INFO_TNAME,
   OB_V_OB_COMPATIBILITY_CONTROL_TNAME,
+  OB_INNODB_LOCK_WAITS_TNAME,
+  OB_INNODB_LOCKS_TNAME,
+  OB_INNODB_TRX_TNAME,
+  OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -12440,10 +12456,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 277;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 790;
-const int64_t OB_SYS_VIEW_COUNT = 861;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1933;
+const int64_t OB_SYS_VIEW_COUNT = 865;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1937;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1936;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1940;
 
 } // end namespace share
 } // end namespace oceanbase

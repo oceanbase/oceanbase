@@ -1028,7 +1028,8 @@ public:
 public:
   static bool is_valid(const int32_t level)
   {
-    return level == READ_COMMITED
+    return level == READ_UNCOMMITTED
+        || level == READ_COMMITED
         || level == REPEATABLE_READ
         || level == SERIALIZABLE;
   }
