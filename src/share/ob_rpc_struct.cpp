@@ -5567,6 +5567,32 @@ DEF_TO_STRING(ObForceSetServerListArg)
 
 OB_SERIALIZE_MEMBER(ObForceSetServerListArg, server_list_, replica_num_);
 
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult::LSFailedInfo, ls_id_, failed_ret_code_, failed_reason_);
+
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult::ResultInfo, tenant_id_, successful_ls_, failed_ls_info_);
+
+int ObForceSetServerListResult::ResultInfo::add_ls_info(const share::ObLSID ls_id, const int failed_ret)
+{
+  int ret = OB_SUCCESS;
+  if (!ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(ls_id), K(failed_ret));
+  } else if (OB_SUCCESS == failed_ret) {
+    if (OB_FAIL(successful_ls_.push_back(ls_id))) {
+      LOG_WARN("push_back failed", K(ret), K(ls_id));
+    }
+  } else {
+    const common::ObString failed_reason = ob_error_name(failed_ret);
+    LSFailedInfo failed_info(ls_id, failed_ret, failed_reason);
+    if (OB_FAIL(failed_ls_info_.push_back(failed_info))) {
+      LOG_WARN("insert_and_get failed for failed_ls_info_", K(ret), K(ls_id), K(failed_ret));
+    }
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObForceSetServerListResult, ret_, result_list_);
+
 bool ObForceCreateSysTableArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_

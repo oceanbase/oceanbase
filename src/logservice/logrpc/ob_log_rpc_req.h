@@ -45,6 +45,7 @@ enum LogConfigChangeCmdType {
   GET_CONFIG_CHANGE_LOCK_STAT_CMD,
   REPLACE_LEARNERS_CMD,
   REPLACE_MEMBER_WITH_LEARNER_CMD,
+  FORCE_SET_MEMBER_LIST_CMD,
 };
 
 inline const char *log_config_change_cmd2str(const LogConfigChangeCmdType state)
@@ -69,6 +70,7 @@ inline const char *log_config_change_cmd2str(const LogConfigChangeCmdType state)
     CHECK_CMD_TYPE_STR(GET_CONFIG_CHANGE_LOCK_STAT_CMD);
     CHECK_CMD_TYPE_STR(REPLACE_LEARNERS_CMD);
     CHECK_CMD_TYPE_STR(REPLACE_MEMBER_WITH_LEARNER_CMD);
+    CHECK_CMD_TYPE_STR(FORCE_SET_MEMBER_LIST_CMD);
     default:
       return "Invalid";
   }
@@ -104,6 +106,12 @@ public:
                      const common::ObMemberList &removed_list,
                      const LogConfigChangeCmdType cmd_type,
                      const int64_t timeout_us);
+  LogConfigChangeCmd(const common::ObAddr &src,
+                     const int64_t palf_id,
+                     const common::ObMemberList &new_member_list,
+                     const int64_t new_replica_num,
+                     const LogConfigChangeCmdType cmd_type,
+                     const int64_t timeout_us);
   ~LogConfigChangeCmd();
   bool is_valid() const;
   void reset();
@@ -114,7 +122,7 @@ public:
   TO_STRING_KV("cmd_type", log_config_change_cmd2str(cmd_type_), K_(src), K_(palf_id), \
   K_(added_member), K_(removed_member), K_(curr_member_list), K_(curr_replica_num),    \
   K_(new_replica_num), K_(timeout_us), K_(lock_owner), K_(config_version),             \
-  K_(added_list), K_(removed_list));
+  K_(added_list), K_(removed_list), K_(new_member_list));
   common::ObAddr src_;
   int64_t palf_id_;
   common::ObMember added_member_;
@@ -128,6 +136,7 @@ public:
   palf::LogConfigVersion config_version_;
   common::ObMemberList added_list_;
   common::ObMemberList removed_list_;
+  common::ObMemberList new_member_list_;
 };
 
 struct LogConfigChangeCmdResp {

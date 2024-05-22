@@ -161,6 +161,7 @@ DEF_COMMAND(TRANS, force_set_server_list, 1, "replica_num ip:port ip:port ... #f
   ObAddr server;
   string server_str;
   obrpc::ObForceSetServerListArg arg;
+  obrpc::ObForceSetServerListResult result;
 
   if (cmd_ == action_name_) {
     ret = OB_INVALID_ARGUMENT;
@@ -200,10 +201,49 @@ DEF_COMMAND(TRANS, force_set_server_list, 1, "replica_num ip:port ip:port ... #f
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(client_->force_set_server_list(arg))) {
+    if (OB_FAIL(client_->force_set_server_list(arg, result))) {
       COMMON_LOG(ERROR, "force_set_server_list failed", K(ret));
     }
   }
+
+  fprintf(stdout, "-----------------------{force_set_server_list result}-----------------------\n");
+  fprintf(stdout, "{\"ob_admin_execute_ret_code\":%d, \"observer_execute_ret_code\":%d, \"result_list\":[", ret, result.ret_);
+  ARRAY_FOREACH(result.result_list_, idx) {
+    obrpc::ObForceSetServerListResult::ResultInfo result_info = result.result_list_.at(idx);
+    fprintf(stdout, "{"); // single result_info start
+    fprintf(stdout, "\"tenant_id\":%lu, ", result_info.tenant_id_);
+    fprintf(stdout, "\"successful_ls_id\":[");
+    if (0 < result_info.successful_ls_.size()) {
+      ARRAY_FOREACH(result_info.successful_ls_, idx) {
+        share::ObLSID ls = result_info.successful_ls_.at(idx);
+        if (idx == result_info.successful_ls_.size() - 1) {
+          fprintf(stdout, "%ld", ls.id());
+        } else {
+          fprintf(stdout, "%ld,", ls.id());
+        }
+      }
+    }
+    fprintf(stdout, "], \"failed_ls_info\":[");
+    // print failed ls info
+    if (0 < result_info.failed_ls_info_.size()) {
+      ARRAY_FOREACH(result_info.failed_ls_info_, idx) {
+        fprintf(stdout, "{");
+        obrpc::ObForceSetServerListResult::LSFailedInfo failed_info = result_info.failed_ls_info_.at(idx);
+        fprintf(stdout, "\"ls_id\":%ld, \"failed_ret_code\":%d, \"failed_reason\":\"%s\"", failed_info.ls_id_.id(), failed_info.failed_ret_code_, failed_info.failed_reason_.ptr());
+        if (idx == result_info.failed_ls_info_.size() - 1) {
+          fprintf(stdout, "}");
+        } else {
+          fprintf(stdout, "}, ");
+        }
+      }
+    }
+    fprintf(stdout, "]");  // failed_ls_info end
+    fprintf(stdout, "}");  // single result_info end
+    if (idx != result.result_list_.size() - 1) {
+      fprintf(stdout, ", ");
+    }
+  }
+  fprintf(stdout, "]}\n");
 
   COMMON_LOG(INFO, "force_set_server_list", K(ret), "replica_num", arg.replica_num_, "server_list", arg.server_list_);
 

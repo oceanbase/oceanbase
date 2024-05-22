@@ -1321,6 +1321,10 @@ int LogConfigMgr::check_config_change_args_by_type_(const LogConfigChangeArgs &a
       {
         break;
       }
+      case FORCE_SET_MEMBER_LIST:
+      {
+        break;
+      }
       case TRY_LOCK_CONFIG_CHANGE:
       {
         if (args.lock_owner_ == curr_lock_owner) {
@@ -1597,7 +1601,9 @@ int LogConfigMgr::update_match_lsn_map_(const LogConfigChangeArgs &args,
   if (is_add_log_sync_member_list(args.type_) && OB_FAIL(added_memberlist.add_member(args.server_))) {
     PALF_LOG(WARN, "add_member failed", K(ret), K_(palf_id), K_(self), K(added_memberlist), K(args));
   } else if (is_remove_log_sync_member_list(args.type_) && OB_FAIL(removed_memberlist.add_member(args.server_))) {
-    PALF_LOG(WARN, "add_member failed", K(ret), K_(palf_id), K_(self), K(added_memberlist), K(args));
+    PALF_LOG(WARN, "add_member failed", K(ret), K_(palf_id), K_(self), K(removed_memberlist), K(args));
+  } else if (FORCE_SET_MEMBER_LIST == args.type_ && OB_FAIL(removed_memberlist.deep_copy(args.removed_list_))) {
+    PALF_LOG(WARN, "failed to get removed members", K(ret), K_(palf_id), K_(self), K(removed_memberlist), K(args));
   }
   if (OB_SUCC(ret) && OB_FAIL(sw_->config_change_update_match_lsn_map(added_memberlist,
           removed_memberlist, new_config_info.config_.log_sync_memberlist_,
@@ -1799,6 +1805,14 @@ int LogConfigMgr::generate_new_config_info_(const int64_t proposal_id,
       new_config_info.config_.degraded_learnerlist_.reset();
       new_config_info.config_.arbitration_member_.reset();
       new_config_info.config_.log_sync_memberlist_.add_member(member);
+      new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
+    }
+    if (OB_SUCC(ret) && FORCE_SET_MEMBER_LIST == cc_type) {
+      // force set member list
+      new_config_info.config_.log_sync_memberlist_.reset();
+      new_config_info.config_.degraded_learnerlist_.reset();
+      new_config_info.config_.arbitration_member_.reset();
+      new_config_info.config_.log_sync_memberlist_.deep_copy(args.new_member_list_);
       new_config_info.config_.log_sync_replica_num_ = args.new_replica_num_;
     }
     // check if the new_config_info is valid
@@ -2169,6 +2183,7 @@ void LogConfigChangeArgs::reset()
   type_ = INVALID_LOG_CONFIG_CHANGE_TYPE;
   added_list_.reset();
   removed_list_.reset();
+  new_member_list_.reset();
 }
 
 int LogConfigMgr::check_follower_sync_status(const LogConfigChangeArgs &args,
@@ -2522,6 +2537,34 @@ int LogConfigMgr::forward_initial_config_meta_to_arb()
           K(arb_member), K_(log_ms_meta));
     }
   }
+  return ret;
+}
+
+int LogConfigMgr::force_set_member_list(const LogConfigChangeArgs &args, const int64_t proposal_id)
+{
+  int ret = OB_SUCCESS;
+  bool unused = false;
+  SpinLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "LogConfigMgr is not inited!", K(ret));
+  } else if (!args.is_valid() || INVALID_PROPOSAL_ID == proposal_id) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", K(ret), K(args), K(proposal_id));
+  } else if (OB_FAIL(append_config_meta_(proposal_id, args, unused))) {
+    PALF_LOG(WARN, "append_config_meta_ failed", K(ret), K(args), K(proposal_id));
+  } else {
+    FlushMetaCbCtx cb_ctx;
+    cb_ctx.type_ = MetaType::CHANGE_CONFIG_META;
+    cb_ctx.proposal_id_ = proposal_id;
+    cb_ctx.config_version_ = log_ms_meta_.curr_.config_.config_version_;
+    if (OB_FAIL(log_engine_->submit_flush_change_config_meta_task(cb_ctx, log_ms_meta_))) {
+      PALF_LOG(WARN, "LogEngine failed to submit flush_change_config_meta_task", K(ret), K(cb_ctx), K(log_ms_meta_));
+    } else {
+      PALF_LOG(INFO, "force to set member list successfully", K_(palf_id), K(args), K(proposal_id), K(log_ms_meta_));
+    }
+  }
+
   return ret;
 }
 

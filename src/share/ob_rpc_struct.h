@@ -6733,6 +6733,48 @@ public:
   int64_t replica_num_;
 };
 
+struct ObForceSetServerListResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObForceSetServerListResult() : ret_(OB_SUCCESS), result_list_() {}
+  ~ObForceSetServerListResult() {}
+  int init();
+  DISALLOW_COPY_AND_ASSIGN(ObForceSetServerListResult);
+
+  struct LSFailedInfo
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    LSFailedInfo() : ls_id_(), failed_ret_code_(OB_SUCCESS), failed_reason_() {}
+    LSFailedInfo(const share::ObLSID &ls_id,
+                 const int failed_ret_code,
+                 const common::ObString failed_reason)
+        : ls_id_(ls_id), failed_ret_code_(failed_ret_code), failed_reason_(failed_reason) {}
+    ~LSFailedInfo() {}
+    TO_STRING_KV(K_(ls_id), K_(failed_ret_code), K_(failed_reason));
+    share::ObLSID ls_id_;
+    int failed_ret_code_;
+    common::ObString failed_reason_;
+  };
+  struct ResultInfo
+  {
+    OB_UNIS_VERSION(1);
+  public:
+    ResultInfo() : tenant_id_(OB_INVALID_TENANT_ID), successful_ls_(), failed_ls_info_() {}
+    ResultInfo(const uint64_t tenant_id) : tenant_id_(tenant_id), successful_ls_(), failed_ls_info_() {}
+    ~ResultInfo() {}
+    int add_ls_info(const share::ObLSID ls_id, const int failed_ret = OB_SUCCESS);
+    TO_STRING_KV(K_(tenant_id), K_(successful_ls), K_(failed_ls_info));
+    uint64_t tenant_id_;
+    common::ObSArray<share::ObLSID> successful_ls_;
+    common::ObSArray<LSFailedInfo> failed_ls_info_;
+  };
+  TO_STRING_KV(K_(ret), K_(result_list));
+  int ret_;
+  common::ObSArray<ResultInfo> result_list_;
+};
+
 struct ObForceCreateSysTableArg
 {
   OB_UNIS_VERSION(1);

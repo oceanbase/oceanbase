@@ -243,6 +243,9 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
       case FORCE_SINGLE_MEMBER_CMD:
         ret = palf_handle_->force_set_as_single_replica();
         break;
+      case FORCE_SET_MEMBER_LIST_CMD:
+        ret = palf_handle_->force_set_member_list(req.new_member_list_, req.new_replica_num_);
+        break;
       case CHANGE_REPLICA_NUM_CMD:
         ret = palf_handle_->change_replica_num(req.curr_member_list_, req.curr_replica_num_,
             req.new_replica_num_, req.timeout_us_);
