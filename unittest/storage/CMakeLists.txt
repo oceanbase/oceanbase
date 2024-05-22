@@ -18,7 +18,7 @@ endfunction()
 function(storage_unittest_longer_timeout case)
   ob_unittest(${ARGV})
   target_link_libraries(${case} PRIVATE mockcontainer)
-  set_tests_properties(${case} PROPERTIES TIMEOUT 3600)
+  set_tests_properties(${case} PROPERTIES TIMEOUT 600)
 endfunction()
 
 function(storage_dml_unittest case)
