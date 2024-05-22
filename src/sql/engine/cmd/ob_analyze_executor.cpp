@@ -75,16 +75,20 @@ int ObAnalyzeExecutor::execute(ObExecContext &ctx, ObAnalyzeStmt &stmt)
         if (OB_UNLIKELY(params.count() != 1)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected error", K(ret), K(params));
-        } else if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, params.at(0)))) {
-          LOG_WARN("failed fill stat locked", K(ret));
-        } else if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, params.at(0), cascade_columns))) {
-          LOG_WARN("failed to delete table stats", K(ret));
-        } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), params.at(0)))) {
-          LOG_WARN("failed to update stat cache", K(ret));
-        } else if (cascade_indexes && params.at(0).part_name_.empty()) {
-          if (OB_FAIL(pl::ObDbmsStats::delete_table_index_stats(ctx, params.at(0)))) {
-            LOG_WARN("failed to delete index stats", K(ret));
-          } else {/*do nothing*/}
+        } else {
+          ObArenaAllocator tmp_alloc("DeleteStats", OB_MALLOC_NORMAL_BLOCK_SIZE, params.at(0).tenant_id_);
+          params.at(0).allocator_ = &tmp_alloc;//use the temp allocator to free memory after delete stats.
+          if (OB_FAIL(ObDbmsStatsLockUnlock::check_stat_locked(ctx, params.at(0)))) {
+            LOG_WARN("failed to check stat locked", K(ret));
+          } else if (OB_FAIL(ObDbmsStatsExecutor::delete_table_stats(ctx, params.at(0), cascade_columns))) {
+            LOG_WARN("failed to delete table stats", K(ret));
+          } else if (OB_FAIL(pl::ObDbmsStats::update_stat_cache(session->get_rpc_tenant_id(), params.at(0)))) {
+            LOG_WARN("failed to update stat cache", K(ret));
+          } else if (cascade_indexes && params.at(0).part_name_.empty()) {
+            if (OB_FAIL(pl::ObDbmsStats::delete_table_index_stats(ctx, params.at(0)))) {
+              LOG_WARN("failed to delete index stats", K(ret));
+            } else {/*do nothing*/}
+          }
         }
         LOG_TRACE("succeed to drop table stats", K(params));
       } else {

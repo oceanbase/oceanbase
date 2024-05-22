@@ -6959,6 +6959,7 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void) ($$);
   if ($3->value_ < 0) {
     yyerror(&@1, result, "value for DELAY_KEY_WRITE shouldn't be negative");
+    YYERROR;
   } else {
     malloc_non_terminal_node($$, result->malloc_pool_, T_DELAY_KEY_WRITE, 1, $3);
   }
@@ -6968,6 +6969,7 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   if ($3->value_ < 0) {
     yyerror(&@1, result, "value for AVG_ROW_LENGTH shouldn't be negative");
+    YYERROR;
   } else {
     malloc_non_terminal_node($$, result->malloc_pool_, T_AVG_ROW_LENGTH, 1, $3);
   }
@@ -6977,6 +6979,7 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2);
   if ($3->value_ < 0) {
     yyerror(&@1, result, "value for CHECKSUM shouldn't be negative");
+    YYERROR;
   } else {
     malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE_CHECKSUM, 1, $3);
   }
