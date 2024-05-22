@@ -777,13 +777,14 @@ int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("memory context is null", K(ret));
   } else {
+    ObTableApiSessNodeVal *val = nullptr;
     void *buf = nullptr;
     ObMemAttr attr(MTL_ID(), "TbSessNodVal", ObCtxIds::DEFAULT_CTX_ID);
     if (OB_ISNULL(buf = mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc mem for ObTableApiSessNodeVal", K(ret), K(sizeof(ObTableApiSessNodeVal)));
     } else {
-      ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(this, credential_.tenant_id_);
+      val = new (buf) ObTableApiSessNodeVal(this, credential_.tenant_id_);
       if (OB_FAIL(val->init_sess_info())) {
         LOG_WARN("fail to init sess info", K(ret), K(*val));
       } else {
@@ -797,8 +798,10 @@ int ObTableApiSessNode::extend_and_get_sess_val(ObTableApiSessGuard &guard)
       }
     }
 
-    if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
-      mem_ctx_->free(buf);
+    if (OB_FAIL(ret) && OB_NOT_NULL(val)) {
+      val->~ObTableApiSessNodeVal();
+      mem_ctx_->free(val);
+      val = nullptr;
       buf = nullptr;
     }
   }
