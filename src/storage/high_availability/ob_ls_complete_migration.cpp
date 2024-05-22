@@ -177,6 +177,7 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
   int tmp_ret = OB_SUCCESS;
   ObInitialCompleteMigrationDag *initial_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -185,8 +186,10 @@ int ObLSCompleteMigrationDagNet::start_running_for_migration_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag))) {
-    LOG_WARN("failed to alloc initial dag ", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_.arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_dag))) {
+    LOG_WARN("failed to alloc initial dag ", K(ret), K(prio));
   } else if (OB_FAIL(initial_dag->init(this))) {
     LOG_WARN("failed to init initial dag", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*initial_dag))) {
@@ -663,8 +666,9 @@ int ObInitialCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObInitialCompleteMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObInitialCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -798,6 +802,7 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   ObFinishCompleteMigrationDag *finish_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObInitialCompleteMigrationDag *initial_complete_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -808,10 +813,12 @@ int ObInitialCompleteMigrationTask::generate_migration_dags_()
   } else if (OB_ISNULL(initial_complete_migration_dag = static_cast<ObInitialCompleteMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial complete migration dag should not be NULL", K(ret), KP(initial_complete_migration_dag));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(start_complete_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_complete_dag))) {
       LOG_WARN("failed to alloc start complete migration dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(finish_complete_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_complete_dag))) {
       LOG_WARN("failed to alloc finish complete migration dag", K(ret));
     } else if (OB_FAIL(start_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init start complete migration dag", K(ret));
@@ -892,8 +899,9 @@ int ObStartCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) 
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -2094,8 +2102,9 @@ int ObFinishCompleteMigrationDag::fill_dag_key(char *buf, const int64_t buf_len)
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else if (FALSE_IT(self_ctx = static_cast<ObLSCompleteMigrationCtx *>(ha_dag_net_ctx_))) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObFinishCompleteMigrationDag: ls_id = %s, migration_type = %s",
-         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_)))) {
+         "ObFinishCompleteMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+         to_cstring(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
   }
   return ret;
@@ -2222,6 +2231,7 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
   ObInitialCompleteMigrationDag *initial_complete_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObFinishCompleteMigrationDag *finish_complete_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2232,8 +2242,10 @@ int ObFinishCompleteMigrationTask::generate_prepare_initial_dag_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_complete_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_complete_dag))) {
       LOG_WARN("failed to alloc initial complete migration dag ", K(ret));
     } else if (OB_FAIL(initial_complete_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial complete migration dag", K(ret));
