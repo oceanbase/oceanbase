@@ -3507,6 +3507,7 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
         // get log_task success
       }
       if (OB_SUCC(ret)) {
+        log_task->lock();
         SCN min_scn;
         if (log_task->is_valid()) {
           if (lsn != log_task->get_begin_lsn()
@@ -3530,7 +3531,6 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
           PALF_LOG(WARN, "try_update_max_lsn_ failed", K(ret), K_(palf_id), K_(self), K(lsn), K(group_entry_header));
         } else {
           // prev_log_proposal_id match or not exist, receive this log
-          log_task->lock();
           if (log_task->is_valid()) {
             // log_task可能被其他线程并发收取了,预期内容与本线程一致.
             if (group_entry_header.get_log_proposal_id() != log_task->get_proposal_id()) {
@@ -3547,11 +3547,11 @@ int LogSlidingWindow::submit_group_log(const LSN &lsn,
             (void) log_task->set_freezed();
             log_task->set_freeze_ts(ObTimeUtility::current_time());
           }
-          log_task->unlock();
 
           PALF_LOG(TRACE, "submit_group_log", K(ret), K_(palf_id), K_(self), K(group_entry_header),
               K(log_id), KPC(log_task));
         }
+        log_task->unlock();
       }
     }
   }
