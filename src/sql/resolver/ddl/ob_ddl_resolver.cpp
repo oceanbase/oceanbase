@@ -9851,20 +9851,14 @@ int ObDDLResolver::resolve_partition_hash_or_key(
           LOG_WARN("failed to generate default hash part", K(ret));
         }
         if (!stmt->use_def_sub_part()) {
-          if (table_schema.is_hash_like_subpart()) {
-            // partition by hash(c1) subpartition by hash(c2) subpartitions 3 partitions 3
-            for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
-              if (OB_FAIL(resolve_subpartition_elements(stmt,
-                                                        NULL, // dummy node
-                                                        table_schema,
-                                                        table_schema.get_part_array()[i],
-                                                        false))) {
-                LOG_WARN("failed to resolve subpartition elements", K(ret));
-              }
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
+            if (OB_FAIL(resolve_subpartition_elements(stmt,
+                                                      NULL, // dummy node
+                                                      table_schema,
+                                                      table_schema.get_part_array()[i],
+                                                      false))) {
+              LOG_WARN("failed to resolve subpartition elements", K(ret));
             }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid partition define", K(ret));
           }
         }
       }
