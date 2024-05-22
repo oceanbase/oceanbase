@@ -14383,6 +14383,7 @@ def_table_schema(
 
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12489: __all_virtual_deadlock_detector_stat
+# 12490: __all_virtual_spatial_reference_systems
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14862,6 +14863,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 # 15457: __all_virtual_query_response_time
 # 15458: __all_scheduler_job_run_detail_v2
+# 15459: __all_spatial_reference_systems
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -61948,6 +61950,7 @@ def_table_schema(
 )
 # 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 28234: DBA_OB_SPATIAL_COLUMNS
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
