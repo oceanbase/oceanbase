@@ -1619,11 +1619,13 @@ void ObTenant::print_throttled_time()
       ObCgSet &set = ObCgSet::instance();
       while (NULL != (iter = tenant_->group_map_.quick_next(iter))) {
         group = static_cast<ObResourceGroup *>(iter);
-        if (OB_TMP_FAIL(group->get_throttled_time(group_throttled_time))) {
-          LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group));
-        } else {
-          tenant_throttled_time += group_throttled_time;
-          databuff_printf(buf, len, pos, "group: %s, throttled_time: %ld;", set.name_of_id(group->group_id_), group_throttled_time);
+        if (!is_user_group(group->group_id_)) {
+          if (OB_TMP_FAIL(group->get_throttled_time(group_throttled_time))) {
+            LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group));
+          } else {
+            tenant_throttled_time += group_throttled_time;
+            databuff_printf(buf, len, pos, "group_id: %d, group: %s, throttled_time: %ld;", group->group_id_, set.name_of_id(group->group_id_), group_throttled_time);
+          }
         }
       }
 
@@ -1633,25 +1635,24 @@ void ObTenant::print_throttled_time()
         LOG_WARN_RET(tmp_ret, "get tenant io manager failed", K(tmp_ret), K(tenant_->id_));
       } else {
         for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
-          uint64_t group_id = OB_INVALID_GROUP_ID;
-          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_) {
-            group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
-          }
-          if (!is_user_group(group_id)) {
-            // do nothing
-          } else if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(i, group_throttled_time))) {
-            LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(i));
-          } else if (OB_TMP_FAIL(tenant_->cgroup_ctrl_.get_group_info_by_group_id(tenant_->id_, group_id, g_name))) {
-            LOG_WARN_RET(tmp_ret, "get group_name by id failed", K(tmp_ret), K(group_id));
-          } else {
-            tenant_throttled_time += group_throttled_time;
-            databuff_printf(buf,
-                len,
-                pos,
-                "group: %.*s, throttled_time: %ld;",
-                g_name.get_value().length(),
-                g_name.get_value().ptr(),
-                group_throttled_time);
+          if (!tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).deleted_ &&
+              !tenant_holder.get_ptr()->get_io_config().group_configs_.at(i).cleared_) {
+            uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
+            if (OB_TMP_FAIL(tenant_holder.get_ptr()->get_throttled_time(group_id, group_throttled_time))) {
+              LOG_WARN_RET(tmp_ret, "get throttled time failed", K(tmp_ret), K(group_id));
+            } else if (OB_TMP_FAIL(tenant_->cgroup_ctrl_.get_group_info_by_group_id(tenant_->id_, group_id, g_name))) {
+              LOG_WARN_RET(tmp_ret, "get group_name by id failed", K(tmp_ret), K(group_id));
+            } else {
+              tenant_throttled_time += group_throttled_time;
+              databuff_printf(buf,
+                  len,
+                  pos,
+                  "group_id: %ld, group: %.*s, throttled_time: %ld;",
+                  group_id,
+                  g_name.get_value().length(),
+                  g_name.get_value().ptr(),
+                  group_throttled_time);
+            }
           }
         }
       }

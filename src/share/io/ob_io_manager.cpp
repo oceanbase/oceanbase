@@ -1153,6 +1153,7 @@ int ObTenantIOManager::delete_consumer_group_config(const int64_t group_id)
       } else if (OB_STATE_NOT_MATCH == ret) {
         // group delete twice, maybe deleted by delete_directive or delete_plan
         LOG_INFO("group delete twice", K(ret), K(index), K(group_id));
+        ret = OB_SUCCESS;
       } else {
         LOG_WARN("get index from map failed", K(ret), K(group_id), K(index));
       }

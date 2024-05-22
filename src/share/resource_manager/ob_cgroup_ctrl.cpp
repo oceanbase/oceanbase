@@ -318,7 +318,12 @@ int ObCgroupCtrl::get_group_path(
         group_name = g_name.get_value().ptr();
       }
       if (OB_SUCC(ret)) {
-        snprintf(group_name_path, path_bufsize, "%s", group_name);
+        if (OB_ISNULL(group_name)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("group name is null", K(ret), K(tenant_id), K(group_id));
+        } else {
+          snprintf(group_name_path, path_bufsize, "%s", group_name);
+        }
       }
     }
   }
