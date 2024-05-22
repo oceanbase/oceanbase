@@ -162,6 +162,7 @@ public:
   void print_io_status();
   void inc_ref();
   void dec_ref();
+  int get_throttled_time(uint64_t group_id, int64_t &throttled_time);
   TO_STRING_KV(K(is_inited_), K(ref_cnt_), K(tenant_id_), K(io_config_), K(io_clock_),
        K(io_allocator_), KPC(io_scheduler_), K(callback_mgr_));
 private:

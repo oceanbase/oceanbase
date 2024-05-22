@@ -170,27 +170,8 @@ const int64_t OB_MAX_SPAN_LENGTH = 1024;
 const int64_t OB_MAX_SPAN_TAG_LENGTH = 8 * 1024L;
 const int64_t OB_MAX_REF_TYPE_LENGTH = 10;
 const int64_t OB_MAX_LS_FLAG_LENGTH = 2048;
-const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
-const int64_t USER_RESOURCE_GROUP_END_ID = 19999;
-const int64_t SYS_RESOURCE_GROUP_START_ID = 20000;
-const int64_t SYS_RESOURCE_GROUP_CNT = 21; //accord ObIOModule
 // The timeout provided to the storage layer will be reduced by 100ms
 const int64_t ESTIMATE_PS_RESERVE_TIME = 100 * 1000;
-OB_INLINE bool is_user_group(const int64_t group_id)
-{
-  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID;
-}
-
-OB_INLINE bool is_sys_group(const int64_t group_id)
-{
-  return group_id >= SYS_RESOURCE_GROUP_START_ID && group_id <= SYS_RESOURCE_GROUP_START_ID + SYS_RESOURCE_GROUP_CNT;
-}
-
-OB_INLINE bool is_valid_resource_group(const int64_t group_id)
-{
-  //other group or user group
-  return group_id == 0 || (group_id >= USER_RESOURCE_GROUP_START_ID && group_id <= USER_RESOURCE_GROUP_END_ID);
-}
 
 // See ObDeviceHealthStatus for more information
 const int64_t OB_MAX_DEVICE_HEALTH_STATUS_STR_LENGTH = 20;

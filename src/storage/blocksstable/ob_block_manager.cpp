@@ -1434,7 +1434,10 @@ int ObBlockManager::set_group_id(const uint64_t tenant_id)
       LOG_WARN("fail to get group id by function", K(ret), K(tenant_id), K(consumer_group_id));
     } else if (consumer_group_id != group_id_) {
       // for CPU isolation, depend on cgroup
-      if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() && OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_group(tenant_id, consumer_group_id))) {
+      if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
+          OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id,
+              consumer_group_id,
+              GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
         LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(tenant_id), K(consumer_group_id));
       }
     }

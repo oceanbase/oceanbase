@@ -78,6 +78,7 @@ enable_cgroup
 enable_dblink
 enable_ddl
 enable_early_lock_release
+enable_global_background_resource_isolation
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
@@ -102,6 +103,7 @@ enable_user_defined_rewrite_rules
 external_kms_info
 freeze_trigger_percentage
 fuse_row_cache_priority
+global_background_cpu_quota
 ha_high_thread_score
 ha_low_thread_score
 ha_mid_thread_score

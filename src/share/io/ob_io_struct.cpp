@@ -426,7 +426,8 @@ void ObIOStatDiff::reset()
 
 /******************             IOUsage              **********************/
 ObIOUsage::ObIOUsage()
-  : io_stats_(),
+  : group_throttled_time_us_(),
+    io_stats_(),
     io_estimators_(),
     group_avg_iops_(),
     group_avg_byte_(),
@@ -453,6 +454,7 @@ int ObIOUsage::init(const int64_t group_num)
              group_avg_iops_.count() != group_num_ ||
              group_avg_byte_.count() != group_num_ ||
              group_avg_rt_us_.count() != group_num_ ||
+             group_throttled_time_us_.count() != group_num_ ||
              doing_request_count_.count() != group_num_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("init io usage failed", K(group_num_));
@@ -471,6 +473,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
              OB_FAIL(group_avg_iops_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_byte_.reserve(group_num + 1)) ||
              OB_FAIL(group_avg_rt_us_.reserve(group_num + 1)) ||
+             OB_FAIL(group_throttled_time_us_.reserve(group_num + 1)) ||
              OB_FAIL(doing_request_count_.reserve(group_num + 1))) {
     LOG_WARN("reserver group failed", K(ret), K(group_num));
   } else {
@@ -480,6 +483,7 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
       ObSEArray<double, GROUP_START_NUM> cur_avg_iops;
       ObSEArray<double, GROUP_START_NUM> cur_avg_byte;
       ObSEArray<double, GROUP_START_NUM> cur_avg_rt_us;
+      ObSEArray<int64_t, GROUP_START_NUM> cur_throttled_time_us;
 
       if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
@@ -515,6 +519,8 @@ int ObIOUsage::refresh_group_num(const int64_t group_num)
           LOG_WARN("push avg_byte array failed", K(ret), K(i));
         } else if (OB_FAIL(group_avg_rt_us_.push_back(cur_avg_rt_us))) {
           LOG_WARN("push avg_rt array failed", K(ret), K(i));
+        } else if (OB_FAIL(group_throttled_time_us_.push_back(0))) {
+          LOG_WARN("push throttled_time_us array failed", K(ret), K(i));
         } else if (OB_FAIL(doing_request_count_.push_back(0))) {
           LOG_WARN("push group_doing_req failed", K(ret), K(i));
         } else {
@@ -826,29 +832,44 @@ void ObIOTuner::run1()
   }
 }
 
-void ObIOTuner::print_sender_status()
+int64_t ObIOTuner::to_string(char *buf, const int64_t len) const
 {
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < io_scheduler_.senders_.count(); ++i) {
+  int64_t pos = 0;
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < io_scheduler_.senders_.count(); ++i) {
     ObIOSender *sender = io_scheduler_.senders_.at(i);
     if (OB_ISNULL(sender)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("io sender is null", K(ret), K(i));
+      tmp_ret = OB_ERR_UNEXPECTED;
+      LOG_WARN_RET(tmp_ret, "io sender is null", K(i));
     } else {
       int64_t reservation_ts = 0;
       int64_t group_limitation_ts = 0;
       int64_t tenant_limitation_ts = 0;
       int64_t proportion_ts = 0;
 
-      ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
-      if (OB_NOT_INIT != ret) {
-        LOG_INFO("[IO STATUS SENDER]", "send_index", sender->sender_index_, "req_count", sender->get_queue_count(),
-                 K(reservation_ts), K(group_limitation_ts), K(tenant_limitation_ts), K(proportion_ts));
+      tmp_ret = sender->get_sender_info(reservation_ts, group_limitation_ts, tenant_limitation_ts, proportion_ts);
+      if (OB_NOT_INIT != tmp_ret) {
+        databuff_printf(buf,
+            len,
+            pos,
+            "send_index: %ld, req_count: %ld, reservation_ts: %ld, group_limitation_ts: %ld, tenant_limitation_ts: "
+            "%ld, proportion_ts: %ld; ",
+            sender->sender_index_,
+            sender->get_queue_count(),
+            reservation_ts,
+            group_limitation_ts,
+            tenant_limitation_ts,
+            proportion_ts);
       }
     }
   }
+  return pos;
 }
 
+void ObIOTuner::print_sender_status()
+{
+  LOG_INFO("[IO STATUS SENDER]", K(*this));
+}
 void ObIOTuner::print_io_status()
 {
   int ret = OB_SUCCESS;
@@ -1728,6 +1749,9 @@ int ObIOScheduler::init_group_queues(const uint64_t tenant_id, const int64_t gro
             LOG_WARN("init tenant group map failed", K(tenant_id), K(ret), K(i));
           }
         } else {
+          if (OB_HASH_EXIST == ret) {
+            ret = OB_SUCCESS;
+          }
           io_group_queues->~ObIOGroupQueues();
           io_allocator->free(io_group_queues);
         }
@@ -3268,7 +3292,7 @@ int ObIOTracer::trace_request(const ObIORequest *req, const char *msg, const Tra
   return ret;
 }
 
-void ObIOTracer::print_status()
+int64_t ObIOTracer::to_string(char *buf, const int64_t len) const
 {
   struct UpdateFn {
     int operator () (hash::HashMapPair<TraceInfo, int64_t> &entry) {
@@ -3318,6 +3342,7 @@ void ObIOTracer::print_status()
     ObIArray<TraceItem> &trace_array_;
   };
 
+  int64_t pos = 0;
   int ret = OB_SUCCESS;
   CountFn counter;
   if (OB_FAIL(counter.init())) {
@@ -3335,12 +3360,17 @@ void ObIOTracer::print_status()
       std::sort(trace_array.begin(), trace_array.end(), [](const TraceItem &left, const TraceItem &right) {
           return left.count_ > right.count_;
           });
-      LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), "trace_request_count", counter.req_count_, "distinct_backtrace_count", trace_array.count());
+      databuff_printf(buf, len, pos, "trace_request_count: %ld, distinct_backtrace_count: %ld; ", counter.req_count_, trace_array.count());
       const int64_t print_count = min(5, trace_array.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < print_count; ++i) {
         const TraceItem &item = trace_array.at(i);
-        LOG_INFO("[IO STATUS TRACER]", "top", i + 1, "count", item.count_, "ref_log", item.trace_info_.ref_log_, "backtrace", item.trace_info_.bt_str_);
+        databuff_printf(buf, len, pos, "top: %ld, count: %ld, ref_log: %s, backtrace: %s; ", i + 1, item.count_, to_cstring(item.trace_info_.ref_log_), item.trace_info_.bt_str_);
       }
     }
   }
+  return pos;
+}
+void ObIOTracer::print_status()
+{
+  LOG_INFO("[IO STATUS TRACER]", K_(tenant_id), K(*this));
 }
