@@ -90,7 +90,7 @@ public:
   static int get_index_task_info(ObMySQLProxy &sql_proxy, const share::schema::ObTableSchema &index_schema, ObDDLErrorInfo &info);
   static int extract_index_key(const share::schema::ObTableSchema &index_schema, const blocksstable::ObDatumRowkey &index_key,
     char *buffer, const int64_t buffer_len);
-  static int load_child_task_error(const uint64_t tenant_id, const int64_t parent_task_id,
+  static int load_child_task_error(const uint64_t tenant_id, const uint64_t object_id, const int64_t parent_task_id,
       const int target_err_code, ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message);
   static int load_ddl_user_error(const uint64_t tenant_id, const int64_t task_id, const uint64_t table_id, 
       common::ObMySQLProxy &sql_proxy, ObBuildDDLErrorMessage &error_message);

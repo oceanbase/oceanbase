@@ -147,6 +147,7 @@ int ObDDLErrorMessageTableOperator::extract_index_key(const ObTableSchema &index
 }
 
 int ObDDLErrorMessageTableOperator::load_child_task_error(const uint64_t tenant_id,
+                                                          const uint64_t object_id,
                                                           const int64_t parent_task_id,
                                                           const int target_err_code,
                                                           ObMySQLProxy &sql_proxy,
@@ -163,9 +164,9 @@ int ObDDLErrorMessageTableOperator::load_child_task_error(const uint64_t tenant_
       LOG_WARN("invalid arguments", K(ret), K(tenant_id), K(parent_task_id));
     } else if (OB_FAIL(sql.assign_fmt(
         "SELECT ret_code, ddl_type, affected_rows, user_message, dba_message from %s WHERE tenant_id = %ld AND "
-        "parent_task_id = %ld AND ret_code = %d", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
+        "parent_task_id = %ld AND ret_code = %d AND object_id = %ld", OB_ALL_DDL_ERROR_MESSAGE_TNAME,
         ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-        parent_task_id, target_err_code))) {
+        parent_task_id, target_err_code, object_id))) {
       LOG_WARN("fail to assign sql", K(ret));
     } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
       LOG_WARN("fail to execute sql", K(ret), K(sql));

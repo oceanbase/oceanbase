@@ -1233,8 +1233,8 @@ int ObDDLTask::report_error_code(const ObString &forward_user_message, const int
     error_message.affected_rows_ = affected_rows;
     const bool is_ddl_retry_task = is_drop_schema_block_concurrent_trans(task_type_);
     if (OB_SUCCESS != ret_code_) {
-      if (is_parent_task_) {
-        if (OB_FAIL(ObDDLErrorMessageTableOperator::load_child_task_error(dst_tenant_id_, task_id_, ret_code_, *GCTX.sql_proxy_, error_message))) {
+      if (maybe_parent_task_) {
+        if (OB_FAIL(ObDDLErrorMessageTableOperator::load_child_task_error(dst_tenant_id_, target_object_id_, task_id_, ret_code_, *GCTX.sql_proxy_, error_message))) {
           LOG_WARN("load child task error failed", K(ret), K(dst_tenant_id_), K(task_id_), K(task_type_), K(ret_code_));
         } else {
           error_message.ddl_type_ = task_type_;
