@@ -164,14 +164,16 @@ friend class ObTableApiSessPool;
 friend class ObTableApiSessNodeVal;
 public:
   explicit ObTableApiSessNode(ObTableApiCredential &credential)
-      : allocator_("TbSessNode", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      : is_inited_(false),
+        mem_ctx_(nullptr),
         sess_lists_(),
         last_active_ts_(0),
         credential_(credential)
   {
   }
   ~ObTableApiSessNode() { destroy(); }
-  TO_STRING_KV(K_(sess_lists),
+  TO_STRING_KV(K_(is_inited),
+               K_(sess_lists),
                K_(last_active_ts),
                K_(credential));
   class SessList
@@ -189,6 +191,7 @@ public:
     DISALLOW_COPY_AND_ASSIGN(SessList);
   };
 public:
+  int init();
   void destroy();
   bool is_empty() const { return sess_lists_.is_empty(); }
   int get_sess_node_val(ObTableApiSessNodeVal *&val);
@@ -198,8 +201,8 @@ public:
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
-  common::ObArenaAllocator allocator_;
-  ObSpinLock allocator_lock_; // for lock allocator_
+  bool is_inited_;
+  lib::MemoryContext mem_ctx_;
   SessList sess_lists_;
   int64_t last_active_ts_;
   ObTableApiCredential credential_;
