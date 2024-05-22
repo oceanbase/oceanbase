@@ -1675,18 +1675,21 @@ int ObSQLSessionInfo::close_dbms_cursor(int64_t cursor_id)
 {
   int ret = OB_SUCCESS;
   ObPLCursorInfo *cursor = NULL;
+  ObDbmsCursorInfo *dbms_cursor = NULL;
   LOG_INFO("remove dbms cursor", K(ret), K(cursor_id), K(get_sessid()));
   // when select GV$OPEN_CURSOR, we will add get_thread_data_lock to fetch pl_cursor_map_
   // so we need get_thread_data_lock there
   ObSQLSessionInfo::LockGuard lock_guard(get_thread_data_lock());
   OZ (pl_cursor_cache_.pl_cursor_map_.erase_refactored(cursor_id, &cursor), cursor_id);
   OV (OB_NOT_NULL(cursor), OB_ERR_UNEXPECTED, cursor_id);
+  OV (OB_NOT_NULL(dbms_cursor = static_cast<ObDbmsCursorInfo *>(cursor)), OB_ERR_UNEXPECTED, cursor_id);
   if (OB_SUCC(ret) && lib::is_diagnose_info_enabled()) {
     EVENT_DEC(SQL_OPEN_CURSORS_CURRENT);
   }
   // dbms cursor应该先执行spi接口关闭，再执行session接口删除。
   OV (!cursor->isopen(), OB_ERR_UNEXPECTED, cursor_id);
   OX (cursor->reset());
+  OX (dbms_cursor->~ObDbmsCursorInfo());
   OX (get_cursor_allocator().free(cursor));
   OX (cursor = NULL);
   return ret;
