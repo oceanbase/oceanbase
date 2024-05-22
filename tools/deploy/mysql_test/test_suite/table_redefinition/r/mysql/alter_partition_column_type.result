@@ -1,0 +1,9 @@
+drop table if exists t1;
+CREATE TABLE `t1`(a bigint, b date)partition by range columns(b) 
+(
+partition part_1 values less than ('2016-09-01'),
+partition part_2 values less than ('2020-09-01')
+);
+ALTER TABLE `t1` MODIFY b INT;
+ERROR HY000: data type or length of a table partitioning column may not be changed
+DROP TABLE `t1`;

@@ -1,0 +1,21 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner      : kunxing.lyk
+# owner group: storage
+# description: alter type of a partition column is not allowed in mysql
+#--disable_abort_on_error
+
+--disable_warnings
+drop table if exists t1;
+--enable_warnings
+
+CREATE TABLE `t1`(a bigint, b date)partition by range columns(b) 
+(
+    partition part_1 values less than ('2016-09-01'),
+    partition part_2 values less than ('2020-09-01')
+);
+
+--error 5895
+ALTER TABLE `t1` MODIFY b INT;
+DROP TABLE `t1`;
