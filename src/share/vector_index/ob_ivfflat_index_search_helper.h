@@ -98,7 +98,7 @@ private:
   int get_centers_by_sql(
     schema::ObSchemaGetterGuard &schema_guard,
     const schema::ObTableSchema &container_table_schema,
-    ObISQLConnection &conn);
+    common::sqlclient::ObISQLConnection &conn);
   int prepare_rowkey_range(
       ObNewRange &key_range,
       const int64_t rowkey_cnt,

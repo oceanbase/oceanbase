@@ -33,7 +33,7 @@ int ObIvfflatIndexSearchHelper::init(
     const int64_t probes,
     const ObTypeVector &qvector,
     const common::ObIArray<int32_t> &output_projector,
-    ObISQLConnection *conn,
+    common::sqlclient::ObISQLConnection *conn,
     sql::ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
@@ -147,7 +147,7 @@ void ObIvfflatIndexSearchHelper::destroy()
 int ObIvfflatIndexSearchHelper::get_centers_by_sql(
     schema::ObSchemaGetterGuard &schema_guard,
     const schema::ObTableSchema &container_table_schema,
-    ObISQLConnection &conn)
+    common::sqlclient::ObISQLConnection &conn)
 {
   int ret = OB_SUCCESS;
   ObVectorDistanceType distance_type = distance_type_ == INNER_PRODUCT ? COSINE : distance_type_;
