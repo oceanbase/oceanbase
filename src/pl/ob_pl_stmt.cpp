@@ -2763,17 +2763,18 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
         OZ (get_routine_info(routines.at(i), routine));
         CK (OB_NOT_NULL(routine));
         if (OB_SUCC(ret) && ObCharset::case_compat_mode_equal(routine->get_routine_name(), var_name)) {
-          if (get_block_type() != BLOCK_ROUTINE // subprogram is not member function, distingish with block type
-              && routine->is_udt_routine() && !routine->is_udt_cons() && !routine->is_udt_static_routine()) {
-            // only care about member routine without prefix.
-            type = ObPLExternalNS::UDT_MEMBER_ROUTINE;
-            var_idx = routine->get_routine_id();
-            parent_id = routine->get_package_id();
+          if (get_block_type() != BLOCK_ROUTINE) { // subprogram is not member function, distingish with block type
+            if (routine->is_udt_routine() && !routine->is_udt_cons() && !routine->is_udt_static_routine()) {
+              // only care about member routine without prefix.
+              type = ObPLExternalNS::UDT_MEMBER_ROUTINE;
+            } else {
+              type = ObPLExternalNS::INTERNAL_PROC;
+            }
           } else {
-            type = ObPLExternalNS::INVALID_VAR;
-            var_idx = routine->get_routine_id();
-            parent_id = routine->get_package_id();
+            type = ObPLExternalNS::NESTED_PROC;
           }
+          var_idx = routine->get_routine_id();
+          parent_id = routine->get_package_id();
         }
       }
     }
