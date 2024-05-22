@@ -4673,7 +4673,8 @@ int ObRawExprUtils::replace_domain_wrapper_expr(ObRawExpr *depend_expr,
   ObSEArray<ObRawExpr *, 4> column_exprs;
   bool need_specific_replace = false;
 
-  if (OB_FAIL(replace_json_wrapper_expr_if_need(
+  if (OB_NOT_NULL(qual) && qual->get_expr_type() != T_OP_BOOL) {
+  } else if (OB_FAIL(replace_json_wrapper_expr_if_need(
       qual, qual_idx, depend_expr, factory, session_info, need_specific_replace))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else if (OB_FAIL(extract_column_exprs(qual, column_exprs))) {

@@ -4114,9 +4114,19 @@ bool ObSysFunRawExpr::inner_json_expr_same_as(
       }
     }
     if (OB_ISNULL(r_param_expr)) {
+    } else if (r_param_expr->get_expr_type() == T_REF_COLUMN) {
+      r_column_expr = r_param_expr;
+      r_param_expr = nullptr;
+      if (l_param_expr->is_const_expr()) {
+        ObString path_str = (static_cast<const ObConstRawExpr*>(l_param_expr))->get_value().get_string();
+        bool_ret = path_str.empty();
+      }
     } else if (r_param_expr->is_wrappered_json_extract()) {
       r_column_expr = r_param_expr->get_param_expr(0)->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(0)->get_param_expr(1);
+    } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_VALUE) {
+      r_column_expr = r_param_expr->get_param_expr(0);
+      r_param_expr = r_param_expr->get_param_expr(1);
     } else if (r_param_expr->get_expr_type() == T_FUN_SYS_JSON_EXTRACT) {
       r_column_expr = r_param_expr->get_param_expr(0);
       r_param_expr = r_param_expr->get_param_expr(1);

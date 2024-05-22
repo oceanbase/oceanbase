@@ -14988,7 +14988,7 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
           LOG_WARN("replace failed", K(ret));
         }
 
-        if (OB_FAIL(ret)) {
+        if (OB_FAIL(ret) || OB_ISNULL(new_qual)) {
         } else if (OB_FAIL(new_qual->formalize(session_info))) {
           if (ret != OB_SUCCESS) {
             //probably type deduced failed. do nothing

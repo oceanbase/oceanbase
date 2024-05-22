@@ -4174,6 +4174,12 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
   if (OB_ISNULL(out_key_part)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
+  } else if (const_param.get_type() == ObUnknownType) {
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    } else if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
   } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
     LOG_WARN("fail to get json val", K(ret), K(const_param));
   } else if (OB_ISNULL(j_base)) {

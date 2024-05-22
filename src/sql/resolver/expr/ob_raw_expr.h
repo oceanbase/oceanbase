@@ -207,7 +207,9 @@ extern ObRawExpr *USELESS_POINTER;
 
 // used in transform only
 #define IS_JSON_DOMAIN_OP(op) \
-  ((op) == T_FUN_SYS_JSON_MEMBER_OF)
+  ((op) == T_FUN_SYS_JSON_MEMBER_OF \
+  || (op) == T_FUN_SYS_JSON_OVERLAPS \
+  || (op) == T_FUN_SYS_JSON_CONTAINS)
 
 #define IS_MULTIVALUE_EXPR(op) \
   (((op) == T_FUN_SYS_JSON_MEMBER_OF) \
@@ -1978,7 +1980,10 @@ public:
     may_add_interval_part_ = flag;
   }
   bool is_wrappered_json_extract() const {
-   return (type_ == T_FUN_SYS_JSON_UNQUOTE && OB_NOT_NULL(get_param_expr(0)) && get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT);
+   return (type_ == T_FUN_SYS_JSON_UNQUOTE &&
+           OB_NOT_NULL(get_param_expr(0)) &&
+           (get_param_expr(0)->type_ == T_FUN_SYS_JSON_EXTRACT ||
+            get_param_expr(0)->type_ == T_FUN_SYS_JSON_VALUE));
   }
   bool extract_multivalue_json_expr(const ObRawExpr*& json_expr) const;
   bool is_multivalue_define_json_expr() const;

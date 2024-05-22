@@ -120,7 +120,7 @@ private:
   static int get_clause_pre_asc_sca_opt(const ObExpr &expr, ObEvalCtx &ctx,
                                         bool &is_cover_by_error, uint8_t &pretty_type,
                                         uint8_t &ascii_type, uint8_t &scalars_type);
-  static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container);
+  static int check_enable_cast_index_array(ObIJsonBase* json_base, bool disable_container, ObObjType dest_type);
 
 public:
   static int get_empty_option(bool &is_cover_by_error,
@@ -153,7 +153,7 @@ public:
                                             bool use_wrapper);
   static int get_error_option(int8_t &error_type, ObIJsonBase *&error_val, ObIJsonBase *jb_arr, ObIJsonBase *jb_obj, bool &is_null);
   static int get_mismatch_option(int8_t &mismatch_type, int &ret);
-  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr &expr);
+  static int init_ctx_var(ObJsonParamCacheCtx*& param_ctx, ObEvalCtx &ctx, const ObExpr &expr);
   static int extract_plan_cache_param(const ObExprJsonQueryParamInfo *info, ObJsonExprParam& json_param);
   static int check_data_type_allowed(const ObExprResType* types_stack, const ObExprResType& data_type);
   /* code from ob_expr_cast for cal_result_type */
@@ -161,6 +161,15 @@ public:
 
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonQuery);
 
+};
+
+struct ObJsonObjectCompare {
+  int operator()(const ObObj &left, const ObObj &right)
+  {
+    int result = 0;
+    left.compare(right, result);
+    return result > 0 ? 1 : 0;
+  }
 };
 
 } // sql
