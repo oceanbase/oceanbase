@@ -3340,7 +3340,9 @@ int ObJsonTableOp::inner_get_next_row()
       bool is_ensure_json = lib::is_oracle_mode() && (doc_type != ObJsonType);
 
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&jt_ctx_.row_alloc_, j_str, j_in_type, expect_type, in_, parse_flag))
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&jt_ctx_.row_alloc_, j_str, j_in_type,
+                                                          expect_type, in_, parse_flag,
+                                                          ObJsonExprHelper::get_json_max_depth_config()))
                  || (in_->json_type() != ObJsonNodeType::J_ARRAY && in_->json_type() != ObJsonNodeType::J_OBJECT)) {
         if (OB_FAIL(ret) || (is_ensure_json)) {
           in_= nullptr;

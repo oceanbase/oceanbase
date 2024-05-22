@@ -89,7 +89,8 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
     } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(*allocator, data1, meta1, has_lob_header1, j_doc))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_doc));
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
-        j_in_type, j_base))) {
+                                                        j_in_type, j_base, 0,
+                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
       LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
     }
   }

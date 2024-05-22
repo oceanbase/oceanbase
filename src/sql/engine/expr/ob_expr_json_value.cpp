@@ -269,7 +269,8 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     } else if (j_str.length() == 0) { // maybe input json doc is null type
       is_null_result = true;
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&temp_allocator, j_str, j_in_type,
-        j_in_type, j_base))) {
+                                                        j_in_type, j_base, 0,
+                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
       LOG_WARN("fail to get json base.", K(ret), K(type), K(j_str), K(j_in_type));
       if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
         is_cover_by_error = false;
@@ -490,7 +491,8 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
       if (j_str.length() == 0) { // maybe input json doc is null type
         is_null_result = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&temp_allocator, j_str, j_in_type,
-          j_in_type, j_base, parse_flag))) {
+                                                          j_in_type, j_base, parse_flag,
+                                                          ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base.", K(ret), K(type), K(j_str), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;

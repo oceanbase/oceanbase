@@ -64,7 +64,10 @@ public:
                           uint16_t index, ObIJsonBase*& j_base,
                           bool &is_null, bool need_to_tree=true, bool relax = true);
 
-  static int cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag = 0);
+  static int cast_to_json_tree(ObString &text,
+                               common::ObIAllocator *allocator,
+                               uint32_t parse_flag = 0,
+                               uint32_t max_depth_config = JSON_DOCUMENT_MAX_DEPTH);
   /*
   get json value to JsonBase in static_typing_engine
   @param[in]  expr       the input arguments
@@ -244,6 +247,12 @@ public:
                                      ObEvalCtx &ctx,
                                      ObString& result,
                                      int32_t reserve_len = 0);
+  static bool is_json_depth_exceed_limit(uint32_t depth)
+  {
+    return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
+  }
+
+  static int32_t get_json_max_depth_config();
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);

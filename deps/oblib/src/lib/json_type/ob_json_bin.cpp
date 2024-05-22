@@ -13,6 +13,7 @@
 #include "common/object/ob_obj_type.h"
 #include "ob_json_bin.h"
 #include "ob_json_tree.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -451,7 +452,7 @@ int ObJsonBin::serialize_json_object(ObJsonObject *object, ObJsonBuffer &result,
       uint32_t value_offset = result.length() - st_pos;
       // recursion(parse value entry into func, simple type can store on value entry)
       if (!try_update_inline(value, header.entry_size_, &value_entry_offset, result)) {
-        ret = serialize_json_value(value, result);
+        ret = SMART_CALL(serialize_json_value(value, result));
         if (OB_FAIL(ret)) {
           LOG_WARN("failed to append key to result", K(ret));
         } else {
@@ -479,7 +480,7 @@ int ObJsonBin::serialize_json_object(ObJsonObject *object, ObJsonBuffer &result,
         int64_t delta_size = real_obj_size - obj_size;
         object->set_serialize_delta_size(delta_size);
         result.set_length(st_pos);
-        ret = serialize_json_object(object, result, depth + 1);
+        ret = SMART_CALL(serialize_json_object(object, result, depth + 1));
       }
     } else {
       ObJsonBinObjHeader *header = reinterpret_cast<ObJsonBinObjHeader*>(result.ptr() + st_pos);
@@ -531,7 +532,7 @@ int ObJsonBin::serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, ui
     uint32_t value_offset = result.length() - st_pos;
     // recursion(parse value entry into func, simple type can store on value entry)
     if (!try_update_inline(value, header.entry_size_, &value_entry_offset, result)) {
-      ret = serialize_json_value(value, result);
+      ret = SMART_CALL(serialize_json_value(value, result));
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to append key to result", K(ret));
       } else {
@@ -559,7 +560,7 @@ int ObJsonBin::serialize_json_array(ObJsonArray *array, ObJsonBuffer &result, ui
         int64_t delta_size = real_array_size - array_size;
         array->set_serialize_delta_size(delta_size);
         result.set_length(st_pos);
-        ret = serialize_json_array(array, result, depth + 1);
+        ret = SMART_CALL(serialize_json_array(array, result, depth + 1));
       }
     } else {
       uint64_t count_var_size = ObJsonVar::get_var_size(header->count_size_);
@@ -699,14 +700,14 @@ int ObJsonBin::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffer &result)
     }
     case ObJsonNodeType::J_OBJECT: {
       ObJsonObject *object = static_cast<ObJsonObject*>(json_tree);
-      if (OB_FAIL(serialize_json_object(object, result))) {
+      if (OB_FAIL(SMART_CALL(serialize_json_object(object, result)))) {
         LOG_WARN("failed to append object json obj", K(ret));
       }
       break;
     }
     case ObJsonNodeType::J_ARRAY: {
       ObJsonArray *array = static_cast<ObJsonArray*>(json_tree);
-      if (OB_FAIL(serialize_json_array(array, result))) {
+      if (OB_FAIL(SMART_CALL(serialize_json_array(array, result)))) {
         LOG_WARN("failed to append array json obj", K(ret));
       }
       break;
@@ -1180,7 +1181,7 @@ int ObJsonBin:: deserialize_json_value(const char *data,
         LOG_WARN("fail to alloc memory for obj json node", K(ret));
       } else {
         ObJsonObject *node = new(buf)ObJsonObject(allocator_);
-        ret = deserialize_json_object(data, length, node, node_vertype);
+        ret = SMART_CALL(deserialize_json_object(data, length, node, node_vertype));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1197,7 +1198,7 @@ int ObJsonBin:: deserialize_json_value(const char *data,
         LOG_WARN("fail to alloc memory for array json node", K(ret));
       } else {
         ObJsonArray *node = new(buf)ObJsonArray(allocator_);
-        ret = deserialize_json_array(data, length, node, node_vertype);
+        ret = SMART_CALL(deserialize_json_array(data, length, node, node_vertype));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1484,7 +1485,7 @@ int ObJsonBin::deserialize_json_object_v0(const char *data, uint64_t length, ObJ
           ObString key(key_len, reinterpret_cast<const char*>(key_buf));
           const char *val = data + value_offset;
           ObJsonNode *node = NULL;
-          ret = deserialize_json_value(val, length - value_offset, val_type, value_offset, node, type);
+          ret = SMART_CALL(deserialize_json_value(val, length - value_offset, val_type, value_offset, node, type));
           if (OB_SUCC(ret)) {
             if (OB_FAIL(object->add(key, node, false, true, false))) {
               LOG_WARN("failed to add node to obj", K(ret));
@@ -1504,7 +1505,7 @@ int ObJsonBin::deserialize_json_object(const char *data, uint64_t length, ObJson
   INIT_SUCC(ret);
   switch(vertype) {
     case ObJBVerType::J_OBJECT_V0: {
-      ret = deserialize_json_object_v0(data, length, object);
+      ret = SMART_CALL(deserialize_json_object_v0(data, length, object));
       break;
     }
     default: {
@@ -1547,7 +1548,7 @@ int ObJsonBin::deserialize_json_array_v0(const char *data, uint64_t length, ObJs
       } else {
         const char *val = data + val_offset;
         ObJsonNode *node = NULL;
-        if (OB_FAIL(deserialize_json_value(val, length - val_offset, val_type, val_offset, node, type))) {
+        if (OB_FAIL(SMART_CALL(deserialize_json_value(val, length - val_offset, val_type, val_offset, node, type)))) {
           LOG_WARN("failed to deserialize child node", K(ret), K(i), K(val_type), K(val_offset));
         } else if (OB_FAIL(array->append(node))) {
           LOG_WARN("failed to append node to array", K(ret));
@@ -1563,7 +1564,7 @@ int ObJsonBin::deserialize_json_array(const char *data, uint64_t length, ObJsonA
   INIT_SUCC(ret);
   switch(vertype) {
     case ObJBVerType::J_ARRAY_V0: {
-      ret = deserialize_json_array_v0(data, length, array);
+      ret = SMART_CALL(deserialize_json_array_v0(data, length, array));
       break;
     }
     default: {
@@ -1691,7 +1692,7 @@ int ObJsonBin::get_max_offset(const char* data, ObJsonNodeType cur_node, uint64_
       if (max_val_offset > offset) {
         uint64_t node_max_offset = 0;
         if (!OB_JSON_TYPE_IS_INLINE(node_type) &&
-            OB_FAIL(get_max_offset(data + max_val_offset, static_cast<ObJsonNodeType>(max_offset_type), node_max_offset))) {
+            OB_FAIL(SMART_CALL(get_max_offset(data + max_val_offset, static_cast<ObJsonNodeType>(max_offset_type), node_max_offset)))) {
           LOG_WARN("get max offset failed.", K(ret), K(cur_node));
         } else {
           max_val_offset += node_max_offset;

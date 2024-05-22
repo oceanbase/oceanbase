@@ -1002,12 +1002,14 @@ public:
   virtual ~ObJsonBaseFactory() {};
   static int get_json_base(ObIAllocator *allocator, const ObString &buf,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out, uint32_t parse_flag = 0);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0,
+                           uint32_t max_depth_config = 100);
   static int get_json_tree(ObIAllocator *allocator, const ObString &str,
                            ObJsonInType in_type, ObJsonNode *&out, uint32_t parse_flag = 0);
   static int get_json_base(ObIAllocator *allocator, const char *ptr, uint64_t length,
                            ObJsonInType in_type, ObJsonInType expect_type,
-                           ObIJsonBase *&out, uint32_t parse_flag = 0);
+                           ObIJsonBase *&out, uint32_t parse_flag = 0,
+                           uint32_t max_depth_config = 100);
   static int transform(ObIAllocator *allocator, ObIJsonBase *src,
                        ObJsonInType expect_type, ObIJsonBase *&out);
 private:

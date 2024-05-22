@@ -33,6 +33,7 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/geo/ob_geometry_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_json_func_helper.h"
 
 #ifdef OB_BUILD_ORACLE_XML
 #include "lib/xml/ob_xml_util.h"
@@ -6024,7 +6025,9 @@ static int string_json(const ObObjType expect_type, ObObjCastParams &params,
       if ((CM_IS_SQL_AS_JSON_SCALAR(cast_mode) && ob_is_string_type(in_type)) && j_text.compare("null") == 0) {
         j_base = &j_null;
       }
-    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text, j_tree, parse_flag))) {
+    } else if (OB_FAIL(ObJsonParser::get_tree(params.allocator_v2_, j_text,
+                                              j_tree, parse_flag,
+                                              sql::ObJsonExprHelper::get_json_max_depth_config()))) {
       if (!is_oracle && CM_IS_IMPLICIT_CAST(cast_mode)
                      && !CM_IS_COLUMN_CONVERT(cast_mode)
                      && is_convert_jstr_type) {

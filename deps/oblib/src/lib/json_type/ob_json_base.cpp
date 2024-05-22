@@ -23,6 +23,7 @@
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 #include "lib/charset/ob_charset.h" // for strntod
 #include "common/ob_smart_var.h" // for SMART_VAR
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -3804,20 +3805,16 @@ int ObIJsonBase::print(ObJsonBuffer &j_buf, bool is_quoted, bool is_pretty, uint
     }
 
     case ObJsonNodeType::J_ARRAY: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_array(j_buf, depth, is_pretty))) {
+      ++depth;
+      if (OB_FAIL(SMART_CALL(print_array(j_buf, depth, is_pretty)))) {
         LOG_WARN("fail to change jarray to string", K(ret), K(is_quoted), K(is_pretty), K(depth));
       }
       break;
     }
 
     case ObJsonNodeType::J_OBJECT: {
-      if (ObJsonParser::is_json_doc_over_depth(++depth)) {
-        ret = OB_ERR_JSON_OUT_OF_DEPTH;
-        LOG_WARN("current json over depth", K(ret), K(depth), K(j_type));
-      } else if (OB_FAIL(print_object(j_buf, depth, is_pretty))) {
+      ++depth;
+      if (OB_FAIL(SMART_CALL(print_object(j_buf, depth, is_pretty)))) {
         LOG_WARN("fail to print object to string", K(ret), K(depth), K(j_type), K(is_pretty));
       }
       break;
@@ -5847,14 +5844,16 @@ int ObIJsonBase::to_bit(uint64_t &value) const
 
 int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const ObString &buf,
                                      ObJsonInType in_type, ObJsonInType expect_type,
-                                     ObIJsonBase *&out, uint32_t parse_flag)
+                                     ObIJsonBase *&out, uint32_t parse_flag,
+                                     uint32_t max_depth_config)
 {
-  return get_json_base(allocator, buf.ptr(), buf.length(), in_type, expect_type, out, parse_flag);
+  return get_json_base(allocator, buf.ptr(), buf.length(), in_type, expect_type, out, parse_flag, max_depth_config);
 }
 
 int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, uint64_t length,
                                      ObJsonInType in_type, ObJsonInType expect_type,
-                                     ObIJsonBase *&out, uint32_t parse_flag)
+                                     ObIJsonBase *&out, uint32_t parse_flag,
+                                     uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   void *buf = NULL;
@@ -5878,7 +5877,7 @@ int ObJsonBaseFactory::get_json_base(ObIAllocator *allocator, const char *ptr, u
     LOG_WARN("param expect_type is invalid", K(ret), K(expect_type));
   } else if (in_type == ObJsonInType::JSON_TREE) {
     ObJsonNode *j_tree = NULL;
-    if (OB_FAIL(ObJsonParser::get_tree(t_allocator, ptr, length, j_tree, parse_flag))) {
+    if (OB_FAIL(ObJsonParser::get_tree(t_allocator, ptr, length, j_tree, parse_flag, max_depth_config))) {
       LOG_WARN("fail to get json tree", K(ret), K(length), K(in_type), K(expect_type));
     } else if (expect_type == ObJsonInType::JSON_TREE) {
       out = j_tree;
@@ -6155,10 +6154,7 @@ int ObJsonBaseUtil::append_newline_and_indent(ObJsonBuffer &j_buf, uint64_t leve
   // Append newline and two spaces per indentation level.
   INIT_SUCC(ret);
 
-  if (level > ObJsonParser::JSON_DOCUMENT_MAX_DEPTH) {
-    ret = OB_ERR_JSON_OUT_OF_DEPTH;
-    LOG_WARN("indent level is too deep", K(ret), K(level));
-  } else if (OB_FAIL(j_buf.append("\n"))) {
+  if (OB_FAIL(j_buf.append("\n"))) {
     LOG_WARN("fail to append newline to buffer", K(ret), K(level));
   } else if (OB_FAIL(j_buf.reserve(level * 2))) {
     LOG_WARN("fail to reserve memory for buffer", K(ret), K(level));

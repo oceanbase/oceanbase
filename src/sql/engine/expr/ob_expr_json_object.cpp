@@ -233,7 +233,10 @@ int ObExprJsonObject::eval_json_object(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     ObString raw_bin;
     j_obj.stable_sort();
     j_obj.unique();
-    if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
+    if (ObJsonExprHelper::is_json_depth_exceed_limit(j_base->depth())) {
+      ret = OB_ERR_JSON_OUT_OF_DEPTH;
+      LOG_WARN("current json over depth", K(ret), K(j_base->depth()));
+    } else if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
       LOG_WARN("failed: get json raw binary", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, raw_bin))) {
       LOG_WARN("fail to pack json result", K(ret));
@@ -349,7 +352,10 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
   }
 
   if (OB_SUCC(ret)) {
-    if (dst_type == ObJsonType) {
+    if (ObJsonExprHelper::is_json_depth_exceed_limit(j_base->depth())) {
+      ret = OB_ERR_JSON_OUT_OF_DEPTH;
+      LOG_WARN("current json over depth", K(ret), K(j_base->depth()));
+    } else if (dst_type == ObJsonType) {
       ObString raw_bin;
       if (OB_FAIL(j_base->get_raw_binary(raw_bin, &temp_allocator))) {
         LOG_WARN("failed: get json raw binary", K(ret));
@@ -425,7 +431,10 @@ int ObExprJsonObject::check_key_valid(common::hash::ObHashSet<ObString> &view_ke
 int ObExprJsonObject::set_result(ObObjType dst_type, ObString str_res, common::ObIAllocator *allocator, ObEvalCtx &ctx, const ObExpr &expr, ObDatum &res, uint8_t strict_type, uint8_t unique_type) {
   INIT_SUCC(ret);
   if (dst_type == ObVarcharType || dst_type == ObLongTextType) {
-    if (strict_type == OB_JSON_ON_STRICT_USE && OB_FAIL(ObJsonParser::check_json_syntax(str_res, allocator, ObJsonParser::JSN_STRICT_FLAG))) {
+    if (strict_type == OB_JSON_ON_STRICT_USE &&
+        OB_FAIL(ObJsonParser::check_json_syntax(str_res, allocator,
+                                                ObJsonParser::JSN_STRICT_FLAG,
+                                                ObJsonExprHelper::get_json_max_depth_config()))) {
       ret = OB_ERR_JSON_SYNTAX_ERROR;
       LOG_WARN("fail to parse json text strict", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str_res))) {

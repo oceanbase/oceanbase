@@ -144,7 +144,8 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
+                                                  expect_type, j_base, parse_flag,
+                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (is_oracle) {
           ret = OB_ERR_JSON_SYNTAX_ERROR;
@@ -219,11 +220,11 @@ int ObJsonExprHelper::get_json_val(const common::ObObj &data, ObExprCtx &ctx,
   return ret;
 }
 
-int ObJsonExprHelper::cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag)
+int ObJsonExprHelper::cast_to_json_tree(ObString &text, common::ObIAllocator *allocator, uint32_t parse_flag, uint32_t max_depth_config)
 {
   INIT_SUCC(ret);
   ObJsonNode *j_tree = NULL;
-  if (OB_FAIL(ObJsonParser::get_tree(allocator, text, j_tree, parse_flag))) {
+  if (OB_FAIL(ObJsonParser::get_tree(allocator, text, j_tree, parse_flag, max_depth_config))) {
     LOG_WARN("get json tree fail", K(ret));
   } else {
     ObJsonBuffer jbuf(allocator);
@@ -419,7 +420,7 @@ int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
           j_base = string_node;
         }
       } else {
-        if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, parse_flag))) {
+        if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, parse_flag, get_json_max_depth_config()))) {
           if (!is_strict) {
             ret = OB_SUCCESS;
             ObJsonString* string_node = nullptr;
@@ -433,7 +434,9 @@ int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
             LOG_WARN("fail to check json syntax", K(ret), K(j_str));
           }
         } else if (OB_FAIL(ObJsonBaseFactory::get_json_base( allocator, j_str,
-                                   ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE, j_base, parse_flag))) {
+                                   ObJsonInType::JSON_TREE, ObJsonInType::JSON_TREE,
+                                   j_base, parse_flag,
+                                   ObJsonExprHelper::get_json_max_depth_config()))) {
           LOG_WARN("failed: parse json string node", K(ret), K(j_str));
         }
       }
@@ -445,7 +448,9 @@ int ObJsonExprHelper::oracle_datum2_json_val(const ObDatum *json_datum,
         LOG_WARN("fail to get real data.", K(ret), K(j_str));
       } else if (OB_FAIL(deep_copy_ob_string(*allocator, j_str, j_str))) {
         LOG_WARN("fail to deep copy string.", K(ret), K(j_str));
-      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN, to_type, j_base))) {
+      } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
+                                                          to_type, j_base, 0,
+                                                          ObJsonExprHelper::get_json_max_depth_config()))) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
         LOG_WARN("fail to get json base", K(ret));
       }
@@ -1184,13 +1189,15 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
 
       if (OB_SUCC(ret)) {
         if (format_json) {
+          uint32_t json_depth_config = ObJsonExprHelper::get_json_max_depth_config();
           uint32_t parse_flag = relax_type ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_STRICT_FLAG;
-          if(OB_FAIL(ObJsonExprHelper::cast_to_json_tree(j_str, allocator, parse_flag))) {
+          if(OB_FAIL(ObJsonExprHelper::cast_to_json_tree(j_str, allocator, parse_flag, json_depth_config))) {
             LOG_WARN("cast to json tree fail", K(ret));
           } else {
             ObJsonInType to_type = to_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
             if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_TREE,
-                                                        to_type, json_node, parse_flag))) {
+                                                        to_type, json_node, parse_flag,
+                                                        json_depth_config))) {
               ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
               LOG_WARN("fail to get json base", K(ret), K(j_str));
             }
@@ -1228,7 +1235,8 @@ int ObJsonExprHelper::transform_convertible_2jsonBase(const T &datum,
         ObJsonInType to_type = to_bin ? ObJsonInType::JSON_BIN : ObJsonInType::JSON_TREE;
         uint32_t parse_flag = relax_type ? ObJsonParser::JSN_RELAXED_FLAG : ObJsonParser::JSN_STRICT_FLAG;
         if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
-                                                     to_type, json_node, parse_flag))) {
+                                                     to_type, json_node, parse_flag,
+                                                     ObJsonExprHelper::get_json_max_depth_config()))) {
           ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;
           LOG_WARN("fail to get json base", K(ret));
         }
@@ -1770,6 +1778,19 @@ int ObJsonExprHelper::pre_default_value_check(ObObjType dst_type, ObString time_
       break;
   }
   return ret;
+}
+
+int ObJsonExprHelper::get_json_max_depth_config()
+{
+  uint32_t json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    json_max_depth = tenant_config->json_document_max_depth;
+    if (json_max_depth < JSON_DOCUMENT_MAX_DEPTH || json_max_depth > 1024) {
+      json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+    }
+  }
+  return json_max_depth;
 }
 
 }
