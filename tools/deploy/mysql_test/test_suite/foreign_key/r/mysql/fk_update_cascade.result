@@ -1,0 +1,147 @@
+drop table if exists A, B, C, D, E;
+create table A(a integer primary key, a2 integer);
+set foreign_key_checks=off;
+insert into A values(2, 2);
+alter table A add foreign key (a2) references A(a) on update cascade;
+set foreign_key_checks=on;
+update A set a = a * 10;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = a * 10 where a = 0;
+drop table A;
+create table A(a integer primary key, a2 integer);
+create index Aindex on A(a2);
+create index Aindex2 on A(a);
+set foreign_key_checks=off;
+insert into A values(2, 3), (3, NULL);
+alter table A add foreign key (a2) references A(a) on update cascade;
+set foreign_key_checks=on;
+update A set a = a * 10;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = a * 10 where a = 2;
+drop table A;
+create table A(a integer primary key, ba integer, msg varchar(20));
+create table B(b integer primary key, a integer unique, msg varchar(20));
+set foreign_key_checks=on;
+insert into A values(1, 2, 'xxx'), (2, 3, 'xxx'), (3, 3, 'xxx');
+insert into B values(1, 2, 'yyy'), (2, 3, 'yyy');
+alter table B add foreign key (a) references A(a) on update cascade;
+alter table A add foreign key (ba) references B(a) on update cascade;
+set foreign_key_checks=on;
+update A set a = a * 10;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = a * 10 where a = 1;
+update A set a = a;
+update A set msg = 'zzz';
+drop table A, B;
+create table A(a integer primary key, a2 integer);
+create table B(b integer primary key, a integer);
+set foreign_key_checks=off;
+insert into A values(2, 4), (3, 4), (4, NULL), (5, NULL);
+insert into B values(1, 3);
+alter table A add foreign key (a2) references A(a);
+alter table B add foreign key (a) references A(a);
+set foreign_key_checks=on;
+update A set a = a * 10 where a = 3;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = a * 10 where a = 2;
+update A set a = a * 10 where a = 5;
+drop table A, B;
+create table A(a int primary key);
+create table B(b int primary key, a int unique, a2 int, da int);
+set foreign_key_checks=off;
+insert into A values(1), (2), (3), (4), (5);
+insert into B values(1, 1, 3, 1), (2, 2, NULL, 1), (3, 3, NULL, 1), (4, 4, NULL, 1), (5, NULL, NULL, 1);
+alter table B add foreign key (a2) references A(a) on update cascade;
+alter table B add foreign key (a) references A(a) on update cascade;
+set foreign_key_checks=on;
+update A, B set A.a = 30, B.da = 2 where A.a = 3 and B.da = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A, B set A.a = 30, B.da = 2 where A.a = 3 and B.da = 10;
+update A, B set A.a = 50, B.da = 2 where A.a = 5 and B.da = 10;
+drop table A, B;
+create table A(a int primary key, msg int unique);
+create table B(b int primary key, a int unique, da int, ea int, a2 int);
+create table C(c int primary key, ba int unique);
+create table D(d int primary key, ca int unique);
+create table E(e int primary key, ca int unique);
+set foreign_key_checks=off;
+insert into A values(1, NULL), (2, NULL), (3, 1), (4, NULL), (5, NULL);
+insert into B values(1, 1, 1, 2, 3), (2, 2, NULL, NULL, NULL), (3, 3, NULL, NULL, NULL), (4, 4, NULL, NULL, NULL), (5, NULL, NULL, NULL, NULL);
+insert into C values(1, 1), (2, 2), (3, 3), (4, NULL), (5, NULL);
+insert into D values(1, 1), (2, 2), (3, NULL), (4, NULL), (5, NULL);
+insert into E values(1, 2), (2, 3), (3, NULL), (4, NULL), (5, NULL);
+alter table B add foreign key (a2) references A(a) on update cascade;
+alter table B add foreign key (a) references A(a) on update cascade;
+alter table C add foreign key (ba) references B(a) on update cascade;
+alter table D add foreign key (ca) references C(ba) on update cascade;
+alter table E add foreign key (ca) references C(ba) on update cascade;
+alter table B add foreign key (da) references D(ca) on update cascade;
+alter table B add foreign key (ea) references E(ca) on update cascade;
+set foreign_key_checks=on;
+update A set a = a * 10;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = 50 where a = 5;
+update C set ba = 4 where ba = 3;
+update C set ba = 3 where ba = 4;
+update C set ba = 4 where ba = 1;
+update C set ba = 1 where ba = 4;
+update B set a = 50 where a = 4;
+update B set a = 4 where a = 50;
+update B set a = 50 where a = 3;
+update B set a = 3 where a = 50;
+update B set a = 50 where a = 2;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update B set a = 50 where a = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A set a = 30 where a = 3;
+update A set a = 3 where a = 30;
+update A, B set A.a = 30, B.da = 2 where B.da = 1 and A.a = 3;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A, B set B.da = 1, A.a = 3 where A.a = 30 and B.da = 2;
+update A, B set B.da = 2, A.a = 5 where A.a = 50 and B.da = 1;
+update B, D set B.a = 5, D.d = 10 where D.d = 1 and B.a = 2;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update A, E set A.a = 10, E.ca = 1 where E.ca = 2 and A.a = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update E, A set A.a = 10, E.ca = 1 where E.ca = 2 and A.a = 1;
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails
+update E set E.ca = 1 where E.ca = 2;
+update A, E set A.a = 10, E.ca = 2 where E.ca = 1 and A.a = 1;
+update C, D, E set C.ba = 4, E.ca = 4, D.ca = 4 where C.ba = 3 and E.ca = 3 and D.ca = 2;
+select * from A;
+a	msg
+2	NULL
+4	NULL
+5	NULL
+10	NULL
+3	1
+select * from B;
+b	a	da	ea	a2
+1	10	4	2	3
+2	2	NULL	NULL	NULL
+3	3	NULL	NULL	NULL
+4	4	NULL	NULL	NULL
+5	NULL	NULL	NULL	NULL
+select * from C;
+c	ba
+1	10
+2	2
+3	4
+4	NULL
+5	NULL
+select * from D;
+d	ca
+1	10
+2	4
+3	NULL
+4	NULL
+5	NULL
+select * from E;
+e	ca
+1	2
+2	4
+3	NULL
+4	NULL
+5	NULL
+update A, B, C, D, E set A.a = 1 where A.a = 10;
+drop table A, B, C, D, E;

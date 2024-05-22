@@ -2840,7 +2840,6 @@ int ObStaticEngineCG::generate_delete_with_das(ObLogDelete &op, ObTableDeleteSpe
       }
     }
     if (OB_SUCC(ret) && is_dup) {
-      LOG_WARN("fafafa");
       del_ctdef.distinct_algo_ = T_HASH_DISTINCT;
     }
   }
@@ -3006,6 +3005,40 @@ int ObStaticEngineCG::generate_update_with_das(ObLogUpdate &op, ObTableUpdateSpe
   } //for table_columns end
   if (OB_SUCC(ret)) {
     spec.check_fk_batch_ = !find;
+  }
+  ObArray<uint64_t> ref_table_ids;
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
+    ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
+    ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+    const uint64_t table_id = upd_ctdef.das_base_ctdef_.index_tid_;
+    ref_table_ids.push_back(table_id);
+  }
+
+  bool is_dup = false;
+  ObArray<std::pair<uint64_t, uint64_t>> visited_columns;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
+    ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
+    ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+    const uint64_t table_id = upd_ctdef.das_base_ctdef_.index_tid_;
+    const ObForeignKeyArgArray& fk_args = upd_ctdef.fk_args_;
+    for (int64_t j = 0; OB_SUCC(ret) && j < fk_args.count() && !is_dup; ++j) {
+      for (int64_t k = 0; k < fk_args.at(j).columns_.count() && !is_dup; ++k) {
+        const ObForeignKeyColumn& fk_col = fk_args.at(j).columns_.at(k);
+        const uint64_t col_id = upd_ctdef.column_ids_.at(fk_col.idx_);
+        if(OB_FAIL(check_fk_nested_dup_upd(ref_table_ids, table_id, col_id, visited_columns, is_dup))) {
+          LOG_WARN("failed to perform nested duplicate table check (foreign key cascade update)", K(ret), K(table_id));
+        } else if (is_dup) {
+          LOG_TRACE("[FOREIGN KEY] find parent table updated by foreign key casacde update", K(table_id));
+        }
+      }
+    }
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_list.count(); ++i) {
+    ObTableUpdateSpec::UpdCtDefArray &ctdefs = spec.upd_ctdefs_.at(i);
+    ObUpdCtDef &upd_ctdef = *ctdefs.at(0);
+    upd_ctdef.need_check_table_cycle_ = is_dup; 
   }
   return ret;
 }
@@ -8915,6 +8948,19 @@ bool ObStaticEngineCG::has_cycle_reference(DASTableIdList &parent_tables, const 
   return ret;
 }
 
+bool ObStaticEngineCG::column_exists_in_list(const ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns, const uint64_t table_id, const uint64_t column_id)
+{
+  bool ret = false;
+  if (!visited_columns.empty()) {
+    for (int64_t i = 0; i < visited_columns.count() && !ret; i++) {
+      if (visited_columns.at(i).first == table_id && visited_columns.at(i).second == column_id) {
+        ret = true;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
                               const uint64_t root_table_id,
                               DASTableIdList &parent_tables,
@@ -8950,6 +8996,49 @@ int ObStaticEngineCG::check_fk_nested_dup_del(const uint64_t table_id,
   }
   if (OB_SUCC(ret) && OB_FAIL(parent_tables.pop_back())) {
     LOG_WARN("failed to pop latest table id", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_ids, const uint64_t root_table_id, const uint64_t root_column_id, ObIArray<std::pair<uint64_t, uint64_t>> &visited_columns, bool& is_dup) {
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const ObTableSchema *table_schema = NULL;
+  const uint64_t tenant_id = MTL_ID();
+  if (OB_FAIL(visited_columns.push_back(std::make_pair(root_table_id, root_column_id)))) {
+    LOG_WARN("failed to push root_table_id to visited columns list", K(ret), K(root_table_id), K(visited_columns.count()));
+  } if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, root_table_id, table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(root_table_id));
+  } else if (!OB_ISNULL(table_schema)) {
+    const common::ObIArray<ObForeignKeyInfo> &foreign_key_infos = table_schema->get_foreign_key_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < foreign_key_infos.count() && !is_dup; ++i) {
+      const ObForeignKeyInfo &fk_info = foreign_key_infos.at(i);
+      const uint64_t child_table_id = fk_info.child_table_id_;
+      const uint64_t parent_table_id = fk_info.parent_table_id_;
+      for (int64_t j = 0; OB_SUCC(ret) && j < fk_info.child_column_ids_.count() && !is_dup; ++j) {
+        const ObObjectID child_col_id = fk_info.child_column_ids_.at(j);
+        const ObObjectID parent_col_id = fk_info.parent_column_ids_.at(j);
+        ObReferenceAction upd_act = fk_info.update_action_;
+        if (root_table_id == parent_table_id && root_column_id == parent_col_id && child_table_id != common::OB_INVALID_ID && child_col_id != common::OB_INVALID_ID && upd_act == ACTION_CASCADE) {
+          // check all the tables in multitable update.
+          for (int64_t k = 0; k < table_ids.count() && !is_dup; k++) {
+            LOG_WARN("asdfasdf ", K(child_table_id), K(table_ids.at(k)));
+            if (child_table_id == table_ids.at(k)) {
+              is_dup = true;
+            }
+          }
+          if (is_dup) {
+            // has duplicate table.
+          } else if (column_exists_in_list(visited_columns, child_table_id, child_col_id)) {
+            // child table has been visited before
+          } else if (OB_FAIL(SMART_CALL(check_fk_nested_dup_upd(table_ids, child_table_id, child_col_id, visited_columns, is_dup)))) {
+            LOG_WARN("failed deep search nested duplicate update table", K(ret), K(table_ids), K(root_column_id), K(root_table_id), K(child_table_id));
+          }
+        }
+      }
+    }
   }
   return ret;
 }
