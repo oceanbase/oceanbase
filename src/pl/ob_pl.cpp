@@ -4319,6 +4319,7 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
       type_table_(), helper_(allocator_), di_helper_(allocator_),
       can_cached_(true),
+      exec_env_(),
       profiler_unit_info_(std::make_pair(OB_INVALID_ID, INVALID_PROC_TYPE))
 {
 #ifndef USE_MCJIT
