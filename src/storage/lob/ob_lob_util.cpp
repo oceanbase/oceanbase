@@ -333,7 +333,7 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.sql_mode_ = SMO_DEFAULT;
       lob_param.ls_id_ = ls_id;
       lob_param.tablet_id_ = tablet_id;
-      lob_param.coll_type_ = collation_type;
+      lob_param.coll_type_ = ObLobCharsetUtil::get_collation_type(obj_type, collation_type);
       lob_param.allocator_ = &allocator;
       lob_param.lob_common_ = nullptr;
       lob_param.timeout_ = timeout_ts;
