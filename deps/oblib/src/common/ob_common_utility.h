@@ -14,6 +14,7 @@
 #define _OCEABASE_COMMON_OB_COMMON_UTILITY_H_
 #include <sys/time.h>
 #include "lib/ob_define.h"
+#include "lib/time/ob_tsc_timestamp.h"
 namespace oceanbase
 {
 namespace common
@@ -57,11 +58,7 @@ private:
 
 inline int64_t get_cur_ts()
 {
-  struct timeval tv;
-  gettimeofday(&tv, NULL);
-  const int64_t us =
-            static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec);
-  return us;
+  return OB_TSC_TIMESTAMP.fast_current_time();
 }
 
 class ObBasicTimeGuard

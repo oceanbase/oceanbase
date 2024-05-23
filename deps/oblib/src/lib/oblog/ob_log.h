@@ -1007,7 +1007,8 @@ void ObLogger::log_it(const char *mod_name,
             int64_t buf_len = tb->get_cap();
             int64_t &pos = tb->get_pos();
             int64_t orig_pos = pos;
-            ret = log_head(get_cur_ts(), mod_name, dba_event, level, file, line, function, errcode, buf, buf_len, pos);
+            int64_t ts = OB_TSC_TIMESTAMP.current_time();
+            ret = log_head(ts, mod_name, dba_event, level, file, line, function, errcode, buf, buf_len, pos);
             if (OB_SUCC(ret)) {
               ret = log_data_func(buf, buf_len, pos);
             }

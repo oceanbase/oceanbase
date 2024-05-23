@@ -76,34 +76,18 @@ int64_t ObTscTimestamp::current_time()
   return (static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec));
 }
 
-int64_t ObTscTimestamp::current_monotonic_time()
+int64_t ObTscTimestamp::fast_current_time()
 {
-  int ret = OB_SUCCESS;
   int64_t result_time = 0;
   if (OB_UNLIKELY(!is_init_)) {
-    // init failed, use system call.
-    struct timeval tv;
-    if (gettimeofday(&tv, NULL) < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LIB_LOG(WARN, "sys gettimeofday unexpected", K(ret));
-    }
-    result_time = (static_cast<int64_t>(tv.tv_sec) * static_cast<int64_t>(1000000) + static_cast<int64_t>(tv.tv_usec));
+    result_time = current_time();
   } else {
-    uint64_t cpuid = 0;
-    const uint64_t current_tsc = rdtscp_id(cpuid);
-    if (base_per_cpu_[cpuid].is_valid()) {
-      const int64_t tsc_count = base_per_cpu_[cpuid].tsc_count_;
-      const int64_t start_us = base_per_cpu_[cpuid].start_us_;
-      result_time = ((current_tsc - tsc_count) * scale_ >> 20) + start_us;
-    } else {
-      ObTscBase cur_base;
-      cur_base.init(current_tsc);
-      base_per_cpu_[cpuid] = cur_base;
-      result_time = cur_base.start_us_;
-    }
+    const uint64_t current_tsc = rdtsc();
+    result_time = current_tsc * scale_ >> 20;
   }
   return result_time;
 }
+
 
 #if defined(__x86_64__)
 uint64_t ObTscTimestamp::get_cpufreq_khz_()

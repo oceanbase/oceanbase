@@ -16,7 +16,6 @@
 #include "lib/allocator/ob_tc_malloc.h"
 #include "lib/ob_define.h"
 #include "lib/alloc/ob_tenant_ctx_allocator.h"
-#include "lib/alloc/ob_malloc_callback.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -110,12 +109,6 @@ ABlock *BlockSet::alloc_block(const uint64_t size, const ObMemAttr &attr)
     uint64_t payload = 0;
     block->hold(&payload);
     UNUSED(ATOMIC_FAA(&total_used_, payload));
-    if (OB_NOT_NULL(malloc_callback)) {
-      (*malloc_callback)(attr, size);
-      for (auto *p = malloc_callback->next(); p != malloc_callback; p = p->next()) {
-        (*p)(attr, size);
-      }
-    }
   }
 
   return block;
@@ -135,12 +128,6 @@ void BlockSet::free_block(ABlock *const block)
     if (!!block->is_large_) {
       free_chunk(chunk);
     } else {
-      if (OB_NOT_NULL(malloc_callback)) {
-        (*malloc_callback)(attr_, -block->alloc_bytes_);
-        for (auto *p = malloc_callback->next(); p != malloc_callback; p = p->next()) {
-          (*p)(attr_, -block->alloc_bytes_);
-        }
-      }
       ABlock *prev_block = NULL;
       ABlock *next_block = NULL;
 

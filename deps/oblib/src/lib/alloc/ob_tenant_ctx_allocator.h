@@ -207,6 +207,9 @@ private:
     }
     return ret;
   }
+private:
+  static void on_alloc(AObject& obj, const ObMemAttr& attr);
+  static void on_free(AObject& obj);
 
 public:
   template <typename T>

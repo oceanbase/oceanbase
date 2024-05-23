@@ -143,7 +143,7 @@ public:
   ~ObTscTimestamp() {}
   int init();
   int64_t current_time();
-  int64_t current_monotonic_time();
+  int64_t fast_current_time();
 
   static ObTscTimestamp &get_instance()
   {
@@ -186,8 +186,6 @@ private:
   uint64_t tsc_count_;
   // cycles2ns scale
   uint64_t scale_;
-  // for monotonic tsc
-  ObTscBase base_per_cpu_[MAX_CPU_COUNT];
 };
 
 }//common
