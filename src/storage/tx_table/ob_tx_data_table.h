@@ -107,16 +107,54 @@ public:
     TO_STRING_KV(K(min_start_scn_in_ctx_), K(keep_alive_scn_), K(update_ts_));
   };
 
+  struct FreezeFrequencyController {
+    int64_t last_freeze_ts_;
+    int64_t last_request_ts_;
+    FreezeFrequencyController() : last_freeze_ts_(0), last_request_ts_(0) {}
+
+    void reset() {
+      last_freeze_ts_ = 0;
+      last_request_ts_ = 0;
+    }
+
+    bool can_freeze(const int64_t current_time)
+    {
+      inc_update(&last_request_ts_, current_time);
+      const int64_t last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
+      if (current_time - last_freeze_ts > MIN_FREEZE_TX_DATA_INTERVAL) {
+        return true;
+      }
+      return false;
+    }
+
+    bool need_re_freeze() {
+      bool need_re_freeze = false;
+      const int64_t last_freeze_ts = ATOMIC_LOAD(&last_freeze_ts_);
+      const int64_t last_request_ts = ATOMIC_LOAD(&last_request_ts_);
+      const int64_t current_time = ObClockGenerator::getClock();
+      // This condition can be confusing. For details, see
+      if (last_request_ts > last_freeze_ts && current_time - last_freeze_ts > 2 * MIN_FREEZE_TX_DATA_INTERVAL) {
+        need_re_freeze = true;
+        STORAGE_LOG(
+            INFO, "retry freeze after twice freeze interval", K(last_request_ts), K(last_freeze_ts), K(current_time));
+      }
+
+      return need_re_freeze;
+    }
+
+    void set_last_freeze_ts(const int64_t rhs) {
+      inc_update(&last_freeze_ts_, rhs);
+    }
+  };
+
   using SliceAllocator = ObSliceAlloc;
 
   static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
 
   static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
-  // A tx data is 128 bytes, 128 * 262144 = 32MB
-  static const int64_t SSTABLE_CACHE_MAX_RETAIN_CNT = 262144;
-  // The max tps is 150w which means the cache can be inserted 15w tx data during 100ms. So once
-  // cache cleaning task will delete at least 11w tx data.
-  static const int64_t DEFAULT_CACHE_RETAINED_TIME = 100_ms; // 100ms
+
+  // The tx data table cannot be freezed more than once in 10 seconds
+  static const int64_t MIN_FREEZE_TX_DATA_INTERVAL = 10LL * 1000LL * 1000LL;
 
   // The tx data memtable will trigger a freeze if its memory use is more than 2%
   static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
@@ -144,6 +182,7 @@ public:  // ObTxDataTable
       ls_tablet_svr_(nullptr),
       memtable_mgr_(nullptr),
       tx_ctx_table_(nullptr),
+      freeze_freq_controller_(),
       read_schema_(),
       calc_upper_info_(),
       calc_upper_trans_version_cache_(),
@@ -155,6 +194,7 @@ public:  // ObTxDataTable
   virtual void stop();
   virtual void reset();
   virtual void destroy();
+  bool need_re_freeze() { return freeze_freq_controller_.need_re_freeze(); }
   int offline();
 
   /**
@@ -351,6 +391,7 @@ private:
   // The tablet id of tx data table
   ObTxDataMemtableMgr *memtable_mgr_;
   ObTxCtxTable *tx_ctx_table_;
+  FreezeFrequencyController freeze_freq_controller_;
   TxDataReadSchema read_schema_;
   CalcUpperInfo calc_upper_info_;
   CalcUpperTransSCNCache calc_upper_trans_version_cache_;

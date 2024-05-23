@@ -77,6 +77,7 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     memtable_mgr_->set_slice_allocator(&slice_allocator_);
     tx_ctx_table_ = tx_ctx_table;
     tablet_id_ = LS_TX_DATA_TABLET;
+    freeze_freq_controller_.reset();
 
     is_inited_ = true;
     FLOG_INFO("tx data table init success", K(sizeof(ObTxData)), K(sizeof(ObTxDataLinkNode)), KPC(this));
@@ -224,6 +225,7 @@ int ObTxDataTable::offline()
   } else {
     calc_upper_info_.reset();
     calc_upper_trans_version_cache_.reset();
+    freeze_freq_controller_.reset();
   }
   return ret;
 }
@@ -790,9 +792,18 @@ int ObTxDataTable::self_freeze_task()
 
   STORAGE_LOG(DEBUG, "start tx data table self freeze task", K(get_ls_id()));
 
-  if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
-    share::ObLSID ls_id = get_ls_id();
-    STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+  const int64_t current_time = ObClockGenerator::getClock();
+  if (freeze_freq_controller_.can_freeze(current_time)) {
+    if (OB_FAIL(memtable_mgr_->flush(SCN::max_scn(), true))) {
+      share::ObLSID ls_id = get_ls_id();
+      STORAGE_LOG(WARN, "self freeze of tx data memtable failed.", KR(ret), K(ls_id), KPC(memtable_mgr_));
+    }
+    if (OB_SUCC(ret) || OB_NO_NEED_MERGE == ret) {
+      // regard no_need_merge as freeze success
+      freeze_freq_controller_.set_last_freeze_ts(current_time);
+    }
+  } else {
+    // skip freeze tx data this time
   }
 
   STORAGE_LOG(DEBUG, "finish tx data table self freeze task", KR(ret), K(get_ls_id()));

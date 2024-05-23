@@ -254,6 +254,14 @@ public:
    */
   int get_start_tx_scn(share::SCN &start_tx_scn);
 
+  /**
+   * @brief The tx data table may receive freeze request but don't really do freeze because of MIN_FREEZE_TX_DATA_INTERVAL. So TenantFreezer will check if there are some freeze requests which are not executed and retry freeze after a while.
+   *
+   * @return true do freeze again
+   * @return false do not need freeze
+   */
+  bool tx_table_need_re_freeze() { return tx_data_table_.need_re_freeze(); }
+
   int generate_virtual_tx_data_row(const transaction::ObTransID tx_id, observer::VirtualTxDataRow &row_data);
   int dump_single_tx_data_2_text(const int64_t tx_id_int, const char *fname);
 

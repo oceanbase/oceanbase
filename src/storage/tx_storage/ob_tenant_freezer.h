@@ -190,8 +190,9 @@ private:
   int check_and_freeze_tx_data_();
   int check_and_freeze_mds_table_();
 
-  int get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen_mem_used,
+  int get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen_mem_used,
                                    int64_t &tenant_tx_data_active_mem_used,
+                                   bool &need_re_freeze,
                                    bool for_statistic_print = false);
 
   int get_ls_tx_data_memory_info_(ObLS *ls,

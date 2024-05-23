@@ -531,6 +531,7 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   int64_t self_freeze_trigger_memory = total_memory * (ObTxDataTable::TX_DATA_FREEZE_TRIGGER_PERCENTAGE / 100);
 
   static int skip_count = 0;
+  bool need_re_freeze = false;
   if (true == ATOMIC_LOAD(&is_freezing_tx_data_)) {
     // skip freeze when there is another self freeze task is running
     if (++skip_count > 10) {
@@ -541,9 +542,9 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
                    K(skip_count),
                    K(cost_time));
     }
-  } else if (OB_FAIL(get_tenant_tx_data_mem_used_(frozen_tx_data_mem_used, active_tx_data_mem_used))) {
+  } else if (OB_FAIL(get_tx_data_info_for_freeze_(frozen_tx_data_mem_used, active_tx_data_mem_used, need_re_freeze))) {
     LOG_WARN("[TenantFreezer] get tenant tx data mem used failed.", KR(ret));
-  } else if (active_tx_data_mem_used > self_freeze_trigger_memory) {
+  } else if (need_re_freeze || active_tx_data_mem_used > self_freeze_trigger_memory) {
     // trigger tx data self freeze
     if (OB_FAIL(post_tx_data_freeze_request_())) {
       LOG_WARN("[TenantFreezer] fail to do tx data self freeze", KR(ret), K(tenant_info_.tenant_id_));
@@ -556,8 +557,8 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
   if (TC_REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
     if (frozen_tx_data_mem_used + active_tx_data_mem_used > tx_data_table_mem_limit) {
       LOG_ERROR_RET(OB_ERR_UNEXPECTED, "tx data use too much memory!!!", STATISTIC_PRINT_MACRO);
-    } else if (OB_FAIL(get_tenant_tx_data_mem_used_(
-                   frozen_tx_data_mem_used, active_tx_data_mem_used, true /*for_statistic_print*/))) {
+    } else if (OB_FAIL(get_tx_data_info_for_freeze_(
+                   frozen_tx_data_mem_used, active_tx_data_mem_used, need_re_freeze, true /*for_statistic_print*/))) {
       LOG_INFO("print statistic failed");
     } else {
       LOG_INFO("TxData Memory Statistic : ", STATISTIC_PRINT_MACRO);
@@ -567,8 +568,9 @@ int ObTenantFreezer::check_and_freeze_tx_data_()
 }
 #undef STATISTIC_PRINT_MACRO
 
-int ObTenantFreezer::get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen_mem_used,
+int ObTenantFreezer::get_tx_data_info_for_freeze_(int64_t &tenant_tx_data_frozen_mem_used,
                                                   int64_t &tenant_tx_data_active_mem_used,
+                                                  bool &need_re_freeze,
                                                   bool for_statistic_print)
 {
   int ret = OB_SUCCESS;
@@ -589,6 +591,11 @@ int ObTenantFreezer::get_tenant_tx_data_mem_used_(int64_t &tenant_tx_data_frozen
       int tmp_ret = OB_SUCCESS;
       int64_t ls_tx_data_frozen_mem_used = 0;
       int64_t ls_tx_data_active_mem_used = 0;
+      if (!for_statistic_print && OB_NOT_NULL(ls) && ls->tx_table_need_re_freeze()) {
+        need_re_freeze = true;
+        break;
+      }
+
       if (OB_TMP_FAIL(get_ls_tx_data_memory_info_(
               ls, ls_tx_data_frozen_mem_used, ls_tx_data_active_mem_used, for_statistic_print))) {
         LOG_WARN("[TenantFreezer] fail to get tx data mem used in one ls", KR(ret), K(ls->get_ls_id()));
