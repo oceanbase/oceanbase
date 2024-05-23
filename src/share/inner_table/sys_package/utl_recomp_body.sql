@@ -307,7 +307,8 @@ create or replace package body utl_recomp AS
                                 START_DATE => systimestamp,
                                 END_DATE => systimestamp + 1,
                                 ENABLED => true,
-                                auto_drop => false);
+                                AUTO_DROP => false,
+                                MAX_RUN_DURATION => 7200);
       current_batch := current_batch + 1;
       exit when current_batch > num_batch;
     end loop;
