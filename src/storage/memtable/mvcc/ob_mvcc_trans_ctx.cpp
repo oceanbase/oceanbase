@@ -1315,9 +1315,7 @@ int ObTransCallbackMgr::acquire_callback_list(const bool new_epoch, const bool n
       ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
     }
   } else if (tid == (stat >> 32)) { // same thread nested, no parallel
-    if (!ATOMIC_BCAS(&parallel_stat_, stat, stat + 1)) {
-      TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "Unexpected status", K(this), K(tid_), K(ref_cnt_), K(tid));
-    }
+    ATOMIC_BCAS(&parallel_stat_, stat, stat + 1);
   } else { // has parallel
     //
     ATOMIC_STORE(&parallel_stat_, PARALLEL_STMT);
