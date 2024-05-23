@@ -62,7 +62,7 @@ public:
 
   bool has_active_memtable();
   int64_t get_memtable_count() const;
-  virtual int get_memtable_for_replay(share::SCN replay_scn,
+  virtual int get_memtable_for_replay(const share::SCN &replay_scn,
                                       ObTableHandleV2 &handle) override;
   int get_last_frozen_memtable(ObTableHandleV2 &handle) const;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;

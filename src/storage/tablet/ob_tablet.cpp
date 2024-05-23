@@ -3412,29 +3412,31 @@ int ObTablet::create_memtable(
       LOG_WARN("failed to create memtable", K(ret), K(clog_checkpoint_scn),
                K(schema_version), K(for_replay));
     }
-  } else if (FALSE_IT(time_guard.click("inner_create_memtable"))) {
-  } else if (OB_FAIL(update_memtables())) {
-    LOG_WARN("failed to append new memtable to table store", K(ret), KPC(this));
-    if (OB_SIZE_OVERFLOW == ret) {
-      // rewrite errno to OB_EAGAIN when memtable count overflow, in case to stuck the log relpay engine
-      ret = OB_EAGAIN;
-    }
-  } else if (FALSE_IT(time_guard.click("update_memtables"))) {
   } else {
-    tablet_addr_.inc_seq();
-    table_store_addr_.addr_.inc_seq();
-
-    if (table_store_addr_.is_memory_object()) {
-      ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
-      if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
-        LOG_WARN("inner get memtables fail", K(ret), K(*this));
-      } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
-        LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+    time_guard.click("inner_create_memtable");
+    do {
+      if (OB_FAIL(update_memtables())) {
+        LOG_WARN("failed to append new memtable to table store", K(ret), KPC(this));
+      } else if (FALSE_IT(time_guard.click("update_memtables"))) {
       } else {
-       time_guard.click("ts update mem");
-       LOG_INFO("table store update memtable success", K(ret), K(ls_id), K(tablet_id), K_(table_store_addr), KP(this));
+        tablet_addr_.inc_seq();
+        table_store_addr_.addr_.inc_seq();
+        if (table_store_addr_.is_memory_object()) {
+          ObSEArray<ObITable *, MAX_MEMSTORE_CNT> memtable_array;
+          if (OB_FAIL(inner_get_memtables(memtable_array, true/*need_active*/))) {
+            LOG_WARN("inner get memtables fail", K(ret), K(*this));
+          } else if (OB_FAIL(table_store_addr_.get_ptr()->update_memtables(memtable_array))) {
+            LOG_WARN("table store update memtables fail", K(ret), K(memtable_array));
+          } else {
+           time_guard.click("ts update mem");
+           LOG_INFO("table store update memtable success", K(ret), K(ls_id), K(tablet_id), K_(table_store_addr), KP(this));
+          }
+        }
       }
-    }
+      if (OB_FAIL(ret) && REACH_COUNT_INTERVAL(100)) {
+        LOG_ERROR("fail to refresh tablet memtables, which may cause hang", K(ret), KPC(this));
+      }
+    } while(OB_FAIL(ret));
   }
 
   return ret;
@@ -6389,7 +6391,6 @@ int ObTablet::set_frozen_for_all_memtables()
   } else if (OB_FAIL(memtable_mgr->set_frozen_for_all_memtables())){
     LOG_WARN("failed to set_frozen_for_all_memtables", K(ret));
   }
-
   return ret;
 }
 

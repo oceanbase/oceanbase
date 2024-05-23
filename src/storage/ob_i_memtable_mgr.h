@@ -242,7 +242,7 @@ public:
 
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) { return OB_SUCCESS; }
 
-  virtual int get_memtable_for_replay(share::SCN replay_scn, ObTableHandleV2 &handle)
+  virtual int get_memtable_for_replay(const share::SCN &replay_scn, ObTableHandleV2 &handle)
   {
     return OB_SUCCESS;
   }
