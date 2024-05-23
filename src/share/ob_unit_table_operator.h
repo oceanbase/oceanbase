@@ -86,6 +86,7 @@ public:
 
 
   virtual int get_unit_stats(common::ObIArray<ObUnitStat> &unit_stats) const;
+  virtual int check_server_empty(const common::ObAddr &server, bool &is_empty);
 private:
   static int zone_list2str(const common::ObIArray<common::ObZone> &zone_list,
                            char *str, const int64_t buf_size);
