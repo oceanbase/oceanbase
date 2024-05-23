@@ -2845,6 +2845,10 @@ int ObLSModifyPaxosReplicaNumberTask::build_task_from_sql_result(
   } else if (false == dest_server.set_ip_addr(dest_ip, static_cast<uint32_t>(dest_port))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
+  } else if (OB_FAIL(member_list.add_member(ObMember(dest_server, 0)))) {
+    // this field is not accurate and will not be used by tasks that are reloaded into memory.
+    // it just ensures that the task build is valid.
+    LOG_WARN("fail to add server to member list", KR(ret), K(dest_server));
   } else {
     //transform priority(int) -> priority_to_set(ObDRTaskPriority)
     if (priority == 0) {
