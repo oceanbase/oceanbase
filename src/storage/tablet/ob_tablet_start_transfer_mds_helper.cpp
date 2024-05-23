@@ -810,6 +810,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
   ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_V2;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
   bool start_modify = false;
+  ObTransferOutTxParam param;
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -824,11 +825,27 @@ int ObTabletStartTransferOutV2Helper::on_register(
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", KR(ret), K(info), KP(ls));
-  } else if (OB_FAIL(transfer_tx_ctx.record_transfer_block_op(info.src_ls_id_, info.dest_ls_id_, info.data_end_scn_, info.transfer_epoch_, false))) {
+  } else if (OB_FAIL(transfer_tx_ctx.record_transfer_block_op(info.src_ls_id_,
+                                                              info.dest_ls_id_,
+                                                              info.data_end_scn_,
+                                                              info.transfer_epoch_,
+                                                              false,
+                                                              info.filter_tx_need_transfer_,
+                                                              info.move_tx_ids_))) {
     LOG_WARN("record transfer block op failed", KR(ret), K(info));
+  } else {
+    param.except_tx_id_ = user_ctx.get_writer().writer_id_;
+    param.data_end_scn_ = info.data_end_scn_;
+    param.op_scn_ = op_scn;
+    param.op_type_ = NotifyType::REGISTER_SUCC;
+    param.is_replay_ = false;
+    param.dest_ls_id_ = info.dest_ls_id_;
+    param.transfer_epoch_ = info.transfer_epoch_;
+    param.move_tx_ids_ = &info.move_tx_ids_;
+  }
+  if (OB_FAIL(ret)) {
   } else if (FALSE_IT(start_modify = true)) {
-  } else if (OB_FAIL(ls->transfer_out_tx_op(user_ctx.get_writer().writer_id_, info.data_end_scn_, op_scn,
-          NotifyType::REGISTER_SUCC, false, info.dest_ls_id_, info.transfer_epoch_, active_tx_count, block_tx_count))) {
+  } else if (!info.empty_tx() && OB_FAIL(ls->transfer_out_tx_op(param, active_tx_count, block_tx_count))) {
     LOG_WARN("transfer block tx failed", KR(ret), K(info));
   } else if (OB_FAIL(transfer_out_helper.update_tablets_transfer_out_(info, ls, ctx))) {
     LOG_WARN("update tablets transfer out failed", KR(ret), K(info), KP(ls));
@@ -840,8 +857,8 @@ int ObTabletStartTransferOutV2Helper::on_register(
   if (OB_FAIL(ret)) {
     // to clean
     int tmp_ret = OB_SUCCESS;
-    if (start_modify && OB_TMP_FAIL(ls->transfer_out_tx_op(user_ctx.get_writer().writer_id_, info.data_end_scn_, op_scn,
-          NotifyType::ON_ABORT, false, info.dest_ls_id_, info.transfer_epoch_, active_tx_count, block_tx_count))) {
+    param.op_type_ = NotifyType::ON_ABORT;
+    if (start_modify && !info.empty_tx() && OB_TMP_FAIL(ls->transfer_out_tx_op(param, active_tx_count, block_tx_count))) {
       LOG_ERROR("transfer out clean failed", K(tmp_ret), K(info), K(user_ctx.get_writer().writer_id_));
     }
   }
@@ -866,6 +883,7 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
   ObTransferOutTxCtx &transfer_tx_ctx = static_cast<ObTransferOutTxCtx&>(ctx);
   ObTxDataSourceType mds_op_type = ObTxDataSourceType::START_TRANSFER_OUT_V2;
   ObTabletStartTransferOutCommonHelper transfer_out_helper(mds_op_type);
+  ObTransferOutTxParam param;
 
   if (OB_ISNULL(buf) || len < 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -880,10 +898,26 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", KR(ret), K(info), KP(ls));
-  } else if (OB_FAIL(transfer_tx_ctx.record_transfer_block_op(info.src_ls_id_, info.dest_ls_id_, info.data_end_scn_, info.transfer_epoch_, true))) {
+  } else if (OB_FAIL(transfer_tx_ctx.record_transfer_block_op(info.src_ls_id_,
+                                                              info.dest_ls_id_,
+                                                              info.data_end_scn_,
+                                                              info.transfer_epoch_,
+                                                              true,
+                                                              info.filter_tx_need_transfer_,
+                                                              info.move_tx_ids_))) {
     LOG_WARN("record transfer block op failed", KR(ret), K(info));
-  } else if (OB_FAIL(ls->transfer_out_tx_op(user_ctx.get_writer().writer_id_, info.data_end_scn_, scn,
-          NotifyType::ON_REDO, true, info.dest_ls_id_, info.transfer_epoch_, active_tx_count, block_tx_count))) {
+  } else {
+    param.except_tx_id_ = user_ctx.get_writer().writer_id_;
+    param.data_end_scn_ = info.data_end_scn_;
+    param.op_scn_ = scn;
+    param.op_type_ = NotifyType::REGISTER_SUCC;
+    param.is_replay_ = false;
+    param.dest_ls_id_ = info.dest_ls_id_;
+    param.transfer_epoch_ = info.transfer_epoch_;
+    param.move_tx_ids_ = &info.move_tx_ids_;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!info.empty_tx() && OB_FAIL(ls->transfer_out_tx_op(param, active_tx_count, block_tx_count))) {
     LOG_WARN("transfer block tx failed", KR(ret), K(info));
   } else if (OB_FAIL(transfer_out_helper.on_replay_success_(scn, info, ctx))) {
     LOG_WARN("start transfer out on replay failed", KR(ret), K(info), KP(ls));

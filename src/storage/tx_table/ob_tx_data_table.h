@@ -209,9 +209,9 @@ public:  // ObTxDataTable
   int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   /**
-   * @brief see ObTxTable::supplement_undo_actions_if_exist
+   * @brief see ObTxTable::supplement_tx_op_if_exist
    */
-  int supplement_undo_actions_if_exist(ObTxData *tx_data);
+  int supplement_tx_op_if_exist(ObTxData *tx_data);
 
   int self_freeze_task();
 

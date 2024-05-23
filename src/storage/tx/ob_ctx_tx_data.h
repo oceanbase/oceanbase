@@ -51,9 +51,11 @@ public:
   void get_tx_table(storage::ObTxTable *&tx_table);
 
   int set_state(int32_t state);
+  int add_abort_op(share::SCN op_scn);
   int set_commit_version(const share::SCN &commit_version);
   int set_start_log_ts(const share::SCN &start_ts);
   int set_end_log_ts(const share::SCN &end_ts);
+  int reserve_tx_op_space(int64_t count);
 
   int32_t get_state() const;
   const share::SCN get_commit_version() const;
@@ -61,13 +63,6 @@ public:
   const share::SCN get_end_log_ts() const;
 
   ObTransID get_tx_id() const;
-
-  int prepare_add_undo_action(ObUndoAction &undo_action,
-                              storage::ObTxDataGuard &tmp_tx_data_guard,
-                              storage::ObUndoStatusNode *&tmp_undo_status);
-  int cancel_add_undo_action(storage::ObUndoStatusNode *tmp_undo_status);
-  int commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status);
-  int add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status = NULL);
 
   int get_tx_data(storage::ObTxDataGuard &tx_data_guard);
 

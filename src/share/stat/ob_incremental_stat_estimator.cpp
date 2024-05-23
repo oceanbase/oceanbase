@@ -227,6 +227,8 @@ int ObIncrementalStatEstimator::derive_split_gather_stats(ObExecContext &ctx,
   } else if (OB_ISNULL(param.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(param));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status failed", KR(ret));
   } else {
     ObArenaAllocator allocator("IncrementStats", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
     ObSEArray<ObOptTableStat *, 4> cur_table_stats;

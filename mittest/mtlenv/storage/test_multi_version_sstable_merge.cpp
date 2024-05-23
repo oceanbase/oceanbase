@@ -1113,6 +1113,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans)
 
   for (int64_t i = 1; i <= 4; i++) {
     ObTxData *tx_data = new ObTxData();
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
     transaction::ObTransID tx_id = i;
 
     // fill in data
@@ -1276,6 +1277,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_compact)
 
   for (int64_t i = 1; i <= 5; i++) {
     ObTxData *tx_data = new ObTxData();
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
     transaction::ObTransID tx_id = i;
 
     // fill in data
@@ -1439,6 +1441,7 @@ TEST_F(TestMultiVersionMerge, test_merge_with_multi_trans_can_not_compact)
 
   for (int64_t i = 1; i <= 5; i++) {
     ObTxData *tx_data = new ObTxData();
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
     transaction::ObTransID tx_id = i;
 
     // fill in data
@@ -3338,6 +3341,7 @@ TEST_F(TestMultiVersionMerge, test_running_trans_cross_macro_with_abort_sql_seq)
   ASSERT_NE(nullptr, tx_table = tx_table_guard.get_tx_table());
 
   ObTxData *tx_data = new ObTxData();
+  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
   transaction::ObTransID tx_id = 1;
 
   // fill in data

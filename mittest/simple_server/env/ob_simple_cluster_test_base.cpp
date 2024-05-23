@@ -106,7 +106,8 @@ ObSimpleClusterTestBase::~ObSimpleClusterTestBase()
 
 void ObSimpleClusterTestBase::SetUp()
 {
-  SERVER_LOG(INFO, "SetUp");
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "SetUp>>>>>>>>>>>>>>", K(case_name));
   int ret = OB_SUCCESS;
   if (!is_started_) {
     if (OB_FAIL(start())) {
@@ -126,7 +127,8 @@ void ObSimpleClusterTestBase::SetUp()
 
 void ObSimpleClusterTestBase::TearDown()
 {
-
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "TearDown>>>>>>>>>>>>>>", K(case_name));
 }
 
 void ObSimpleClusterTestBase::TearDownTestCase()

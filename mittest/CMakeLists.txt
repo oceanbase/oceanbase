@@ -1,4 +1,6 @@
-add_library(mit_env env/ob_simple_server_helper.cpp)
+set(MIT_SRCS env/ob_simple_server_helper.cpp)
+
+add_library(mit_env ${MIT_SRCS})
 
 target_include_directories(mit_env PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)

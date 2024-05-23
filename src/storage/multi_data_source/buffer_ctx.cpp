@@ -69,22 +69,22 @@ int BufferCtxNode::serialize(char *buf, const int64_t buf_len, int64_t &pos) con
 }
 
 template <int IDX>
-int deserialize_(BufferCtx *&ctx_, int64_t type_idx, const char *buf, const int64_t buf_len, int64_t &pos) {
+int deserialize_(BufferCtx *&ctx_, int64_t type_idx, const char *buf, const int64_t buf_len, int64_t &pos, ObIAllocator &allocator) {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   if (IDX == type_idx) {
     using ImplType = GET_CTX_TYPE_BY_TUPLE_IDX(IDX);
     ImplType *p_impl = nullptr;
     set_mds_mem_check_thread_local_info(MdsWriter(WriterType::UNKNOWN_WRITER, 0), typeid(ImplType).name());
-    if (OB_ISNULL(p_impl = (ImplType *)MTL(ObTenantMdsService*)->get_buffer_ctx_allocator().alloc(sizeof(ImplType),
-                                                                                                  ObMemAttr(MTL_ID(),
-                                                                                                  "MDS_CTX_DESE",
-                                                                                                  ObCtxIds::MDS_CTX_ID)))) {
+    if (OB_ISNULL(p_impl = (ImplType *)allocator.alloc(sizeof(ImplType),
+                                                       ObMemAttr(MTL_ID(),
+                                                       "MDS_CTX_DESE",
+                                                       ObCtxIds::MDS_CTX_ID)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       MDS_LOG(ERROR, "fail to alloc buffer ctx memory", KR(ret), K(type_idx), K(IDX));
     } else if (FALSE_IT(new (p_impl) ImplType())) {
     } else if (MDS_FAIL(p_impl->deserialize(buf, buf_len, pos))) {
-      MTL(mds::ObTenantMdsService*)->get_buffer_ctx_allocator().free(p_impl);
+      allocator.free(p_impl);
       p_impl = nullptr;
       MDS_LOG(ERROR, "deserialzed from buffer failed", KR(ret), K(type_idx), K(IDX));
     } else {
@@ -98,7 +98,7 @@ int deserialize_(BufferCtx *&ctx_, int64_t type_idx, const char *buf, const int6
       MDS_LOG(INFO, "deserialize ctx success", KR(ret), K(*p_impl), K(type_idx), K(IDX), K(buf_len), K(pos), K(lbt()));
     }
     reset_mds_mem_check_thread_local_info();
-  } else if (MDS_FAIL(deserialize_<IDX + 1>(ctx_, type_idx, buf, buf_len, pos))) {
+  } else if (MDS_FAIL(deserialize_<IDX + 1>(ctx_, type_idx, buf, buf_len, pos, allocator))) {
     MDS_LOG(ERROR, "deserialzed from buffer failed", KR(ret), K(type_idx), K(IDX));
   }
   return ret;
@@ -109,14 +109,15 @@ int deserialize_<BufferCtxTupleHelper::get_element_size()>(BufferCtx *&ctx_,
                                                            int64_t type_idx,
                                                            const char *buf,
                                                            const int64_t buf_len,
-                                                           int64_t &pos)
+                                                           int64_t &pos,
+                                                           ObIAllocator &allocator)
 {
   int ret = OB_ERR_UNEXPECTED;
   MDS_LOG(ERROR, "type idx out of tuple range", KR(ret), K(type_idx), K(BufferCtxTupleHelper::get_element_size()));
   return ret;
 }
 
-int BufferCtxNode::deserialize(const char *buf, const int64_t buf_len, int64_t &pos)
+int BufferCtxNode::deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
@@ -125,7 +126,7 @@ int BufferCtxNode::deserialize(const char *buf, const int64_t buf_len, int64_t &
     MDS_LOG(ERROR, "fail to deserialize buffer ctx id", KR(ret), K(type_idx));
   } else if (INVALID_VALUE == type_idx) {
     MDS_LOG(DEBUG, "deserialized INVALD buffer ctx", KR(ret), K(type_idx), K(buf_len), K(pos));
-  } else if (MDS_FAIL(deserialize_<0>(ctx_, type_idx, buf, buf_len, pos))) {
+  } else if (MDS_FAIL(deserialize_<0>(ctx_, type_idx, buf, buf_len, pos, allocator))) {
     MDS_LOG(WARN, "deserialized buffer ctx failed", KR(ret), K(type_idx));
   }
   return ret;

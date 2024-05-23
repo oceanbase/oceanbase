@@ -1193,6 +1193,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbOrNull2empty::eval_rb_or_null2empty,               /* 714 */
   NULL, // ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,       /* 715 */
   NULL, //ObExprSdoRelate::eval_sdo_relate                            /* 716 */
+  NULL, // ObExprRbToString::eval_rb_to_string,                       /* 717 */
+  NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
+  NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
+  NULL, // ObExprArray::eval_array,                                   /* 720 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

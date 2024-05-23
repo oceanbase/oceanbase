@@ -389,6 +389,7 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
                                          bool &normal_sort_valid)
 {
   int ret = OB_SUCCESS;
+  bool has_keep_aggr = false;
   if (ignore_hint) {
     use_hash_valid = true;
     use_merge_valid = true;
@@ -403,10 +404,13 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(optimizer_context_.get_query_ctx()), K(ret));
+  } else if (OB_FAIL(check_aggr_with_keep(get_stmt()->get_aggr_items(), has_keep_aggr))) {
+    LOG_WARN("failed to check aggr with keep", K(ret));
   } else if (get_stmt()->has_rollup()
              || group_by_exprs.empty()
-             || get_stmt()->has_distinct_or_concat_agg()) {
-    //group_concat and distinct aggregation hold all input rows temporary,
+             || get_stmt()->has_distinct_or_concat_agg()
+             || has_keep_aggr) {
+    //keep_aggr、group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
   }
@@ -7919,6 +7923,22 @@ int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &orde
       } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
         LOG_WARN("failed to prune and keep best plans", K(ret));
       } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                          bool &has_keep_aggr)
+{
+  int ret = OB_SUCCESS;
+  has_keep_aggr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_keep_aggr && i < aggr_items.count(); ++i) {
+    if (OB_ISNULL(aggr_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr item is null", K(ret));
+    } else if (IS_KEEP_AGGR_FUN(aggr_items.at(i)->get_expr_type())) {
+      has_keep_aggr = true;
     }
   }
   return ret;

@@ -299,8 +299,8 @@ private:
 
   // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-      storage::ObTabletHandle &tablet_handle);
-  int get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+      ObBackupTabletHandleRef *&tablet_ref);
+  int inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
       ObBackupTabletHandleRef *&tablet_ref);
   int get_consistent_scn_(share::SCN &consistent_scn) const;
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type,
@@ -368,7 +368,8 @@ class ObBackupMacroBlockTaskMgr {
 public:
   ObBackupMacroBlockTaskMgr();
   virtual ~ObBackupMacroBlockTaskMgr();
-  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size);
+  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size,
+      ObLSBackupCtx &ls_backup_ctx);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   share::ObBackupDataType get_backup_data_type() const;
   int receive(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &id_list);
@@ -402,6 +403,7 @@ private:
   volatile int64_t cur_task_id_;
   ObArray<ObBackupProviderItem> pending_list_;
   ObArray<ObBackupProviderItem> ready_list_;
+  ObLSBackupCtx *ls_backup_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockTaskMgr);
 };
 

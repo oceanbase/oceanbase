@@ -264,69 +264,9 @@ int ObTxDataTable::alloc_tx_data(ObTxDataGuard &tx_data_guard,
   } else {
     ObTxData *tx_data = new (slice_ptr) ObTxData();
     tx_data->tx_data_allocator_ = tx_data_allocator_;
+    tx_data->op_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_op_allocator();
     tx_data_guard.init(tx_data);
   }
-  return ret;
-}
-
-int ObTxDataTable::deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard)
-{
-  int ret = OB_SUCCESS;
-  void *slice_ptr = nullptr;
-  const int64_t abs_expire_time = THIS_WORKER.get_timeout_ts();
-  const ObTxData *in_tx_data = in_tx_data_guard.tx_data();
-  ObTxData *out_tx_data = nullptr;
-
-  if (OB_ISNULL(slice_ptr = tx_data_allocator_->alloc(true, abs_expire_time))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "allocate memory from slice_allocator fail.", KR(ret), KP(this),
-                K(tablet_id_), K(abs_expire_time));
-  } else if (OB_ISNULL(in_tx_data)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "invalid nullptr of tx data", K(in_tx_data_guard), KPC(this));
-  } else {
-    out_tx_data = new (slice_ptr) ObTxData();
-    *out_tx_data = *in_tx_data;
-    out_tx_data->tx_data_allocator_ = tx_data_allocator_;
-    out_tx_data->undo_status_list_.head_ = nullptr;
-    out_tx_data->ref_cnt_ = 0;
-    out_tx_data_guard.init(out_tx_data);
-
-    if (OB_FAIL(deep_copy_undo_status_list_(in_tx_data->undo_status_list_,
-                                            out_tx_data->undo_status_list_))) {
-      STORAGE_LOG(WARN, "deep copy undo status list failed.");
-    } else {
-      // deep copy succeed.
-    }
-  }
-  return ret;
-}
-
-int ObTxDataTable::deep_copy_undo_status_list_(const ObUndoStatusList &in_list,
-                                               ObUndoStatusList &out_list)
-{
-  int ret = OB_SUCCESS;
-  ObUndoStatusNode *cur_in_node = in_list.head_;
-  ObUndoStatusNode *pre_node = nullptr;
-  ObUndoStatusNode *new_node = nullptr;
-
-  while (OB_SUCC(ret) && nullptr != cur_in_node) {
-    if (OB_FAIL(alloc_undo_status_node(new_node))) {
-      STORAGE_LOG(WARN, "alloc undo status node failed.", KR(ret));
-    } else {
-      *new_node = *cur_in_node;
-      // reset next pointer to avoid invalid free
-      new_node->next_ = nullptr;
-      if (nullptr == pre_node) {
-        out_list.head_ = new_node;
-      } else {
-        pre_node->next_ = new_node;
-      }
-      pre_node = new_node;
-      cur_in_node = cur_in_node->next_;
-    }
-  }
-
   return ret;
 }
 
@@ -974,11 +914,11 @@ int ObTxDataTable::DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
         tmp_upper_trans_version = tx_data.commit_version_;
       }
     }
-
-    if (OB_NOT_NULL(tx_data.undo_status_list_.head_)) {
-      free_undo_status_list_(tx_data.undo_status_list_.head_);
-      tx_data.undo_status_list_.head_ = nullptr;
+    if (tx_data.op_guard_.is_valid() && OB_NOT_NULL(tx_data.op_guard_->get_undo_status_list().head_)) {
+      free_undo_status_list_(tx_data.op_guard_->get_undo_status_list().head_);
+      tx_data.op_guard_->get_undo_status_list().head_ = nullptr;
     }
+
   }
 
   if (OB_ITER_END == ret) {
@@ -1137,6 +1077,14 @@ int ObTxDataTable::check_min_start_in_tx_data_(const SCN &sstable_end_scn,
   return ret;
 }
 
+int ObTxDataTable::deep_copy_tx_data(const ObTxDataGuard &in_tx_data, ObTxDataGuard &out_tx_data)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(in_tx_data);
+  UNUSED(out_tx_data);
+  return ret;
+}
+
 int ObTxDataTable::update_cache_if_needed_(bool &skip_calc)
 {
   int ret = OB_SUCCESS;
@@ -1243,7 +1191,7 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
   return ret;
 }
 
-int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
+int ObTxDataTable::supplement_tx_op_if_exist(ObTxData *tx_data)
 {
   int ret = OB_SUCCESS;
   ObTxData tx_data_from_sstable;
@@ -1256,6 +1204,8 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is nullptr", KR(ret), KP(this));
+  } else if (FALSE_IT(tx_data_from_sstable.tx_data_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_allocator())) {
+  } else if (FALSE_IT(tx_data_from_sstable.op_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_op_allocator())) {
   } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable, unused_scn))) {
     if (ret == OB_TRANS_CTX_NOT_EXIST) {
       // This transaction does not have undo actions
@@ -1263,19 +1213,10 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
     } else {
       STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret));
     }
-  } else {
-    // assign and reset to avoid deep copy
-    if (OB_NOT_NULL(tx_data->undo_status_list_.head_)) {
-      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid undo status list", KPC(tx_data));
-    }
-    tx_data->undo_status_list_ = tx_data_from_sstable.undo_status_list_;
-    tx_data_from_sstable.undo_status_list_.reset();
+  } else if (FALSE_IT(*tx_data = tx_data_from_sstable)) {
   }
-
-  if (OB_NOT_NULL(tx_data_from_sstable.undo_status_list_.head_)) {
-    STORAGE_LOG(WARN, "supplement undo actions failed", KR(ret), KPC(tx_data), K(get_ls_id()));
-    free_undo_status_list_(tx_data_from_sstable.undo_status_list_.head_);
-  }
+  tx_data_from_sstable.tx_data_allocator_ = nullptr;
+  tx_data_from_sstable.reset();
   return ret;
 }
 

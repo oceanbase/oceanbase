@@ -575,7 +575,7 @@ int ObLSBackupDataDagNet::inner_init_before_run_()
     LOG_WARN("failed to prepare backup tablet provider", K(ret), K(backup_param), K_(backup_data_type));
   } else if (OB_FAIL(get_batch_size_(batch_size))) {
     LOG_WARN("failed to get batch size", K(ret));
-  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size))) {
+  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size, ls_backup_ctx_))) {
     LOG_WARN("failed to init task mgr", K(ret), K(batch_size));
   } else {
     ls_backup_ctx_.stat_mgr_.mark_begin(backup_data_type_);

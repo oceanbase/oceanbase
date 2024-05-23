@@ -118,6 +118,9 @@ int ObTransformPredicateMoveAround::inner_do_transfrom(ObDMLStmt *stmt, bool &tr
     LOG_WARN("failed to create equal exprs for insert", K(ret));
   } else if (OB_FAIL(pushdown_predicates(stmt, dummy_pushdown))) {
     LOG_WARN("failed to push down predicates", K(ret));
+  } else if (real_happened_ &&
+         OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
+    LOG_WARN("formalize stmt expr reference failed", K(ret));
   } else {
     trans_happened = real_happened_;
   }

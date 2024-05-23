@@ -1153,7 +1153,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
     ret = init_vector(ctx, batch_result_ ? VEC_UNIFORM : VEC_UNIFORM_CONST, BATCH_SIZE());
   }
   if (OB_FAIL(ret)) {
-  } else if (info.projected_ || NULL == eval_batch_func_
+  } else if ((batch_result_ && info.projected_) || NULL == eval_batch_func_
              || (!batch_result_ && info.evaluated_)) {
     // expr values is projected by child or has no evaluate func, do nothing.
   } else if (!info.evaluated_) {

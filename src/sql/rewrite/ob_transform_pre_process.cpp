@@ -4202,6 +4202,32 @@ int ObTransformPreProcess::replace_expr_for_rls(ObDMLStmt &stmt,
   return ret;
 }
 
+int ObTransformPreProcess::get_inner_aggr_exprs(
+    ObSelectStmt *sub_stmt,
+    common::ObIArray<ObAggFunRawExpr*>& inner_aggr_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sub_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("select stmt is null", K(ret));
+  } else {
+    common::ObIArray<ObAggFunRawExpr*> &aggr_exprs = sub_stmt->get_aggr_items();
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); ++i) {
+      if (OB_ISNULL(aggr_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr of aggr expr is null", K(ret));
+      } else if (aggr_exprs.at(i)->in_inner_stmt()) {
+        /*do nothing.*/
+        if (OB_FAIL(add_var_to_array_no_dup(inner_aggr_exprs,
+                                            aggr_exprs.at(i)))) {
+          LOG_WARN("failed to to add var to array no dup.", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformPreProcess::get_first_level_output_exprs(
     ObSelectStmt *sub_stmt,
     common::ObIArray<ObRawExpr*>& inner_aggr_exprs)
@@ -4212,13 +4238,14 @@ int ObTransformPreProcess::get_first_level_output_exprs(
     LOG_WARN("select stmt is null", K(ret));
   } else {
     common::ObIArray<ObAggFunRawExpr*> &aggr_exprs = sub_stmt->get_aggr_items();
-    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < aggr_exprs.count(); ++i) {
       if (OB_ISNULL(aggr_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr of aggr expr is null", K(ret));
-      } else if (aggr_exprs.at(i)->is_nested_aggr()) {
+      } else if (aggr_exprs.at(i)->in_inner_stmt()) {
         /*do nothing.*/
       } else {
+        // outer aggr
         int64_t N = aggr_exprs.at(i)->get_param_count();
         for (int64_t j = 0; OB_SUCC(ret) && j < N; ++j) {
           if (OB_ISNULL(aggr_exprs.at(i)->get_param_expr(j))) {
@@ -4242,6 +4269,8 @@ int ObTransformPreProcess::generate_child_level_aggr_stmt(ObSelectStmt *select_s
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> complex_aggr_exprs;
+  ObSEArray<ObAggFunRawExpr*, 4> inner_aggr_exprs;
+
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("select stmt is null", K(ret));
@@ -4256,24 +4285,23 @@ int ObTransformPreProcess::generate_child_level_aggr_stmt(ObSelectStmt *select_s
                                                    ctx_->src_qb_name_,
                                                    ctx_->src_hash_val_))) {
     LOG_WARN("failed to recursive adjust statement id", K(ret));
-  } else if (OB_FAIL(get_first_level_output_exprs(sub_stmt,
-                                                  complex_aggr_exprs))) {
-    LOG_WARN("failed to extract levels aggr.", K(ret));
+  } else if (OB_FAIL(get_first_level_output_exprs(sub_stmt, complex_aggr_exprs))) {
+    LOG_WARN("failed to low levels aggr.", K(ret));
+  } else if (OB_FAIL(get_inner_aggr_exprs(sub_stmt, inner_aggr_exprs)) ) {
   } else {
     sub_stmt->get_aggr_items().reset();
     sub_stmt->get_select_items().reset();
+    sub_stmt->get_order_items().reset();
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < sub_stmt->get_having_exprs().count(); ++i) {
-    if (OB_FAIL(ObTransformUtils::extract_aggr_expr(sub_stmt->get_having_exprs().at(i),
-                                                    sub_stmt->get_aggr_items()))) {
-      LOG_WARN("failed to extract aggr exprs.", K(ret));
-    } else { /*do nothing.*/ }
+
+  for (int64_t j = 0; OB_SUCC(ret) && j < inner_aggr_exprs.count(); ++j) {
+    if (OB_FAIL(add_var_to_array_no_dup(sub_stmt->get_aggr_items(), inner_aggr_exprs.at(j)))) {
+      LOG_WARN("failed to add aggr exprs to aggr item.", K(ret));
+    }
   }
+
   for (int64_t j = 0; OB_SUCC(ret) && j < complex_aggr_exprs.count(); ++j) {
-    if (OB_FAIL(ObTransformUtils::extract_aggr_expr(complex_aggr_exprs.at(j),
-                                                    sub_stmt->get_aggr_items()))) {
-      LOG_WARN("failed to extract aggr exprs.", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
+    if (OB_FAIL(ObTransformUtils::create_select_item(*ctx_->allocator_,
                                                             complex_aggr_exprs.at(j),
                                                             sub_stmt))) {
       LOG_WARN("failed to push back into select item array.", K(ret));
@@ -4307,7 +4335,7 @@ int ObTransformPreProcess::remove_nested_aggr_exprs(ObSelectStmt *stmt)
       if (OB_ISNULL(stmt->get_aggr_items().at(i))) {
        ret = OB_ERR_UNEXPECTED;
        LOG_WARN("expr of aggr expr is null", K(ret));
-      } else if (stmt->get_aggr_items().at(i)->is_nested_aggr()) {
+      } else if (stmt->get_aggr_items().at(i)->in_inner_stmt()) {
        /*do nothing.*/
       } else if (OB_FAIL(aggr_exprs.push_back(stmt->get_aggr_items().at(i)))) {
        LOG_WARN("failed to assign to inner aggr exprs.", K(ret));
@@ -4356,7 +4384,6 @@ int ObTransformPreProcess::generate_parent_level_aggr_stmt(ObSelectStmt *&select
     select_stmt->get_table_items().reset();
     select_stmt->get_joined_tables().reset();
     select_stmt->get_from_items().reset();
-    select_stmt->get_order_items().reset();
     select_stmt->get_column_items().reset();
     select_stmt->get_condition_exprs().reset();
     select_stmt->get_part_exprs().reset();
@@ -4367,6 +4394,8 @@ int ObTransformPreProcess::generate_parent_level_aggr_stmt(ObSelectStmt *&select
     select_stmt->get_rollup_items().reset();
     select_stmt->get_cube_items().reset();
     select_stmt->get_having_exprs().reset();
+    select_stmt->get_order_items().reset();
+
     if (OB_FAIL(get_first_level_output_exprs(select_stmt,
                                              old_exprs))) {
       LOG_WARN("failed to get column exprs from stmt from.", K(ret));

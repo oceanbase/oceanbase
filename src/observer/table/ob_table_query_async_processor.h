@@ -226,6 +226,7 @@ protected:
 private:
   int process_query_start();
   int process_query_next();
+  int process_query_end();
   int destory_query_session(bool need_rollback_trans);
   DISALLOW_COPY_AND_ASSIGN(ObTableQueryAsyncP);
 

@@ -4689,7 +4689,7 @@ int ObDMLResolver::resolve_joined_table_item(const ParseNode &parse_node, Joined
     table_node = parse_node.children_[i];
     // nested join case or normal join case
     if (T_JOINED_TABLE == table_node->type_) {
-      if (OB_FAIL(resolve_joined_table(*table_node, child_table))) {
+      if (OB_FAIL(SMART_CALL(resolve_joined_table(*table_node, child_table)))) {
         LOG_WARN("resolve child joined table failed", K(ret));
       } else if (1 == i) {
         cur_table->left_table_ = child_table;
@@ -17431,6 +17431,8 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_FTS_LOG(WARN, "fail to allocate right table item", K(ret));
   } else {
+    ObRawExpr *part_expr = get_stmt()->get_part_expr(left_table->table_id_, left_table->ref_id_);
+    ObRawExpr *subpart_expr = get_stmt()->get_subpart_expr(left_table->table_id_, left_table->ref_id_);
     right_table->type_ = TableItem::BASE_TABLE;
     right_table->ref_id_ = table_schema->get_table_id();
     right_table->table_id_ = generate_table_id();
@@ -17441,8 +17443,8 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     right_table->table_type_ = table_schema->get_table_type();
     if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
       STORAGE_FTS_LOG(WARN, "fail to add right table item", K(ret), K(right_table));
-    } else if (OB_FAIL(resolve_table_partition_expr(*right_table, *table_schema))) {
-      STORAGE_FTS_LOG(WARN, "fail to resolve table partition expr", K(ret), KPC(right_table), KPC(table_schema));
+    } else if (OB_FAIL(get_stmt()->set_part_expr(right_table->table_id_, right_table->ref_id_, part_expr, subpart_expr))) {
+      STORAGE_FTS_LOG(WARN, "fail to set right table partition expr", K(ret), KPC(right_table), KPC(left_table));
     } else if (OB_FAIL(create_joined_table_item(ObJoinType::INNER_JOIN, left_table, right_table, joined_table))) {
       STORAGE_FTS_LOG(WARN, "fail to create joined table item", K(ret), KPC(left_table), KPC(right_table));
     } else if (OB_FAIL(add_all_rowkey_columns_to_stmt(*left_table, left_column_exprs))) {

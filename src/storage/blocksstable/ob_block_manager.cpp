@@ -1006,8 +1006,14 @@ void ObBlockManager::mark_and_sweep()
       } else if (0 == mark_info.count()) {
         skip_mark = true;
         LOG_INFO("no block alloc/free, no need to mark blocks", K(ret), K(mark_info.count()));
-      } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
-        LOG_WARN("fail to mark macro blocks", K(ret));
+      } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_INFO("mark blocks meet memory issue, still countinue sweep to lease compaction space");
+          ret = OB_SUCCESS;
+          skip_mark = true;
+        } else {
+          LOG_WARN("fail to mark macro blocks", K(ret));
+        }
       }
 
       if (OB_FAIL(ret)) {

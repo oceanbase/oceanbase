@@ -365,6 +365,7 @@ struct DistinctObjMeta
   int transform_exprs(ObDMLStmt *stmt, bool &trans_happened);
   int transform_for_nested_aggregate(ObDMLStmt *&stmt, bool &trans_happened);
   int generate_child_level_aggr_stmt(ObSelectStmt *stmt, ObSelectStmt *&sub_stmt);
+  int get_inner_aggr_exprs(ObSelectStmt *sub_stmt, common::ObIArray<ObAggFunRawExpr*>& inner_aggr_exprs);
   int get_first_level_output_exprs(ObSelectStmt *sub_stmt,
                                    common::ObIArray<ObRawExpr*>& inner_aggr_exprs);
   int generate_parent_level_aggr_stmt(ObSelectStmt *&stmt, ObSelectStmt *sub_stmt);

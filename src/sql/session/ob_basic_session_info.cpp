@@ -334,6 +334,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tx_desc_->get_tenant_id(), false))) {
       MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    } else {
+      LOG_WARN("tenant env not exist, force release tx", KP(tx_desc_), K(tx_desc_->get_tx_id()));
+      transaction::ObTransService::force_release_tx_when_session_destroy(*tx_desc_);
     }
     tx_desc_ = NULL;
   }

@@ -374,7 +374,7 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
     if (0 == attr_name.case_compare("job_action")) {
       if (0 == job_name.case_compare(opt_stats_history_manager)) {
         const char *job_action_name = "DBMS_STATS.PURGE_STATS(";
-        if (0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
+        if (!val_name.empty() && 0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
           if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
             LOG_WARN("failed to add column", K(ret));
           } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(val_name)))) {
@@ -385,7 +385,7 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
         } else {/*do nothing*/}
       } else {
         const char *job_action_name = "DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC(";
-        if (0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
+        if (!val_name.empty() && 0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
           if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
             LOG_WARN("failed to add column", K(ret));
           } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(val_name)))) {

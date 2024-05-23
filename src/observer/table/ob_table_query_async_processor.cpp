@@ -377,7 +377,7 @@ int ObTableQueryAsyncP::get_query_session(uint64_t sessid, ObTableQueryAsyncSess
       LOG_WARN("fail to insert session to query map", K(ret), K(sessid));
       OB_DELETE(ObTableQueryAsyncSession, ObModIds::TABLE_PROC, query_session);
     } else {}
-  } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
+  } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_ || ObQueryOperationType::QUERY_END == arg_.query_type_) {
     if (OB_FAIL(ObQueryAsyncMgr::get_instance().get_query_session(sessid, query_session))) {
       LOG_WARN("fail to get query session from query sync mgr", K(ret), K(sessid));
     } else if (OB_ISNULL(query_session)) {
@@ -609,6 +609,13 @@ int ObTableQueryAsyncP::process_query_next()
   return ret;
 }
 
+int ObTableQueryAsyncP::process_query_end()
+{
+  int ret = OB_SUCCESS;
+  result_.is_end_ = true;
+  return ret;
+}
+
 int ObTableQueryAsyncP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -627,6 +634,8 @@ int ObTableQueryAsyncP::try_process()
         ret = process_query_start();
       } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_) {
         ret = process_query_next();
+      } else if (ObQueryOperationType::QUERY_END == arg_.query_type_) {
+        ret = process_query_end();
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("query execution failed, need rollback", K(ret));
@@ -689,8 +698,8 @@ int ObTableQueryAsyncP::destory_query_session(bool need_rollback_trans)
 int ObTableQueryAsyncP::check_query_type()
 {
   int ret = OB_SUCCESS;
-  if (arg_.query_type_ != table::ObQueryOperationType::QUERY_START &&
-            arg_.query_type_ != table::ObQueryOperationType::QUERY_NEXT){
+  if (arg_.query_type_ < table::ObQueryOperationType::QUERY_START ||
+            arg_.query_type_ >= table::ObQueryOperationType::QUERY_MAX) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid query operation type", K(ret), K(arg_.query_type_));
   }

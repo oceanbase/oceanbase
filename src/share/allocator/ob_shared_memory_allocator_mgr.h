@@ -44,6 +44,8 @@ public:
       SHARE_LOG(ERROR, "init memstore allocator failed", KR(ret));
     } else if (OB_FAIL(mds_allocator_.init())) {
       SHARE_LOG(ERROR, "init mds allocator failed", KR(ret));
+    } else if (OB_FAIL(tx_data_op_allocator_.init())) {
+      SHARE_LOG(ERROR, "init tx data op allocator failed", KR(ret));
     } else if (OB_FAIL(
                    share_resource_throttle_tool_.init(&memstore_allocator_, &tx_data_allocator_, &mds_allocator_))) {
       SHARE_LOG(ERROR, "init share resource throttle tool failed", KR(ret));
@@ -65,6 +67,7 @@ public:
   ObTenantTxDataAllocator &tx_data_allocator() { return tx_data_allocator_; }
   ObTenantMdsAllocator &mds_allocator() { return mds_allocator_; }
   TxShareThrottleTool &share_resource_throttle_tool() { return share_resource_throttle_tool_; }
+  ObTenantTxDataOpAllocator &tx_data_op_allocator() { return tx_data_op_allocator_; }
 
 private:
   void update_share_throttle_config_(const int64_t total_memory, omt::ObTenantConfigGuard &config);
@@ -78,6 +81,7 @@ private:
   ObMemstoreAllocator memstore_allocator_;
   ObTenantTxDataAllocator tx_data_allocator_;
   ObTenantMdsAllocator mds_allocator_;
+  ObTenantTxDataOpAllocator tx_data_op_allocator_;
 };
 
 class TxShareMemThrottleUtil

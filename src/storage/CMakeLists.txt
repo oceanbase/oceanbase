@@ -324,6 +324,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_id_service.cpp
   tx/ob_keep_alive_ls_handler.cpp
   tx/ob_tx_loop_worker.cpp
+  tx/ob_tx_ls_state_mgr.cpp
   tx/ob_location_adapter.cpp
   tx/ob_one_phase_committer.cpp
   tx/ob_standby_timestamp_service.cpp
@@ -367,6 +368,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_2pc_msg_handler.cpp
   tx/ob_tx_2pc_ctx_impl.cpp
   tx/ob_tx_data_define.cpp
+  tx/ob_tx_data_op.cpp
   tx/ob_tx_data_functor.cpp
   tx/ob_tx_serialization.cpp
   tx/ob_tx_log.cpp

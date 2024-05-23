@@ -35,6 +35,7 @@ function(ob_offline_observer case case_file)
     EXCLUDE_FROM_ALL
     ${case_file}
     ${OBSERVER_TEST_SRCS}
+    ../${MIT_SRCS}
     )
   target_include_directories(${case} PUBLIC
     ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
@@ -53,6 +54,7 @@ endfunction()
 
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
+ob_offline_observer(test_tx_data test_tx_data.cpp)
 
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)

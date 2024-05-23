@@ -2873,6 +2873,17 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
   return ret;
 }
 
+int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == package_id) {
+    OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, &result));
+  } else {
+    OZ (ObSPIService::spi_calc_package_expr(this, package_id, expr_idx, &result));
+  }
+  return ret;
+}
+
 int ObPLExecState::final(int ret)
 {
   int tmp_ret = OB_SUCCESS;
@@ -3971,7 +3982,8 @@ int ObPLExecState::check_pl_execute_priv(ObSchemaGetterGuard &guard,
                           OBJ_PRIV_ID_EXECUTE,
                           CHECK_FLAG_NORMAL,
                           obj_owner_id,
-                          role_id_array));
+                          role_id_array),
+                          K(obj_tenant_id), K(user_id), K(database_name), K(obj_id), K(obj_owner_id), K(role_id_array));
     }
     if (ROUTINE_SCHEMA == schema_type && ret == OB_TABLE_NOT_EXIST) {
       ret = OB_WRONG_COLUMN_NAME;
@@ -4453,11 +4465,18 @@ int ObPLFunction::is_special_pkg_invoke_right(ObSchemaGetterGuard &guard, bool &
   return ret;
 }
 
+int ObPLINS::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result)
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_USER_WARN(OB_NOT_SUPPORTED, "call expr on base class ObIPLNS");
+  return ret;
+}
+
 int ObPLINS::init_complex_obj(ObIAllocator &allocator,
                               const ObPLDataType &pl_type,
                               common::ObObjParam &obj,
                               bool set_allocator,
-                              bool set_null) const
+                              bool set_null)
 {
   int ret = OB_SUCCESS;
   int64_t init_size = 0;
@@ -4489,16 +4508,36 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     OX (record = reinterpret_cast<ObPLRecord*>(ptr));
     for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
       CK (OB_NOT_NULL(record_type->get_member(i)));
+      CK (OB_NOT_NULL(record_type->get_record_member(i)));
       OZ (record->get_element(i, member));
       CK (OB_NOT_NULL(member));
-      if (record_type->get_member(i)->is_obj_type()) {
-        OX (new (member) ObObj(ObNullType));
+      OX (new (member) ObObj(ObNullType));
+      if (OB_FAIL(ret)) {
+      } else if (record_type->get_record_member(i)->get_default() != OB_INVALID_INDEX) {
+        ObObjParam default_v;
+        if (record_type->is_package_type()) {
+          OZ (calc_expr(extract_package_id(pl_type.get_user_type_id()),
+                        record_type->get_record_member(i)->get_default(),
+                        default_v));
+        } else {
+          OZ (calc_expr(OB_INVALID_ID,
+                        record_type->get_record_member(i)->get_default(),
+                        default_v));
+        }
+        if (OB_FAIL(ret)) {
+        } else if (record_type->get_member(i)->is_obj_type()) {
+          OZ (deep_copy_obj(allocator, default_v, *member));
+        } else {
+          OZ (ObUserDefinedType::deep_copy_obj(allocator, default_v, *member));
+        }
       } else {
-        int64_t init_size = OB_INVALID_SIZE;
-        int64_t member_ptr = 0;
-        OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-        OZ (record_type->get_member(i)->newx(allocator, this, member_ptr));
-        OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
+        if (!record_type->get_member(i)->is_obj_type()) {
+          int64_t init_size = OB_INVALID_SIZE;
+          int64_t member_ptr = 0;
+          OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
+          OZ (record_type->get_member(i)->newx(allocator, this, member_ptr));
+          OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
+        }
       }
     }
     // f(self object_type, p1 out object_type), p1 will be init here, we have to set it null

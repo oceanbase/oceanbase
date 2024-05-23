@@ -1761,7 +1761,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   } else if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_tablet_handle_without_memtables_(tenant_id, ls_id, tablet_id, tablet_ref))) {
+  } else if (OB_FAIL(get_tablet_handle_(tenant_id, ls_id, tablet_id, tablet_ref))) {
     if (OB_TABLET_NOT_EXIST == ret) {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       ret = OB_SUCCESS;
@@ -1785,9 +1785,6 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     LOG_WARN("can not backup replica", K(ret), K(tablet_id), K(ls_id));
   } else if (OB_FAIL(check_tablet_replica_validity_(tenant_id, ls_id, tablet_id, backup_data_type))) {
     LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(backup_data_type));
-  } else if (OB_FAIL(hold_tablet_handle_(tablet_id, tablet_ref))) {
-    ls_backup_ctx_->tablet_holder_.free_tablet_ref(tablet_ref);
-    LOG_WARN("failed to hold tablet handle", K(ret), K(tablet_id), KPC(tablet_ref));
   } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
@@ -1917,10 +1914,11 @@ int ObBackupTabletProvider::get_consistent_scn_(share::SCN &consistent_scn) cons
 }
 
 int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id, ObTabletHandle &tablet_handle)
+    const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_ref)
 {
   int ret = OB_SUCCESS;
-  tablet_handle.reset();
+  tablet_ref = NULL;
+  bool hold_tablet_success = false;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
@@ -1930,30 +1928,19 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
   } else {
     const int64_t rebuild_seq = ls_backup_ctx_->rebuild_seq_;
     MTL_SWITCH(tenant_id) {
-      ObLS *ls = NULL;
-      ObLSHandle ls_handle;
-      ObLSService *ls_svr = NULL;
-      if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLSService is null", K(ret), K(tenant_id));
-      } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-        LOG_WARN("fail to get ls handle", K(ret), K(ls_id));
-      } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("LS is null", K(ret));
-      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
+      if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
         LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
       } else {
         // sync wait transfer in tablet replace table finish
         const int64_t ABS_TIMEOUT_TS = ObTimeUtil::current_time() + 5 * 60 * 1000 * 1000; //5min
         bool is_normal_tablet = false;
         while (OB_SUCC(ret)) {
-          tablet_handle.reset();
+          tablet_ref = NULL;
           if (ABS_TIMEOUT_TS < ObTimeUtil::current_time()) {
             ret = OB_TIMEOUT;
             LOG_WARN("backup get tablet handle timeout", K(ret), K(ls_id), K(tablet_id));
-          } else if (OB_FAIL(ls->get_tablet(tablet_id, tablet_handle))) {// read readble commited, only get NORMAL and TRANSFER IN tablet.
-            LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+          } else if (OB_FAIL(inner_get_tablet_handle_without_memtables_(tenant_id, ls_id, tablet_id, tablet_ref))) { // read readble commited, only get NORMAL and TRANSFER IN tablet.
+            LOG_WARN("failed to inner get tablet handle without memtables", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
           } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, rebuild_seq))) {
             LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
           } else if (tablet_id.is_ls_inner_tablet()) {
@@ -1961,10 +1948,10 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
             // Data of inner tablets is backed up with meta at the same replica. And.
             // the clog_checkpoint_scn < consistent_scn is allowed.
             break;
-          } else if (tablet_handle.get_obj()->get_tablet_meta().has_transfer_table()) {
+          } else if (tablet_ref->tablet_handle_.get_obj()->get_tablet_meta().has_transfer_table()) {
             LOG_INFO("transfer table is not replaced", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
             usleep(100 * 1000); // wait 100ms
-          } else if (OB_FAIL(check_tablet_status_(tablet_handle, is_normal_tablet))) {
+          } else if (OB_FAIL(check_tablet_status_(tablet_ref->tablet_handle_, is_normal_tablet))) {
             LOG_WARN("failed to check tablet is normal", K(ret), K(tenant_id), K(ls_id), K(rebuild_seq));
           } else if (!is_normal_tablet) {
             LOG_INFO("tablet status is not normal", K(tenant_id), K(ls_id), K(tablet_id));
@@ -1972,14 +1959,25 @@ int ObBackupTabletProvider::get_tablet_handle_(const uint64_t tenant_id, const s
           } else {
             break;
           }
+          if (OB_NOT_NULL(tablet_ref)) {
+            ls_backup_ctx_->tablet_holder_.free_tablet_ref(tablet_ref);
+          }
         }
       }
     }
+    if (FAILEDx(hold_tablet_handle_(tablet_id, tablet_ref))) {
+      LOG_WARN("failed to hold tablet handle", K(ret), K(tablet_id), KPC(tablet_ref));
+    } else {
+      hold_tablet_success = true;
+    }
+  }
+  if (OB_NOT_NULL(ls_backup_ctx_) && OB_NOT_NULL(tablet_ref) && !hold_tablet_success) {
+    ls_backup_ctx_->tablet_holder_.free_tablet_ref(tablet_ref);
   }
   return ret;
 }
 
-int ObBackupTabletProvider::get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+int ObBackupTabletProvider::inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_ref)
 {
   int ret = OB_SUCCESS;
@@ -2524,7 +2522,8 @@ ObBackupMacroBlockTaskMgr::ObBackupMacroBlockTaskMgr()
       file_id_(0),
       cur_task_id_(0),
       pending_list_(),
-      ready_list_()
+      ready_list_(),
+      ls_backup_ctx_(NULL)
 {}
 
 ObBackupMacroBlockTaskMgr::~ObBackupMacroBlockTaskMgr()
@@ -2532,7 +2531,8 @@ ObBackupMacroBlockTaskMgr::~ObBackupMacroBlockTaskMgr()
   reset();
 }
 
-int ObBackupMacroBlockTaskMgr::init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size)
+int ObBackupMacroBlockTaskMgr::init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size,
+    ObLSBackupCtx &ls_backup_ctx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -2553,6 +2553,7 @@ int ObBackupMacroBlockTaskMgr::init(const share::ObBackupDataType &backup_data_t
 #endif
     max_task_id_ = 0;
     cur_task_id_ = 0;
+    ls_backup_ctx_ = &ls_backup_ctx;
     is_inited_ = true;
   }
   return ret;
@@ -2596,7 +2597,14 @@ int ObBackupMacroBlockTaskMgr::deliver(common::ObIArray<ObBackupProviderItem> &i
   ObThreadCondGuard guard(cond_);
   int64_t begin_ms = ObTimeUtility::fast_current_time();
   while (OB_SUCC(ret) && id_list.empty()) {
-    if (OB_FAIL(get_from_ready_list_(id_list))) {
+    if (OB_ISNULL(ls_backup_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls backup ctx should not be null", K(ret));
+    } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
+      ret = ls_backup_ctx_->get_result_code();
+      LOG_INFO("ls backup ctx already failed", K(ret));
+      break;
+    } else if (OB_FAIL(get_from_ready_list_(id_list))) {
       LOG_WARN("failed to get from ready list", K(ret));
     } else if (!id_list.empty()) {
       break;

@@ -2217,9 +2217,9 @@ int ObPLExternalNS::resolve_external_routine(const ObString &db_name,
         LOG_WARN("add dependency object failed", "package_id", schema_routine_info->get_package_id(), K(ret));
       } else if (synonym_checker.has_synonym()) {
         if (OB_FAIL(ObResolverUtils::add_dependency_synonym_object(&resolve_ctx_.schema_guard_,
-                                                                        &resolve_ctx_.session_info_,
-                                                                        synonym_checker,
-                                                                        *get_dependency_table()))) {
+                                                                   &resolve_ctx_.session_info_,
+                                                                   synonym_checker,
+                                                                   *get_dependency_table()))) {
           LOG_WARN("add dependency synonym failed", K(ret));
         }
       }

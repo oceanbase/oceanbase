@@ -3679,7 +3679,7 @@ int ObAggFunRawExpr::assign(const ObRawExpr &other)
       } else {
         distinct_ = tmp.distinct_;
         separator_param_expr_ = tmp.separator_param_expr_;
-        is_nested_aggr_ = tmp.is_nested_aggr_;
+        expr_in_inner_stmt_ = tmp.expr_in_inner_stmt_;
         pl_agg_udf_expr_ = tmp.pl_agg_udf_expr_;
         udf_meta_.assign(tmp.udf_meta_);
         is_need_deserialize_row_ = tmp.is_need_deserialize_row_;
@@ -3743,7 +3743,7 @@ void ObAggFunRawExpr::reset()
   clear_child();
   order_items_.reset();
   separator_param_expr_ = NULL;
-  is_nested_aggr_ = false;
+  expr_in_inner_stmt_ = false;
   is_need_deserialize_row_ = false;
   pl_agg_udf_expr_ = NULL;
 }
@@ -3756,7 +3756,7 @@ bool ObAggFunRawExpr::inner_same_as(
   if (get_expr_type() != expr.get_expr_type()) {
   } else  {
     const ObAggFunRawExpr *a_expr = static_cast<const ObAggFunRawExpr *>(&expr);
-    if (is_nested_aggr_ != a_expr->is_nested_aggr()) {
+    if (expr_in_inner_stmt_ != a_expr->expr_in_inner_stmt_) {
       //do nothing.
     } else if (distinct_ == a_expr->is_param_distinct()) {
       if ((NULL == separator_param_expr_ && NULL == a_expr->separator_param_expr_)

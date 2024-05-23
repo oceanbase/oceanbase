@@ -14382,6 +14382,8 @@ def_table_schema(
 )
 
 # 12488: __all_virtual_scheduler_job_run_detail_v2
+# 12489: __all_virtual_deadlock_detector_stat
+# 12490: __all_virtual_spatial_reference_systems
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14861,6 +14863,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15456', all_def_keywords['__all_virtual_nic_info'])))
 # 15457: __all_virtual_query_response_time
 # 15458: __all_scheduler_job_run_detail_v2
+# 15459: __all_spatial_reference_systems
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -17846,7 +17849,10 @@ SELECT
     when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
     when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'
-    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'DDL_MERGE'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'
+    when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
+    when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
+    when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.TENANT_ID,
@@ -56036,7 +56042,11 @@ SELECT
     when 0 then 'MEMTABLE' when 1 then 'TX_DATA_MEMTABLE' when 2 then 'TX_CTX_MEMTABLE'
     when 3 then 'LOCK_MEMTABLE' when 4 then 'DIRECT_LOAD_MEMTABLE' when 10 then 'MAJOR' when 11 then 'MINOR'
     when 12 then 'MINI' when 13 then 'META'
-    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'IMC_SEGMENT' when 20 then 'DDL_MERGE'
+    when 14 then 'DDL_DUMP' when 15 then 'REMOTE_LOGICAL_MINOR' when 16 then 'DDL_MEM'
+    when 17 then 'CO_MAJOR' when 18 then 'NORMAL_CG' when 19 then 'ROWKEY_CG' when 20 then 'COL_ORIENTED_META'
+    when 21 then 'DDL_MERGE_CO' when 22 then 'DDL_MERGE_CG' when 23 then 'DDL_MEM_CO'
+    when 24 then 'DDL_MEM_CG' when 25 then 'DDL_MEM_MINI_SSTABLE'
+    when 26 then 'MDS_MINI' when 27 then 'MDS_MINOR'
     else 'INVALID'
   end) as TABLE_TYPE,
  M.LS_ID,
@@ -61940,6 +61950,7 @@ def_table_schema(
 )
 # 28232: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 28234: DBA_OB_SPATIAL_COLUMNS
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

@@ -259,6 +259,12 @@ enum ObMVOnQueryComputationFlag
   IS_MV_ON_QUERY_COMPUTATION = 1,
 };
 
+enum ObDDLIgnoreSyncCdcFlag
+{
+  DO_SYNC_LOG_FOR_CDC = 0,
+  DONT_SYNC_LOG_FOR_CDC = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -288,7 +294,9 @@ private:
   static const int32_t TM_MV_ENABLE_QUERY_REWRITE_BITS = 1;
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_OFFSET = 28;
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
-  static const int32_t TM_RESERVED = 3;
+  static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
+  static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
+  static const int32_t TM_RESERVED = 2;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -303,6 +311,7 @@ private:
   static const uint32_t TABLE_REFERENCED_BY_MV_MASK = (1U << TM_TABLE_REFERENCED_BY_MV_BITS) - 1;
   static const uint32_t MV_ENABLE_QUERY_REWRITE_MASK = (1U << TM_MV_ENABLE_QUERY_REWRITE_BITS) - 1;
   static const uint32_t MV_ON_QUERY_COMPUTATION_MASK = (1U << TM_MV_ON_QUERY_COMPUTATION_BITS) - 1;
+  static const uint32_t DDL_IGNORE_SYNC_CDC_MASK = (1U << TM_DDL_IGNORE_SYNC_CDC_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -381,7 +390,8 @@ public:
                "mv_available_flag", mv_available_flag_,
                "table_referenced_by_mv_flag", table_referenced_by_mv_flag_,
                "mv_enable_query_rewrite_flag", mv_enable_query_rewrite_flag_,
-               "mv_on_query_computation_flag", mv_on_query_computation_flag_);
+               "mv_on_query_computation_flag", mv_on_query_computation_flag_,
+               "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_);
   union {
     int32_t mode_;
     struct {
@@ -398,6 +408,7 @@ public:
       uint32_t table_referenced_by_mv_flag_ : TM_TABLE_REFERENCED_BY_MV_BITS;
       uint32_t mv_enable_query_rewrite_flag_ : TM_MV_ENABLE_QUERY_REWRITE_BITS;
       uint32_t mv_on_query_computation_flag_ : TM_MV_ON_QUERY_COMPUTATION_BITS;
+      uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -723,6 +734,10 @@ public:
   { return IS_MV_ON_QUERY_COMPUTATION == (enum ObMVOnQueryComputationFlag)table_mode_.mv_on_query_computation_flag_; }
   inline void set_mv_on_query_computation(const ObMVOnQueryComputationFlag flag)
   { table_mode_.mv_on_query_computation_flag_ = flag; }
+  inline void set_ddl_ignore_sync_cdc_flag(const ObDDLIgnoreSyncCdcFlag flag)
+  { table_mode_.ddl_table_ignore_sync_cdc_flag_ = flag; }
+  inline bool is_ddl_table_ignored_to_sync_cdc() const
+  { return DONT_SYNC_LOG_FOR_CDC == table_mode_.ddl_table_ignore_sync_cdc_flag_; }
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }

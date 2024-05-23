@@ -67,7 +67,7 @@ public: // derived from ObIMemtableMgr
   virtual int get_active_memtable(ObTableHandleV2 &handle) const override;
   virtual int get_all_memtables(ObTableHdlArray &handle) override;
   virtual void destroy() override;
-  virtual int get_memtable_for_replay(share::SCN replay_scn,
+  virtual int get_memtable_for_replay(const share::SCN &replay_scn,
                                       ObTableHandleV2 &handle) override;
   virtual int get_boundary_memtable(ObTableHandleV2 &handle) override;
   virtual int create_memtable(const CreateMemtableArg &arg) override;

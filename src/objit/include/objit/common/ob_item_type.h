@@ -81,6 +81,7 @@ typedef enum ObItemType
   T_JSON        = 47,
   T_GEOMETRY    = 48,
   T_UDT_SQL     = 49,
+  T_COLLECTION  = 51,
   T_ROARINGBITMAP = 52,
 
   T_IEEE754_NAN = 61,
@@ -853,6 +854,7 @@ typedef enum ObItemType
   T_FUN_SYS_XML_EXISTSNODE = 1734,
   T_FUN_SYS_PRIV_ST_GEOHASH = 1735,
   T_FUN_SYS_PRIV_ST_MAKEPOINT = 1736,
+  T_FUN_SYS_ARRAY = 1737,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -911,6 +913,9 @@ typedef enum ObItemType
   T_FUN_SYS_RB_AND_NULL2EMPTY = 2043,
   T_FUN_SYS_RB_OR_NULL2EMPTY = 2044,
   T_FUN_SYS_RB_ANDNOT_NULL2EMPTY = 2045,
+  T_FUN_SYS_RB_TO_STRING = 2046,
+  T_FUN_SYS_RB_FROM_STRING = 2047,
+  T_FUN_SYS_RB_ITERATE = 2048,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id

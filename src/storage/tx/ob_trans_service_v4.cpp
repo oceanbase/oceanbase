@@ -3932,5 +3932,15 @@ int ObTransService::handle_ask_tx_state_for_4377(const ObAskTxStateFor4377Msg &m
   TRANS_LOG(INFO, "handle ask tx state for 4377", K(ret), K(msg), K(is_alive));
   return ret;
 }
+
+void ObTransService::force_release_tx_when_session_destroy(ObTxDesc &tx)
+{
+  {
+    ObSpinLockGuard guard(tx.lock_);
+    TRANS_LOG_RET(WARN, OB_SUCCESS, "txdesc will be released forcedly", K(tx));
+    tx.print_trace_();
+  }
+  ObTxDescMgr::force_release(tx);
+}
 } // transaction
 } // ocenabase

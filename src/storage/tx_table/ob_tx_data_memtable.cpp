@@ -182,15 +182,15 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
     max_tx_scn_.inc_update(tx_data->end_scn_);
     atomic_update_(tx_data);
     ATOMIC_INC(&inserted_cnt_);
-    if (OB_UNLIKELY(tx_data->undo_status_list_.undo_node_cnt_ >= 10)) {
-      if (tx_data->undo_status_list_.undo_node_cnt_ == 10 || tx_data->undo_status_list_.undo_node_cnt_ % 100 == 0) {
+    if (OB_UNLIKELY(tx_data->op_guard_.is_valid() && tx_data->op_guard_->get_undo_status_list().undo_node_cnt_ >= 10)) {
+      if (tx_data->op_guard_->get_undo_status_list().undo_node_cnt_ == 10 || tx_data->op_guard_->get_undo_status_list().undo_node_cnt_ % 100 == 0) {
         STORAGE_LOG(INFO,
                     "attention! this tx write too many rollback to savepoint log",
                     "ls_id", get_ls_id(),
                     "tx_id", tx_data->tx_id_,
                     "state", ObTxData::get_state_string(tx_data->state_),
-                    "undo_node_cnt", tx_data->undo_status_list_.undo_node_cnt_,
-                    "newest_undo_node", tx_data->undo_status_list_.head_,
+                    "undo_node_cnt", tx_data->op_guard_->get_undo_status_list().undo_node_cnt_,
+                    "newest_undo_node", tx_data->op_guard_->get_undo_status_list().head_,
                     K(tx_data->start_scn_),
                     K(tx_data->end_scn_));
       }
@@ -205,9 +205,21 @@ void ObTxDataMemtable::atomic_update_(ObTxData *tx_data)
   int64_t thread_idx = common::get_itid() & MAX_CONCURRENCY_MOD_MASK;
   min_tx_scn_[thread_idx].dec_update(tx_data->end_scn_);
   min_start_scn_[thread_idx].dec_update(tx_data->start_scn_);
-  int64_t tx_data_size = TX_DATA_SLICE_SIZE * (1LL + tx_data->undo_status_list_.undo_node_cnt_);
+  int64_t tx_data_size = 0;
+  int64_t count = 0;
+  if (tx_data->state_ == ObTxCommitData::RUNNING) {
+    tx_data_size = TX_DATA_SLICE_SIZE;
+  } else if (!tx_data->op_guard_.is_valid()) {
+    tx_data_size = TX_DATA_SLICE_SIZE;
+  } else {
+    count = tx_data->op_guard_->get_undo_status_list().undo_node_cnt_;
+    int64_t tx_op_size = tx_data->op_guard_->get_tx_op_size();
+    tx_data_size = TX_DATA_SLICE_SIZE + TX_DATA_SLICE_SIZE +
+                   count * TX_DATA_SLICE_SIZE + // undo status list
+                   tx_op_size; // tx_op
+  }
   ATOMIC_FAA(&occupied_size_[thread_idx], tx_data_size);
-  ATOMIC_FAA(&total_undo_node_cnt_[thread_idx], tx_data->undo_status_list_.undo_node_cnt_);
+  ATOMIC_FAA(&total_undo_node_cnt_[thread_idx], count);
 }
 
 int ObTxDataMemtable::get_tx_data(const ObTransID &tx_id, ObTxDataGuard &tx_data_guard)
@@ -377,7 +389,6 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
       fake_tx_data->tx_id_ = INT64_MAX;
       fake_tx_data->commit_version_.convert_for_tx(serialize_size);
       fake_tx_data->start_scn_.convert_for_tx((int64_t)buf_.get_ptr());
-      fake_tx_data->undo_status_list_.head_ = nullptr;
     }
   }
 
@@ -648,13 +659,11 @@ int ObTxDataMemtable::estimate_phy_size(const ObStoreRowkey *start_key,
   return ret;
 }
 
-int ObTxDataMemtable::get_split_ranges(const ObStoreRowkey *start_key,
-                                       const ObStoreRowkey *end_key,
+int ObTxDataMemtable::get_split_ranges(const ObStoreRange &input_range,
                                        const int64_t part_cnt,
                                        common::ObIArray<common::ObStoreRange> &range_array)
 {
-  UNUSED(start_key);
-  UNUSED(end_key);
+  UNUSED(input_range);
   int ret = OB_SUCCESS;
 
   if (!pre_process_done_) {

@@ -313,6 +313,8 @@ int ObIndexStatsEstimator::fast_gather_index_stats(ObExecContext &ctx,
             } else {
               index_stat->set_macro_block_num(block_num_stat->tab_macro_cnt_);
               index_stat->set_micro_block_num(block_num_stat->tab_micro_cnt_);
+              index_stat->set_sstable_row_count(block_num_stat->sstable_row_cnt_);
+              index_stat->set_memtable_row_count(block_num_stat->memtable_row_cnt_);
             }
             if (OB_SUCC(ret)) {
               if (OB_FAIL(index_table_stats.push_back(index_stat))) {

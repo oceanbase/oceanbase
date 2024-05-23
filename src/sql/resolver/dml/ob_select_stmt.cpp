@@ -156,7 +156,7 @@ int ObSelectStmt::check_aggr_and_winfunc(ObRawExpr &expr)
   if (expr.is_aggr_expr() &&
       !ObRawExprUtils::find_expr(agg_items_, &expr)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("aggr expr does not exist in the stmt", K(ret), K(expr));
+    LOG_WARN("aggr expr does not exist in the stmt", K(agg_items_), K(expr), K(ret));
   } else if (expr.is_win_func_expr() &&
              !ObRawExprUtils::find_expr(win_func_exprs_, &expr)) {
     ret = OB_ERR_UNEXPECTED;

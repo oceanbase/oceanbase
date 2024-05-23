@@ -376,6 +376,7 @@ constexpr int OB_ERR_TOO_MANY_PREFIX_DECLARE = -7424;
 constexpr int OB_ERR_XPATH_INVALID_NODE = -7426;
 constexpr int OB_ERR_XPATH_NO_NODE = -7427;
 constexpr int OB_ERR_DUP_DEF_NAMESPACE = -7431;
+constexpr int OB_ERR_INVALID_VECTOR_DIM = -7600;
 constexpr int OB_PACKET_CLUSTER_ID_NOT_MATCH = -8004;
 constexpr int OB_TENANT_ID_NOT_MATCH = -8005;
 constexpr int OB_URI_ERROR = -9001;

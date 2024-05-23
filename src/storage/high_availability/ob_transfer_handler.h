@@ -193,6 +193,8 @@ private:
       ObMySQLTransaction &trans,
       const SCN data_end_scn,
       const SCN transfer_scn,
+      ObIArray<ObTabletID> &tablet_list,
+      ObIArray<transaction::ObTransID> &move_tx_ids,
       int64_t &move_tx_count);
   int start_trans_(
       ObTimeoutCtx &timeout_ctx,
@@ -205,7 +207,8 @@ private:
       const share::ObTransferTaskInfo &task_info,
       common::ObMySQLTransaction &trans,
       const transaction::ObTxDataSourceType data_source_type,
-      SCN data_end_scn = SCN::min_scn());
+      SCN data_end_scn,
+      ObIArray<transaction::ObTransID> *move_tx_ids);
   int lock_transfer_task_(
       const share::ObTransferTaskInfo &task_info,
       common::ObISQLClient &trans);

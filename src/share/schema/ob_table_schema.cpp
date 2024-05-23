@@ -8690,6 +8690,10 @@ int ObTableSchema::add_column_group(const ObColumnGroupSchema &other)
   if (!other.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(other));
+  } else if (other.get_column_group_type() != ObColumnGroupType::DEFAULT_COLUMN_GROUP
+             && !ObSchemaUtils::can_add_column_group(*this)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("only default column group is allowded to add to not user/tmp table", K(ret), K(other), KPC(this));
   } else if (OB_FAIL(do_add_column_group(other))) {
     LOG_WARN("fail to do add column group", KR(ret), K(other));
   }

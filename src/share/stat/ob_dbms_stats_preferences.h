@@ -214,6 +214,19 @@ class ObEstimateBlockPrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "TRUE"; }
 };
 
+class ObBlockSamplePrefs : public ObStatPrefs
+{
+  public:
+    ObBlockSamplePrefs() : ObStatPrefs() {}
+    ObBlockSamplePrefs(ObIAllocator *alloc,
+                       ObSQLSessionInfo *session_info,
+                       const ObString &pvalue) :
+    ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "BLOCK_SAMPLE"; }
+    virtual const char* get_stat_pref_default_value() const { return "FALSE"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)
