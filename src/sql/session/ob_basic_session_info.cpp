@@ -4075,6 +4075,9 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
   // 普通租户，序列化和 hardcode 不一致的变量
   const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
   for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
+    if (SYS_VAR_OPTIMIZER_FEATURES_ENABLE == ids.at(i) && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
+      continue;
+    }
     int64_t sys_var_idx = -1;
     if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), sys_var_idx))) {
       LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(ids.at(i)), K(ret));
@@ -5271,9 +5274,8 @@ int ObBasicSessionInfo::get_auto_increment_cache_size(int64_t &auto_increment_ca
 int ObBasicSessionInfo::get_optimizer_features_enable_version(uint64_t &version) const
 {
   int ret = OB_SUCCESS;
-  // if OPTIMIZER_FEATURES_ENABLE is set as '', use LASTED_COMPAT_VERSION
-  //DEFAULT_USED_VERSION is only used on 4.2.1, use LASTED_COMPAT_VERSION if version > 4.2.1
-  version = DEFAULT_USED_VERSION;
+  // if OPTIMIZER_FEATURES_ENABLE is set as '', use COMPAT_VERSION_4_2_1 where this variable is introduced.
+  version = COMPAT_VERSION_4_2_1;
   ObString version_str;
   uint64_t tmp_version = 0;
   if (OB_FAIL(get_string_sys_var(SYS_VAR_OPTIMIZER_FEATURES_ENABLE, version_str))) {
