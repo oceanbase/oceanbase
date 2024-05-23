@@ -1229,6 +1229,7 @@ inline void ObLogger::do_log_message(const bool is_async,
   const int64_t log_size = limited_left_log_size_ + NORMAL_LOG_SIZE;
   limited_left_log_size_ = 0;
   BASIC_TIME_GUARD(tg, "ObLog");
+  int64_t start_ts = OB_TSC_TIMESTAMP.current_time();
   if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
           allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
@@ -1240,7 +1241,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     ObPLogItem *log_item = new (local_buf_) ObPLogItem();
     log_item->set_buf_size(MAX_LOG_SIZE);
     log_item->set_log_level(level);
-    log_item->set_timestamp(tg.get_start_ts());
+    log_item->set_timestamp(start_ts);
     log_item->set_tl_type(tl_type_);
     log_item->set_force_allow(is_force_allows());
     log_item->set_fd_type(fd_type);
@@ -1249,7 +1250,7 @@ inline void ObLogger::do_log_message(const bool is_async,
     int64_t buf_len = log_item->get_buf_size();
     int64_t pos = log_item->get_data_len();
     if (with_head) {
-      if (OB_FAIL(log_head(tg.get_start_ts(), mod_name, dba_event, level, file, line, function, errcode,
+      if (OB_FAIL(log_head(start_ts, mod_name, dba_event, level, file, line, function, errcode,
                            buf, buf_len, pos))) {
         LOG_STDERR("log_header error ret = %d\n", ret);
       }
@@ -1345,7 +1346,7 @@ _Pragma("GCC diagnostic pop")
     const int64_t buf_len = sizeof buf;
     int64_t pos = 0;
     int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(log_head(tg.get_start_ts(), mod_name, dba_event, OB_LOG_LEVEL_ERROR, file, line, function,
+    if (OB_TMP_FAIL(log_head(start_ts, mod_name, dba_event, OB_LOG_LEVEL_ERROR, file, line, function,
                              errcode, buf, buf_len, pos))) {
     } else if (OB_TMP_FAIL(logdata_printf(buf, buf_len, pos,
                                           "LOGGER COST TOO MUCH TIME, cost: %ld, ", cost_time))) {
