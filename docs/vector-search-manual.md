@@ -10,8 +10,13 @@ OceanBase 向量数据库能力支持将您的向量数据与其他数据一起�
 - 支持HNSW、IVF_FLAT索引
 - 支持最大 16,000 维的向量存储
 # 如何使用OceanBase的向量数据库功能
-下面介绍如何使用OceanBase的向量数据库功能，包括基本SQL语法以及目前版本的一些功能约束和注意事项。
+下面介绍如何部署并使用OceanBase的向量数据库，包括基本SQL语法以及目前版本的一些功能约束和注意事项。
 请注意，**该特性目前迭代中的功能，建议只用做个人学习或功能验证**。
+## 部署单机版OceanBase向量数据库
+拉取并启动OceanBase向量数据库单机docker镜像：
+```shell
+docker run -p 2881:2881 --name obvec -d oceanbase/oceanbase-ce:vector
+```
 ## 操作示例（省流版）
 ```sql
 # 建表语句，向量作为一个单独的列
