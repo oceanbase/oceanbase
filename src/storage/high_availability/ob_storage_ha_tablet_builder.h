@@ -86,9 +86,15 @@ public:
   int create_all_tablets_with_4_1_rpc(
       CopyTabletSimpleInfoMap &simple_info_map);
 private:
-  int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
-  int get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader);
-  int get_tablet_info_ob_reader_(ObICopyTabletInfoReader *&reader);
+  int get_tablet_info_reader_(
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      ObICopyTabletInfoReader *&reader);
+  int get_tablet_info_restore_reader_(
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      ObICopyTabletInfoReader *&reader);
+  int get_tablet_info_ob_reader_(
+      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      ObICopyTabletInfoReader *&reader);
   void free_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int create_or_update_tablet_(
       const obrpc::ObCopyTabletInfo &tablet_info,
@@ -150,6 +156,11 @@ private:
       const compaction::ObMediumCompactionInfoList &medium_info_list);
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
+  int get_minor_scn_before_4215_(
+      const common::ObTabletID &tablet_id,
+      share::SCN &start_scn,
+      share::SCN &checkpoint_scn);
+
 private:
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
