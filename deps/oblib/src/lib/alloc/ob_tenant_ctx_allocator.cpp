@@ -424,7 +424,7 @@ void ObTenantCtxAllocator::on_alloc(AObject& obj, const ObMemAttr& attr)
     obj.version_ = ObMemVersionNode::tl_node->version_;
   }
   get_mem_leak_checker().on_alloc(obj, attr);
-  SANITY_POISON(obj, obj.nobjs_ * AOBJECT_CELL_BYTES);
+  SANITY_POISON(&obj, obj.nobjs_ * AOBJECT_CELL_BYTES);
   SANITY_UNPOISON(obj.data_, obj.alloc_bytes_);
   if (OB_NOT_NULL(malloc_callback)) {
     const int64_t size = obj.alloc_bytes_;
@@ -444,7 +444,7 @@ void ObTenantCtxAllocator::on_free(AObject &obj)
   ABlock *block = obj.block();
   abort_unless(block->is_valid());
   abort_unless(block->in_use_);
-  abort_unless(NULL != block->obj_set_)
+  abort_unless(NULL != block->obj_set_);
 
   SANITY_POISON(obj.data_, obj.alloc_bytes_);
   get_mem_leak_checker().on_free(obj);
