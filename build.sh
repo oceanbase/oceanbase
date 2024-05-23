@@ -178,6 +178,11 @@ function build
         # build soft link for ccls
         ln -sf ${TOPDIR}/build_ccls/compile_commands.json ${TOPDIR}/compile_commands.json
         ;;
+      xclangd)
+        do_build "$@" -DCMAKE_BUILD_TYPE=Debug -DOB_USE_LLD=$LLD_OPTION -DOB_ENABLE_UNITY=OFF
+        # build soft link for clangd
+        ln -sf ${TOPDIR}/build_clangd/compile_commands.json ${TOPDIR}/compile_commands.json
+        ;;
       xperf)
         do_build "$@" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DENABLE_AUTO_FDO=ON -DENABLE_THIN_LTO=ON -DOB_USE_LLD=$LLD_OPTION
         ;;
