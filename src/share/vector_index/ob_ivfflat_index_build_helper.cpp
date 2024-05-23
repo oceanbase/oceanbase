@@ -851,7 +851,6 @@ int ObIvfflatIndexBuildHelper::set_center_cache(const int64_t table_id) {
   return ret;
 }
 
-// TODO(@jingshui) : need to opt! select * from data_table too many times now.
 int ObIvfflatIndexBuildHelper::build() {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(cache_)) {
@@ -997,8 +996,6 @@ int ObIvfflatIndexBuildHelper::quick_init_centers() {
   return ret;
 }
 
-// TODO(@jingshui): sample counts may be less than center counts, we can select
-// count(*) first to opt
 int ObIvfflatIndexBuildHelper::init_centers() {
   int ret = OB_SUCCESS;
   ObTypeVector vector;
@@ -1577,7 +1574,7 @@ int ObIvfflatIndexBuildHelper::ivfflat_elkan_kmeans() {
           }
         } else if (OB_FAIL(center_vectors_[next_idx].at(i)->deep_copy(
                        *center_vectors_[cur_idx_].at(
-                           i)))) { // TODO(@jingshui): use random vector?
+                           i)))) {
           LOG_WARN("fail to copy vector", K(ret));
         }
       }
