@@ -371,6 +371,13 @@ bool ObITabletMemtable::can_be_minor_merged()
   return is_in_prepare_list_of_data_checkpoint();
 }
 
+
+bool ObITabletMemtable::is_force_released() const
+{
+  return TabletMemtableFreezeState::FORCE_RELEASED == get_freeze_state();
+}
+
+
 }  // namespace storage
 
 }  // namespace oceanbase
