@@ -792,7 +792,17 @@ int ObPartTransCtx::handle_tx_2pc_prepare_redo_resp(const Ob2pcPrepareRedoRespMs
   if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(find_participant_id_(msg.sender_, participant_id))) {
-    TRANS_LOG(ERROR, "find participant failed", KR(ret), K(msg), K(*this));
+    if (0 == exec_info_.participants_.count()) {
+      // It may be possible that when the coordinator switches to the new
+      // leader, compensates the abort log while it may have already broadcasted
+      // the prepare redo requests by the old leader. And during the paxos of
+      // the abort log, it may receive the prepare redo response and has no
+      // participants list to handle the response, so we need tolerate it here.
+      ret = OB_SUCCESS;
+      TRANS_LOG(INFO, "find participant failed", KR(ret), K(msg), K(*this));
+    } else {
+      TRANS_LOG(ERROR, "find participant failed", KR(ret), K(msg), K(*this));
+    }
   } else if (OB_FAIL(handle_2pc_resp(msg_type, participant_id))) {
     TRANS_LOG(WARN, "handle 2pc response failed", KR(ret), K(msg), K(participant_id), K(*this));
   }
@@ -968,7 +978,17 @@ int ObPartTransCtx::handle_tx_2pc_abort_resp(const Ob2pcAbortRespMsg &msg)
   if (OB_FAIL(set_2pc_request_id_(msg.request_id_))) {
     TRANS_LOG(WARN, "set request id failed", KR(ret), K(msg), K(*this));
   } else if (OB_FAIL(find_participant_id_(msg.sender_, participant_id))) {
-    TRANS_LOG(ERROR, "find participant failed", KR(ret), K(msg), K(*this));
+    if (0 == exec_info_.participants_.count()) {
+      // It may be possible that when the coordinator switches to the new
+      // leader, compensates the abort log while it may have already broadcasted
+      // the abort requests by the old leader. And during the paxos of the
+      // abort log, it may receive the abort response and has no participants
+      // list to handle the response, so we need tolerate it here.
+      ret = OB_SUCCESS;
+      TRANS_LOG(INFO, "find participant failed", KR(ret), K(msg), K(*this));
+    } else {
+      TRANS_LOG(ERROR, "find participant failed", KR(ret), K(msg), K(*this));
+    }
   } else if (OB_FAIL(handle_2pc_resp(msg_type, participant_id))) {
     TRANS_LOG(WARN, "handle 2pc response failed", KR(ret), K(msg), K(participant_id), K(*this));
   }
