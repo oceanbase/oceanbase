@@ -8305,19 +8305,6 @@ int ObPartTransCtx::recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const S
       const ObTxBufferNode &node = node_wrapper.get_node();
       if (OB_FAIL(mds_array.push_back(node))) {
         TRANS_LOG(WARN, "failed to push node to array", KR(ret), KPC(this));
-      } else if (node.type_ == ObTxDataSourceType::TABLE_LOCK) {
-        // to recover table_lock
-        ObTableLockOp lock_op;
-        int64_t pos = 0;
-        const char *buf = node.data_.ptr();
-        const int64_t len = node.data_.length();
-        if (OB_FAIL(lock_op.deserialize(buf, node.get_data_size(), pos))) {
-          TRANS_LOG(WARN, "deserialize fail", KR(ret), KPC(this));
-        } else if (OB_FAIL(mt_ctx_.replay_lock(lock_op, tx_op.get_op_scn()))) {
-          TRANS_LOG(WARN, "recover lock_op failed", KR(ret), KPC(this));
-        } else {
-          TRANS_LOG(INFO, "recover lock_op from tx_op", KPC(this), K(lock_op), K(node_wrapper));
-        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
