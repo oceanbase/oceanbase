@@ -5638,7 +5638,7 @@ int ObAlterTableResolver::check_column_in_part_key(const ObTableSchema &table_sc
       if (OB_ISNULL(column_schema = cur_table_schema.get_column_schema(alter_column_name))) {
         // do nothing, bacause the column does not exist in the schema.
       } else if (column_schema->is_tbl_part_key_column()) {
-        if (!is_same) {
+        if (lib::is_oracle_mode() && !is_same) {
           ret = OB_ERR_MODIFY_PART_COLUMN_TYPE;
           SQL_RESV_LOG(WARN, "data type or len of a part column may not be changed", K(ret));
         } else if (cur_table_schema.is_global_index_table()) {
@@ -5736,8 +5736,17 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
       if (is_key_part(part_type) && part_expr->get_param_count() < 1) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret), K(*part_expr));
+      } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type) {
+        // Some partition column type altering is not allowed in MySQL, and there it is not documented. If you need to add more rules, add it here.
+        const common::ColumnType src_type = src_col_schema.get_data_type();
+        const common::ColumnType dst_type = dst_col_schema.get_data_type();
+        LOG_INFO("partition column type altering", K(src_type), K(dst_type));
+        if ((common::ob_is_string_tc(src_type) && common::ob_is_int_uint_tc(dst_type)) || (common::ob_is_date_tc(src_type) && common::ob_is_int_uint_tc(dst_type))) {
+          ret = OB_ERR_WRONG_TYPE_COLUMN_VALUE_ERROR;
+          LOG_WARN("This partition column type altering is not allowed", K(ret), K(src_type), K(dst_type));
+        }
       }
-      if (0 == part_expr->get_param_count()) {
+      if (OB_SUCC(ret) && 0 == part_expr->get_param_count()) {
         OZ (ObResolverUtils::check_column_valid_for_partition(*part_expr, part_type, table_schema));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < part_expr->get_param_count(); ++i) {
