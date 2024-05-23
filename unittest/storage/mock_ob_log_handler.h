@@ -491,6 +491,11 @@ public:
     UNUSED(addr);
     return OB_SUCCESS;
   }
+  int get_parent(common::ObAddr &parent) const
+  {
+    UNUSED(parent);
+    return OB_SUCCESS;
+  }
   int register_rebuild_cb(palf::PalfRebuildCb *rebuild_cb)
   {
     UNUSED(rebuild_cb);

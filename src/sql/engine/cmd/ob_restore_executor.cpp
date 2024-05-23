@@ -186,46 +186,42 @@ int ObPhysicalRestoreTenantExecutor::physical_restore_preview(
     ObExecContext &ctx, ObPhysicalRestoreTenantStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  ObSqlString set_backup_dest_sql;
-  ObSqlString set_scn_sql;
-  ObSqlString set_timestamp_sql;
-  sqlclient::ObISQLConnection *conn = NULL;
-  observer::ObInnerSQLConnectionPool *pool = NULL;
-  ObMySQLProxy *sql_proxy = ctx.get_sql_proxy();
   ObSQLSessionInfo *session_info = ctx.get_my_session();
   const obrpc::ObPhysicalRestoreTenantArg &restore_tenant_arg = stmt.get_rpc_arg();
-  int64_t affected_rows = 0;
   if (OB_ISNULL(session_info)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), KP(session_info));
-  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_) || OB_ISNULL(sql_proxy->get_pool())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy must not null", K(ret), KP(GCTX.sql_proxy_));
-  } else if (sqlclient::INNER_POOL != sql_proxy->get_pool()->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pool type must be inner", K(ret), "type", sql_proxy->get_pool()->get_type());
-  } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool*>(sql_proxy->get_pool()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pool must not null", K(ret));
-  } else if (OB_FAIL(set_backup_dest_sql.assign_fmt("set @%s = '%.*s'",
-      OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, restore_tenant_arg.uri_.length(), restore_tenant_arg.uri_.ptr()))) {
-    LOG_WARN("failed to set backup dest", KR(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(set_scn_sql.assign_fmt("set @%s = '%ld'",
-      OB_RESTORE_PREVIEW_SCN_SESSION_STR, restore_tenant_arg.with_restore_scn_ ? restore_tenant_arg.restore_scn_.get_val_for_inner_table_field() : 0))) {
-    LOG_WARN("failed to set timestamp", KR(ret), K(set_scn_sql));
-  } else if (OB_FAIL(set_scn_sql.assign_fmt("set @%s = '%.*s'",
-      OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_tenant_arg.restore_timestamp_.length(), restore_tenant_arg.uri_.ptr()))) {
-    LOG_WARN("failed to set timestamp", KR(ret), K(set_scn_sql));
-  } else if (OB_FAIL(pool->acquire(session_info, conn))) {
-    LOG_WARN("failed to get conn", K(ret));
-  } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
-      set_backup_dest_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set backup dest", K(ret), K(set_backup_dest_sql));
-  } else if (OB_FAIL(conn->execute_write(session_info->get_effective_tenant_id(),
-      set_scn_sql.ptr(), affected_rows))) {
-    LOG_WARN("failed to set restore timestamp", K(ret), K(set_scn_sql));
+  } else {
+    ObSessionVariable backup_dest;
+    backup_dest.value_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+    backup_dest.value_.set_varchar(restore_tenant_arg.uri_.ptr(), restore_tenant_arg.uri_.length());
+    backup_dest.meta_.set_meta(backup_dest.value_.meta_);
+    if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, backup_dest))) {
+      LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR, "value", backup_dest);
+    } else {
+      ObSessionVariable restore_scn;
+      restore_scn.value_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      char scn_str[OB_MAX_INTEGER_DISPLAY_WIDTH + 1] = { 0 };
+      int64_t pos = 0;
+      if (OB_FAIL(databuff_printf(scn_str, OB_MAX_INTEGER_DISPLAY_WIDTH + 1, pos, "%lu", restore_tenant_arg.restore_scn_.get_val_for_inner_table_field()))) {
+        LOG_WARN("fail to databuff prinf", K(ret), K(restore_tenant_arg));
+      } else {
+        restore_scn.value_.set_varchar(restore_tenant_arg.with_restore_scn_ ? scn_str : "0");
+        restore_scn.meta_.set_meta(restore_scn.value_.meta_);
+        if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_PREVIEW_SCN_SESSION_STR, restore_scn))) {
+          LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_SCN_SESSION_STR, "value", restore_scn);
+        } else {
+          ObSessionVariable restore_timestamp;
+          restore_timestamp.value_.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+          restore_timestamp.value_.set_varchar(restore_tenant_arg.restore_timestamp_.ptr(), restore_tenant_arg.restore_timestamp_.length());
+          restore_timestamp.meta_.set_meta(restore_timestamp.value_.meta_);
+          if (OB_FAIL(session_info->replace_user_variable(OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, restore_timestamp))) {
+            LOG_WARN("fail to set session variable", "name", OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR, "value", restore_timestamp);
+          }
+        }
+      }
+    }
   }
-
   return ret;
 }
 

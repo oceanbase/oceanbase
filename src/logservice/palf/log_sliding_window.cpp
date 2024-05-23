@@ -885,7 +885,7 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
   const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
-  if (OB_FAIL(mm_->get_children_list(children_list))) {
+  if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
       && OB_FAIL(log_engine_->submit_push_log_req(children_list, PUSH_LOG, curr_proposal_id,

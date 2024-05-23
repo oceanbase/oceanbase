@@ -66,14 +66,21 @@ public:
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/single_piece_info.obarc
   static int get_single_piece_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
-
+  // oss://[user_specified_path]/single_piece_info.obarc
+  static int get_single_piece_file_info_path(const ObBackupDest &dest, ObBackupPath &path);
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint
   static int get_piece_checkpoint_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
 
+  // oss://archive/checkpoint, or oss://[user_specified_path]/checkpoint
+  static int get_piece_checkpoint_dir_path(const ObBackupDest &dest, ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/checkpoint/checkpoint_info.[file_id].obarc
   static int get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, const int64_t file_id, ObBackupPath &path);
+
+  // oss://[user_specified_path]/checkpoint/checkpoint_info.[file_id].obarc
+  static int get_piece_checkpoint_file_path(const ObBackupDest &dest, const int64_t file_id, ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/piece_d[dest_id]r[round_id]p[piece_id]_20220601T120000_20220602T120000.obarc
   static int get_piece_inner_placeholder_file_path(const ObBackupDest &dest, const int64_t dest_id, 
@@ -88,6 +95,9 @@ public:
   static int get_ls_file_info_path(const ObBackupDest &dest, const int64_t dest_id,
       const int64_t round_id, const int64_t piece_id, const ObLSID &ls_id, ObBackupPath &path);
 
+  // oss://[user_specified_path]/logstream_[ls_id]/file_info.obarc
+  static int get_ls_file_info_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path);
+
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/file_info.obarc
   static int get_piece_info_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
@@ -95,6 +105,9 @@ public:
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/tenant_archive_piece_infos.obarc
   static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, const int64_t dest_id, 
       const int64_t round_id, const int64_t piece_id, ObBackupPath &path);
+
+  // oss://archive/tenant_archive_piece_infos.obarc, or oss://[user_specified_path]/tenant_archive_piece_infos.obarc
+  static int get_tenant_archive_piece_infos_file_path(const ObBackupDest &dest, ObBackupPath &path);
 
   // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]/logstream_[%ld]/log/[file_id].obarc
   static int get_ls_archive_file_path(const ObBackupDest &dest, const int64_t dest_id, 

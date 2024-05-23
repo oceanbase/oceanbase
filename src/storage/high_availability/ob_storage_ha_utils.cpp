@@ -42,7 +42,7 @@ namespace oceanbase
 {
 namespace storage
 {
-
+ERRSIM_POINT_DEF(EN_CHECK_LOG_NEED_REBUILD);
 int ObStorageHAUtils::get_ls_leader(const uint64_t tenant_id, const share::ObLSID &ls_id, common::ObAddr &leader)
 {
   int ret = OB_SUCCESS;
@@ -557,6 +557,46 @@ int64_t ObStorageHAUtils::get_rpc_timeout()
   return rpc_timeout;
 }
 
+int ObStorageHAUtils::check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild)
+{
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  common::ObAddr parent_addr;
+  ObLSHandle ls_handle;
+  bool is_log_sync = false;
+
+  if (OB_INVALID_TENANT_ID == tenant_id || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("argument is not valid", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ls_id, ls_handle))) {
+    LOG_WARN("failed to get ls", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(tenant_id), K(ls_id));
+  } else if (OB_ISNULL(ls->get_log_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log handler should not be NULL", K(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(ls->get_log_handler()->is_in_sync(is_log_sync, need_rebuild))) {
+    LOG_WARN("failed to get is_in_sync", K(ret), K(tenant_id), K(ls_id));
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = EN_CHECK_LOG_NEED_REBUILD ? : OB_SUCCESS;
+    if (OB_TMP_FAIL(tmp_ret)) {
+      need_rebuild = true;
+      SERVER_EVENT_ADD("storage_ha", "check_log_need_rebuild",
+                      "tenant_id", tenant_id,
+                      "ls_id", ls_id.id(),
+                      "result", tmp_ret);
+      DEBUG_SYNC(AFTER_CHECK_LOG_NEED_REBUILD);
+    }
+  }
+#endif
+  return ret;
+}
+
 void ObTransferUtils::set_transfer_module()
 {
 #ifdef ERRSIM
@@ -577,5 +617,76 @@ void ObTransferUtils::clear_transfer_module()
 #endif
 }
 
+void ObTransferUtils::transfer_tablet_restore_stat(
+    const uint64_t tenant_id,
+    const share::ObLSID &src_ls_id,
+    const share::ObLSID &dest_ls_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle src_ls_handle;
+  ObLSHandle dest_ls_handle;
+  ObLS *src_ls = nullptr;
+  ObLS *dest_ls = nullptr;
+  ObRestorePersistHelper helper;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ObArray<ObLSRestoreProgressPersistInfo> ls_restore_progress_array;
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id, dest_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(dest_ls_id));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), K(dest_ls_handle));
+  } else if (OB_FAIL(ls_service->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(src_ls_id));
+  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(src_ls_handle));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(helper.init(tenant_id))) {
+    LOG_WARN("fail to init restore table helper", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else {
+    ObLSRestoreJobPersistKey src_ls_key;
+    ObLSRestoreJobPersistKey dest_ls_key;
+    if (OB_FAIL(helper.get_all_ls_restore_progress(trans, ls_restore_progress_array))) {
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else if (ls_restore_progress_array.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else {
+      dest_ls_key.tenant_id_ = tenant_id;
+      dest_ls_key.job_id_ = ls_restore_progress_array.at(0).key_.job_id_;
+      dest_ls_key.ls_id_ = dest_ls_id;
+      dest_ls_key.addr_ = GCTX.self_addr();
+
+      src_ls_key = dest_ls_key;
+      src_ls_key.ls_id_ = src_ls_id;
+      if (OB_FAIL(helper.transfer_tablet(trans, src_ls_key, dest_ls_key))) {
+        LOG_WARN("fail to transfer tablet restore stat", K(ret), K(src_ls_key), K(dest_ls_key));
+      }
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+
+    if (FAILEDx(dest_ls->get_ls_restore_handler()->restore_stat().inc_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(dest_ls_key));
+    } else if (OB_FAIL(src_ls->get_ls_restore_handler()->restore_stat().dec_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(src_ls_key));
+    }
+  }
+}
 } // end namespace storage
 } // end namespace oceanbase

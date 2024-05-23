@@ -100,6 +100,7 @@ const int64_t OB_MAX_RESTORE_TYPE_LEN = 8; // LOCATION/SERVICE/RAWPATH
 const int64_t OB_MAX_BACKUP_SET_NUM = 1000000;
 
 const int64_t OB_MAX_BACKUP_PIECE_NUM = 1000000;
+const int64_t MIN_LAG_TARGET_FOR_S3 = 60 * 1000 * 1000UL/*60s*/;
 
 static constexpr const int64_t MAX_FAKE_PROVIDE_ITEM_COUNT = 128;
 static constexpr const int64_t DEFAULT_FAKE_BATCH_COUNT = 32;
@@ -349,7 +350,7 @@ const char *const OB_BACKUP_DECRYPTION_PASSWD_ARRAY_SESSION_STR = "__ob_backup_d
 const char *const OB_RESTORE_SOURCE_NAME_SESSION_STR = "__ob_restore_source_name__";
 const char *const OB_RESTORE_PREVIEW_TENANT_ID_SESSION_STR = "__ob_restore_preview_tenant_id__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_DEST_SESSION_STR = "__ob_restore_preview_backup_dest__";
-const char *const OB_RESTORE_PREVIEW_SCN_SESSION_STR = "__ob_restore_preview_timestamp__";
+const char *const OB_RESTORE_PREVIEW_SCN_SESSION_STR = "__ob_restore_preview_scn__";
 const char *const OB_RESTORE_PREVIEW_TIMESTAMP_SESSION_STR = "__ob_restore_preview_timestamp__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_NAME_SESSION_STR = "__ob_restore_preview_backup_cluster_name__";
 const char *const OB_RESTORE_PREVIEW_BACKUP_CLUSTER_ID_SESSION_STR = "__ob_restore_preview_backup_cluster_id__";
@@ -896,7 +897,7 @@ public:
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   virtual int get_access_key_(char *key_buf, const int64_t key_buf_len) const override;
-  virtual int parse_storage_info_(const char *storage_info, bool &has_appid) override;
+  virtual int parse_storage_info_(const char *storage_info, bool &has_needed_extension) override;
   int encrypt_access_key_(char *encrypt_key, const int64_t length) const;
   int decrypt_access_key_(const char *buf);
 #endif
@@ -922,6 +923,7 @@ public:
   bool is_valid() const;
   bool is_root_path_equal(const ObBackupDest &backup_dest) const;
   int is_backup_path_equal(const ObBackupDest &backup_dest, bool &is_equal) const;
+  bool is_storage_type_s3(){ return OB_ISNULL(storage_info_) ? false : ObStorageType::OB_STORAGE_S3 == storage_info_->get_type(); }
   int get_backup_dest_str(char *buf, const int64_t buf_size) const;
   int get_backup_dest_str_with_primary_attr(char *buf, const int64_t buf_size) const;
   int get_backup_path_str(char *buf, const int64_t buf_size) const;

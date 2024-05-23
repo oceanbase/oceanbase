@@ -21,7 +21,7 @@ namespace oceanbase
 {
 namespace common
 {
-
+const char *get_storage_access_type_str(const ObStorageAccessType &type);
 /*
 there are three write mode
 ------use write interface----
@@ -57,9 +57,15 @@ public:
   //file/dir interfaces
   virtual int open(const char *pathname, const int flags, const mode_t mode, 
                    ObIOFd &fd, ObIODOpts *opts= NULL) override;
+  virtual int complete(const ObIOFd &fd) override;
+  virtual int abort(const ObIOFd &fd) override;
   virtual int close(const ObIOFd &fd) override;
   virtual int mkdir(const char *pathname, mode_t mode) override;
   virtual int rmdir(const char *pathname) override;
+  // When attempting to delete a non-existent file, NFS will return an OB_BACKUP_FILE_NOT_EXIST error.
+  // OSS/COS/S3/OBS will not report any error, while GCS will return a 'file not found' error.
+  // Since GCS is accessed using the S3 SDK, to maintain consistency across different object storage services
+  // that are accessed via the S3 SDK, no error code is returned when attempting to delete a non-existent object.
   virtual int unlink(const char *pathname) override;
   virtual int exist(const char *pathname, bool &is_exist) override;
   //sync io interfaces
@@ -73,15 +79,31 @@ public:
   //add new
   virtual int get_config(ObIODOpts &opts) override;
 
+  int del_unmerged_parts(const char *pathname);
+  int seal_for_adaptive(const ObIOFd &fd);
+  int adaptive_exist(const char *pathname, bool &is_exist);
+  int adaptive_stat(const char *pathname, ObIODFileStat &statbuf);
+  int adaptive_unlink(const char *pathname);
+  int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op);
+
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 
 
 private:
   int get_access_type(ObIODOpts *opts, ObStorageAccessType& access_type);
   int open_for_reader(const char *pathname, void*& ctx);
+  int open_for_adaptive_reader_(const char *pathname, void *&ctx);
   int open_for_overwriter(const char *pathname, void*& ctx);
   int open_for_appender(const char *pathname, ObIODOpts *opts, void*& ctx);
+  int open_for_multipart_writer_(const char *pathname, void *&ctx);
   int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
+
+  int inner_exist_(const char *pathname, bool &is_exist, const bool is_adaptive = false);
+  int inner_stat_(const char *pathname, ObIODFileStat &statbuf, const bool is_adaptive = false);
+  int inner_unlink_(const char *pathname, const bool is_adaptive = false);
+  int inner_scan_dir_(const char *dir_name,
+      ObBaseDirEntryOperator &op, const bool is_adaptive = false);
+
 private:
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
@@ -89,8 +111,10 @@ private:
   ObStorageUtil            util_;
   /*obj ctx pool: use to create fd ctx(reader/writer)*/
   common::ObPooledAllocator<ObStorageReader, ObMalloc, ObSpinLock> reader_ctx_pool_;
+  common::ObPooledAllocator<ObStorageAdaptiveReader, ObMalloc, ObSpinLock> adaptive_reader_ctx_pool_;
   common::ObPooledAllocator<ObStorageAppender, ObMalloc, ObSpinLock> appender_ctx_pool_;
   common::ObPooledAllocator<ObStorageWriter, ObMalloc, ObSpinLock> overwriter_ctx_pool_;
+  common::ObPooledAllocator<ObStorageMultiPartWriter, ObMalloc, ObSpinLock> multipart_writer_ctx_pool_;
   common::ObObjectStorageInfo storage_info_;
   bool is_started_;
   char storage_info_str_[OB_MAX_URI_LENGTH];

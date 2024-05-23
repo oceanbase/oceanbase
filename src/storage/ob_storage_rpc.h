@@ -265,6 +265,7 @@ public:
   virtual ~ObFetchLSMetaInfoResp() {}
   bool is_valid() const;
   void reset();
+  bool is_valid_for_4_1_0_0() const;
 
   TO_STRING_KV(K_(ls_meta_package), K_(has_transfer_table), K_(version));
   storage::ObLSMetaPackage ls_meta_package_;

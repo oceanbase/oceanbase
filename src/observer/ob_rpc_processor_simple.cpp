@@ -157,7 +157,7 @@ int ObRpcLSMigrateReplicaP::process()
       COMMON_LOG(WARN, "can not migrate ls which local ls is exist", K(ret), K(arg_), K(is_exist));
     } else {
       migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg_.data_source_;
+      migration_op_arg.data_src_ = arg_.force_data_source_;
       migration_op_arg.dst_ = arg_.dst_;
       migration_op_arg.ls_id_ = arg_.ls_id_;
       //TODO(muwei.ym) need check priority in 4.2 RC3
@@ -213,7 +213,7 @@ int ObRpcLSAddReplicaP::process()
       //TODO(muwei.ym) need check priority in 4.2 RC3
       migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
       migration_op_arg.paxos_replica_number_ = arg_.new_paxos_replica_number_;
-      migration_op_arg.src_ = arg_.data_source_;
+      migration_op_arg.src_ = arg_.dst_;
       migration_op_arg.type_ = ObMigrationOpType::ADD_LS_OP;
 
       if (OB_FAIL(ls_service->create_ls_for_ha(arg_.task_id_, migration_op_arg))) {

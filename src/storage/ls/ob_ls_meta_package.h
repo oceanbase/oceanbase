@@ -34,6 +34,7 @@ public:
   ObLSMetaPackage &operator=(const ObLSMetaPackage &other);
   void reset();
   bool is_valid() const;
+  bool is_valid_for_4_1_0_0() const;
 
   TO_STRING_KV(K_(ls_meta), K_(palf_meta), K_(dup_ls_meta));
 public:

@@ -76,5 +76,11 @@ bool ObLSMetaPackage::is_valid() const
           dup_ls_meta_.is_valid());
 }
 
+bool ObLSMetaPackage::is_valid_for_4_1_0_0() const
+{
+  return (ls_meta_.is_valid() &&
+          palf_meta_.is_valid());
+}
+
 }
 }

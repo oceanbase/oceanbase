@@ -210,6 +210,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restore_start_ts);
+    ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restoring_start_ts);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, comment);
 
     // restore_scn
@@ -473,6 +474,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(initiator_tenant_id, job);
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
+    RETRIEVE_INT_VALUE(restoring_start_ts, job);
     if (OB_SUCC(ret)) {
       if (name == "restore_scn") {
         uint64_t current_value = share::OB_INVALID_SCN_VAL;

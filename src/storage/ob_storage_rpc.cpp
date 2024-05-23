@@ -485,6 +485,12 @@ bool ObFetchLSMetaInfoResp::is_valid() const
       && version_ != OB_INVALID_ID;
 }
 
+bool ObFetchLSMetaInfoResp::is_valid_for_4_1_0_0() const
+{
+  return ls_meta_package_.is_valid_for_4_1_0_0()
+      && version_ != OB_INVALID_ID;
+}
+
 OB_SERIALIZE_MEMBER(ObFetchLSMetaInfoResp, ls_meta_package_, version_, has_transfer_table_);
 
 ObFetchLSMemberListArg::ObFetchLSMemberListArg()

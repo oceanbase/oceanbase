@@ -21,12 +21,16 @@
 #include "lib/utility/ob_print_utils.h"
 #include "logservice/palf/lsn.h"              // LSN
 #include "share/ob_define.h"
+#include "share/backup/ob_backup_struct.h"     // ObBackupPathString
 namespace oceanbase
 {
 namespace logservice
 {
 const int64_t MAX_FETCH_LOG_BUF_LEN = 4 * 1024 * 1024L;
 const int64_t MAX_LS_FETCH_LOG_TASK_CONCURRENCY = 4;
+
+typedef std::pair<share::ObBackupPathString, share::ObBackupPathString> DirInfo;
+typedef common::ObSEArray<std::pair<share::ObBackupPathString, share::ObBackupPathString>, 1> DirArray;
 
 struct ObLogRestoreErrorContext
 {

@@ -160,6 +160,7 @@ public:
   Property_declare_ObString(comment)
 
   Property_declare_int(int64_t, restore_start_ts)
+  Property_declare_int(int64_t, restoring_start_ts)
   Property_declare_int(share::SCN, restore_scn)
   Property_declare_int(share::SCN, consistent_scn)
   Property_declare_int(uint64_t, post_data_version)

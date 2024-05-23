@@ -16,13 +16,15 @@
 #include "share/ob_rpc_struct.h"
 #include "share/restore/ob_physical_restore_table_operator.h"//PhysicalRestoreStatus
 #include "share/backup/ob_archive_struct.h"
-
+#include "share/backup/ob_archive_store.h" //ObSinglePieceDesc
+#include "storage/backup/ob_backup_data_store.h" //ObBackupSetFilter::ObBackupSetMap
 namespace oceanbase
 {
 namespace share
 {
 struct ObHisRestoreJobPersistInfo;
 struct ObPhysicalRestoreJob;
+struct ObExternPieceWholeInfo;
 }
 namespace palf
 {
@@ -59,6 +61,14 @@ public:
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
              ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
+  static int get_restore_source_from_multi_path(
+             const bool restore_using_compl_log,
+             const ObIArray<ObString>& multi_path_array,
+             const common::ObString &passwd_array,
+             const share::SCN &restore_scn,
+             ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+             ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
+             ObIArray<share::ObBackupPathString> &log_path_list);
   static int insert_user_tenant_restore_job(
              common::ObISQLClient &sql_client,
              const ObString &tenant_name,
@@ -74,7 +84,7 @@ public:
   static int check_physical_restore_finish(common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed);
   static int get_restore_job_comment(common::ObISQLClient &proxy, const int64_t job_id, char *buf, const int64_t buf_size);
   static int get_restore_tenant_cpu_count(common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count);
-  static int fill_restore_scn_(
+  static int fill_restore_scn(
       const share::SCN &src_scn,
       const ObString &timestamp,
       const bool with_restore_scn,
@@ -82,9 +92,38 @@ public:
       const common::ObString &passwd,
       const bool restore_using_compl_log,
       share::SCN &restore_scn);
-  static int check_restore_using_complement_log_(
+  static int fill_multi_path_restore_scn_(
+    const obrpc::ObPhysicalRestoreTenantArg &arg,
+    const bool &restore_using_compl_log,
+    const ObIArray<ObString> &multi_path_array,
+    const ObIArray<share::ObBackupSetFileDesc> &backup_set_array,
+    const ObIArray<share::ObSinglePieceDesc> &backup_piece_array,
+    share::SCN &restore_scn);
+
+static int fill_multi_path_restore_scn_with_compl_log_(
+      const ObIArray<ObBackupSetFileDesc> &backup_set_array,
+      const common::ObString &passwd,
+      share::SCN &restore_scn);
+
+static int fill_multi_path_restore_scn_without_compl_log_(
+      const ObIArray<share::ObSinglePieceDesc> &backup_piece_array,
+      share::SCN &restore_scn);
+
+  static int check_restore_using_complement_log(
              const ObIArray<ObString> &tenant_path_array,
              bool &only_contain_backup_set);
+
+  // check if using complement log, also sorts multi_path_array by backup_set_id
+  static int get_restore_scn_from_multi_path_(
+            const obrpc::ObPhysicalRestoreTenantArg &arg,
+            ObIArray<ObString> &multi_path_array,
+             bool &use_complement_log,
+             share::SCN &restore_scn,
+             ObArray<share::ObSinglePieceDesc> &backup_piece_array);
+  static int sort_backup_piece_array_(ObArray<share::ObSinglePieceDesc> &backup_piece_array);
+  static int check_multi_path_using_complement_log_(
+             ObIArray<ObString> &multi_path_array,
+             bool &use_complement_log);
 private:
   static int fill_backup_info_(
              const obrpc::ObPhysicalRestoreTenantArg &arg,
@@ -101,12 +140,53 @@ private:
              const share::SCN &restore_scn,
              share::SCN &restore_start_scn,
              ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list);
+  static int get_restore_backup_set_array_from_multi_path_(
+             const ObIArray<ObString> &multi_path_array,
+             const common::ObString &passwd_array,
+             const share::SCN &restore_scn,
+             share::SCN &restore_start_scn,
+             ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+             ObTimeZoneInfoWrap &time_zone_wrap);
+  static int sort_multi_paths_by_backup_set_id_(
+              const ObArray<std::pair<ObString, ObBackupSetFileDesc>> &path_set_pairs,
+              ObIArray<ObString> &multi_path_array);
+  static int get_backup_set_info_from_multi_path_(const ObString &multi_path, ObExternBackupSetInfoDesc &backup_set_info);
+  static int fill_backup_set_map_(
+             const share::ObBackupSetFileDesc &backup_set_file,
+             ObBackupSetFilter::BackupSetMap &backup_set_map,
+             share::SCN &restore_start_scn);
+  static int get_restore_backup_set_array_from_backup_set_map_(
+             const common::hash::ObHashMap<int64_t, ObString> &backup_set_path_map,
+             ObBackupSetFilter::BackupSetMap &backup_set_map,
+             ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list);
   static int get_restore_log_piece_array_(
              const ObIArray<ObString> &tenant_path_array,
              const share::SCN &restore_start_scn,
              const share::SCN &restore_end_scn,
              ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
              ObIArray<share::ObBackupPathString> &log_path_list);
+  static int get_restore_log_piece_array_from_multi_path_(
+             const ObIArray<ObString> &multi_path_array,
+             const SCN &restore_start_scn,
+             const SCN &restore_end_scn,
+             const ObTimeZoneInfoWrap &time_zone_wrap,
+             ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
+  static int get_all_piece_keys_(
+             const ObIArray<ObString> &multi_path_array,
+             ObArray<ObPieceKey> &piece_keys,
+             common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map);
+  static int get_latest_non_empty_piece_(
+             const ObArray<ObPieceKey> &piece_keys,
+             const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
+             ObExternPieceWholeInfo &piece_whole_info,
+             bool &is_empty_piece);
+  static int get_piece_paths_in_range_from_multi_path_(
+             const ObArray<ObTenantArchivePieceAttr> &candidate_pieces,
+             const common::hash::ObHashMap<ObPieceKey, ObString> &multi_path_map,
+             const SCN &restore_start_scn,
+             const SCN &restore_end_scn,
+             const ObTimeZoneInfoWrap &time_zone_wrap,
+             ObIArray<share::ObRestoreLogPieceBriefInfo> &pieces);
   static int get_restore_log_array_for_complement_log_(
              const ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
              const share::SCN &restore_start_scn,
@@ -129,12 +209,20 @@ private:
              const ObIArray<share::ObRestoreLogPieceBriefInfo> &backup_piece_list,
             const ObIArray<share::ObBackupPathString> &log_path_list,
              share::ObPhysicalRestoreJob &job);
+  static int do_fill_backup_path_with_full_pieces_(
+             const ObIArray<share::ObRestoreBackupSetBriefInfo> &backup_set_list,
+            const ObIArray<share::ObSinglePieceDesc> &backup_piece_array,
+            const ObIArray<share::ObBackupPathString> &log_path_list,
+             share::ObPhysicalRestoreJob &job);
   static int do_fill_backup_info_(
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
   static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
   static int get_backup_sys_time_zone_(
       const ObIArray<ObString> &tenant_path_array,
+      common::ObTimeZoneInfoWrap &time_zone_wrap);
+  static int get_multi_path_backup_sys_time_zone_(
+      const ObIArray<ObString> &multi_path_array,
       common::ObTimeZoneInfoWrap &time_zone_wrap);
   static int convert_restore_timestamp_to_scn_(
       const ObString &timestamp,

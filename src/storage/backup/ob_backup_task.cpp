@@ -5369,7 +5369,7 @@ int ObLSBackupComplementLogTask::inner_get_piece_file_list_(const share::ObLSID 
   const share::SCN &start_scn = piece_attr.start_scn_;
   if (OB_FAIL(get_src_backup_piece_dir_(ls_id, piece_attr, src_piece_dir_path))) {
     LOG_WARN("failed to get src backup piece dir", K(ret), K(round_id), K(piece_id), K(ls_id), K(piece_attr));
-  } else if (OB_FAIL(util.list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
+  } else if (OB_FAIL(util.adaptively_list_files(src_piece_dir_path.get_obstr(), archive_dest_.get_storage_info(), op))) {
     LOG_WARN("failed to list files", K(ret), K(src_piece_dir_path));
   } else if (OB_FAIL(op.get_file_id_list(file_id_list))) {
     LOG_WARN("failed to get files", K(ret));
@@ -5595,41 +5595,58 @@ int ObLSBackupComplementLogTask::inner_backup_complement_log_(
 int ObLSBackupComplementLogTask::transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int64_t dst_len = 0;
   int64_t transfer_len = 0;
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(inner_transfer_clog_file_(src_path, dst_path, transfer_len))) {
-      LOG_WARN("failed to inner transfer clog file", K(ret), K(src_path), K(dst_path));
+  ObIOFd fd;
+  ObBackupIoAdapter util;
+  ObIODevice *device_handle = NULL;
+  if (OB_FAIL(util.open_with_access_type(
+          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_MULTIPART_WRITER))) {
+    LOG_WARN("failed to open with access type", K(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(inner_transfer_clog_file_(src_path, dst_path, device_handle, fd, dst_len, transfer_len))) {
+        LOG_WARN("failed to inner transfer clog file", K(ret), K(src_path), K(dst_path));
+      } else {
+        dst_len += transfer_len;
+      }
+      if (0 == transfer_len) { //at this point, last part is still held in memory
+        LOG_INFO("transfer ended", K(ret), K(src_path), K(dst_path));
+        break;
+      }
     }
-    if (0 == transfer_len) {
-      LOG_INFO("transfer ended", K(ret), K(src_path), K(dst_path));
-      break;
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(device_handle->complete(fd))) {
+        LOG_WARN("fail to complete multipart upload", K(ret), K(device_handle), K(fd));
+      }
+    } else {
+      if (OB_NOT_NULL(device_handle) && OB_TMP_FAIL(device_handle->abort(fd))) {
+        ret = COVER_SUCC(tmp_ret);
+        LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
+      }
+    }
+    if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
+      LOG_WARN("fail to close file", K(ret), K_(backup_dest), K(dst_path));
+      ret = OB_SUCCESS == ret ? tmp_ret : ret;
     }
   }
   return ret;
 }
 
-int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
-    const ObBackupPath &src_path, const ObBackupPath &dst_path, int64_t &transfer_len)
+int ObLSBackupComplementLogTask::inner_transfer_clog_file_(const ObBackupPath &src_path, const ObBackupPath &dst_path,
+    ObIODevice *&device_handle, ObIOFd &fd, const int64_t dst_len, int64_t &transfer_len)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   transfer_len = 0;
-  ObIOFd fd;
   ObBackupIoAdapter util;
-  ObIODevice *device_handle = NULL;
   int64_t write_size = -1;
   ObArenaAllocator allocator;
   int64_t src_len = 0;
-  int64_t dst_len = 0;
   char *buf = NULL;
   int64_t read_len = 0;
-  if (OB_FAIL(util.open_with_access_type(
-          device_handle, fd, backup_dest_.get_storage_info(), dst_path.get_obstr(), OB_STORAGE_ACCESS_RANDOMWRITER))) {
-    LOG_WARN("failed to open with access type", K(ret));
-  } else if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
+  if (OB_FAIL(get_file_length_(src_path.get_obstr(), archive_dest_.get_storage_info(), src_len))) {
     LOG_WARN("failed to get file length", K(ret), K(src_path));
-  } else if (OB_FAIL(get_file_length_(dst_path.get_obstr(), backup_dest_.get_storage_info(), dst_len))) {
-    LOG_WARN("failed to get file length", K(ret), K(dst_path));
   } else if (dst_len == src_len) {
     transfer_len = 0;
   } else if (dst_len > src_len) {
@@ -5640,17 +5657,13 @@ int ObLSBackupComplementLogTask::inner_transfer_clog_file_(
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(transfer_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(transfer_len));
-  } else if (OB_FAIL(util.read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
+  } else if (OB_FAIL(util.adaptively_read_part_file(src_path.get_obstr(), archive_dest_.get_storage_info(), buf, transfer_len, dst_len, read_len))) {
     LOG_WARN("failed to read part file", K(ret), K(src_path));
   } else if (read_len != transfer_len) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("read len not expected", K(ret), K(read_len), K(transfer_len));
   } else if (OB_FAIL(device_handle->pwrite(fd, dst_len, transfer_len, buf, write_size))) {
-    LOG_WARN("failed to write appender file", K(ret));
-  }
-  if (OB_SUCCESS != (tmp_ret = util.close_device_and_fd(device_handle, fd))) {
-    LOG_WARN("failed to close storage appender", K(ret), KR(tmp_ret));
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
+    LOG_WARN("failed to write multipart upload file", K(ret));
   }
   return ret;
 }
@@ -5674,7 +5687,7 @@ int ObLSBackupComplementLogTask::get_file_length_(
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter util;
-  if (OB_FAIL(util.get_file_length(file_path, storage_info, length))) {
+  if (OB_FAIL(util.adaptively_get_file_length(file_path, storage_info, length))) {
     if (OB_BACKUP_FILE_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
       length = 0;

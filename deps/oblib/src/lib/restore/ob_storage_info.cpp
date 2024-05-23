@@ -21,9 +21,22 @@ namespace oceanbase
 
 namespace common
 {
+const char *OB_STORAGE_CHECKSUM_TYPE_STR[] = {CHECKSUM_TYPE_NO_CHECKSUM, CHECKSUM_TYPE_MD5, CHECKSUM_TYPE_CRC32};
+
+const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
+{
+  const char *str = "UNKNOWN";
+  STATIC_ASSERT(static_cast<int64_t>(OB_STORAGE_CHECKSUM_MAX_TYPE) == ARRAYSIZEOF(OB_STORAGE_CHECKSUM_TYPE_STR), "ObStorageChecksumType count mismatch");
+  if (type >= OB_NO_CHECKSUM_ALGO && type < OB_STORAGE_CHECKSUM_MAX_TYPE) {
+    str = OB_STORAGE_CHECKSUM_TYPE_STR[type];
+  }
+  return str;
+}
+
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE)
+  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+    checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
@@ -39,6 +52,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 void ObObjectStorageInfo::reset()
 {
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
+  checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   endpoint_[0] = '\0';
   access_id_[0] = '\0';
   access_key_[0] = '\0';
@@ -54,6 +68,7 @@ int64_t ObObjectStorageInfo::hash() const
 {
   int64_t hash_value = 0;
   hash_value = murmurhash(&device_type_, static_cast<int32_t>(sizeof(device_type_)), hash_value);
+  hash_value = murmurhash(&checksum_type_, static_cast<int32_t>(sizeof(checksum_type_)), hash_value);
   hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(access_key_, static_cast<int32_t>(strlen(access_key_)), hash_value);
@@ -64,6 +79,7 @@ int64_t ObObjectStorageInfo::hash() const
 bool ObObjectStorageInfo::operator ==(const ObObjectStorageInfo &storage_info) const
 {
   return device_type_ == storage_info.device_type_
+      && checksum_type_ == storage_info.checksum_type_
       && (0 == STRCMP(endpoint_, storage_info.endpoint_))
       && (0 == STRCMP(access_id_, storage_info.access_id_))
       && (0 == STRCMP(access_key_, storage_info.access_key_))
@@ -85,32 +101,43 @@ ObStorageType ObObjectStorageInfo::get_type() const
   return device_type_;
 }
 
+ObStorageChecksumType ObObjectStorageInfo::get_checksum_type() const
+{
+  return checksum_type_;
+}
+
+const char *ObObjectStorageInfo::get_checksum_type_str() const
+{
+  return get_storage_checksum_type_str(checksum_type_);
+}
+
 // oss:host=xxxx&access_id=xxx&access_key=xxx
 // cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx
+// s3:host=xxxx&access_id=xxx&access_key=xxx&s3_region=xxx
 int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char *storage_info)
 {
-  bool has_appid = false;
+  bool has_needed_extension = false;
   int ret = OB_SUCCESS;
   if (is_valid()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("storage info init twice", K(ret));
   } else if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("storage info is invalid", K(ret), K(storage_info));
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info));
   } else if (FALSE_IT(device_type_ = device_type)) {
   } else if (0 == strlen(storage_info)) {
     if (OB_STORAGE_FILE != device_type_) {
       ret = OB_INVALID_BACKUP_DEST;
       LOG_WARN("storage info is empty", K(ret), K_(device_type));
     }
-  } else if (OB_FAIL(parse_storage_info_(storage_info, has_appid))) {
+  } else if (OB_FAIL(parse_storage_info_(storage_info, has_needed_extension))) {
     LOG_WARN("parse storage info failed", K(ret));
   } else if (OB_STORAGE_FILE != device_type
       && (0 == strlen(endpoint_) || 0 == strlen(access_id_) || 0 == strlen(access_key_))) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("backup device is not nfs, endpoint/access_id/access_key do not allow to be empty",
         K(ret), K_(device_type), K_(endpoint), K_(access_id));
-  } else if (OB_STORAGE_COS == device_type && !has_appid) {
+  } else if (OB_STORAGE_COS == device_type && !has_needed_extension) {
     ret = OB_INVALID_BACKUP_DEST;
     LOG_WARN("invalid cos info, appid do not allow to be empty", K(ret), K_(extension));
   } else if (OB_STORAGE_FILE == device_type
@@ -121,11 +148,7 @@ int ObObjectStorageInfo::set(const common::ObStorageType device_type, const char
   } else {
   }
 
-
-  if (OB_SUCC(ret)) {
-    LOG_INFO("succ to parse storage info",
-        K_(device_type), K_(endpoint), K_(access_id), K_(extension));
-  } else {
+  if (OB_FAIL(ret)) {
     reset();
   }
   return ret;
@@ -143,13 +166,13 @@ int ObObjectStorageInfo::set(const char *uri, const char *storage_info)
   return ret;
 }
 
-int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has_appid)
+int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has_needed_extension)
 {
   int ret = OB_SUCCESS;
-
+  has_needed_extension = false;
   if (OB_ISNULL(storage_info) || strlen(storage_info) >= OB_MAX_BACKUP_STORAGE_INFO_LENGTH) {
     ret = OB_INVALID_BACKUP_DEST;
-    LOG_WARN("storage info is invalid", K(ret), K(storage_info), K(strlen(storage_info)));
+    LOG_WARN("storage info is invalid", K(ret), KP(storage_info), K(strlen(storage_info)));
   } else {
     char tmp[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
     char *token = NULL;
@@ -163,9 +186,13 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
       token = ::strtok_r(str, "&", &saved_ptr);
       if (NULL == token) {
         break;
+      } else if (0 == strncmp(REGION, token, strlen(REGION))) {
+        if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set region", K(ret), K(token));
+        }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
         if (OB_FAIL(set_storage_info_field_(token, endpoint_, sizeof(endpoint_)))) {
-          LOG_WARN("failed to set endpoint",K(ret), K(token));
+          LOG_WARN("failed to set endpoint", K(ret), K(token));
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(set_storage_info_field_(token, access_id_, sizeof(access_id_)))) {
@@ -173,10 +200,10 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_storage_info_field_(token, access_key_, sizeof(access_key_)))) {
-          LOG_WARN("failed to set access key", K(ret), K(token));
+          LOG_WARN("failed to set access key", K(ret));
         }
       } else if (OB_STORAGE_FILE != device_type_ && 0 == strncmp(APPID, token, strlen(APPID))) {
-        has_appid = true;
+        has_needed_extension = (OB_STORAGE_COS == device_type_);
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set appid", K(ret), K(token));
         }
@@ -189,6 +216,11 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
           OB_LOG(WARN, "failed to check delete mode", K(ret), K(token));
         } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set delete mode", K(ret), K(token));
+        }
+      } else if (0 == strncmp(CHECKSUM_TYPE, token, strlen(CHECKSUM_TYPE))) {
+        const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
+        if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
+          OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
         }
       } else {
       }
@@ -210,6 +242,59 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
   return ret;
 }
 
+bool is_oss_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+bool is_cos_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_NO_CHECKSUM_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+bool is_s3_supported_checksum(const ObStorageChecksumType checksum_type)
+{
+  return checksum_type == ObStorageChecksumType::OB_CRC32_ALGO
+      || checksum_type == ObStorageChecksumType::OB_MD5_ALGO;
+}
+
+int ObObjectStorageInfo::set_checksum_type_(const char *checksum_type_str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(checksum_type_str)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(checksum_type_str));
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_NO_CHECKSUM)) {
+    checksum_type_ = OB_NO_CHECKSUM_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_MD5)) {
+    checksum_type_ = OB_MD5_ALGO;
+  } else if (0 == strcmp(checksum_type_str, CHECKSUM_TYPE_CRC32)) {
+    checksum_type_ = OB_CRC32_ALGO;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid checksum type", K(ret), K(checksum_type_str));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_UNLIKELY(OB_STORAGE_OSS == device_type_ && !is_oss_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for oss",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  } else if (OB_UNLIKELY(OB_STORAGE_COS == device_type_ && !is_cos_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for cos",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  } else if (OB_UNLIKELY(OB_STORAGE_S3 == device_type_ && !is_s3_supported_checksum(checksum_type_))) {
+    ret = OB_CHECKSUM_TYPE_NOT_SUPPORTED;
+    OB_LOG(WARN, "not supported checksum type for s3",
+        K(ret), K_(device_type), K(checksum_type_str), K_(checksum_type));
+  }
+
+  return ret;
+}
+
 int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, const int64_t length)
 {
   int ret = OB_SUCCESS;
@@ -221,14 +306,14 @@ int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, 
     int64_t pos = strlen(field);
     if (info_len >= length) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("info is too long ", K(ret), K(info), K(length));
+      LOG_WARN("info is too long ", K(ret), K(info_len), K(length));
     } else if (pos > 0 && OB_FAIL(databuff_printf(field, length, pos, "&"))) {
       // cos:host=xxxx&access_id=xxx&access_key=xxxappid=xxx&delete_mode=xxx
       // extension_ may contain both appid and delete_mode
       // so delimiter '&' should be included
-      LOG_WARN("failed to add delimiter to storage info field", K(ret), K(info), K(field), K(length));
+      LOG_WARN("failed to add delimiter to storage info field", K(ret), K(pos), KP(field), K(length));
     } else if (OB_FAIL(databuff_printf(field, length, pos, "%s", info))) {
-      LOG_WARN("failed to set storage info field", K(ret), K(info), K(field), K(length));
+      LOG_WARN("failed to set storage info field", K(ret), K(pos), KP(field), K(length));
     }
   }
   return ret;
@@ -238,6 +323,7 @@ int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
   device_type_ = storage_info.device_type_;
+  checksum_type_ = storage_info.checksum_type_;
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));
   MEMCPY(access_id_, storage_info.access_id_, sizeof(access_id_));
   MEMCPY(access_key_, storage_info.access_key_, sizeof(access_key_));
@@ -260,15 +346,15 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (OB_STORAGE_FILE != device_type_) {
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s",
-                                       endpoint_, access_id_, key))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s",
+                                       endpoint_, access_id_, key,
+                                       CHECKSUM_TYPE, get_checksum_type_str()))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }
 
   if (OB_SUCC(ret) && 0 != strlen(extension_) && info_len > strlen(storage_info)) {
-    // if OB_STORAGE_FILE's extension is not empty
-    // delimiter should be included
+    // if OB_STORAGE_FILE's extension is not empty, delimiter should be included
     int64_t str_len = strlen(storage_info);
     if (str_len > 0 && OB_FAIL(databuff_printf(storage_info, info_len, str_len, "&"))) {
       LOG_WARN("failed to add delimiter to storage info", K(ret), K(info_len), K(str_len));

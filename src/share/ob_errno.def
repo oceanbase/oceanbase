@@ -2205,6 +2205,15 @@ DEFINE_ERROR(OB_FILE_OR_DIRECTORY_EXIST, -9101, -1, "HY000", "file or directory 
 DEFINE_ERROR(OB_FILE_OR_DIRECTORY_PERMISSION_DENIED, -9102, -1, "HY000", "file or directory permission denied");
 DEFINE_ERROR(OB_TOO_MANY_OPEN_FILES, -9103, -1, "HY000", "too many open files");
 DEFINE_ERROR(OB_DIRECT_LOAD_COMMIT_ERROR, -9104, -1, "HY000", "fail to commit direct load");
+DEFINE_ERROR_DEP(OB_S3_ERROR, -9105, -1, "HY000", "S3 error");
+
+DEFINE_ERROR_EXT_DEP(OB_CHECKSUM_TYPE_NOT_SUPPORTED, -9113, -1, "HY000", "checksum type is not supported", "checksum type %s is not supported for the input destination");
+DEFINE_ERROR_DEP(OB_INVALID_STORAGE_DEST, -9114, -1, "HY000", "storage destination is not valid");
+DEFINE_ERROR(OB_STORAGE_DEST_NOT_CONNECT, -9115, -1, "HY000", "can not connect to storage destination");
+DEFINE_ERROR_DEP(OB_OBJECT_STORAGE_PERMISSION_DENIED, -9116, -1, "HY000", "no I/O operation permission of the object storage");
+DEFINE_ERROR_DEP(OB_S3_REGION_MISMATCH, -9117, -1, "HY000", "the specified s3_region does not match the endpoint");
+DEFINE_ERROR_DEP(OB_INVALID_OBJECT_STORAGE_ENDPOINT, -9118, -1, "HY000", "object storage endpoint is invalid");
+DEFINE_ERROR_EXT_DEP(OB_RESTORE_SOURCE_NOT_ENOUGH, -9119, -1, "HY000", "do not have enough restore source", "%s");
 
 // 余留位置，在该行之前继续添加storage错误码
 

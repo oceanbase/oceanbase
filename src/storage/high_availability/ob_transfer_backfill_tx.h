@@ -251,6 +251,7 @@ private:
   int check_major_sstable_(
       const ObTablet *tablet,
       const ObTabletMemberWrapper<ObTabletTableStore> &table_store_wrapper);
+  void transfer_tablet_restore_stat_() const;
 private:
   bool is_inited_;
   ObTransferBackfillTXCtx *ctx_;

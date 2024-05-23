@@ -51,6 +51,8 @@ public:
   static int calc_tablet_sstable_macro_block_cnt(
       const ObTabletHandle &tablet_handle, int64_t &data_macro_block_count);
 
+  static int check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild);
+
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,
@@ -70,6 +72,10 @@ struct ObTransferUtils
   static int get_gts(const uint64_t tenant_id, share::SCN &gts);
   static void set_transfer_module();
   static void clear_transfer_module();
+  static void transfer_tablet_restore_stat(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id);
 };
 
 } // end namespace storage
