@@ -2275,7 +2275,6 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  ObLSTransferMetaInfo transfer_meta_info;
 
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
@@ -2290,11 +2289,6 @@ int ObCheckStartTransferTabletsDelegate::check_start_transfer_in_tablets_()
   } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("src ls migration status is not none", K(ret), K(migration_status), KPC(ls), K(arg_));
-  } else if (OB_FAIL(ls->get_transfer_meta_info(transfer_meta_info))) {
-    LOG_WARN("failed to get transfer meta info", K(ret), KPC(ls));
-  } else if (transfer_meta_info.is_in_trans()) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("transfer meta info is in trans status, not match", K(ret), K(transfer_meta_info));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < arg_.tablet_list_.count(); ++i) {
       const ObTransferTabletInfo &tablet_info = arg_.tablet_list_.at(i);

@@ -1873,12 +1873,15 @@ int ObTabletStartTransferInHelper::do_tx_end_before_commit_(
   const ObTransferInTransStatus::STATUS trans_status = ObTransferInTransStatus::PREPARE;
   ObArray<ObTabletID> tablet_id_list;
   ObTransferService *transfer_service = nullptr;
+  bool is_tablet_list_same = false;
 
   if (!tx_start_transfer_in_info.is_valid() || (for_replay && !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do tx end before commit get invalid argument", K(ret), K(tx_start_transfer_in_info));
   } else if (!for_replay) {
     //leader do tx end before commit, no need check transfer src ls
+  } else if (OB_FAIL(tx_start_transfer_in_info.get_tablet_id_list(tablet_id_list))) {
+    LOG_WARN("failed to get tablet id list", K(ret), K(tx_start_transfer_in_info));
   } else if (OB_ISNULL(transfer_service = MTL(ObTransferService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(transfer_service));
@@ -1901,10 +1904,16 @@ int ObTabletStartTransferInHelper::do_tx_end_before_commit_(
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("transfer meta info is not same with transfer in info", K(ret), K(transfer_meta_info), K(tx_start_transfer_in_info));
       }
+    } else if (OB_FAIL(transfer_meta_info.check_transfer_tablet_is_same(tablet_id_list, is_tablet_list_same))) {
+      LOG_WARN("failed to check transfer tablet is same", K(ret), K(transfer_meta_info), K(tx_start_transfer_in_info));
+    } else if (is_tablet_list_same) {
+      LOG_INFO("tx start transfer tablet list is same with ls transfer meta info", K(transfer_meta_info),
+          K(tx_start_transfer_in_info));
     } else {
-      //tx_start_transfer_in_info.start_scn_ > transfer_meta_info.src_scn_
+      //tx_start_transfer_in_info.start_scn_ > transfer_meta_info.src_scn_ && !is_tablet_list_same
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("tx start transfer scn is bigger than transfer meta info scn, unexpected", K(ret), K(transfer_meta_info), K(tx_start_transfer_in_info));
+      LOG_ERROR("tx start transfer scn is bigger than transfer meta info scn and tablet list is not same, "
+          "unexpected", K(ret), K(transfer_meta_info), K(tx_start_transfer_in_info));
     }
   } else if (OB_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
     LOG_WARN("failed to check can skip replay commit", K(ret), K(scn), K(tx_start_transfer_in_info));
@@ -1920,8 +1929,6 @@ int ObTabletStartTransferInHelper::do_tx_end_before_commit_(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tx_start_transfer_in_info.get_tablet_id_list(tablet_id_list))) {
-      LOG_WARN("failed to get tablet id list", K(ret), K(tx_start_transfer_in_info));
     } else if (OB_FAIL(ls->set_transfer_meta_info(
         tx_start_transfer_in_info.start_scn_,
         tx_start_transfer_in_info.src_ls_id_,

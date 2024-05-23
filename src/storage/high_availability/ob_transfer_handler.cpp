@@ -457,7 +457,6 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   process_perf_diagnose_info_(ObStorageHACostItemName::TRANSFER_START_BEGIN,
         ObStorageHADiagTaskType::TRANSFER_START, start_ts, round_, false/*is_report*/);
   bool commit_succ = false;
-  bool is_update_transfer_meta = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObSEArray<ObTabletID, 100> tablet_ids; // (0, 100], default 32, see ObTenantTransferService::get_tablet_count_threshold_(),
   tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
@@ -529,8 +528,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
       LOG_WARN("failed to reset timeout for trans", K(ret));
-    } else if (OB_FAIL(do_trans_transfer_start_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans,
-        is_update_transfer_meta))) {
+    } else if (OB_FAIL(do_trans_transfer_start_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     } else {
 #ifdef ERRSIM
@@ -565,7 +563,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
 
   if (OB_FAIL(ret)) {
     if (!is_leader) {
-    } else if (FALSE_IT(can_retry = is_update_transfer_meta ? false : can_retry_(task_info, ret))) {
+    } else if (FALSE_IT(can_retry = can_retry_(task_info, ret))) {
     } else if (can_retry) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
       if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
@@ -1031,13 +1029,11 @@ int ObTransferHandler::do_trans_transfer_start_(
     const palf::LogConfigVersion &config_version,
     const share::SCN &dest_max_desided_scn,
     ObTimeoutCtx &timeout_ctx,
-    ObMySQLTransaction &trans,
-    bool &is_update_transfer_meta)
+    ObMySQLTransaction &trans)
 {
   LOG_INFO("[TRANSFER] start do trans transfer start", K(task_info));
   int ret = OB_SUCCESS;
   SCN start_scn;
-  is_update_transfer_meta = false;
   ObArray<ObMigrationTabletParam> tablet_meta_list;
   const share::ObTransferStatus next_status(ObTransferStatus::DOING);
   const int64_t start_ts = ObTimeUtil::current_time();
@@ -1063,7 +1059,7 @@ int ObTransferHandler::do_trans_transfer_start_(
   } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list))) {
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (task_info.data_version_ >= DATA_VERSION_4_2_3_0
-      && OB_FAIL(update_transfer_meta_info_(task_info, start_scn, timeout_ctx, is_update_transfer_meta))) {
+      && OB_FAIL(update_transfer_meta_info_(task_info, start_scn, timeout_ctx))) {
     LOG_WARN("failed to update transfer meta info", K(ret), K(task_info));
   } else if (OB_FAIL(do_tx_start_transfer_in_(task_info, start_scn, tablet_meta_list, timeout_ctx, trans))) {
     LOG_WARN("failed to do tx start transfer in", K(ret), K(task_info), K(start_scn), K(tablet_meta_list));
@@ -2696,8 +2692,7 @@ int ObTransferHandler::record_error_diagnose_info_in_replay(
 int ObTransferHandler::update_transfer_meta_info_(
     const share::ObTransferTaskInfo &task_info,
     const share::SCN &start_scn,
-    ObTimeoutCtx &timeout_ctx,
-    bool &is_update_transfer_meta)
+    ObTimeoutCtx &timeout_ctx)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -2712,7 +2707,6 @@ int ObTransferHandler::update_transfer_meta_info_(
   ObUpdateTransferMetaInfoArg arg;
   ObHAAsyncRpcArg async_rpc_arg;
   ObArray<obrpc::Int64> responses;
-  is_update_transfer_meta = false;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -2746,15 +2740,6 @@ int ObTransferHandler::update_transfer_meta_info_(
     }
   }
 #endif
-    if (responses.count() > member_addr_list.count()) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      ret = OB_SUCCESS == ret ? tmp_ret : ret;
-      LOG_WARN("unexpected responses", K(ret), K(tmp_ret), K(responses), K(member_addr_list));
-    } else if (0 == responses.count()) {
-      is_update_transfer_meta = false;
-    } else {
-      is_update_transfer_meta = true;
-    }
   }
   return ret;
 }

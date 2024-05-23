@@ -219,11 +219,12 @@ int ObLSTransferMetaInfo::set_transfer_info(
 {
   int ret = OB_SUCCESS;
   bool can_change = false;
+  const bool skip_check_trans_status = src_scn > src_scn_ ? true : false;
 
   if (!src_ls.is_valid() || !src_scn.is_valid() || !ObTransferInTransStatus::is_valid(trans_status) || 0 == data_version) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("set transfer info get invalid argument", K(ret), K(src_ls), K(src_scn), K(trans_status), K(data_version));
-  } else if (OB_FAIL(update_trans_status_(trans_status))) {
+  } else if (OB_FAIL(update_trans_status_(trans_status, skip_check_trans_status))) {
     LOG_WARN("failed to update trans status", K(ret), K(trans_status));
   } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assign tablet id array", K(ret), K(tablet_id_array));
@@ -241,11 +242,12 @@ int ObLSTransferMetaInfo::cleanup_transfer_info()
   int ret = OB_SUCCESS;
   bool can_change = false;
   const ObTransferInTransStatus::STATUS trans_status = ObTransferInTransStatus::NONE;
+  const bool skip_check_trans_status = false;
 
   if (!is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls transfer meta info is invalid, unexpected", K(ret), KPC(this));
-  } else if (OB_FAIL(update_trans_status_(trans_status))) {
+  } else if (OB_FAIL(update_trans_status_(trans_status, skip_check_trans_status))) {
     LOG_WARN("failed to update trans status", K(ret), K(trans_status), KPC(this));
   } else {
     src_ls_ = TRANSFER_INIT_LS_ID;
@@ -258,10 +260,11 @@ int ObLSTransferMetaInfo::cleanup_transfer_info()
 int ObLSTransferMetaInfo::update_trans_status(const ObTransferInTransStatus::STATUS &trans_status)
 {
   int ret = OB_SUCCESS;
+  const bool skip_check_trans_status = false;
   if (!ObTransferInTransStatus::is_valid(trans_status)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("update trans status get invalid argument", K(ret), K(trans_status));
-  } else if (OB_FAIL(update_trans_status_(trans_status))) {
+  } else if (OB_FAIL(update_trans_status_(trans_status, skip_check_trans_status))) {
     LOG_WARN("failed to update trans status", K(ret), K(trans_status));
   }
   return ret;
@@ -372,11 +375,14 @@ bool ObLSTransferMetaInfo::is_abort_status()
 }
 
 int ObLSTransferMetaInfo::update_trans_status_(
-    const ObTransferInTransStatus::STATUS &trans_status)
+    const ObTransferInTransStatus::STATUS &trans_status,
+    const bool skip_check_trans_status)
 {
   int ret = OB_SUCCESS;
-  bool can_change = false;
-  if (OB_FAIL(ObTransferInTransStatus::check_can_change_status(trans_status_, trans_status, can_change))) {
+  bool can_change = true;
+
+  if (!skip_check_trans_status
+      && OB_FAIL(ObTransferInTransStatus::check_can_change_status(trans_status_, trans_status, can_change))) {
     LOG_WARN("failed to check can change status", K(ret), K(trans_status_), K(trans_status));
   } else if (!can_change) {
     ret = OB_ERR_UNEXPECTED;
@@ -401,6 +407,37 @@ int ObLSTransferMetaInfo::get_tablet_id_array(
 bool ObLSTransferMetaInfo::is_in_compatible_status()
 {
   return data_version_ < DATA_VERSION_4_2_3_0;
+}
+
+int ObLSTransferMetaInfo::check_transfer_tablet_is_same(
+    const common::ObIArray<ObTabletID> &tablet_id_array,
+    bool &is_same)
+{
+  int ret = OB_SUCCESS;
+  is_same = false;
+  if (!is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls transfer meta info is invalid", K(ret), KPC(this));
+  } else if (tablet_id_array.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check transfer tablet is same get invalid argument", K(ret), K(tablet_id_array));
+  } else if (tablet_id_array.count() != tablet_id_array_.count()) {
+    is_same = false;
+  } else {
+    is_same = true;
+    bool is_exist = false;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+      const ObTabletID &tablet_id = tablet_id_array.at(i);
+      if (OB_FAIL(check_tablet_in_list(tablet_id, is_exist))) {
+        LOG_WARN("failed to check tablet in list", K(ret), K(tablet_id));
+      } else if (!is_exist) {
+        is_same = false;
+        LOG_INFO("tablet is no in ls meta transfer info", K(ret), K(tablet_id), KPC(this));
+        break;
+      }
+    }
+  }
+  return ret;
 }
 
 int64_t ObLSTransferMetaInfo::to_string(char *buf, const int64_t buf_len) const
