@@ -1397,16 +1397,6 @@ int ObInnerSQLConnection::commit()
   return ret;
 }
 
-int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
-  int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(execute_write(tenant_id, ObString::make_string(sql), affected_rows, is_user_sql, sql_exec_addr))) {
-    LOG_WARN("execute_write failed", K(ret), K(tenant_id), K(sql));
-  }
-  return ret;
-}
-
 int ObInnerSQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
     int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
@@ -1572,7 +1562,7 @@ int ObInnerSQLConnection::get_session_timeout_for_rpc(int64_t &query_timeout, in
 }
 
 int ObInnerSQLConnection::execute_read(const uint64_t tenant_id,
-                                       const char *sql,
+                                       const ObString &sql,
                                        ObISQLClient::ReadResult &res,
                                        bool is_user_sql,
                                        const common::ObAddr *sql_exec_addr)

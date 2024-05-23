@@ -145,7 +145,7 @@ int ObLinkScanOp::free_snapshot()
   return ret;
 }
 #endif
-int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
+int ObLinkScanOp::inner_execute_link_stmt(const ObString &link_stmt)
 {
   int ret = OB_SUCCESS;
   uint16_t charset_id = 0;
@@ -156,9 +156,9 @@ int ObLinkScanOp::inner_execute_link_stmt(const char *link_stmt)
   bool have_lob = false;
   res_.set_enable_use_result(true);
   bool new_snapshot = false;
-  if (OB_ISNULL(link_stmt)) {
+  if (link_stmt.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL", K(ret), KP(link_stmt));
+    LOG_WARN("unexpected NULL", K(ret), K(link_stmt));
   } else if (sql::DblinkGetConnType::TM_CONN == conn_type_) {
     if (OB_FAIL(tm_rm_connection_->execute_read(OB_INVALID_TENANT_ID, link_stmt, res_))) {
       LOG_WARN("failed to read table data by tm_rm_connection", K(ret), K(link_stmt), K(tm_rm_connection_->get_dblink_driver_proto()));

@@ -145,15 +145,12 @@ public:
            const int32_t group_id = 0);
   int destroy(void);
   inline void reset() { destroy(); }
-  virtual int execute_read(const uint64_t tenant_id, const char *sql,
+  virtual int execute_read(const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_read(const int64_t cluster_id, const uint64_t tenant_id, const ObString &sql,
                            common::ObISQLClient::ReadResult &res, bool is_user_sql = false,
                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
-  virtual int execute_write(const uint64_t tenant_id, const char *sql,
-                            int64_t &affected_rows, bool is_user_sql = false,
-                            const common::ObAddr *sql_exec_addr = nullptr/* ddl inner sql execution addr */) override;
   virtual int execute_write(const uint64_t tenant_id, const ObString &sql,
                             int64_t &affected_rows, bool is_user_sql = false,
                             const common::ObAddr *sql_exec_addr = nullptr) override;

@@ -27,7 +27,7 @@ public:
   virtual int inner_rescan() override;
 
   virtual void reset();
-  int inner_execute_link_stmt(const char *link_stmt);
+  int inner_execute_link_stmt(const ObString &link_stmt);
   int send_reverse_link_info(transaction::ObTransID &tx_id);
 
 private:

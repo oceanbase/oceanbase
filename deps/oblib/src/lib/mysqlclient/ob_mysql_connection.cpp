@@ -92,7 +92,7 @@ void ObMySQLConnection::reset()
   set_last_error(OB_SUCCESS);
 }
 
-int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql)
+int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const ObString &sql)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(stmt.init(*this, sql))) {
@@ -392,7 +392,7 @@ int ObMySQLConnection::set_timeout_variable(const int64_t query_timeout, const i
       } else if (OB_FAIL(create_statement(stmt, OB_SYS_TENANT_ID, sql))) {
         LOG_WARN("create statement failed", K(ret));
       } else if (OB_FAIL(stmt.execute_update(affect_rows))) {
-        LOG_WARN("execute sql failed", K(get_server()), KCSTRING(sql), K(ret));
+        LOG_WARN("execute sql failed", K(get_server()), K(sql), K(ret));
       }
     }
   }
@@ -445,7 +445,7 @@ int ObMySQLConnection::init_oceanbase_connection()
     } else if (OB_FAIL(stmt.init(*this, sql))) {
       LOG_WARN("create statement failed", K(ret));
     } else if (OB_FAIL(stmt.execute_update())) {
-      LOG_WARN("execute sql failed", KCSTRING(sql), K(ret), K_(tenant_id));
+      LOG_WARN("execute sql failed", K(sql), K(ret), K_(tenant_id));
     }
   }
   return ret;
@@ -473,7 +473,7 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(stmt.init(*this, sql.ptr()))) {
+    } else if (OB_FAIL(stmt.init(*this, sql.string()))) {
       LOG_WARN("create statement failed", K(ret));
     } else if (OB_FAIL(stmt.execute_update())) {
       LOG_WARN("execute sql failed", K(sql), K(ret), K(tenant_id), K(tenant_id_));
@@ -487,13 +487,6 @@ int ObMySQLConnection::switch_tenant(const uint64_t tenant_id)
 int ObMySQLConnection::execute_write(const uint64_t tenant_id, const ObString &sql,
     int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
-  UNUSEDx(tenant_id, sql, affected_rows, is_user_sql, sql_exec_addr);
-  return OB_NOT_SUPPORTED;
-}
-
-int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
-    int64_t &affected_rows, bool is_user_sql, const common::ObAddr *sql_exec_addr)
-{
   UNUSED(is_user_sql);
   UNUSED(sql_exec_addr);
   int ret = OB_SUCCESS;
@@ -503,9 +496,9 @@ int ObMySQLConnection::execute_write(const uint64_t tenant_id, const char *sql,
   } else {
     ObMySQLStatement stmt;
     if (OB_FAIL(create_statement(stmt, tenant_id, sql))) {
-      LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
+      LOG_WARN("create statement failed", K(sql), K(ret));
     } else if (OB_FAIL(stmt.execute_update(affected_rows))) {
-      LOG_WARN("statement execute update failed", KCSTRING(sql), K(ret));
+      LOG_WARN("statement execute update failed", K(sql), K(ret));
     }
   }
   return ret;
@@ -544,7 +537,7 @@ int ObMySQLConnection::execute_read(const int64_t cluster_id, const uint64_t ten
   return OB_NOT_SUPPORTED;
 }
 
-int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
+int ObMySQLConnection::execute_read(const uint64_t tenant_id, const ObString &sql,
     ObISQLClient::ReadResult &res, bool is_user_sql, const common::ObAddr *sql_exec_addr)
 {
   UNUSED(is_user_sql);
@@ -557,17 +550,17 @@ int ObMySQLConnection::execute_read(const uint64_t tenant_id, const char *sql,
   } else if (OB_FAIL(res.create_handler(read_ctx))) {
     LOG_ERROR("create result handler failed", K(ret));
   } else if (OB_FAIL(create_statement(read_ctx->stmt_, tenant_id, sql))) {
-    LOG_WARN("create statement failed", KCSTRING(sql), K(ret));
+    LOG_WARN("create statement failed", K(sql), K(ret));
   } else if (OB_ISNULL(read_ctx->result_ = read_ctx->stmt_.execute_query(res.is_enable_use_result()))) {
     ret = get_last_error();
     //const int ER_LOCK_WAIT_TIMEOUT = -1205;
     if (-1205 == ret) {
-      LOG_INFO("query failed", K(get_server()), KCSTRING(sql), K(ret));
+      LOG_INFO("query failed", K(get_server()), K(sql), K(ret));
     } else {
-      LOG_WARN("query failed", K(get_server()), KCSTRING(sql), K(ret));
+      LOG_WARN("query failed", K(get_server()), K(sql), K(ret));
     }
   } else {
-    LOG_DEBUG("query succeed", K(get_server()), KCSTRING(sql), K(ret));
+    LOG_DEBUG("query succeed", K(get_server()), K(sql), K(ret));
   }
   return ret;
 }
@@ -584,7 +577,7 @@ int ObMySQLConnection::get_session_variable(const ObString &name, int64_t &val)
     ObMySQLResult *result = NULL;
     if (OB_FAIL(sql.append_fmt("select %.*s from dual", name.length(), name.ptr()))) {
       LOG_WARN("assign sql failed", K(ret));
-    } else if (OB_FAIL(create_statement(read_ctx.stmt_, OB_SYS_TENANT_ID, sql.ptr()))) {
+    } else if (OB_FAIL(create_statement(read_ctx.stmt_, OB_SYS_TENANT_ID, sql.string()))) {
       LOG_WARN("create statement failed", K(sql), K(ret));
     } else if (OB_ISNULL(read_ctx.result_ = read_ctx.stmt_.execute_query())) {
       ret = get_last_error();
@@ -610,7 +603,7 @@ int ObMySQLConnection::set_session_variable(const ObString &name, int64_t val)
     ObSqlString sql;
     if (OB_FAIL(sql.append_fmt("set %.*s = %ld", name.length(), name.ptr(), val))) {
       LOG_WARN("assign sql failed", K(ret));
-    } else if (OB_FAIL(stmt.init(*this, sql.ptr()))) {
+    } else if (OB_FAIL(stmt.init(*this, sql.string()))) {
       LOG_WARN("create statement failed", K(ret));
     } else if (OB_FAIL(stmt.execute_update())) {
       LOG_WARN("execute sql failed", K(sql), K(ret));
@@ -649,7 +642,7 @@ int ObMySQLConnection::set_session_variable(const ObString &name, const ObString
     }
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(stmt.init(*this, sql.ptr()))) {
+    } else if (OB_FAIL(stmt.init(*this, sql.string()))) {
       LOG_WARN("create statement failed", K(ret), K(sql));
     } else if (OB_FAIL(stmt.execute_update())) {
       LOG_WARN("execute sql failed", K(sql), K(ret));

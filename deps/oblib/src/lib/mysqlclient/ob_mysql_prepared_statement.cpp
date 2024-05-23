@@ -933,17 +933,17 @@ int ObMySQLPreparedStatement::get_ob_type(ObObjType &ob_type, obmysql::EMySQLFie
   return ret;
 }
 
-int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const char *sql)
+int ObMySQLPreparedStatement::init(ObMySQLConnection &conn, const ObString &sql)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;
-  if (OB_ISNULL(sql)) {
+  if (sql.empty()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid sql", KP(sql), K(ret));
+    LOG_WARN("invalid sql", K(sql), K(ret));
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
-  } else if (0 != mysql_stmt_prepare(stmt_, sql, STRLEN(sql))) {
+  } else if (0 != mysql_stmt_prepare(stmt_, sql.ptr(), sql.length())) {
     ret = -mysql_errno(conn_->get_handler());
     LOG_WARN("fail to prepare stmt", "info", mysql_error(conn_->get_handler()), K(ret));
   } else if (OB_FAIL(param_.init())) {

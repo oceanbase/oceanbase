@@ -413,7 +413,7 @@ int ObReverseLink::open(int64_t session_sql_req_level)
   return ret;
 }
 
-int ObReverseLink::read(const char *sql, ObISQLClient::ReadResult &res)
+int ObReverseLink::read(const ObString &sql, ObISQLClient::ReadResult &res)
 {
   int ret = OB_SUCCESS;
   if (is_close_) {

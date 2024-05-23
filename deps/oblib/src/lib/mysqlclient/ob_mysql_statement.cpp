@@ -29,8 +29,7 @@ namespace sqlclient
 ObMySQLStatement::ObMySQLStatement() :
     conn_(NULL),
     result_(*this),
-    stmt_(NULL),
-    sql_str_(NULL)
+    stmt_(NULL)
 {
 
 }
@@ -54,11 +53,11 @@ ObMySQLConnection *ObMySQLStatement::get_connection()
   return conn_;
 }
 
-int ObMySQLStatement::init(ObMySQLConnection &conn, const char *sql)
+int ObMySQLStatement::init(ObMySQLConnection &conn, const ObString &sql)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;
-  if (OB_ISNULL(sql)) {
+  if (sql.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql, sql is null", K(ret));
   } else if (OB_ISNULL(stmt_ = conn.get_handler())) {
@@ -90,16 +89,16 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
   int ret = OB_SUCCESS;
   int tmp_ret = 0;
   const int CR_SERVER_LOST = 2013;
-  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
+  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || sql_str_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), KP_(sql_str), K(ret));
+    LOG_ERROR("invalid mysql stmt", K_(conn), KP_(stmt), K_(sql_str), K(ret));
   } else if (OB_UNLIKELY(!conn_->usable())) {
     ret = -CR_SERVER_LOST;
     conn_->set_last_error(ret);
     LOG_WARN("conn already failed, should not execute query again!", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_)))) {
+    if (0 != (tmp_ret = mysql_real_query(stmt_, sql_str_.ptr(), sql_str_.length()))) {
       ret = -mysql_errno(stmt_);
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);
@@ -120,7 +119,7 @@ int ObMySQLStatement::execute_update(int64_t &affected_rows)
                                             K(stmt_->host),
                                             K(stmt_->port),
                                             K(errmsg),
-                                            K(STRLEN(sql_str_)),
+                                            K(sql_str_.length()),
                                             K(sql_str_));
         TRANSLATE_CLIENT_ERR(ret, errmsg);
       }
@@ -142,16 +141,16 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
   ObMySQLResult *result = NULL;
   int ret = OB_SUCCESS;
   const int CR_SERVER_LOST = 2013;
-  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || OB_ISNULL(sql_str_)) {
+  if (OB_ISNULL(conn_) || OB_ISNULL(stmt_) || sql_str_.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), KP_(sql_str), K(ret));
+    LOG_ERROR("invalid mysql stmt", K_(conn), K_(stmt), K(sql_str_), K(ret));
   } else if (OB_UNLIKELY(!conn_->usable())) {
     ret = -CR_SERVER_LOST;
     conn_->set_last_error(ret);
     LOG_WARN("conn already failed, should not execute query again", K(conn_));
   } else {
     int64_t begin = ObTimeUtility::current_monotonic_raw_time();
-    if (0 != mysql_real_query(stmt_, sql_str_, STRLEN(sql_str_))) {
+    if (0 != mysql_real_query(stmt_, sql_str_.ptr(), sql_str_.length())) {
       ret = -mysql_errno(stmt_);
       char errmsg[256] = {0};
       const char *srcmsg = mysql_error(stmt_);
@@ -162,7 +161,7 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
                "err_msg", errmsg, K(ret), K(sql_str_));
       } else {
         LOG_WARN("fail to query server", "host", stmt_->host, "port", stmt_->port, K(conn_->get_sessid()),
-               "err_msg", errmsg, K(ret), K(STRLEN(sql_str_)), K(sql_str_));
+               "err_msg", errmsg, K(ret), K(sql_str_.length()), K(sql_str_));
       }
       if (OB_SUCCESS == ret) {
         ret = OB_ERR_SQL_CLIENT;
@@ -177,7 +176,7 @@ ObMySQLResult *ObMySQLStatement::execute_query(bool enable_use_result)
                                             K(stmt_->host),
                                             K(stmt_->port),
                                             K(errmsg),
-                                            K(STRLEN(sql_str_)),
+                                            K(sql_str_.length()),
                                             K(sql_str_));
         TRANSLATE_CLIENT_ERR(ret, errmsg);
       }

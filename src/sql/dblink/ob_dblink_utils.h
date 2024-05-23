@@ -84,7 +84,7 @@ public:
   uint32_t get_tm_sessid() { return tm_sessid_; }
 
   int open(int64_t session_sql_req_level);
-  int read(const char *sql, ObISQLClient::ReadResult &res);
+  int read(const ObString &sql, ObISQLClient::ReadResult &res);
   int ping();
   int close();
   TO_STRING_KV(K_(user),

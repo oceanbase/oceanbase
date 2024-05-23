@@ -47,7 +47,7 @@ public:
             const common::ObIArray<ObParamPosIdx> &param_infos,
             const ObParamStore &param_store,
             ObReverseLink *reverse_link = NULL);
-  virtual int inner_execute_link_stmt(const char *link_stmt) = 0;
+  virtual int inner_execute_link_stmt(const ObString &sql) = 0;
   static int init_dblink_param_ctx(ObExecContext &exec_ctx,
                                    common::sqlclient::dblink_param_ctx &param_ctx,
                                    common::sqlclient::DblinkDriverProto link_type,
@@ -75,6 +75,7 @@ protected:
   common::ObIAllocator &allocator_;
   char *stmt_buf_;
   int64_t stmt_buf_len_;
+  int64_t stmt_buf_pos_;
   int64_t next_sql_req_level_;
   static const int64_t STMT_BUF_BLOCK;
   common::sqlclient::DblinkDriverProto link_type_;

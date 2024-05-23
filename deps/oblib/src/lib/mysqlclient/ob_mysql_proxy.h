@@ -184,8 +184,8 @@ public:
   int acquire_dblink(const sqlclient::dblink_param_ctx &param_ctx,
                      sqlclient::ObISQLConnection *&dblink_conn);
   int release_dblink(sqlclient::DblinkDriverProto dblink_type, sqlclient::ObISQLConnection *dblink_conn);
-  int dblink_read(sqlclient::ObISQLConnection *dblink_conn, ReadResult &result, const char *sql);
-  int dblink_write(sqlclient::ObISQLConnection *dblink_conn, int64_t &affected_rows, const char *sql);
+  int dblink_read(sqlclient::ObISQLConnection *dblink_conn, ReadResult &result, const ObString &sql);
+  int dblink_write(sqlclient::ObISQLConnection *dblink_conn, int64_t &affected_rows, const ObString &sql);
   int dblink_execute_proc(sqlclient::ObISQLConnection *dblink_conn);
   int dblink_execute_proc(const uint64_t tenant_id,
                           sqlclient::ObISQLConnection *dblink_conn,
@@ -195,7 +195,7 @@ public:
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                           const ObTimeZoneInfo *tz_info);
-  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
+  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const ObString &sql);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *param,

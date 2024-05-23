@@ -138,7 +138,7 @@ public:
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
   int close();
-  int init(ObMySQLConnection &conn, const char *sql);
+  int init(ObMySQLConnection &conn, const ObString &sql);
   int bind_param(const ObBindParam &param);
   int bind_result(const ObBindParam &param);
   int bind_param_int(const int64_t col_idx, int64_t *out_buf);

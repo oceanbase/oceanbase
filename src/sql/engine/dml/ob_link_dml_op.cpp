@@ -103,13 +103,13 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
   return ret;
 }
 
-int ObLinkDmlOp::inner_execute_link_stmt(const char *link_stmt)
+int ObLinkDmlOp::inner_execute_link_stmt(const ObString &link_stmt)
 {
   int ret = OB_SUCCESS;
   transaction::ObTransID tx_id;
-  if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(dblink_conn_) || OB_ISNULL(link_stmt)) {
+  if (OB_ISNULL(dblink_proxy_) || OB_ISNULL(dblink_conn_) || link_stmt.empty()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), KP(link_stmt), KP(dblink_conn_));
+    LOG_WARN("dblink_proxy or link_stmt is NULL", K(ret), KP(dblink_proxy_), K(link_stmt), KP(dblink_conn_));
   } else if (OB_FAIL(ObTMService::tm_rm_start(ctx_, link_type_, dblink_conn_, tx_id))) {
     LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id_), K(dblink_conn_));
   } else if (MY_SPEC.is_reverse_link_ && OB_FAIL(send_reverse_link_info(tx_id))) {

@@ -94,6 +94,7 @@ ObLinkOp::ObLinkOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *inp
     allocator_(exec_ctx.get_allocator()),
     stmt_buf_(NULL),
     stmt_buf_len_(STMT_BUF_BLOCK),
+    stmt_buf_pos_(0),
     next_sql_req_level_(0),
     link_type_(DBLINK_DRV_OB),
     in_xa_trascaction_(false)
@@ -185,8 +186,8 @@ int ObLinkOp::execute_link_stmt(const ObString &link_stmt_fmt,
                                 param_store,
                                 reverse_link))) {
     LOG_WARN("failed to gen link stmt", K(ret), K(link_stmt_fmt));
-  } else if (OB_FAIL(inner_execute_link_stmt(stmt_buf_))) {
-    LOG_WARN("failed to execute link stmt", K(ret));
+  } else if (OB_FAIL(inner_execute_link_stmt(ObString(stmt_buf_pos_, stmt_buf_)))) {
+    LOG_WARN("failed to execute link stmt", K(ret), K(stmt_buf_pos_), K(stmt_buf_));
   }
   return ret;
 }
@@ -247,11 +248,6 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       } else if (param.is_null()) {
         obj_print_params.ob_obj_type_  = ObObjType(param_type_value);
         obj_print_params.print_null_string_value_ = 1;
-      }
-      if (DBLINK_DRV_OCI == link_type_) {
-        // Ensure that when oceanbase connects to oracle,
-        // the target character set of param is the same as that of oci connection.
-        obj_print_params.cs_type_ = ctx_.get_my_session()->get_nls_collation();
       }
       obj_print_params.cs_type_ = spell_coll;
       obj_print_params.need_cast_expr_ = true;
@@ -321,7 +317,10 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
       stmt_buf_ += head_comment_length_ + reserve_proxy_route_space;
       link_stmt_pos -= head_comment_length_ + reserve_proxy_route_space;
     }
-    LOG_TRACE("succ to combine link sql", K(stmt_buf_), K(link_stmt_pos));
+    if (OB_SUCC(ret)) {
+      stmt_buf_pos_ = link_stmt_pos;
+    }
+    LOG_WARN("succ to combine link sql", KP(stmt_buf_), K(stmt_buf_pos_), K(ObString(stmt_buf_pos_, stmt_buf_)));
   }
   return ret;
 }
