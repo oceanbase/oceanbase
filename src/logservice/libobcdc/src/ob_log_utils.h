@@ -588,6 +588,14 @@ struct CDCLSNComparator
     return a < b;
   }
 };
+
+struct LSNComparator
+{
+  static int compare(const palf::LSN& lsn1, const palf::LSN& lsn2) {
+    return lsn1.val_ > lsn2.val_ ? 1 : (lsn1.val_ == lsn2.val_ ? 0 : -1);
+  }
+};
+
 // sort and unique lsn arr.
 // NOT THREAD_SAFE
 int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr);

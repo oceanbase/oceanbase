@@ -135,6 +135,28 @@ private:
       LogEntryType &log_group_entry,
       LSN &lsn,
       ClientLSCtx &ctx);
+
+  int fetch_missing_logs_in_palf_(const ObLSID &ls_id,
+      palf::PalfHandleGuard &palf_handle_guard,
+      const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      int64_t &cur_idx,
+      obrpc::ObCdcLSFetchLogResp &resp,
+      FetchRunTime &frt);
+
+  int fetch_missing_logs_in_archive_(const ObLSID &ls_id,
+      ClientLSCtx &ctx,
+      const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      int64_t &cur_idx,
+      obrpc::ObCdcLSFetchLogResp &resp,
+      FetchRunTime &frt);
+
+  int calc_raw_read_size_(const obrpc::ObCdcLSFetchMissLogReq::MissLogParamArray &miss_log_array,
+      const int64_t cur_idx,
+      const int64_t read_buf_len,
+      int64_t &read_size,
+      int64_t &target_idx);
+
+  int init_archive_source_(ClientLSCtx &ctx, ObLSID ls_id);
   // Check whether has reached time limit
   inline bool is_time_up_(const int64_t scan_round, const int64_t end_tstamp)
   {

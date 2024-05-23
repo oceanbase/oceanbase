@@ -113,12 +113,12 @@ public:
     return ret;
   }
 
-  OB_INLINE bool is_empty()
+  OB_INLINE bool is_empty() const
   {
     return (NULL == root_);
   }
 
-  OB_INLINE T *get_first()
+  OB_INLINE T *get_first() const
   {
     T *tmp_node = NULL;
     if (OB_NOT_NULL(root_)) {
@@ -127,7 +127,7 @@ public:
     return tmp_node;
   }
 
-  OB_INLINE T *get_last()
+  OB_INLINE T *get_last() const
   {
     T *tmp_node = NULL;
     if (OB_NOT_NULL(root_)) {
@@ -136,7 +136,7 @@ public:
     return tmp_node;
   }
 
-  OB_INLINE int get_next(const T *node, T *&return_node)
+  OB_INLINE int get_next(const T *node, T *&return_node) const
   {
     int ret = common::OB_SUCCESS;
     T *tmp_node = NULL;
@@ -166,7 +166,7 @@ public:
     return ret;
   }
 
-  OB_INLINE int get_prev(const T *node, T *&return_node)
+  OB_INLINE int get_prev(const T *node, T *&return_node) const
   {
     int ret = common::OB_SUCCESS;
     T *tmp_node = NULL;
@@ -197,7 +197,7 @@ public:
   }
 
   //Node in tree that matches key, or NULL if no match
-  OB_INLINE int search(const T *key, T *&return_node)
+  OB_INLINE int search(const T *key, T *&return_node) const
   {
     int ret = common::OB_SUCCESS;
     int cmp = 0;
@@ -291,62 +291,64 @@ public:
     } else {
       init_node(node);
       path[0].node_ = root_;
-      for (pathp = path; OB_NOT_NULL(pathp->node_); pathp++) {
+      for (pathp = path; OB_NOT_NULL(pathp->node_) && OB_SUCC(ret); pathp++) {
         cmp = pathp->cmp_ = compare_.compare(node, pathp->node_);
-        abort_unless(0 != cmp);
         if (cmp < 0) {
           pathp[1].node_ = get_left(pathp->node_);
         } else if (cmp > 0) {
           pathp[1].node_ = get_right(pathp->node_);
-        }
-      }
-
-      pathp->node_ = node;
-      for (pathp--; (reinterpret_cast<uint64_t>(pathp) >= reinterpret_cast<uint64_t>(path)); pathp--) {
-        cur_node = pathp->node_;
-        if (pathp->cmp_ < 0) {
-          left_node = pathp[1].node_;
-          set_left(cur_node, left_node);
-          if (get_red(left_node)) {
-            left_node_left = get_left(left_node);
-            if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
-              //Fix up 4-node.
-              set_black(left_node_left);
-              rotate_right(cur_node, tmp_node);
-              cur_node = tmp_node;
-            }
-          } else {
-            break;
-          }
         } else {
-          right_node = pathp[1].node_;
-          set_right(cur_node, right_node);
-          if (!get_red(right_node)) {
-            break;
-          } else {
-            left_node = get_left(cur_node);
-            if (OB_NOT_NULL(left_node) && get_red(left_node)) {
-              //Split 4-node.
-              set_black(left_node);
-              set_black(right_node);
-              set_red(cur_node);
-            } else {
-              //Lean left.
-              bool tred = get_red(cur_node);
-              rotate_left(cur_node, tmp_node);
-              set_color(tmp_node, tred);
-              set_red(cur_node);
-              cur_node = tmp_node;
-            }
-          }
+          ret = common::OB_ENTRY_EXIST;
         }
-        pathp->node_ = cur_node;
       }
 
-      //Set root, and make it black.
-      root_ = path->node_;
-      set_black(root_);
+      if (OB_SUCC(ret)) {
+        pathp->node_ = node;
+        for (pathp--; (reinterpret_cast<uint64_t>(pathp) >= reinterpret_cast<uint64_t>(path)); pathp--) {
+          cur_node = pathp->node_;
+          if (pathp->cmp_ < 0) {
+            left_node = pathp[1].node_;
+            set_left(cur_node, left_node);
+            if (get_red(left_node)) {
+              left_node_left = get_left(left_node);
+              if (OB_NOT_NULL(left_node_left) && get_red(left_node_left)) {
+                //Fix up 4-node.
+                set_black(left_node_left);
+                rotate_right(cur_node, tmp_node);
+                cur_node = tmp_node;
+              }
+            } else {
+              break;
+            }
+          } else {
+            right_node = pathp[1].node_;
+            set_right(cur_node, right_node);
+            if (!get_red(right_node)) {
+              break;
+            } else {
+              left_node = get_left(cur_node);
+              if (OB_NOT_NULL(left_node) && get_red(left_node)) {
+                //Split 4-node.
+                set_black(left_node);
+                set_black(right_node);
+                set_red(cur_node);
+              } else {
+                //Lean left.
+                bool tred = get_red(cur_node);
+                rotate_left(cur_node, tmp_node);
+                set_color(tmp_node, tred);
+                set_red(cur_node);
+                cur_node = tmp_node;
+              }
+            }
+          }
+          pathp->node_ = cur_node;
+        }
 
+        //Set root, and make it black.
+        root_ = path->node_;
+        set_black(root_);
+      }
     }
     return ret;
   }
@@ -884,7 +886,7 @@ private:
   }
 
   //Internal utility macros.
-  OB_INLINE T *get_first(T *root)
+  OB_INLINE T *get_first(T *root) const
   {
     T *tmp_node = NULL;
     T * return_node = NULL;
@@ -897,7 +899,7 @@ private:
     return return_node;
   }
 
-  OB_INLINE T *get_last(T *root)
+  OB_INLINE T *get_last(T *root) const
   {
     T *tmp_node = NULL;
     T *return_node = NULL;

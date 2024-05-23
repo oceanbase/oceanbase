@@ -1254,7 +1254,18 @@ private:
       const MultiDataSourceNode &multi_data_source_node,
       ObCDCTabletChangeInfo &tablet_change_info);
 
+  int treeify_redo_list_(); // try to convert sorted_redo_list and fetched_log_entry_arr to tree
+  int untreeify_redo_list_(); // try to convert sorted_redo_list and fetched_log_entry_arr to list
+
 private:
+
+  // allocator used to alloc:
+  // LogEntryNode/RollbackNode
+  // DdlRedoLogNode/DmlRedoLogNode/mutator_row_data
+  // trace_id/trace_info/part_trans_info_str_/participant_
+  // MutatorRow(DDL)/DdlStmtTask
+  ObSmallArena            allocator_;
+  ObLfFIFOAllocator       log_entry_task_base_allocator_;
   ServedState             serve_state_;
   // trans basic info
   uint64_t                cluster_id_;            // cluster ID
@@ -1335,14 +1346,6 @@ private:
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
 
   ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
-
-  // allocator used to alloc:
-  // LogEntryNode/RollbackNode
-  // DdlRedoLogNode/DmlRedoLogNode/mutator_row_data
-  // trace_id/trace_info/part_trans_info_str_/participant_
-  // MutatorRow(DDL)/DdlStmtTask
-  ObSmallArena            allocator_;
-  ObLfFIFOAllocator       log_entry_task_base_allocator_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartTransTask);

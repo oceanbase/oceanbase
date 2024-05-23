@@ -32,6 +32,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp
   ob_cdc_malloc_sample_info.cpp
+  ob_cdc_miss_log_handler.cpp
   ob_cdc_server_endpoint_access_info.cpp
   ob_cdc_tenant_endpoint_provider.cpp
   ob_cdc_udt.cpp

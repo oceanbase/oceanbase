@@ -589,8 +589,8 @@ int ObLogResourceCollector::handle(void *data,
       if (OB_ISNULL(task)) {
         LOG_ERROR("ObLogBR task is NULL");
         ret = OB_ERR_UNEXPECTED;
-      } else if (task->get_record_type(record_type)) {
-        LOG_ERROR("ObLogBR task get_record_type fail", KR(ret));
+      } else if (OB_FAIL(task->get_record_type(record_type))) {
+        LOG_ERROR("ObLogBR task get_record_type fail", KR(ret), KPC(task));
       } else {
         if (HEARTBEAT == record_type || EBEGIN == record_type || ECOMMIT == record_type) {
           br_pool_->free(task);
@@ -873,21 +873,30 @@ int ObLogResourceCollector::recycle_stored_redo_(PartTransTask &task)
   int ret = OB_SUCCESS;
   const logservice::TenantLSID &tenant_ls_id = task.get_tls_id();
   SortedRedoLogList &sorted_redo_list =  task.get_sorted_redo_list();
-  DmlRedoLogNode *dml_redo_node = static_cast<DmlRedoLogNode *>(sorted_redo_list.head_);
+  RedoNodeIterator redo_iter = sorted_redo_list.redo_iter_begin();
 
-  while (OB_SUCC(ret) && OB_NOT_NULL(dml_redo_node) && ! RCThread::is_stoped()) {
-    if (dml_redo_node->is_stored()) {
-      const palf::LSN &store_log_lsn = dml_redo_node->get_start_log_lsn();
-      ObLogStoreKey store_key;
-      std::string key;
+  while (OB_SUCC(ret) && redo_iter != sorted_redo_list.redo_iter_end() && ! RCThread::is_stoped()) {
+    if (OB_UNLIKELY(!redo_iter.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("expected valid redo iterator", KR(ret), K(sorted_redo_list), K(redo_iter));
+    } else {
+      DmlRedoLogNode *dml_redo_node = static_cast<DmlRedoLogNode *>(&(*redo_iter));
+      if (OB_ISNULL(dml_redo_node)) {
+        ret = OB_INVALID_DATA;
+        LOG_ERROR("invalid dml_redo_node convert from redo_iter", KR(ret), K(redo_iter));
+      } else if (dml_redo_node->is_stored()) {
+        const palf::LSN &store_log_lsn = dml_redo_node->get_start_log_lsn();
+        ObLogStoreKey store_key;
+        std::string key;
 
-      if (OB_FAIL(store_key.init(tenant_ls_id, store_log_lsn))) {
-        LOG_ERROR("store_key init fail", KR(ret), K(store_key), K(tenant_ls_id), K(store_log_lsn));
-      } else if (OB_FAIL(store_key.get_key(key))) {
-        LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
-      } else if (OB_FAIL(del_store_service_data_(tenant_ls_id.get_tenant_id(), key))) {
-        LOG_ERROR("del_store_service_data_ fail", KR(ret), K(task));
-      } else {}
+        if (OB_FAIL(store_key.init(tenant_ls_id, store_log_lsn))) {
+          LOG_ERROR("store_key init fail", KR(ret), K(store_key), K(tenant_ls_id), K(store_log_lsn));
+        } else if (OB_FAIL(store_key.get_key(key))) {
+          LOG_ERROR("get_storage_key fail", KR(ret), "key", key.c_str());
+        } else if (OB_FAIL(del_store_service_data_(tenant_ls_id.get_tenant_id(), key))) {
+          LOG_ERROR("del_store_service_data_ fail", KR(ret), K(task));
+        }
+      }
     }
 
     if (RCThread::is_stoped()) {
@@ -895,7 +904,7 @@ int ObLogResourceCollector::recycle_stored_redo_(PartTransTask &task)
     }
 
     if (OB_SUCC(ret)) {
-      dml_redo_node = static_cast<DmlRedoLogNode *>(dml_redo_node->get_next());
+      redo_iter++;
     }
   }
 

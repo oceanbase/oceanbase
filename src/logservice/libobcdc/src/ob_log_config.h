@@ -605,6 +605,8 @@ public:
   DEF_TIME(print_mod_memory_usage_interval, OB_CLUSTER_PARAMETER, "1m", "[0s, ]", "print mod memory usage threshold");
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
+  T_DEF_INT_INFT(sorted_list_auto_treeify_threshold, OB_CLUSTER_PARAMETER, 32, 0, "treeify list auto-treeify mode treeify threshold");
+  T_DEF_INT_INFT(sorted_list_auto_untreeify_threshold, OB_CLUSTER_PARAMETER, 30, 0, "treeify list auto-treeify mode treeify threshold");
 
 #undef OB_CLUSTER_PARAMETER
 

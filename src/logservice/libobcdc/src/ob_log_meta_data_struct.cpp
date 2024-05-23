@@ -116,6 +116,7 @@ int ObDictTenantInfo::alloc_dict_db_meta(datadict::ObDictDatabaseMeta *&dict_db_
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else if (OB_ISNULL(dict_db_meta = static_cast<datadict::ObDictDatabaseMeta *>(
           cfifo_allocator_.alloc(sizeof(datadict::ObDictDatabaseMeta))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_db_meta failed", KR(ret), K(dict_db_meta));
   } else {
     new (dict_db_meta) datadict::ObDictDatabaseMeta(&arena_allocator_);
@@ -253,6 +254,7 @@ int ObDictTenantInfo::alloc_dict_table_meta(datadict::ObDictTableMeta *&dict_tab
     LOG_ERROR("ObDictTenantInfo has not been initialized", KR(ret));
   } else if (OB_ISNULL(dict_table_meta = static_cast<datadict::ObDictTableMeta *>(
           cfifo_allocator_.alloc(sizeof(datadict::ObDictTableMeta))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate dict_table_meta failed", KR(ret), K(dict_table_meta));
   } else {
     new (dict_table_meta) datadict::ObDictTableMeta(&arena_allocator_);

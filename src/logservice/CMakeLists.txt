@@ -188,6 +188,7 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_log_restore_archive_driver.cpp
   restoreservice/ob_restore_log_function.cpp
   restoreservice/ob_remote_log_writer.cpp
+  restoreservice/ob_remote_log_raw_reader.cpp
 )
 
 ob_set_subtarget(ob_logservice data_dictionary

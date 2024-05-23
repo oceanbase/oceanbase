@@ -52,9 +52,11 @@ struct PartTransID
   // transaction::ObTransID(int64_t)
   transaction::ObTransID       trans_id_;
 
+  PartTransID() : tls_id_(), trans_id_() {}
   PartTransID(const logservice::TenantLSID &tls_id, const transaction::ObTransID &trans_id);
   ~PartTransID();
   bool operator==(const PartTransID &part_trans_id) const;
+  PartTransID &operator=(const PartTransID &other);
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
   void reset();

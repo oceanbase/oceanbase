@@ -124,7 +124,7 @@ int ObLogPartTransParser::parse(PartTransTask &task, const bool is_build_baselin
   } else {
     const SortedRedoLogList &sorted_redo_list = task.get_sorted_redo_list();
     // Parse Redo logs if they exist
-    if (sorted_redo_list.log_num_ > 0 && OB_FAIL(parse_ddl_redo_log_(task, is_build_baseline, stop_flag))) {
+    if (sorted_redo_list.get_node_number() > 0 && OB_FAIL(parse_ddl_redo_log_(task, is_build_baseline, stop_flag))) {
       LOG_ERROR("parse_ddl_redo_log_ fail", KR(ret), K(task), K(is_build_baseline));
     }
   }
@@ -202,7 +202,7 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
   int ret = OB_SUCCESS;
   int64_t redo_num = 0;
   SortedRedoLogList &sorted_redo_list = task.get_sorted_redo_list();
-  DdlRedoLogNode *redo_node = static_cast<DdlRedoLogNode *>(sorted_redo_list.head_);
+  RedoNodeIterator redo_iter = sorted_redo_list.redo_iter_begin();
   const uint64_t tenant_id = task.get_tenant_id();
 
   if (OB_UNLIKELY(! sorted_redo_list.is_valid())) {
@@ -231,27 +231,37 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
     }
 
     if (OB_SUCC(ret)) {
-      while (OB_SUCCESS == ret && NULL != redo_node) {
-        LOG_DEBUG("parse redo log", "redo_node", *redo_node);
-
-        if (OB_UNLIKELY(! redo_node->is_valid())) {
-          LOG_ERROR("redo_node is invalid", "redo_node", *redo_node, "redo_index", redo_num);
-          ret = OB_INVALID_DATA;
-        }
-        // Calibrate data for completeness
-        else if (OB_UNLIKELY(! redo_node->check_data_integrity())) {
-          LOG_ERROR("redo data is not valid", KPC(redo_node));
-          ret = OB_INVALID_DATA;
-        } else if (OB_FAIL(parse_stmts_(tenant, *redo_node, is_build_baseline,
-            invalid_redo_log_entry_task, task, row_index, stop_flag))) {
-          LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *redo_node,
-              K(is_build_baseline), K(task), K(row_index));
+      while (OB_SUCCESS == ret && redo_iter != sorted_redo_list.redo_iter_end() && !stop_flag) {
+        if (OB_UNLIKELY(!redo_iter.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("invalid redo iterator", KR(ret), K(sorted_redo_list), K(redo_iter));
         } else {
-          redo_num += redo_node->get_log_num();
-          redo_node = static_cast<DdlRedoLogNode *>(redo_node->get_next());
+          DdlRedoLogNode *ddl_redo = static_cast<DdlRedoLogNode*>(&(*redo_iter));
+          LOG_DEBUG("parse redo log", "redo_node", *ddl_redo);
+
+          if (OB_UNLIKELY(! ddl_redo->is_valid())) {
+            ret = OB_INVALID_DATA;
+            LOG_ERROR("redo_node is invalid", KR(ret), "redo_node", *ddl_redo, "redo_index", redo_num);
+          }
+          // Calibrate data for completeness
+          else if (OB_UNLIKELY(! ddl_redo->check_data_integrity())) {
+            LOG_ERROR("redo data is not valid", KPC(ddl_redo));
+            ret = OB_INVALID_DATA;
+          } else if (OB_FAIL(parse_stmts_(tenant, *ddl_redo, is_build_baseline,
+              invalid_redo_log_entry_task, task, row_index, stop_flag))) {
+            LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *ddl_redo,
+                K(is_build_baseline), K(task), K(row_index));
+          } else {
+            redo_num += ddl_redo->get_log_num();
+            redo_iter++;
+          }
         }
-      } // while
+      } // end while
     }
+  }
+
+  if (OB_SUCC(ret) && stop_flag) {
+    ret = OB_IN_STOP_STATE;
   }
 
   return ret;

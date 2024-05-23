@@ -488,7 +488,7 @@ void ObCdcLSFetchLogResp::reset()
  */
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq::MissLogParam, miss_lsn_);
 OB_SERIALIZE_MEMBER(ObCdcLSFetchMissLogReq, rpc_ver_, ls_id_, miss_log_array_,
-                    client_pid_, client_id_, flag_, compressor_type_, tenant_id_);
+                    client_pid_, client_id_, flag_, compressor_type_, tenant_id_, progress_);
 
 void ObCdcLSFetchMissLogReq::reset()
 {
@@ -500,6 +500,7 @@ void ObCdcLSFetchMissLogReq::reset()
   flag_ = 0;
   tenant_id_ = OB_INVALID_TENANT_ID;
   compressor_type_ = common::ObCompressorType::INVALID_COMPRESSOR;
+  progress_ = OB_INVALID_TIMESTAMP;
 }
 
 int ObCdcLSFetchMissLogReq::append_miss_log(const MissLogParam &param)

@@ -513,6 +513,9 @@ public:
   void set_tenant_id(const uint64_t tenant_id) { tenant_id_ = tenant_id; }
   uint64_t get_tenant_id() const { return tenant_id_; }
 
+  void set_progress(const int64_t progress) { progress_ = progress; }
+  int64_t get_progress() const { return progress_; }
+
   void set_compressor_type(const common::ObCompressorType &compressor_type) { compressor_type_ = compressor_type; }
   common::ObCompressorType get_compressor_type() const { return compressor_type_; }
 
@@ -533,6 +536,7 @@ private:
   int8_t flag_;
   common::ObCompressorType compressor_type_;
   uint64_t tenant_id_;
+  int64_t progress_;
 };
 
 } // namespace obrpc
