@@ -1337,8 +1337,11 @@ int ObIvfflatIndexBuildHelper::init_centers_elkan() {
         }
       }
 
+      if (idx >= total_cnt_) {
+        idx = total_cnt_ - 1 < 0 ? 0 : total_cnt_ - 1;
+      }
       if (OB_FAIL(get_vector_by_sql(idx, next_center))) {
-        LOG_WARN("fail to get vector by sql", K(ret));
+        LOG_WARN("fail to get vector by sql", K(ret), K(idx), K_(total_cnt));
       } else if (OB_FAIL(center_vectors_[cur_idx_].push_back(next_center))) {
         LOG_WARN("failed to push back into array", K(ret));
       }
