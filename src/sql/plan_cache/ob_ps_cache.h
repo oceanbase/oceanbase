@@ -94,7 +94,7 @@ public:
   int deref_all_ps_stmt(const ObIArray<ObPsStmtId> &ps_stmt_ids);
   int inner_ref_stmt_item(const ObPsSqlKey &ps_sql_key, ObPsStmtItem *&ps_stmt_item);
   int deref_stmt_item(const ObPsSqlKey &ps_sql_key);
-  int deref_ps_stmt(const ObPsStmtId stmt_id, bool erase_item = false);
+  int deref_ps_stmt(const ObPsStmtId stmt_id);
   int get_or_add_stmt_item(const ObPsSqlKey &ps_key,
                            const bool is_contain_tmp_tbl,
                            ObPsStmtItem *&ps_item_value);
@@ -129,6 +129,7 @@ public:
   int erase_stmt_item(ObPsStmtId stmt_id, const ObPsSqlKey &ps_key);
 
 private:
+  int destroy_cached_ps(const ObPsStmtId inner_stmt_id);
   int inner_cache_evict(bool is_evict_all);
   int fill_ps_stmt_info(const ObResultSet &result,
                         int64_t param_cnt,

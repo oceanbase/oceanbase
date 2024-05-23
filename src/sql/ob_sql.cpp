@@ -1122,7 +1122,7 @@ int ObSql::do_add_ps_cache(const PsCacheInfoCtx &info_ctx,
           ObPsStmtId inner_stmt_id = ps_stmt_item->get_ps_stmt_id();
           ps_cache->deref_stmt_info(inner_stmt_id); //需要决定是否摘除
         }
-        ps_stmt_item->dec_ref_count_check_erase();
+        ps_stmt_item->dec_ref_count();
       }
     }
   }
@@ -1861,7 +1861,7 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
           || need_do_real_prepare
           || duplicate_prepare) {
         if (NULL != stmt_item) {
-          stmt_item->dec_ref_count_check_erase();
+          stmt_item->dec_ref_count();
         }
         if (NULL != stmt_info) {
           ps_cache->deref_stmt_info(inner_stmt_id); //需要决定是否摘除
