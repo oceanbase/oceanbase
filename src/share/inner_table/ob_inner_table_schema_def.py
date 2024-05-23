@@ -28222,7 +28222,7 @@ def_table_schema(
     0 AS BLOCK
     FROM
     oceanbase.__ALL_VIRTUAL_TRANS_LOCK_STAT
-    GROUP BY (TRANS_ID)
+    GROUP BY SVR_IP, SVR_PORT, TENANT_ID, TRANS_ID
 
     UNION ALL
 
@@ -28315,7 +28315,7 @@ def_table_schema(
 # 21403: DBA_OB_EXTERNAL_TABLE_FILE
 
 def_table_schema(
-  owner           = 'lixinze.lxz',
+  owner           = 'gjw228474',
   table_name      = 'V$OB_TIMESTAMP_SERVICE',
   table_id        = '21404',
   table_type      = 'SYSTEM_VIEW',
@@ -28337,7 +28337,7 @@ def_table_schema(
       (SELECT MAX(SERVICE_EPOCH) FROM
       oceanbase.__all_virtual_timestamp_service
       where TENANT_ID = a.TENANT_ID)
-    GROUP BY TENANT_ID
+    GROUP BY TENANT_ID, TS_TYPE, TS_VALUE, SVR_IP, SVR_PORT
 """.replace("\n", " ")
 )
 
@@ -55189,7 +55189,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'lixinze.lxz',
+  owner = 'gjw228474',
   table_name      = 'V$OB_TIMESTAMP_SERVICE',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
