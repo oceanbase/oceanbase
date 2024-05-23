@@ -376,7 +376,7 @@ int ObRecoveryLSService::process_ls_log_(
           // nothing
         } else if (logservice::TRANS_SERVICE_LOG_BASE_TYPE == header.get_log_type()) {
           ObTxLogBlock tx_log_block;
-          if (OB_FAIL(tx_log_block.init_for_replay(log_buf, log_length, log_pos))) {
+          if (OB_FAIL(tx_log_block.init_for_replay(log_body, log_body_size, pos))) {
             LOG_WARN("failed to init tx log block", KR(ret), K(log_length));
           } else if (OB_FAIL(process_ls_tx_log_(tx_log_block, sync_scn))) {
             LOG_WARN("failed to process ls tx log", KR(ret), K(tx_log_block), K(sync_scn));
