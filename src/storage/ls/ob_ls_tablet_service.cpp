@@ -2733,6 +2733,8 @@ int ObLSTabletService::insert_rows(
                 tbl_rows[i].flag_.set_flag(ObDmlFlag::DF_INSERT);
               }
             }
+          } else if (tbl_rows != static_cast<ObStoreRow *>(ptr)) {
+            tbl_rows = static_cast<ObStoreRow *>(ptr);
           }
 
           if (OB_FAIL(ret)) {
