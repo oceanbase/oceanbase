@@ -228,7 +228,6 @@ int calc_##tritype##_expr(const ObExpr &expr, ObEvalCtx &ctx,                 \
 
 class ObSolidifiedVarsContext
 {
-  OB_UNIS_VERSION(1);
 public:
   ObSolidifiedVarsContext() :
     local_session_var_(NULL),
@@ -242,8 +241,10 @@ public:
     local_tz_wrap_(NULL)
   {
   }
-  virtual ~ObSolidifiedVarsContext() {
+  virtual ~ObSolidifiedVarsContext()
+  {
     if (NULL != local_tz_wrap_ && NULL != alloc_) {
+      local_tz_wrap_->~ObTimeZoneInfoWrap();
       alloc_->free(local_tz_wrap_);
       local_tz_wrap_ = NULL;
     }
