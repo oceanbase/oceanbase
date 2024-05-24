@@ -74,23 +74,29 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
     int64_t affected_rows = 0;
     const char *file_type_str = NULL;
     switch (file_type) {
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA:
+      case ObDiskReportFileType::TENANT_DATA:
         file_type_str = "tenant file data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA:
+      case ObDiskReportFileType::TENANT_META_DATA:
         file_type_str = "tenant meta data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_INDEX_DATA:
+      case ObDiskReportFileType::TENANT_INDEX_DATA:
         file_type_str = "tenant index data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_TMP_DATA:
+      case ObDiskReportFileType::TENANT_TMP_DATA:
         file_type_str = "tenant tmp data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_SLOG_DATA:
+      case ObDiskReportFileType::TENANT_SLOG_DATA:
         file_type_str = "tenant slog data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA:
+      case ObDiskReportFileType::TENANT_CLOG_DATA:
         file_type_str = "tenant clog data";
+        break;
+      case ObDiskReportFileType::TENANT_MAJOR_SSTABLE_DATA:
+        file_type_str = "tenant shared_major data";
+        break;
+      case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
+        file_type_str = "tenant local data";
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -141,23 +147,29 @@ int ObDiskUsageTableOperator::delete_tenant_space_usage(const uint64_t tenant_id
     int64_t affected_rows = 0;
     const char *file_type_str = NULL;
     switch (file_type) {
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA:
+      case ObDiskReportFileType::TENANT_DATA:
         file_type_str = "tenant file data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA:
+      case ObDiskReportFileType::TENANT_META_DATA:
         file_type_str = "tenant file meta data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_INDEX_DATA:
+      case ObDiskReportFileType::TENANT_INDEX_DATA:
         file_type_str = "tenant index data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_TMP_DATA:
+      case ObDiskReportFileType::TENANT_TMP_DATA:
         file_type_str = "tenant tmp data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_SLOG_DATA:
+      case ObDiskReportFileType::TENANT_SLOG_DATA:
         file_type_str = "tenant slog data";
         break;
-      case ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA:
+      case ObDiskReportFileType::TENANT_CLOG_DATA:
         file_type_str = "tenant clog data";
+        break;
+      case ObDiskReportFileType::TENANT_MAJOR_SSTABLE_DATA:
+        file_type_str = "tenant shared_major data";
+        break;
+      case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
+        file_type_str = "tenant local data";
         break;
       default:
         ret = OB_ERR_UNEXPECTED;

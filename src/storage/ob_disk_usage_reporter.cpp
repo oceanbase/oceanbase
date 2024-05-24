@@ -231,9 +231,9 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
 
   if (OB_SUCC(ret)) {
     meta_key.tenant_id_ = tenant_id;
-    meta_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA;
+    meta_key.file_type_ = ObDiskReportFileType::TENANT_META_DATA;
     data_key.tenant_id_ = tenant_id;
-    data_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA;
+    data_key.file_type_ = ObDiskReportFileType::TENANT_DATA;
     if (OB_FAIL(result_map_.set_refactored(meta_key, meta_size, 1 /* whether allowed to override */))) {
       STORAGE_LOG(WARN, "failed to insert meta info result_map_", K(ret), K(meta_key), K(meta_size));
     } else if (OB_FAIL(result_map_.set_refactored(data_key, data_size, 1 /* whether allowed to override */))) {
@@ -302,7 +302,7 @@ int ObDiskUsageReportTask::count_tenant_slog(const uint64_t tenant_id)
   } else if (OB_FAIL(slogger->get_using_disk_space(slog_space))) {
     STORAGE_LOG(WARN, "failed to get the disk space that slog used", K(ret));
   } else {
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_SLOG_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_SLOG_DATA;
     report_key.tenant_id_ = tenant_id;
     if (OB_FAIL(result_map_.set_refactored(report_key, slog_space, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(slog_space));
@@ -325,7 +325,7 @@ int ObDiskUsageReportTask::count_tenant_clog(const uint64_t tenant_id)
   } else if (OB_FAIL(log_svr->get_palf_stable_disk_usage(clog_space, size_limit))) {
     STORAGE_LOG(WARN, "failed to get the disk space that clog used", K(ret));
   } else {
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_CLOG_DATA;
     report_key.tenant_id_ = tenant_id;
     if (OB_FAIL(result_map_.set_refactored(report_key, clog_space, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(clog_space));
@@ -348,7 +348,7 @@ int ObDiskUsageReportTask::count_server_slog()
   } else if (OB_FAIL(slogger->get_using_disk_space(slog_space))) {
     STORAGE_LOG(WARN, "failed to get the disk space that server slog used", K(ret));
   } else {
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_SLOG_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_SLOG_DATA;
     report_key.tenant_id_ = OB_SERVER_TENANT_ID;
     if (OB_FAIL(result_map_.set_refactored(report_key, slog_space, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(slog_space));
@@ -372,7 +372,7 @@ int ObDiskUsageReportTask::count_server_clog()
   } else if (OB_FAIL(log_block_mgr->get_disk_usage(clog_in_use_size_byte, clog_total_size_byte))) {
     STORAGE_LOG(ERROR, "Failed to get clog stat ", KR(ret));
   } else {
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_CLOG_DATA;
     report_key.tenant_id_ = OB_SERVER_TENANT_ID;
     int64_t clog_space = clog_in_use_size_byte;
     if (OB_FAIL(result_map_.set_refactored(report_key, clog_space, 1))) {
@@ -391,7 +391,7 @@ int ObDiskUsageReportTask::count_server_meta()
     STORAGE_LOG(WARN, "failed to get server's meta block list", K(ret));
   } else {
     report_key.tenant_id_ = OB_SERVER_TENANT_ID;
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_META_DATA;
     if (OB_FAIL(result_map_.set_refactored(report_key, block_list.count() * common::OB_DEFAULT_MACRO_BLOCK_SIZE, 1))) {
       STORAGE_LOG(WARN, "failed to set result_map_", K(ret), K(report_key), K(block_list.count()));
     }
@@ -408,7 +408,7 @@ int ObDiskUsageReportTask::count_tenant_tmp()
   if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(tenant_block_cnt_pairs))) {
     STORAGE_LOG(WARN, "failed to get tenant tmp macro block list", K(ret));
   } else {
-    report_key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_TMP_DATA;
+    report_key.file_type_ = ObDiskReportFileType::TENANT_TMP_DATA;
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_block_cnt_pairs.count(); ++i) {
       report_key.tenant_id_ = tenant_block_cnt_pairs.at(i).first;
       macro_block_cnt = tenant_block_cnt_pairs.at(i).second;
@@ -477,9 +477,9 @@ int ObDiskUsageReportTask::get_data_disk_used_size(const uint64_t tenant_id, int
     // the file_type_ of which data is on data disk is needed
     const int need_cnt = 3;
     const ObDiskReportFileType file_types_need[need_cnt] = {
-        ObDiskReportFileType::OB_DISK_REPORT_TENANT_DATA,
-        ObDiskReportFileType::OB_DISK_REPORT_TENANT_META_DATA,
-        ObDiskReportFileType::OB_DISK_REPORT_TENANT_TMP_DATA
+        ObDiskReportFileType::TENANT_DATA,
+        ObDiskReportFileType::TENANT_META_DATA,
+        ObDiskReportFileType::TENANT_TMP_DATA
     };
     ObDiskUsageReportKey key;
     key.tenant_id_ = tenant_id;
@@ -511,7 +511,7 @@ int ObDiskUsageReportTask::get_clog_disk_used_size(const uint64_t tenant_id, int
   } else {
     ObDiskUsageReportKey key;
     key.tenant_id_ = tenant_id;
-    key.file_type_ = ObDiskReportFileType::OB_DISK_REPORT_TENANT_CLOG_DATA;
+    key.file_type_ = ObDiskReportFileType::TENANT_CLOG_DATA;
 
     int64_t size = 0;
     if (OB_FAIL(result_map_.get_refactored(key, size)) && OB_HASH_NOT_EXIST != ret) {
@@ -530,7 +530,7 @@ int ObDiskUsageReportTask::delete_tenant_usage_stat(const uint64_t tenant_id)
   int ret = OB_SUCCESS;
   ObDiskUsageReportKey key;
   key.tenant_id_ = tenant_id;
-  int64_t file_type_num = static_cast<int64_t>(ObDiskReportFileType::OB_DISK_REPORT_TYPE_NUM);
+  int64_t file_type_num = static_cast<int64_t>(ObDiskReportFileType::TYPE_MAX);
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

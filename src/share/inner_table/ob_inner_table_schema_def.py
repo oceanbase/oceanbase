@@ -34368,6 +34368,14 @@ def_table_schema(
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
 # 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
 #
+# 21591 - 21596 placeholder by gaishun.gs
+# 21591: DBA_OB_SERVER_SPACE_USAGE
+# 21592: CDB_OB_SERVER_SPACE_USAGE
+# 21593: DBA_OB_SPACE_USAGE
+# 21594: CDB_OB_SPACE_USAGE
+# 21595: DBA_OB_TABLE_SPACE_USAGE
+# 21596: CDB_OB_TABLE_SPACE_USAGE
+
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -61952,6 +61960,11 @@ def_table_schema(
 # 28233: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 28234: DBA_OB_SPATIAL_COLUMNS
 #
+# 28235 - 28237 placeholder by gaishun.gs
+# 28235: DBA_OB_SERVER_SPACE_USAGE_ORA
+# 28236: DBA_OB_SPACE_USAGE_ORA
+# 28237: DBA_OB_TABLE_SPACE_USAGE_ORA
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
