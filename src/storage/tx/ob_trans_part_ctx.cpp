@@ -308,7 +308,7 @@ void ObPartTransCtx::default_init_()
   exec_info_.reset();
   ctx_tx_data_.reset();
   sub_state_.reset();
-//  reset_log_cbs_();
+  reset_log_cbs_();
   last_op_sn_ = 0;
   last_scn_.reset();
   first_scn_.reset();

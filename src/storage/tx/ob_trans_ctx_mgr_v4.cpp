@@ -452,6 +452,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
                           epoch_v,
                           this,
                           arg.for_replay_))) {
+      TRANS_LOG(WARN, "init trans ctx fail", K(ret), "ctx", OB_P(tmp), K(arg));
     } else if (FALSE_IT(inc_total_tx_ctx_count())) {
     } else if (FALSE_IT(tmp_ctx->get_ctx_guard(ctx_lock_guard, CtxLockGuard::MODE::CTX))) {
     } else if (OB_FAIL(ls_tx_ctx_map_.insert_and_get(arg.tx_id_, tmp_ctx, &exist_ctx))) {
