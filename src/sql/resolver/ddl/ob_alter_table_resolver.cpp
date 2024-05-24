@@ -5737,7 +5737,7 @@ int ObAlterTableResolver::check_alter_part_key_allowed(const ObTableSchema &tabl
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error", K(ret), K(*part_expr));
       } else if (PARTITION_FUNC_TYPE_RANGE_COLUMNS == part_type || PARTITION_FUNC_TYPE_LIST_COLUMNS == part_type) {
-        // Some partition column type altering is not allowed in MySQL, and there it is not documented. If you need to add more rules, add it here.
+        // Some partition column type altering is not allowed in MySQL, and there is no document about it. If you need to add more rules, add it here.
         const common::ColumnType src_type = src_col_schema.get_data_type();
         const common::ColumnType dst_type = dst_col_schema.get_data_type();
         LOG_INFO("partition column type altering", K(src_type), K(dst_type));
