@@ -441,7 +441,6 @@ public:
   int notify_mds_table_flush_ret(
       const share::SCN &flush_scn,
       const int flush_ret);
-  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int64_t get_memtable_count() const { return memtable_count_; }
 
   // tablet mds data read interface
@@ -722,6 +721,7 @@ private:
   int mark_mds_table_switched_to_empty_shell_();
   int fetch_autoinc_seq(ObTabletMemberWrapper<share::ObTabletAutoincSeq> &wrapper) const;
   int handle_transfer_replace_(const ObBatchUpdateTableStoreParam &param);
+  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

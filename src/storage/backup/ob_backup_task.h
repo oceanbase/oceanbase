@@ -562,7 +562,7 @@ private:
       ObBackupMacroBlockIndex &macro_index);
   int write_backup_meta_(const blocksstable::ObBufferReader &data, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
-  int get_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
+  int get_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);
   int release_tablet_handle_(const common::ObTabletID &tablet_id);
   int check_backup_finish_(bool &finish);
   int do_generate_next_backup_dag_();

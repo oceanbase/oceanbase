@@ -146,25 +146,40 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletStat);
 };
 
+struct ObBackupTabletHandleRef
+{
+public:
+  ObBackupTabletHandleRef() : allocator_(), tablet_handle_() {}
+  ~ObBackupTabletHandleRef() {}
+  bool is_valid() const { return tablet_handle_.is_valid(); }
+  TO_STRING_KV(K_(tablet_handle));
+  common::ObArenaAllocator allocator_;
+  storage::ObTabletHandle tablet_handle_;
+};
+
 class ObBackupTabletHolder final {
 public:
   ObBackupTabletHolder();
   ~ObBackupTabletHolder();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  int hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
-  int get_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
+  int alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_handle);
+  void free_tablet_ref(ObBackupTabletHandleRef *&tablet_handle);
+  int set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
+  int get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);
   int release_tablet(const common::ObTabletID &tablet_id);
   bool is_empty() const;
   void reuse();
   void reset();
 
 private:
-  typedef common::hash::ObHashMap<common::ObTabletID, storage::ObTabletHandle> TabletHandleMap;
+  typedef common::hash::ObHashMap<common::ObTabletID, ObBackupTabletHandleRef *> TabletHandleMap;
+  typedef common::DefaultPageAllocator BaseAllocator;
 
 private:
   bool is_inited_;
   share::ObLSID ls_id_;
   TabletHandleMap holder_map_;
+  ObFIFOAllocator fifo_allocator_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTabletHolder);
 };
 
@@ -286,13 +301,15 @@ private:
 
   // make sure clog checkpoint scn of the returned tablet is >= consistent_scn.
   int get_tablet_handle_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-      storage::ObTabletHandle &tablet_handle);
+      ObBackupTabletHandleRef *&tablet_ref);
+  int inner_get_tablet_handle_without_memtables_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+      ObBackupTabletHandleRef *&tablet_ref);
   int get_consistent_scn_(share::SCN &consistent_scn) const;
   int report_tablet_skipped_(const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type,
                              const share::ObBackupDataType &backup_data_type);
   int get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id, share::ObBackupSkippedType &skipped_type);
-  int hold_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
+  int hold_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
   int fetch_tablet_sstable_array_(const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
       const ObTabletTableStore &table_store, const share::ObBackupDataType &backup_data_type,
       common::ObIArray<storage::ObITable *> &sstable_array);
@@ -348,7 +365,8 @@ class ObBackupMacroBlockTaskMgr {
 public:
   ObBackupMacroBlockTaskMgr();
   virtual ~ObBackupMacroBlockTaskMgr();
-  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size);
+  int init(const share::ObBackupDataType &backup_data_type, const int64_t batch_size,
+      ObLSBackupCtx &ls_backup_ctx);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   share::ObBackupDataType get_backup_data_type() const;
   int receive(const int64_t task_id, const common::ObIArray<ObBackupProviderItem> &id_list);
@@ -382,6 +400,7 @@ private:
   volatile int64_t cur_task_id_;
   ObArray<ObBackupProviderItem> pending_list_;
   ObArray<ObBackupProviderItem> ready_list_;
+  ObLSBackupCtx *ls_backup_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockTaskMgr);
 };
 

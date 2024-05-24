@@ -6390,6 +6390,58 @@ int ObLSTabletService::ha_get_tablet(
   return ret;
 }
 
+int ObLSTabletService::get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  const bool force_alloc_new = true;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant meta mem mgr should not be null", K(ret), KP(t3m));
+  } else if (OB_FAIL(t3m->get_tablet_with_allocator(
+      priority, key, allocator, handle, force_alloc_new))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to get tablet with allocator", K(ret), K(priority), K(key));
+    }
+  } else if (OB_FAIL(handle.get_obj()->clear_memtables_on_table_store())) {
+    LOG_WARN("failed to clear memtables on table store", K(ret), K(key));
+  }
+  return ret;
+}
+
+int ObLSTabletService::ha_get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_tablet_without_memtables(priority, key, allocator, handle))) {
+    LOG_WARN("failed to get tablet without memtables", K(ret), K(priority), K(key));
+  } else if (OB_ISNULL(tablet = handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(key));
+  } else if (tablet->is_empty_shell()) {
+    // treat empty shell as tablet not exist.
+    ret = OB_TABLET_NOT_EXIST;
+  }
+  return ret;
+}
+
 int ObLSTabletService::check_real_leader_for_4377_(const ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
