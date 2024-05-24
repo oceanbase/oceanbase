@@ -1954,6 +1954,14 @@ public:
                                               bool &is_valid_join_chain);
   static int get_null_reject_rels(const ObIArray<ObRawExpr *> &conditions,
                                   ObSqlBitSet<> &null_reject_rels);
+  static int get_having_filters_for_deduce(const ObSelectStmt* sel_stmt,
+                                           const ObIArray<ObRawExpr*> &raw_having_exprs,
+                                           const ObIArray<ObRawExpr*> &group_clause_exprs,
+                                           ObIArray<ObRawExpr*> &having_exprs_for_deduce);
+  static int check_has_aggr_with_group_expr(const ObRawExpr *expr,
+                                            const ObIArray<ObRawExpr*> &group_clause_exprs,
+                                            bool in_aggr,
+                                            bool &has_target);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
