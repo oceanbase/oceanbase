@@ -106,15 +106,9 @@ private:
                           sql::ObFreeSessionCtx &free_session_ctx);
   int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
 
-  int get_column_idxs(ObIArray<int64_t> &column_idxs) const;
-
   int init_instance();
   int commit_instance();
   void destroy_instance();
-  int get_compressor_type(const uint64_t tenant_id,
-                          const uint64_t table_id,
-                          const int64_t parallel,
-                          ObCompressorType &compressor_type);
 
 private:
   class ClientTaskExectueProcessor;

@@ -197,6 +197,7 @@ ob_set_subtarget(ob_server table_load
   table_load/ob_table_load_service.cpp
   table_load/ob_table_load_store_ctx.cpp
   table_load/ob_table_load_store_trans.cpp
+  table_load/ob_table_load_store_trans_px_writer.cpp
   table_load/ob_table_load_store.cpp
   table_load/ob_table_load_table_compactor.cpp
   table_load/ob_table_load_table_ctx.cpp

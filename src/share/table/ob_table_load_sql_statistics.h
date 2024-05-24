@@ -30,7 +30,7 @@ public:
   void reset();
   bool is_empty() const
   {
-    return table_stat_array_.count() == 0 || col_stat_array_.count() == 0;
+    return table_stat_array_.count() == 0 && col_stat_array_.count() == 0;
   }
   int allocate_table_stat(ObOptTableStat *&table_stat);
   int allocate_col_stat(ObOptOSGColumnStat *&col_stat);

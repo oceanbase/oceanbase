@@ -69,7 +69,7 @@ private:
     bool is_valid() const;
     TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel), K_(thread_count),
                  K_(batch_row_count), K_(data_mem_usage_limit), K_(need_sort), K_(online_opt_stat_gather),
-                 K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(store_column_idxs));
+                 K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(column_ids));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -88,8 +88,7 @@ private:
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
     DataAccessParam data_access_param_;
-    common::ObSEArray<int64_t, 16>
-      store_column_idxs_; // Mapping of stored columns to source data columns
+    ObArray<uint64_t> column_ids_;
   };
 
   struct LoadExecuteContext

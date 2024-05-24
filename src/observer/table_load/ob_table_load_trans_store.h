@@ -67,8 +67,7 @@ public:
 public:
   // 只在对应工作线程中调用, 串行执行
   int write(int32_t session_id, const table::ObTableLoadTabletObjRowArray &row_array);
-  int write(int32_t session_id, const ObTabletID &tablet_id,
-      const common::ObIArray<common::ObNewRow> &row_array);
+  int px_write(const ObTabletID &tablet_id, const common::ObNewRow &row);
   int flush(int32_t session_id);
   int clean_up(int32_t session_id);
 public:

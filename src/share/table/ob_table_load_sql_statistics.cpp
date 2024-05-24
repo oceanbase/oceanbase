@@ -135,21 +135,28 @@ int ObTableLoadSqlStatistics::merge(const ObTableLoadSqlStatistics& other)
       }
     }
   } else {
+    if (OB_UNLIKELY(table_stat_array_.count() != other.table_stat_array_.count() ||
+                    col_stat_array_.count() != other.col_stat_array_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      OB_LOG(WARN, "invalid args", KR(ret),
+             K(table_stat_array_.count()), K(col_stat_array_.count()),
+             K(other.table_stat_array_.count()), K(other.col_stat_array_.count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret)&& i < other.table_stat_array_.count(); ++i) {
       ObOptTableStat *table_stat = other.table_stat_array_.at(i);
       if (OB_FAIL(table_stat_array_.at(i)->merge_table_stat(*table_stat))) {
-        OB_LOG(WARN, "failed to merge table stat");
+        OB_LOG(WARN, "failed to merge table stat", KR(ret));
       }
     }
     for (int64_t i = 0; OB_SUCC(ret)&& i < other.col_stat_array_.count(); ++i) {
       ObOptOSGColumnStat *col_stat = other.col_stat_array_.at(i);
       if (OB_ISNULL(col_stat)) {
         ret = OB_ERR_UNEXPECTED;
-        OB_LOG(WARN, "get unexpected null");
+        OB_LOG(WARN, "get unexpected null", KR(ret));
       }
       // ObOptOSGColumnStat的序列化结果只序列化里面的ObOptColumnStat, 需要调用ObOptColumnStat的merge函数
       else if (OB_FAIL(col_stat_array_.at(i)->col_stat_->merge_column_stat(*col_stat->col_stat_))) {
-        OB_LOG(WARN, "failed to merge col stat");
+        OB_LOG(WARN, "failed to merge col stat", KR(ret));
       }
     }
   }

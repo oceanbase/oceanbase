@@ -558,75 +558,6 @@ void ObTableLoadClientTask::get_status(ObTableLoadClientStatus &client_status,
   error_code = error_code_;
 }
 
-int ObTableLoadClientTask::get_column_idxs(ObIArray<int64_t> &column_idxs) const
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = param_.get_tenant_id();
-  const uint64_t table_id = param_.get_table_id();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  ObArray<int64_t> column_ids; // in user define order
-  ObArray<ObColDesc> column_descs; // in storage order
-  bool found_column = true;
-  column_idxs.reset();
-  if (OB_FAIL(
-        ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, column_ids))) {
-    LOG_WARN("failed to get all column idx", K(ret));
-  } else if (OB_UNLIKELY(column_ids.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected empty column idxs", KR(ret));
-  } else if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
-    LOG_WARN("fail to get column descs", KR(ret));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
-    const ObColDesc &col_desc = column_descs.at(i);
-    const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(col_desc.col_id_);
-    if (OB_ISNULL(col_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
-    } else {
-      found_column = col_schema->is_hidden();
-    }
-    // 在用户定义的列数组中找到对应的列
-    for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
-      const int64_t column_id = column_ids.at(j);
-      if (col_desc.col_id_ == column_id) {
-        found_column = true;
-        if (OB_FAIL(column_idxs.push_back(j))) {
-          LOG_WARN("fail to push back column desc", KR(ret), K(column_idxs), K(i), K(col_desc),
-                   K(j), K(column_ids));
-        }
-      }
-    }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column not found", KR(ret), K(column_ids), K(column_descs),
-             K(column_idxs));
-  }
-  return ret;
-}
-
-int ObTableLoadClientTask::get_compressor_type(const uint64_t tenant_id,
-                                               const uint64_t table_id,
-                                               const int64_t parallel,
-                                               ObCompressorType &compressor_type)
-{
-  int ret = OB_SUCCESS;
-  ObCompressorType table_compressor_type = ObCompressorType::NONE_COMPRESSOR;
-  if (OB_FAIL(
-        ObTableLoadSchema::get_table_compressor_type(tenant_id, table_id, table_compressor_type))) {
-    LOG_WARN("fail to get table compressor type", KR(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_compressor_type, parallel,
-                                                             compressor_type))) {
-    LOG_WARN("fail to get tmp store compressor type", KR(ret));
-  }
-  return ret;
-}
-
-
 int ObTableLoadClientTask::init_instance()
 {
   int ret = OB_SUCCESS;
@@ -634,34 +565,41 @@ int ObTableLoadClientTask::init_instance()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
+    const uint64_t tenant_id = param_.get_tenant_id();
+    const uint64_t table_id = param_.get_table_id();
     omt::ObTenant *tenant = nullptr;
-    ObArray<int64_t> column_idxs;
+    ObSchemaGetterGuard schema_guard;
+    ObArray<uint64_t> column_ids;
     bool online_opt_stat_gather = false;
     ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
-    if (OB_FAIL(GCTX.omt_->get_tenant(param_.get_tenant_id(), tenant))) {
-      LOG_WARN("fail to get tenant handle", KR(ret), K(param_.get_tenant_id()));
-    } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(param_.get_tenant_id(), online_opt_stat_gather))) {
+    if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
+      LOG_WARN("fail to get tenant handle", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(tenant_id, online_opt_stat_gather))) {
       LOG_WARN("failed to get tenant optimizer_gather_stats_on_load", KR(ret));
-    } else if (OB_FAIL(get_column_idxs(column_idxs))) {
-      LOG_WARN("fail to get column idxs", KR(ret));
-    } else if (OB_FAIL(get_compressor_type(param_.get_tenant_id(), param_.get_table_id(), session_count_, compressor_type))) {
+    } else if (OB_FAIL(ObTableLoadSchema::get_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(schema_guard, table_id))) {
+      LOG_WARN("fail to check support direct load", KR(ret));
+    } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(schema_guard, tenant_id, table_id, column_ids))) {
+      LOG_WARN("fail to get user column ids", KR(ret));
+    } else if (OB_FAIL(ObTableLoadSchema::get_compressor_type(schema_guard, tenant_id, table_id, param_.get_parallel(), compressor_type))) {
       LOG_WARN("fail to get compressor type", KR(ret));
     } else {
       session_count_ = MIN(param_.get_parallel(), (int64_t)tenant->unit_max_cpu() * 2);
       ObTableLoadParam load_param;
-      load_param.tenant_id_ = param_.get_tenant_id();
-      load_param.table_id_ = param_.get_table_id();
+      load_param.tenant_id_ = tenant_id;
+      load_param.table_id_ = table_id;
       load_param.parallel_ = param_.get_parallel();
       load_param.session_count_ = session_count_;
       load_param.batch_size_ = 100;
       load_param.max_error_row_count_ = param_.get_max_error_row_count();
-      load_param.column_count_ = column_idxs.count();
+      load_param.column_count_ = column_ids.count();
       load_param.need_sort_ = true;
       load_param.px_mode_ = false;
       load_param.online_opt_stat_gather_ = online_opt_stat_gather; // 支持统计信息收集需要构造ObExecContext
       load_param.dup_action_ = param_.get_dup_action();
       load_param.compressor_type_ = compressor_type;
-      if (OB_FAIL(instance_.init(load_param, column_idxs, exec_ctx_))) {
+      if (OB_FAIL(instance_.init(load_param, column_ids, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
       }
     }

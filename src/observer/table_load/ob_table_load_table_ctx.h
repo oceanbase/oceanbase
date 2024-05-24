@@ -50,7 +50,7 @@ public:
   TO_STRING_KV(K_(param), KP_(coordinator_ctx), KP_(store_ctx), "ref_count", get_ref_count(),
                K_(is_dirty), K_(is_inited));
 public:
-  int init_coordinator_ctx(const common::ObIArray<int64_t> &idx_array,
+  int init_coordinator_ctx(const common::ObIArray<uint64_t> &column_ids,
                            ObTableLoadExecCtx *exec_ctx);
   int init_store_ctx(
     const table::ObTableLoadArray<table::ObTableLoadLSIdAndPartitionId> &partition_id_array,

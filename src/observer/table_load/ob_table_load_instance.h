@@ -15,6 +15,7 @@
 #include "share/table/ob_table_load_row_array.h"
 #include "share/table/ob_table_load_define.h"
 #include "sql/engine/cmd/ob_load_data_utils.h"
+#include "observer/table_load/ob_table_load_struct.h"
 
 namespace oceanbase
 {
@@ -31,28 +32,59 @@ public:
   ObTableLoadInstance();
   ~ObTableLoadInstance();
   void destroy();
-  int init(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array,
+  // column_ids不包含堆表的hidden pk
+  int init(ObTableLoadParam &param,
+           const common::ObIArray<uint64_t> &column_ids,
            ObTableLoadExecCtx *execute_ctx);
   int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   int commit(table::ObTableLoadResultInfo &result_info);
   int px_commit_data();
   int px_commit_ddl();
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
-  void update_job_stat_parsed_rows(int64_t parsed_rows)
-  {
-    ATOMIC_AAF(&job_stat_->parsed_rows_, parsed_rows);
-  }
-  void update_job_stat_parsed_bytes(int64_t parsed_bytes)
-  {
-    ATOMIC_AAF(&job_stat_->parsed_bytes_, parsed_bytes);
-  }
 private:
-  int create_table_ctx(ObTableLoadParam &param, const common::ObIArray<int64_t> &idx_array);
-  int begin();
+  int start_stmt(const ObTableLoadParam &param);
+  int end_stmt(const bool commit);
+
+  int start_redef_table(const ObTableLoadParam &param);
+  int commit_redef_table();
+  int abort_redef_table();
+
+  int start_direct_load(const ObTableLoadParam &param, const common::ObIArray<uint64_t> &column_ids);
+  int end_direct_load(const bool commit);
   int start_trans();
-  int check_trans_committed();
-  int check_merged();
+  int write_trans(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
+  int commit_trans();
 private:
+  struct StmtCtx
+  {
+  public:
+    StmtCtx()
+      : tenant_id_(OB_INVALID_TENANT_ID),
+        table_id_(OB_INVALID_ID),
+        session_info_(nullptr),
+        is_started_(false)
+    {
+    }
+    void reset()
+    {
+      tenant_id_ = OB_INVALID_TENANT_ID;
+      table_id_ = OB_INVALID_ID;
+      ddl_param_.reset();
+      session_info_ = nullptr;
+      is_started_ = false;
+    }
+    bool is_started() const { return is_started_; }
+    TO_STRING_KV(K_(tenant_id),
+                 K_(table_id),
+                 K_(ddl_param),
+                 KP_(session_info));
+  public:
+    uint64_t tenant_id_;
+    uint64_t table_id_;
+    ObTableLoadDDLParam ddl_param_;
+    sql::ObSQLSessionInfo *session_info_;
+    bool is_started_;
+  };
   struct TransCtx
   {
   public:
@@ -71,8 +103,9 @@ private:
   common::ObIAllocator *allocator_;
   ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
+  StmtCtx stmt_ctx_;
   TransCtx trans_ctx_;
-  bool is_committed_;
+  table::ObTableLoadResultInfo result_info_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadInstance);
 };
