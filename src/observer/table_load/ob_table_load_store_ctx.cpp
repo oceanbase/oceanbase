@@ -120,7 +120,7 @@ int ObTableLoadStoreCtx::init(
       table_data_desc_.sstable_data_block_size_ =
         ObDirectLoadSSTableDataBlock::DEFAULT_DATA_BLOCK_SIZE;
       table_data_desc_.extra_buf_size_ = ObDirectLoadTableDataDesc::DEFAULT_EXTRA_BUF_SIZE;
-      table_data_desc_.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
+      table_data_desc_.compressor_type_ = ctx_->param_.compressor_type_;
       table_data_desc_.is_heap_table_ = ctx_->schema_.is_heap_table_;
 
       int64_t wa_mem_limit = 0;
@@ -583,7 +583,7 @@ int ObTableLoadStoreCtx::init_session_ctx_array()
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->param_.session_count_; ++i) {
       SessionContext *session_ctx = session_ctx_array_ + i;
       session_ctx->autoinc_param_ = autoinc_param;
-      if (is_multiple_mode_) {
+      if (!is_fast_heap_table_) {
         session_ctx->extra_buf_size_ = table_data_desc_.extra_buf_size_;
         if (OB_ISNULL(session_ctx->extra_buf_ =
                         static_cast<char *>(allocator_.alloc(session_ctx->extra_buf_size_)))) {

@@ -609,6 +609,24 @@ int ObTableLoadClientTask::get_column_idxs(ObIArray<int64_t> &column_idxs) const
   return ret;
 }
 
+int ObTableLoadClientTask::get_compressor_type(const uint64_t tenant_id,
+                                               const uint64_t table_id,
+                                               const int64_t parallel,
+                                               ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObCompressorType table_compressor_type = ObCompressorType::NONE_COMPRESSOR;
+  if (OB_FAIL(
+        ObTableLoadSchema::get_table_compressor_type(tenant_id, table_id, table_compressor_type))) {
+    LOG_WARN("fail to get table compressor type", KR(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_compressor_type, parallel,
+                                                             compressor_type))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  }
+  return ret;
+}
+
+
 int ObTableLoadClientTask::init_instance()
 {
   int ret = OB_SUCCESS;
@@ -619,12 +637,15 @@ int ObTableLoadClientTask::init_instance()
     omt::ObTenant *tenant = nullptr;
     ObArray<int64_t> column_idxs;
     bool online_opt_stat_gather = false;
+    ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
     if (OB_FAIL(GCTX.omt_->get_tenant(param_.get_tenant_id(), tenant))) {
       LOG_WARN("fail to get tenant handle", KR(ret), K(param_.get_tenant_id()));
     } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(param_.get_tenant_id(), online_opt_stat_gather))) {
       LOG_WARN("failed to get tenant optimizer_gather_stats_on_load", KR(ret));
     } else if (OB_FAIL(get_column_idxs(column_idxs))) {
       LOG_WARN("fail to get column idxs", KR(ret));
+    } else if (OB_FAIL(get_compressor_type(param_.get_tenant_id(), param_.get_table_id(), session_count_, compressor_type))) {
+      LOG_WARN("fail to get compressor type", KR(ret));
     } else {
       session_count_ = MIN(param_.get_parallel(), (int64_t)tenant->unit_max_cpu() * 2);
       ObTableLoadParam load_param;
@@ -639,6 +660,7 @@ int ObTableLoadClientTask::init_instance()
       load_param.px_mode_ = false;
       load_param.online_opt_stat_gather_ = online_opt_stat_gather; // 支持统计信息收集需要构造ObExecContext
       load_param.dup_action_ = param_.get_dup_action();
+      load_param.compressor_type_ = compressor_type;
       if (OB_FAIL(instance_.init(load_param, column_idxs, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
       }

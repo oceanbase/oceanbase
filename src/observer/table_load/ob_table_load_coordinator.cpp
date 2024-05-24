@@ -287,6 +287,7 @@ int ObTableLoadCoordinator::pre_begin_peers()
     arg.snapshot_version_ = ctx_->ddl_param_.snapshot_version_;
     arg.data_version_ = ctx_->ddl_param_.data_version_;
     arg.session_info_ = ctx_->session_info_;
+    arg.compressor_type_ = param_.compressor_type_;
     for (int64_t i = 0; OB_SUCC(ret) && i < all_leader_info_array.count(); ++i) {
       const ObTableLoadPartitionLocation::LeaderInfo &leader_info = all_leader_info_array.at(i);
       const ObTableLoadPartitionLocation::LeaderInfo &target_leader_info =

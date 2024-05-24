@@ -688,7 +688,6 @@ int ObTableLoadParallelMergeCtx::start(ObTableLoadParallelMergeCb *cb)
     LOG_WARN("invalid args", KR(ret), KP(cb));
   } else {
     cb_ = cb;
-    abort_unless(1 >= tablet_ctx_map_.size()); // mutiple tablet sstable only
     for (TabletCtxIterator iter = tablet_ctx_map_.begin();
          OB_SUCC(ret) && iter != tablet_ctx_map_.end(); ++iter) {
       ObTableLoadParallelMergeTabletCtx *tablet_ctx = iter->second;

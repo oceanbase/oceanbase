@@ -135,6 +135,14 @@ enum ObDDLTaskStatus {
   SUCCESS = 100
 };
 
+const char *const temp_store_format_options[] =
+{
+  "auto",
+  "zstd",
+  "lz4",
+  "none",
+};
+
 static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
   const char *str = nullptr;
   switch(task_status) {
@@ -516,6 +524,10 @@ public:
   static int check_schema_version_refreshed(
       const uint64_t tenant_id,
       const int64_t target_schema_version);
+  static int get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                          const int64_t parallel,
+                                          ObCompressorType &compr_type);
+
 private:
   static int generate_order_by_str(
       const ObIArray<int64_t> &select_column_ids,

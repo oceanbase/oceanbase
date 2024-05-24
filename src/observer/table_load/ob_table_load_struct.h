@@ -52,9 +52,13 @@ public:
   }
   int compare(const ObTableLoadKey &other) const
   {
-    return (tenant_id_ != other.tenant_id_ ? tenant_id_ - other.tenant_id_
-                                           : table_id_ - other.table_id_);
+    if (tenant_id_ != other.tenant_id_) {
+      return (tenant_id_ > other.tenant_id_ ? 1 : -1);
+    } else {
+      return (table_id_ != other.table_id_ ? (table_id_ > other.table_id_ ? 1 : -1) : 0);
+    }
   }
+
   TO_STRING_KV(K_(tenant_id), K_(table_id));
 public:
   uint64_t tenant_id_;
@@ -88,12 +92,24 @@ public:
   }
   int compare(const ObTableLoadUniqueKey &other) const
   {
-    return (table_id_ != other.table_id_ ? table_id_ - other.table_id_ : task_id_ - other.task_id_);
+    if (table_id_ != other.table_id_) {
+      return (table_id_ > other.table_id_ ? 1 : -1);
+    } else {
+      return (task_id_ != other.task_id_ ? (task_id_ > other.task_id_ ? 1 : -1) : 0);
+    }
   }
   TO_STRING_KV(K_(table_id), K_(task_id));
 public:
   uint64_t table_id_;
   int64_t task_id_;
+};
+
+enum class ObTableLoadExeMode {
+  FAST_HEAP_TABLE = 0,
+  GENERAL_TABLE_COMPACT = 1,
+  MULTIPLE_HEAP_TABLE_COMPACT = 2,
+  MEM_COMPACT = 3,
+  MAX_TYPE
 };
 
 struct ObTableLoadParam
@@ -110,7 +126,8 @@ struct ObTableLoadParam
       need_sort_(false),
       px_mode_(false),
       online_opt_stat_gather_(false),
-      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE)
+      dup_action_(sql::ObLoadDupActionType::LOAD_INVALID_MODE),
+      compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
   {
   }
 
@@ -132,12 +149,13 @@ struct ObTableLoadParam
            parallel_ > 0 &&
            session_count_ > 0 &&
            batch_size_ > 0 &&
-           column_count_ > 0;
+           column_count_ > 0 &&
+           ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
   }
 
   TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
                K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dup_action));
+               K_(online_opt_stat_gather), K_(dup_action), K_(compressor_type));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -151,6 +169,7 @@ public:
   bool px_mode_;
   bool online_opt_stat_gather_;
   sql::ObLoadDupActionType dup_action_;
+  ObCompressorType compressor_type_;
 };
 
 struct ObTableLoadDDLParam

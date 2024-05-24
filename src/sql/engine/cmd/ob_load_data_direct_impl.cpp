@@ -2125,6 +2125,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   int ret = OB_SUCCESS;
   execute_ctx_.exec_ctx_.exec_ctx_ = ctx_;
   execute_ctx_.allocator_ = &ctx_->get_allocator();
+  ObCompressorType table_compressor_type = ObCompressorType::NONE_COMPRESSOR;
   ObTableLoadParam load_param;
   load_param.tenant_id_ = execute_param_.tenant_id_;
   load_param.table_id_ = execute_param_.table_id_;
@@ -2138,8 +2139,14 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.sql_mode_ = execute_param_.sql_mode_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
-  if (OB_FAIL(direct_loader_.init(load_param, execute_param_.store_column_idxs_,
-                                  &execute_ctx_.exec_ctx_))) {
+  if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
+        execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
+    LOG_WARN("fail to get table compressor type", KR(ret));
+  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
+               table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
+    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.store_column_idxs_,
+                                         &execute_ctx_.exec_ctx_))) {
     LOG_WARN("fail to init direct loader", KR(ret));
   } else if (OB_FAIL(init_logger())) {
     LOG_WARN("fail to init logger", KR(ret));

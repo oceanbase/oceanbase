@@ -1545,6 +1545,40 @@ int ObDDLUtil::check_table_empty_in_oracle_mode(
   return ret;
 }
 
+int ObDDLUtil::get_temp_store_compress_type(const ObCompressorType schema_compr_type,
+                                            const int64_t parallel,
+                                            ObCompressorType &compr_type)
+{
+  int ret = OB_SUCCESS;
+  const int64_t COMPRESS_PARALLELISM_THRESHOLD = 8;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  compr_type = NONE_COMPRESSOR;
+  if (OB_UNLIKELY(!tenant_config.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail get tenant_config", K(ret), K(MTL_ID()));
+  } else {
+    if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("NONE")) {
+      compr_type = NONE_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("ZSTD")) {
+      compr_type = ZSTD_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("LZ4")) {
+      compr_type = LZ4_COMPRESSOR;
+    } else if (0 == tenant_config->_ob_ddl_temp_file_compress_func.get_value_string().case_compare("AUTO")) {
+      if (parallel >= COMPRESS_PARALLELISM_THRESHOLD) {
+        compr_type = schema_compr_type;
+      } else {
+        compr_type = NONE_COMPRESSOR;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the temp store format config is unexpected", K(ret), K(tenant_config->_ob_ddl_temp_file_compress_func.get_value_string()));
+    }
+  }
+  LOG_INFO("get compressor type", K(ret), K(compr_type));
+  return ret;
+}
+
+
 /******************           ObCheckTabletDataComplementOp         *************/
 
 int ObCheckTabletDataComplementOp::check_task_inner_sql_session_status(

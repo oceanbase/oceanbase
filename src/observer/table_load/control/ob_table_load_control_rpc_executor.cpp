@@ -62,6 +62,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.px_mode_ = arg_.px_mode_;
     param.online_opt_stat_gather_ = arg_.online_opt_stat_gather_;
     param.dup_action_ = arg_.dup_action_;
+    param.compressor_type_ = arg_.compressor_type_;
     ObTableLoadDDLParam ddl_param;
     uint64_t data_version = 0;
     ddl_param.dest_table_id_ = arg_.dest_table_id_;

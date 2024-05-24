@@ -234,6 +234,17 @@ bool ObConfigResourceLimitSpecChecker::check(const ObConfigItem &t) const
   return OB_SUCCESS == ret;
 }
 
+bool ObConfigTempStoreFormatChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  for (int i = 0; i < ARRAYSIZEOF(share::temp_store_format_options) && !is_valid; ++i) {
+    if (0 == ObString::make_string(temp_store_format_options[i]).case_compare(t.str())) {
+      is_valid = true;
+    }
+  }
+  return is_valid;
+}
+
 bool ObConfigPxBFGroupSizeChecker::check(const ObConfigItem &t) const
 {
   bool is_valid = false;

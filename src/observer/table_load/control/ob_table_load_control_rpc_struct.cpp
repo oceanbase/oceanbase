@@ -65,7 +65,12 @@ ObDirectLoadControlPreBeginArg::ObDirectLoadControlPreBeginArg()
     schema_version_(0),
     snapshot_version_(0),
     data_version_(0),
-    session_info_(nullptr)
+    session_info_(nullptr),
+    avail_memory_(0),
+    write_session_count_(0),
+    exe_mode_(ObTableLoadExeMode::MAX_TYPE),
+    cluster_version_(0),
+    compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
 {
   free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
 }
@@ -96,7 +101,11 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
               snapshot_version_,
               data_version_,
               partition_id_array_,
-              target_partition_id_array_);
+              target_partition_id_array_,
+              avail_memory_,
+              write_session_count_,
+              exe_mode_,
+              cluster_version_);
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -105,6 +114,8 @@ OB_DEF_SERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_ENCODE(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              compressor_type_);
   return ret;
 }
 
@@ -124,7 +135,11 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
               snapshot_version_,
               data_version_,
               partition_id_array_,
-              target_partition_id_array_);
+              target_partition_id_array_,
+              avail_memory_,
+              write_session_count_,
+              exe_mode_,
+              cluster_version_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObTableLoadUtils::create_session_info(session_info_, free_session_ctx_))) {
       LOG_WARN("fail to init session info", KR(ret));
@@ -132,6 +147,8 @@ OB_DEF_DESERIALIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_DECODE(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_DECODE,
+              compressor_type_);
   return ret;
 }
 
@@ -152,7 +169,11 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
               snapshot_version_,
               data_version_,
               partition_id_array_,
-              target_partition_id_array_);
+              target_partition_id_array_,
+              avail_memory_,
+              write_session_count_,
+              exe_mode_,
+              cluster_version_);
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -161,6 +182,8 @@ OB_DEF_SERIALIZE_SIZE_SIMPLE(ObDirectLoadControlPreBeginArg)
       OB_UNIS_ADD_LEN(*session_info_);
     }
   }
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              compressor_type_);
   return len;
 }
 

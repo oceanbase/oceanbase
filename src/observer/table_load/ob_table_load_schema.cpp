@@ -278,6 +278,20 @@ int ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(const uint64_t 
   return ret;
 }
 
+int ObTableLoadSchema::get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
+                                                 ObCompressorType &compressor_type)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else {
+    compressor_type = table_schema->get_compressor_type();
+  }
+  return ret;
+}
+
 ObTableLoadSchema::ObTableLoadSchema()
   : allocator_("TLD_Schema"),
     is_partitioned_table_(false),
