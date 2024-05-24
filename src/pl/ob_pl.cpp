@@ -4256,7 +4256,8 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
                                  lib::MemoryContext &mem_context)
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
       type_table_(), helper_(allocator_), di_helper_(allocator_),
-      can_cached_(true)
+      can_cached_(true),
+      exec_env_()
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;
