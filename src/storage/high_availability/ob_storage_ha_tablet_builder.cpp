@@ -163,7 +163,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablets(ObIDagNet *dag_net)
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
-  } else if (OB_FAIL(get_tablet_info_reader_(reader))) {
+  } else if (OB_FAIL(get_tablet_info_reader_(param_.tablet_id_array_, reader))) {
     LOG_WARN("failed to get tablet info reader", K(ret), K(param_));
   } else {
     while (OB_SUCC(ret)) {
@@ -309,7 +309,7 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
-  } else if (OB_FAIL(get_tablet_info_reader_(reader))) {
+  } else if (OB_FAIL(get_tablet_info_reader_(param_.tablet_id_array_, reader))) {
     LOG_WARN("failed to get tablet info reader", K(ret), K(param_));
   } else {
     while (OB_SUCC(ret)) {
@@ -361,7 +361,7 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
-  } else if (OB_FAIL(get_tablet_info_reader_(reader))) {
+  } else if (OB_FAIL(get_tablet_info_reader_(param_.tablet_id_array_, reader))) {
     LOG_WARN("failed to get tablet info reader", K(ret), K(param_));
   } else {
     obrpc::ObCopyTabletInfo tablet_info;
@@ -441,6 +441,7 @@ int ObStorageHATabletsBuilder::update_pending_tablets_with_remote()
 }
 
 int ObStorageHATabletsBuilder::get_tablet_info_reader_(
+    const common::ObIArray<common::ObTabletID> &tablet_id_array,
     ObICopyTabletInfoReader *&reader)
 {
   int ret = OB_SUCCESS;
@@ -449,19 +450,24 @@ int ObStorageHATabletsBuilder::get_tablet_info_reader_(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets buidler do not init", K(ret));
+  } else if (tablet_id_array.empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get tablet info reader get invalid argument", K(ret), K(tablet_id_array));
   } else if (param_.is_leader_restore_) {
-    if (OB_FAIL(get_tablet_info_restore_reader_(reader))) {
+    if (OB_FAIL(get_tablet_info_restore_reader_(tablet_id_array, reader))) {
       LOG_WARN("failed to get tablet info restore reader", K(ret), K(param_));
     }
   } else {
-    if (OB_FAIL(get_tablet_info_ob_reader_(reader))) {
+    if (OB_FAIL(get_tablet_info_ob_reader_(tablet_id_array, reader))) {
       LOG_WARN("failed to get tablet info ob reader", K(ret), K(param_));
     }
   }
   return ret;
 }
 
-int ObStorageHATabletsBuilder::get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader)
+int ObStorageHATabletsBuilder::get_tablet_info_restore_reader_(
+    const common::ObIArray<common::ObTabletID> &tablet_id_array,
+    ObICopyTabletInfoReader *&reader)
 {
   int ret = OB_SUCCESS;
   reader = nullptr;
@@ -480,7 +486,7 @@ int ObStorageHATabletsBuilder::get_tablet_info_restore_reader_(ObICopyTabletInfo
     LOG_WARN("failed to alloc memory", K(ret), KP(buf));
   } else if (FALSE_IT(restore_reader = new (buf) ObCopyTabletInfoRestoreReader())) {
   } else if (FALSE_IT(reader = restore_reader)) {
-  } else if (OB_FAIL(restore_reader->init(*param_.restore_base_info_, param_.tablet_id_array_, *param_.meta_index_store_))) {
+  } else if (OB_FAIL(restore_reader->init(*param_.restore_base_info_, tablet_id_array, *param_.meta_index_store_))) {
     LOG_WARN("failed to init tablet restore reader", K(ret), K(param_));
   }
 
@@ -493,6 +499,7 @@ int ObStorageHATabletsBuilder::get_tablet_info_restore_reader_(ObICopyTabletInfo
 }
 
 int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
+    const common::ObIArray<common::ObTabletID> &tablet_id_array,
     ObICopyTabletInfoReader *&reader)
 {
   int ret = OB_SUCCESS;
@@ -513,8 +520,8 @@ int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
     LOG_WARN("failed to alloc memory", K(ret), KP(buf));
   } else if (FALSE_IT(ob_reader = new (buf) ObCopyTabletInfoObReader())) {
   } else if (FALSE_IT(reader = ob_reader)) {
-  } else if (OB_FAIL(arg.tablet_id_list_.assign(param_.tablet_id_array_))) {
-    LOG_WARN("failed to assign tablet id array", K(ret), K(param_));
+  } else if (OB_FAIL(arg.tablet_id_list_.assign(tablet_id_array))) {
+    LOG_WARN("failed to assign tablet id array", K(ret), K(param_), K(tablet_id_array));
   } else if (OB_FAIL(ObStorageHAUtils::get_server_version(arg.version_))) {
     LOG_WARN("failed to get server version", K(ret), K_(param));
   } else {
@@ -974,8 +981,9 @@ int ObStorageHATabletsBuilder::get_minor_scn_range_(
       //need copy src all minor sstables for tablet meta merge, do not need calculate sstable version range.
       //here set end scn just for compatible
       if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_2_0) {
-        scn_range.start_scn_ = ObTabletMeta::INIT_CLOG_CHECKPOINT_SCN;
-        scn_range.end_scn_ = sstables.empty() ? tablet->get_tablet_meta().clog_checkpoint_scn_ : sstables.at(0)->get_start_scn();
+        if (OB_FAIL(get_minor_scn_before_4220_(tablet->get_tablet_meta().tablet_id_, scn_range.start_scn_, scn_range.end_scn_))) {
+          LOG_WARN("failed to get minor scn before 4215", K(ret), KPC(tablet));
+        }
       } else {
         scn_range.start_scn_.set_base();
         scn_range.end_scn_.set_max();
@@ -1279,6 +1287,43 @@ int ObStorageHATabletsBuilder::hold_local_tablet_(
         LOG_WARN("failed to push tablet handle into array", K(ret), K(tablet_handle));
       }
     }
+  }
+  return ret;
+}
+
+int ObStorageHATabletsBuilder::get_minor_scn_before_4220_(
+    const common::ObTabletID &tablet_id,
+    share::SCN &start_scn,
+    share::SCN &checkpoint_scn)
+{
+  int ret = OB_SUCCESS;
+  ObICopyTabletInfoReader *reader = nullptr;
+  obrpc::ObCopyTabletInfo tablet_info;
+  ObArray<ObTabletID> tablet_id_array;
+  start_scn.reset();
+  checkpoint_scn.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_FAIL(tablet_id_array.push_back(tablet_id))) {
+    LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_info_reader_(tablet_id_array, reader))) {
+    LOG_WARN("failed to get tablet info reader", K(ret), K(param_));
+  } else if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
+    LOG_WARN("failed to fetch tablet info", K(ret));
+  } else {
+    start_scn = tablet_info.param_.start_scn_;
+    checkpoint_scn = tablet_info.param_.clog_checkpoint_scn_;
+
+    if (OB_ITER_END != reader->fetch_tablet_info(tablet_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fetch tablet info result is unexpected", K(ret), K(tablet_id));
+    }
+  }
+
+  if (OB_NOT_NULL(reader)) {
+    free_tablet_info_reader_(reader);
   }
   return ret;
 }
