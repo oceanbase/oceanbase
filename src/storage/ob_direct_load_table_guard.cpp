@@ -68,11 +68,17 @@ int ObDirectLoadTableGuard::prepare_memtable(ObDDLKV *&res_memtable)
   int ret = OB_SUCCESS;
   res_memtable = nullptr;
   bool tried_freeze = false;
+  bool need_retry = false;
   const int64_t INC_MACRO_BLOCK_COUNT_FREEZE_TRIGGER =
       10 * 10L * 1024L * 1024L * 1024L / OB_SERVER_BLOCK_MGR.get_macro_block_size();
   const int64_t INC_MACRO_BLOCK_MEMORY_FREEZE_TRIGGER = 50 * 1024 * 1024;  // 50M;
+  const int64_t start_time = ObClockGenerator::getClock();
 
+  // this do_while loop up to twice
+  // the first time : may trigger independent freeze
+  // the second time : just acquire direct load memtable to write
   do {
+    need_retry = false;
     ObDDLKV *ddl_kv = nullptr;
     if (OB_FAIL(acquire_memtable_once_())) {
       STORAGE_LOG(WARN, "acquire direct load memtable failed", KR(ret), KPC(this));
@@ -84,7 +90,7 @@ int ObDirectLoadTableGuard::prepare_memtable(ObDDLKV *&res_memtable)
                                  ddl_kv->get_memory_used() >= INC_MACRO_BLOCK_MEMORY_FREEZE_TRIGGER)) {
       reset();              // ATTENTION!!! : must reset guard, or freeze cannot finish
       tried_freeze = true;  // only try independent freeze once
-      ret = OB_EAGAIN;      // to execute loop again
+      need_retry = true;
 
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ddl_kv->freeze())) {
@@ -97,7 +103,7 @@ int ObDirectLoadTableGuard::prepare_memtable(ObDDLKV *&res_memtable)
       res_memtable = ddl_kv;
       has_acquired_memtable_ = true;
     }
-  } while (OB_EAGAIN == ret);
+  } while (OB_SUCC(ret) && need_retry);
 
   return ret;
 }
@@ -129,7 +135,6 @@ int ObDirectLoadTableGuard::acquire_memtable_once_()
       }
 
       if (OB_FAIL(ret)) {
-        const int64_t MAX_RETRY_CREATE_MEMTABLE_TIME = 1LL * 1000LL * 1000LL;
         if ((OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) &&
             (ObClockGenerator::getClock() - start_time < MAX_RETRY_CREATE_MEMTABLE_TIME)) {
           ret = OB_SUCCESS;
