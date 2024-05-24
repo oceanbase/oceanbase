@@ -1186,7 +1186,8 @@ int ObMultipleMerge::prepare_tables_from_iterator(ObTableStoreIterator &table_it
         continue;
       } else if (table_ptr->is_memtable()) {
         read_released_memtable = read_released_memtable ||
-            memtable::ObMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
+          memtable::ObMemtableFreezeState::RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state() ||
+          memtable::ObMemtableFreezeState::FORCE_RELEASED == (static_cast<memtable::ObMemtable*>(table_ptr))->get_freeze_state();
         ++memtable_cnt;
       }
       if (OB_FAIL(tables_.push_back(table_ptr))) {

@@ -291,7 +291,10 @@ private:
   int submit_batch_tablet_freeze_task(const ObTableHandleArray &tables_array, ObFuture<int> *result);
   int batch_tablet_freeze_task(ObTableHandleArray tables_array);
   int finish_freeze_with_ls_lock(memtable::ObMemtable *memtable);
-  int try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable, bool &ready_for_flush, const int64_t start);
+  int try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable,
+                                                     bool &ready_for_flush,
+                                                     bool &is_force_released,
+                                                     const int64_t start);
   void submit_checkpoint_task();
 private:
   // flag whether the logsteram is freezing

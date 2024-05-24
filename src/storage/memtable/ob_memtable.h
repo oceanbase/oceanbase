@@ -189,6 +189,7 @@ public:
   static const int64_t READY_FOR_FLUSH = 1;
   static const int64_t FLUSHED = 2;
   static const int64_t RELEASED = 3;
+  static const int64_t FORCE_RELEASED = 3;
 };
 
 class ObMemtableMutatorIterator;
@@ -593,6 +594,7 @@ public:
   // TODO(handora.qc) ready_for_flush interface adjustment
   bool is_can_flush() { return ObMemtableFreezeState::READY_FOR_FLUSH == freeze_state_ && share::SCN::max_scn() != get_end_scn(); }
   virtual int finish_freeze();
+  bool is_force_released() const { return ObMemtableFreezeState::FORCE_RELEASED == freeze_state_; }
 
   virtual int64_t dec_ref()
   {

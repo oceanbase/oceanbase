@@ -604,14 +604,8 @@ int ObFreezer::ls_freeze_task()
           // retry to submit the log to go around the above case
           (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
         last_submit_log_time = ObTimeUtility::current_time();
-        int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
-        int64_t write_lock = 0;
-        ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
-        if (OB_FAIL(check_ls_state())) {
-        } else {
-          submit_log_for_freeze(false/*try*/);
-          TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K(ls_id));
-        }
+        submit_log_for_freeze(false/*try*/);
+        TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K(ls_id));
       }
 
       const int64_t cost_time = ObTimeUtility::current_time() - start;
@@ -897,29 +891,35 @@ int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *
   const int64_t start = ObTimeUtility::current_time();
   int ret = OB_SUCCESS;
   bool ready_for_flush = false;
+  bool is_force_released = false;
 
   do {
-    if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(memtable, ready_for_flush, start))) {
+    if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(memtable,
+                                                               ready_for_flush,
+                                                               is_force_released,
+                                                               start))) {
       TRANS_LOG(WARN, "[Freezer] memtable is not ready_for_flush", K(ret));
     }
-  } while (OB_SUCC(ret) && !ready_for_flush);
+  } while (OB_SUCC(ret) && !ready_for_flush && !is_force_released);
 
   return ret;
 }
 
-int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable, bool &ready_for_flush, const int64_t start)
+int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtable *memtable,
+                                                              bool &ready_for_flush,
+                                                              bool &is_force_released,
+                                                              const int64_t start)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL - LSLOCKLOGMETA;
   int64_t write_lock = 0;
-  ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
 
-  if (OB_FAIL(check_ls_state())) {
-  } else if (OB_ISNULL(memtable)) {
+  if (OB_ISNULL(memtable)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(WARN, "[Freezer] memtable cannot be null", K(ret));
   } else if (FALSE_IT(ready_for_flush = memtable->ready_for_flush())) {
-  } else if (!ready_for_flush) {
+  } else if (FALSE_IT(is_force_released = memtable->is_force_released())) {
+  } else if (!ready_for_flush && !is_force_released) {
     if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
       if (need_resubmit_log()) {
         submit_log_for_freeze(false/*try*/);
@@ -1197,15 +1197,19 @@ int ObFreezer::batch_tablet_freeze_task(ObTableHandleArray tables_array)
       memtable::ObIMemtable *imemtable = nullptr;
       memtable::ObMemtable *memtable = nullptr;
       bool ready_for_flush = false;
+      bool is_force_released = false;
       if (!handle.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(WARN, "memtable cannot be null", K(ret), K(ls_id));
       } else if (OB_FAIL(handle.get_memtable(imemtable))) {
         LOG_WARN("fail to get memtable", K(ret));
       } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable*>(imemtable))) {
-      } else if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(memtable, ready_for_flush, start))) {
+      } else if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(memtable,
+                                                                        ready_for_flush,
+                                                                        is_force_released,
+                                                                        start))) {
         TRANS_LOG(WARN, "[Freezer] fail to wait memtable ready_for_flush", K(ret), K(ls_id));
-      } else if (!ready_for_flush) {
+      } else if (!ready_for_flush && !is_force_released) {
       } else if (OB_FAIL(finish_freeze_with_ls_lock(memtable))) {
         TRANS_LOG(WARN, "[Freezer] fail to finish_freeze", K(ret), K(ls_id), KPC(memtable));
       } else if (OB_FAIL(tables_array.pop_back(handle))) {
@@ -1282,6 +1286,17 @@ int ObFreezer::submit_log_for_freeze(bool is_try)
   do {
     ret = OB_SUCCESS;
     transaction::ObTransID fail_tx_id;
+
+    {
+      int64_t read_lock = LSLOCKALL;
+      int64_t write_lock = 0;
+      ObLSLockGuard lock_ls(ls_, ls_->lock_, read_lock, write_lock);
+      if (OB_FAIL(check_ls_state())) {
+        // ls has died, we need break the loop for submitting log
+        TRANS_LOG(WARN, "ls state has die", K(ls_id));
+        break;
+      }
+    }
 
     if (OB_FAIL(get_ls_tx_svr()->traverse_trans_to_submit_redo_log(fail_tx_id))) {
       const int64_t cost_time = ObTimeUtility::current_time() - start;

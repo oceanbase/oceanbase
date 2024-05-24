@@ -652,7 +652,6 @@ DEF_REPORT_CHEKCPOINT_DIAGNOSE_INFO(UpdateReleaseTime, update_release_time)
 int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable,
                                                 const bool force)
 {
-  UNUSED(force);
   int ret = OB_SUCCESS;
   memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(imemtable);
 
@@ -677,7 +676,11 @@ int ObTabletMemtableMgr::release_head_memtable_(memtable::ObIMemtable *imemtable
       }
       memtable->remove_from_data_checkpoint();
       memtable->set_is_flushed();
-      memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
+      if (force) {
+        memtable->set_freeze_state(ObMemtableFreezeState::FORCE_RELEASED);
+      } else {
+        memtable->set_freeze_state(ObMemtableFreezeState::RELEASED);
+      }
       memtable->set_frozen();
       memtable->report_memtable_diagnose_info(UpdateReleaseTime());
       release_head_memtable();

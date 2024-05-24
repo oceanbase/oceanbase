@@ -2418,7 +2418,7 @@ void ObMemtable::resolve_left_boundary(SCN end_scn)
 void ObMemtable::set_freeze_state(const int64_t state)
 {
   if (state >= ObMemtableFreezeState::NOT_READY_FOR_FLUSH &&
-      state <= ObMemtableFreezeState::RELEASED) {
+      state <= ObMemtableFreezeState::FORCE_RELEASED) {
     freeze_state_ = state;
   }
 }
