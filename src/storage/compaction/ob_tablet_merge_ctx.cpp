@@ -1229,17 +1229,11 @@ int ObTabletMergeCtx::try_swap_tablet_handle()
     if (need_swap_tablet(*tablet_handle_.get_obj(), row_count, macro_count)) {
       tables_handle_.reset(); // clear tables array
       const ObTabletMapKey key(param_.ls_id_, param_.tablet_id_);
-      if (OB_FAIL(MTL(ObTenantMetaMemMgr*)->get_tablet_with_allocator(
-        WashTabletPriority::WTP_LOW, key, allocator_, tablet_handle_, true/*force_alloc_new*/))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_TABLET_NOT_EXIST;
-        } else {
-          LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
-        }
+      if (OB_FAIL(ls_handle_.get_ls()->get_tablet_svr()->get_tablet_without_memtables(
+          WashTabletPriority::WTP_LOW, key, allocator_, tablet_handle_))) {
+        LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
       } else if (OB_FAIL(inner_init_for_medium())) {
         LOG_WARN("failed to init for medium", K(ret), K(param_));
-      } else if (OB_FAIL(tablet_handle_.get_obj()->clear_memtables_on_table_store())) {
-        LOG_WARN("failed to clear memtables on table_store", K(ret), K(param_));
       } else {
         LOG_INFO("success to swap tablet handle", K(ret), K(tablet_handle_), K(tables_handle_));
       }

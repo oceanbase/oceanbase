@@ -233,8 +233,8 @@ public:
       common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache);
   int next(common::ObTabletID &tablet_id);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
-  int hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
-  int get_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle);
+  int set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
+  int get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);
   int release_tablet(const common::ObTabletID &tablet_id);
   void set_result_code(const int64_t result, bool &is_set);
   int64_t get_result_code() const;

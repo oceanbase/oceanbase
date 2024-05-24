@@ -759,12 +759,10 @@ int ObTabletMergeExecutePrepareTask::get_tablet_and_result()
   int ret = OB_SUCCESS;
   if (need_swap_tablet_flag_) {
     const ObTabletMapKey key(ctx_->param_.ls_id_, ctx_->param_.tablet_id_);
-    if (OB_FAIL(MTL(ObTenantMetaMemMgr *)->get_tablet_with_allocator(
+    if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet_svr()->get_tablet_without_memtables(
                         WashTabletPriority::WTP_LOW, key, ctx_->allocator_,
-                        ctx_->tablet_handle_, true /*force_alloc_new*/))) {
+                        ctx_->tablet_handle_))) {
       LOG_WARN("failed to get alloc tablet handle", K(ret), K(key));
-    } else if (OB_FAIL(ctx_->tablet_handle_.get_obj()->clear_memtables_on_table_store())) {
-      LOG_WARN("failed to clear memtables on table_store", K(ret), K(ctx_->tablet_handle_));
     }
   } else if (OB_FAIL(ctx_->ls_handle_.get_ls()->get_tablet(
             ctx_->param_.tablet_id_,

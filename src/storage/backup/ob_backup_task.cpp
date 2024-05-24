@@ -570,7 +570,7 @@ int ObLSBackupDataDagNet::inner_init_before_run_()
     LOG_WARN("failed to prepare backup tablet provider", K(ret), K(backup_param), K_(backup_data_type));
   } else if (OB_FAIL(get_batch_size_(batch_size))) {
     LOG_WARN("failed to get batch size", K(ret));
-  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size))) {
+  } else if (OB_FAIL(task_mgr_.init(backup_data_type_, batch_size, ls_backup_ctx_))) {
     LOG_WARN("failed to init task mgr", K(ret), K(batch_size));
   } else {
     ls_backup_ctx_.stat_mgr_.mark_begin(backup_data_type_);
@@ -2782,13 +2782,13 @@ int ObLSBackupDataTask::do_check_tablet_valid_()
     ARRAY_FOREACH_X(tablet_list, idx, cnt, OB_SUCC(ret)) {
       const ObBackupProviderItem &tablet_item = tablet_list.at(idx);
       const ObTabletID &tablet_id = tablet_item.get_tablet_id();
-      ObTabletHandle tablet_handle;
+      ObBackupTabletHandleRef *tablet_ref = NULL;
       if (OB_ISNULL(checker)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("checker should not be null", K(ret));
-      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_handle))) {
+      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
         LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id));
-      } else if (OB_FAIL(checker->check_tablet_valid(param_.tenant_id_, param_.ls_id_, tablet_id, tablet_handle))) {
+      } else if (OB_FAIL(checker->check_tablet_valid(param_.tenant_id_, param_.ls_id_, tablet_id, tablet_ref->tablet_handle_))) {
         LOG_WARN("failed to check tablet valid", K(ret), K_(param), K(tablet_id));
       } else if (OB_FAIL(mark_backup_item_finished_(tablet_item, physical_id))) {
         LOG_WARN("failed to mark backup item finished", K(ret), K(tablet_item));
@@ -2879,16 +2879,16 @@ int ObLSBackupDataTask::do_backup_meta_data_()
       const common::ObTabletID &tablet_id = item.get_tablet_id();
       ObITabletMetaBackupReader *reader = NULL;
       ObBufferReader buffer_reader;
-      ObTabletHandle tablet_handle;
+      ObBackupTabletHandleRef *tablet_ref = NULL;
       ObTabletMetaReaderType reader_type;
       ObBackupMetaType meta_type;
       ObBackupMetaIndex meta_index;
       const ObBackupPhysicalID physical_id = ObBackupPhysicalID::get_default();
       if (OB_FAIL(get_tablet_meta_info_(item, reader_type, meta_type))) {
         LOG_WARN("failed to get tablet meta info", K(ret), K(item));
-      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_handle))) {
+      } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
         LOG_WARN("failed to get tablet handle", K(ret), K_(task_id), K(tablet_id), K(item), K(i), K(item_list));
-      } else if (OB_FAIL(prepare_tablet_meta_reader_(tablet_id, reader_type, tablet_handle, reader))) {
+      } else if (OB_FAIL(prepare_tablet_meta_reader_(tablet_id, reader_type, tablet_ref->tablet_handle_, reader))) {
         LOG_WARN("failed to prepare tablet meta reader", K(tablet_id), K(reader_type));
       } else if (OB_FAIL(reader->get_meta_data(buffer_reader))) {
         LOG_WARN("failed to get meta data", K(ret), K(tablet_id));
@@ -3283,9 +3283,10 @@ int ObLSBackupDataTask::write_backup_meta_(const ObBufferReader &data, const com
   return ret;
 }
 
-int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
+  tablet_handle = NULL;
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
@@ -3294,6 +3295,9 @@ int ObLSBackupDataTask::get_tablet_handle_(const common::ObTabletID &tablet_id, 
     LOG_WARN("ls backup ctx should not be null", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to acquire tablet", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablet_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet handle should not be null", K(ret), K(tablet_id));
   } else {
     LOG_INFO("get tablet handle", K(tablet_id));
   }
@@ -3527,7 +3531,7 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     const common::ObTabletID &tablet_id, ObBackupTabletStat *tablet_stat)
 {
   int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
+  ObBackupTabletHandleRef *tablet_ref = NULL;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   ObBackupDataType backup_data_type;
   backup_data_type.set_major_data_backup();
@@ -3542,13 +3546,13 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     // do nothing
   } else if (tablet_id.id() != ls_backup_ctx_->backup_retry_ctx_.need_skip_logic_id_.tablet_id_) {
     // do nothing
-  } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_handle))) {
+  } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
     LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id));
-  } else if (OB_FAIL(tablet_handle.get_obj()->fetch_table_store(table_store_wrapper))) {
+  } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
-  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_handle,
+  } else if (OB_FAIL(ObBackupUtils::get_sstables_by_data_type(tablet_ref->tablet_handle_,
       backup_data_type, *table_store_wrapper.get_member(), sstable_array))) {
-    LOG_WARN("failed to get sstable by data type", K(ret), K(tablet_handle));
+    LOG_WARN("failed to get sstable by data type", K(ret), K(tablet_ref));
   } else if (sstable_array.empty()) {
     // do nothing
   } else if (1 != sstable_array.count()) {
@@ -3562,8 +3566,8 @@ int ObLSBackupDataTask::may_fill_reused_backup_items_(
     LOG_WARN("get incorrect table type", K(ret), KPC(table_ptr));
   } else if (FALSE_IT(sstable_ptr = static_cast<ObSSTable *>(table_ptr))) {
   } else if (OB_FAIL(ObBackupUtils::fetch_macro_block_logic_id_list(
-      tablet_handle, *sstable_ptr, logic_id_list))) {
-    LOG_WARN("failed to fetch macro block logic id list", K(ret), K(tablet_handle), KPC(sstable_ptr));
+      tablet_ref->tablet_handle_, *sstable_ptr, logic_id_list))) {
+    LOG_WARN("failed to fetch macro block logic id list", K(ret), KPC(tablet_ref), KPC(sstable_ptr));
   } else {
     std::sort(logic_id_list.begin(), logic_id_list.end());
     const ObITable::TableKey &table_key = table_ptr->get_key();

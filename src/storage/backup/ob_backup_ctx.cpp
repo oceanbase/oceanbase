@@ -968,28 +968,28 @@ void ObLSBackupCtx::reuse()
   check_tablet_info_cost_time_ = 0;
 }
 
-int ObLSBackupCtx::hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupCtx::set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
-  if (!tablet_id.is_valid() || !tablet_handle.is_valid()) {
+  if (!tablet_id.is_valid() || OB_ISNULL(tablet_handle)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id), K(tablet_handle));
-  } else if (OB_FAIL(tablet_holder_.hold_tablet(tablet_id, tablet_handle))) {
-    LOG_WARN("failed to hold tablet", K(ret), K(tablet_id));
+    LOG_WARN("get invalid args", K(ret), K(tablet_id), KP(tablet_handle));
+  } else if (OB_FAIL(tablet_holder_.set_tablet(tablet_id, tablet_handle))) {
+    LOG_WARN("failed to hold tablet", K(ret), K(tablet_id), KPC(tablet_handle));
   } else {
     LOG_INFO("hold tablet", K(tablet_id));
   }
   return ret;
 }
 
-int ObLSBackupCtx::get_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupCtx::get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id), K(tablet_handle));
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet_holder_.get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else {
