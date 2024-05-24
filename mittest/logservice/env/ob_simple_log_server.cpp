@@ -744,6 +744,7 @@ void ObLogDeliver::handle(void *task)
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "ObLogDeliver not init", K(ret));
   } else if (OB_ISNULL(task)) {
+    ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid argument", KP(task));
   } else {
     rpc::ObRequest *req = static_cast<rpc::ObRequest *>(task);
