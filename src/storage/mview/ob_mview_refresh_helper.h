@@ -49,7 +49,8 @@ public:
 
   static int generate_purge_mlog_sql(share::schema::ObSchemaGetterGuard &schema_guard,
                                      const uint64_t tenant_id, const uint64_t mlog_id,
-                                     const share::SCN &purge_scn, ObSqlString &sql_string);
+                                     const share::SCN &purge_scn, const int64_t purge_log_parallel,
+                                     ObSqlString &sql_string);
 
   static int get_table_row_num(ObMViewTransaction &trans, const uint64_t tenant_id,
                                const uint64_t table_id, const share::SCN &scn, int64_t &num_rows);

@@ -49,9 +49,10 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
   --
 
   PROCEDURE purge_log(
-    master        IN   VARCHAR2,
-    num           IN   BINARY_INTEGER := 1,
-    flag          IN   VARCHAR2       := 'NOP');
+    master              IN   VARCHAR2,
+    num                 IN   BINARY_INTEGER := 1,
+    flag                IN   VARCHAR2       := 'NOP',
+    purge_log_parallel  IN   BINARY_INTEGER := 1);
 
   --  -----------------------------------------------------------------------
   --  Transaction consistent refresh of an array of materialized views.

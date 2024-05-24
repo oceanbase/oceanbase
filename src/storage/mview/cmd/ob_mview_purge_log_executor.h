@@ -26,14 +26,15 @@ namespace storage
 struct ObMViewPurgeLogArg
 {
 public:
-  ObMViewPurgeLogArg() : num_(-1) {}
+  ObMViewPurgeLogArg() : num_(-1), purge_log_parallel_(0) {}
   bool is_valid() const { return !master_.empty(); }
-  TO_STRING_KV(K_(master), K_(num), K_(flag));
+  TO_STRING_KV(K_(master), K_(num), K_(flag), K_(purge_log_parallel));
 
 public:
   ObString master_;
   int64_t num_;
   ObString flag_;
+  int64_t purge_log_parallel_;
 };
 
 class ObMViewPurgeLogExecutor
