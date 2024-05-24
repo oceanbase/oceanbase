@@ -913,9 +913,9 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
       LOG_WARN("decode int32_t failed", K(data_len), K(pos), K(ret));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < real_param_cnt; ++i) {
-      ObObj tmp;
       OB_UNIS_DECODE(param_idx);
       OB_UNIS_DECODE(param_obj);
+	  ObObjParam tmp = param_obj;
       if (OB_UNLIKELY(param_idx < 0) || OB_UNLIKELY(param_idx >= param_cnt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid param idx", K(param_idx), K(param_cnt));
@@ -932,7 +932,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
     //所以需要对param store的所有元素都执行一次深拷贝
   	for (int64_t i = 0; OB_SUCC(ret) && i < param_store_.count(); ++i) {
   	  const ObObjParam &objpara = param_store_.at(i);
-  	  ObObj tmp;
+	  ObObjParam tmp = objpara;
       if (OB_FAIL(deep_copy_obj(allocator_, objpara, tmp))) {
       	LOG_WARN("deep copy obj failed", K(ret));
       } else {
