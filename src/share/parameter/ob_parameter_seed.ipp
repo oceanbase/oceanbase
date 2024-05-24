@@ -1971,3 +1971,8 @@ DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
          "Control whether can use DBMS_JOB package.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// obkv feature switch
+DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
+         "Enable or disable OBKV feature.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

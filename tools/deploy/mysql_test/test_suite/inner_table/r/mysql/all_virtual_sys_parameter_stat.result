@@ -301,6 +301,7 @@ _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
 _enable_in_range_optimization
+_enable_kv_feature
 _enable_log_cache
 _enable_memleak_light_backtrace
 _enable_newsort
