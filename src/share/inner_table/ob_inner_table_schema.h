@@ -1719,6 +1719,24 @@ public:
   static int innodb_locks_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_trx_schema(share::schema::ObTableSchema &table_schema);
   static int ndb_transid_mysql_connection_map_schema(share::schema::ObTableSchema &table_schema);
+  static int tablespaces_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_buffer_page_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_buffer_page_lru_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_buffer_pool_stats_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmp_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmp_per_index_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmp_per_index_reset_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmp_reset_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmpmem_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_cmpmem_reset_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_datafiles_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_indexes_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_tables_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_tablespaces_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_tablestats_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_virtual_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_temp_table_info_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_metrics_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4430,6 +4448,24 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::innodb_locks_schema,
   ObInnerTableSchema::innodb_trx_schema,
   ObInnerTableSchema::ndb_transid_mysql_connection_map_schema,
+  ObInnerTableSchema::tablespaces_schema,
+  ObInnerTableSchema::innodb_buffer_page_schema,
+  ObInnerTableSchema::innodb_buffer_page_lru_schema,
+  ObInnerTableSchema::innodb_buffer_pool_stats_schema,
+  ObInnerTableSchema::innodb_cmp_schema,
+  ObInnerTableSchema::innodb_cmp_per_index_schema,
+  ObInnerTableSchema::innodb_cmp_per_index_reset_schema,
+  ObInnerTableSchema::innodb_cmp_reset_schema,
+  ObInnerTableSchema::innodb_cmpmem_schema,
+  ObInnerTableSchema::innodb_cmpmem_reset_schema,
+  ObInnerTableSchema::innodb_sys_datafiles_schema,
+  ObInnerTableSchema::innodb_sys_indexes_schema,
+  ObInnerTableSchema::innodb_sys_tables_schema,
+  ObInnerTableSchema::innodb_sys_tablespaces_schema,
+  ObInnerTableSchema::innodb_sys_tablestats_schema,
+  ObInnerTableSchema::innodb_sys_virtual_schema,
+  ObInnerTableSchema::innodb_temp_table_info_schema,
+  ObInnerTableSchema::innodb_metrics_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6044,6 +6080,24 @@ const uint64_t tenant_space_tables [] = {
   OB_INNODB_LOCKS_TID,
   OB_INNODB_TRX_TID,
   OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TID,
+  OB_TABLESPACES_TID,
+  OB_INNODB_BUFFER_PAGE_TID,
+  OB_INNODB_BUFFER_PAGE_LRU_TID,
+  OB_INNODB_BUFFER_POOL_STATS_TID,
+  OB_INNODB_CMP_TID,
+  OB_INNODB_CMP_PER_INDEX_TID,
+  OB_INNODB_CMP_PER_INDEX_RESET_TID,
+  OB_INNODB_CMP_RESET_TID,
+  OB_INNODB_CMPMEM_TID,
+  OB_INNODB_CMPMEM_RESET_TID,
+  OB_INNODB_SYS_DATAFILES_TID,
+  OB_INNODB_SYS_INDEXES_TID,
+  OB_INNODB_SYS_TABLES_TID,
+  OB_INNODB_SYS_TABLESPACES_TID,
+  OB_INNODB_SYS_TABLESTATS_TID,
+  OB_INNODB_SYS_VIRTUAL_TID,
+  OB_INNODB_TEMP_TABLE_INFO_TID,
+  OB_INNODB_METRICS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8537,6 +8591,24 @@ const char* const tenant_space_table_names [] = {
   OB_INNODB_LOCKS_TNAME,
   OB_INNODB_TRX_TNAME,
   OB_NDB_TRANSID_MYSQL_CONNECTION_MAP_TNAME,
+  OB_TABLESPACES_TNAME,
+  OB_INNODB_BUFFER_PAGE_TNAME,
+  OB_INNODB_BUFFER_PAGE_LRU_TNAME,
+  OB_INNODB_BUFFER_POOL_STATS_TNAME,
+  OB_INNODB_CMP_TNAME,
+  OB_INNODB_CMP_PER_INDEX_TNAME,
+  OB_INNODB_CMP_PER_INDEX_RESET_TNAME,
+  OB_INNODB_CMP_RESET_TNAME,
+  OB_INNODB_CMPMEM_TNAME,
+  OB_INNODB_CMPMEM_RESET_TNAME,
+  OB_INNODB_SYS_DATAFILES_TNAME,
+  OB_INNODB_SYS_INDEXES_TNAME,
+  OB_INNODB_SYS_TABLES_TNAME,
+  OB_INNODB_SYS_TABLESPACES_TNAME,
+  OB_INNODB_SYS_TABLESTATS_TNAME,
+  OB_INNODB_SYS_VIRTUAL_TNAME,
+  OB_INNODB_TEMP_TABLE_INFO_TNAME,
+  OB_INNODB_METRICS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -12456,10 +12528,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 277;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 790;
-const int64_t OB_SYS_VIEW_COUNT = 865;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1937;
+const int64_t OB_SYS_VIEW_COUNT = 883;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1955;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1940;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1958;
 
 } // end namespace share
 } // end namespace oceanbase

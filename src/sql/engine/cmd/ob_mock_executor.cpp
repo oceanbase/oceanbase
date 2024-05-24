@@ -25,6 +25,10 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
     LOG_USER_WARN(OB_NOT_SUPPORTED, "After executing the GRANT and REVOKE statements, "
                                     "the permissions will be automatically applied and take effect. "
                                     "There is no need to execute the FLUSH PRIVILEGES command. FLUSH PRIVILEGES");
+  } else if (stmt::T_REPAIR_TABLE == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Repair table Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else if (stmt::T_CHECKSUM_TABLE == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "Checksum table Statement just mocks the syntax of MySQL without supporting specific realization");
   }
   return ret;
 }

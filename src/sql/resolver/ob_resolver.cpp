@@ -733,6 +733,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_QUERY_RESPONSE_TIME:
       case T_SHOW_STATUS:
       case T_SHOW_CREATE_TRIGGER:
+      case T_SHOW_ENGINE:
+      case T_SHOW_OPEN_TABLES:
       case T_SHOW_SEQUENCES: {
         REGISTER_STMT_RESOLVER(Show);
         break;
@@ -1197,6 +1199,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CANCEL_BALANCE_JOB: {
         REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_REPAIR_TABLE: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_CHECKSUM_TABLE: {
+        REGISTER_STMT_RESOLVER(Mock);
         break;
       }
       default: {

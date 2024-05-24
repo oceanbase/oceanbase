@@ -23,16 +23,19 @@ int ObMockResolver::resolve(const ParseNode& parse_tree)
 {
   int ret = OB_SUCCESS;
   ObMockStmt *mock_stmt = NULL;
-  if (OB_UNLIKELY(parse_tree.type_ != T_FLUSH_PRIVILEGES)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
-  } else if (OB_UNLIKELY(NULL == (mock_stmt = create_stmt<ObMockStmt>()))) {
+  if (OB_UNLIKELY(NULL == (mock_stmt = create_stmt<ObMockStmt>()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create mock stmt");
   } else {
     switch (parse_tree.type_) {
       case T_FLUSH_PRIVILEGES:
         mock_stmt->set_stmt_type(stmt::T_FLUSH_PRIVILEGES);
+        break;
+      case T_REPAIR_TABLE:
+        mock_stmt->set_stmt_type(stmt::T_REPAIR_TABLE);
+        break;
+      case T_CHECKSUM_TABLE:
+        mock_stmt->set_stmt_type(stmt::T_CHECKSUM_TABLE);
         break;
       default:
         ret = OB_ERR_UNEXPECTED;

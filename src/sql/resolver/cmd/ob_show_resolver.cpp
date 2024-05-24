@@ -1477,6 +1477,39 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         }();
         break;
       }
+      case T_SHOW_ENGINE: {
+        [&] {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show engine in oracle mode is");
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
+          } else {
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_ENGINE;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_ENGINE);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_ENGINE);
+          }
+        }();
+        break;
+      }
+      case T_SHOW_OPEN_TABLES: {
+        [&] {
+          if (is_oracle_mode) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "show open tables in oracle mode is");
+          } else if (OB_UNLIKELY(parse_tree.num_child_ != 1 || NULL == parse_tree.children_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_), K(parse_tree.children_));
+          } else {
+            show_resv_ctx.condition_node_ = parse_tree.children_[0];
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_OPEN_TABLES;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_OPEN_TABLES);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_OPEN_TABLES);
+          }
+        }();
+        break;
+      }
       case T_SHOW_PRIVILEGES: {
         [&] {
           if (OB_UNLIKELY(parse_tree.num_child_ != 0)) {
@@ -2995,6 +3028,19 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_PROFILE,
                        "SELECT * FROM %s.%s ",
                        NULL,
                        NULL);
+
+DEFINE_SHOW_CLAUSE_SET(SHOW_ENGINE,
+                       NULL,
+                       "SELECT 1 as `Type`, 1 as `Name`, 1 as `Status` FROM dual where 0 = 1 ",
+                       NULL,
+                       NULL);
+
+
+DEFINE_SHOW_CLAUSE_SET(SHOW_OPEN_TABLES,
+                       NULL,
+                       "SELECT 1 as `Database`, 1 as `Table`, 1 as In_use, 1 as Name_locked FROM dual where 0 = 1 ",
+                       NULL,
+                       "Table");
 
 DEFINE_SHOW_CLAUSE_SET(SHOW_PRIVILEGES,
                        NULL,

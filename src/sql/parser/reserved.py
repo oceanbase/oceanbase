@@ -1613,6 +1613,7 @@ class SqlKeywords:
          FAULTS
          FIELDS
          FILE
+         FILE_BLOCK_SIZE
          FILEX
          FINAL_COUNT
          FIRST
