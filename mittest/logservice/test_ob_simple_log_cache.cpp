@@ -185,6 +185,39 @@ TEST_F(TestObSimpleLogCache, concurrent_read)
   OB_LOG_KV_CACHE.destroy();
 }
 
+TEST_F(TestObSimpleLogCache, raw_read)
+{
+  disable_hot_cache_ = true;
+  SET_CASE_LOG_FILE(TEST_NAME, "raw_read");
+  OB_LOGGER.set_log_level("TRACE");
+  int server_idx = 0;
+  int64_t leader_idx = 0;
+  int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  PALF_LOG(INFO, "start to test log cache", K(id));
+
+  EXPECT_EQ(OB_SUCCESS, OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1));
+  PalfHandleImplGuard leader;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  ObTenantEnv::set_tenant(get_cluster()[leader_idx]->get_tenant_base());
+  std::vector<LSN> lsn_array;
+  std::vector<SCN> scn_array;
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, MAX_LOG_BODY_SIZE, id, lsn_array, scn_array));
+  const LSN max_lsn = leader.get_palf_handle_impl()->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
+  int64_t aligned_offset = common::upper_align(lsn_array[35].val_, LOG_DIO_ALIGN_SIZE);
+  LSN aligned_lsn(aligned_offset);
+  int64_t in_read_size = 2 * 1024 * 1024;
+  int64_t out_read_size = 0;
+  char *read_buf = reinterpret_cast<char*>(mtl_malloc_align(
+    LOG_DIO_ALIGN_SIZE, in_read_size, "mittest"));
+  EXPECT_EQ(OB_SUCCESS, leader.get_palf_handle_impl()->raw_read(aligned_lsn, read_buf, in_read_size, out_read_size));
+
+  if (OB_NOT_NULL(read_buf)) {
+    mtl_free_align(read_buf);
+  }
+  OB_LOG_KV_CACHE.destroy();
+}
+
 // enable in 4.4
 TEST_F(TestObSimpleLogCache, DISABLED_fill_cache_when_slide)
 {
