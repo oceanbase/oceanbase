@@ -1,0 +1,36 @@
+name: Auto Merge on Approval
+
+on:
+  pull_request_review:
+    types: [submitted]
+    branches:
+      - vector_search
+
+jobs:
+  automerge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for approval by specific reviewers
+        if: github.event.review.state == 'approved'
+        id: check_approval
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const allowedReviewers = ['a1iive', 'GITHUBear'];
+            const review = context.payload.review;
+            const isAllowedReviewer = allowedReviewers.includes(review.user.login);
+            const isApproval = review.state === 'approved';
+            const result = isAllowedReviewer && isApproval;
+            return result
+          result-encoding: string
+      - name: Automerge
+        if: steps.check_approval.outputs.result == 'true'
+        uses: pascalgn/automerge-action@v0.16.3
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          MERGE_LABELS: ""
+          MERGE_METHOD: "squash"
+          MERGE_COMMIT_MESSAGE: "pull-request-title"
+          MERGE_RETRIES: "10"
+          MERGE_RETRY_SLEEP: "6000"
+          MERGE_DELETE_BRANCH: "false"
