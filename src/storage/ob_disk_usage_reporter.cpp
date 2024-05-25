@@ -38,9 +38,7 @@ namespace storage
 
 ObDiskUsageReportTask::ObDiskUsageReportTask()
     : is_inited_(false),
-      sql_proxy_(NULL),
-      sstable_data_size_(-1),
-      sstable_meta_size_(-1)
+      sql_proxy_(NULL)
 {
   // do nothing
 }
@@ -187,45 +185,37 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
   int64_t tmp_meta_size = 0;
   int64_t tmp_data_size = 0;
 
-  if ((data_size = ATOMIC_LOAD(&sstable_data_size_)) >= 0) {
-    meta_size = ATOMIC_LOAD(&sstable_meta_size_);
-    STORAGE_LOG(INFO, "skip count sstable data size", K(data_size), K(meta_size));
+  data_size = 0;
+  if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_meta_block_list(block_list))) {
+    STORAGE_LOG(WARN, "failed to get tenant's meta block list", K(ret));
   } else {
-    data_size = 0;
-    if (OB_FAIL(MTL(ObTenantCheckpointSlogHandler*)->get_meta_block_list(block_list))) {
-      STORAGE_LOG(WARN, "failed to get tenant's meta block list", K(ret));
-    } else {
-      ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-      ObArenaAllocator iter_allocator("DiskReport", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
-      ObTenantTabletIterator tablet_iter(*t3m, iter_allocator, nullptr/*no op*/);
-      ObTabletHandle tablet_handle;
-      while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
-        if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
-        } else if (tablet_handle.get_obj()->is_empty_shell()) {
-          // skip empty shell
-        } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_size(
-            true /*ignore shared block*/, tmp_meta_size, tmp_data_size))) {
-          STORAGE_LOG(WARN, "failed to get tablet's meta and data size", K(ret));
-        } else {
-          meta_size += tmp_meta_size;
-          data_size += tmp_data_size;
-        }
-        tablet_handle.reset();
-        iter_allocator.reuse();
-        tmp_meta_size = 0;
-        tmp_data_size = 0;
+    ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+    ObArenaAllocator iter_allocator("DiskReport", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+    ObTenantTabletIterator tablet_iter(*t3m, iter_allocator, nullptr/*no op*/);
+    ObTabletHandle tablet_handle;
+    while (OB_SUCC(ret) && OB_SUCC(tablet_iter.get_next_tablet(tablet_handle))) {
+      if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "unexpected invalid tablet", K(ret), K(tablet_handle));
+      } else if (tablet_handle.get_obj()->is_empty_shell()) {
+        // skip empty shell
+      } else if (OB_FAIL(tablet_handle.get_obj()->get_tablet_size(
+          true /*ignore shared block*/, tmp_meta_size, tmp_data_size))) {
+        STORAGE_LOG(WARN, "failed to get tablet's meta and data size", K(ret));
+      } else {
+        meta_size += tmp_meta_size;
+        data_size += tmp_data_size;
       }
+      tablet_handle.reset();
+      iter_allocator.reuse();
+      tmp_meta_size = 0;
+      tmp_data_size = 0;
+    }
 
-      if (OB_ITER_END == ret || OB_SUCCESS == ret) {
-        ret = OB_SUCCESS;
-        data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
-        meta_size += block_list.count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
-
-        ATOMIC_SET(&sstable_meta_size_, meta_size);
-        ATOMIC_SET(&sstable_data_size_, data_size);
-      }
+    if (OB_ITER_END == ret || OB_SUCCESS == ret) {
+      ret = OB_SUCCESS;
+      data_size += MTL(ObSharedMacroBlockMgr*)->get_shared_block_cnt() * OB_DEFAULT_MACRO_BLOCK_SIZE;
+      meta_size += block_list.count() * OB_DEFAULT_MACRO_BLOCK_SIZE;
     }
   }
 
