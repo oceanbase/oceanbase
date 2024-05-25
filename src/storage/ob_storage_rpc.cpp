@@ -912,7 +912,8 @@ ObTransferTabletInfoArg::ObTransferTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
     src_ls_id_(),
     dest_ls_id_(),
-    tablet_list_()
+    tablet_list_(),
+    data_version_(0)
 {
 }
 
@@ -922,6 +923,7 @@ void ObTransferTabletInfoArg::reset()
   src_ls_id_.reset();
   dest_ls_id_.reset();
   tablet_list_.reset();
+  data_version_ = 0;
 }
 
 int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
@@ -936,6 +938,7 @@ int ObTransferTabletInfoArg::assign(const ObTransferTabletInfoArg &other)
     tenant_id_ = other.tenant_id_;
     src_ls_id_ = other.src_ls_id_;
     dest_ls_id_ = other.dest_ls_id_;
+    data_version_ = other.data_version_;
   }
   return ret;
 }
@@ -948,7 +951,7 @@ bool ObTransferTabletInfoArg::is_valid() const
          && !tablet_list_.empty();
 }
 
-OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_);
+OB_SERIALIZE_MEMBER(ObTransferTabletInfoArg, tenant_id_, src_ls_id_, dest_ls_id_, tablet_list_, data_version_);
 
 ObFetchLSReplayScnArg::ObFetchLSReplayScnArg()
   : tenant_id_(OB_INVALID_ID),
