@@ -364,6 +364,7 @@ public:
 private:
   bool is_pending() const { return ATOMIC_LOAD(&pending_cnt_) > 0; }
   bool ready_for_flush_();
+  bool data_has_completed_(share::SCN &max_decided_scn);
   int wait_pending();
   int full_load_freeze_(const share::SCN &freeze_scn);
   int inc_load_freeze_();
