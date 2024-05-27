@@ -2926,14 +2926,10 @@ drop procedure bug5251|
 #
 --disable_warnings ONCE
 drop procedure if exists bug5251|
---error 1064
 create procedure bug5251()
   checksum table t1|
---error 1305
 call bug5251()|
---error 1305
 call bug5251()|
---error 1305
 drop procedure bug5251|
 
 #
@@ -5067,34 +5063,23 @@ drop procedure bug5967|
 --disable_warnings
 drop procedure if exists bug13012|
 # Disable warnings also for BACKUP/RESTORE: they are deprecated.
---error 1064
 eval create procedure bug13012()
     BEGIN
        REPAIR TABLE t1;
     END|
---error 1305
 call bug13012()|
 
 --enable_warnings
 
---error 1305
 drop procedure bug13012|
 
 create view v1 as select * from t1|
---error 1064
 create procedure bug13012()
 BEGIN
   REPAIR TABLE t1,t2,t3,v1;
   OPTIMIZE TABLE t1,t2,t3,v1;
   ANALYZE TABLE t1,t2,t3,v1;
 END|
---error 1305
-call bug13012()|
---error 1305
-call bug13012()|
---error 1305
-call bug13012()|
---error 1305
 drop procedure bug13012|
 drop view v1|
 select * from t1 order by data|

@@ -104,7 +104,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
         K(schema_checker_));
   } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_GRANTS)
             && (parse_tree.type_ != T_SHOW_TRIGGERS) && (parse_tree.type_ != T_SHOW_PROFILE)
-            && (parse_tree.type_ != T_SHOW_PROCEDURE_CODE) && (parse_tree.type_ != T_SHOW_FUNCTION_CODE)) {
+            && (parse_tree.type_ != T_SHOW_PROCEDURE_CODE) && (parse_tree.type_ != T_SHOW_FUNCTION_CODE)
+            && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {

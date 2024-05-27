@@ -1846,6 +1846,7 @@ end|
 create function bug2267_4() returns int return 100|
 call bug2267_1()|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
+test	bug13012	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_1	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_2	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_3	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
@@ -2262,13 +2263,13 @@ drop procedure bug5251|
 drop procedure if exists bug5251|
 create procedure bug5251()
 checksum table t1|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'checksum table t1' at line 2
 call bug5251()|
-ERROR 42000: procedure test.bug5251 does not exist
+Warnings:
+Warning	1235	Checksum table Statement just mocks the syntax of MySQL without supporting specific realization not supported
 call bug5251()|
-ERROR 42000: procedure test.bug5251 does not exist
+Warnings:
+Warning	1235	Checksum table Statement just mocks the syntax of MySQL without supporting specific realization not supported
 drop procedure bug5251|
-ERROR 42000: PROCEDURE test.bug5251 does not exist
 drop procedure if exists bug5287|
 create procedure bug5287(param1 int)
 label1:
@@ -3923,11 +3924,8 @@ create procedure bug13012()
 BEGIN
 REPAIR TABLE t1;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REPAIR TABLE t1' at line 3
 call bug13012()|
-ERROR 42000: procedure test.bug13012 does not exist
 drop procedure bug13012|
-ERROR 42000: PROCEDURE test.bug13012 does not exist
 create view v1 as select * from t1|
 create procedure bug13012()
 BEGIN
@@ -3935,15 +3933,7 @@ REPAIR TABLE t1,t2,t3,v1;
 OPTIMIZE TABLE t1,t2,t3,v1;
 ANALYZE TABLE t1,t2,t3,v1;
 END|
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REPAIR TABLE t1,t2,t3,v1' at line 3
-call bug13012()|
-ERROR 42000: procedure test.bug13012 does not exist
-call bug13012()|
-ERROR 42000: procedure test.bug13012 does not exist
-call bug13012()|
-ERROR 42000: procedure test.bug13012 does not exist
 drop procedure bug13012|
-ERROR 42000: PROCEDURE test.bug13012 does not exist
 drop view v1|
 select * from t1 order by data|
 id	data
