@@ -849,12 +849,13 @@ PalfEnvImpl::RemoveStaleIncompletePalfFunctor::RemoveStaleIncompletePalfFunctor(
 int PalfEnvImpl::RemoveStaleIncompletePalfFunctor::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
+  char *saveptr = NULL;
   char file_name[OB_MAX_FILE_NAME_LENGTH] = {'\0'};
   const char *d_name = entry->d_name;
   MEMCPY(file_name, d_name, strlen(d_name));
-  char *tmp = strtok(file_name, "_");
+  char *tmp = strtok_r(file_name, "_", &saveptr);
   char *timestamp_str = NULL;
-  if (NULL == tmp || NULL == (timestamp_str = strtok(NULL, "_"))) {
+  if (NULL == tmp || NULL == (timestamp_str = strtok_r(NULL, "_", &saveptr))) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "unexpected format", K(ret), K(tmp), K(file_name));
   } else {
