@@ -2072,6 +2072,8 @@ int ObCheckStartTransferTabletsP::check_transfer_out_tablet_sstable_(const ObTab
   int ret = OB_SUCCESS;
   ObTableStoreIterator ddl_iter;
   ObTabletMemberWrapper<ObTabletTableStore> wrapper;
+  const int64_t emergency_sstable_count = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
+
   if (OB_ISNULL(tablet)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet is null", K(ret));
@@ -2079,6 +2081,10 @@ int ObCheckStartTransferTabletsP::check_transfer_out_tablet_sstable_(const ObTab
     LOG_WARN("fetch table store fail", K(ret), KP(tablet));
   } else if (!wrapper.get_member()->get_major_sstables().empty()) {
     // do nothing
+  } else if (wrapper.get_member()->get_table_count() > emergency_sstable_count) {
+    ret = OB_TOO_MANY_SSTABLE;
+    LOG_WARN("transfer src tablet has too many sstable, cannot transfer, need retry", K(ret),
+        "table_count", wrapper.get_member()->get_table_count(), "emergency sstable count", emergency_sstable_count);
   } else if (OB_FAIL(tablet->get_ddl_sstables(ddl_iter))) {
     LOG_WARN("failed to get ddl sstable", K(ret));
   } else if (ddl_iter.is_valid()) { // indicates the existence of ddl sstable
