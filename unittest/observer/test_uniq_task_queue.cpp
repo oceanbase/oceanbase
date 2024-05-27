@@ -239,22 +239,13 @@ TEST_F(TestUniqTaskQueue, test_get_queue_fail)
 // bugfix: workitem/49006474
 TEST_F(TestUniqTaskQueue, test_queue_starvation)
 {
-  obrpc::MockObCommonRpcProxy rpc;
-  GDS.set_rpc_proxy(&rpc);
-
-  ObMalloc allocator;
-  ObDSSessionActions sa;
-  ASSERT_EQ(OB_SUCCESS, sa.init(1024, allocator));
-
-  GCONF.debug_sync_timeout.set_value("1000s");
-  ASSERT_TRUE(GCONF.is_debug_sync_enabled());
-
-  const bool L = false; // local
-  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("BEFORE_UNIQ_TASK_RUN wait_for signal", L, sa));
-
   MockTaskQueue queue;
   MockTaskProcesser processor(queue);
   ASSERT_EQ(OB_SUCCESS, queue.init(&processor, 1 /*thread_num*/, 1024 /*queue_size*/));
+
+  // to reproduce the bug scenario's groups and tasks, stop the queue first and add tasks
+  queue.stop();
+  queue.wait();
 
   MockTask task(0 /*group_id*/, 0 /*task_id*/);
   ASSERT_EQ(OB_SUCCESS, queue.add(task));
@@ -276,7 +267,8 @@ TEST_F(TestUniqTaskQueue, test_queue_starvation)
    *       |-----------|
    */
 
-  ASSERT_EQ(OB_SUCCESS, GDS.add_debug_sync("now signal signal", L, sa));
+  // continue to start queue
+  ASSERT_EQ(OB_SUCCESS, queue.start());
 
   /*
    * before task(1, 0) runs, tasks in queue are as follows:
