@@ -65,9 +65,10 @@ void ObDASRetryCtrl::tablet_location_retry_proc(ObDASRef &das_ref,
   } else if (OB_FAIL(table_schema->check_if_tablet_exists(tablet_loc->tablet_id_, tablet_exist))) {
     LOG_WARN("failed to check if tablet exists", K(ret), K(tablet_loc), K(ref_table_id));
   } else if (!tablet_exist) {
-    // partition could be dropped
-    task_op.set_errcode(OB_PARTITION_NOT_EXIST);
-    LOG_WARN("partition not exist, maybe dropped by DDL, stop das retry", K(tablet_loc), K(ref_table_id));
+    // partition could be dropped or table could be truncated, in this case we return OB_SCHEMA_EAGAIN and
+    // attempt statement-level retry
+    task_op.set_errcode(OB_SCHEMA_EAGAIN);
+    LOG_WARN("partition not exist, maybe dropped by DDL or table was truncated", K(tablet_loc), K(ref_table_id));
   } else {
     loc_router.force_refresh_location_cache(true, task_op.get_errcode());
     need_retry = true;
