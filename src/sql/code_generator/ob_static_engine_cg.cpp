@@ -9024,7 +9024,6 @@ int ObStaticEngineCG::check_fk_nested_dup_upd(const ObIArray<uint64_t>& table_id
         if (root_table_id == parent_table_id && root_column_id == parent_col_id && child_table_id != common::OB_INVALID_ID && child_col_id != common::OB_INVALID_ID && upd_act == ACTION_CASCADE) {
           // check all the tables in multitable update.
           for (int64_t k = 0; k < table_ids.count() && !is_dup; k++) {
-            LOG_WARN("asdfasdf ", K(child_table_id), K(table_ids.at(k)));
             if (child_table_id == table_ids.at(k)) {
               is_dup = true;
             }
