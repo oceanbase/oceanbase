@@ -34467,8 +34467,45 @@ AND
 # 21577: INNODB_SYS_VIRTUAL
 # 21578: INNODB_TEMP_TABLE_INFO
 # 21579: INNODB_METRICS
-# 21580: EVENTS
-
+def_table_schema(
+  owner = 'huangrenhuang.hrh',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'EVENTS',
+  table_id        = '21580',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(NULL AS CHARACTER(64)) AS EVENT_CATALOG,
+           CAST(NULL AS CHARACTER(64)) AS EVENT_SCHEMA,
+           CAST(NULL AS CHARACTER(64)) AS EVENT_NAME,
+           CAST(NULL AS CHARACTER(93)) AS DEFINER,
+           CAST(NULL AS CHARACTER(64)) AS TIME_ZONE,
+           CAST(NULL AS CHARACTER(8)) AS EVENT_BODY,
+           CAST(NULL AS CHARACTER(512)) AS EVENT_DEFINITION,
+           CAST(NULL AS CHARACTER(9)) AS EVENT_TYPE,
+           CAST(NULL AS TIME)  AS EXECUTE_AT,
+           CAST(NULL AS CHARACTER(256)) AS INTERVAL_VALUE,
+           CAST(NULL AS CHARACTER(18))  AS INTERVAL_FIELD,
+           CAST(NULL AS CHARACTER(8192))  AS SQL_MODE,
+           CAST(NULL AS TIME) AS STARTS,
+           CAST(NULL AS TIME) AS ENDS,
+           CAST(NULL AS CHARACTER(18)) AS STATUS,
+           CAST(NULL AS CHARACTER(12)) AS ON_COMPLETION,
+           CAST(NULL AS TIME) AS CREATED,
+           CAST(NULL AS TIME) AS LAST_ALTERED,
+           CAST(NULL AS TIME) AS LAST_EXECUTED,
+           CAST(NULL AS CHARACTER(64)) AS EVENT_COMMENT,
+           CAST(NULL AS UNSIGNED) AS ORIGINATOR,
+           CAST(NULL AS CHARACTER(32)) AS CHARACTER_SET_CLIENT,
+           CAST(NULL AS CHARACTER(32)) AS COLLATION_CONNECTION,
+           CAST(NULL AS CHARACTER(32)) AS DATABASE_COLLATION
+    FROM DUAL WHERE 1 = 0
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'gengfu.zpc',

@@ -1727,6 +1727,7 @@ public:
   static int v_ob_tenant_resource_limit_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tenant_resource_limit_detail_schema(share::schema::ObTableSchema &table_schema);
+  static int events_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
@@ -4535,6 +4536,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_resource_limit_schema,
   ObInnerTableSchema::gv_ob_tenant_resource_limit_detail_schema,
   ObInnerTableSchema::v_ob_tenant_resource_limit_detail_schema,
+  ObInnerTableSchema::events_schema,
   ObInnerTableSchema::v_ob_nic_info_schema,
   ObInnerTableSchema::gv_ob_nic_info_schema,
   ObInnerTableSchema::dba_synonyms_schema,
@@ -6205,6 +6207,7 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TID,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TID,
+  OB_EVENTS_TID,
   OB_V_OB_NIC_INFO_TID,
   OB_GV_OB_NIC_INFO_TID,
   OB_DBA_SYNONYMS_TID,
@@ -8782,6 +8785,7 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_TNAME,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_TNAME,
+  OB_EVENTS_TNAME,
   OB_V_OB_NIC_INFO_TNAME,
   OB_GV_OB_NIC_INFO_TNAME,
   OB_DBA_SYNONYMS_TNAME,
@@ -12898,10 +12902,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 295;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 814;
-const int64_t OB_SYS_VIEW_COUNT = 879;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1993;
+const int64_t OB_SYS_VIEW_COUNT = 880;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1994;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1996;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1997;
 
 } // end namespace share
 } // end namespace oceanbase
