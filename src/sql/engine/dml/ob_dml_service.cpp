@@ -216,7 +216,7 @@ int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, cons
       }
     }
   }
-  return ret;s
+  return ret;
 }
 
 int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef)
@@ -231,7 +231,7 @@ int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, c
   } else {
     DASTableIdList& parent_table_set = root_ctx->get_das_ctx().get_parent_table_set();
     DASTableIdList::iterator it = parent_table_set.begin();
-    bool found = false;s
+    bool found = false;
     for (; it != parent_table_set.end(); it++) {
       if (*it == dml_ctdef.das_base_ctdef_.index_tid_) {
         found = true;
