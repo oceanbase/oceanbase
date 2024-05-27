@@ -657,6 +657,12 @@ int ObTabletPersister::persist_and_fill_tablet(
       }
     }
     space_usage.shared_data_size_ = shared_data_size;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(new_handle.get_obj()->calc_sstable_occupy_size(space_usage.occupy_bytes_))) {
+      LOG_WARN("failed to calc tablet occupy_size", K(ret), KPC(new_handle.get_obj()));
+    } else {
+      new_handle.get_obj()->set_space_usage_(space_usage);
+    }
   }
 
   return ret;

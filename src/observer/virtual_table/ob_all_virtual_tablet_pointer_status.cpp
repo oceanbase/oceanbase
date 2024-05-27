@@ -146,6 +146,8 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
     ls_id = key.ls_id_;
     tablet_id = key.tablet_id_;
     tablet_pointer = static_cast<const ObTabletPointer*>(ptr_hdl.get_resource_ptr());
+    ObTabletResidentInfo tablet_info(key, *tablet_pointer);
+
     const int64_t col_cnt = output_column_ids_.count();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {
       const uint64_t col_id = output_column_ids_.at(i);
@@ -208,10 +210,10 @@ int ObAllVirtualTabletPtr::process_curr_tenant(ObNewRow *&row)
           }
           break;
         case DATA_OCCUPIED:
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(tablet_info.get_occupy_size());
           break;
         case DATA_REQUIRED:
-          cur_row_.cells_[i].set_int(0);
+          cur_row_.cells_[i].set_int(tablet_info.get_required_size());
           break;
         default:
           ret = OB_ERR_UNEXPECTED;
