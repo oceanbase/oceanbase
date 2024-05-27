@@ -2618,9 +2618,8 @@ int ObCreateTableResolver::resolve_index_node(const ParseNode *node)
           }
           if (OB_SUCC(ret)) {
             if (sort_item.is_func_index_) {
-              bool is_mulvalue_index = (index_keyname_ == MULTI_KEY || index_keyname_ == MULTI_UNIQUE_KEY);
               ObRawExpr *expr = NULL;
-              if (is_mulvalue_index) {
+              if (is_multi_value_index) {
                 ObColumnSchemaV2 *budy_column_schema = NULL;
                 if (OB_FAIL(ObMulValueIndexBuilderUtil::build_and_generate_multivalue_column(
                                                                                   sort_item,

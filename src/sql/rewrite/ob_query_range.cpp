@@ -4034,7 +4034,8 @@ int ObQueryRange::get_member_of_keyparts(const common::ObObj &const_param, ObKey
     ObObj cast_obj = const_param;
     if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, out_key_part->pos_, cast_obj, cmp))) {
       LOG_WARN("failed to try cast value type", K(ret));
-    } else if (cmp != 0) {
+    }
+    if (OB_FAIL(ret) || cmp != 0) {
       if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
         LOG_WARN("failed set normal key", K(ret));
       } else if (OB_NOT_NULL(query_range_ctx_)) {
@@ -4174,11 +4175,9 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
   if (OB_ISNULL(out_key_part)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid argument", K(ret));
-  } else if (const_param.get_type() == ObUnknownType) {
+  } else if (const_param.is_unknown()) {
     if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
       LOG_WARN("failed set normal key", K(ret));
-    } else if (OB_NOT_NULL(query_range_ctx_)) {
-      query_range_ctx_->cur_expr_is_precise_ = false;
     }
   } else if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(const_param, exec_ctx, false, &allocator_, j_base))) {
     LOG_WARN("fail to get json val", K(ret), K(const_param));

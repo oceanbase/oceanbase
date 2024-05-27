@@ -403,7 +403,12 @@ int ObExprJsonQuery::check_enable_cast_index_array(ObIJsonBase* json_base, bool 
   } else if (json_base->json_type() == ObJsonNodeType::J_NULL) {
     ret = OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
     LOG_USER_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX);
-  } else if (!disable_container && json_base->json_type() == ObJsonNodeType::J_BOOLEAN) {
+  } else if (!disable_container &&
+    (json_base->json_type() == ObJsonNodeType::J_BOOLEAN
+     && !(ob_is_int_uint_tc(dest_type) ||
+          ob_is_number_or_decimal_int_tc(dest_type) ||
+          ob_is_float_tc(dest_type) ||
+          ob_is_double_tc(dest_type)))) {
     ret = OB_NOT_MULTIVALUE_SUPPORT;
     LOG_USER_ERROR(OB_NOT_MULTIVALUE_SUPPORT, "CAST-ing JSON BOOLEAN type to array");
   } else if (json_base->json_type() == ObJsonNodeType::J_OBJECT) {
@@ -475,7 +480,9 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     LOG_WARN("failed to reserve size", K(ret));
   } else if (FALSE_IT((*reinterpret_cast<uint32_t*>(str_buff.ptr()) = element_count))) {
   } else if (str_buff.set_length(sizeof(uint32_t))) {
-  } else if (OB_NOT_NULL(json_base) && json_base->json_type() == ObJsonNodeType::J_ARRAY) {
+  } else if (OB_NOT_NULL(json_base) &&
+    json_base->json_type() == ObJsonNodeType::J_ARRAY && element_count > 0) {
+
     /*
     *  need remove duplicate element
     */
@@ -568,9 +575,28 @@ int ObExprJsonQuery::set_multivalue_result(ObEvalCtx& ctx,
     } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator, ctx, json_base, dst_collation,
                                                                accuracy, dest_type, scale, tmp_obj))) {
       LOG_WARN("failed to cast to res", K(ret), K(dest_type));
-      ret = OB_ERR_JSON_CONTAINER_CAST_SCALAR;
-      LOG_USER_ERROR(OB_ERR_JSON_CONTAINER_CAST_SCALAR);
+      ret = OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX;
+      LOG_USER_ERROR(OB_ERR_JSON_VALUE_CAST_FUNCTION_INDEX);
     } else if (FALSE_IT(reserve_len = tmp_obj.get_serialize_size())) {
+    } else if (OB_FAIL(str_buff.reserve(reserve_len + 128))) {
+      LOG_WARN("failed to reserve size", K(ret), K(reserve_len));
+    } else if (OB_FAIL(tmp_obj.serialize(str_buff.ptr(), str_buff.capacity(), pos))) {
+      LOG_WARN("failed to serialize datum", K(ret), K(reserve_len));
+    } else {
+      str_buff.set_length(pos);
+    }
+  } else {
+    // empty result, set a minimal
+
+    ObObj tmp_obj;
+    tmp_obj.set_type(dest_type);
+    tmp_obj.set_collation_type(dst_collation);
+    tmp_obj.set_scale(scale);
+    tmp_obj.set_min_value();
+    int64_t pos = str_buff.length();
+
+    uint64_t reserve_len = 0;
+    if (FALSE_IT(reserve_len = tmp_obj.get_serialize_size())) {
     } else if (OB_FAIL(str_buff.reserve(reserve_len + 128))) {
       LOG_WARN("failed to reserve size", K(ret), K(reserve_len));
     } else if (OB_FAIL(tmp_obj.serialize(str_buff.ptr(), str_buff.capacity(), pos))) {
