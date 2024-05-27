@@ -14,6 +14,9 @@
 #include <gtest/gtest.h>
 #include "storage/schema_utils.h"
 #include "storage/test_tablet_helper.h"
+#include "lib/utility/ob_serialization_helper.h"
+#include "share/ob_rpc_struct.h"
+#include "deps/oblib/src/lib/utility/ob_unify_serialize.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -40,16 +43,88 @@ public:
   }
 };
 
+struct TestBatchCreateTabletArg
+{
+  const static int64_t UNIS_VERSION = 1;
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int serialize_(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int64_t get_serialize_size() const;
+  int64_t get_serialize_size_() const;
+  ObBatchCreateTabletArg arg;
+};
+
+OB_DEF_SERIALIZE(TestBatchCreateTabletArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, arg.id_, arg.major_frozen_scn_, arg.tablets_, arg.table_schemas_, arg.need_check_tablet_cnt_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(TestBatchCreateTabletArg)
+{
+  int len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, arg.id_, arg.major_frozen_scn_, arg.tablets_, arg.table_schemas_, arg.need_check_tablet_cnt_);
+  return len;
+}
+
+struct TestBatchUnbindTabletArg
+{
+  const static int64_t UNIS_VERSION = 1;
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int serialize_(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int64_t get_serialize_size() const;
+  int64_t get_serialize_size_() const;
+  ObBatchUnbindTabletArg arg;
+};
+
+OB_DEF_SERIALIZE(TestBatchUnbindTabletArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, arg.tenant_id_, arg.ls_id_, arg.schema_version_, arg.orig_tablet_ids_, arg.hidden_tablet_ids_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(TestBatchUnbindTabletArg)
+{
+  int len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, arg.tenant_id_, arg.ls_id_, arg.schema_version_, arg.orig_tablet_ids_, arg.hidden_tablet_ids_);
+  return len;
+}
+
+struct TestBatchRemoveTabletArg
+{
+  const static int64_t UNIS_VERSION = 1;
+  int serialize(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int serialize_(char* buf, const int64_t buf_len, int64_t& pos) const;
+  int64_t get_serialize_size() const;
+  int64_t get_serialize_size_() const;
+  ObBatchRemoveTabletArg arg;
+};
+
+OB_DEF_SERIALIZE(TestBatchRemoveTabletArg)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_ENCODE, arg.tablet_ids_, arg.id_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(TestBatchRemoveTabletArg)
+{
+  int len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, arg.tablet_ids_, arg.id_);
+  return len;
+}
+
 TEST_F(TestIsOldMds, test_is_old_mds_for_unbind) {
   int ret = OB_SUCCESS;
-  ObBatchUnbindTabletArg arg;
+  TestBatchUnbindTabletArg test_arg;
   for (int64_t i =0; OB_SUCC(ret) && i < 5; i++) {
-    arg.orig_tablet_ids_.push_back(ObTabletID(1));
+    test_arg.arg.orig_tablet_ids_.push_back(ObTabletID(1));
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
   for (int64_t i =0; OB_SUCC(ret) && i < 5; i++) {
-    arg.hidden_tablet_ids_.push_back(ObTabletID(1));
+    test_arg.arg.hidden_tablet_ids_.push_back(ObTabletID(1));
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -58,28 +133,39 @@ TEST_F(TestIsOldMds, test_is_old_mds_for_unbind) {
   int64_t pos = 0;
   bool is_old_mds;
 
-  arg.is_old_mds_ = false;
-  ret = arg.serialize(buf, len, pos);
+  pos = 0;
+  test_arg.arg.is_old_mds_ = true;
+  memset(buf, 0, 5000);
+  ret = test_arg.arg.serialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, is_old_mds);
+
+  pos = 0;
+  test_arg.arg.is_old_mds_ = false;
+  memset(buf, 0, 5000);
+  ret = test_arg.arg.serialize(buf, len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, is_old_mds);
 
   pos = 0;
-  arg.is_old_mds_ = true;
   memset(buf, 0, 5000);
-  ret = arg.serialize(buf, len, pos);
+  ret = test_arg.serialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  len = pos;
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_old_mds);
 }
 
 TEST_F(TestIsOldMds, test_is_old_mds_for_delete) {
   int ret = OB_SUCCESS;
-  ObBatchRemoveTabletArg arg;
+  TestBatchRemoveTabletArg test_arg;
   for (int64_t i =0; OB_SUCC(ret) && i < 5; i++) {
-    arg.tablet_ids_.push_back(ObTabletID(1));
+    test_arg.arg.tablet_ids_.push_back(ObTabletID(1));
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -88,31 +174,41 @@ TEST_F(TestIsOldMds, test_is_old_mds_for_delete) {
   int64_t pos = 0;
   bool is_old_mds;
 
-  arg.is_old_mds_ = false;
-  ret = arg.serialize(buf, len, pos);
+  pos = 0;
+  test_arg.arg.is_old_mds_ = true;
+  memset(buf, 0, 5000);
+  ret = test_arg.arg.serialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, is_old_mds);
+
+  pos = 0;
+  test_arg.arg.is_old_mds_ = false;
+  ret = test_arg.arg.serialize(buf, len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, is_old_mds);
 
   pos = 0;
-  arg.is_old_mds_ = true;
   memset(buf, 0, 5000);
-  ret = arg.serialize(buf, len, pos);
+  ret = test_arg.serialize(buf, len, pos);
+  len = pos;
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_old_mds);
 }
 
 TEST_F(TestIsOldMds, test_is_old_mds_for_create) {
   int ret = OB_SUCCESS;
-  ObBatchCreateTabletArg arg;
+  TestBatchCreateTabletArg test_arg;
   ObTableSchema table_schema;
   TestSchemaUtils::prepare_data_schema(table_schema);
-  ret = arg.table_schemas_.push_back(table_schema);
+  ret = test_arg.arg.table_schemas_.push_back(table_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.table_schemas_.push_back(table_schema);
+  ret = test_arg.arg.table_schemas_.push_back(table_schema);
   ASSERT_EQ(OB_SUCCESS, ret);
   for (int64_t i =0; OB_SUCC(ret) && i < 5; i++) {
     obrpc::ObCreateTabletInfo create_tablet_info;
@@ -125,7 +221,7 @@ TEST_F(TestIsOldMds, test_is_old_mds_for_create) {
       create_tablet_info.table_schema_index_.push_back(0);
       ASSERT_EQ(OB_SUCCESS, ret);
     }
-    arg.tablets_.push_back(create_tablet_info);
+    test_arg.arg.tablets_.push_back(create_tablet_info);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 
@@ -134,19 +230,28 @@ TEST_F(TestIsOldMds, test_is_old_mds_for_create) {
   int64_t pos = 0;
   bool is_old_mds;
 
-  arg.is_old_mds_ = false;
-  ret = arg.serialize(buf, len, pos);
+  pos = 0;
+  test_arg.arg.is_old_mds_ = true;
+  memset(buf, 0, 5000);
+  ret = test_arg.arg.serialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, is_old_mds);
+
+  pos = 0;
+  test_arg.arg.is_old_mds_ = false;
+  ret = test_arg.arg.serialize(buf, len, pos);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = test_arg.arg.is_old_mds(buf, len, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(false, is_old_mds);
 
   pos = 0;
-  arg.is_old_mds_ = true;
   memset(buf, 0, 5000);
-  ret = arg.serialize(buf, len, pos);
+  ret = test_arg.serialize(buf, len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = arg.is_old_mds(buf, len, is_old_mds);
+  ret = test_arg.arg.is_old_mds(buf, pos, is_old_mds);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(true, is_old_mds);
 }

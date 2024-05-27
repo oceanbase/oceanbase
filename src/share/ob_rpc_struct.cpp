@@ -7968,16 +7968,23 @@ int ObBatchRemoveTabletArg::is_old_mds(const char *buf,
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len));
+    LOG_WARN("invalid args", K(ret), KP(buf), K(data_len));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, version, len);
     if (OB_FAIL(ret)) {
     }
     // tablets array
     else if (OB_FAIL(skip_array_len(buf, data_len, pos))) {
-      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos), K(version), K(len), K(id));
+      LOG_WARN("failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos), K(version), K(len), K(id));
     } else {
-      LST_DO_CODE(OB_UNIS_DECODE, id, is_old_mds);
+      LST_DO_CODE(OB_UNIS_DECODE, id);
+      if (OB_FAIL(ret)) {
+      } else if (pos == data_len) {
+        is_old_mds = true;
+        FLOG_INFO("arg is end, it is old mds", K(ret), KP(buf), K(data_len), K(pos), K(is_old_mds), K(version), K(len), K(id));
+      } else {
+        LST_DO_CODE(OB_UNIS_DECODE, is_old_mds);
+      }
     }
   }
 
@@ -8243,20 +8250,27 @@ int ObBatchCreateTabletArg::is_old_mds(const char *buf,
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len));
+    LOG_WARN("invalid args", K(ret), KP(buf), K(data_len));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, version, len, id, major_frozen_scn);
     if (OB_FAIL(ret)) {
     }
     // tablets array
     else if (OB_FAIL(skip_unis_array_len(buf, data_len, pos))) {
-      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+      LOG_WARN("failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
     }
     // schema array
     else if (OB_FAIL(skip_unis_array_len(buf, data_len, pos))) {
-      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+      LOG_WARN("failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
     } else {
-      LST_DO_CODE(OB_UNIS_DECODE, need_check_tablet_cnt, is_old_mds);
+      LST_DO_CODE(OB_UNIS_DECODE, need_check_tablet_cnt);
+      if (OB_FAIL(ret)) {
+      } else if (pos == data_len) {
+        is_old_mds = true;
+        FLOG_INFO("arg is end, it is old mds", K(ret), KP(buf), K(data_len), K(pos), K(is_old_mds), K(version), K(len), K(id), K(major_frozen_scn), K(need_check_tablet_cnt));
+      } else {
+        LST_DO_CODE(OB_UNIS_DECODE, is_old_mds);
+      }
     }
   }
 

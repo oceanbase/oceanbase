@@ -104,20 +104,25 @@ int ObBatchUnbindTabletArg::is_old_mds(const char *buf,
 
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    TRANS_LOG(WARN, "invalid args", K(ret), KP(buf), K(data_len));
+    LOG_WARN("invalid args", K(ret), KP(buf), K(data_len));
   } else {
     LST_DO_CODE(OB_UNIS_DECODE, version, len, tenant_id, id, schema_version);
     if (OB_FAIL(ret)) {
     }
     // orig tablets array
     else if (OB_FAIL(skip_array_len(buf, data_len, pos))) {
-      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+      LOG_WARN("failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
     }
     // hidden tablets array
     else if (OB_FAIL(skip_array_len(buf, data_len, pos))) {
-      TRANS_LOG(WARN, "failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
+      LOG_WARN("failed to skip_unis_array_len", K(ret), KP(buf), K(data_len), K(pos));
     } else {
-      LST_DO_CODE(OB_UNIS_DECODE, is_old_mds);
+      if (pos == data_len) {
+        is_old_mds = true;
+        FLOG_WARN("arg is end, it is old mds", K(ret), KP(buf), K(data_len), K(pos), K(is_old_mds), K(version), K(len), K(id));
+      } else {
+        LST_DO_CODE(OB_UNIS_DECODE, is_old_mds);
+      }
     }
   }
 
