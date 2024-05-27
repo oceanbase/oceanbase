@@ -209,16 +209,14 @@ int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, cons
   exist = false;
   if (OB_NOT_NULL(parent_table_set)) {
     DASTableIdList::const_iterator it = parent_table_set->begin();
-    LOG_WARN("asdfasdf check table id", K(table_id));
-    for (; it != parent_table_set->end(); it++) {
-      LOG_WARN("asdfasdf table id in table set", K(*it));
+    for (; it != parent_table_set->end(); it++) {s
       if (*it == table_id) {
         exist = true;
         break;
       }
     }
   }
-  return ret;
+  return ret;s
 }
 
 int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, const ObDMLBaseCtDef &dml_ctdef)
@@ -233,8 +231,7 @@ int ObDMLService::delete_table_id_from_parent_table_set(ObDMLRtCtx &dml_rtctx, c
   } else {
     DASTableIdList& parent_table_set = root_ctx->get_das_ctx().get_parent_table_set();
     DASTableIdList::iterator it = parent_table_set.begin();
-    bool found = false;
-    LOG_WARN("asdfasdf delete table id from table set", K(dml_ctdef.das_base_ctdef_.index_tid_));
+    bool found = false;s
     for (; it != parent_table_set.end(); it++) {
       if (*it == dml_ctdef.das_base_ctdef_.index_tid_) {
         found = true;
