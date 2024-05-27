@@ -1696,7 +1696,7 @@ int ObHashGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
       curr_group_id_ = 0;
       bypass_ctrl_.start_by_pass();
       LOG_TRACE("force by pass open");
-    } else if (OB_FAIL(load_data_batch(op_max_batch_size))) {
+    } else if (OB_FAIL(load_data_batch(MY_SPEC.max_batch_size_))) {
       LOG_WARN("load data failed", K(ret));
     } else {
       curr_group_id_ = 0;
@@ -1716,7 +1716,7 @@ int ObHashGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
         brs_.size_ = 0;
         reset();
       } else {
-        if (OB_FAIL(load_data_batch(op_max_batch_size))) {
+        if (OB_FAIL(load_data_batch(MY_SPEC.max_batch_size_))) {
           LOG_WARN("load data failed", K(ret));
         } else {
           op_monitor_info_.otherstat_3_value_ =
@@ -1739,13 +1739,12 @@ int ObHashGroupByOp::inner_get_next_batch(const int64_t max_row_cnt)
         by_pass_brs_holder_.restore();
         calc_avg_group_mem();
       }
-
       if (OB_FAIL(by_pass_restart_round())) {
         LOG_WARN("failed to restart", K(ret));
       } else if (OB_FAIL(init_by_pass_group_batch_item())) {
         LOG_WARN("failed to init by pass row", K(ret));
       } else if(!bypass_ctrl_.by_passing()) {
-        if (OB_FAIL(load_data_batch(op_max_batch_size))) {
+        if (OB_FAIL(load_data_batch(MY_SPEC.max_batch_size_))) {
           LOG_WARN("failed to laod data", K(ret));
         } else if (curr_group_id_ >= local_group_rows_.size()) {
           iter_end_ = true;
