@@ -46,6 +46,7 @@ public:
   const common::ObString &get_target_sql() const { return create_outline_arg_.outline_info_.get_outline_target_str(); }
   common::ObString &get_target_sql() { return create_outline_arg_.outline_info_.get_outline_target_str(); }
   obrpc::ObCreateOutlineArg &get_create_outline_arg() { return create_outline_arg_; }
+  const obrpc::ObCreateOutlineArg &get_create_outline_arg() const { return create_outline_arg_; }
   common::ObString &get_hint() { return hint_; }
   common::ObString &get_sql_id() { return sql_id_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return create_outline_arg_; }

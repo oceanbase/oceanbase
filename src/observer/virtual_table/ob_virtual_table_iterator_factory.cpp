@@ -230,6 +230,7 @@
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
+#include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
 
 namespace oceanbase
 {
@@ -1241,8 +1242,11 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObShowGrants, show_grants))) {
               show_grants->set_tenant_id(real_tenant_id);
               show_grants->set_user_id(session->get_user_id());
-              session->get_session_priv_info(show_grants->get_session_priv());
-              vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              if (OB_FAIL(session->get_session_priv_info(show_grants->get_session_priv()))) {
+                SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+              } else {
+                vt_iter = static_cast<ObVirtualTableIterator *>(show_grants);
+              }
             }
             break;
           }
@@ -2738,6 +2742,16 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObInfoSchemaEnableRolesTable *enable_roles = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObInfoSchemaEnableRolesTable, enable_roles))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(enable_roles);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_COMPATIBILITY_CONTROL_TID: {
+            ObVirtualCompatibilityConflictControl *compatibility_control = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObVirtualCompatibilityConflictControl, compatibility_control))) {
+              SERVER_LOG(ERROR, "ObVirtualCompatibilityConflictControl construct fail", K(ret));
+            } else {
+              compatibility_control->set_allocator(&allocator);
+              vt_iter = static_cast<ObVirtualTableIterator *>(compatibility_control);
             }
             break;
           }

@@ -59,16 +59,21 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
 {
   int ret = OB_SUCCESS;
   ObVariableSetStmt *variable_set_stmt = NULL;
+  bool check_var_name_length = false;
   if (OB_UNLIKELY(T_VARIABLE_SET != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("parse_tree.type_ must be T_VARIABLE_SET", K(ret), K(parse_tree.type_));
-  } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(schema_checker_)) {
+  } else if (OB_ISNULL(session_info_) || OB_ISNULL(allocator_) || OB_ISNULL(schema_checker_) ||
+             OB_ISNULL(params_.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("session_info_ or allocator_ is NULL", K(ret), K(session_info_), K(allocator_),
-              K(schema_checker_));
+              K(schema_checker_), K(params_.query_ctx_));
   } else if (OB_ISNULL(variable_set_stmt = create_stmt<ObVariableSetStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create variable set stmt failed", K(ret));
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::VAR_NAME_LENGTH,
+                                                         check_var_name_length))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = variable_set_stmt;
     variable_set_stmt->set_actual_tenant_id(session_info_->get_effective_tenant_id());
@@ -205,13 +210,21 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
               }
             }
           } else {
-            // use WARN_ON_FAIL cast_mode if set user_variable
-            const stmt::StmtType session_ori_stmt_type = session_info_->get_stmt_type();
-            session_info_->set_stmt_type(stmt::T_SELECT);
-            if (OB_FAIL(resolve_value_expr(*set_node->children_[1], var_node.value_expr_))) {
-              LOG_WARN("failed to resolve value expr", K(ret));
+            if (lib::is_mysql_mode() && check_var_name_length) {
+              if (OB_FAIL(ObResolverUtils::check_user_variable_length(var_node.variable_name_.ptr(),
+                                                                      var_node.variable_name_.length()))) {
+                LOG_WARN("check user variable length fail", K(ret));
+              }
             }
-            session_info_->set_stmt_type(session_ori_stmt_type);
+            if (OB_SUCC(ret)) {
+              // use WARN_ON_FAIL cast_mode if set user_variable
+              const stmt::StmtType session_ori_stmt_type = session_info_->get_stmt_type();
+              session_info_->set_stmt_type(stmt::T_SELECT);
+              if (OB_FAIL(resolve_value_expr(*set_node->children_[1], var_node.value_expr_))) {
+                LOG_WARN("failed to resolve value expr", K(ret));
+              }
+              session_info_->set_stmt_type(session_ori_stmt_type);
+            }
           }
           if (OB_SUCC(ret)) {
             if (OB_NOT_NULL(var_node.value_expr_) && var_node.value_expr_->has_flag(CNT_AGG)) {

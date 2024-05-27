@@ -5521,6 +5521,7 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_TABLEGROUPS:
     case stmt::T_HELP:
     case stmt::T_SHOW_RECYCLEBIN:
+    case stmt::T_SHOW_PROFILE:
     case stmt::T_SHOW_RESTORE_PREVIEW:
     case stmt::T_SHOW_TENANT:
     case stmt::T_SHOW_SEQUENCES:

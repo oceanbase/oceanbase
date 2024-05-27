@@ -1881,17 +1881,17 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_COMPATIBILITY_CONTROL; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(259); }
 };
-class ObSysVarObCompatibilityVersion : public ObIntSysVar
+class ObSysVarObCompatibilityVersion : public ObVersionSysVar
 {
 public:
-  ObSysVarObCompatibilityVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  ObSysVarObCompatibilityVersion() : ObVersionSysVar(ObSysVarOnCheckFuncs::check_and_convert_compat_version, NULL, ObSysVarToObjFuncs::to_obj_version, ObSysVarToStrFuncs::to_str_version, ObSysVarGetMetaTypeFuncs::get_meta_type_varchar) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_COMPATIBILITY_VERSION; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(260); }
 };
-class ObSysVarObSecurityVersion : public ObIntSysVar
+class ObSysVarObSecurityVersion : public ObVersionSysVar
 {
 public:
-  ObSysVarObSecurityVersion() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  ObSysVarObSecurityVersion() : ObVersionSysVar(ObSysVarOnCheckFuncs::check_and_convert_security_version, NULL, ObSysVarToObjFuncs::to_obj_version, ObSysVarToStrFuncs::to_str_version, ObSysVarGetMetaTypeFuncs::get_meta_type_varchar) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_SECURITY_VERSION; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(261); }
 };

@@ -937,12 +937,12 @@ int ObDDLResolver::resolve_table_id_pre(ParseNode *node)
   if (NULL != node) {
     ParseNode *option_node = NULL;
     int32_t num = 0;
-    if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+    if(T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse node", K(ret));
-    } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
+    } else if (OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
+      SQL_RESV_LOG(WARN, "session_info_ is null", K(session_info_), K(ret));
     } else {
       num = node->num_child_;
     }
@@ -968,12 +968,12 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
   if (NULL != node) {
     ParseNode *option_node = NULL;
     int32_t num = 0;
-    if(T_TABLE_OPTION_LIST != node->type_ || node->num_child_ < 1) {
+    if(T_TABLE_OPTION_LIST != node->type_) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid parse node", KR(ret), K(node->type_), K(node->num_child_));
-    } else if (OB_ISNULL(node->children_) || OB_ISNULL(session_info_)) {
+    } else if ( OB_ISNULL(session_info_)) {
       ret = OB_ERR_UNEXPECTED;
-      SQL_RESV_LOG(WARN, "node children or session_info_ is null", K(node->children_), K(session_info_), K(ret));
+      SQL_RESV_LOG(WARN, "session_info_ is null", K(session_info_), K(ret));
     } else {
       num = node->num_child_;
     }

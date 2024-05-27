@@ -870,6 +870,7 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
 
   int alter_user_profile(const obrpc::ObAlterUserProfileArg &arg);
   int alter_user_default_role(const obrpc::ObAlterUserProfileArg &arg);
+  int alter_user_proxy(const obrpc::ObAlterUserProxyArg &arg);
   int get_all_users_in_tenant_with_profile(const uint64_t tenant_id,
                                            const uint64_t profile_id,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
@@ -2109,6 +2110,7 @@ public:
              obrpc::ObSrvRpcProxy &rpc_proxy,
              const common::ObIArray<common::ObConfigPairs> &init_configs,
              const common::ObIArray<common::ObAddr> &addrs);
+
 #ifdef OB_BUILD_TDE_SECURITY
   int check_need_create_root_key(const obrpc::ObCreateTenantArg &arg, bool &need_create);
   int get_root_key_from_primary(const obrpc::ObCreateTenantArg &arg,

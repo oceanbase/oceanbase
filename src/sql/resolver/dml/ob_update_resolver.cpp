@@ -40,6 +40,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
   ObUpdateStmt *update_stmt = NULL;
   ObSEArray<ObTableAssignment, 2> tables_assign;
   bool has_tg = false;
+  bool disable_limit_offset = false;
   if (T_UPDATE != parse_tree.type_
       || 3 > parse_tree.num_child_
       || OB_ISNULL(parse_tree.children_)
@@ -50,6 +51,9 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(update_stmt = create_stmt<ObUpdateStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create update stmt failed");
+  } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::UPD_LIMIT_OFFSET,
+                                                         disable_limit_offset))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = update_stmt;
     update_stmt->set_ignore(false);
@@ -156,7 +160,7 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("failed to generate batched stmt info", K(ret));
     } else if (OB_FAIL(resolve_order_clause(parse_tree.children_[ORDER_BY]))) {
       LOG_WARN("resolve order clause failed", K(ret));
-    } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT]))) {
+    } else if (OB_FAIL(resolve_limit_clause(parse_tree.children_[LIMIT], disable_limit_offset))) {
       LOG_WARN("resolve limit clause failed", K(ret));
     } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT]))) {
       LOG_WARN("resolve hints failed", K(ret));

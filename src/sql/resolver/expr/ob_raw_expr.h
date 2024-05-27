@@ -1648,7 +1648,8 @@ struct ObResolveContext
     is_variable_allowed_(true),
     is_expanding_view_(false),
     is_in_system_view_(false),
-    match_exprs_(NULL)
+    match_exprs_(NULL),
+    is_from_show_resolver_(false)
   {
   }
 
@@ -1697,6 +1698,7 @@ struct ObResolveContext
   bool is_expanding_view_;
   bool is_in_system_view_;
   common::ObIArray<ObMatchFunRawExpr*> *match_exprs_;
+  bool is_from_show_resolver_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

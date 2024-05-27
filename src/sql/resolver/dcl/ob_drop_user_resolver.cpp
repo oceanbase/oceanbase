@@ -34,6 +34,7 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
   ParseNode * top_node = const_cast<ParseNode*>(&parse_tree);
   ParseNode * user_list_node = nullptr;
   ObDropUserStmt *drop_user_stmt = NULL;
+  bool if_exists = false;
   CHECK_COMPATIBILITY_MODE(params_.session_info_);
   if (OB_ISNULL(params_.session_info_)) {
     ret = OB_NOT_INIT;
@@ -81,8 +82,15 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
     } else if (T_DROP_USER != top_node->type_ || top_node->num_child_ <= 0) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(top_node->type_), K(top_node->num_child_));
+    } else if (OB_ISNULL(user_list_node = top_node->children_[0])) {
+      ret = OB_ERR_USER_EMPTY;
+      SQL_RESV_LOG(WARN, "user_list_node is null", K(ret));
+    } else if(OB_UNLIKELY(top_node->num_child_ < 2)) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "drop user top node num child shoud be 2", K(ret), K(top_node->type_), K(top_node->num_child_));
     } else {
-      user_list_node = top_node;
+      ParseNode* if_exists_node = top_node->children_[1];
+      if_exists = if_exists_node != NULL;
     }
   }
   if (OB_SUCC(ret)) {
@@ -108,6 +116,7 @@ int ObDropUserResolver::resolve(const ParseNode &parse_tree)
       }
       if (OB_SUCC(ret)) {
         drop_user_stmt->set_tenant_id(tenant_id);
+        drop_user_stmt->set_if_exists(if_exists);
       }
     }
   }

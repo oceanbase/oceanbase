@@ -37,7 +37,6 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
   ObKillSessionArg arg;
   ObAddr addr;
   ObSQLSessionMgr &session_mgr = OBSERVER.get_sql_session_mgr();
-
   if (OB_FAIL(arg.init(ctx, stmt))) {
     LOG_WARN("fail to init kill_session arg", K(ret), K(arg), K(ctx), K(stmt));
   } else {

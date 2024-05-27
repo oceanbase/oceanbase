@@ -89,6 +89,7 @@
 #include "sql/resolver/dcl/ob_create_role_resolver.h"
 #include "sql/resolver/dcl/ob_drop_role_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_resolver.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_resolver.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_resolver.h"
 #include "sql/resolver/tcl/ob_start_trans_resolver.h"
 #include "sql/resolver/tcl/ob_end_trans_resolver.h"
@@ -126,6 +127,7 @@
 #include "sql/resolver/cmd/ob_drop_restore_point_resolver.h"
 #include "sql/resolver/cmd/ob_get_diagnostics_resolver.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
+#include "sql/resolver/cmd/ob_mock_resolver.h"
 #include "sql/resolver/dcl/ob_alter_role_resolver.h"
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
@@ -419,6 +421,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
+      case T_FLUSH_PRIVILEGES: {
+        REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
       case T_SWITCH_REPLICA_ROLE: {
         REGISTER_STMT_RESOLVER(SwitchReplicaRole);
         break;
@@ -704,6 +710,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_TENANT:
       case T_SHOW_CREATE_TENANT:
       case T_SHOW_RECYCLEBIN:
+      case T_SHOW_PROFILE:
       case T_SHOW_PROCEDURE_STATUS:
       case T_SHOW_FUNCTION_STATUS:
       case T_SHOW_TRIGGERS:
@@ -740,6 +747,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_ALTER_USER_DEFAULT_ROLE:
       case T_SET_ROLE: {
         REGISTER_STMT_RESOLVER(AlterUserProfile);
+        break;
+      }
+      case T_ALTER_USER_PROXY: {
+        REGISTER_STMT_RESOLVER(AlterUserProxy);
         break;
       }
       case T_ALTER_USER_PRIMARY_ZONE: {

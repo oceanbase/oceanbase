@@ -2049,6 +2049,7 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
   const bool is_paramlize = false;
   int64_t server_collation = CS_TYPE_INVALID;
   bool enable_decimal_int = false;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (raw_params.empty()) {
     // do nothing
   } else if (raw_params_idx.count() != raw_params.count()) {
@@ -2057,6 +2058,8 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
     K(raw_params_idx.count()), K(raw_params.count()));
   } else if (OB_FAIL(fixed_param_store.reserve(raw_params_idx.count()))) {
     LOG_WARN("failed to reserve array", K(ret), K(raw_params_idx.count()));
+  } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session.get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variable failed", K(ret));
@@ -2073,18 +2076,19 @@ int ObSql::clac_fixed_param_store(const stmt::StmtType stmt_type,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("node is null", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param,
-                                                  stmt_type,
-                                                  allocator,
-                                                  collation_connection,
-                                                  session.get_nls_collation_nation(),
-                                                  session.get_timezone_info(),
-                                                  value,
-                                                  is_paramlize,
-                                                  literal_prefix,
-                                                  session.get_actual_nls_length_semantics(),
-                                                  static_cast<ObCollationType>(server_collation),
-                                                  NULL, session.get_sql_mode(),
-                                                  enable_decimal_int))) {
+                                                      stmt_type,
+                                                      allocator,
+                                                      collation_connection,
+                                                      session.get_nls_collation_nation(),
+                                                      session.get_timezone_info(),
+                                                      value,
+                                                      is_paramlize,
+                                                      literal_prefix,
+                                                      session.get_actual_nls_length_semantics(),
+                                                      static_cast<ObCollationType>(server_collation),
+                                                      NULL, session.get_sql_mode(),
+                                                      enable_decimal_int,
+                                                      compat_type))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (OB_FAIL(add_param_to_param_store(value, fixed_param_store))) {
       LOG_WARN("failed to add param to param store", K(ret), K(value), K(fixed_param_store));
@@ -2884,6 +2888,9 @@ int ObSql::generate_stmt(ParseResult &parse_result,
         result.get_exec_context().get_stmt_factory()->get_query_ctx())) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("allocate query context failed", K(ret));
+    } else if (OB_FAIL(resolver_ctx.session_info_->get_optimizer_features_enable_version(
+                          resolver_ctx.query_ctx_->optimizer_features_enable_version_))) {
+      LOG_WARN("failed to get_optimizer_features_enable_version", K(ret));
     } else {
       resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(context.schema_guard_);
       if (OB_FAIL(resolver_ctx.schema_checker_->init(resolver_ctx.query_ctx_->sql_schema_guard_, session_id))) {

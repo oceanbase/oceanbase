@@ -41,6 +41,7 @@
 #endif
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "share/ob_compatibility_control.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -666,10 +667,37 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
       LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
     } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.host_name_))) {
       LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
-    } else if (OB_FAIL(name_pool_.write_string(tmp_string, &thread_data_.user_at_host_name_))) {
-      LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
     } else {
       user_id_ = user_id;
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_proxy_user(const ObString &user_name, const ObString &host_name, const uint64_t user_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(user_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)
+      || OB_UNLIKELY(host_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name length invalid_", K(user_name), K(host_name), K(ret));
+  } else if (user_id == OB_INVALID_ID) {
+    proxy_user_id_ = user_id;
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.proxy_user_name_.reset();
+    thread_data_.proxy_host_name_.reset();
+  } else {
+    char tmp_buf[common::OB_MAX_USER_NAME_LENGTH_STORE + common::OB_MAX_USER_NAME_LENGTH_STORE + 2] = {};
+    snprintf(tmp_buf, sizeof(tmp_buf), "%.*s@%.*s", user_name.length(), user_name.ptr(),
+                                                    host_name.length(), host_name.ptr());
+    ObString tmp_string(tmp_buf);
+    LockGuard lock_guard(thread_data_mutex_);
+    if (OB_FAIL(name_pool_.write_string(user_name, &thread_data_.proxy_user_name_))) {
+      LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.proxy_host_name_))) {
+      LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
+    } else {
+      proxy_user_id_ = user_id;
     }
   }
   return ret;
@@ -2739,6 +2767,18 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_CONTROL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_compat_type(static_cast<share::ObCompatType>(int_val)));
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_VERSION: {
+      uint64_t uint_val = 0;
+      OZ (val.get_uint64(uint_val), val);
+      OX (sys_vars_cache_.set_compat_version(uint_val));
       break;
     }
     default: {
@@ -4822,13 +4862,20 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(sql_id);
   if (OB_SUCC(ret)) {
     set_cur_sql_id(sql_id.ptr());
-  }
-  if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
                 thread_data_.proxy_host_name_,
                 enable_role_ids_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_user_name_,
+                                          &thread_data_.proxy_user_name_))) {
+        LOG_WARN("fail to write username to string_buf_", K(thread_data_.proxy_user_name_), K(ret));
+      } else if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_host_name_,
+                                                &thread_data_.proxy_host_name_))) {
+        LOG_WARN("fail to write userhost to string_buf_", K(thread_data_.proxy_host_name_), K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -5938,6 +5985,50 @@ int ObBasicSessionInfo::get_sql_audit_mem_conf(int64_t &mem_pct)
   int ret = OB_SUCCESS;
   if (OB_FAIL(get_sys_variable(SYS_VAR_OB_SQL_AUDIT_PERCENTAGE, mem_pct))) {
     LOG_WARN("failed to get memory percentage for sql audit", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::get_compatibility_control(ObCompatType &compat_type) const
+{
+  compat_type = sys_vars_cache_.get_compat_type();
+  return OB_SUCCESS;
+}
+
+int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) const
+{
+  compat_version = sys_vars_cache_.get_compat_version();
+  return OB_SUCCESS;
+}
+
+int ObBasicSessionInfo::get_security_version(uint64_t &security_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_sys_variable(SYS_VAR_OB_SECURITY_VERSION, security_version))) {
+    LOG_WARN("fail to get ob security version", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::check_feature_enable(const ObCompatFeatureType feature_type,
+                                             bool &is_enable) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  is_enable = false;
+  if (feature_type < ObCompatFeatureType::COMPAT_FEATURE_END) {
+    if (OB_FAIL(get_compatibility_version(version))) {
+      LOG_WARN("failed to get compat version", K(ret));
+    }
+  } else {
+    if (OB_FAIL(get_security_version(version))) {
+      LOG_WARN("failed to get security version", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(version,
+                                                           feature_type, is_enable))) {
+    LOG_WARN("failed to get feature enable", K(ret));
   }
   return ret;
 }

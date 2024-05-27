@@ -5844,7 +5844,8 @@ int ObTransformUtils::find_relation_expr(ObDMLStmt *stmt,
 int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
                                                           ObDMLStmt *stmt,
                                                           TableItem *item,
-                                                          ObIArray<ObRawExpr *> &unique_keys)
+                                                          ObIArray<ObRawExpr *> &unique_keys,
+                                                          int64_t *rowkey_count /* = NULL */)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
@@ -5881,6 +5882,9 @@ int ObTransformUtils::generate_unique_key_for_basic_table(ObTransformerCtx *ctx,
       } else if (OB_FAIL(unique_keys.push_back(col_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else { /*do nothing*/ }
+    }
+    if (OB_SUCC(ret) && rowkey_count != NULL) {
+      *rowkey_count = rowkey_info.get_size();
     }
   }
   return ret;

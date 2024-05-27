@@ -425,6 +425,9 @@ int ObSelectStmtPrinter::print_select()
       } else if (select_stmt->is_unpivot_select()) {
         DATA_PRINTF(" * ");
       } else {
+        if (select_stmt->is_select_straight_join()) { // straight_join
+          DATA_PRINTF("straight_join ");
+        }
         if (select_stmt->has_distinct()) { // distinct
           DATA_PRINTF("distinct ");
         }

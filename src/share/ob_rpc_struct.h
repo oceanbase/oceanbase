@@ -4569,7 +4569,6 @@ public:
 private:
   AdminDRTaskType type_;
 };
-
 struct ObAdminCommandArg
 {
 public:
@@ -5321,6 +5320,28 @@ public:
   uint64_t default_role_flag_;
   common::ObSEArray<uint64_t, 4> role_id_array_;
   common::ObSEArray<uint64_t, 4> user_ids_; //for set default role to multiple users
+};
+
+struct ObAlterUserProxyArg : public ObDDLArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterUserProxyArg() : ObDDLArg(), tenant_id_(common::OB_INVALID_TENANT_ID),
+    client_user_ids_(), proxy_user_ids_(),
+    credential_type_(0), flags_(0), role_ids_()
+  {}
+  virtual ~ObAlterUserProxyArg() {}
+  int assign(const ObAlterUserProxyArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id), K_(client_user_ids), K_(proxy_user_ids), K_(role_ids), K_(flags));
+
+  uint64_t tenant_id_;
+  ObSEArray<uint64_t, 4> client_user_ids_;
+  ObSEArray<uint64_t, 4> proxy_user_ids_;
+  uint64_t credential_type_;
+  uint64_t flags_;
+  bool is_grant_;
+  common::ObSEArray<uint64_t, 4> role_ids_;
 };
 
 struct ObCreateDirectoryArg : public ObDDLArg
@@ -9477,6 +9498,23 @@ public:
 };
 #endif
 
+struct ObAlterUserProxyRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObAlterUserProxyRes()
+    : ret_(OB_SUCCESS)
+  {}
+  ~ObAlterUserProxyRes() {}
+  int assign(const ObAlterUserProxyRes &other);
+  void set_ret(int ret) { ret_ = ret; }
+  int64_t get_ret() const { return ret_; }
+  void reset() { ret_ = OB_SUCCESS; };
+  TO_STRING_KV(K_(ret));
+private:
+  int ret_;
+};
+
 struct TenantServerUnitConfig
 {
 public:
@@ -11606,7 +11644,6 @@ public:
   uint64_t tenant_id_;
   int64_t log_disk_size_;
 };
-
 struct ObDumpServerUsageRequest final
 {
   OB_UNIS_VERSION(1);
@@ -11615,7 +11652,6 @@ public:
   ~ObDumpServerUsageRequest() { tenant_id_ = OB_INVALID_TENANT_ID; }
   uint64_t tenant_id_;
 };
-
 struct ObDumpServerUsageResult final
 {
   OB_UNIS_VERSION(1);

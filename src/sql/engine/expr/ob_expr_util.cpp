@@ -949,3 +949,19 @@ int ObSolidifiedVarsGetter::get_max_allowed_packet(int64_t &max_size)
   }
   return ret;
 }
+
+int ObSolidifiedVarsGetter::get_compat_version(uint64_t &compat_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(session_->get_compatibility_version(compat_version))) {
+    LOG_WARN("failed to get compat version", K(ret));
+  } else if (NULL != local_session_var_
+             && OB_FAIL(ObSQLUtils::merge_solidified_var_into_compat_version(local_session_var_->get_local_vars(),
+                                                                             compat_version))) {
+    LOG_WARN("try get local compat version failed", K(ret));
+  }
+  return ret;
+}

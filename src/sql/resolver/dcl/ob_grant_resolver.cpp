@@ -1407,13 +1407,20 @@ int ObGrantResolver::resolve_mysql(const ParseNode &parse_tree)
             LOG_WARN("Resolve priv set error", K(ret));
           } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
             LOG_WARN("fail to get data version", K(tenant_id));
-          } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {
-            if ((priv_set & OB_PRIV_EXECUTE) != 0 ||
-                (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
-                (priv_set & OB_PRIV_CREATE_ROUTINE) != 0) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
-            }
+          } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)
+                     && ((priv_set & OB_PRIV_EXECUTE) != 0 ||
+                         (priv_set & OB_PRIV_ALTER_ROUTINE) != 0 ||
+                         (priv_set & OB_PRIV_CREATE_ROUTINE) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_3_1_0 or 4_2_2_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant execute/alter routine/create routine privilege");
+          } else if (!sql::ObSQLUtils::is_data_version_ge_423_or_432(compat_version)
+                     && ((priv_set & OB_PRIV_CREATE_TABLESPACE) != 0 ||
+                         (priv_set & OB_PRIV_SHUTDOWN) != 0 ||
+                         (priv_set & OB_PRIV_RELOAD) != 0)) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("grammar is not support when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0 or 4_3_2_0", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant create tablespace/shutdown/reload privilege");
           }
           if (OB_FAIL(ret)) {
           } else {

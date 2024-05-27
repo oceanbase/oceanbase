@@ -7178,6 +7178,48 @@ all_tenant_snapshot_ls_replica_history_def = dict(
   ],
 )
 def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
+
+all_user_proxy_info_def = dict(
+    owner = 'mingye.swj',
+    table_name    = '__all_user_proxy_info',
+    table_id      = '512',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+	('tenant_id', 'int', 'false'),
+        ('client_user_id', 'int', 'false'),
+        ('proxy_user_id', 'int', 'false'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+      ('credential_type', 'int', 'false', '0'),
+      ('flags', 'int', 'false', '0')
+    ],
+)
+def_table_schema(**all_user_proxy_info_def)
+def_table_schema(**gen_history_table_def(513, all_user_proxy_info_def))
+
+all_user_proxy_role_info_def = dict(
+    owner = 'mingye.swj',
+    table_name    = '__all_user_proxy_role_info',
+    table_id      = '514',
+    table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+	('tenant_id', 'int', 'false'),
+        ('client_user_id', 'int', 'false'),
+        ('proxy_user_id', 'int', 'false'),
+        ('role_id', 'int', 'false'),
+    ],
+    in_tenant_space = True,
+
+    normal_columns = [
+    ],
+)
+def_table_schema(**all_user_proxy_role_info_def)
+def_table_schema(**gen_history_table_def(515, all_user_proxy_role_info_def))
+
 #
 # 508 : __all_ls_replica_task_history
 # 509 : __all_ls_compaction_status
@@ -14300,11 +14342,44 @@ def_table_schema(
 # 12470: __all_virtual_ls_compaction_status
 # 12471: __all_virtual_tablet_compaction_status
 # 12472: __all_virtual_tablet_checksum_error_info
-# 12473: __all_virtual_compatibility_control
-# 12474: __all_virtual_user_proxy_info
-# 12475: __all_virtual_user_proxy_info_history
-# 12476: __all_virtual_user_proxy_role_info
-# 12477: __all_virtual_user_proxy_role_info_history
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_virtual_compatibility_control',
+  table_id = '12473',
+  table_type = 'VIRTUAL_TABLE',
+  in_tenant_space = True,
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('name', 'varchar:OB_MAX_CONFIG_NAME_LEN'),
+    ('description', 'varchar:OB_MAX_CONFIG_INFO_LEN'),
+    ('is_enable', 'bool'),
+    ('enable_versions', 'longtext'),
+  ],
+)
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12474',
+  table_name = '__all_virtual_user_proxy_info',
+  keywords = all_def_keywords['__all_user_proxy_info']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12475',
+  table_name = '__all_virtual_user_proxy_info_history',
+  keywords = all_def_keywords['__all_user_proxy_info_history']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12476',
+  table_name = '__all_virtual_user_proxy_role_info',
+  keywords = all_def_keywords['__all_user_proxy_role_info']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12477',
+  table_name = '__all_virtual_user_proxy_role_info_history',
+  keywords = all_def_keywords['__all_user_proxy_role_info_history']))
+
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
 # 12480: __all_virtual_service
@@ -14357,11 +14432,11 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+
 # 12483: __all_virtual_group_io_stat
 # 12484: __all_virtual_res_mgr_consumer_group
 # 12485: __all_virtual_storage_io_usage
 # 12486: __all_zone_storage
-#
 
 def_table_schema(
   owner             = 'gengfu.zpc',
@@ -14844,13 +14919,15 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
 
+# 余留位置
+
 # 15441: __all_virtual_shared_storage_quota
 # 15442: __all_virtual_column_group
 # 15443: __all_virtual_ls_replica_task_history
 # 15444: __all_virtual_session_ps_info
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
-# 15446: __all_user_proxy_info
-# 15447: __all_user_proxy_role_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15446', all_def_keywords['__all_user_proxy_info'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15447', all_def_keywords['__all_user_proxy_role_info'])))
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
 # 15449: __all_virtual_service
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
@@ -15710,6 +15787,40 @@ def_table_schema(
 # 20019: INNODB_SYS_COLUMNS
 
 def_table_schema(
+  owner = 'ailing.lcq',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'PROFILING',
+  table_id        = '20016',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT  CAST(00000000000000000000 as SIGNED) as QUERY_ID,
+            CAST(00000000000000000000 as SIGNED) as SEQ,
+            CAST('' as CHAR(30)) as STATE,
+            CAST(0.000000 as DECIMAL(9, 6)) as DURATION,
+            CAST(NULL as DECIMAL(9, 6)) as CPU_USER,
+            CAST(NULL as DECIMAL(9, 6)) as CPU_SYSTEM,
+            CAST(00000000000000000000 as SIGNED) as CONTEXT_VOLUNTARY,
+            CAST(00000000000000000000 as SIGNED) as CONTEXT_INVOLUNTARY,
+            CAST(00000000000000000000 as SIGNED) as BLOCK_OPS_IN,
+            CAST(00000000000000000000 as SIGNED) as BLOCK_OPS_OUT,
+            CAST(00000000000000000000 as SIGNED) as MESSAGES_SENT,
+            CAST(00000000000000000000 as SIGNED) as MESSAGES_RECEIVED,
+            CAST(00000000000000000000 as SIGNED) as PAGE_FAULTS_MAJOR,
+            CAST(00000000000000000000 as SIGNED) as PAGE_FAULTS_MINOR,
+            CAST(00000000000000000000 as SIGNED) as SWAPS,
+            CAST(NULL as CHAR(30)) as SOURCE_FUNCTION,
+            CAST(NULL as CHAR(20)) as SOURCE_FILE,
+            CAST(00000000000000000000 as SIGNED) as SOURCE_LINE
+    FROM DUAL limit 0;
+""".replace("\n", " ")
+)
+
+def_table_schema(
   owner = 'yuzhong.zhao',
   tablegroup_id  = 'OB_INVALID_ID',
   table_name     = 'GV$SESSION_EVENT',
@@ -16217,7 +16328,8 @@ def_table_schema(
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
-                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
+                         proxy_user as PROXY_USER
                      from oceanbase.__all_virtual_sql_audit
 """.replace("\n", " "),
 
@@ -16625,7 +16737,9 @@ def_table_schema(
     PL_TRACE_ID,
     PLSQL_EXEC_TIME,
     TOTAL_MEMSTORE_READ_ROW_COUNT,
-    TOTAL_SSSTORE_READ_ROW_COUNT FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
+    TOTAL_SSSTORE_READ_ROW_COUNT,
+    PROXY_USER
+  FROM oceanbase.GV$OB_SQL_AUDIT WHERE svr_ip=HOST_IP() AND svr_port=RPC_PORT()
 """.replace("\n", " "),
 
     normal_columns = [
@@ -23557,7 +23671,8 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
+  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
+  PROXY_USER
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -23607,7 +23722,8 @@ def_table_schema(
     IN_BYTES,
     OUT_BYTES,
     USER_CLIENT_PORT,
-    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
+    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
+    PROXY_USER
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -28299,7 +28415,10 @@ def_table_schema(
           (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK,
           (CASE WHEN (PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
+          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 3)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TABLESPACE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 4)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_SHUTDOWN,
+          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -28356,7 +28475,10 @@ def_table_schema(
           (CASE WHEN PRIV_CREATE_DATABASE_LINK = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_CREATE_DATABASE_LINK,
           (CASE WHEN (PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
-          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
+          (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 3)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TABLESPACE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 4)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_SHUTDOWN,
+          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -28932,6 +29054,8 @@ def_table_schema(
                      AND U.PRIV_PROCESS = 1 THEN 'PROCESS'
                 WHEN V1.C1 = 17
                      AND U.PRIV_CREATE_SYNONYM = 1 THEN 'CREATE SYNONYM'
+                WHEN V1.C1 = 23
+                     AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
                 WHEN V1.C1 = 27
                      AND U.PRIV_FILE = 1 THEN 'FILE'
                 WHEN V1.C1 = 28
@@ -28951,11 +29075,15 @@ def_table_schema(
                 WHEN V1.C1 = 36
                      AND U.PRIV_CREATE_DATABASE_LINK = 1 THEN 'CREATE DATABASE LINK'
                 WHEN V1.C1 = 37
-                     AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
-                WHEN V1.C1 = 38
                      AND (U.PRIV_OTHERS & (1 << 1)) != 0 THEN 'ALTER ROUTINE'
-                WHEN V1.C1 = 39
+                WHEN V1.C1 = 38
                      AND (U.PRIV_OTHERS & (1 << 2)) != 0 THEN 'CREATE ROUTINE'
+                WHEN V1.C1 = 39
+                     AND (U.PRIV_OTHERS & (1 << 3)) != 0 THEN 'CREATE TABLESPACE'
+                WHEN V1.C1 = 40
+                     AND (U.PRIV_OTHERS & (1 << 4)) != 0 THEN 'SHUTDOWN'
+                WHEN V1.C1 = 41
+                     AND (U.PRIV_OTHERS & (1 << 5)) != 0 THEN 'RELOAD'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -29029,6 +29157,7 @@ def_table_schema(
         UNION ALL SELECT 14 AS C1
         UNION ALL SELECT 15 AS C1
         UNION ALL SELECT 17 AS C1
+        UNION ALL SELECT 23 AS C1
         UNION ALL SELECT 27 AS C1
         UNION ALL SELECT 28 AS C1
         UNION ALL SELECT 29 AS C1
@@ -29040,7 +29169,9 @@ def_table_schema(
         UNION ALL SELECT 36 AS C1
         UNION ALL SELECT 37 AS C1
         UNION ALL SELECT 38 AS C1
-        UNION ALL SELECT 39 AS C1) V1,
+        UNION ALL SELECT 39 AS C1
+        UNION ALL SELECT 40 AS C1
+        UNION ALL SELECT 41 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -34195,7 +34326,25 @@ def_table_schema(
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
-# 21545: V$OB_COMPATIBILITY_CONTROL
+
+def_table_schema(
+  owner = 'sean.yyj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  table_name      = 'V$OB_COMPATIBILITY_CONTROL',
+  table_id        = '21545',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  table_type      = 'SYSTEM_VIEW',
+  in_tenant_space = True,
+  view_definition = """SELECT
+      name as NAME,
+      description as DESCRIPTION,
+      CASE is_enable WHEN 1 THEN 'TRUE' ELSE 'FALSE' END AS IS_ENABLE,
+      enable_versions as ENABLE_VERSIONS
+    FROM oceanbase.__all_virtual_compatibility_control
+""".replace("\n", " "),
+  normal_columns  = [],
+)
 # 21546: DBA_OB_RSRC_DIRECTIVES
 # 21547: CDB_OB_RSRC_DIRECTIVES
 # 21548: DBA_OB_SERVICES
@@ -46183,19 +46332,61 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT CAST(A.USER_NAME AS VARCHAR2(30)) GRANTEE,\
-      CAST(B.USER_NAME AS VARCHAR2(30)) GRANTED_ROLE,\
-      DECODE(R.ADMIN_OPTION, 0, 'NO', 1, 'YES', '') AS ADMIN_OPTION ,\
-      DECODE(R.DISABLE_FLAG, 0, 'YES', 1, 'NO', '') AS DEFAULT_ROLE\
-      FROM SYS.ALL_VIRTUAL_TENANT_ROLE_GRANTEE_MAP_REAL_AGENT R,\
-      SYS.ALL_VIRTUAL_USER_REAL_AGENT A,\
-      SYS.ALL_VIRTUAL_USER_REAL_AGENT B\
-      WHERE R.GRANTEE_ID = A.USER_ID\
-      AND R.ROLE_ID = B.USER_ID\
-      AND B.TYPE = 1\
-      AND A.TENANT_ID = EFFECTIVE_TENANT_ID()\
-      AND B.TENANT_ID = EFFECTIVE_TENANT_ID()\
-      AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')""".replace("\n", " ")
+  view_definition = """
+  WITH RV AS (
+    SELECT R.ROLE_ID,
+          CAST(A.USER_NAME AS VARCHAR2(30)) GRANTEE,
+          CAST(B.USER_NAME AS VARCHAR2(30)) GRANTED_ROLE,
+          DECODE(R.ADMIN_OPTION, 0, 'NO', 1, 'YES', '') AS ADMIN_OPTION ,
+          DECODE(R.DISABLE_FLAG, 0, 'YES', 1, 'NO', '') AS DEFAULT_ROLE
+    FROM SYS.ALL_VIRTUAL_TENANT_ROLE_GRANTEE_MAP_REAL_AGENT R,
+          SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
+          SYS.ALL_VIRTUAL_USER_REAL_AGENT B
+    WHERE R.GRANTEE_ID = A.USER_ID
+          AND R.ROLE_ID = B.USER_ID
+          AND B.TYPE = 1
+          AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
+  ),
+  PRV AS (
+    SELECT PR.ROLE_ID ROLE_ID
+    FROM SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_USER_REAL_AGENT B,
+         SYS.ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT P LEFT JOIN
+         SYS.ALL_VIRTUAL_USER_PROXY_ROLE_INFO_REAL_AGENT PR
+         ON P.TENANT_ID = PR.TENANT_ID AND P.CLIENT_USER_ID = PR.CLIENT_USER_ID AND P.PROXY_USER_ID = PR.PROXY_USER_ID
+    WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
+          AND B.USER_NAME = SYS_CONTEXT('USERENV','PROXY_USER')
+          AND P.CLIENT_USER_ID = A.USER_ID
+          AND P.PROXY_USER_ID = B.USER_ID
+  ),
+  PRV_FLAG AS (
+    SELECT P.FLAGS FLAGS
+    FROM SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
+         SYS.ALL_VIRTUAL_USER_REAL_AGENT B,
+         SYS.ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT P
+    WHERE P.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
+          AND B.USER_NAME = SYS_CONTEXT('USERENV','PROXY_USER')
+          AND P.CLIENT_USER_ID = A.USER_ID
+          AND P.PROXY_USER_ID = B.USER_ID
+  )
+  SELECT  RV.GRANTEE GRANTEE,
+          RV.GRANTED_ROLE GRANTED_ROLE,
+          RV.ADMIN_OPTION ADMIN_OPTION,
+          RV.DEFAULT_ROLE DEFAULT_ROLE
+  FROM RV LEFT JOIN PRV ON RV.ROLE_ID = PRV.ROLE_ID LEFT JOIN PRV_FLAG ON 1 = 1
+  WHERE (0 = (SELECT COUNT(ROLE_ID) FROM PRV) AND (PRV_FLAG.FLAGS IS NULL OR PRV_FLAG.FLAGS != 2))
+      OR (PRV_FLAG.FLAGS = 1)
+      OR (PRV_FLAG.FLAGS = 2 AND 1 = 0)
+      OR (PRV_FLAG.FLAGS = 4 AND RV.ROLE_ID = PRV.ROLE_ID)
+      OR (PRV_FLAG.FLAGS = 8 AND (RV.ROLE_ID != PRV.ROLE_ID OR PRV.ROLE_ID IS NULL))""".replace("\n", " ")
 )
 
 def_table_schema(
@@ -54348,6 +54539,49 @@ def_table_schema(
 # 25301: PROXY_USERS
 # 25302: DBA_OB_SERVICES
 # 25303: DBA_OB_STORAGE_IO_USAGE
+def_table_schema(
+  owner = 'mingye.swj',
+  table_name      = 'PROXY_USERS',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25301',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  select cast(U1.USER_NAME as VARCHAR2(128)) as PROXY,
+         cast(U2.USER_NAME as VARCHAR2(128)) as CLIENT,
+         cast(DECODE(P.CREDENTIAL_TYPE, 0, 'NO', 5, 'YES') as VARCHAR2(3)) as AUTHENTICATION,
+         cast(DECODE(case when V.CNT = 0 and P.FLAGS = 4 then 2
+                          when V.CNT = 0 and P.FlAGS = 8 then 1
+                          else P.FLAGS end,
+                       0, NULL,
+                       1, 'PROXY MAY ACTIVATE ALL CLIENT ROLES',
+                       2, 'NO CLIENT ROLES MAY BE ACTIVATED',
+                       4, 'PROXY MAY ACTIVATE ROLE',
+                       5, 'PROXY MAY ACTIVATE ALL CLIENT ROLES',
+                       8, 'PROXY MAY NOT ACTIVATE ROLE') as VARCHAR2(35)) as FLAGS
+from SYS.ALL_VIRTUAL_USER_REAL_AGENT U1, SYS.ALL_VIRTUAL_USER_REAL_AGENT U2, SYS.ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT P,
+    (SELECT COUNT(B.ROLE_ID) CNT, A.TENANT_ID TENANT_ID, A.PROXY_USER_ID PROXY_USER_ID, A.CLIENT_USER_ID CLIENT_USER_ID
+     FROM SYS.ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT A LEFT JOIN
+          SYS.ALL_VIRTUAL_USER_PROXY_ROLE_INFO_REAL_AGENT B
+        ON A.TENANT_ID = B.TENANT_ID
+        AND A.CLIENT_USER_ID = B.CLIENT_USER_ID
+        AND A.PROXY_USER_ID = B.PROXY_USER_ID
+      GROUP BY A.TENANT_ID, A.PROXY_USER_ID, A.CLIENT_USER_ID
+    ) V
+where U1.TENANT_ID = U2.TENANT_ID
+  and U2.TENANT_ID = P.TENANT_ID
+  and U1.TENANT_ID = EFFECTIVE_TENANT_ID()
+  and U1.USER_ID = P.PROXY_USER_ID
+  and U2.USER_ID = P.CLIENT_USER_ID
+  and V.TENANT_ID = U1.TENANT_ID
+  and V.PROXY_USER_ID = P.PROXY_USER_ID
+  and V.CLIENT_USER_ID = P.CLIENT_USER_ID
+""".replace("\n", " ")
+)
+
 
 #
 # 余留位置（此行之前占位）
@@ -54499,7 +54733,8 @@ def_table_schema(
                          pl_trace_id as PL_TRACE_ID,
                          plsql_exec_time as PLSQL_EXEC_TIME,
                          total_memstore_read_row_count as TOTAL_MEMSTORE_READ_ROW_COUNT,
-                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT
+                         total_ssstore_read_row_count as TOTAL_SSSTORE_READ_ROW_COUNT,
+                         proxy_user as PROXY_USER
                     FROM SYS.ALL_VIRTUAL_SQL_AUDIT
 """.replace("\n", " ")
 )
@@ -54611,7 +54846,8 @@ FLT_TRACE_ID,
 PL_TRACE_ID,
 PLSQL_EXEC_TIME,
 TOTAL_MEMSTORE_READ_ROW_COUNT,
-TOTAL_SSSTORE_READ_ROW_COUNT FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+TOTAL_SSSTORE_READ_ROW_COUNT,
+PROXY_USER FROM SYS.GV$OB_SQL_AUDIT WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 
@@ -59002,7 +59238,8 @@ SELECT
   LB_VPORT,
   IN_BYTES,
   OUT_BYTES,
-  USER_CLIENT_PORT
+  USER_CLIENT_PORT,
+  PROXY_USER
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -59053,7 +59290,8 @@ def_table_schema(
   LB_VPORT,
   IN_BYTES,
   OUT_BYTES,
-  USER_CLIENT_PORT
+  USER_CLIENT_PORT,
+  PROXY_USER
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -62861,6 +63099,30 @@ def_sys_index_table(
 # 101104: __all_tablet_reorganize_history
 # 101105: __all_scheduler_job_run_detail_v2
 #
+def_sys_index_table(
+  index_name = 'idx_user_proxy_info_proxy_user_id',
+  index_table_id = 101101,
+  index_columns = ['tenant_id', 'proxy_user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_user_proxy_info'])
+
+def_sys_index_table(
+  index_name = 'idx_user_proxy_info_proxy_user_id_history',
+  index_table_id = 101102,
+  index_columns = ['tenant_id', 'proxy_user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_user_proxy_info_history'])
+
+def_sys_index_table(
+  index_name = 'idx_user_proxy_role_info_proxy_user_id_history',
+  index_table_id = 101103,
+  index_columns = ['tenant_id', 'proxy_user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_user_proxy_role_info_history'])
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
@@ -63627,6 +63889,17 @@ def_agent_index_table(
   real_table_name = '__all_dbms_lock_allocated' ,
   real_index_name = 'idx_dbms_lock_allocated_expiration',
   keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_user_proxy_info_proxy_user_id_real_agent',
+  index_table_id = 15448,
+  index_columns = ['tenant_id', 'proxy_user_id'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_user_proxy_info' ,
+  real_index_name = 'idx_user_proxy_info_proxy_user_id',
+  keywords = all_def_keywords['ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT_ORA'])
+
 
 # End Oracle Agent table Index
 ################################################################################

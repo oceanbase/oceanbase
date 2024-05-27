@@ -82,10 +82,11 @@ int ObUseDatabaseResolver::resolve(const ParseNode &parse_tree)
         use_database_stmt->set_db_name(db_name);
         uint64_t tenant_id = session_info_->get_effective_tenant_id();
         share::schema::ObSessionPrivInfo session_priv;
-        session_info_->get_session_priv_info(session_priv);
         uint64_t database_id = OB_INVALID_ID;
         const share::schema::ObDatabaseSchema *db_schema = NULL;
-        if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
+        if (OB_FAIL(session_info_->get_session_priv_info(session_priv))) {
+          LOG_WARN("faile to get session priv info", K(ret));
+        } else  if (OB_FAIL(schema_checker_->get_database_id(tenant_id, db_name, database_id))) {
           LOG_USER_ERROR(OB_ERR_BAD_DATABASE, db_name.length(), db_name.ptr());
           LOG_WARN("invalid database name. ", K(db_name));
         } else if (OB_FAIL(schema_checker_->check_db_access(session_priv, db_name))) {

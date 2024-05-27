@@ -215,7 +215,8 @@ int ObSqlParameterization::transform_syntax_tree(ObIAllocator &allocator,
           } else if (0 == tmp_root->is_val_paramed_item_idx_
                      && OB_FAIL(get_select_item_param_info(*raw_params,
                                                            tmp_root,
-                                                           select_item_param_infos))) {
+                                                           select_item_param_infos,
+                                                           session))) {
             SQL_PC_LOG(WARN, "failed to get select item param info", K(ret));
           } else {
             // do nothing
@@ -477,6 +478,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int ret = OB_SUCCESS;
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
       || OB_ISNULL(ctx.sql_info_)
@@ -490,6 +492,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                K(ctx.fixed_param_store_),
                K(ctx.params_),
                K(ret));
+  } else if (OB_FAIL(session_info.get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
   } else {
@@ -559,7 +563,9 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               literal_prefix,
                               ctx.default_length_semantics_,
                               static_cast<ObCollationType>(server_collation),
-                              NULL, session_info.get_sql_mode(), enable_decimal_int,
+                              NULL, session_info.get_sql_mode(),
+                              enable_decimal_int,
+                              compat_type,
                               ctx.is_from_pl_))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
@@ -2059,7 +2065,8 @@ int ObSqlParameterization::get_related_user_vars(const ParseNode *tree, common::
 
 int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObPCParam *> &raw_params,
                                                       ParseNode *tree,
-                                                      SelectItemParamInfoArray *select_item_param_infos)
+                                                      SelectItemParamInfoArray *select_item_param_infos,
+                                                      const ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
   SelectItemParamInfo param_info;
@@ -2067,6 +2074,7 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
   int64_t expr_pos = tree->raw_sql_offset_;
   int64_t buf_len = SelectItemParamInfo::PARAMED_FIELD_BUF_LEN;
   ObSEArray<TraverseStackFrame, 64> stack_frames;
+  bool enable_modify_null_name = false;
 
   if (T_PROJECT_STRING != tree->type_ || OB_ISNULL(tree->children_) || tree->num_child_ <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -2175,6 +2183,29 @@ int ObSqlParameterization::get_select_item_param_info(const common::ObIArray<ObP
     tree->is_val_paramed_item_idx_ = 1;
 
     LOG_DEBUG("add a paramed info", K(param_info));
+  }
+
+  // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(session.check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                  enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (is_mysql_mode() &&
+             1 == param_info.params_idx_.count() &&
+             0 == ObString(param_info.name_len_, param_info.paramed_field_name_).compare("?") &&
+             enable_modify_null_name) {
+    int64_t idx = param_info.params_idx_.at(0);
+    if (idx >= raw_params.count()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid index", K(idx), K(raw_params.count()));
+    } else if (OB_ISNULL(raw_params.at(idx)) || OB_ISNULL(raw_params.at(idx)->node_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(raw_params.at(idx)), K(raw_params.at(idx)->node_));
+    } else if (T_NULL == raw_params.at(idx)->node_->type_) {
+      tree->str_value_ = "NULL";
+      tree->str_len_ = strlen("NULL");
+    }
   }
 
   return ret;

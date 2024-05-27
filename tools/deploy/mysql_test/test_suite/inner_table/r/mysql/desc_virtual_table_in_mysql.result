@@ -4896,6 +4896,16 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tracepoint_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_compatibility_control;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+name	varchar(128)	NO		NULL	
+description	varchar(4096)	NO		NULL	
+is_enable	tinyint(4)	NO		NULL	
+enable_versions	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_compatibility_control;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_resource_limit;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	
