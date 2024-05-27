@@ -869,7 +869,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::g
   int ret = OB_SUCCESS;
   depth = 0;
   prefetch_depth_ = MIN(2 * prefetch_depth_, DEFAULT_SCAN_MICRO_DATA_HANDLE_CNT);
-  if (need_check_prefetch_depth_) {
+  if (need_check_prefetch_depth_ && access_ctx_->limit_param_->offset_ < INT32_MAX && access_ctx_->limit_param_->limit_ < INT32_MAX) {
     int64_t prefetch_micro_cnt = MAX(1,
           (access_ctx_->limit_param_->offset_ + access_ctx_->limit_param_->limit_ - access_ctx_->out_cnt_ + \
           SSTABLE_MICRO_AVG_COUNT - 1) / SSTABLE_MICRO_AVG_COUNT);
