@@ -79,6 +79,7 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
   obrpc::ObCreateTriggerRes res;
   bool with_res = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2);
   pl::ObPL *pl_engine = nullptr;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
   CK (OB_NOT_NULL(pl_engine = ctx.get_my_session()->get_pl_engine()));
   OZ (stmt.get_first_stmt(first_stmt));
   arg.ddl_stmt_str_ = first_stmt;
@@ -126,7 +127,9 @@ int ObCreateTriggerExecutor::execute(ObExecContext &ctx, ObCreateTriggerStmt &st
       OZ (common_rpc_proxy->create_trigger(arg), common_rpc_proxy->get_server());
     }
   }
-  if (OB_SUCC(ret) && !has_error && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0) {
+  if (OB_SUCC(ret) && !has_error && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_3_0 &&
+      tenant_config.is_valid() &&
+      tenant_config->plsql_v2_compatibility) {
     OZ (ObSPIService::force_refresh_schema(arg.trigger_info_.get_tenant_id(), res.trigger_schema_version_));
     OZ (ctx.get_task_exec_ctx().schema_service_->
           get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
@@ -183,6 +186,7 @@ int ObAlterTriggerExecutor::execute(ObExecContext &ctx, ObAlterTriggerStmt &stmt
     const ObTriggerInfo& trigger_info = arg.trigger_infos_.at(0);
     int64_t latest_schema_version = OB_INVALID_VERSION;
     arg.ddl_stmt_str_ = first_stmt;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx.get_my_session()->get_effective_tenant_id()));
     OV (OB_NOT_NULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx)), OB_NOT_INIT);
     OZ (task_exec_ctx->get_common_rpc(common_rpc_proxy));
     OV (OB_NOT_NULL(common_rpc_proxy));
@@ -202,7 +206,9 @@ int ObAlterTriggerExecutor::execute(ObExecContext &ctx, ObAlterTriggerStmt &stmt
     } else {
       latest_schema_version = trigger_info.get_schema_version();
     }
-    if (OB_SUCC(ret)) {
+    if (OB_SUCC(ret) &&
+        tenant_config.is_valid() &&
+        tenant_config->plsql_v2_compatibility) {
       OZ (ctx.get_task_exec_ctx().schema_service_->
           get_tenant_schema_guard(ctx.get_my_session()->get_effective_tenant_id(), *ctx.get_sql_ctx()->schema_guard_));
       OZ (compile_trigger(ctx,

@@ -1276,7 +1276,7 @@ DEF_INT(plsql_optimize_level, OB_TENANT_PARAMETER, "1",
         "the compiler makes to optimize PL/SQL library units",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
-         "allows some abnormal behavior that Version 8 disallows, not available",
+         "allows to control store routine compile action at DDL stage",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // for bloom filter
 DEF_BOOL(_bloom_filter_enabled, OB_TENANT_PARAMETER, "True",
