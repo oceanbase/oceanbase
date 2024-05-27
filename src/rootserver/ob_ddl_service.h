@@ -516,22 +516,21 @@ public:
                                        ObDDLOperator &ddl_operator,
                                        ObMySQLTransaction &trans);
   int get_tablets(
-      const share::schema::ObTableSchema &table_schema,
-      const uint64_t session_id,
-      common::ObIArray<LSTabletID> &tablets,
-      ObDDLSQLTransaction &trans);
+    const uint64_t tenant_id,
+    const ObArray<common::ObTabletID> &tablet_ids,
+    ObIArray<LSTabletID> &tablets,
+    ObDDLSQLTransaction &trans);
   int build_modify_tablet_binding_args(
-      const share::schema::ObTableSchema &table_schema,
-      const bool is_hidden_tablets,
-      const int64_t schema_version,
-      const uint64_t session_id,
-      common::ObIArray<storage::ObBatchUnbindTabletArg> &args,
-      ObDDLSQLTransaction &trans);
+    const uint64_t tenant_id,
+    const ObArray<ObTabletID> &tablet_ids,
+    const bool is_hidden_tablets,
+    const int64_t schema_version,
+    ObIArray<ObBatchUnbindTabletArg> &modify_args,
+    ObDDLSQLTransaction &trans);
   int unbind_hidden_tablets(
       const share::schema::ObTableSchema &orig_table_schema,
       const share::schema::ObTableSchema &hidden_table_schema,
       const int64_t schema_version,
-      const uint64_t session_id,
       ObDDLSQLTransaction &trans);
   int write_ddl_barrier(
       const share::schema::ObTableSchema &hidden_table_schema,
@@ -1478,7 +1477,9 @@ private:
                               const share::schema::ObSchemaOperationType operation_type,
                               const common::ObString &ddl_stmt_str);
   int alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                           obrpc::ObAlterTableRes &res);
+
+                           obrpc::ObAlterTableRes &res,
+                           const uint64_t tenant_data_version);
   int need_modify_not_null_constraint_validate(const obrpc::ObAlterTableArg &alter_table_arg,
                                                bool &is_add_not_null_col,
                                                bool &need_modify) const;
@@ -1765,7 +1766,8 @@ private:
       share::schema::ObTableSchema &new_table_schema,
       share::schema::ObTableSchema &index_schema);
   int alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
-                                            obrpc::ObAlterTableRes &res);
+                                            obrpc::ObAlterTableRes &res,
+                                            const uint64_t tenant_data_version);
   int truncate_table_in_trans(const obrpc::ObTruncateTableArg &arg,
                               const share::schema::ObTableSchema &orig_table_schema,
                               common::ObIArray<share::schema::ObTableSchema> &table_schemas,
@@ -2075,6 +2077,16 @@ private:
       ObDDLOperator &ddl_operator,
       common::ObMySQLTransaction &trans,
       common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
+  int build_single_table_rw_defensive_(
+    const uint64_t tenant_id,
+    const ObArray<ObTabletID> &tablet_ids,
+    const int64_t schema_version,
+    ObDDLSQLTransaction &trans);
+  int build_rw_defense_for_table_(
+      const ObTableSchema &table_schema,
+      const int64_t new_data_table_schema_version,
+      const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
+      ObDDLSQLTransaction &trans);
 
 public:
   int check_parallel_ddl_conflict(
