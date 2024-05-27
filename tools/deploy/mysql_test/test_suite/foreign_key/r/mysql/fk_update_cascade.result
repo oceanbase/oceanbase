@@ -1,3 +1,5 @@
+alter system set _enable_defensive_check = '2';
+alter system set_tp tp_no = 403, error_code = 1, frequency = 1;
 drop table if exists A, B, C, D, E;
 create table A(a integer primary key, a2 integer);
 set foreign_key_checks=off;
@@ -145,3 +147,5 @@ e	ca
 5	NULL
 update A, B, C, D, E set A.a = 1 where A.a = 10;
 drop table A, B, C, D, E;
+alter system set _enable_defensive_check = '1';
+alter system set_tp tp_no = 403, error_code = 0, frequency = 1;
