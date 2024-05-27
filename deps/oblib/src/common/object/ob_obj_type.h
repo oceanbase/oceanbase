@@ -1186,6 +1186,7 @@ enum VecValueTypeClass: uint16_t {
   VEC_TC_DEC_INT128,
   VEC_TC_DEC_INT256,
   VEC_TC_DEC_INT512,
+  VEC_TC_COLLECTION,
   MAX_VEC_TC
 };
 
@@ -1246,7 +1247,9 @@ OB_INLINE VecValueTypeClass get_vec_value_tc(const ObObjType type, const int16_t
     VEC_TC_LOB,               // ObLobType
     VEC_TC_JSON,              // ObJsonType
     VEC_TC_GEO,               // ObGeometryType
-    VEC_TC_UDT                // ObUserDefinedSQLType
+    VEC_TC_UDT,                // ObUserDefinedSQLType
+    MAX_VEC_TC,               // invalid for ObDecimalIntType
+    VEC_TC_COLLECTION         // ObCollectionSQLType
   };
   VecValueTypeClass t = MAX_VEC_TC;
   if (type < 0 || type >= ObMaxType) {
