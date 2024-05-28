@@ -1772,6 +1772,7 @@ BACKUP_TENANT_ID	longtext	NO
 BACKUP_CLUSTER_NAME	longtext	NO			
 BACKUP_DEST	longtext	NO			
 RESTORE_OPTION	longtext	NO			
+RESTORE_TYPE	longtext	NO			
 RESTORE_SCN	longtext	NO			
 RESTORE_SCN_DISPLAY	datetime(6)	NO			
 STATUS	longtext	NO			
@@ -1799,6 +1800,7 @@ BACKUP_DEST	longtext	NO		NULL
 RESTORE_SCN	bigint(20) unsigned	NO		NULL	
 RESTORE_SCN_DISPLAY	datetime(6)	NO			
 RESTORE_OPTION	varchar(4096)	NO		NULL	
+RESTORE_TYPE	varchar(4096)	NO			
 START_TIMESTAMP	timestamp(6)	YES		NULL	
 FINISH_TIMESTAMP	timestamp(6)	YES		NULL	
 STATUS	varchar(64)	NO			
@@ -2264,6 +2266,7 @@ ARBITRATION_SERVICE_STATUS	varchar(64)	NO
 UNIT_NUM	bigint(20)	NO			
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
+RESTORE_DATA_MODE	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TENANTS limit 1);
 cnt
 1
@@ -5258,6 +5261,7 @@ BACKUP_TENANT_ID	longtext	NO
 BACKUP_CLUSTER_NAME	longtext	NO			
 BACKUP_DEST	longtext	NO			
 RESTORE_OPTION	longtext	NO			
+RESTORE_TYPE	longtext	NO			
 RESTORE_SCN	longtext	NO			
 RESTORE_SCN_DISPLAY	datetime(6)	NO			
 STATUS	longtext	NO			
@@ -5284,6 +5288,7 @@ BACKUP_DEST	longtext	NO		NULL
 RESTORE_SCN	bigint(20) unsigned	NO		NULL	
 RESTORE_SCN_DISPLAY	datetime(6)	NO			
 RESTORE_OPTION	varchar(4096)	NO		NULL	
+RESTORE_TYPE	varchar(4096)	NO			
 START_TIMESTAMP	timestamp(6)	YES		NULL	
 FINISH_TIMESTAMP	timestamp(6)	YES		NULL	
 STATUS	varchar(64)	NO			

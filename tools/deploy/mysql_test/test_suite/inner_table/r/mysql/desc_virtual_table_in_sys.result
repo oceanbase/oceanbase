@@ -5858,6 +5858,7 @@ readable_scn	bigint(20) unsigned	NO		NULL
 recovery_until_scn	bigint(20) unsigned	NO		4611686018427387903	
 log_mode	varchar(100)	NO		NOARCHIVELOG	
 max_ls_id	bigint(20)	NO		0	
+restore_data_mode	varchar(128)	NO		NORMAL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_info;
 IF(count(*) >= 0, 1, 0)
 1
