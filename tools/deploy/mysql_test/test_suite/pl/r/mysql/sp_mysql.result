@@ -1846,7 +1846,6 @@ end|
 create function bug2267_4() returns int return 100|
 call bug2267_1()|
 Db	Name	Type	Definer	Modified	Created	Security_type	Comment	character_set_client	collation_connection	Database Collation
-test	bug13012	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_1	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_2	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
 test	bug2267_3	PROCEDURE	'admin'@'%'	0000-00-00 00:00:00	0000-00-00 00:00:00	DEFINER	NULL	utf8mb4	utf8mb4_general_ci	utf8mb4_general_ci
