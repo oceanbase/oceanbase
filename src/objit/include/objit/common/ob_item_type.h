@@ -2513,6 +2513,7 @@ typedef enum ObItemType
   T_VEC_INDEX_PARAMS,
   T_VEC_INDEX_COLUMN,
   T_VEC_INDEX_COLUMN_EXPR,
+  T_BACKUP_CLUSTER_PARAMETERS,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -119,6 +119,19 @@ public:
   bool is_valid() const override { return true; }
 };
 
+struct ObBackupResourcePool
+{
+public:
+    ObBackupResourcePool()
+      : resource_pool_(),
+        unit_config_() {}
+    int assign(const ObBackupResourcePool &that);
+    TO_STRING_KV(K_(resource_pool), K_(unit_config));
+public:
+    share::ObResourcePool resource_pool_;
+    share::ObUnitConfig unit_config_;
+};
+
 struct ObExternTenantLocalityInfoDesc final : public ObExternBackupDataDesc
 {
 public:
@@ -141,7 +154,8 @@ public:
       locality_(),
       primary_zone_(),
       sys_time_zone_(),
-      sys_time_zone_wrap_() {}
+      sys_time_zone_wrap_(),
+      resource_pool_infos_() {}
   virtual ~ObExternTenantLocalityInfoDesc() {}
   int assign(const ObExternTenantLocalityInfoDesc &that);
   bool is_valid() const override;
@@ -159,6 +173,7 @@ public:
   PrimaryZone primary_zone_;
   TimeZone sys_time_zone_;
   ObTimeZoneInfoWrap sys_time_zone_wrap_;
+  common::ObSArray<ObBackupResourcePool> resource_pool_infos_;
 };
 
 struct ObExternBackupSetInfoDesc final : public ObExternBackupDataDesc
