@@ -3334,6 +3334,7 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
     ObRelIds cur_relids;
     JoinInfo join_info;
     bool is_strict_order = true;
+    bool is_detector_valid = true;
     if (left_tree->get_tables().overlap(right_tree->get_tables())) {
       //非法连接，do nothing
     } else if (OB_FAIL(cur_relids.add_members(left_tree->get_tables()))) {
@@ -3359,7 +3360,16 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       OPT_TRACE("there is no valid join condition for ", left_tree, "join", right_tree);
       LOG_TRACE("there is no valid join info for ", K(left_tree->get_tables()),
                                                     K(right_tree->get_tables()));
-    } else if (OB_FAIL(merge_join_info(left_tree,
+    } else if (NULL != join_tree &&
+               OB_FAIL(check_detector_valid(left_tree,
+                                            right_tree,
+                                            valid_detectors,
+                                            join_tree,
+                                            is_detector_valid))) {
+        LOG_WARN("failed to check detector valid", K(ret));
+      } else if (!is_detector_valid) {
+        OPT_TRACE("join tree will be remove: ", left_tree, "join", right_tree);
+      } else if (OB_FAIL(merge_join_info(left_tree,
                                        right_tree,
                                        valid_detectors,
                                        join_info))) {
@@ -3623,6 +3633,34 @@ int ObLogPlan::merge_join_info(ObJoinOrder *left_tree,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::check_detector_valid(ObJoinOrder *left_tree,
+                                    ObJoinOrder *right_tree,
+                                    const ObIArray<ConflictDetector*> &valid_detectors,
+                                    ObJoinOrder *cur_tree,
+                                    bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  ObSEArray<ConflictDetector*, 4> all_detectors;
+  ObSEArray<ConflictDetector*, 4> common_detectors;
+  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) || OB_ISNULL(cur_tree)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null param", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_detectors, left_tree->get_conflict_detectors()))) {
+    LOG_WARN("failed to append detectors", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_detectors, right_tree->get_conflict_detectors()))) {
+    LOG_WARN("failed to append detectors", K(ret));
+  } else if (OB_FAIL(append_array_no_dup(all_detectors, valid_detectors))) {
+    LOG_WARN("failed to append detectors", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::intersect(all_detectors, cur_tree->get_conflict_detectors(), common_detectors))) {
+    LOG_WARN("failed to calc common detectors", K(ret));
+  } else if (common_detectors.count() != all_detectors.count() ||
+             common_detectors.count() != cur_tree->get_conflict_detectors().count()) {
+    is_valid = false;
   }
   return ret;
 }
