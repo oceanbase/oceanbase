@@ -6488,6 +6488,9 @@ void ObExecEnv::reset()
   collation_connection_ = CS_TYPE_INVALID;
   collation_database_ = CS_TYPE_INVALID;
   plsql_ccflags_.reset();
+
+  // default PLSQL_OPTIMIZE_LEVEL = 2
+  plsql_optimize_level_ = 2;
 }
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
@@ -6496,7 +6499,8 @@ bool ObExecEnv::operator==(const ObExecEnv &other) const
       && charset_client_ == other.charset_client_
       && collation_connection_ == other.collation_connection_
       && collation_database_ == other.collation_database_
-      && plsql_ccflags_ == other.plsql_ccflags_;
+      && plsql_ccflags_ == other.plsql_ccflags_
+      && plsql_optimize_level_ == other.plsql_optimize_level_;
 }
 
 bool ObExecEnv::operator!=(const ObExecEnv &other) const
@@ -6535,7 +6539,8 @@ int ObExecEnv::gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_
       case SQL_MODE:
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
-      case COLLATION_DATABASE: {
+      case COLLATION_DATABASE:
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         val.reset();
         OZ (session.get_sys_variable(ExecEnvMap[i], val));
@@ -6597,7 +6602,8 @@ int ObExecEnv::gen_exec_env(const share::schema::ObSysVariableSchema &sys_variab
       case SQL_MODE:
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
-      case COLLATION_DATABASE: {
+      case COLLATION_DATABASE:
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         if (OB_FAIL(sys_variable.get_sysvar_schema(ExecEnvMap[i], sysvar_schema))) {
           LOG_WARN("failed to get sysvar schema", K(ret));
@@ -6653,7 +6659,14 @@ int ObExecEnv::init(const ObString &exec_env)
   int ret = OB_SUCCESS;
   ObString value_str;
   ObString start = exec_env;
+  bool is_oracle_mode = lib::is_oracle_mode();
+
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
+    // mysql mode do not have plsql_ccflags_length
+    if (PLSQL_CCFLAGS == i && !is_oracle_mode) {
+      continue;
+    }
+
     GET_ENV_VALUE(start, value_str);
     if (OB_SUCC(ret)) {
       switch (i) {
@@ -6679,11 +6692,20 @@ int ObExecEnv::init(const ObString &exec_env)
         } else {
           int32_t plsql_ccflags_length = 0;
           SET_ENV_VALUE(plsql_ccflags_length, int32_t);
+          CK (plsql_ccflags_length >= 0);
           if (OB_FAIL(ret)) {
           } else if (plsql_ccflags_length > 0) {
             plsql_ccflags_.assign(start.ptr(), plsql_ccflags_length);
-            start += plsql_ccflags_length + 1;// 1 for ','
           }
+          OX (start += plsql_ccflags_length + 1);// 1 for ','
+        }
+      }
+      break;
+      case PLSQL_OPTIMIZE_LEVEL: {
+        if (value_str.empty()) {
+          // do nothing, old routine object version do not have plsql_optimize_level
+        } else {
+          SET_ENV_VALUE(plsql_optimize_level_, int64_t);
         }
       }
       break;
@@ -6737,6 +6759,10 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
         }
       }
       break;
+      case PLSQL_OPTIMIZE_LEVEL: {
+        plsql_optimize_level_ = static_cast<int64_t>(val.get_int());
+      }
+      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(i), K(ret));
@@ -6774,6 +6800,10 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     case PLSQL_CCFLAGS: {
       val.set_varchar(plsql_ccflags_);
       val.set_collation_type(ObCharset::get_system_collation());
+    }
+    break;
+    case PLSQL_OPTIMIZE_LEVEL: {
+      val.set_int(plsql_optimize_level_);
     }
     break;
     default: {

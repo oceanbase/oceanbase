@@ -233,7 +233,11 @@ int ObPLCompiler::compile(
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : murmurhash(block->str_value_, block->str_len_, 0);
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
+
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, lock_idx * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (lock_idx % GCONF._ob_pl_compile_max_concurrency) * 8);
+
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
           LOG_WARN("query or session is killed after get PL jit lock", K(ret));
@@ -476,7 +480,9 @@ int ObPLCompiler::compile(
       OZ (cg.init());
       OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op));
       if (OB_SUCC(ret) && 0 == func.get_action()) { // not in disk
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), routine.get_routine_id());
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, routine.get_routine_id() * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (routine.get_routine_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
         OZ (ObPL::check_session_alive(session_info_));
         OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op)); // has lock, try read dll again
         if (OB_SUCC(ret) && 0 == func.get_action()) { // nobody code gen yet! do real code generate
@@ -740,7 +746,10 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
         //do nothing
       } else {
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
+
         OZ (ObPL::check_session_alive(session_info_));
         if (OB_SUCC(ret)) {
           if (need_read_dll) {
@@ -815,11 +824,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                       package_ast, package_info.is_for_trigger()));
 
   {
-      // check session status after get lock
-    if (OB_SUCC(ret) && OB_FAIL(ObPL::check_session_alive(session_info_))) {
-      LOG_WARN("query or session is killed after get PL jit lock", K(ret));
-    }
-
     if (OB_SUCC(ret)) {
 #ifdef USE_MCJIT
       HEAP_VAR(ObPLCodeGenerator, cg ,allocator_, session_info_) {
@@ -834,7 +838,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                 lib::is_oracle_mode()) {
 #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)));
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
+
         // check session status after get lock
         OZ (ObPL::check_session_alive(session_info_));
 

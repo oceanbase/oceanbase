@@ -31,6 +31,16 @@
 
 namespace oceanbase {
 namespace jit {
+
+enum class ObPLOptLevel : int
+{
+  INVALID = -1,
+  O0 = 0,
+  O1 = 1,
+  O2 = 2,
+  O3 = 3
+};
+
 namespace core {
 using namespace llvm;
 
@@ -84,6 +94,8 @@ public:
   void add_compiled_object(size_t length, const char *ptr);
 
   const ObString& get_compiled_object() const { return SoObject; }
+
+  int set_optimize_level(ObPLOptLevel level);
 
 private:
   std::string mangle(const std::string &Name)
