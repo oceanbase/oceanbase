@@ -57,35 +57,6 @@ Medium Compaction    ObTabletMajorMergeDag      ObTabletMajorMergeCtx
 Tx Table Compaction  ObTxTableMergeDag          ObTabletMiniMergeCtx/ObTabletExeMergeCtx
 */
 
-struct ObStorageCompactionTimeGuard : public ObCompactionTimeGuard
-{
-public:
-  ObStorageCompactionTimeGuard()
-    : ObCompactionTimeGuard(COMPACTION_WARN_THRESHOLD_RATIO, "[STORAGE] ")
-  {}
-  virtual ~ObStorageCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
-    DAG_WAIT_TO_SCHEDULE = 0,
-    COMPACTION_POLICY,
-    PRE_PROCESS_TX_TABLE,
-    GET_PARALLEL_RANGE,
-    EXECUTE,
-    CREATE_SSTABLE,
-    UPDATE_TABLET,
-    RELEASE_MEMTABLE,
-    SCHEDULE_OTHER_COMPACTION,
-    DAG_FINISH,
-    COMPACTION_EVENT_MAX
-  };
-  virtual int64_t to_string(char *buf, const int64_t buf_len) const override;
-private:
-  const static char *CompactionEventStr[];
-  static const char *get_comp_event_str(enum CompactionEvent event);
-  static const int64_t COMPACTION_WARN_THRESHOLD_RATIO = 60 * 1000L * 1000L; // 1 min
-  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.1;
-  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
-};
-
 struct ObMergeParameter {
   ObMergeParameter(
     const ObStaticMergeParam &static_param);
