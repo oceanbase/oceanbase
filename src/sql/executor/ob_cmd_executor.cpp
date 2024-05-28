@@ -570,6 +570,8 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObFlushDagWarningsStmt, ObFlushDagWarningsExecutor);
         break;
       }
+      case stmt::T_REPAIR_TABLE:
+      case stmt::T_CHECKSUM_TABLE:
       case stmt::T_FLUSH_PRIVILEGES: {
         DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;

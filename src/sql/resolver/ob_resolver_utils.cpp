@@ -2321,6 +2321,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_REVOKE_ROLE);
       SET_STMT_TYPE(T_CREATE_CONTEXT);
       SET_STMT_TYPE(T_DROP_CONTEXT);
+      SET_STMT_TYPE(T_SHOW_ENGINE);
+      SET_STMT_TYPE(T_SHOW_OPEN_TABLES);
+      SET_STMT_TYPE(T_REPAIR_TABLE);
+      SET_STMT_TYPE(T_CHECKSUM_TABLE);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {

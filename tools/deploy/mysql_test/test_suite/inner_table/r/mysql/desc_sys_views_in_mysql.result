@@ -6221,6 +6221,282 @@ LIMIT_VALUE	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_TENANT_RESOURCE_LIMIT_DETAIL limit 1);
 cnt
 1
+desc information_schema.TABLESPACES;
+Field	Type	Null	Key	Default	Extra
+TABLESPACE_NAME	varchar(0)	NO			
+ENGINE	varchar(0)	NO			
+TABLESPACE_TYPE	varchar(0)	NO			
+LOGFILE_GROUP_NAME	varchar(0)	NO			
+EXTENT_SIZE	bigint(0) unsigned	NO			
+AUTOEXTEND_SIZE	bigint(0) unsigned	NO			
+MAXIMUM_SIZE	bigint(0) unsigned	NO			
+NODEGROUP_ID	bigint(0) unsigned	NO			
+TABLESPACE_COMMENT	varchar(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.TABLESPACES limit 1);
+cnt
+1
+desc information_schema.INNODB_BUFFER_PAGE;
+Field	Type	Null	Key	Default	Extra
+POOL_ID	bigint(0) unsigned	NO			
+BLOCK_ID	bigint(0) unsigned	NO			
+SPACE	bigint(0) unsigned	NO			
+PAGE_NUMBER	bigint(0) unsigned	NO			
+PAGE_TYPE	varchar(0)	NO			
+FLUSH_TYPE	bigint(0) unsigned	NO			
+FIX_COUNT	bigint(0) unsigned	NO			
+IS_HASHED	varchar(0)	NO			
+NEWEST_MODIFICATION	bigint(0) unsigned	NO			
+OLDEST_MODIFICATION	bigint(0) unsigned	NO			
+ACCESS_TIME	bigint(0) unsigned	NO			
+TABLE_NAME	varchar(0)	NO			
+INDEX_NAME	varchar(0)	NO			
+NUMBER_RECORDS	bigint(0) unsigned	NO			
+DATA_SIZE	bigint(0) unsigned	NO			
+COMPRESSED_SIZE	bigint(0) unsigned	NO			
+PAGE_STATE	varchar(0)	NO			
+IO_FIX	varchar(0)	NO			
+IS_OLD	varchar(0)	NO			
+FREE_PAGE_CLOCK	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_PAGE limit 1);
+cnt
+1
+desc information_schema.INNODB_BUFFER_PAGE_LRU;
+Field	Type	Null	Key	Default	Extra
+POOL_ID	bigint(0) unsigned	NO			
+LRU_POSITION	bigint(0) unsigned	NO			
+SPACE	bigint(0) unsigned	NO			
+PAGE_NUMBER	bigint(0) unsigned	NO			
+PAGE_TYPE	varchar(0)	NO			
+FLUSH_TYPE	bigint(0) unsigned	NO			
+FIX_COUNT	bigint(0) unsigned	NO			
+IS_HASHED	varchar(0)	NO			
+NEWEST_MODIFICATION	bigint(0) unsigned	NO			
+OLDEST_MODIFICATION	bigint(0) unsigned	NO			
+ACCESS_TIME	bigint(0) unsigned	NO			
+TABLE_NAME	varchar(0)	NO			
+INDEX_NAME	varchar(0)	NO			
+NUMBER_RECORDS	bigint(0) unsigned	NO			
+DATA_SIZE	bigint(0) unsigned	NO			
+COMPRESSED_SIZE	bigint(0) unsigned	NO			
+COMPRESSED	varchar(0)	NO			
+IO_FIX	varchar(0)	NO			
+IS_OLD	varchar(0)	NO			
+FREE_PAGE_CLOCK	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_PAGE_LRU limit 1);
+cnt
+1
+desc information_schema.INNODB_BUFFER_POOL_STATS;
+Field	Type	Null	Key	Default	Extra
+POOL_ID	bigint(0) unsigned	NO			
+POOL_SIZE	bigint(0) unsigned	NO			
+FREE_BUFFERS	bigint(0) unsigned	NO			
+DATABASE_PAGES	bigint(0) unsigned	NO			
+OLD_DATABASE_PAGES	bigint(0) unsigned	NO			
+MODIFIED_DATABASE_PAGES	bigint(0) unsigned	NO			
+PENDING_DECOMPRESS	bigint(0) unsigned	NO			
+PENDING_READS	bigint(0) unsigned	NO			
+PENDING_FLUSH_LRU	bigint(0) unsigned	NO			
+PENDING_FLUSH_LIST	bigint(0) unsigned	NO			
+PAGES_MADE_YOUNG	bigint(0) unsigned	NO			
+PAGES_NOT_MADE_YOUNG	bigint(0) unsigned	NO			
+PAGES_MADE_YOUNG_RATE	decimal(10,0)	NO			
+PAGES_MADE_NOT_YOUNG_RATE	decimal(10,0)	NO			
+NUMBER_PAGES_READ	bigint(0) unsigned	NO			
+NUMBER_PAGES_CREATED	bigint(0) unsigned	NO			
+NUMBER_PAGES_WRITTEN	bigint(0) unsigned	NO			
+PAGES_READ_RATE	decimal(10,0)	NO			
+PAGES_CREATE_RATE	decimal(10,0)	NO			
+PAGES_WRITTEN_RATE	decimal(10,0)	NO			
+NUMBER_PAGES_GET	bigint(0) unsigned	NO			
+HIT_RATE	bigint(0) unsigned	NO			
+YOUNG_MAKE_PER_THOUSAND_GETS	bigint(0) unsigned	NO			
+NOT_YOUNG_MAKE_PER_THOUSAND_GETS	bigint(0) unsigned	NO			
+NUMBER_PAGES_READ_AHEAD	bigint(0) unsigned	NO			
+NUMBER_READ_AHEAD_EVICTED	bigint(0) unsigned	NO			
+READ_AHEAD_RATE	decimal(10,0)	NO			
+READ_AHEAD_EVICTED_RATE	decimal(10,0)	NO			
+LRU_IO_TOTAL	bigint(0) unsigned	NO			
+LRU_IO_CURRENT	bigint(0) unsigned	NO			
+UNCOMPRESS_TOTAL	bigint(0) unsigned	NO			
+UNCOMPRESS_CURRENT	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_BUFFER_POOL_STATS limit 1);
+cnt
+1
+desc information_schema.INNODB_CMP;
+Field	Type	Null	Key	Default	Extra
+PAGE_SIZE	bigint(0)	NO			
+COMPRESS_OPS	bigint(0)	NO			
+COMPRESS_OPS_OK	bigint(0)	NO			
+COMPRESS_TIME	bigint(0)	NO			
+UNCOMPRESS_OPS	bigint(0)	NO			
+UNCOMPRESS_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP limit 1);
+cnt
+1
+desc information_schema.INNODB_CMP_PER_INDEX;
+Field	Type	Null	Key	Default	Extra
+DATABASE_NAME	varchar(0)	NO			
+TABLE_NAME	varchar(0)	NO			
+INDEX_NAME	varchar(0)	NO			
+COMPRESS_OPS	bigint(0)	NO			
+COMPRESS_OPS_OK	bigint(0)	NO			
+COMPRESS_TIME	bigint(0)	NO			
+UNCOMPRESS_OPS	bigint(0)	NO			
+UNCOMPRESS_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_PER_INDEX limit 1);
+cnt
+1
+desc information_schema.INNODB_CMP_PER_INDEX_RESET;
+Field	Type	Null	Key	Default	Extra
+DATABASE_NAME	varchar(0)	NO			
+TABLE_NAME	varchar(0)	NO			
+INDEX_NAME	varchar(0)	NO			
+COMPRESS_OPS	bigint(0)	NO			
+COMPRESS_OPS_OK	bigint(0)	NO			
+COMPRESS_TIME	bigint(0)	NO			
+UNCOMPRESS_OPS	bigint(0)	NO			
+UNCOMPRESS_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_PER_INDEX_RESET limit 1);
+cnt
+1
+desc information_schema.INNODB_CMP_RESET;
+Field	Type	Null	Key	Default	Extra
+PAGE_SIZE	bigint(0)	NO			
+COMPRESS_OPS	bigint(0)	NO			
+COMPRESS_OPS_OK	bigint(0)	NO			
+COMPRESS_TIME	bigint(0)	NO			
+UNCOMPRESS_OPS	bigint(0)	NO			
+UNCOMPRESS_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMP_RESET limit 1);
+cnt
+1
+desc information_schema.INNODB_CMPMEM;
+Field	Type	Null	Key	Default	Extra
+PAGE_SIZE	bigint(0)	NO			
+BUFFER_POOL_INSTANCE	bigint(0)	NO			
+PAGES_USED	bigint(0)	NO			
+PAGES_FREE	bigint(0)	NO			
+RELOCATION_OPS	bigint(0)	NO			
+RELOCATION_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMPMEM limit 1);
+cnt
+1
+desc information_schema.INNODB_CMPMEM_RESET;
+Field	Type	Null	Key	Default	Extra
+PAGE_SIZE	bigint(0)	NO			
+BUFFER_POOL_INSTANCE	bigint(0)	NO			
+PAGES_USED	bigint(0)	NO			
+PAGES_FREE	bigint(0)	NO			
+RELOCATION_OPS	bigint(0)	NO			
+RELOCATION_TIME	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_CMPMEM_RESET limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_DATAFILES;
+Field	Type	Null	Key	Default	Extra
+SPACE	bigint(0) unsigned	NO			
+PATH	varchar(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_DATAFILES limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_INDEXES;
+Field	Type	Null	Key	Default	Extra
+INDEX_ID	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+TABLE_ID	bigint(0) unsigned	NO			
+TYPE	bigint(0)	NO			
+N_FIELDS	bigint(0)	NO			
+PAGE_NO	bigint(0)	NO			
+SPACE	bigint(0)	NO			
+MERGE_THRESHOLD	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_INDEXES limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_TABLES;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+FLAG	bigint(0)	NO			
+N_COLS	bigint(0)	NO			
+SPACE	bigint(0)	NO			
+FILE_FORMAT	varchar(0)	NO			
+ROW_FORMAT	varchar(0)	NO			
+ZIP_PAGE_SIZE	bigint(0) unsigned	NO			
+SPACE_TYPE	varchar(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLES limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_TABLESPACES;
+Field	Type	Null	Key	Default	Extra
+SPACE	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+FLAG	bigint(0) unsigned	NO			
+FILE_FORMAT	varchar(0)	NO			
+ROW_FORMAT	varchar(0)	NO			
+PAGE_SIZE	bigint(0) unsigned	NO			
+ZIP_PAGE_SIZE	bigint(0) unsigned	NO			
+SPACE_TYPE	varchar(0)	NO			
+FS_BLOCK_SIZE	bigint(0) unsigned	NO			
+FILE_SIZE	bigint(0) unsigned	NO			
+ALLOCATED_SIZE	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLESPACES limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_TABLESTATS;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+STATS_INITIALIZED	varchar(0)	NO			
+NUM_ROWS	bigint(0) unsigned	NO			
+CLUST_INDEX_SIZE	bigint(0) unsigned	NO			
+OTHER_INDEX_SIZE	bigint(0) unsigned	NO			
+MODIFIED_COUNTER	bigint(0) unsigned	NO			
+AUTOINC	bigint(0) unsigned	NO			
+REF_COUNT	bigint(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_TABLESTATS limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_VIRTUAL;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(0) unsigned	NO			
+POS	bigint(0) unsigned	NO			
+BASE_POS	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_VIRTUAL limit 1);
+cnt
+1
+desc information_schema.INNODB_TEMP_TABLE_INFO;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+N_COLS	bigint(0) unsigned	NO			
+SPACE	bigint(0) unsigned	NO			
+PER_TABLE_TABLESPACE	varchar(0)	NO			
+IS_COMPRESSED	varchar(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_TEMP_TABLE_INFO limit 1);
+cnt
+1
+desc information_schema.INNODB_METRICS;
+Field	Type	Null	Key	Default	Extra
+NAME	varchar(0)	NO			
+SUBSYSTEM	varchar(0)	NO			
+COUNT	bigint(0)	NO			
+MAX_COUNT	bigint(0)	NO			
+MIN_COUNT	bigint(0)	NO			
+AVG_COUNT	decimal(10,0)	NO			
+COUNT_RESET	bigint(0)	NO			
+MAX_COUNT_RESET	bigint(0)	NO			
+MIN_COUNT_RESET	bigint(0)	NO			
+AVG_COUNT_RESET	decimal(10,0)	NO			
+TIME_ENABLED	datetime	NO			
+TIME_DISABLED	datetime	NO			
+TIME_ELAPSED	bigint(0)	NO			
+TIME_RESET	datetime	NO			
+STATUS	varchar(0)	NO			
+TYPE	varchar(0)	NO			
+COMMENT	varchar(0)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_METRICS limit 1);
+cnt
+1
 desc information_schema.EVENTS;
 Field	Type	Null	Key	Default	Extra
 EVENT_CATALOG	varchar(64)	NO			

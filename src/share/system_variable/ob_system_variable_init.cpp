@@ -3921,7 +3921,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[277].default_value_ = "" ;
+      ObSysVars[277].default_value_ = "ib_buffer_pool" ;
       ObSysVars[277].info_ = "Specifies the name of the file that holds the list of tablespace IDs and page IDs produced by innodb_buffer_pool_dump_at_shutdown or innodb_buffer_pool_dump_now" ;
       ObSysVars[277].name_ = "innodb_buffer_pool_filename" ;
       ObSysVars[277].data_type_ = ObVarcharType ;

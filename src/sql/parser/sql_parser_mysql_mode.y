@@ -287,7 +287,7 @@ END_P SET_VAR DELIMITER
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL
 
-        FAILOVER FAST FAULTS FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
+        FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FROZEN FILE_ID
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER
 
@@ -435,7 +435,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
 %type <node> int_or_decimal
 %type <node> opt_column_attribute_list column_attribute column_attribute_list opt_column_default_value opt_column_default_value_list
-%type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage
+%type <node> show_stmt from_or_in columns_or_fields database_or_schema index_or_indexes_or_keys opt_from_or_in_database_clause opt_show_condition opt_desc_column_option opt_status opt_storage opt_show_engine
 %type <node> prepare_stmt stmt_name preparable_stmt
 %type <node> variable_set_stmt var_and_val_list var_and_val to_or_eq set_expr_or_default sys_var_and_val_list sys_var_and_val opt_set_sys_var opt_global_sys_vars_set
 %type <node> execute_stmt argument_list argument opt_using_args
@@ -520,7 +520,8 @@ END_P SET_VAR DELIMITER
 %type <node> opt_qb_name opt_qb_name_list_with_quotes parallel_hint pq_set_hint_desc pq_subquery_hint_desc
 %type <node> create_tablespace_stmt drop_tablespace_stmt tablespace rotate_master_key_stmt
 %type <node> alter_tablespace_stmt
-%type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action opt_force_purge
+%type <node> permanent_tablespace permanent_tablespace_options permanent_tablespace_option alter_tablespace_actions alter_tablespace_action alter_tablespace_options opt_force_purge
+%type <node> opt_tablespace_option opt_tablespace_options opt_tablespace_engine opt_alter_tablespace_option opt_alter_tablespace_options
 %type <node> opt_sql_throttle_for_priority opt_sql_throttle_using_cond sql_throttle_one_or_more_metrics sql_throttle_metric
 %type <node> opt_copy_id opt_backup_dest opt_backup_backup_dest opt_tenant_info opt_with_active_piece get_format_unit opt_backup_tenant_list opt_backup_to opt_description policy_name opt_recovery_window opt_redundancy opt_backup_copies opt_restore_until opt_backup_key_info opt_encrypt_key
 %type <node> opt_recover_tenant recover_table_list recover_table_relation_name restore_remap_list remap_relation_name table_relation_name opt_recover_remap_item_list restore_remap_item_list restore_remap_item remap_item remap_table_val opt_tenant
@@ -547,6 +548,7 @@ END_P SET_VAR DELIMITER
 %type <node> mock_stmt
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
+%type <node> opt_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -14012,6 +14014,17 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
 }
 | SHOW SEQUENCES opt_show_condition opt_from_or_in_database_clause
 { malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_SEQUENCES, 2, $3, $4); }
+| SHOW ENGINE_ relation_name_or_string opt_show_engine
+{
+  (void)($3);
+  (void)($4);
+  malloc_terminal_node($$, result->malloc_pool_, T_SHOW_ENGINE);
+}
+| SHOW OPEN TABLES opt_from_or_in_database_clause opt_show_condition
+{
+  (void)($4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_OPEN_TABLES, 1, $5);
+}
 ;
 
 databases_or_schemas:
@@ -14203,6 +14216,13 @@ opt_calibration_list:
 }
 ;
 
+opt_show_engine:
+STATUS
+{ $$ = NULL; }
+| MUTEX
+{ $$ = NULL; }
+;
+
 /*****************************************************************************
  *
  *	help grammar
@@ -14240,6 +14260,11 @@ permanent_tablespace_options
   merge_nodes(tablespace_options, result, T_LINK_NODE, $1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_PERMANENT_TABLESPACE, 1, $1);
 }
+| opt_tablespace_options
+{
+  (void)$1;
+  $$ = NULL;
+}
 | // EMPTY
 {
   $$ = NULL;
@@ -14253,12 +14278,99 @@ ENCRYPTION opt_equal_mark STRING_VALUE
 }
 ;
 
+opt_tablespace_option:
+ADD DATAFILE STRING_VALUE
+{
+  (void)$3;
+  $$ = NULL;
+}
+| FILE_BLOCK_SIZE COMP_EQ INTNUM
+{
+  (void)$3;
+  $$ = NULL;
+}
+| USE LOGFILE GROUP STRING_VALUE
+{
+  (void)$4;
+  $$ = NULL;
+}
+| EXTENT_SIZE opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| INITIAL_SIZE opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| AUTOEXTEND_SIZE opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| MAX_SIZE opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| NODEGROUP opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| WAIT
+{
+  $$ = NULL;
+}
+| COMMENT opt_equal_mark STRING_VALUE
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| opt_tablespace_engine
+{
+  $$ = $1;
+}
+;
+
+opt_tablespace_engine:
+ENGINE_ opt_equal_mark relation_name_or_string
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+;
+
 drop_tablespace_stmt:
 DROP TABLESPACE tablespace
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TABLESPACE, 1, $3);
 }
+| DROP TABLESPACE tablespace opt_tablespace_engine
+{
+  (void)$4;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_DROP_TABLESPACE, 1, $3);
+}
 ;
+
+alter_tablespace_options:
+alter_tablespace_actions
+{
+  $$ = $1;
+}
+| opt_alter_tablespace_options
+{
+  (void)$1;
+  $$ = NULL;
+}
 
 alter_tablespace_actions:
 alter_tablespace_action
@@ -14271,6 +14383,18 @@ alter_tablespace_action
 }
 ;
 
+opt_alter_tablespace_options:
+opt_alter_tablespace_option
+{
+  $$ = $1;
+}
+| opt_alter_tablespace_options opt_alter_tablespace_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+
 alter_tablespace_action:
 opt_set permanent_tablespace_option
 {
@@ -14279,8 +14403,35 @@ opt_set permanent_tablespace_option
 }
 ;
 
+opt_alter_tablespace_option:
+ADD DATAFILE STRING_VALUE
+{
+  (void)$3;
+  $$ = NULL;
+}
+| DROP DATAFILE STRING_VALUE
+{
+  (void)$3;
+  $$ = NULL;
+}
+| INITIAL_SIZE opt_equal_mark INTNUM
+{
+  (void)$2;
+  (void)$3;
+  $$ = NULL;
+}
+| WAIT
+{
+  $$ = NULL;
+}
+| opt_tablespace_engine
+{
+  $$ = $1;
+}
+;
+
 alter_tablespace_stmt:
-alter_with_opt_hint TABLESPACE tablespace alter_tablespace_actions
+alter_with_opt_hint TABLESPACE tablespace alter_tablespace_options
 {
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_ALTER_TABLESPACE, 2, $3, $4);
@@ -14303,6 +14454,17 @@ permanent_tablespace_option
 | permanent_tablespace_options ',' permanent_tablespace_option
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+opt_tablespace_options:
+opt_tablespace_option
+{
+  $$ = $1;
+}
+| opt_tablespace_options opt_tablespace_option
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
 }
 ;
 
@@ -17300,6 +17462,7 @@ DUMP MEMORY LEAK
   malloc_non_terminal_node($$, result->malloc_pool_, T_DUMP_MEMORY, 1, $$);
 }
 
+
 /*****************************************************************************
  *
  *	ALTER SYSTEM grammar
@@ -18274,6 +18437,21 @@ alter_with_opt_hint SYSTEM RESET alter_system_reset_parameter_actions
   (void)($1);
   malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_CLONE, 1, $5);
 }
+|
+REPAIR opt_repair_mode TABLE opt_table_list opt_repair_option_list
+{
+  (void)$2;
+  (void)$4;
+  (void)$5;
+  malloc_terminal_node($$, result->malloc_pool_, T_REPAIR_TABLE);
+}
+|
+CHECKSUM TABLE opt_table_list opt_checksum_option
+{
+  (void)$3;
+  (void)$4;
+  malloc_terminal_node($$, result->malloc_pool_, T_CHECKSUM_TABLE);
+}
 ;
 
 opt_sql_throttle_for_priority:
@@ -18287,6 +18465,72 @@ FOR PRIORITY COMP_LE INTNUM
   $$ = NULL;
 }
 ;
+
+opt_table_list:
+normal_relation_factor
+{
+  $$ = $1;
+}
+|
+normal_relation_factor ',' opt_table_list
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+opt_repair_mode:
+NO_WRITE_TO_BINLOG
+{ $$ = NULL; }
+|
+LOCAL
+{ $$ = NULL; }
+| /*empty*/
+{ $$ = NULL; }
+;
+
+repair_option:
+QUICK
+{ $$ = NULL; }
+|
+EXTENDED
+{ $$ = NULL; }
+|
+USE_FRM
+{ $$ = NULL; }
+;
+
+repair_option_list:
+repair_option
+{
+  $$ = $1;
+}
+|
+repair_option repair_option_list
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+}
+;
+
+opt_repair_option_list:
+repair_option_list
+{
+  $$ = $1;
+}
+| /*empty*/
+{ $$ = NULL; }
+;
+
+
+opt_checksum_option:
+QUICK
+{ $$ = NULL; }
+|
+EXTENDED
+{ $$ = NULL; }
+| /*empty*/
+{ $$ = NULL; }
+;
+
 
 opt_sql_throttle_using_cond:
 USING sql_throttle_one_or_more_metrics
@@ -21445,6 +21689,7 @@ ACCOUNT
 |       FAST
 |       FAULTS
 |       FLASHBACK
+|       FILE_BLOCK_SIZE
 |       FIELDS
 |       FIELD_DELIMITER
 |       FIELD_OPTIONALLY_ENCLOSED_BY

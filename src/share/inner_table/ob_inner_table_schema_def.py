@@ -34457,24 +34457,553 @@ AND
 # 21559: GV$OB_GROUP_IO_STAT
 # 21560: DBA_OB_STORAGE_IO_USAGE
 # 21561: CDB_OB_STROAGE_IO_USAGE
-# 21562: TABLESPACES
-# 21563: INNODB_BUFFER_PAGE
-# 21564: INNODB_BUFFER_PAGE_LRU
-# 21565: INNODB_BUFFER_POOL_STATS
-# 21566: INNODB_CMP
-# 21567: INNODB_CMP_PER_INDEX
-# 21568: INNODB_CMP_PER_INDEX_RESET
-# 21569: INNODB_CMP_RESET
-# 21570: INNODB_CMPMEM
-# 21571: INNODB_CMPMEM_RESET
-# 21572: INNODB_SYS_DATAFILES
-# 21573: INNODB_SYS_INDEXES
-# 21574: INNODB_SYS_TABLES
-# 21575: INNODB_SYS_TABLESPACES
-# 21576: INNODB_SYS_TABLESTATS
-# 21577: INNODB_SYS_VIRTUAL
-# 21578: INNODB_TEMP_TABLE_INFO
-# 21579: INNODB_METRICS
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'TABLESPACES',
+  table_id        = '21562',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as TABLESPACE_NAME,
+    CAST(NULL as CHAR) as ENGINE,
+    CAST(NULL as CHAR) as TABLESPACE_TYPE,
+    CAST(NULL as CHAR) as LOGFILE_GROUP_NAME,
+    CAST(NULL as UNSIGNED) as EXTENT_SIZE,
+    CAST(NULL as UNSIGNED) as AUTOEXTEND_SIZE,
+    CAST(NULL as UNSIGNED) as MAXIMUM_SIZE,
+    CAST(NULL as UNSIGNED) as NODEGROUP_ID,
+    CAST(NULL as CHAR) as TABLESPACE_COMMENT
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_BUFFER_PAGE',
+  table_id        = '21563',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as POOL_ID,
+    CAST(NULL as UNSIGNED) as BLOCK_ID,
+    CAST(NULL as UNSIGNED) as SPACE,
+    CAST(NULL as UNSIGNED) as PAGE_NUMBER,
+    CAST(NULL as CHAR) as PAGE_TYPE,
+    CAST(NULL as UNSIGNED) as FLUSH_TYPE,
+    CAST(NULL as UNSIGNED) as FIX_COUNT,
+    CAST(NULL as CHAR) as IS_HASHED,
+    CAST(NULL as UNSIGNED) as NEWEST_MODIFICATION,
+    CAST(NULL as UNSIGNED) as OLDEST_MODIFICATION,
+    CAST(NULL as UNSIGNED) as ACCESS_TIME,
+    CAST(NULL as CHAR) as TABLE_NAME,
+    CAST(NULL as CHAR) as INDEX_NAME,
+    CAST(NULL as UNSIGNED) as NUMBER_RECORDS,
+    CAST(NULL as UNSIGNED) as DATA_SIZE,
+    CAST(NULL as UNSIGNED) as COMPRESSED_SIZE,
+    CAST(NULL as CHAR) as PAGE_STATE,
+    CAST(NULL as CHAR) as IO_FIX,
+    CAST(NULL as CHAR) as IS_OLD,
+    CAST(NULL as UNSIGNED) as FREE_PAGE_CLOCK
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_BUFFER_PAGE_LRU',
+  table_id        = '21564',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as POOL_ID,
+    CAST(NULL as UNSIGNED) as LRU_POSITION,
+    CAST(NULL as UNSIGNED) as SPACE,
+    CAST(NULL as UNSIGNED) as PAGE_NUMBER,
+    CAST(NULL as CHAR) as PAGE_TYPE,
+    CAST(NULL as UNSIGNED) as FLUSH_TYPE,
+    CAST(NULL as UNSIGNED) as FIX_COUNT,
+    CAST(NULL as CHAR) as IS_HASHED,
+    CAST(NULL as UNSIGNED) as NEWEST_MODIFICATION,
+    CAST(NULL as UNSIGNED) as OLDEST_MODIFICATION,
+    CAST(NULL as UNSIGNED) as ACCESS_TIME,
+    CAST(NULL as CHAR) as TABLE_NAME,
+    CAST(NULL as CHAR) as INDEX_NAME,
+    CAST(NULL as UNSIGNED) as NUMBER_RECORDS,
+    CAST(NULL as UNSIGNED) as DATA_SIZE,
+    CAST(NULL as UNSIGNED) as COMPRESSED_SIZE,
+    CAST(NULL as CHAR) as COMPRESSED,
+    CAST(NULL as CHAR) as IO_FIX,
+    CAST(NULL as CHAR) as IS_OLD,
+    CAST(NULL as UNSIGNED) as FREE_PAGE_CLOCK
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_BUFFER_POOL_STATS',
+  table_id        = '21565',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as POOL_ID,
+    CAST(NULL as UNSIGNED) as POOL_SIZE,
+    CAST(NULL as UNSIGNED) as FREE_BUFFERS,
+    CAST(NULL as UNSIGNED) as DATABASE_PAGES,
+    CAST(NULL as UNSIGNED) as OLD_DATABASE_PAGES,
+    CAST(NULL as UNSIGNED) as MODIFIED_DATABASE_PAGES,
+    CAST(NULL as UNSIGNED) as PENDING_DECOMPRESS,
+    CAST(NULL as UNSIGNED) as PENDING_READS,
+    CAST(NULL as UNSIGNED) as PENDING_FLUSH_LRU,
+    CAST(NULL as UNSIGNED) as PENDING_FLUSH_LIST,
+    CAST(NULL as UNSIGNED) as PAGES_MADE_YOUNG,
+    CAST(NULL as UNSIGNED) as PAGES_NOT_MADE_YOUNG,
+    CAST(NULL as DECIMAL) as PAGES_MADE_YOUNG_RATE,
+    CAST(NULL as DECIMAL) as PAGES_MADE_NOT_YOUNG_RATE,
+    CAST(NULL as UNSIGNED) as NUMBER_PAGES_READ,
+    CAST(NULL as UNSIGNED) as NUMBER_PAGES_CREATED,
+    CAST(NULL as UNSIGNED) as NUMBER_PAGES_WRITTEN,
+    CAST(NULL as DECIMAL) as PAGES_READ_RATE,
+    CAST(NULL as DECIMAL) as PAGES_CREATE_RATE,
+    CAST(NULL as DECIMAL) as PAGES_WRITTEN_RATE,
+    CAST(NULL as UNSIGNED) as NUMBER_PAGES_GET,
+    CAST(NULL as UNSIGNED) as HIT_RATE,
+    CAST(NULL as UNSIGNED) as YOUNG_MAKE_PER_THOUSAND_GETS,
+    CAST(NULL as UNSIGNED) as NOT_YOUNG_MAKE_PER_THOUSAND_GETS,
+    CAST(NULL as UNSIGNED) as NUMBER_PAGES_READ_AHEAD,
+    CAST(NULL as UNSIGNED) as NUMBER_READ_AHEAD_EVICTED,
+    CAST(NULL as DECIMAL) as READ_AHEAD_RATE,
+    CAST(NULL as DECIMAL) as READ_AHEAD_EVICTED_RATE,
+    CAST(NULL as UNSIGNED) as LRU_IO_TOTAL,
+    CAST(NULL as UNSIGNED) as LRU_IO_CURRENT,
+    CAST(NULL as UNSIGNED) as UNCOMPRESS_TOTAL,
+    CAST(NULL as UNSIGNED) as UNCOMPRESS_CURRENT
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMP',
+  table_id        = '21566',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as SIGNED) as PAGE_SIZE,
+    CAST(NULL as SIGNED) as COMPRESS_OPS,
+    CAST(NULL as SIGNED) as COMPRESS_OPS_OK,
+    CAST(NULL as SIGNED) as COMPRESS_TIME,
+    CAST(NULL as SIGNED) as UNCOMPRESS_OPS,
+    CAST(NULL as SIGNED) as UNCOMPRESS_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMP_PER_INDEX',
+  table_id        = '21567',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as DATABASE_NAME,
+    CAST(NULL as CHAR) as TABLE_NAME,
+    CAST(NULL as CHAR) as INDEX_NAME,
+    CAST(NULL as SIGNED) as COMPRESS_OPS,
+    CAST(NULL as SIGNED) as COMPRESS_OPS_OK,
+    CAST(NULL as SIGNED) as COMPRESS_TIME,
+    CAST(NULL as SIGNED) as UNCOMPRESS_OPS,
+    CAST(NULL as SIGNED) as UNCOMPRESS_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMP_PER_INDEX_RESET',
+  table_id        = '21568',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as DATABASE_NAME,
+    CAST(NULL as CHAR) as TABLE_NAME,
+    CAST(NULL as CHAR) as INDEX_NAME,
+    CAST(NULL as SIGNED) as COMPRESS_OPS,
+    CAST(NULL as SIGNED) as COMPRESS_OPS_OK,
+    CAST(NULL as SIGNED) as COMPRESS_TIME,
+    CAST(NULL as SIGNED) as UNCOMPRESS_OPS,
+    CAST(NULL as SIGNED) as UNCOMPRESS_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMP_RESET',
+  table_id        = '21569',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as SIGNED) as PAGE_SIZE,
+    CAST(NULL as SIGNED) as COMPRESS_OPS,
+    CAST(NULL as SIGNED) as COMPRESS_OPS_OK,
+    CAST(NULL as SIGNED) as COMPRESS_TIME,
+    CAST(NULL as SIGNED) as UNCOMPRESS_OPS,
+    CAST(NULL as SIGNED) as UNCOMPRESS_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMPMEM',
+  table_id        = '21570',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as SIGNED) as PAGE_SIZE,
+    CAST(NULL as SIGNED) as BUFFER_POOL_INSTANCE,
+    CAST(NULL as SIGNED) as PAGES_USED,
+    CAST(NULL as SIGNED) as PAGES_FREE,
+    CAST(NULL as SIGNED) as RELOCATION_OPS,
+    CAST(NULL as SIGNED) as RELOCATION_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_CMPMEM_RESET',
+  table_id        = '21571',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as SIGNED) as PAGE_SIZE,
+    CAST(NULL as SIGNED) as BUFFER_POOL_INSTANCE,
+    CAST(NULL as SIGNED) as PAGES_USED,
+    CAST(NULL as SIGNED) as PAGES_FREE,
+    CAST(NULL as SIGNED) as RELOCATION_OPS,
+    CAST(NULL as SIGNED) as RELOCATION_TIME
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_DATAFILES',
+  table_id        = '21572',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as SPACE,
+    CAST(NULL as CHAR) as PATH
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_INDEXES',
+  table_id        = '21573',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as INDEX_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as UNSIGNED) as TABLE_ID,
+    CAST(NULL as SIGNED) as TYPE,
+    CAST(NULL as SIGNED) as N_FIELDS,
+    CAST(NULL as SIGNED) as PAGE_NO,
+    CAST(NULL as SIGNED) as SPACE,
+    CAST(NULL as SIGNED) as MERGE_THRESHOLD
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_TABLES',
+  table_id        = '21574',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as TABLE_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as SIGNED) as FLAG,
+    CAST(NULL as SIGNED) as N_COLS,
+    CAST(NULL as SIGNED) as SPACE,
+    CAST(NULL as CHAR) as FILE_FORMAT,
+    CAST(NULL as CHAR) as ROW_FORMAT,
+    CAST(NULL as UNSIGNED) as ZIP_PAGE_SIZE,
+    CAST(NULL as CHAR) as SPACE_TYPE
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_TABLESPACES',
+  table_id        = '21575',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as SPACE,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as UNSIGNED) as FLAG,
+    CAST(NULL as CHAR) as FILE_FORMAT,
+    CAST(NULL as CHAR) as ROW_FORMAT,
+    CAST(NULL as UNSIGNED) as PAGE_SIZE,
+    CAST(NULL as UNSIGNED) as ZIP_PAGE_SIZE,
+    CAST(NULL as CHAR) as SPACE_TYPE,
+    CAST(NULL as UNSIGNED) as FS_BLOCK_SIZE,
+    CAST(NULL as UNSIGNED) as FILE_SIZE,
+    CAST(NULL as UNSIGNED) as ALLOCATED_SIZE
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_TABLESTATS',
+  table_id        = '21576',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as TABLE_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as CHAR) as STATS_INITIALIZED,
+    CAST(NULL as UNSIGNED) as NUM_ROWS,
+    CAST(NULL as UNSIGNED) as CLUST_INDEX_SIZE,
+    CAST(NULL as UNSIGNED) as OTHER_INDEX_SIZE,
+    CAST(NULL as UNSIGNED) as MODIFIED_COUNTER,
+    CAST(NULL as UNSIGNED) as AUTOINC,
+    CAST(NULL as SIGNED) as REF_COUNT
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_VIRTUAL',
+  table_id        = '21577',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as TABLE_ID,
+    CAST(NULL as UNSIGNED) as POS,
+    CAST(NULL as UNSIGNED) as BASE_POS
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_TEMP_TABLE_INFO',
+  table_id        = '21578',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as TABLE_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as UNSIGNED) as N_COLS,
+    CAST(NULL as UNSIGNED) as SPACE,
+    CAST(NULL as CHAR) as PER_TABLE_TABLESPACE,
+    CAST(NULL as CHAR) as IS_COMPRESSED
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'chaser.ch',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_METRICS',
+  table_id        = '21579',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as CHAR) as SUBSYSTEM,
+    CAST(NULL as SIGNED) as COUNT,
+    CAST(NULL as SIGNED) as MAX_COUNT,
+    CAST(NULL as SIGNED) as MIN_COUNT,
+    CAST(NULL as DECIMAL) as AVG_COUNT,
+    CAST(NULL as SIGNED) as COUNT_RESET,
+    CAST(NULL as SIGNED) as MAX_COUNT_RESET,
+    CAST(NULL as SIGNED) as MIN_COUNT_RESET,
+    CAST(NULL as DECIMAL) as AVG_COUNT_RESET,
+    CAST(NULL as DATETIME) as TIME_ENABLED,
+    CAST(NULL as DATETIME) as TIME_DISABLED,
+    CAST(NULL as SIGNED) as TIME_ELAPSED,
+    CAST(NULL as DATETIME) as TIME_RESET,
+    CAST(NULL as CHAR) as STATUS,
+    CAST(NULL as CHAR) as TYPE,
+    CAST(NULL as CHAR) as COMMENT
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
 def_table_schema(
   owner = 'huangrenhuang.hrh',
   tablegroup_id   = 'OB_INVALID_ID',
@@ -34570,7 +35099,6 @@ def_table_schema(
 # 21594: CDB_OB_SPACE_USAGE
 # 21595: DBA_OB_TABLE_SPACE_USAGE
 # 21596: CDB_OB_TABLE_SPACE_USAGE
-
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

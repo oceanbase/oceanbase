@@ -22,7 +22,7 @@ namespace sql
 class ObMockStmt : public ObCMDStmt
 {
 public:
-  ObMockStmt() : ObCMDStmt(stmt::T_FLUSH_PRIVILEGES)
+  ObMockStmt() : ObCMDStmt(stmt::T_NONE)
   {
   }
   virtual ~ObMockStmt() {}

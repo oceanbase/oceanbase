@@ -5529,6 +5529,8 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_CREATE_TENANT:
     case stmt::T_SHOW_TRACE:
     case stmt::T_SHOW_ENGINES:
+    case stmt::T_SHOW_ENGINE:
+    case stmt::T_SHOW_OPEN_TABLES:
     case stmt::T_SHOW_PRIVILEGES:
     case stmt::T_SHOW_CREATE_PROCEDURE:
     case stmt::T_SHOW_CREATE_FUNCTION:

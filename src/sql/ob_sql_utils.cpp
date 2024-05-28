@@ -1648,6 +1648,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_TENANT == type
                || T_SHOW_RESTORE_PREVIEW == type
                || T_SHOW_SEQUENCES == type
+               || T_SHOW_ENGINE == type
+               || T_SHOW_OPEN_TABLES == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())) {
       ret = true;
     }

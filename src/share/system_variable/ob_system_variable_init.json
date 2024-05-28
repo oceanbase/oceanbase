@@ -3997,7 +3997,7 @@
   "innodb_buffer_pool_filename": {
     "id": 10193,
     "name": "innodb_buffer_pool_filename",
-    "default_value": "",
+    "default_value": "ib_buffer_pool",
     "base_value": "",
     "data_type": "varchar",
     "info": "Specifies the name of the file that holds the list of tablespace IDs and page IDs produced by innodb_buffer_pool_dump_at_shutdown or innodb_buffer_pool_dump_now",
