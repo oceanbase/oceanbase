@@ -97,6 +97,13 @@ class ObPhysicalPlanCtx
 public:
   explicit ObPhysicalPlanCtx(common::ObIAllocator &allocator);
   virtual ~ObPhysicalPlanCtx();
+  void destroy()
+  {
+    // Member variables that need to request additional memory
+    // with another allocator should call destroy here.
+    subschema_ctx_.destroy();
+    all_local_session_vars_.destroy();
+  }
   inline void set_tenant_id(uint64_t tenant_id) { tenant_id_ = tenant_id; }
   inline void set_show_seed(bool show_seed) { is_show_seed_ = show_seed; }
   inline uint64_t get_tenant_id() { return tenant_id_; }
