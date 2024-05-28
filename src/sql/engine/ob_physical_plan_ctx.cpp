@@ -126,7 +126,7 @@ ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {
   total_memstore_read_row_count_ = 0;
   total_ssstore_read_row_count_ = 0;
-  subschema_ctx_.destroy();
+  destroy();
 }
 
 void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
