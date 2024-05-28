@@ -1242,21 +1242,24 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
   } else if (!index_schema.is_index_table() && index_schema.is_heap_table()) {
     // 如果是堆表，那么这里还需要在 constraint_info.constraint_columns_中追加分区建
     // 因为4.0版本堆表 分区建 + hidden_pk 才能保证唯一性
-    uint64_t rowkey_column_id = 0;
-    const ObRowkeyInfo &rowkey_info = index_schema.get_partition_key_info();
     const ColumnItem *col_item = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
-      if (OB_FAIL(rowkey_info.get_column_id(i, rowkey_column_id))) {
-        LOG_WARN("get rowkey column id failed", K(ret));
-      } else if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
-                                                                               constraint_info.table_id_,
-                                                                               rowkey_column_id))) {
+    ObSEArray<uint64_t, 5> rowkey_partkey_ids;
+    if (OB_FAIL(index_schema.get_rowkey_partkey_column_ids(rowkey_partkey_ids))) {
+      LOG_WARN("fail to get rowkey partkey column_ids", K(ret), K(index_schema.get_table_id()));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_partkey_ids.count(); ++i) {
+      uint64_t column_id = rowkey_partkey_ids.at(i);
+      if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
+                                                                        constraint_info.table_id_,
+                                                                        column_id))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column expr by id failed", K(ret), K(rowkey_column_id));
-      } else if (OB_FAIL(constraint_info.constraint_columns_.push_back(col_item->expr_))) {
+        LOG_WARN("get column expr by id failed", K(ret), K(i), K(column_id), K(rowkey_partkey_ids));
+      } else if (OB_FAIL(add_var_to_array_no_dup(constraint_info.constraint_columns_, col_item->expr_))) {
         LOG_WARN("store column expr to column exprs failed", K(ret));
       }
     }
+
   }
   return ret;
 }
