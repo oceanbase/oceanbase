@@ -783,33 +783,6 @@ int ObSolidifiedVarsContext::get_local_tz_info(const sql::ObBasicSessionInfo *se
   return ret;
 }
 
-OB_DEF_SERIALIZE(ObSolidifiedVarsContext)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != local_session_var_) {
-    OB_UNIS_ENCODE(*local_session_var_);
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObSolidifiedVarsContext)
-{
-  int64_t len = 0;
-  if (NULL != local_session_var_) {
-    OB_UNIS_ADD_LEN(*local_session_var_);
-  }
-  return len;
-}
-
-OB_DEF_DESERIALIZE(ObSolidifiedVarsContext)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != local_session_var_) {
-    OB_UNIS_DECODE(*local_session_var_);
-  }
-  return ret;
-}
-
 DEF_TO_STRING(ObSolidifiedVarsContext)
 {
   int64_t pos = 0;

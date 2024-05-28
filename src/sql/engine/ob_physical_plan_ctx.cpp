@@ -129,7 +129,7 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
 
 ObPhysicalPlanCtx::~ObPhysicalPlanCtx()
 {
-  subschema_ctx_.destroy();
+  destroy();
 }
 
 void ObPhysicalPlanCtx::restore_param_store(const int64_t original_param_cnt)
