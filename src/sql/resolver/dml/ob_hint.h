@@ -211,6 +211,7 @@ struct ObGlobalHint {
 //#define COMPAT_VERSION_4_2_1_BP3  (oceanbase::common::cal_version(4, 2, 1, 3))
 #define COMPAT_VERSION_4_2_1_BP4  (oceanbase::common::cal_version(4, 2, 1, 4))
 #define COMPAT_VERSION_4_2_1_BP5  (oceanbase::common::cal_version(4, 2, 1, 5))
+#define COMPAT_VERSION_4_2_1_BP8  (oceanbase::common::cal_version(4, 2, 1, 8))
 #define COMPAT_VERSION_4_2_2      (oceanbase::common::cal_version(4, 2, 2, 0))
 #define COMPAT_VERSION_4_2_3      (oceanbase::common::cal_version(4, 2, 3, 0))
 #define COMPAT_VERSION_4_2_4      (oceanbase::common::cal_version(4, 2, 4, 0))
