@@ -122,11 +122,21 @@ int ObTypeVector::divide(const int64_t divisor)
 int ObTypeVector::vector_cmp(const ObTypeVector& other)
 {
   int cmp_res = ObObjCmpFuncs::CR_EQ;
-  if (OB_UNLIKELY(dims_ != other.dims())) {
+  const double P[] =
+  {
+    5/1e000, 5/1e001, 5/1e002, 5/1e003, 5/1e004, 5/1e005, 5/1e006, 5/1e007,
+    5/1e008, 5/1e009, 5/1e010, 5/1e011, 5/1e012, 5/1e013, 5/1e014, 5/1e015,
+    5/1e016, 5/1e017, 5/1e018, 5/1e019, 5/1e020, 5/1e021, 5/1e022, 5/1e023,
+    5/1e024, 5/1e025, 5/1e026, 5/1e027, 5/1e028, 5/1e029, 5/1e030, 5/1e031
+  };
+  if (OB_UNLIKELY(size_ != other.count())) {
     cmp_res = ObObjCmpFuncs::CR_OB_ERROR;
   } else {
-    for (int64_t i = 0; i < dims_; ++i) {
-      if (vals_[i] < other.at(i)) {
+    double p = P[precision+1];
+    for (int64_t i = 0; i < size_; ++i) {
+      if (vals_[i] == other.at(i) || fabs(vals_[i] - other.at(i)) < p) {
+        continue;
+      } else if (vals_[i] < other.at(i)) {
         cmp_res = ObObjCmpFuncs::CR_LT;
         break;
       } else if (vals_[i] > other.at(i)) {

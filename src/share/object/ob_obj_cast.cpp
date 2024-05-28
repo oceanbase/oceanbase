@@ -10516,10 +10516,10 @@ static int vector_string(const ObObjType expected_type, ObObjCastParams &params,
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < val.dims(); ++i) {
         if (i == 0) {
-          if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, "%.6f", val.at(i)))) {
+          if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, "%.*f",  ObTypeVector::precision, val.at(i)))) {
             LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos), K(i), K(val.at(i)));
           }
-        } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, ",%.6f", val.at(i)))) {
+        } else if (OB_FAIL(databuff_printf(tmp_buf, tmp_buf_len, tmp_buf_pos, *allocator, ",%.*f",  ObTypeVector::precision, val.at(i)))) {
           LOG_WARN("failed to printf vector data buffer", K(ret), K(tmp_buf_len), K(tmp_buf_pos), K(i), K(val.at(i)));
         }
       }

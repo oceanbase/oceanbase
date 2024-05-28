@@ -88,6 +88,8 @@ public:
     static int get_vector_dfunc(common::ObVectorDistanceType vd_type, VectorIndexDistanceFunc& func);
     NEED_SERIALIZE_AND_DESERIALIZE;
     DECLARE_TO_STRING;
+public:
+  static const int precision = 8;
 private:
   float* vals_;
   int64_t dims_;
