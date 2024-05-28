@@ -89,12 +89,19 @@ int ObResourcePlanManager::refresh_global_background_cpu()
   int ret = OB_SUCCESS;
   int32_t cfs_period_us = 0;
   if (GCONF.enable_global_background_resource_isolation) {
-    int32_t cpu = static_cast<int32_t>(GCONF.global_background_cpu_quota);
+    double cpu = static_cast<double>(GCONF.global_background_cpu_quota);
     if (cpu <= 0) {
       cpu = -1;
     }
+    if (cpu >= 0 && OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_shares(  // set cgroup/background/cpu.shares
+                    OB_INVALID_TENANT_ID,
+                    cpu,
+                    OB_INVALID_GROUP_ID,
+                    BACKGROUND_CGROUP))) {
+        LOG_WARN("fail to set background cpu shares", K(ret));
+    }
     int compare_ret = 0;
-    if (OB_SUCC(GCTX.cgroup_ctrl_->compare_cpu(background_quota_, cpu, compare_ret))) {
+    if (OB_SUCC(ret) && OB_SUCC(GCTX.cgroup_ctrl_->compare_cpu(background_quota_, cpu, compare_ret))) {
       if (0 == compare_ret) {
         // do nothing
       } else if (OB_FAIL(GCTX.cgroup_ctrl_->set_cpu_cfs_quota(  // set cgroup/background/cpu.cfs_quota_us

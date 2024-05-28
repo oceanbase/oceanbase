@@ -1607,7 +1607,7 @@ DEF_BOOL(enable_cgroup, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(enable_global_background_resource_isolation, OB_CLUSTER_PARAMETER, "False",
          "When set to false, foreground and background tasks are isolated within the tenant; When set to true, isolate background tasks individually upon tenant-level",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
-DEF_INT(global_background_cpu_quota, OB_CLUSTER_PARAMETER, "-1", "[-1,)",
+DEF_DBL(global_background_cpu_quota, OB_CLUSTER_PARAMETER, "-1", "[-1,)",
          "When enable_global_background_resource_isolation is True, specify the number of vCPUs allocated to the background tasks"
          "-1 for the CPU is not limited by the cgroup",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
