@@ -508,7 +508,7 @@ static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshol
   int ret = OB_SUCCESS;
   is_inrow = false;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold <= 0)) {
+  if (OB_UNLIKELY(!obj.is_lob_storage() || lob_inrow_threshold < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(obj), K(lob_inrow_threshold));
   } else if (OB_ISNULL(lob_mngr)) {
@@ -518,7 +518,10 @@ static int check_lob_is_inrow(const ObObj &obj, const int64_t lob_inrow_threshol
     ObString data = obj.get_string();
     const bool set_has_lob_header = data.length() > 0;
     ObLobLocatorV2 src(data, set_has_lob_header);
-    if (src.has_inrow_data() && lob_mngr->can_write_inrow(data.length(), lob_inrow_threshold)) {
+    int64_t byte_len = 0;
+    if (OB_FAIL(src.get_lob_data_byte_len(byte_len))) {
+      LOG_WARN("fail to get lob data byte len", K(ret), K(src));
+    } else if (src.has_inrow_data() && lob_mngr->can_write_inrow(byte_len, lob_inrow_threshold)) {
       is_inrow = true;
     } else {
       is_inrow = false;
