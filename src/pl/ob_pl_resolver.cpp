@@ -14549,23 +14549,14 @@ int ObPLResolver::resolve_access_ident(ObObjAccessIdent &access_ident, // 当前
     if (OB_FAIL(ret)) {
     } else if ((ObPLExternalNS::LOCAL_TYPE == type || ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type)
                 && (is_routine || (access_ident.has_brackets_))) {
-      if (ObPLExternalNS::PKG_TYPE == type || ObPLExternalNS::UDT_NS == type) {
-        OZ (resolve_routine(access_ident, ns, access_idxs, func));
-        if (OB_FAIL(ret)) {
-          ret = OB_SUCCESS;
-          ob_reset_tsi_warning_buffer();
-          OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-            K(is_routine), K(is_resolve_rowtype), K(type),
-            K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
-        }
-      } else {
-        OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
-          K(is_routine), K(is_resolve_rowtype), K(type),
-          K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
-      }
+      OZ (resolve_construct(access_ident, ns, access_idxs, var_index, func),
+        K(is_routine), K(is_resolve_rowtype), K(type),
+        K(pl_data_type), K(var_index), K(access_ident), K(access_idxs));
     } else if (ObPLExternalNS::INVALID_VAR == type
                || (ObPLExternalNS::SELF_ATTRIBUTE == type)
                || (ObPLExternalNS::UDT_MEMBER_ROUTINE == type && is_routine)
+               || (ObPLExternalNS::INTERNAL_PROC == type && is_routine)
+               || (ObPLExternalNS::NESTED_PROC == type && is_routine)
                || (ObPLExternalNS::LOCAL_VAR == type && is_routine)
                || (ObPLExternalNS::TABLE_NS == type && is_routine)
                || (ObPLExternalNS::LABEL_NS == type && is_routine)
