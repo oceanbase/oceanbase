@@ -190,9 +190,6 @@ int ObSimpleLogServer::update_tenant_log_disk_size_(const uint64_t tenant_id,
     ObLogService *log_service = MTL(ObLogService *);
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(log_service->update_log_disk_usage_limit_size(new_log_disk_size))) {
-      LOG_WARN("failed to update_log_disk_usage_limit_size", K(ret), K(tenant_id), K(new_log_disk_size),
-               K(old_log_disk_size), K(allowed_new_log_disk_size));
     } else if (OB_FAIL(log_block_pool_.update_tenant(old_log_disk_size, new_log_disk_size, allowed_new_log_disk_size, log_service))) {
       LOG_WARN("failed to update teannt int ObServerLogBlockMGR", K(ret), K(tenant_id), K(new_log_disk_size),
                K(old_log_disk_size), K(allowed_new_log_disk_size));
