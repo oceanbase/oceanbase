@@ -11070,6 +11070,57 @@ int ObDMLResolver::inner_resolve_hints(const ParseNode &node,
   return ret;
 }
 
+int ObDMLResolver::resolve_dblink_hint(const ParseNode &hint_node,
+                                       ObGlobalHint &global_hint)
+{
+  int ret = OB_SUCCESS;
+  ParseNode *child0 = NULL;
+  ParseNode *child1 = NULL;
+  if (OB_UNLIKELY(2 != hint_node.num_child_) ||
+      OB_ISNULL(child0 = hint_node.children_[0]) ||
+      OB_ISNULL(child1 = hint_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hint node", K(ret),
+                  K(hint_node.num_child_), K(child0), K(child1));
+  } else if (T_DBLINK_INFO != hint_node.type_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hint node", K(ret),K(hint_node.type_));
+  } else {
+    if (T_VARCHAR == child0->type_) { // from ocenabase 4.3.0, dblink_info hint use trans_param-like kv hint
+      ObString dblink_info_param_str;
+      dblink_info_param_str.assign_ptr(child0->str_value_, static_cast<int32_t>(child0->str_len_));
+      if (T_VARCHAR == child1->type_) {
+        ObString dblink_info_param_value;
+        dblink_info_param_value.assign_ptr(child1->str_value_, static_cast<int32_t>(child1->str_len_));
+        if (!dblink_info_param_str.case_compare("DBLINK_XA_TRANS_STOP_CHECK_LOCK")) {
+          if (!dblink_info_param_value.case_compare("TRUE")) {
+            global_hint.set_xa_trans_stop_check_lock(true);
+          }
+        } else {
+          // do nothing
+        }
+      } else if (T_INT == child1->type_) {
+        if (!dblink_info_param_str.case_compare("DBLINK_TM_SESSID")) {
+          global_hint.merge_dblink_info_tm_sessid(child1->value_);
+        } else if (!dblink_info_param_str.case_compare("DBLINK_TX_ID")) {
+          global_hint.merge_dblink_info_tx_id(child1->value_);
+        } else {
+          // do nothing
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected value type in opt param hint", "type", get_type_name(child1->type_));
+      }
+    } else if (T_INT == child0->type_) { // compat oceanbase below 4.3.0
+      global_hint.merge_tm_sessid_tx_id(child0->value_, child1->value_);
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected value type in opt param hint", "type", get_type_name(child0->type_));
+    }
+  }
+  return ret;
+}
+
 // resolve and deal conflict global hint,
 // if hint_node is not global hint, set is_global_hint to false.
 int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
@@ -11105,8 +11156,8 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       break;
     }
     case T_DBLINK_INFO: {
-      CHECK_HINT_PARAM(hint_node, 2) {
-        global_hint.merge_dblink_info_hint(child0->value_, child1->value_);
+      if (OB_FAIL(resolve_dblink_hint(hint_node, global_hint))) {
+        LOG_WARN("failed to resolve dblink hint", K(ret));
       }
       break;
     }

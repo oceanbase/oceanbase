@@ -531,7 +531,6 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
   ObDASCtx &das_ctx = DAS_CTX(exec_ctx);
   transaction::ObTransService *txs = NULL;
   uint64_t tenant_id = 0;
-
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx), OB_NOT_NULL(plan));
   OX (tenant_id = session->get_effective_tenant_id());
   OX (session->get_trans_result().reset());
@@ -633,6 +632,89 @@ bool print_log = false;
              K(plan),
              "consistency_level_in_plan_ctx", plan_ctx->get_consistency_level(),
              K(trans_result));
+  }
+  return ret;
+}
+
+int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
+{
+  int ret = OB_SUCCESS;
+  uint16_t charset_id = 0;
+  uint16_t ncharset_id = 0;
+  uint64_t tenant_id = -1;
+  uint32_t sessid = -1;
+  uint32_t tm_sessid = 0;
+  common::ObDbLinkProxy *dblink_proxy = GCTX.dblink_proxy_;
+  sql::ObSQLSessionMgr *session_mgr = GCTX.session_mgr_;
+  ObSQLSessionInfo *session = GET_MY_SESSION(exec_ctx);
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(exec_ctx);
+  const ObPhysicalPlan *phy_plan = plan_ctx->get_phy_plan();
+  common::ObArenaAllocator allocator;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_ISNULL(session) || OB_ISNULL(dblink_proxy) || OB_ISNULL(phy_plan) || OB_ISNULL(session_mgr) || OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), KP(session), KP(dblink_proxy), KP(phy_plan), KP(session_mgr), KP(plan_ctx));
+  } else if (lib::is_oracle_mode() &&
+             !plan_ctx->get_dblink_ids().empty() &&
+             plan_ctx->get_main_xa_trans_branch()) {
+    if (OB_FAIL(ObDblinkService::get_charset_id(session, charset_id, ncharset_id))) {
+      LOG_WARN("failed to get session charset id", K(ret));
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret), K(session->get_effective_tenant_id()));
+    } else {
+      ObIArray<uint64_t> &dblink_ids = plan_ctx->get_dblink_ids();
+      tenant_id = session->get_effective_tenant_id();
+      sessid = session->get_sessid();
+      for(int64_t i = 0; OB_SUCC(ret) && i < dblink_ids.count(); ++i) {
+        uint64_t dblink_id = dblink_ids.at(i);
+        const ObDbLinkSchema *dblink_schema = NULL;
+        common::sqlclient::ObISQLConnection *dblink_conn = NULL;
+        if (OB_FAIL(schema_guard.get_dblink_schema(tenant_id, dblink_id, dblink_schema))) {
+          LOG_WARN("failed to get dblink schema", K(ret), K(tenant_id), K(dblink_id));
+        } else if (OB_ISNULL(dblink_schema)) {
+          ret = OB_DBLINK_NOT_EXIST_TO_ACCESS;
+          LOG_WARN("dblink schema is NULL", K(ret), K(dblink_id));
+        } else if (OB_FAIL(session->get_dblink_context().get_dblink_conn(dblink_id, dblink_conn))) {
+          LOG_WARN("failed to get dblink connection from session", K(dblink_id), K(sessid), K(ret));
+        } else if (OB_NOT_NULL(dblink_conn)) {
+          ObDblinkCtxInSession::revert_dblink_conn(dblink_conn); // release rlock locked by get_dblink_conn
+        } else {
+          common::sqlclient::dblink_param_ctx dblink_param_ctx;
+          if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(dblink_param_ctx,
+                                                             session,
+                                                             allocator, //useless in oracle mode
+                                                             dblink_id,
+                                                             static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())))) {
+            LOG_WARN("failed to init dblink param ctx", K(ret), K(dblink_param_ctx), K(dblink_id));
+          } else if (OB_FAIL(dblink_proxy->create_dblink_pool(dblink_param_ctx,
+                                                        dblink_schema->get_host_addr(),
+                                                        dblink_schema->get_tenant_name(),
+                                                        dblink_schema->get_user_name(),
+                                                        dblink_schema->get_plain_password(),
+                                                        dblink_schema->get_database_name(),
+                                                        dblink_schema->get_conn_string(),
+                                                        dblink_schema->get_cluster_name()))) {
+            LOG_WARN("failed to create dblink pool", K(ret));
+          } else if (OB_FAIL(dblink_proxy->acquire_dblink(dblink_param_ctx, dblink_conn))) {
+            LOG_WARN("failed to acquire dblink", K(ret), K(dblink_param_ctx));
+          } else if (OB_FAIL(session->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
+            LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+          } else if (OB_FAIL(session->get_dblink_context().set_dblink_conn(dblink_conn))) {
+            LOG_WARN("failed to set dblink connection to session", K(session), K(sessid), K(ret));
+          } else if (OB_FAIL(ObTMService::tm_rm_start(exec_ctx,
+                                                      static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()),
+                                                      dblink_conn,
+                                                      session->get_dblink_context().get_tx_id()))) {
+            LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id), K(dblink_conn), K(sessid), K(static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto())));
+          } else {
+            LOG_TRACE("link succ to prepare xa connection", KP(plan_ctx), K(ret), K(dblink_id), K(session->get_dblink_context().get_tx_id()));
+          }
+        }
+      }
+    }
+  }
+  if (OB_NOT_NULL(plan_ctx)) {
+    plan_ctx->get_dblink_ids().reset();
   }
   return ret;
 }

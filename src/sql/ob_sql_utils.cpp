@@ -2218,10 +2218,11 @@ char ObSQLUtils::find_first_empty_char(const ObString &sql)
 int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObString &sql,
                                 ObSchemaGetterGuard *schema_guard,
                                 ObObjPrintParams print_params,
-                                const ParamStore *param_store)
+                                const ParamStore *param_store,
+                                const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
-  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store);
+  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store, session);
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(stmt), K(ret));
@@ -2297,7 +2298,8 @@ int ObSqlPrinter::inner_print(char *buf, int64_t buf_len, int64_t &res_len)
                                stmt_,
                                schema_guard_,
                                print_params_,
-                               param_store_);
+                               param_store_,
+                               session_);
 }
 
 int ObSQLUtils::print_sql(char *buf,
@@ -2306,7 +2308,8 @@ int ObSQLUtils::print_sql(char *buf,
                           const ObStmt *stmt,
                           ObSchemaGetterGuard *schema_guard,
                           ObObjPrintParams print_params,
-                          const ParamStore *param_store)
+                          const ParamStore *param_store,
+                          const ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
@@ -2337,7 +2340,9 @@ int ObSQLUtils::print_sql(char *buf,
                                   static_cast<const ObSelectStmt*>(reconstruct_stmt),
                                   schema_guard,
                                   print_params,
-                                  param_store);
+                                  param_store,
+                                  false,
+                                  session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       printer.enable_print_temp_table_as_cte();
@@ -2353,7 +2358,8 @@ int ObSQLUtils::print_sql(char *buf,
                                     static_cast<const ObInsertAllStmt*>(reconstruct_stmt),
                                     schema_guard,
                                     print_params,
-                                    param_store);
+                                    param_store,
+                                    session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
@@ -2369,7 +2375,8 @@ int ObSQLUtils::print_sql(char *buf,
                                   static_cast<const ObInsertStmt*>(reconstruct_stmt),
                                   schema_guard,
                                   print_params,
-                                  param_store);
+                                  param_store,
+                                  session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
@@ -2384,7 +2391,8 @@ int ObSQLUtils::print_sql(char *buf,
                                   static_cast<const ObDeleteStmt*>(reconstruct_stmt),
                                   schema_guard,
                                   print_params,
-                                  param_store);
+                                  param_store,
+                                  session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
@@ -2399,7 +2407,8 @@ int ObSQLUtils::print_sql(char *buf,
                                   static_cast<const ObUpdateStmt*>(reconstruct_stmt),
                                   schema_guard,
                                   print_params,
-                                  param_store);
+                                  param_store,
+                                  session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {
@@ -2414,7 +2423,8 @@ int ObSQLUtils::print_sql(char *buf,
                                   static_cast<const ObMergeStmt*>(reconstruct_stmt),
                                   schema_guard,
                                   print_params,
-                                  param_store);
+                                  param_store,
+                                  session);
       printer.set_is_root(true);
       printer.set_is_first_stmt_for_hint(true);
       if (OB_FAIL(printer.do_print())) {

@@ -75,6 +75,7 @@ struct dblink_param_ctx{
   const char *set_client_charset_cstr_;
   const char *set_connection_charset_cstr_;
   const char *set_results_charset_cstr_;
+  const char *set_transaction_isolation_cstr_;
   dblink_param_ctx() :
   charset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
   ncharset_id_(static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID)), //utf8, deault value, don't modify it cause dblink pull meta need it
@@ -87,7 +88,8 @@ struct dblink_param_ctx{
   set_sql_mode_cstr_(NULL),
   set_client_charset_cstr_(NULL),
   set_connection_charset_cstr_(NULL),
-  set_results_charset_cstr_(NULL)
+  set_results_charset_cstr_(NULL),
+  set_transaction_isolation_cstr_(NULL)
   { }
   TO_STRING_KV(K_(charset_id),
                K_(ncharset_id),
@@ -100,7 +102,8 @@ struct dblink_param_ctx{
                K_(set_sql_mode_cstr),
                K_(set_client_charset_cstr),
                K_(set_connection_charset_cstr),
-               K_(set_results_charset_cstr));
+               K_(set_results_charset_cstr),
+               K_(set_transaction_isolation_cstr));
 };
 
 class ObISQLConnectionPool

@@ -282,7 +282,8 @@ int ObSelectStmtPrinter::print_set_op_stmt()
                                        schema_guard_,
                                        print_params_,
                                        param_store_,
-                                       /*force_col_alias*/true);
+                                       /*force_col_alias*/true,
+                                       session_);
       stmt_printer.set_column_list(column_list_);
       stmt_printer.set_is_first_stmt_for_hint(is_first_stmt_for_hint_);
       ObString set_op_str = ObString::make_string(

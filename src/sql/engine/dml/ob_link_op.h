@@ -51,23 +51,13 @@ public:
   explicit ObLinkOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input);
   virtual ~ObLinkOp() { destroy(); }
   virtual void destroy() { reset(); }
-
-  inline void set_link_driver_proto(common::sqlclient::DblinkDriverProto type) { link_type_ = type; }
   virtual void reset() = 0;
-  int init_dblink(uint64_t dblink_id, common::ObDbLinkProxy *dblink_proxy, bool in_xa_trascaction = false);
+  int init_dblink();
   int execute_link_stmt(const common::ObString &link_stmt_fmt,
             const common::ObIArray<ObParamPosIdx> &param_infos,
             const ObParamStore &param_store,
             ObReverseLink *reverse_link = NULL);
   virtual int inner_execute_link_stmt(const char *link_stmt) = 0;
-  static int init_dblink_param_ctx(ObExecContext &exec_ctx,
-                                   common::sqlclient::dblink_param_ctx &param_ctx,
-                                   common::sqlclient::DblinkDriverProto link_type,
-                                   uint64_t tenant_id,
-                                   uint64_t dblink_id,
-                                   uint32_t session_id,
-                                   int64_t next_sql_req_level);
-  static int get_charset_id(ObExecContext &exec_ctx, uint16_t &charset_id, uint16_t &ncharset_id);
 protected:
   int combine_link_stmt(const common::ObString &link_stmt_fmt,
                         const common::ObIArray<ObParamPosIdx> &param_infos,
@@ -90,7 +80,9 @@ protected:
   int64_t next_sql_req_level_;
   static const int64_t STMT_BUF_BLOCK;
   common::sqlclient::DblinkDriverProto link_type_;
-  bool in_xa_trascaction_; // is dblink write/read remote database in xa trasaction
+  bool in_xa_transaction_; // is dblink write/read remote database in xa transaction
+  common::sqlclient::dblink_param_ctx dblink_param_ctx_;
+  uint32_t tm_sessid_; // only used by link scan
   static const char * head_comment_fmt_;
   static const int64_t head_comment_length_;
   static const char *proxy_route_info_fmt_;

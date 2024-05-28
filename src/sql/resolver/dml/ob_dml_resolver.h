@@ -799,6 +799,8 @@ private:
   int resolve_global_hint(const ParseNode &hint_node,
                           ObGlobalHint &global_hint,
                           bool &resolved_hint);
+  int resolve_dblink_hint(const ParseNode &hint_node,
+                          ObGlobalHint &global_hint);
   int resolve_transform_hint(const ParseNode &hint_node,
                              bool &resolved_hint,
                              ObIArray<ObHint*> &trans_hints);

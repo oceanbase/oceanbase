@@ -4252,46 +4252,18 @@ int ObSelectLogPlan::generate_normal_raw_plan()
 int ObSelectLogPlan::generate_dblink_raw_plan()
 {
   int ret = OB_SUCCESS;
-  ObQueryCtx *query_ctx = NULL;
   // dblink_info hint
   int64_t tx_id = -1;
-  int64_t tm_sessid = -1;
+  uint32_t tm_sessid = 0;
+  bool xa_trans_stop_check_lock = false;
   uint64_t dblink_id = OB_INVALID_ID;
   const ObSelectStmt *stmt = get_stmt();
   ObLogicalOperator *top = NULL;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
-  } else if (NULL == (query_ctx = stmt->get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (FALSE_IT(dblink_id = stmt->get_dblink_id())) {
-  } else if (0 == dblink_id) { //dblink id = 0 means @!/@xxxx!
-    ObSQLSessionInfo *session = get_optimizer_context().get_session_info();
-    oceanbase::sql::ObReverseLink *reverse_dblink_info = NULL;
-    if (NULL == session) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), KP(session));
-    } else if (OB_FAIL(session->get_dblink_context().get_reverse_link(reverse_dblink_info))) {
-      LOG_WARN("failed to get reverse link info from session", K(ret), K(session->get_sessid()));
-    } else if (NULL == reverse_dblink_info) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else {
-      // set dblink_info, to unparse a link sql with dblink_info hint
-      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(
-                                                    reverse_dblink_info->get_tx_id(),
-                                                    reverse_dblink_info->get_tm_sessid());
-      LOG_DEBUG("set tx_id_ and tm_sessid to stmt",
-                                                    K(reverse_dblink_info->get_tx_id()),
-                                                    K(reverse_dblink_info->get_tm_sessid()));
-    }
   } else {
-    // save dblink_info hint
-    tx_id = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tx_id_hint();
-    tm_sessid = query_ctx->get_query_hint_for_update().get_global_hint().get_dblink_tm_sessid_hint();
-    // reset dblink hint, to unparse a link sql without dblink_info hint
-    query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
+    dblink_id = stmt->get_dblink_id();
   }
   if (OB_FAIL(ret)) {
     //do nothing
@@ -4316,13 +4288,6 @@ int ObSelectLogPlan::generate_dblink_raw_plan()
   } else {
     top->mark_is_plan_root();
     top->get_plan()->set_plan_root(top);
-    if (0 == dblink_id) {
-      // reset dblink info, to avoid affecting the next execution flow
-      query_ctx->get_query_hint_for_update().get_global_hint().reset_dblink_info_hint();
-    } else {
-      // restore dblink_info hint, ensure that the next execution process can get the correct dblink_info
-      query_ctx->get_query_hint_for_update().get_global_hint().merge_dblink_info_hint(tx_id, tm_sessid);
-    }
     LOG_TRACE("succeed to allocate loglinkscan", K(dblink_id));
   }
   return ret;

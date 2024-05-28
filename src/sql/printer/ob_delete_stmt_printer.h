@@ -28,8 +28,9 @@ public:
   ObDeleteStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDeleteStmt *stmt,
                       ObSchemaGetterGuard *schema_guard,
                       common::ObObjPrintParams print_params,
-                      const ParamStore *param_store = NULL) :
-    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store) {}
+                      const ParamStore *param_store = NULL,
+                      const ObSQLSessionInfo *session = NULL) :
+    ObDMLStmtPrinter(buf, buf_len, pos, stmt, schema_guard, print_params, param_store, session) {}
   virtual ~ObDeleteStmtPrinter() {}
 
   void init(char *buf, int64_t buf_len, int64_t *pos, ObDeleteStmt *stmt);

@@ -118,7 +118,11 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       subschema_ctx_(allocator_),
       all_local_session_vars_(allocator),
       total_memstore_read_row_count_(0),
-      total_ssstore_read_row_count_(0)
+      total_ssstore_read_row_count_(0),
+      tx_id_(0),
+      tm_sessid_(0),
+      hint_xa_trans_stop_check_lock_(false),
+      main_xa_trans_branch_(false)
 {
 }
 

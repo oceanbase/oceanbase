@@ -34,10 +34,18 @@ class ObDblinkService
 {
 public:
 #ifdef OB_BUILD_DBLINK
-  static uint64_t get_current_tenant_id();
   static common::sqlclient::ObTenantOciEnvs * get_tenant_oci_envs();
   static int init_oci_envs_func_ptr();
 #endif
+  static int get_charset_id(ObSQLSessionInfo *session_info,
+                            uint16_t &charset_id,
+                            uint16_t &ncharset_id);
+  static int init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &param_ctx,
+                                                    sql::ObSQLSessionInfo *session_info,
+                                                    ObIAllocator &allocator,
+                                                    uint64_t dblink_id,
+                                                    common::sqlclient::DblinkDriverProto link_type = common::sqlclient::DblinkDriverProto::DBLINK_DRV_OB,
+                                                    common::sqlclient::DblinkPoolType pool_type = common::sqlclient::DblinkPoolType::DBLINK_POOL_DEF);
   static int check_lob_in_result(common::sqlclient::ObMySQLResult *result, bool &have_lob);
   static int get_length_from_type_text(ObString &type_text, int32_t &length);
   static int get_local_session_vars(sql::ObSQLSessionInfo *session_info,
@@ -50,6 +58,25 @@ public:
                                 const char *&set_client_charset,
                                 const char *&set_connection_charset,
                                 const char *&set_results_charset);
+  static int get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info,
+                                                const char *&set_isolation_level);
+public:
+  static const char *SET_ISOLATION_LEVEL_READ_COMMITTED;
+  static const char *SET_ISOLATION_LEVEL_REPEATABLE_READ;
+  static const char *SET_ISOLATION_LEVEL_SERIALIZABLE;
+  static const char *SET_ISOLATION_LEVEL_READ_COMMITTED_MYSQL_MODE;
+  static const char *SET_ISOLATION_LEVEL_REPEATABLE_READ_MYSQL_MODE;
+  static const char *SET_ISOLATION_LEVEL_SERIALIZABLE_MYSQL_MODE;
+  static const char *SET_RESULTS_CHARSET_NULL;
+  static const char *SET_CLIENT_CHARSET_UTF8MB4;
+  static const char *SET_CLIENT_CHARSET_GBK;
+  static const char *SET_CLIENT_CHARSET_BINARY;
+  static const char *SET_CONNECTION_CHARSET_UTF8MB4;
+  static const char *SET_CONNECTION_CHARSET_GBK;
+  static const char *SET_CONNECTION_CHARSET_BINARY;
+  static const char *SET_RESULTS_CHARSET_UTF8MB4;
+  static const char *SET_RESULTS_CHARSET_GBK;
+  static const char *SET_RESULTS_CHARSET_BINARY;
 };
 
 enum DblinkGetConnType {
@@ -120,7 +147,8 @@ private:
 class ObDblinkUtils
 {
 public:
-  static int has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool has_any_dblink = false);
+  static int has_reverse_link_or_any_dblink(const ObDMLStmt *stmt, bool &has, bool enable_check_any_dblink = false);
+  static int gather_dblink_id(const ObDMLStmt *stmt, ObIArray<int64_t> &dblink_id_array);
 };
 
 class ObSQLSessionInfo;
@@ -134,7 +162,8 @@ public:
       reverse_dblink_(NULL),
       reverse_dblink_buf_(NULL),
       sys_var_reverse_info_buf_(NULL),
-      sys_var_reverse_info_buf_size_(0)
+      sys_var_reverse_info_buf_size_(0),
+      tx_id_()
   {}
   ~ObDblinkCtxInSession()
   {
@@ -151,11 +180,13 @@ public:
   }
   int register_dblink_conn_pool(common::sqlclient::ObCommonServerConnectionPool *dblink_conn_pool);
   int free_dblink_conn_pool();
-  int get_dblink_conn(uint64_t dblink_id, common::sqlclient::ObISQLConnection *&dblink_conn);
+  int get_dblink_conn(uint64_t dblink_id, common::sqlclient::ObISQLConnection *&dblink_conn, uint32_t tm_sessid = 0);
+  static int revert_dblink_conn(common::sqlclient::ObISQLConnection *&dblink_conn);
   int set_dblink_conn(common::sqlclient::ObISQLConnection *dblink_conn);
   int clean_dblink_conn(const bool force_disconnect);
   inline bool is_dblink_xa_tras() { return !dblink_conn_holder_array_.empty(); }
   int get_reverse_link(ObReverseLink *&reverse_dblink);
+  transaction::ObTransID &get_tx_id() { return tx_id_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObReverseLink *reverse_dblink_;
@@ -166,6 +197,7 @@ private:
   ObArray<common::sqlclient::ObCommonServerConnectionPool *> dblink_conn_pool_array_;  //for dblink read to free connection when session drop.
   ObArray<int64_t> dblink_conn_holder_array_; //for dblink write to hold connection during trasaction.
   ObString last_reverse_info_values_;
+  transaction::ObTransID tx_id_;
 };
 
 struct ObParamPosIdx

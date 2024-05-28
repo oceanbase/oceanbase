@@ -24,8 +24,8 @@
 #include "share/ob_tenant_role.h"//ObTenantRole
 #ifdef OB_BUILD_DBLINK
 #include "lib/oracleclient/ob_oci_environment.h"
+#include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
-#include "lib/mysqlclient/ob_tenant_oci_envs.h"
 namespace oceanbase
 {
 namespace common {
@@ -223,6 +223,14 @@ namespace detector
 #define TenantErrsimEvent
 #endif
 
+#ifdef OB_BUILD_DBLINK
+#define ObTenantDblinkKeep common::sqlclient::ObTenantDblinkKeeper*,
+#define ObTenantOciEnv common::sqlclient::ObTenantOciEnvs*,
+#else
+#define ObTenantDblinkKeep
+#define ObTenantOciEnv
+#endif
+
 // 在这里列举需要添加的租户局部变量的类型，租户会为每种类型创建一个实例。
 // 实例的初始化和销毁逻辑由MTL_BIND接口指定。
 // 使用MTL接口可以获取实例。
@@ -318,7 +326,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObUDRMgr*,                        \
       sql::ObFLTSpanMgr*,                            \
       ObTestModule*,                                 \
-      oceanbase::common::sqlclient::ObTenantOciEnvs*, \
+      ObTenantOciEnv                                 \
       rootserver::ObHeartbeatService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
@@ -330,7 +338,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::checkpoint::ObCheckpointDiagnoseMgr*,\
       storage::ObStorageHADiagMgr*,                 \
       share::ObIndexUsageInfoMgr*,                  \
-      table::ObTableGroupCommitMgr*                 \
+      ObTenantDblinkKeep                            \
+      table::ObTableGroupCommitMgr*                \
   )
 
 

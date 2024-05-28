@@ -203,18 +203,21 @@ int ObDelUpdLogPlan::generate_dblink_raw_plan()
     LOG_WARN("failed to allocate link dml as top", K(ret));
   } else if (OB_FAIL(make_candidate_plans(top))) {
     LOG_WARN("failed to make candidate plans", K(ret));
-  } else if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt())) {
-    LOG_WARN("failed to set link stmt", K(ret));
   } else {
     set_plan_root(top);
     bool has_reverse_link = false;
     if (OB_FAIL(ObDblinkUtils::has_reverse_link_or_any_dblink(stmt, has_reverse_link))) {
       LOG_WARN("failed to exec has_reverse_link", K(ret));
+    } else if (OB_FAIL(ObDblinkUtils::gather_dblink_id(stmt, static_cast<ObLogLinkDml *>(top)->get_related_dblink_ids()))) {
+      LOG_WARN("failed to exec gather_dblink_id", K(ret));
     } else {
       uint64_t dblink_id = stmt->get_dblink_id();
       top->set_dblink_id(dblink_id);
       static_cast<ObLogLinkDml *>(top)->set_reverse_link(has_reverse_link);
       static_cast<ObLogLinkDml *>(top)->set_dml_type(stmt->get_stmt_type());
+      if (OB_FAIL(static_cast<ObLogLink *>(top)->set_link_stmt())) {
+        LOG_WARN("failed to set link stmt", K(ret));
+      }
     }
   }
   return ret;

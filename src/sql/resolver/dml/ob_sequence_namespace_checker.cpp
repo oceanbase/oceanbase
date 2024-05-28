@@ -241,9 +241,9 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
   exists = false;
   has_currval = false;
   dblink_param_ctx param_ctx;
+  common::ObArenaAllocator allocator;
   int64_t sql_request_level = 0;
   uint64_t tenant_id = OB_INVALID_ID;
-  uint64_t dblink_id = OB_INVALID_ID;
   DblinkDriverProto link_type = DBLINK_DRV_OB;
   ObDbLinkProxy *dblink_proxy = GCTX.dblink_proxy_;
   if (OB_ISNULL(dblink_proxy) || OB_ISNULL(session_info) || OB_ISNULL(dblink_schema)) {
@@ -256,23 +256,18 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
   } else if (sql_request_level < 1 || sql_request_level > 3) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid sql_request_level", K(sql_request_level), K(ret));
-  } else if (!lib::is_oracle_mode() &&
-             OB_FAIL(ObDblinkService::get_set_sql_mode_cstr(session_info,
-                                                            param_ctx.set_sql_mode_cstr_,
-                                                            session_info->get_allocator()))) {
-    LOG_WARN("failed to get sql mode cstr", K(ret));
+  } else if (OB_FAIL(ObDblinkService::init_dblink_param_ctx(param_ctx,
+                                                            session_info,
+                                                            allocator, //useless in oracle mode
+                                                            dblink_schema->get_dblink_id(),
+                                                            static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()),
+                                                            DblinkPoolType::DBLINK_POOL_SCHEMA))) {
+    LOG_WARN("failed to init dblink param ctx", K(ret), K(param_ctx));
   } else {
-    tenant_id = dblink_schema->get_tenant_id();
-    dblink_id = dblink_schema->get_dblink_id();
-    link_type = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto());
-    // don't need set param_ctx.charset_id_ and param_ctx.ncharset_id_, default value is what we need.
-    param_ctx.pool_type_ = DblinkPoolType::DBLINK_POOL_SCHEMA;
-    param_ctx.sql_request_level_ = sql_request_level;
-    param_ctx.tenant_id_ = tenant_id;
-    param_ctx.dblink_id_ = dblink_id;
-    param_ctx.link_type_ = link_type;
-    param_ctx.sessid_ = session_info->get_sessid();
-    LOG_DEBUG("get link sequence schema", K(sequence_name), K(database_name), KP(dblink_schema), K(ret));
+    // param_ctx.charset_id_ and param_ctx.ncharset_id_, default value is what we need.
+    param_ctx.charset_id_ = common::ObNlsCharsetId::CHARSET_AL32UTF8_ID;
+    param_ctx.ncharset_id_ = common::ObNlsCharsetId::CHARSET_AL32UTF8_ID;
+    LOG_TRACE("get link sequence schema", K(param_ctx), K(sequence_name), K(database_name), KP(dblink_schema), K(ret));
   }
   if (OB_SUCC(ret)) {
     ObSqlString sql;
@@ -305,11 +300,22 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
                                                     dblink_schema->get_conn_string(),
                                                     dblink_schema->get_cluster_name()))) {
         LOG_WARN("create dblink pool failed", K(ret), K(param_ctx));
-      } else if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx,
-                                                      dblink_conn))) {
-        LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
-      } else if (OB_FAIL(session_info->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
-        LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+      } else if (OB_FAIL(session_info->get_dblink_context().get_dblink_conn(param_ctx.dblink_id_, dblink_conn))) {
+        LOG_WARN("failed to get dblink connection from session", K(ret));
+      } else if (NULL == dblink_conn) {
+        if (OB_FAIL(dblink_proxy->acquire_dblink(param_ctx, dblink_conn))) {
+          LOG_WARN("failed to acquire dblink", K(ret), K(param_ctx));
+        } else if (OB_FAIL(session_info->get_dblink_context().register_dblink_conn_pool(dblink_conn->get_common_server_pool()))) {
+          LOG_WARN("failed to register dblink conn pool to current session", K(ret));
+        } else if (OB_FAIL(session_info->get_dblink_context().set_dblink_conn(dblink_conn))) {
+          LOG_WARN("failed to set dblink connection to session", K(ret));
+        } else if (OB_FAIL(session_info->get_dblink_context().get_dblink_conn(param_ctx.dblink_id_, dblink_conn))) { // will add a rlock on dblink conn, means this dblink_conn is inuse
+          LOG_WARN("failed to get dblink connection from session", K(ret), K(param_ctx.dblink_id_));
+        } else {
+          LOG_TRACE("link sequence get connection from dblink pool", K(lbt()));
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(dblink_proxy->dblink_read(dblink_conn, res, sql.ptr()))) {
         if (OB_ERR_SEQ_NOT_EXIST != ret) {
           exists = true;
@@ -345,12 +351,12 @@ int ObSequenceNamespaceChecker::check_link_sequence_exists(const ObDbLinkSchema 
           LOG_WARN("failed to close oci result", K(tmp_ret));
         }
   #endif
-        if (OB_SUCCESS != (tmp_ret = dblink_proxy->release_dblink(param_ctx.link_type_, dblink_conn))) {
-          LOG_WARN("failed to relese connection", K(tmp_ret));
+        // release rlock on dblink_conn
+        if (OB_SUCCESS != (tmp_ret = ObDblinkCtxInSession::revert_dblink_conn(dblink_conn))) {
+          LOG_WARN("failed to revert dblink conn", K(tmp_ret), KP(dblink_conn));
         }
-        if (OB_SUCC(ret)) {
-          ret = tmp_ret;
-        }
+        dblink_conn = NULL;
+        //release dblink connection by session
       }
     }
   }

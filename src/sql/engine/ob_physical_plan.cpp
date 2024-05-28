@@ -98,8 +98,6 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     stat_(),
     op_stats_(),
     need_drive_dml_query_(false),
-    tx_id_(-1),
-    tm_sessid_(-1),
     var_init_exprs_(allocator_),
     is_returning_(false),
     is_late_materialized_(false),
@@ -228,9 +226,6 @@ void ObPhysicalPlan::reset()
   append_table_id_ = 0;
   stat_.expected_worker_map_.destroy();
   stat_.minimal_worker_map_.destroy();
-  tx_id_ = -1;
-  tm_sessid_ = -1;
-  var_init_exprs_.reset();
   need_record_plan_info_ = false;
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
@@ -242,7 +237,6 @@ void ObPhysicalPlan::reset()
   udf_has_dml_stmt_ = false;
   disable_auto_memory_mgr_ = false;
 }
-
 void ObPhysicalPlan::destroy()
 {
 #ifndef NDEBUG

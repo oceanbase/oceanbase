@@ -92,7 +92,8 @@ public:
   ObDMLStmtPrinter(char *buf, int64_t buf_len, int64_t *pos, const ObDMLStmt *stmt,
                    ObSchemaGetterGuard *schema_guard,
                    common::ObObjPrintParams print_params,
-                   const ParamStore *param_store = NULL);
+                   const ParamStore *param_store = NULL,
+                   const ObSQLSessionInfo *session = NULL);
   virtual ~ObDMLStmtPrinter();
   void enable_print_temp_table_as_cte() { print_cte_ = true; }
   void disable_print_temp_table_as_cte() { print_cte_ = false; }
@@ -115,6 +116,7 @@ public:
                   bool no_print_alias = false);
   int print_table_with_subquery(const TableItem *table_item);
   int print_base_table(const TableItem *table_item);
+  int prepare_dblink_hint(ObQueryHint &query_hint_dblink);
   int print_hint();
   void set_is_root(bool is_root) { is_root_ = is_root; }
   void set_is_first_stmt_for_hint(bool is_first_stmt) { is_first_stmt_for_hint_ = is_first_stmt; }
@@ -166,6 +168,7 @@ protected:
   ObObjPrintParams print_params_;
   ObRawExprPrinter expr_printer_;
   const ParamStore *param_store_;
+  const ObSQLSessionInfo *session_;
 };
 
 }

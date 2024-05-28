@@ -508,6 +508,16 @@ public:
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
   int get_local_session_vars(int64_t idx, const ObSolidifiedVarsContext *&local_vars);
+  void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
+  int64_t get_tx_id() const { return tx_id_; }
+  void set_tm_sessid(uint32_t tm_sessid) { tm_sessid_ = tm_sessid; }
+  uint32_t get_tm_sessid() const { return tm_sessid_; }
+  void set_hint_xa_trans_stop_check_lock(int64_t hint_xa_trans_stop_check_lock) { hint_xa_trans_stop_check_lock_ = hint_xa_trans_stop_check_lock; }
+  int64_t get_hint_xa_trans_stop_check_lock() const { return hint_xa_trans_stop_check_lock_; }
+  void set_main_xa_trans_branch(bool main_xa_trans_branch) { main_xa_trans_branch_ = main_xa_trans_branch; }
+  bool get_main_xa_trans_branch() const { return main_xa_trans_branch_; }
+  ObIArray<uint64_t> &get_dblink_ids() { return dblink_ids_; }
+  inline int keep_dblink_id(uint64_t dblink_id) { return add_var_to_array_no_dup(dblink_ids_, dblink_id); }
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -648,6 +658,11 @@ private:
   common::ObFixedArray<ObSolidifiedVarsContext, common::ObIAllocator> all_local_session_vars_;
   int64_t total_memstore_read_row_count_;
   int64_t total_ssstore_read_row_count_;
+  int64_t tx_id_; //for dblink recover xa tx
+  uint32_t tm_sessid_; //for dblink get connection attached on tm session
+  bool hint_xa_trans_stop_check_lock_; // for dblink to stop check stmt lock in xa trans
+  bool main_xa_trans_branch_; // for dblink to indicate weather this sql is executed in main_xa_trans_branch
+  ObSEArray<uint64_t, 8> dblink_ids_;
 };
 
 }
