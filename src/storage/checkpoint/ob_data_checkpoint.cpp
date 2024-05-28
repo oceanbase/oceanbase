@@ -306,7 +306,7 @@ ObTabletID ObDataCheckpoint::get_tablet_id() const
 
 bool ObDataCheckpoint::is_flushing() const
 {
-  return !ls_freeze_finished_ || !prepare_list_.is_empty();
+  return !ls_freeze_finished_;
 }
 
 bool ObDataCheckpoint::is_empty()
