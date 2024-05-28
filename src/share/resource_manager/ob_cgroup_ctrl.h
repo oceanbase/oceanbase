@@ -151,7 +151,7 @@ public:
   int remove_both_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   static int remove_dir_(const char *curr_dir);
 
-  int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
+  int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OBCG_DEFAULT, const char *base_path = "");
 
   // 从指定租户cgroup组移除指定tid
   int remove_self_from_cgroup(const uint64_t tenant_id);
