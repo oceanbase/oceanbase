@@ -338,8 +338,9 @@ LATCH_DEF(ASH_LOCK, 317, "ash lock", LATCH_FIFO, 2000, 0, true)
 
 LATCH_DEF(TRANS_ACCESS_LOCK, 328, "trans read/write access latch", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TRANS_FLUSH_REDO_LOCK, 329, "trans flush redo log latch", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 330, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 336, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

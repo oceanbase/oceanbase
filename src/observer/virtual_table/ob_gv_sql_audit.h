@@ -17,6 +17,7 @@
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "common/ob_range.h"
 #include "observer/mysql/ob_ra_queue.h"
+#include "observer/mysql/ob_dl_queue.h"
 
 namespace oceanbase
 {
@@ -194,7 +195,7 @@ private:
   int64_t start_id_;
   int64_t end_id_;
   int64_t cur_id_;
-  common::ObRaQueue::Ref ref_;
+  common::ObDlQueue::DlRef ref_;
   common::ObAddr *addr_;
   common::ObString ipstr_;
   int32_t port_;

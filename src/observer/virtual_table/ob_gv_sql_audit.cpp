@@ -57,7 +57,7 @@ ObGvSqlAudit::~ObGvSqlAudit() {
 void ObGvSqlAudit::reset()
 {
   if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    if (cur_mysql_req_mgr_ != nullptr && ref_.idx_ != -1) {
+    if (cur_mysql_req_mgr_ != nullptr && ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -211,7 +211,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
           // inc ref count by 1
           if (with_tenant_ctx_ != nullptr) { // free old memory
             // before freeing tenant ctx, we must release ref_ if possible
-            if (nullptr != prev_req_mgr && ref_.idx_ != -1) {
+            if (nullptr != prev_req_mgr && ref_.is_not_null()) {
               prev_req_mgr->revert(&ref_);
             }
             with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -275,7 +275,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
       if (OB_ITER_END == ret) {
         // release last tenant's ctx
         if (with_tenant_ctx_ != nullptr) {
-          if (prev_req_mgr != nullptr && ref_.idx_ != -1) {
+          if (prev_req_mgr != nullptr && ref_.is_not_null()) {
             prev_req_mgr->revert(&ref_);
           }
           with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -288,7 +288,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret)) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
+    if (ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     do {

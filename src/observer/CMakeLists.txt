@@ -105,6 +105,8 @@ ob_set_subtarget(ob_server mysql
   mysql/obsm_row.cpp
   mysql/obsm_utils.cpp
   mysql/obmp_set_option.cpp
+  mysql/ob_dl_queue.cpp
+  mysql/ob_construct_queue.cpp
 )
 
 ob_set_subtarget(ob_server omt
