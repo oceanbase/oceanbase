@@ -22,20 +22,28 @@ namespace sql
 class ObExecContext;
 class ObSQLSessionInfo;
 } // namespace sql
+namespace transaction
+{
+class ObTxDesc;
+} // namespace transaction
 namespace observer
 {
 
 class ObTableLoadExecCtx
 {
 public:
-  ObTableLoadExecCtx() = default;
+  ObTableLoadExecCtx() : tx_desc_(nullptr) {}
   virtual ~ObTableLoadExecCtx() = default;
   virtual common::ObIAllocator *get_allocator() = 0;
   virtual sql::ObSQLSessionInfo *get_session_info() = 0;
   virtual sql::ObExecContext *get_exec_ctx() = 0; // for sql statistics
-  virtual int check_status() = 0;
   virtual bool is_valid() const = 0;
+  virtual int check_status();
+  void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
+  transaction::ObTxDesc *get_tx_desc() const { return tx_desc_; }
   DECLARE_PURE_VIRTUAL_TO_STRING;
+protected:
+  transaction::ObTxDesc *tx_desc_;
 };
 
 class ObTableLoadSqlExecCtx : public ObTableLoadExecCtx

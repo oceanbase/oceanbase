@@ -278,14 +278,21 @@ int ObTableLoadCoordinatorCtx::set_status_abort()
 int ObTableLoadCoordinatorCtx::check_status(ObTableLoadStatusType status) const
 {
   int ret = OB_SUCCESS;
-  obsys::ObRLockGuard guard(status_lock_);
-  if (OB_UNLIKELY(status != status_)) {
-    if (ObTableLoadStatusType::ERROR == status_) {
-      ret = error_code_;
-    } else if (ObTableLoadStatusType::ABORT == status_) {
-      ret = OB_CANCELED;
-    } else {
-      ret = OB_STATE_NOT_MATCH;
+  {
+    obsys::ObRLockGuard guard(status_lock_);
+    if (OB_UNLIKELY(status != status_)) {
+      if (ObTableLoadStatusType::ERROR == status_) {
+        ret = error_code_;
+      } else if (ObTableLoadStatusType::ABORT == status_) {
+        ret = OB_CANCELED;
+      } else {
+        ret = OB_STATE_NOT_MATCH;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(exec_ctx_->check_status())) {
+      LOG_WARN("fail to check status", KR(ret));
     }
   }
   return ret;
