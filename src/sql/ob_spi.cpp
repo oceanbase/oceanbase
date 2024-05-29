@@ -9595,6 +9595,18 @@ int ObSPIService::spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t lin
   return ret;
 }
 
+int ObSPIService::spi_opaque_assign_null(int64_t opaque_ptr)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque *>(opaque_ptr);
+  CK (OB_NOT_NULL(opaque));
+  OX (opaque->~ObPLOpaque()); // release orig resource
+  OX (new (opaque) ObPLOpaque()); // reinit a new opaque which is invalid.
+#endif
+  return ret;
+}
+
 ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   old_sub_plsql_exec_time_(-1),
   execute_start_(ObTimeUtility::current_time()),

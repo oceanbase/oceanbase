@@ -534,6 +534,10 @@ public:
                                bool default_construct,
                                common::ObObj &obj) const;
   virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
+  virtual int generate_assign_with_null(ObPLCodeGenerator &generator,
+                                        const ObPLINS &ns,
+                                        jit::ObLLVMValue &allocator,
+                                        jit::ObLLVMValue &dest) const;
 };
 #endif
 //---------- for ObCollectionType ----------

@@ -100,6 +100,7 @@ public:
     jit::ObLLVMFunction spi_check_autonomous_trans_;
     jit::ObLLVMFunction spi_pl_profiler_before_record_;
     jit::ObLLVMFunction spi_pl_profiler_after_record_;
+    jit::ObLLVMFunction spi_opaque_assign_null_;
   };
 
   struct EHStack

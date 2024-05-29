@@ -194,7 +194,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_pl_profiler_before_record));
   jit::ObLLVMHelper::add_symbol(ObString("spi_pl_profiler_after_record"),
                                 (void*)(sql::ObSPIService::spi_pl_profiler_after_record));
-
+  jit::ObLLVMHelper::add_symbol(ObString("spi_opaque_assign_null"),
+                                (void*)(sql::ObSPIService::spi_opaque_assign_null));
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
   OZ (jit_lock_.init(32));

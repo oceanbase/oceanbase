@@ -799,6 +799,7 @@ public:
 
   static int spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t line, int64_t level);
 
+  static int spi_opaque_assign_null(int64_t opaque_ptr);
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,

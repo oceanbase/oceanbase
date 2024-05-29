@@ -2161,6 +2161,27 @@ int ObOpaqueType::free_session_var(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+int ObOpaqueType::generate_assign_with_null(ObPLCodeGenerator &generator,
+                                            const ObPLINS &ns,
+                                            jit::ObLLVMValue &allocator,
+                                            jit::ObLLVMValue &dest) const
+{
+  int ret = OB_SUCCESS;
+  jit::ObLLVMType int_type;
+  jit::ObLLVMValue ret_err;
+  jit::ObLLVMValue dest_addr;
+  ObSEArray<ObLLVMValue, 1> args;
+  OZ (generator.get_helper().get_llvm_type(ObIntType, int_type));
+  OZ (generator.get_helper().create_ptr_to_int(ObString("cast_ptr_to_int64"), dest, int_type, dest_addr));
+  OZ (args.push_back(dest_addr));
+  OZ (generator.get_helper().create_call(ObString("spi_opaque_assign_null"),
+                                         generator.get_spi_service().spi_opaque_assign_null_,
+                                         args,
+                                         ret_err));
+  OZ (generator.check_success(ret_err));
+  return ret;
+}
+
 //---------- for ObCollectionType ----------
 
 int ObCollectionType::deep_copy(common::ObIAllocator &alloc, const ObCollectionType &other)
