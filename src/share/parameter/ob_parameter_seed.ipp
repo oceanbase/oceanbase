@@ -1270,11 +1270,6 @@ DEF_STR(plsql_code_type, OB_TENANT_PARAMETER, "native",
 DEF_BOOL(plsql_debug, OB_TENANT_PARAMETER, "False",
          "specifies whether or not PL/SQL library units will be compiled for debugging",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(plsql_optimize_level, OB_TENANT_PARAMETER, "1",
-        "specifies the optimization level that will be used to"
-        "compile PL/SQL library units. The higher the setting of this parameter, the more effort"
-        "the compiler makes to optimize PL/SQL library units",
-        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(plsql_v2_compatibility, OB_TENANT_PARAMETER, "False",
          "allows to control store routine compile action at DDL stage",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1918,3 +1913,6 @@ DEF_BOOL(_allow_skip_replay_redo_after_detete_tablet, OB_TENANT_PARAMETER, "FALS
          "allow skip replay invalid redo log after tablet delete transaction is committed."
          "The default value is FALSE. Value: TRUE means we allow skip replaying this invalid redo log, False means we do not alow such behavior.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
+        "The maximum number of threads that an observer node can compile PL concurrently.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
