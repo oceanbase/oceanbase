@@ -969,8 +969,8 @@ int ObPrivSqlService::gen_routine_priv_dml(
     if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; }
     if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
         || OB_FAIL(dml.add_pk_column("user_id", routine_priv_key.user_id_))
-        || OB_FAIL(dml.add_pk_column("database_name", routine_priv_key.db_))
-        || OB_FAIL(dml.add_pk_column("routine_name", routine_priv_key.routine_))
+        || OB_FAIL(dml.add_pk_column("database_name", ObHexEscapeSqlStr(routine_priv_key.db_)))
+        || OB_FAIL(dml.add_pk_column("routine_name", ObHexEscapeSqlStr(routine_priv_key.routine_)))
         || OB_FAIL(dml.add_pk_column("routine_type", routine_priv_key.routine_type_))
         || OB_FAIL(dml.add_column("all_priv", all_priv))) {
       LOG_WARN("add column failed", K(ret));
