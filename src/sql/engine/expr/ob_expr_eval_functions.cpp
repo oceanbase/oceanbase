@@ -1200,6 +1200,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
   NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
   NULL, // ObExprArray::eval_array,                                   /* 720 */
+  NULL, // ObExprVectorL1Distance::calc_l1_distance,                  /* 721 */
+  NULL, // ObExprVectorL2Distance::calc_l2_distance,                  /* 722 */
+  NULL, // ObExprVectorCosineDistance::calc_cosine_distance,          /* 723 */
+  NULL, // ObExprVectorIPDistance::calc_inner_product,                /* 724 */
+  NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
+  NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

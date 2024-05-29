@@ -855,6 +855,12 @@ typedef enum ObItemType
   T_FUN_SYS_PRIV_ST_GEOHASH = 1735,
   T_FUN_SYS_PRIV_ST_MAKEPOINT = 1736,
   T_FUN_SYS_ARRAY = 1737,
+  T_FUN_SYS_L1_DISTANCE = 1738,
+  T_FUN_SYS_L2_DISTANCE = 1739,
+  T_FUN_SYS_INNER_PRODUCT = 1740,
+  T_FUN_SYS_COSINE_DISTANCE = 1741,
+  T_FUN_SYS_VECTOR_DIMS = 1742,
+  T_FUN_SYS_VECTOR_NORM = 1743,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
