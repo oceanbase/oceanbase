@@ -274,6 +274,10 @@ public:
         v.retry_type_ = RETRY_TYPE_NONE;
       }
       v.no_more_test_ = true;
+    } else if (stmt::T_LOAD_DATA == v.result_.get_stmt_type()) {
+      v.client_ret_ = err;
+      v.retry_type_ = RETRY_TYPE_NONE;
+      v.no_more_test_ = true;
     }
   }
 };
