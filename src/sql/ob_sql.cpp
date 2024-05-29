@@ -189,6 +189,7 @@ int ObSql::stmt_prepare(const common::ObString &stmt,
                         bool is_inner_sql/*true*/)
 {
   int ret = OB_SUCCESS;
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
@@ -198,6 +199,9 @@ int ObSql::stmt_prepare(const common::ObString &stmt,
   CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, false);
   if (OB_FAIL(ret) && OB_SUCCESS == result.get_errcode()) {
     result.set_errcode(ret);
+  }
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
   }
   return ret;
 }
@@ -216,6 +220,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
            "execution_id", result.get_session().get_current_execution_id());
 #endif
   NG_TRACE_EXT(parse_begin, OB_ID(stmt), trunc_stmt.string(), OB_ID(stmt_len), stmt.length());
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   //1 check inited
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
@@ -240,6 +245,9 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   FLT_SET_TAG(database_id, result.get_session().get_database_id(),
                 sql_id, context.sql_id_);
 
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
+  }
   return ret;
 }
 
@@ -252,6 +260,7 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
 {
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("failed to do sanity check", K(ret));
   } else if (OB_FAIL(init_result_set(context, result))) {
@@ -270,6 +279,9 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
     result.set_errcode(ret);
   }
   FLT_SET_TAG(sql_id, context.sql_id_);
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
+  }
   return ret;
 }
 
@@ -5717,9 +5729,15 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
 
     // CHECK for `TXN_FREE_ROUTE`
     if (should_reroute && !session.is_inner() && session.is_in_transaction()) {
-      auto stmt_type = plan->get_stmt_type();
+      bool ac = true;
+      session.get_autocommit(ac);
+      const stmt::StmtType stmt_type = plan->get_stmt_type();
       bool fixed_route = true;
-      if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
+      if (ac && !session.get_tx_desc()->is_explicit()) {
+        fixed_route = false;
+        // for autocommit txn, always allow reroute, because such
+        // transaction will not corss multiple node
+      } else if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
         // current is multi-stmt
       } else if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, false)) {
         // stmt is not DML
@@ -5925,6 +5943,31 @@ int ObSql::get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_s
 //   }
 //   return ret;
 // }
+
+// If handel failed, rollback implicit started txn by current stmt
+// if autocommit is on.
+// this is because the txn may be started during generate plan for some
+// strange Query.
+// We have found one situation:
+// udf contains DML stmt and with deterministic property in MySQL mode
+void ObSql::rollback_implicit_trans_when_fail(ObResultSet &result, int &ret)
+{
+  bool ac = false;
+  result.get_session().get_autocommit(ac);
+  const transaction::ObTxDesc *tx = result.get_session().get_tx_desc();
+  if (ac && tx && tx->get_tx_id().is_valid() && !tx->is_explicit()) {
+    const transaction::ObTransID txid = tx->get_tx_id();
+    int tmp_ret = OB_SUCCESS;
+    bool need_disconnect = false;
+    if (OB_TMP_FAIL(ObSqlTransControl::rollback_trans(&result.get_session(), need_disconnect))) {
+      LOG_WARN("rollback transaction fail, will disconnect", K(tmp_ret), K(result.get_session()), K(txid));
+      result.get_exec_context().get_need_disconnect_for_update() = true;
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("rollback transaction started during get-plan success", K(ret), K(txid));
+    }
+  }
+}
 
 }//end of namespace sql
 }//end of namespace oceanbase
