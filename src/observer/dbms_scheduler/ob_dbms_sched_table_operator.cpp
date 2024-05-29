@@ -100,26 +100,6 @@ int ObDBMSSchedTableOperator::update_for_start(
   return ret;
 }
 
-int ObDBMSSchedTableOperator::seperate_job_id_from_name(ObString &job_name, int64_t &job_id)
-{
-  int ret = OB_SUCCESS;
-  const char* prefix = "JOB$_";
-  job_id = 0;
-  if (job_name.prefix_match(prefix)) {
-    char nptr[JOB_NAME_MAX_SIZE];
-    char *endptr = NULL;
-    snprintf(nptr, JOB_NAME_MAX_SIZE, "%.*s", job_name.length(), job_name.ptr());
-    job_id = strtoll(nptr + strlen(prefix), &endptr, 10);
-    if (job_id <= 0) {
-      LOG_WARN("job_id is not right", K(job_name), K(nptr), K(job_id));
-    } else if (*endptr != '\0' || job_id <= JOB_ID_OFFSET) {
-      job_id = 0; // use job_info.job_ when job_id is not formal
-    }
-  }
-  return ret;
-}
-
-
 int ObDBMSSchedTableOperator::_build_job_drop_dml(int64_t now, ObDBMSSchedJobInfo &job_info, ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
@@ -181,20 +161,25 @@ int ObDBMSSchedTableOperator::_build_job_log_dml(
   int ret = OB_SUCCESS;
   ObDMLSqlSplicer dml;
   int64_t tenant_id = job_info.tenant_id_;
+  uint64_t data_version = 0;
   OZ (dml.add_gmt_create(now));
   OZ (dml.add_gmt_modified(now));
-  OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
-  int64_t job_id = 0;
-  OZ (seperate_job_id_from_name(job_info.get_job_name(), job_id));
-  if (job_id <= 0) {
-    job_id = job_info.get_job_id();
-  }
-  OZ (dml.add_pk_column("job", job_id));
+  OZ (dml.add_pk_column("job", job_info.get_job_id()));
   OZ (dml.add_time_column("time", now));
   OZ (dml.add_column("code", err));
   OZ (dml.add_column("message", ObHexEscapeSqlStr(errmsg.empty() ? ObString("SUCCESS") : errmsg)));
   OZ (dml.add_column("job_class", job_info.job_class_));
-  OZ (dml.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME, sql));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+  } else if (DATA_VERSION_4_2_4_0 <= data_version) {
+    OZ (dml.add_pk_column("job_name", job_info.job_name_));
+    OZ (dml.splice_insert_sql(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME, sql));
+  } else {
+    OZ (dml.add_pk_column("tenant_id", ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+    OZ (dml.splice_insert_sql(OB_ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL_TNAME, sql));
+  }
   return ret;
 }
 

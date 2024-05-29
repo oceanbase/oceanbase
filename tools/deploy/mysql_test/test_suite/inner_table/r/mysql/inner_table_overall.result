@@ -282,6 +282,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 513	__all_user_proxy_info_history	0	201001	1
 514	__all_user_proxy_role_info	0	201001	1
 515	__all_user_proxy_role_info_history	0	201001	1
+519	__all_scheduler_job_run_detail_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
 10003	__tenant_virtual_table_index	2	201001	1
@@ -718,6 +719,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12477	__all_virtual_user_proxy_role_info_history	2	201001	1
 12481	__all_virtual_tenant_resource_limit	2	201001	1
 12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
+12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1155,6 +1157,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21577	INNODB_SYS_VIRTUAL	1	201002	1
 21578	INNODB_TEMP_TABLE_INFO	1	201002	1
 21579	INNODB_METRICS	1	201002	1
+21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;
