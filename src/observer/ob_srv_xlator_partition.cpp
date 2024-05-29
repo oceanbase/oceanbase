@@ -300,6 +300,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObNetEndpointRegisterP, gctx_);
   RPC_PROCESSOR(ObNetEndpointPredictIngressP, gctx_);
   RPC_PROCESSOR(ObNetEndpointSetIngressP, gctx_);
+  RPC_PROCESSOR(ObRpcGetTenantResP, gctx_);
 
   // session info verification
   RPC_PROCESSOR(ObSessInfoVerificationP, gctx_);
@@ -324,4 +325,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 
   RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
+  // limit calculator
+  RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
 }

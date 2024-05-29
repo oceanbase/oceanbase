@@ -75,6 +75,7 @@
 #include "sql/session/ob_sess_info_verify.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "storage/ob_storage_schema.h"  // ObCreateTabletSchema
+#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 
 namespace oceanbase
 {
@@ -7547,6 +7548,58 @@ public:
   share::SCN cur_restore_source_max_scn_;
 };
 
+struct ObGetTenantResArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetTenantResArg() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ObGetTenantResArg(const uint64_t tenant_id) : tenant_id_(tenant_id) {}
+  ~ObGetTenantResArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_);
+  }
+  int assign(const ObGetTenantResArg &other)
+  {
+    tenant_id_ = other.tenant_id_;
+    return OB_SUCCESS;
+  }
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const
+  {
+    return tenant_id_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGetTenantResArg);
+  uint64_t tenant_id_;
+};
+struct ObTenantLogicalRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTenantLogicalRes() : server_(), arg_() {}
+  ~ObTenantLogicalRes() {}
+  bool is_valid() const
+  {
+    return server_.is_valid();
+  }
+  int init(const ObAddr &server, const share::ObUserResourceCalculateArg &arg);
+  int assign(const ObTenantLogicalRes &other);
+  TO_STRING_KV(K_(server), K_(arg));
+  ObAddr get_server() const
+  {
+    return server_;
+  }
+  const share::ObUserResourceCalculateArg& get_arg() const
+  {
+    return arg_;
+  }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObTenantLogicalRes);
+  ObAddr server_;
+  share::ObUserResourceCalculateArg arg_;
+
+};
 struct ObGetLSReplayedScnArg
 {
   OB_UNIS_VERSION(1);
@@ -7623,6 +7676,7 @@ private:
   share::SCN offline_scn_;
   common::ObAddr self_addr_;//add in 4.2.3/4.3.0
 };
+
 
 struct ObSwitchTenantArg
 {

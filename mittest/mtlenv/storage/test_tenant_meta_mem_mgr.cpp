@@ -1579,6 +1579,34 @@ TEST_F(TestTenantMetaMemMgr, test_tablet_gc_queue)
   ASSERT_TRUE(gc_queue.is_empty());
 }
 
+TEST_F(TestTenantMetaMemMgr, test_show_limit)
+{
+  auto *calculator = MTL(ObTenantMetaMemMgr*)->get_t3m_limit_calculator();
+  ASSERT_NE(nullptr, calculator);
+
+  const int64_t DEFAULT_TABLET_CNT_PER_GB = ObTenantMetaMemMgr::DEFAULT_TABLET_CNT_PER_GB;
+
+  const int64_t before_tenant_mem = lib::get_tenant_memory_limit(MTL_ID());
+  const int64_t this_case_tenant_mem = 1 * 1024 * 1024 * 1024;  /* 1GB */
+  lib::set_tenant_memory_limit(MTL_ID(), this_case_tenant_mem);
+
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  const int64_t config_tablet_per_gb = tenant_config.is_valid() ?
+                                          tenant_config->_max_tablet_cnt_per_gb :
+                                          DEFAULT_TABLET_CNT_PER_GB;
+
+  share::ObResoureConstraintValue result;
+  ASSERT_EQ(OB_SUCCESS, calculator->get_resource_constraint_value(result));
+  int64_t config_res = 0;
+  result.get_type_value(CONFIGURATION_CONSTRAINT, config_res);
+  int64_t memory_res = 0;
+  result.get_type_value(MEMORY_CONSTRAINT, memory_res);
+  ASSERT_EQ(20000, config_res);
+  ASSERT_EQ(20480, memory_res);
+
+  lib::set_tenant_memory_limit(MTL_ID(), before_tenant_mem);
+}
+
 TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
 {
   static const int64_t tablet_cnt = 155000;

@@ -50,6 +50,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
 #include "share/ob_tablet_autoincrement_service.h"
+#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 #include "share/sequence/ob_sequence_cache.h"
 #include "logservice/ob_log_service.h"
 #include "logservice/ob_log_handler.h"
@@ -2587,6 +2588,30 @@ int ObRpcGetLSSyncScnP::process()
   return ret;
 }
 
+int ObRpcGetTenantResP::process()
+{
+  int ret = OB_SUCCESS;
+  ObResourceLimitCalculator *cal = nullptr;
+  ObUserResourceCalculateArg res_arg;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("ObRpcStartTransferTaskP::process tenant not match", KR(ret), K_(arg));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(arg));
+  } else if (OB_ISNULL(cal = MTL(ObResourceLimitCalculator*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cal is null", KR(ret), K_(arg));
+  } else if (OB_FAIL(cal->get_tenant_logical_resource(res_arg))) {
+    LOG_WARN("failed to get tenant logical resource", KR(ret), K_(arg));
+  } else if (OB_FAIL(result_.init(GCTX.self_addr(), res_arg))) {
+    LOG_WARN("failed to init result", KR(ret), K(res_arg));
+  }
+  return ret;
+
+}
+
 int ObForceSetLSAsSingleReplicaP::process()
 {
   int ret = OB_SUCCESS;
@@ -2995,5 +3020,15 @@ int ObForceDumpServerUsageP::process()
   } else {}
   return ret;
 }
+
+int ObResourceLimitCalculatorP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(ObResourceLimitCalculator *)->get_tenant_min_phy_resource_value(result_))) {
+    LOG_WARN("get physical resource needed by unit failed", K(ret));
+  }
+  return ret;
+}
+
 } // end of namespace observer
 } // end of namespace oceanbase

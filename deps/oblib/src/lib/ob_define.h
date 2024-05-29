@@ -1913,6 +1913,9 @@ enum ObJsonPartialUpdateFlag
   OB_JSON_PARTIAL_UPDATE_LAST_EXPR = 1 << 1,
   OB_JSON_PARTIAL_UPDATE_FIRST_EXPR = 1 << 2,
 };
+// Resource limit calculator
+const int64_t MAX_RESOURCE_NAME_LEN = 128;
+const int64_t MAX_CONSTRAINT_NAME_LEN = 128;
 
 enum ObDmlType
 {

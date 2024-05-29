@@ -32,6 +32,8 @@ class ObMetaPointerMap : public ObResourceMap<Key, ObMetaPointer<T>>
 {
 public:
   typedef ObResourceMap<Key, ObMetaPointer<T>> ResourceMap;
+  ObMetaPointerMap();
+  int set(const Key &key, ObMetaPointer<T> &ptr);  // overwrite
   int erase(const Key &key, ObMetaObjGuard<T> &guard);
   int exist(const Key &key, bool &is_exist);
   int get_meta_obj(const Key &key, ObMetaObjGuard<T> &guard);
@@ -65,6 +67,7 @@ public:
   template <typename Operator> int for_each_value_store(Operator &op);
   int wash_meta_obj(const Key &key, ObMetaObjGuard<ObTablet> &guard, void *&free_obj);
   int64_t count() const { return ResourceMap::map_.size(); }
+  OB_INLINE int64_t max_count() const { return ATOMIC_LOAD(&max_count_); }
 
 private:
   // used when tablet object and memory is hold by external allocator
@@ -93,6 +96,9 @@ private:
 
 public:
   using ObResourceMap<Key, ObMetaPointer<T>>::ObResourceMap;
+
+private:
+  int64_t max_count_;
 };
 
 template <typename Key, typename T>
@@ -205,6 +211,24 @@ int ObMetaPointerHandle<Key, T>::set(
       ObResourceHandle<ObMetaPointer<T>>::ptr_ = ptr;
       map_ = map;
     }
+  }
+  return ret;
+}
+
+template <typename Key, typename T>
+ObMetaPointerMap<Key, T>::ObMetaPointerMap()
+    : ObResourceMap<Key, ObMetaPointer<T>>(), max_count_(0)
+{
+}
+
+template <typename Key, typename T>
+int ObMetaPointerMap<Key, T>::set(const Key &key, ObMetaPointer<T> &ptr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ResourceMap::set(key, ptr))) {
+    STORAGE_LOG(WARN, "fail to set into ResourceMap", K(ret), K(key));
+  } else if (count() > ATOMIC_LOAD(&max_count_)) {
+    ATOMIC_INC(&max_count_);
   }
   return ret;
 }

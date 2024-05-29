@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/ob_storage_rpc.h"
 #include "storage/ls/ob_ls_meta_package.h"                      // ObLSMetaPackage
+#include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 
 namespace oceanbase
 {
@@ -44,14 +45,14 @@ struct ObLSMeta;
 
 // Maintain the tenant <-> log streams mapping relationship
 // Support log stream meta persistent and checkpoint
-class ObLSService
+class ObLSService : public ObIResourceLimitCalculatorHandler
 {
   static const int64_t DEFAULT_LOCK_TIMEOUT = 60_s;
   static const int64_t SMALL_TENANT_MEMORY_LIMIT = 4 * 1024 * 1024 * 1024L; // 4G
   static const int64_t TENANT_MEMORY_PER_LS_NEED = 200 * 1024 * 1024L; // 200MB
 public:
   ObLSService();
-  ~ObLSService();
+  virtual ~ObLSService();
 
   static int mtl_init(ObLSService* &ls_service);
   int init(const uint64_t tenant_id,
@@ -65,6 +66,12 @@ public:
   void dec_ls_safe_destroy_task_cnt();
   void inc_iter_cnt();
   void dec_iter_cnt();
+public:
+  // for limit calculator
+  virtual int get_current_info(share::ObResourceInfo &info) override;
+  virtual int get_resource_constraint_value(share::ObResoureConstraintValue &constraint_value) override;
+  virtual int cal_min_phy_resource_needed(share::ObMinPhyResourceResult &min_phy_res) override;
+  virtual int cal_min_phy_resource_needed(const int64_t num, share::ObMinPhyResourceResult &min_phy_res) override;
 public:
   // create a LS
   // @param [in] arg, all the parameters that is need to create a LS.
@@ -184,6 +191,11 @@ private:
   int get_restore_status_(
       share::ObLSRestoreStatus &restore_status);
 
+  // for resource limit calculator
+  int cal_min_phy_resource_needed_(const int64_t ls_cnt,
+                                   ObMinPhyResourceResult &min_phy_res);
+  int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value);
+
 private:
   bool is_inited_;
   bool is_running_; // used by create/remove, only can be used after start and before stop.
@@ -208,6 +220,10 @@ private:
 
   // record the count of ls iter
   int64_t iter_cnt_;
+
+  // for limit calculator
+  // the max ls cnt after observer start
+  int64_t max_ls_cnt_;
   DISALLOW_COPY_AND_ASSIGN(ObLSService);
 };
 

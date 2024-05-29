@@ -716,6 +716,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12475	__all_virtual_user_proxy_info_history	2	201001	1
 12476	__all_virtual_user_proxy_role_info	2	201001	1
 12477	__all_virtual_user_proxy_role_info_history	2	201001	1
+12481	__all_virtual_tenant_resource_limit	2	201001	1
+12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1127,6 +1129,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21543	GV$OB_TRACEPOINT_INFO	1	201001	1
 21544	V$OB_TRACEPOINT_INFO	1	201001	1
 21545	V$OB_COMPATIBILITY_CONTROL	1	201001	1
+21550	GV$OB_TENANT_RESOURCE_LIMIT	1	201001	1
+21551	V$OB_TENANT_RESOURCE_LIMIT	1	201001	1
+21552	GV$OB_TENANT_RESOURCE_LIMIT_DETAIL	1	201001	1
+21553	V$OB_TENANT_RESOURCE_LIMIT_DETAIL	1	201001	1
 21554	INNODB_LOCK_WAITS	1	201002	1
 21555	INNODB_LOCKS	1	201002	1
 21556	INNODB_TRX	1	201002	1

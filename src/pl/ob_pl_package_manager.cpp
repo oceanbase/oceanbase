@@ -293,6 +293,7 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
 #endif
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
   {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
+  {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
   {"external_table_alert_log", "external_table_alert_log.sql", "none"}
 };
 

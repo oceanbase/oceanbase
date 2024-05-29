@@ -13848,7 +13848,6 @@ def_table_schema(
   ],
 )
 
-
 def_table_schema(**gen_iterate_private_virtual_table_def(
   table_id = '12467',
   table_name = '__all_virtual_ls_replica_task_history',
@@ -13943,6 +13942,54 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12477',
   table_name = '__all_virtual_user_proxy_role_info_history',
   keywords = all_def_keywords['__all_user_proxy_role_info_history']))
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name     = '__all_virtual_tenant_resource_limit',
+  table_id       = '12481',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = True,
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('zone', 'varchar:MAX_ZONE_LENGTH'),
+  ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
+  ('current_utilization', 'bigint'),
+  ('max_utilization', 'bigint'),
+  ('reserved_value', 'bigint'),
+  ('limit_value', 'bigint'),
+  ('effective_limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
+def_table_schema(
+  owner = 'yanyuan.cxf',
+  table_name     = '__all_virtual_tenant_resource_limit_detail',
+  table_id       = '12482',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [
+  ],
+
+  in_tenant_space = True,
+  normal_columns = [
+  ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+  ('svr_port', 'int'),
+  ('tenant_id', 'int'),
+  ('resource_name', 'varchar:MAX_RESOURCE_NAME_LEN'),
+  ('limit_type', 'varchar:MAX_CONSTRAINT_NAME_LEN'),
+  ('limit_value', 'bigint'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14400,6 +14447,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15447', all_def_keywords['__all_user_proxy_role_info'])))
 # 余留位置
 
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
+#
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -33590,6 +33640,97 @@ def_table_schema(
     FROM oceanbase.__all_virtual_compatibility_control
 """.replace("\n", " "),
   normal_columns  = [],
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT',
+  table_id        = '21550',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+     svr_ip AS SVR_IP,
+     svr_port AS SVR_PORT,
+     tenant_id AS TENANT_ID,
+     zone AS ZONE,
+     resource_name AS RESOURCE_NAME,
+     current_utilization AS CURRENT_UTILIZATION,
+     max_utilization AS MAX_UTILIZATION,
+     reserved_value AS RESERVED_VALUE,
+     limit_value AS LIMIT_VALUE,
+     effective_limit_type AS EFFECTIVE_LIMIT_TYPE
+FROM
+    oceanbase.__all_virtual_tenant_resource_limit
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT',
+  table_id        = '21551',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,
+    RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE
+FROM
+    oceanbase.GV$OB_TENANT_RESOURCE_LIMIT
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  table_id        = '21552',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+     svr_ip AS SVR_IP,
+     svr_port AS SVR_PORT,
+     tenant_id AS TENANT_ID,
+     resource_name AS RESOURCE_NAME,
+     limit_type AS LIMIT_TYPE,
+     limit_value AS LIMIT_VALUE
+FROM
+    oceanbase.__all_virtual_tenant_resource_limit_detail
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  table_id        = '21553',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE
+FROM
+    oceanbase.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
 )
 
 def_table_schema(
@@ -61221,6 +61362,105 @@ def_table_schema(
       TP_MATCH
     FROM SYS.GV$OB_TRACEPOINT_INFO
     WHERE SVR_IP=HOST_IP() AND SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28224',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    ZONE,
+    RESOURCE_NAME,
+    CURRENT_UTILIZATION,
+    MAX_UTILIZATION,
+    RESERVED_VALUE,
+    LIMIT_VALUE,
+    EFFECTIVE_LIMIT_TYPE
+FROM
+    SYS.ALL_VIRTUAL_TENANT_RESOURCE_LIMIT
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28225',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, ZONE, RESOURCE_NAME, CURRENT_UTILIZATION, MAX_UTILIZATION,
+    RESERVED_VALUE, LIMIT_VALUE, EFFECTIVE_LIMIT_TYPE
+FROM
+    SYS.GV$OB_TENANT_RESOURCE_LIMIT
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'GV$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28226',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    RESOURCE_NAME,
+    LIMIT_TYPE,
+    LIMIT_VALUE
+FROM
+   SYS.ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'cxf262476',
+  table_name      = 'V$OB_TENANT_RESOURCE_LIMIT_DETAIL',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28227',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+SELECT
+    SVR_IP, SVR_PORT, TENANT_ID, RESOURCE_NAME, LIMIT_TYPE, LIMIT_VALUE
+FROM
+    SYS.GV$OB_TENANT_RESOURCE_LIMIT_DETAIL
+WHERE
+    SVR_IP=HOST_IP()
+AND
+    SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
 )
 

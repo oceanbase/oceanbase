@@ -226,6 +226,9 @@
 #include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
+
 namespace oceanbase
 {
 using namespace common;
@@ -2688,6 +2691,32 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantSchedulerRunningJob, running_job))) {
               running_job->set_session_mgr(GCTX.session_mgr_);
               vt_iter = static_cast<ObVirtualTableIterator *>(running_job);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID:
+          {
+            ObResourceLimitTable *all_virtual_resource_limit = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitTable,
+                                          all_virtual_resource_limit))) {
+              vt_iter = static_cast<ObResourceLimitTable *>(all_virtual_resource_limit);
+              if (OB_FAIL(all_virtual_resource_limit->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID:
+          {
+            ObResourceLimitDetailTable *all_virtual_resource_limit_detail = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObResourceLimitDetailTable,
+                                          all_virtual_resource_limit_detail))) {
+              vt_iter = static_cast<ObResourceLimitDetailTable *>(all_virtual_resource_limit_detail);
+              if (OB_FAIL(all_virtual_resource_limit_detail->set_addr(addr_)))
+              {
+                LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
             }
             break;
           }
