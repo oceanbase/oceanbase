@@ -611,7 +611,24 @@ int ObQueryHint::get_qb_name_counts(const int64_t stmt_count, ObIArray<int64_t> 
   return ret;
 }
 
-int ObQueryHint::recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count)
+int ObQueryHint::get_qb_name_info(const int64_t stmt_count,
+                                  ObIArray<int64_t> &qb_name_counts,
+                                  int64_t &sel_start_id,
+                                  int64_t &set_start_id,
+                                  int64_t &other_start_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_qb_name_counts(stmt_count, qb_name_counts))) {
+    LOG_WARN("failed to get qb name counts", K(ret));
+  } else {
+    sel_start_id = sel_start_id_;
+    set_start_id = set_start_id_;
+    other_start_id = other_start_id_;
+  }
+  return ret;
+}
+
+int ObQueryHint::recover_qb_name_counts(const ObIArray<int64_t> &qb_name_counts, int64_t &stmt_count)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(stmt_id_map_.count() != stmt_count)) {
@@ -634,6 +651,23 @@ int ObQueryHint::recover_qb_names(const ObIArray<int64_t> &qb_name_counts, int64
         --stmt_count;
       }
     }
+  }
+  return ret;
+}
+
+int ObQueryHint::recover_qb_name_info(const ObIArray<int64_t> &qb_name_counts,
+                                      int64_t &stmt_count,
+                                      int64_t sel_start_id,
+                                      int64_t set_start_id,
+                                      int64_t other_start_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(recover_qb_name_counts(qb_name_counts, stmt_count))) {
+    LOG_WARN("failed to recover qb name counts", K(ret));
+  } else {
+    sel_start_id_ = sel_start_id;
+    set_start_id_ = set_start_id;
+    other_start_id_ = other_start_id;
   }
   return ret;
 }
