@@ -209,7 +209,7 @@ int ObDMLService::check_table_cycle(const DASTableIdList* parent_table_set, cons
   exist = false;
   if (OB_NOT_NULL(parent_table_set)) {
     DASTableIdList::const_iterator it = parent_table_set->begin();
-    for (; it != parent_table_set->end(); it++) {s
+    for (; it != parent_table_set->end(); it++) {
       if (*it == table_id) {
         exist = true;
         break;
