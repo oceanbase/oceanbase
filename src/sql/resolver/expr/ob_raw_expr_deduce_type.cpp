@@ -3147,13 +3147,20 @@ int ObRawExprDeduceType::set_agg_group_concat_result_type(ObAggFunRawExpr &expr,
     }
     result_type.set_varchar();
     if (lib::is_oracle_mode()) {
-      ObSEArray<ObExprResType*, 2, ObNullAllocator> params;
-      for (int64_t i = 0; OB_SUCC(ret) && i < types.count(); ++i) {
-        OZ (params.push_back(&types[i]));
-      }
-      if (OB_FAIL(dummy_op.aggregate_length_semantics_oracle(
-                        *my_session_, params, result_type))) {
-        LOG_WARN("fail to aggregate length semantics for string result", K(ret), K(types));
+      if (expr.get_real_param_count() > 2) {
+        ret = OB_ERR_PARAM_SIZE;
+        LOG_WARN("listagg has 2 params at most", K(ret), K(expr.get_real_param_count()));
+      } else {
+        ObSEArray<ObExprResType*, 2, ObNullAllocator> params;
+        for (int64_t i = 0; OB_SUCC(ret) && i < types.count(); ++i) {
+          OZ (params.push_back(&types[i]));
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(dummy_op.aggregate_length_semantics_oracle(
+                            *my_session_, params, result_type))) {
+            LOG_WARN("fail to aggregate length semantics for string result", K(ret), K(types));
+          }
+        }
       }
     }
     if (OB_FAIL(ret)) {
