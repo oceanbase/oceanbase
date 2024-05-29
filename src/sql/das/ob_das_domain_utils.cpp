@@ -341,7 +341,6 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
   } else if (record_num == 0) {
-    ret = OB_ITER_END;
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
@@ -362,13 +361,19 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
       }
       for(uint64_t j = 0; OB_SUCC(ret) && j < column_num; j++) {
         obj_arr[j].set_nop_value();
-        const ObObjMeta &col_type = das_ctdef.column_types_.at(j);
+        ObObjMeta col_type = das_ctdef.column_types_.at(j);
         const ObAccuracy &col_accuracy = das_ctdef.column_accuracys_.at(j);
         int64_t projector_idx = row_projector.at(j);
         if (multivalue_idx == projector_idx) {
           if (OB_FAIL(obj_arr[j].deserialize(data, data_len, pos))) {
             LOG_WARN("failed to deserialize datum.", K(ret), K(json_str));
           } else {
+            if (ob_is_numeric_type(col_type.get_type()) || ob_is_temporal_type(col_type.get_type())) {
+              col_type.set_collation_level(CS_LEVEL_NUMERIC);
+            } else {
+              col_type.set_collation_level(CS_LEVEL_IMPLICIT);
+            }
+
             obj_arr[j].set_collation_level(col_type.get_collation_level());
             obj_arr[j].set_collation_type(col_type.get_collation_type());
             obj_arr[j].set_type(col_type.get_type());
@@ -509,6 +514,9 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
   int ret = OB_SUCCESS;
   const ObChunkDatumStore::StoredRow *sr = nullptr;
   bool got_row = false;
+  if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker interrupt", K(ret));
+  }
   while (OB_SUCC(ret) && !got_row) {
     if (row_idx_ >= rows_.count()) {
       rows_.reuse();
@@ -533,6 +541,50 @@ int ObDomainDMLIterator::get_next_domain_row(ObNewRow *&row)
     }
   }
   LOG_DEBUG("get next domain row", K(ret), K(got_row), K(row_idx_), K(rows_), KPC(row), KPC(sr));
+  return ret;
+}
+
+int ObDomainDMLIterator::get_next_domain_rows(ObNewRow *&row, int64_t &row_count)
+{
+  int ret = OB_SUCCESS;
+  const ObChunkDatumStore::StoredRow *sr = nullptr;
+  bool got_row = false;
+  if (!das_ctdef_->table_param_.get_data_table().is_fts_index()) { // batch only for fulltext
+    if (OB_FAIL(get_next_domain_row(row))) {
+      LOG_WARN("fail to get next domain row", K(ret));
+    } else {
+      row_count = 1;
+    }
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("worker interrupt", K(ret));
+  } else {
+    row_count = 0;
+    while (OB_SUCC(ret) && !got_row) {
+      if (row_idx_ >= rows_.count()) {
+        rows_.reuse();
+        row_idx_ = 0;
+        if (OB_UNLIKELY(!das_ctdef_->table_param_.get_data_table().is_domain_index())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error, not domain index", K(ret), K(das_ctdef_->table_param_.get_data_table()));
+        } else if (FAILEDx(write_iter_.get_next_row(sr))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next row from result iterator failed", K(ret));
+          }
+        } else if (OB_FAIL(generate_domain_rows(sr))) {
+          if (ret != OB_ITER_END) {
+            LOG_WARN("fail to generate domain index row", K(ret), KPC(sr));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && row_idx_ < rows_.count()) {
+        row = &(rows_[row_idx_]);
+        row_count = rows_.count() - row_idx_;
+        row_idx_ = rows_.count();
+        got_row = true;
+      }
+    }
+    LOG_DEBUG("get next domain rows", K(ret), K(got_row), K(row_idx_), K(row_count), K(rows_), KPC(row), KPC(sr));
+  }
   return ret;
 }
 

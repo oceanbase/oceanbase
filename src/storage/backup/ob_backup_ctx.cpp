@@ -315,9 +315,10 @@ int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBacku
     file_id_ = file_id;
     file_offset_ = 0;
     backup_data_type_ = backup_data_type;
-    is_inited_ = true;
     if (OB_FAIL(prepare_file_write_ctx_(param, backup_data_type, file_id))) {
       LOG_WARN("failed to prepare file write ctx", K(ret), K(param), K(backup_data_type), K(file_id));
+    } else {
+      is_inited_ = true;
     }
   }
   return ret;
@@ -408,7 +409,7 @@ int ObBackupDataCtx::close()
       LOG_WARN("fail to complete multipart upload", K(ret), K_(dev_handle), K_(io_fd));
     }
   } else {
-    if (OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
+    if (OB_NOT_NULL(dev_handle_) && OB_TMP_FAIL(dev_handle_->abort(io_fd_))) {
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("fail to abort multipart upload", K(ret), K(tmp_ret), K_(dev_handle), K_(io_fd));
     }
@@ -592,7 +593,7 @@ int ObBackupDataCtx::append_index_(const IndexType &index, ObBackupIndexBufferNo
   } else if (OB_FAIL(buffer_node.put_backup_index(index))) {
     LOG_WARN("failed to put backup index", K(ret), K(index));
   } else {
-    LOG_INFO("append index", K(index));
+    LOG_DEBUG("append index", K(index));
   }
   return ret;
 }
@@ -963,32 +964,32 @@ void ObLSBackupCtx::reuse()
   check_tablet_info_cost_time_ = 0;
 }
 
-int ObLSBackupCtx::hold_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupCtx::set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
-  if (!tablet_id.is_valid() || !tablet_handle.is_valid()) {
+  if (!tablet_id.is_valid() || OB_ISNULL(tablet_handle)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id), K(tablet_handle));
-  } else if (OB_FAIL(tablet_holder_.hold_tablet(tablet_id, tablet_handle))) {
-    LOG_WARN("failed to hold tablet", K(ret), K(tablet_id));
+    LOG_WARN("get invalid args", K(ret), K(tablet_id), KP(tablet_handle));
+  } else if (OB_FAIL(tablet_holder_.set_tablet(tablet_id, tablet_handle))) {
+    LOG_WARN("failed to hold tablet", K(ret), K(tablet_id), KPC(tablet_handle));
   } else {
-    LOG_INFO("hold tablet", K(tablet_id));
+    LOG_DEBUG("backup set tablet", K(tablet_id), KP(tablet_handle));
   }
   return ret;
 }
 
-int ObLSBackupCtx::get_tablet(const common::ObTabletID &tablet_id, storage::ObTabletHandle &tablet_handle)
+int ObLSBackupCtx::get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
   if (!tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(tablet_id), K(tablet_handle));
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else if (OB_FAIL(tablet_holder_.get_tablet(tablet_id, tablet_handle))) {
     LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("acquire tablet", K(tablet_id));
+    LOG_DEBUG("backup get tablet", K(tablet_id), KP(tablet_handle));
   }
   return ret;
 }
@@ -1003,7 +1004,7 @@ int ObLSBackupCtx::release_tablet(const common::ObTabletID &tablet_id)
   } else if (OB_FAIL(tablet_holder_.release_tablet(tablet_id))) {
     LOG_WARN("failed to release tablet", K(ret), K(tablet_id));
   } else {
-    LOG_INFO("release tablet", K(tablet_id));
+    LOG_DEBUG("release tablet", K(tablet_id));
   }
   return ret;
 }

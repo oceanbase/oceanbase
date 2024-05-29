@@ -155,7 +155,7 @@ int ObCOTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
 
-  if (is_meta_major_merge(static_param_.get_merge_type())) {
+  if (is_meta_major_merge(get_merge_type())) {
     if (OB_FAIL(get_meta_compaction_info())) {
       LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
     }

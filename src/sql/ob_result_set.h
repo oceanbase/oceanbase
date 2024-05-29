@@ -275,7 +275,7 @@ public:
   // ref: obmp_query.cpp, ob_mysql_end_trans_callback.cpp
   bool is_async_end_trans_submitted() const
   {
-    auto &s = get_exec_context().get_trans_state();
+    const TransState &s = get_exec_context().get_trans_state();
     return s.is_end_trans_executed() && s.is_end_trans_success();
   }
   inline TransState &get_trans_state()  { return get_exec_context().get_trans_state(); }
@@ -333,6 +333,9 @@ public:
                                obmysql::ObMySQLField &mfield);
   void set_close_fail_callback(ObFunction<void(const int, int&)> func) { close_fail_cb_ = func; }
   void set_will_retry() { will_retry_ = true; }
+  static int implicit_commit_before_cmd_execute(ObSQLSessionInfo &session_info,
+                                                ObExecContext &exec_ctx,
+                                                const int cmd_type);
 private:
   // types and constants
   static const int64_t TRANSACTION_SET_VIOLATION_MAX_RETRY = 3;

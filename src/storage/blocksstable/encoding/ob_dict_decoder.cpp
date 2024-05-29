@@ -1649,7 +1649,7 @@ int ObDictDecoder::read_distinct(
   bool has_null = false;
   if (OB_FAIL(batch_read_distinct(ctx, cell_datas, ctx.col_header_->length_, group_by_cell))) {
     LOG_WARN("Failed to batch read distinct", K(ret));
-  } else if (check_has_null(ctx, ctx.col_header_->length_, has_null)) {
+  } else if (OB_FAIL(check_has_null(ctx, ctx.col_header_->length_, has_null))) {
     LOG_WARN("Failed to check has null", K(ret));
   } else if (has_null) {
     group_by_cell.add_distinct_null_value();

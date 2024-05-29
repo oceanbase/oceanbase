@@ -15,9 +15,9 @@ class UpgradeParams:
   old_version = '4.0.0.0'
 
 class PasswordMaskingFormatter(logging.Formatter):
-    def format(self, record):
-        s = super(PasswordMaskingFormatter, self).format(record)
-        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 
 #### --------------start : my_error.py --------------
 class MyError(Exception):
@@ -411,9 +411,6 @@ def check_cluster_status(query_cur):
   (desc, results) = query_cur.exec_query("""select count(1) from CDB_OB_MAJOR_COMPACTION where (GLOBAL_BROADCAST_SCN > LAST_SCN or STATUS != 'IDLE')""")
   if results[0][0] > 0 :
     fail_list.append('{0} tenant is merging, please check'.format(results[0][0]))
-  (desc, results) = query_cur.exec_query("""select /*+ query_timeout(1000000000) */ count(1) from __all_virtual_tablet_compaction_info where max_received_scn > finished_scn and max_received_scn > 0""")
-  if results[0][0] > 0 :
-    fail_list.append('{0} tablet is merging, please check'.format(results[0][0]))
   logging.info('check cluster status success')
 
 # 5. 检查是否有异常租户(creating，延迟删除，恢复中)
@@ -804,7 +801,7 @@ if __name__ == '__main__':
       password = get_opt_password()
       timeout = int(get_opt_timeout())
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
-          host, port, user, password, timeout, log_filename)
+          host, port, user, password.replace('"', '\\"'), timeout, log_filename)
       do_check(host, port, user, password, timeout, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')

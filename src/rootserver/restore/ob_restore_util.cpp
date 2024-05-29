@@ -780,11 +780,17 @@ int ObRestoreUtil::do_fill_backup_info_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_RESTORE_SKIP_BACKUP_DATA_VERSION_CHECK, "");
+
 int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc)
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  if (!backup_file_desc.is_valid()) {
+
+  if (OB_UNLIKELY(ERRSIM_RESTORE_SKIP_BACKUP_DATA_VERSION_CHECK)) {
+    // do nothing
+    LOG_INFO("skip backup data version check");
+  } else if (!backup_file_desc.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(backup_file_desc));
   } else if (!ObUpgradeChecker::check_cluster_version_exist(backup_file_desc.cluster_version_)) {

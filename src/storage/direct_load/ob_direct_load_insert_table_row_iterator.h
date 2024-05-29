@@ -31,6 +31,7 @@ public:
   ObDirectLoadInsertTableRowIterator();
   virtual ~ObDirectLoadInsertTableRowIterator();
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+  int get_next_row(const bool skip_lob, const blocksstable::ObDatumRow *&row);
 protected:
   int inner_init(ObDirectLoadInsertTabletContext *insert_tablet_ctx,
                  table::ObTableLoadSqlStatistics *sql_statistics,

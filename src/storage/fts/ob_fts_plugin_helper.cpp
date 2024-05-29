@@ -145,7 +145,7 @@ ObFTParseHelper::ObFTParseHelper()
     allocator_(nullptr),
     parser_desc_(nullptr),
     parser_name_(),
-    filter_stopword_(false),
+    add_word_flag_(),
     is_inited_(false)
 {
 }
@@ -178,7 +178,9 @@ int ObFTParseHelper::init(
     LOG_WARN("fail to get fulltext parser descriptor", K(ret), KPC(parse_handler));
   } else {
     plugin_param_.desc_ = parser_desc_;
-    filter_stopword_ = need_stopword_list(parser_name_);
+    if (need_min_max_word(parser_name_))  { add_word_flag_.set_min_max_word(); }
+    if (need_castdn(parser_name_))        { add_word_flag_.set_casedown();     }
+    if (need_stopword_list(parser_name_)) { add_word_flag_.set_stop_word();    }
     allocator_ = allocator;
     is_inited_ = true;
   }
@@ -193,7 +195,7 @@ void ObFTParseHelper::reset()
   parser_desc_ = nullptr;
   plugin_param_.reset();
   allocator_ = nullptr;
-  filter_stopword_ = false;
+  add_word_flag_.clear();
   is_inited_ = false;
 }
 
@@ -220,17 +222,14 @@ int ObFTParseHelper::segment(
     LOG_WARN("unexpected error, charset info is nullptr", K(ret), K(type));
   } else {
     words.reuse();
-    lib::ObFTParserParam::ObIAddWord *add_word = nullptr;
-    if (OB_FAIL(alloc_add_word(type, words, add_word))) {
-      LOG_WARN("fail to allocate add word", K(ret), K(type));
-    } else if (OB_FAIL(segment(parser_name_.get_parser_version(), parser_desc_, cs, fulltext, fulltext_len, *allocator_,
-            *add_word))) {
+    ObAddWord add_word(type, add_word_flag_, *allocator_, words);
+    if (OB_FAIL(segment(parser_name_.get_parser_version(), parser_desc_, cs, fulltext, fulltext_len, *allocator_,
+            add_word))) {
       LOG_WARN("fail to segment fulltext", K(ret), K(parser_name_), KP(parser_desc_), KP(cs), KP(fulltext),
           K(fulltext_len), KP(allocator_));
     } else {
-      doc_length = add_word->get_add_word_count();
+      doc_length = add_word.get_add_word_count();
     }
-    free_add_word(add_word);
   }
   LOG_DEBUG("ft parse segment", K(ret), K(type), K(ObString(fulltext_len, fulltext)), K(words));
   return ret;
@@ -238,45 +237,23 @@ int ObFTParseHelper::segment(
 
 bool ObFTParseHelper::need_stopword_list(const ObFTParser &parser)
 {
-  share::ObPluginName name("space");
-  return parser.get_parser_name() == name;
+  share::ObPluginName space("space");
+  share::ObPluginName beng("beng");
+  return parser.get_parser_name() == space || parser.get_parser_name() == beng;
 }
 
-int ObFTParseHelper::alloc_add_word(
-    const ObCollationType &type,
-    common::ObIArray<ObFTWord> &words,
-    lib::ObFTParserParam::ObIAddWord *&add_word) const
+bool ObFTParseHelper::need_min_max_word(const ObFTParser &parser)
 {
-  int ret = OB_SUCCESS;
-  common::ObMemAttr mem_attr(MTL_ID(), "FTAddWord");
-  void *buf = nullptr;
-  const int64_t buf_size = filter_stopword_ ? sizeof(ObStopWordAddWord) : sizeof(ObNoStopWordAddWord);
-  if (OB_NOT_NULL(add_word)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("add word isn't nullptr", K(ret), KPC(add_word));
-  } else if (OB_ISNULL(buf = ob_malloc(buf_size, mem_attr))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(buf_size));
-  } else if (filter_stopword_) {
-    add_word = new (buf) ObStopWordAddWord(type, *allocator_, words);
-  } else {
-    add_word = new (buf) ObNoStopWordAddWord(type, *allocator_, words);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
-    ob_free(buf);
-    buf = nullptr;
-    add_word = nullptr;
-  }
-  return ret;
+  share::ObPluginName space("space");
+  share::ObPluginName beng("beng");
+  return parser.get_parser_name() == space || parser.get_parser_name() == beng;
 }
 
-void ObFTParseHelper::free_add_word(lib::ObFTParserParam::ObIAddWord *&add_word) const
+bool ObFTParseHelper::need_castdn(const ObFTParser &parser)
 {
-  if (OB_NOT_NULL(add_word)) {
-    add_word->~ObIAddWord();
-    ob_free(static_cast<void *>(add_word));
-    add_word = nullptr;
-  }
+  share::ObPluginName space("space");
+  share::ObPluginName ngram("ngram");
+  return parser.get_parser_name() == space || parser.get_parser_name() == ngram;
 }
 
 } // end namespace storage

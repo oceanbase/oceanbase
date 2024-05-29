@@ -156,7 +156,8 @@ int ObBloomFilterBuildTask::build_bloom_filter()
       read_info.offset_ = 0;
       read_info.size_ = OB_DEFAULT_MACRO_BLOCK_SIZE;
       read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
-      read_info.io_desc_.set_group_id(ObIOModule::BLOOM_FILTER_IO);
+      read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+      read_info.io_desc_.set_sys_module_id(ObIOModule::BLOOM_FILTER_IO);
       if (OB_ISNULL(io_buf_) && OB_ISNULL(io_buf_ =
           reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

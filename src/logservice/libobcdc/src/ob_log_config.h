@@ -606,9 +606,13 @@ public:
   DEF_TIME(print_mod_memory_usage_interval, OB_CLUSTER_PARAMETER, "1m", "[0s, ]", "print mod memory usage threshold");
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
+  T_DEF_INT_INFT(max_chunk_cache_size, OB_CLUSTER_PARAMETER, 0, 0, "chunkmgr max chunk size");
 
+  // direct load inc
   // Whether to sync the incremental direct load data
   T_DEF_BOOL(enable_direct_load_inc, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+  T_DEF_INT_INFT(direct_load_inc_thread_num, OB_CLUSTER_PARAMETER, 0, 0, "thread num of reading and parsing direct load inc log");
+  T_DEF_INT_INFT(direct_load_inc_queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 0, 0, "lowest threshold of queue_backlog that will touch parser flow control in direct load inc case");
 
 #undef OB_CLUSTER_PARAMETER
 

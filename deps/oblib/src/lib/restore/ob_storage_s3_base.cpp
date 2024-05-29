@@ -113,7 +113,9 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "S3 account not valid", K(ret));
   } else {
-    config.region = account.region_;
+    if (OB_NOT_NULL(account.region_) && account.region_[0] != '\0') {
+      config.region = account.region_;
+    }
     config.scheme = Aws::Http::Scheme::HTTP; // if change to HTTPS, be careful about checksum logic.
     config.verifySSL = true;
     config.connectTimeoutMs = S3_CONNECT_TIMEOUT_MS;
@@ -846,26 +848,24 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
       } else if (0 == strncmp(REGION, token, strlen(REGION))) {
         if (OB_FAIL(set_field(token + strlen(REGION), region_, sizeof(region_)))) {
           OB_LOG(WARN, "failed to set s3 region", K(ret), KCSTRING(token));
-        } else {
-          bitmap |= 1;
         }
       } else if (0 == strncmp(HOST, token, strlen(HOST))) {
         if (OB_FAIL(set_field(token + strlen(HOST), endpoint_, sizeof(endpoint_)))) {
           OB_LOG(WARN, "failed to set s3 endpoint", K(ret), KCSTRING(token));
         } else {
-          bitmap |= (1 << 1);
+          bitmap |= 1;
         }
       } else if (0 == strncmp(ACCESS_ID, token, strlen(ACCESS_ID))) {
         if (OB_FAIL(set_field(token + strlen(ACCESS_ID), access_id_, sizeof(access_id_)))) {
           OB_LOG(WARN, "failed to set s3 access id", K(ret), KCSTRING(token));
         } else {
-          bitmap |= (1 << 2);
+          bitmap |= (1 << 1);
         }
       } else if (0 == strncmp(ACCESS_KEY, token, strlen(ACCESS_KEY))) {
         if (OB_FAIL(set_field(token + strlen(ACCESS_KEY), secret_key_, sizeof(secret_key_)))) {
           OB_LOG(WARN, "failed to set s3 secret key", K(ret), KP(token));
         } else {
-          bitmap |= (1 << 3);
+          bitmap |= (1 << 2);
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (0 == strcmp(token + strlen(DELETE_MODE), "delete")) {
@@ -881,7 +881,7 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
       }
     }
 
-    if (OB_SUCC(ret) && bitmap != 0x0F) {
+    if (OB_SUCC(ret) && bitmap != 0x07) {
       ret = OB_INVALID_ARGUMENT;
       OB_LOG(WARN, "failed to init s3 account", K(ret), KCSTRING(region_),
           KCSTRING(endpoint_), KCSTRING(access_id_), K(bitmap));
@@ -1246,9 +1246,6 @@ int ObStorageS3Reader::pread_(char *buf,
     } else {
       Aws::S3::Model::GetObjectRequest request;
       Aws::S3::Model::GetObjectOutcome outcome;
-      if (get_data_size == file_length_) {
-        request.SetChecksumMode(Aws::S3::Model::ChecksumMode::ENABLED);
-      }
       char range_read[64] = { 0 };
       request.WithBucket(bucket_.ptr()).WithKey(object_.ptr());
 

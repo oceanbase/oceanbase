@@ -237,12 +237,14 @@ int ObCreateRoutineResolver::collect_ref_obj_info(int64_t ref_obj_id, int64_t re
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(stmt_));
-  obrpc::ObCreateRoutineArg &crt_routine_arg =
-      static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
-  ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
-  OV (ObObjectType::INVALID != dep_obj_type);
-  OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
-                                         ref_obj_id, ref_timestamp, dependent_type));
+  if (OB_SUCC(ret)) {
+    obrpc::ObCreateRoutineArg &crt_routine_arg =
+        static_cast<ObCreateRoutineStmt *>(stmt_)->get_routine_arg();
+    ObObjectType dep_obj_type = crt_routine_arg.routine_info_.get_object_type();
+    OV (ObObjectType::INVALID != dep_obj_type);
+    OZ (ObDependencyInfo::collect_dep_info(crt_routine_arg.dependency_infos_, dep_obj_type,
+                                           ref_obj_id, ref_timestamp, dependent_type));
+  }
   return ret;
 }
 
@@ -277,7 +279,9 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
               params_.session_info_->get_effective_tenant_id(),
               access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
-      OX (routine_param.set_type_owner(table->get_database_id()));
+      if (OB_SUCC(ret) && ObCharset::case_compat_mode_equal(table->get_table_name_str(), routine_param.get_type_subname())) {
+        routine_param.set_type_owner(table->get_database_id());
+      }
     }
     OZ (collect_ref_obj_info(table->get_table_id(), table->get_schema_version(),
                              ObDependencyTableType::DEPENDENCY_TABLE));
@@ -331,7 +335,9 @@ int ObCreateRoutineResolver::set_routine_param(const ObIArray<ObObjAccessIdx> &a
               params_.session_info_->get_effective_tenant_id(),
               access_idxs.at(0).var_index_, table));
       CK (OB_NOT_NULL(table));
-      OX (routine_param.set_type_owner(table->get_database_id()));
+      if (OB_SUCC(ret) && ObCharset::case_compat_mode_equal(table->get_table_name_str(), routine_param.get_type_name())) {
+        routine_param.set_type_owner(table->get_database_id());
+      }
     }
     OZ (collect_ref_obj_info(table->get_table_id(), table->get_schema_version(),
                              ObDependencyTableType::DEPENDENCY_TABLE));

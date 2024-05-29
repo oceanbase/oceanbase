@@ -1006,8 +1006,14 @@ void ObBlockManager::mark_and_sweep()
       } else if (0 == mark_info.count()) {
         skip_mark = true;
         LOG_INFO("no block alloc/free, no need to mark blocks", K(ret), K(mark_info.count()));
-      } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {//mark
-        LOG_WARN("fail to mark macro blocks", K(ret));
+      } else if (OB_FAIL(mark_macro_blocks(mark_info, macro_id_set, tmp_status))) {
+        if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+          LOG_INFO("mark blocks meet memory issue, still countinue sweep to lease compaction space");
+          ret = OB_SUCCESS;
+          skip_mark = true;
+        } else {
+          LOG_WARN("fail to mark macro blocks", K(ret));
+        }
       }
 
       if (OB_FAIL(ret)) {
@@ -1653,7 +1659,8 @@ int ObBlockManager::InspectBadBlockTask::check_block(ObMacroBlockHandle &macro_b
     read_info.offset_ = 0;
     read_info.size_ = blk_mgr_.get_macro_block_size();
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_READ);
-    read_info.io_desc_.set_group_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
+    read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    read_info.io_desc_.set_sys_module_id(ObIOModule::INSPECT_BAD_BLOCK_IO);
 
     if (OB_ISNULL(read_info.buf_ = reinterpret_cast<char*>(allocator.alloc(read_info.size_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

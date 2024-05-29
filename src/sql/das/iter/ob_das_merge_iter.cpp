@@ -88,10 +88,27 @@ int MergeStoreRows::to_expr(bool is_vectorized, int64_t size)
   return ret;
 }
 
+int64_t MergeStoreRows::get_group_idx(int64_t idx)
+{
+  OB_ASSERT(idx < saved_size_);
+  return store_rows_[idx].store_row_->cells()[group_id_idx_].get_int();
+}
+
 int64_t MergeStoreRows::cur_group_idx()
 {
+  return get_group_idx(cur_idx_);
+}
+
+int64_t MergeStoreRows::row_cnt_with_cur_group_idx()
+{
   OB_ASSERT(cur_idx_ < saved_size_);
-  return store_rows_[cur_idx_].store_row_->cells()[group_id_idx_].get_int();
+  int64_t group_idx = cur_group_idx();
+  // index of first row with greater group idx
+  int64_t end_idx = cur_idx_ + 1;
+  while (end_idx < saved_size_ && get_group_idx(end_idx) == group_idx) {
+     end_idx++;
+  }
+  return end_idx - cur_idx_;
 }
 
 void MergeStoreRows::reuse()
@@ -157,14 +174,17 @@ int ObDASMergeIter::create_das_task(const ObDASTabletLoc *tablet_loc, ObDASScanO
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
+  // when the cluster version is less than 4.3.1, a DAS_OP_TABLE_BATCH_SCAN task is sent on group rescan situtations
+  // for compatibility considerations.
+  ObDASOpType op_type = (nullptr != group_id_expr_ && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) ? DAS_OP_TABLE_BATCH_SCAN : DAS_OP_TABLE_SCAN;
   reuse_op = false;
   if (OB_ISNULL(das_ref_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr das ref", K(ret));
-  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_loc, DAS_OP_TABLE_SCAN))) {
+  } else if (OB_NOT_NULL(task_op = das_ref_->find_das_task(tablet_loc, op_type))) {
     // reuse scan op
     reuse_op = true;
-  } else if (OB_FAIL(das_ref_->create_das_task(tablet_loc, DAS_OP_TABLE_SCAN, task_op))) {
+  } else if (OB_FAIL(das_ref_->create_das_task(tablet_loc, op_type, task_op))) {
     LOG_WARN("das ref failed to create das task", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -687,9 +707,11 @@ int ObDASMergeIter::get_next_sorted_rows(int64_t &count, int64_t capacity)
             LOG_WARN("failed to update output tablet id", K(ret), K(tablet_id));
           }
         }
-        ret = merge_store_rows_arr_[output_idx].to_expr(true, 1);
+        MergeStoreRows &store_rows = merge_store_rows_arr_.at(output_idx);
+        int64_t ret_count = store_rows.row_cnt_with_cur_group_idx();
+        ret = store_rows.to_expr(true, ret_count);
         if (OB_SUCC(ret)) {
-          count = 1;
+          count = ret_count;
           merge_state_arr_[output_idx].row_store_have_data_ = merge_store_rows_arr_[output_idx].have_data();
         } else {
           LOG_WARN("failed to convert store row to expr", K(output_idx), K(ret));

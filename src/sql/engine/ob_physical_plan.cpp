@@ -473,7 +473,6 @@ int ObPhysicalPlan::init_operator_stats()
 
 void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
                                       const bool is_first,
-                                      const bool is_evolution,
                                       const ObIArray<ObTableRowCount> *table_row_count_list)
 {
   const int64_t current_time = ObClockGenerator::getClock();
@@ -491,6 +490,15 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
       ATOMIC_STORE(&(stat_.hit_count_), 0);
     } else {
       ATOMIC_INC(&(stat_.hit_count_));
+    }
+    if (ATOMIC_LOAD(&stat_.is_evolution_)) { //for spm
+      ATOMIC_INC(&(stat_.evolution_stat_.executions_));
+      // ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_),
+      //            record.get_elapsed_time() - record.exec_record_.wait_time_end_
+      //            - (record.exec_timestamp_.run_ts_ - record.exec_timestamp_.receive_ts_));
+      ATOMIC_AAF(&(stat_.evolution_stat_.cpu_time_), record.exec_timestamp_.executor_t_);
+      ATOMIC_AAF(&(stat_.evolution_stat_.elapsed_time_), record.get_elapsed_time());
+      ATOMIC_STORE(&(stat_.evolution_stat_.last_exec_ts_), record.exec_timestamp_.executor_end_ts_);
     }
   } else { // long route stat begin
     execute_count = ATOMIC_AAF(&stat_.execute_times_, 1);
@@ -1186,7 +1194,6 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "session is null", K(ret));
   } else  {
-    stat_.plan_id_ = get_plan_id();
     stat_.plan_hash_value_ = get_signature();
     stat_.gen_time_ = ObTimeUtility::current_time();
     stat_.schema_version_ = get_tenant_schema_version();

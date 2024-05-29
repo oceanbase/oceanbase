@@ -190,6 +190,7 @@ public:
   ObIMemtableMgr *mt_mgr_;
   ObTxCtxMemtableMgr *ctx_mt_mgr_;
   ObTenantTxDataAllocator tx_data_allocator_;
+  ObTenantTxDataOpAllocator tx_data_op_allocator_;
 
   ObTenantBase tenant_base_;
 };
@@ -304,6 +305,7 @@ TEST_F(TestTxCtxTable, test_tx_ctx_memtable_mgr)
   attr.tenant_id_ = MTL_ID();
   tx_data_allocator_.init("test");
   tx_data_table.tx_data_allocator_ = &tx_data_allocator_;
+  tx_data_op_allocator_.init();
 
   ObTxPalfParam palf_param((logservice::ObLogHandler *)(0x01),
                            (transaction::ObDupTableLSHandler *)(0x02));
@@ -439,9 +441,12 @@ int ObLSTxCtxMgr::init(const int64_t tenant_id,
     //}
     if (OB_FAIL(ls_tx_ctx_map_.init(lib::ObMemAttr(tenant_id, "LSTxCtxMgr")))) {
       TRANS_LOG(WARN, "ls_tx_ctx_map_ init fail", KR(ret));
+    } else if (OB_FAIL(tx_ls_state_mgr_.init(ls_id))) {
+      TRANS_LOG(WARN, "init tx_ls_state_mgr_ failed", KR(ret));
+    } else if (OB_FAIL(tx_ls_state_mgr_.switch_tx_ls_state(ObTxLSStateMgr::TxLSAction::START))) {
+      TRANS_LOG(WARN, "start ls_tx_ctx_mgr failed",K(ret),K(tx_ls_state_mgr_));
     } else {
       is_inited_ = true;
-      state_ = State::F_WORKING;
       tenant_id_ = tenant_id;
       ls_id_ = ls_id;
       tx_table_ = tx_table;

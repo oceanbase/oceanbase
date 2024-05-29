@@ -347,8 +347,10 @@ public:
   int update_upper_trans_version(ObLS &ls, bool &is_updated);
 
   // memtable operation
+  // ATTENTION!!!
+  // - The `get_all_memtables()` is that get all memtables from memtable mgr, not from this tablet.
   int get_all_memtables(ObTableHdlArray &handle) const;
-  int get_boundary_memtable(ObTableHandleV2 &handle) const;
+  int get_boundary_memtable_from_memtable_mgr(ObTableHandleV2 &handle) const;
   int get_protected_memtable_mgr_handle(ObProtectedMemtableMgrHandle *&handle) const;
 
   // get the active memtable for write or replay.
@@ -496,7 +498,6 @@ public:
   int notify_mds_table_flush_ret(
       const share::SCN &flush_scn,
       const int flush_ret);
-  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
   int64_t get_memtable_count() const { return memtable_count_; }
 
   // tablet mds data read interface
@@ -800,6 +801,7 @@ private:
       const bool need_tablet_attr = true) const;
   int calc_tablet_attr(ObTabletAttr &attr) const;
   int check_ready_for_read_if_need(const ObTablet &old_tablet);
+  int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible

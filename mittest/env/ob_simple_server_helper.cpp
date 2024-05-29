@@ -311,6 +311,57 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
   return ret;
 }
 
+int SimpleServerHelper::freeze_tx_data(uint64_t tenant_id, ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else {
+      storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
+      ObTxDataMemtableMgr *tx_data_memtable_mgr
+        = dynamic_cast<ObTxDataMemtableMgr *>(
+          dynamic_cast<ObLSTxService *>(
+            checkpoint_executor->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+          ->common_checkpoints_[storage::checkpoint::ObCommonCheckpointType::TX_DATA_MEMTABLE_TYPE]);
+      if (OB_ISNULL(tx_data_memtable_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("checkpoint obj is null", KR(ret));
+      } else if (OB_FAIL(tx_data_memtable_mgr->flush(share::SCN::max_scn(),
+              checkpoint::INVALID_TRACE_ID))) {
+      } else {
+        usleep(10 * 1000 * 1000);
+      }
+    }
+  }
+  return ret;
+}
+
+int SimpleServerHelper::freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else {
+      storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
+      ObTxCtxMemtable *tx_ctx_memtable
+        = dynamic_cast<ObTxCtxMemtable *>(
+          dynamic_cast<ObLSTxService *>(
+            checkpoint_executor->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+          ->common_checkpoints_[storage::checkpoint::ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
+      if (OB_ISNULL(tx_ctx_memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("checkpoint obj is null", KR(ret));
+      } else if (OB_FAIL(tx_ctx_memtable->flush(share::SCN::max_scn(), 0))) {
+      } else {
+        usleep(10 * 1000 * 1000);
+      }
+    }
+  }
+  return ret;
+}
+
 int SimpleServerHelper::wait_flush_finish(uint64_t tenant_id, ObLSID ls_id, ObTabletID tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -695,10 +746,9 @@ int SimpleServerHelper::ls_reboot(uint64_t tenant_id, ObLSID ls_id)
   LOG_INFO("ls_reboot", K(tenant_id), K(ls_id));
   int ret = OB_SUCCESS;
   auto print_mgr_state = [](ObLS *ls) {
-    auto state = ls->ls_tx_svr_.mgr_->state_;
+    const ObTxLSStateMgr &state_mgr = ls->ls_tx_svr_.mgr_->tx_ls_state_mgr_;
     LOG_INFO("print ls ctx mgr state:", K(ls->get_ls_id()),
-                                        "ctx_mgr_state", state,
-                                        K(ObLSTxCtxMgr::State::state_str(state)));
+                                        K(state_mgr));
   };
   auto func = [tenant_id, ls_id, print_mgr_state] () {
     int ret = OB_SUCCESS;

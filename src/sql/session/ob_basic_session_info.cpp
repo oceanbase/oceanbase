@@ -334,6 +334,9 @@ void ObBasicSessionInfo::reset(bool skip_sys_var)
     MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
     if (OB_SUCC(guard.switch_to(tx_desc_->get_tenant_id(), false))) {
       MTL(transaction::ObTransService*)->release_tx(*tx_desc_);
+    } else {
+      LOG_WARN("tenant env not exist, force release tx", KP(tx_desc_), K(tx_desc_->get_tx_id()));
+      transaction::ObTransService::force_release_tx_when_session_destroy(*tx_desc_);
     }
     tx_desc_ = NULL;
   }
@@ -2628,6 +2631,37 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       }
       break;
     }
+    case SYS_VAR__OB_ENABLE_ROLE_IDS: {
+      ObString serialized_data;
+      enable_role_ids_.reuse();
+      if (OB_FAIL(val.get_string(serialized_data))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else if (!serialized_data.empty()) {
+        ObString id_str = serialized_data.split_on(',');
+        while (OB_SUCC(ret) && !id_str.empty()) {
+          int err = 0;
+          uint64_t role_id = ObCharset::strntoull(id_str.ptr(), id_str.length(), 10, &err);
+          if (OB_SUCC(ret) && err != 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("str to int64 failed", K(ret), K(id_str));
+          } else {
+            OZ (enable_role_ids_.push_back(role_id));
+          }
+          id_str = serialized_data.split_on(',');
+        }
+        if (OB_SUCC(ret) && !serialized_data.empty()) {
+          int err = 0;
+          uint64_t role_id = ObCharset::strntoull(serialized_data.ptr(), serialized_data.length(), 10, &err);
+          if (OB_SUCC(ret) && err != 0) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("str to int64 failed", K(ret), K(serialized_data));
+          } else {
+            OZ (enable_role_ids_.push_back(role_id));
+          }
+        }
+      }
+      break;
+    }
     case SYS_VAR_OB_TRACE_INFO: {
       ObString trace_info;
       if (OB_FAIL(val.get_string(trace_info))) {
@@ -3156,6 +3190,17 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_default_lob_inrow_threshold(int_val));
+      break;
+    }
+    case SYS_VAR__OB_ENABLE_ROLE_IDS: {
+      ObString str;
+      if (OB_FAIL(val.get_string(str))) {
+        LOG_WARN("fail to get str value", K(ret), K(var));
+      } else {
+        int64_t run_time_filter_type = ObConfigRuntimeFilterChecker::
+            get_runtime_filter_type(str.ptr(), str.length());
+        sys_vars_cache.set_base_runtime_filter_type(run_time_filter_type);
+      }
       break;
     }
     default: {
@@ -3835,6 +3880,20 @@ int ObBasicSessionInfo::replace_new_session_label(uint64_t policy_id, const ObLa
   return ret;
 }
 
+int ObBasicSessionInfo::set_enable_role_ids(const ObIArray<uint64_t>& role_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString serialized_data;
+  for (int i = 0; OB_SUCC(ret) && i < role_ids.count(); i++) {
+    if (i != 0) {
+      OZ (serialized_data.append(","));
+    }
+    OZ (serialized_data.append_fmt("%lu", role_ids.at(i)));
+  }
+  OZ (update_sys_variable(SYS_VAR__OB_ENABLE_ROLE_IDS, serialized_data.string()));
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////////
 int64_t ObBasicSessionInfo::to_string(char *buf, const int64_t buf_len) const
 {
@@ -4508,7 +4567,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
     LST_DO_CODE(OB_UNIS_ENCODE,
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
-                thread_data_.proxy_host_name_);
+                thread_data_.proxy_host_name_,
+                enable_role_ids_);
   }
   return ret;
 }
@@ -4523,7 +4583,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   if (OB_FAIL(serialization::decode(buf, data_len, pos, has_tx_desc))) {
     LOG_WARN("fail to deserialize has_tx_desc_", K(data_len), K(pos), K(ret));
   } else if (has_tx_desc) {
-    auto txs = MTL(transaction::ObTransService*);
+    transaction::ObTransService* txs = MTL(transaction::ObTransService*);
     if (OB_FAIL(txs->acquire_tx(buf, data_len, pos, tx_desc_))) {
       LOG_WARN("acquire tx by deserialize fail", K(data_len), K(pos), K(ret));
     } else {
@@ -4767,7 +4827,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
     LST_DO_CODE(OB_UNIS_DECODE,
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
-                thread_data_.proxy_host_name_);
+                thread_data_.proxy_host_name_,
+                enable_role_ids_);
   }
   return ret;
 }
@@ -5048,7 +5109,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               proxy_user_id_,
               thread_data_.proxy_user_name_,
-              thread_data_.proxy_host_name_);
+              thread_data_.proxy_host_name_,
+              enable_role_ids_);
   return len;
 }
 
@@ -5194,6 +5256,7 @@ int ObBasicSessionInfo::is_sys_var_actully_changed(const ObSysVarClassType &sys_
       case SYS_VAR_OB_PL_BLOCK_TIMEOUT:
       case SYS_VAR_OB_COMPATIBILITY_MODE:
       case SYS_VAR__OB_OLS_POLICY_SESSION_LABELS:
+      case SYS_VAR__OB_ENABLE_ROLE_IDS:
       case SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED: {
        changed = old_val.get_meta() == new_val.get_meta() ? old_val != new_val : true;
       }

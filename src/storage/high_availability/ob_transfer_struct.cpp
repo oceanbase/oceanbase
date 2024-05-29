@@ -34,7 +34,9 @@ ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
     task_id_(),
     data_end_scn_(),
     transfer_epoch_(0),
-    data_version_(DEFAULT_MIN_DATA_VERSION)
+    data_version_(DEFAULT_MIN_DATA_VERSION),
+    filter_tx_need_transfer_(false),
+    move_tx_ids_()
 {
 }
 
@@ -47,6 +49,8 @@ void ObTXStartTransferOutInfo::reset()
   data_end_scn_.reset();
   transfer_epoch_ = 0;
   data_version_ = 0;
+  filter_tx_need_transfer_ = false;
+  move_tx_ids_.reset();
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
@@ -65,6 +69,8 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     LOG_WARN("assign start transfer out info get invalid argument", K(ret), K(start_transfer_out_info));
   } else if (OB_FAIL(tablet_list_.assign(start_transfer_out_info.tablet_list_))) {
     LOG_WARN("failed to assign start transfer out info", K(ret), K(start_transfer_out_info));
+  } else if (OB_FAIL(move_tx_ids_.assign(start_transfer_out_info.move_tx_ids_))) {
+    LOG_WARN("failed to assign move_tx_ids", K(ret), K(start_transfer_out_info));
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
@@ -72,11 +78,13 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     data_end_scn_ = start_transfer_out_info.data_end_scn_;
     transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
     data_version_ = start_transfer_out_info.data_version_;
+    filter_tx_need_transfer_ = start_transfer_out_info.filter_tx_need_transfer_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_, data_end_scn_, transfer_epoch_, data_version_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_,
+    data_end_scn_, transfer_epoch_, data_version_, filter_tx_need_transfer_, move_tx_ids_);
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()
   : src_ls_id_(),
@@ -385,16 +393,20 @@ int ObTXTransferUtils::set_tablet_freeze_flag(storage::ObLS &ls, ObTablet *table
     LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
   } else {
     CLICK();
+    ObITabletMemtable *mt = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
-      ObITable *table = memtables.at(i).get_table();
-      if (OB_ISNULL(table)) {
+      if (OB_UNLIKELY(memtables.at(i).get_tablet_memtable(mt))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("table in tables_handle is invalid", K(ret), KP(table));
+        LOG_WARN("table in tables_handle is not memtable", K(ret), K(memtables.at(i)));
+      } else if (!mt->is_active_memtable()) {
+        // skip
+      } else if (OB_UNLIKELY(!mt->is_data_memtable())) {
+        // incremental direct load hold table lock will block transfer scheduling, so there will be no active direct load memtable
+        ret = OB_TRANSFER_SYS_ERROR;
+        LOG_WARN("memtable is not data memtable", K(ret), KPC(mt));
       } else {
-        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
-        if (memtable->is_active_memtable()) {
-          memtable->set_transfer_freeze(weak_read_scn);
-        }
+        memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(mt);
+        memtable->set_transfer_freeze(weak_read_scn);
       }
     }
     if (OB_SUCC(ret)) {

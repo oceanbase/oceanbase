@@ -426,6 +426,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
                 }
               }
             }
+          } else if (ob_is_rowid_tc(data_type)) {
+            int32_t len = static_cast<int32_t>(node->int32_values_[OB_NODE_CAST_C_LEN_IDX]);
+            if (OB_UNLIKELY(0 == len)) {
+              ret = OB_ERR_ZERO_LEN_COL;
+              LOG_WARN("Oracle not allowed zero length", K(ret));
+            } else if (OB_UNLIKELY(len > OB_MAX_USER_ROW_KEY_LENGTH)) {
+              ret = OB_ERR_TOO_LONG_COLUMN_LENGTH;
+              LOG_WARN("column data length is invalid", K(ret), K(len));
+            }
           }
 
           if (OB_SUCC(ret)) {
@@ -2186,11 +2195,34 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
   if (NULL == ctx_.secondary_namespace_) {
     // do nothing ...
   } else {
+
+class ObPLDependencyGuard
+{
+public:
+  ObPLDependencyGuard(pl::ObPLDependencyTable *dependency_table)
+    : dependency_table_(dependency_table), count_(0) {
+    if (OB_NOT_NULL(dependency_table_)) {
+      count_ = dependency_table_->count();
+    }
+  }
+  ~ObPLDependencyGuard() {
+    if (OB_NOT_NULL(dependency_table_)) {
+      while (dependency_table_->count() > count_) {
+        dependency_table_->pop_back();
+      }
+    }
+  }
+private:
+  pl::ObPLDependencyTable *dependency_table_;
+  int64_t count_;
+};
+
     SET_LOG_CHECK_MODE();
     CK(OB_NOT_NULL(ctx_.secondary_namespace_->get_external_ns()));
     if (OB_SUCC(ret)) {
       ObArray<ObQualifiedName> fake_columns;
       ObArray<ObRawExpr*> fake_exprs;
+      ObPLDependencyGuard dep_guard(ctx_.secondary_namespace_->get_external_ns()->get_dependency_table());
       if (OB_FAIL(ObResolverUtils::resolve_external_symbol(allocator,
                                                            expr_factory,
                                                            ctx_.secondary_namespace_->get_external_ns()->get_resolve_ctx().session_info_,
@@ -3115,8 +3147,12 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
           T_QUESTIONMARK == c_expr->get_expr_type() &&
           c_expr->get_result_type().is_ext() &&
           (pl::PL_RECORD_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
-          pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type())) {
+           pl::PL_NESTED_TABLE_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_ASSOCIATIVE_ARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_VARRAY_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_REF_CURSOR_TYPE == c_expr->get_result_type().get_extend_type() ||
+           pl::PL_OPAQUE_TYPE == c_expr->get_result_type().get_extend_type())) {
         ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
       }
     }
@@ -6959,7 +6995,7 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
       LOG_WARN("failed to extract info", K(ret));
     } else if (!search_keywords->is_static_const_expr()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query is not supported");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
       LOG_WARN("search query is not const expr", K(ret));
     } else if (ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
       ret = OB_NOT_SUPPORTED;

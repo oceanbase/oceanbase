@@ -27,6 +27,7 @@ using namespace oceanbase::palf;
 
 namespace cdc
 {
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_RESP_ERROR);
 
 ObCdcFetcher::ObCdcFetcher()
   : is_inited_(false),
@@ -124,8 +125,9 @@ int ObCdcFetcher::fetch_log(const ObCdcLSFetchLogReq &req,
       }
 
       if (OB_NOT_NULL(ls_ctx)) {
-        if (OB_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
-          LOG_WARN("failed to revert client ls ctx", K(req));
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(host_->revert_client_ls_ctx(ls_ctx))) {
+          LOG_WARN_RET(tmp_ret, "failed to revert client ls ctx", K(req));
         } else {
           ls_ctx = nullptr;
         }
@@ -325,6 +327,10 @@ int ObCdcFetcher::do_fetch_log_(const ObCdcLSFetchLogReq &req,
   // update_monitor(frt.fetch_status_);
   if (OB_FAIL(ret)) {
     LOG_WARN("fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
+        K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch log fail", KR(ret), "CDC_Connector_PID", req.get_client_pid(),
         K(req), K(resp));
   }
 
@@ -831,7 +837,7 @@ int ObCdcFetcher::check_lag_follower_(const ObLSID &ls_id,
 {
   int ret = OB_SUCCESS;
   ObRole role = INVALID_ROLE;
-  bool is_in_sync = true;
+  bool is_in_sync = false;
   int64_t leader_epoch = OB_INVALID_TIMESTAMP;
   if (OB_FAIL(check_ls_sync_status_(ls_id, palf_handle_guard, role, is_in_sync))) {
     LOG_WARN("failed to check ls sync status", K(ls_id), K(role), K(is_in_sync));
@@ -863,7 +869,6 @@ int ObCdcFetcher::check_ls_sync_status_(const ObLSID &ls_id,
     storage::ObLSHandle ls_handle;
     ObLS *ls = NULL;
     logservice::ObLogHandler *log_handler = NULL;
-    bool is_sync = false;
     bool is_need_rebuild = false;
 
     if (OB_FAIL(ls_service_->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
@@ -874,8 +879,8 @@ int ObCdcFetcher::check_ls_sync_status_(const ObLSID &ls_id,
     } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log_handler is NULL", KR(ret), K(ls_id));
-    } else if (OB_FAIL(log_handler->is_in_sync(is_sync, is_need_rebuild))) {
-      LOG_WARN("log_handler is_in_sync fail", KR(ret), K(ls_id), K(is_sync));
+    } else if (OB_FAIL(log_handler->is_in_sync(in_sync, is_need_rebuild))) {
+      LOG_WARN("log_handler is_in_sync fail", KR(ret), K(ls_id), K(in_sync));
     }
   } else {
     // leader must be in_sync
@@ -1210,6 +1215,13 @@ int ObCdcFetcher::do_fetch_raw_log_(const obrpc::ObCdcFetchRawLogReq &req,
   if (retry_count > 1) {
     LOG_INFO("retry multiple times to read log", KR(ret), K(req), K(resp), K(retry_count),
         K(need_retry), K(fetch_log_succ));
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fetch raw log fail", K(req), K(resp));
+  } else if (ERRSIM_FETCH_LOG_RESP_ERROR) {
+    ret = ERRSIM_FETCH_LOG_RESP_ERROR;
+    LOG_WARN("ERRSIM fetch raw log fail", K(req), K(resp));
   }
 
   return ret;

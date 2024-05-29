@@ -355,7 +355,7 @@ private:
                                       const ObLSID &ls_id);
 private:
   bool is_inited_;
-  RWLock rwlock_; //for leader revoke/takeover submit log
+  mutable RWLock rwlock_; //for leader revoke/takeover submit log
   storage::ObLS *ls_;
   int64_t gc_seq_invalid_member_; //缓存gc检查当前ls不在成员列表时的轮次
   int64_t gc_start_ts_;
@@ -364,6 +364,7 @@ private:
   bool log_sync_stopped_;//used for trans_service to kill trx, True means this replica may not be able to fully synchronize the logs.
   share::SCN rec_scn_;
   common::ObSpinLock rec_scn_lock_;//protect  rec_scn_, which guarantees that cb.scn_ is assigned valid value before on_success callback
+  int64_t last_print_dba_log_ts_;
 };
 
 } // namespace logservice

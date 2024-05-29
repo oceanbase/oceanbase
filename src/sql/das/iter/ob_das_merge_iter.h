@@ -70,7 +70,9 @@ public:
   int save(bool is_vectorized, int64_t size);
   int to_expr(bool is_vectorized, int64_t size);
   bool have_data() const { return cur_idx_ != OB_INVALID_INDEX && cur_idx_ < saved_size_; }
+  int64_t get_group_idx(int64_t idx);
   int64_t cur_group_idx();
+  int64_t row_cnt_with_cur_group_idx();
   void reuse();
   void reset();
   TO_STRING_KV(K_(saved_size),

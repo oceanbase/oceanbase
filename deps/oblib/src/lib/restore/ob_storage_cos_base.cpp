@@ -781,6 +781,8 @@ int ObStorageCosReader::pread(
     int64_t &read_size)
 {
   int ret = OB_SUCCESS;
+  ObCosMemAllocator allocator;
+  qcloud_cos::ObCosWrapper::Handle *tmp_cos_handle = nullptr;
   ObExternalIOCounterGuard io_guard;
 
   if (!is_opened_) {
@@ -789,6 +791,17 @@ int ObStorageCosReader::pread(
   } else if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0 || offset < 0)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid argument", K(ret), KP(buf), K(buf_size), K(offset));
+    // The created cos_handle contains a memory allocator that is not thread-safe and
+    // cannot be used concurrently. As the allocator is not designed to handle concurrent calls,
+    // using it in parallel (such as calling reader.pread simultaneously from multiple threads)
+    // can lead to race conditions, undefined behavior, and potential crashes (core dumps).
+    // To maintain thread safety, a new temporary cos_handle should be created for each individual
+    // pread operation rather than reusing the same handle. This approach ensures that memory
+    // allocation is safely performed without conflicts across concurrent operations.
+  } else if (OB_FAIL(create_cos_handle(
+      allocator, handle_.get_cos_account(),
+      checksum_type_ == ObStorageChecksumType::OB_MD5_ALGO, tmp_cos_handle))) {
+    OB_LOG(WARN, "fail to create tmp cos handle", K(ret), K_(checksum_type));
   } else {
     // When is_range_read is true, it indicates that only a part of the data is read.
     // When false, it indicates that the entire object is read
@@ -817,7 +830,7 @@ int ObStorageCosReader::pread(
       qcloud_cos::CosStringBuffer object_name = qcloud_cos::CosStringBuffer(
           handle_.get_object_name().ptr(), handle_.get_object_name().length());
 
-      if (OB_FAIL(qcloud_cos::ObCosWrapper::pread(handle_.get_ptr(), bucket_name,
+      if (OB_FAIL(qcloud_cos::ObCosWrapper::pread(tmp_cos_handle, bucket_name,
           object_name, offset, buf, get_data_size, is_range_read, read_size))) {
         OB_LOG(WARN, "fail to read object from cos", K(ret), K(is_range_read),
             KP(buf), K(buf_size), K(offset), K(get_data_size), K_(has_meta));

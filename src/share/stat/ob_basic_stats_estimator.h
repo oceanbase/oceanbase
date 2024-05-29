@@ -102,7 +102,8 @@ public:
                                         ObIArray<ObPartitionStatInfo> &partition_stat_infos);
 
   static int gen_tablet_list(const ObTableStatParam &param,
-                             ObSqlString &tablet_list);
+                             ObSqlString &tablet_list,
+                             bool &is_all_update);
 
   static int do_estimate_block_count(ObExecContext &ctx,
                                      const uint64_t tenant_id,
@@ -137,12 +138,9 @@ public:
 
   static int get_need_stats_tables(ObExecContext &ctx,
                                    const int64_t tenant_id,
-                                   ObIArray<int64_t> &table_ids,
-                                   int64_t &slice_cnt);
-
-  static int get_need_stats_table_cnt(ObExecContext &ctx,
-                                      const int64_t tenant_id,
-                                      int64_t &task_table_count);
+                                   const int64_t offset,
+                                   const int64_t slice_cnt,
+                                   ObIArray<int64_t> &table_ids);
 
   int estimate(const ObOptStatGatherParam &param,
                ObIArray<ObOptStat> &dst_opt_stats);
@@ -180,6 +178,8 @@ private:
                                                               const int64_t degree,
                                                               bool &use_column_store,
                                                               bool &use_split_part);
+
+  static int get_gather_table_type_list(ObSqlString &gather_table_type_list);
 };
 
 }

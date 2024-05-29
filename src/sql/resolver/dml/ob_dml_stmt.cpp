@@ -1997,7 +1997,8 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
   int ret = OB_SUCCESS;
   if (expr.is_column_ref_expr() || expr.is_aggr_expr() ||
       expr.is_win_func_expr() || expr.is_query_ref_expr() ||
-      ObRawExprUtils::is_pseudo_column_like_expr(expr)) {
+      ObRawExprUtils::is_pseudo_column_like_expr(expr) ||
+      expr.is_match_against_expr()) {
     expr.set_explicited_reference(ref_type);
     if (expr.is_column_ref_expr()) {
       ObColumnRefRawExpr &column_expr = static_cast<ObColumnRefRawExpr&>(expr);
@@ -2054,6 +2055,7 @@ int ObDMLStmt::set_sharable_expr_reference(ObRawExpr &expr, ExplicitedRefType re
        expr.has_flag(CNT_ROWNUM) || expr.has_flag(CNT_SEQ_EXPR) ||
        expr.has_flag(CNT_PSEUDO_COLUMN) || expr.has_flag(CNT_ONETIME) ||
        expr.has_flag(CNT_DYNAMIC_PARAM) || expr.has_flag(CNT_MATCH_EXPR))) {
+    ref_type = expr.is_match_against_expr() ? ExplicitedRefType::REF_BY_MATCH_EXPR : ref_type;
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.get_param_count(); i++) {
       if (OB_ISNULL(expr.get_param_expr(i))) {
         ret = OB_ERR_UNEXPECTED;
@@ -3062,6 +3064,52 @@ int ObDMLStmt::get_table_rel_ids(const uint64_t table_id,
 
 int ObDMLStmt::get_table_rel_ids(const ObIArray<TableItem*> &tables,
                                  ObSqlBitSet<> &table_set) const
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+    if (OB_ISNULL(tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret));
+    } else if (OB_FAIL(get_table_rel_ids(*tables.at(i), table_set))) {
+      LOG_WARN("failed to get table rel ids", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const uint64_t table_id,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  int32_t idx = get_table_bit_index(table_id);
+  if (OB_UNLIKELY(OB_INVALID_INDEX == idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect idx", K(ret));
+  } else if (OB_FAIL(table_set.add_member(idx))) {
+    LOG_WARN("failed to add members", K(ret));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const TableItem &target,
+                                 ObRelIds &table_set) const
+{
+  int ret = OB_SUCCESS;
+  if (target.is_joined_table()) {
+    const JoinedTable &cur_table = static_cast<const JoinedTable &>(target);
+    for (int64_t i = 0; OB_SUCC(ret) && i < cur_table.single_table_ids_.count(); ++i) {
+      if (OB_FAIL(table_set.add_member(get_table_bit_index(cur_table.single_table_ids_.at(i))))) {
+        LOG_WARN("failed to add member", K(ret), K(cur_table.single_table_ids_.at(i)));
+      }
+    }
+  } else if (OB_FAIL(table_set.add_member(get_table_bit_index(target.table_id_)))) {
+    LOG_WARN("failed to add member", K(ret), K(target.table_id_));
+  }
+  return ret;
+}
+
+int ObDMLStmt::get_table_rel_ids(const ObIArray<TableItem*> &tables,
+                                 ObRelIds &table_set) const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
@@ -4376,7 +4424,9 @@ int ObDMLStmt::check_and_get_same_rowid_expr(const ObRawExpr *expr, ObRawExpr *&
   return ret;
 }
 
-int ObDMLStmt::has_virtual_generated_column(int64_t table_id, bool &has_virtual_col) const
+int ObDMLStmt::has_virtual_generated_column(int64_t table_id,
+                                            bool &has_virtual_col,
+                                            bool ignore_fulltext_gen_col/*=false*/) const
 {
   int ret = OB_SUCCESS;
   const ObColumnRefRawExpr *col_expr = NULL;
@@ -4385,9 +4435,14 @@ int ObDMLStmt::has_virtual_generated_column(int64_t table_id, bool &has_virtual_
     if (OB_ISNULL(col_expr = column_items_.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(col_expr));
-    } else if (table_id == col_expr->get_table_id() &&
-               col_expr->is_virtual_generated_column()) {
-      has_virtual_col = true;
+    } else if (table_id == col_expr->get_table_id() && col_expr->is_virtual_generated_column()) {
+      if (col_expr->is_fulltext_column() && ignore_fulltext_gen_col) {
+        // columns that are additionally dependent on the full-text index auxiliary table are
+        // defined as virtual generated columns on the main table.
+        has_virtual_col = false;
+      } else {
+        has_virtual_col = true;
+      }
     }
   }
   return ret;

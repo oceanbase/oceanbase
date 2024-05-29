@@ -133,7 +133,13 @@ void safe_current_datetime_str_v2(char *buf, int64_t len, int64_t &pos);
 
 int wait_readable(int fd, int64_t timeout);
 
+int64_t safe_parray(char *buf, int64_t len, int64_t *array, int size);
+
 } // namespace common
 } // namespace oceanbase
+
+extern "C" {
+  int64_t safe_parray_c(char *buf, int64_t len, int64_t *array, int size);
+}
 
 #endif // OCEANBASE_SIGNAL_UTILS_H_

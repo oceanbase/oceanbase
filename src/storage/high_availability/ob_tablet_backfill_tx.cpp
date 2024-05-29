@@ -517,6 +517,7 @@ int ObTabletBackfillTXTask::get_all_backfill_tx_tables_(
   table_array.reset();
   ObArray<ObTableHandleV2> minor_sstables;
   ObArray<ObTableHandleV2> memtables;
+  const int64_t emergency_sstable_count = ObTabletTableStore::EMERGENCY_SSTABLE_CNT;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -535,7 +536,11 @@ int ObTabletBackfillTXTask::get_all_backfill_tx_tables_(
     }
   } else {
     // The backfill of sstable needs to start with a larger start_scn
-    if (OB_FAIL(ObTableStoreUtil::reverse_sort_minor_table_handles(minor_sstables))) {
+    if (minor_sstables.count() > emergency_sstable_count) {
+        ret = OB_TOO_MANY_SSTABLE;
+        LOG_WARN("transfer src tablet has too many sstable, cannot backfill, need retry", K(ret),
+            "table_count", minor_sstables.count(), "emergency sstable count", emergency_sstable_count);
+    } else if (OB_FAIL(ObTableStoreUtil::reverse_sort_minor_table_handles(minor_sstables))) {
       LOG_WARN("failed to sort minor tables", K(ret));
     } else if (OB_FAIL(append(table_array, minor_sstables))) {
       LOG_WARN("failed to append minor sstables", K(ret), KPC(tablet), K(minor_sstables));
@@ -586,7 +591,7 @@ int ObTabletBackfillTXTask::get_backfill_tx_memtables_(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("table should not be NULL or table type is unexpected", K(ret), KP(table));
           } else if (table->is_direct_load_memtable()) {
-            ret = OB_NOT_SUPPORTED;
+            ret = OB_TRANSFER_SYS_ERROR;
             LOG_WARN("find a direct load memtable", KR(ret), K(tablet_info_.tablet_id_), KPC(table));
           } else if (FALSE_IT(memtable = static_cast<memtable::ObMemtable *>(table))) {
           } else if (table->get_start_scn() >= backfill_tx_ctx_->log_sync_scn_

@@ -64,6 +64,12 @@ private:
   int gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg);
   int pre_begin_peers(ObDirectLoadResourceApplyArg &apply_arg);
   int confirm_begin_peers();
+private:
+  int add_check_begin_result_task();
+  int check_peers_begin_result(bool &is_finish);
+  class CheckBeginResultTaskProcessor;
+  class CheckBeginResultTaskCallback;
+public:
   int pre_merge_peers();
   int start_merge_peers();
   int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);

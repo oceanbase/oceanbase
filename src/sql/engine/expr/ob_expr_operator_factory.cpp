@@ -1262,6 +1262,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSysExtractUtc);
   REG_OP_ORCL(ObExprTzOffset);
   REG_OP_ORCL(ObExprFromTz);
+  // REG_OP_ORCL(ObExprSpatialCellid);
+  // REG_OP_ORCL(ObExprSpatialMbr);
   //label security
   REG_OP_ORCL(ObExprOLSPolicyCreate);
   REG_OP_ORCL(ObExprOLSPolicyAlter);
@@ -1397,6 +1399,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprInnerRowCmpVal);
   REG_OP_ORCL(ObExprLastRefreshScn);
   // REG_OP_ORCL(ObExprTopNFilter);
+  // REG_OP_ORCL(ObExprSdoRelate);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

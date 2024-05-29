@@ -63,49 +63,38 @@ static const char ob_stop_word_list[][FTS_STOP_WORD_MAX_LENGTH] = {
   "www"
 };
 
-class ObNoStopWordAddWord final : public lib::ObFTParserParam::ObIAddWord
+class ObAddWord final : public lib::ObFTParserParam::ObIAddWord
 {
 public:
-  ObNoStopWordAddWord(
+  ObAddWord(
       const ObCollationType &type,
+      const ObAddWordFlag &flag,
       common::ObIAllocator &allocator,
       common::ObIArray<ObFTWord> &word);
-  virtual ~ObNoStopWordAddWord() = default;
+  virtual ~ObAddWord() = default;
   virtual int operator()(
       lib::ObFTParserParam *param,
       const char *word,
-      const int64_t word_len) override;
-  virtual int64_t get_add_word_count() const override { return word_count_; }
-  VIRTUAL_TO_STRING_KV(K_(collation_type), K_(word_count), K_(words));
+      const int64_t word_len,
+      const int64_t char_cnt) override;
+  virtual int64_t get_add_word_count() const override { return non_stopword_cnt_; }
+  VIRTUAL_TO_STRING_KV(K_(collation_type), K_(min_max_word_cnt), K_(non_stopword_cnt), K_(stopword_cnt),
+      K_(words));
+public:
+  static const int64_t FT_MIN_WORD_LEN = 3;
+  static const int64_t FT_MAX_WORD_LEN = 84;
 private:
-  OB_INLINE common::ObIArray<ObFTWord> &get_words() { return words_; }
+  bool is_min_max_word(const int64_t c_len) const;
+  int casedown_word(const ObFTWord &src, ObFTWord &dst);
+  int check_stopword(const ObFTWord &word, bool &is_stopword);
 private:
   ObCollationType collation_type_;
   common::ObIAllocator &allocator_;
   common::ObIArray<ObFTWord> &words_;
-  int64_t word_count_;
-};
-
-class ObStopWordAddWord final : public lib::ObFTParserParam::ObIAddWord
-{
-public:
-  ObStopWordAddWord(
-      const ObCollationType &type,
-      common::ObIAllocator &allocator,
-      common::ObIArray<ObFTWord> &word);
-  virtual ~ObStopWordAddWord() = default;
-  virtual int operator()(
-      lib::ObFTParserParam *param,
-      const char *word,
-      const int64_t word_len) override;
-  virtual int64_t get_add_word_count() const { return non_stopword_count_; }
-  VIRTUAL_TO_STRING_KV(K_(collation_type), K_(non_stopword_count), K_(stopword_count), K_(words));
-private:
-  ObCollationType collation_type_;
-  common::ObIAllocator &allocator_;
-  common::ObIArray<ObFTWord> &words_;
-  int64_t non_stopword_count_;
-  int64_t stopword_count_;
+  int64_t min_max_word_cnt_;
+  int64_t non_stopword_cnt_;
+  int64_t stopword_cnt_;
+  ObAddWordFlag flag_;
 };
 
 } // end namespace storage

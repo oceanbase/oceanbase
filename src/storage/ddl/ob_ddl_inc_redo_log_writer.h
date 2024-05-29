@@ -124,6 +124,7 @@ public:
       const int64_t task_id,
       const share::SCN &start_scn,
       const uint64_t data_format_version,
+      const storage::ObDirectLoadType direct_load_type,
       transaction::ObTxDesc *tx_desc,
       const transaction::ObTransID &trans_id);
   void reset();
@@ -144,6 +145,7 @@ private:
   int64_t task_id_;
   share::SCN start_scn_;
   uint64_t data_format_version_;
+  storage::ObDirectLoadType direct_load_type_;
   transaction::ObTxDesc *tx_desc_;
   transaction::ObTransID trans_id_;
 };

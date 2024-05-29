@@ -192,6 +192,11 @@ int ObAccessPathEstimation::get_valid_est_methods(ObOptimizerContext &ctx,
       valid_methods &= ~EST_STORAGE;
       valid_methods &= ~EST_DS_METHODS;
     }
+    if (table_type == MATERIALIZED_VIEW) {
+      // TODO [MATERIALIZED TABLE]
+      valid_methods &= ~EST_STORAGE;
+      valid_methods &= ~EST_DS_METHODS;
+    }
     if (is_virtual_table(ref_table_id)) {
       if (!ObDynamicSamplingUtils::is_ds_virtual_table(ref_table_id)) {
         valid_methods &= ~EST_DS_METHODS;

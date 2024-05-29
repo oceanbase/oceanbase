@@ -59,6 +59,7 @@ public:
   bool is_refreshing_mview() const { return is_refreshing_mview_; }
   void set_retryable_ddl(const bool flag) { is_retryable_ddl_ = flag; }
   bool is_retryable_ddl() const { return is_retryable_ddl_; }
+  inline void reset() { ddl_info_ = 0; }
   TO_STRING_KV(K_(ddl_info));
   OB_UNIS_VERSION(1);
 public:

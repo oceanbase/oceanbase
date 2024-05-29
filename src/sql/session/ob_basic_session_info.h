@@ -550,6 +550,8 @@ public:
     is_result_accurate = sys_vars_cache_.get_is_result_accurate();
     return common::OB_SUCCESS;
   }
+  common::ObIArray<uint64_t>& get_enable_role_ids() { return enable_role_ids_; }
+  const common::ObIArray<uint64_t>& get_enable_role_ids() const { return enable_role_ids_; }
   int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
   int get_sql_quote_show_create(bool &sql_quote_show_create) const;
   common::ObConsistencyLevel get_consistency_level() const { return consistency_level_; };
@@ -1398,6 +1400,7 @@ public:
   inline void set_feedback_proxy_info_support(const bool is_feedback_proxy_info_support) { is_feedback_proxy_info_support_ = is_feedback_proxy_info_support; }
   inline bool is_feedback_proxy_info_support() { return is_feedback_proxy_info_support_; }
   int replace_new_session_label(uint64_t policy_id, const share::ObLabelSeSessionLabel &new_session_label);
+  int set_enable_role_ids(const ObIArray<uint64_t>& role_ids);
   int load_default_sys_variable(common::ObIAllocator &allocator, int64_t var_idx);
 
   int set_session_temp_table_used(const bool is_used);
@@ -2391,6 +2394,8 @@ private:
   ForceRichFormatStatus force_rich_vector_format_;
   // just used to plan cache key
   bool config_use_rich_format_;
+
+  common::ObSEArray<uint64_t, 4> enable_role_ids_;
 };
 
 

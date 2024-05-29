@@ -47,6 +47,7 @@ public:
                                               const int64_t buf_size,
                                               int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
+  virtual bool task_can_retry() const { return false; } //build mview task should not retry
   int on_child_task_prepare(const int64_t task_id);
 
 private:

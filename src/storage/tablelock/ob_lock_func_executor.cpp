@@ -285,12 +285,12 @@ int ObLockFuncExecutor::check_lock_exist_(const uint64_t &lock_id)
   char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
   bool is_existed = false;
 
-  OZ(databuff_printf(where_cond,
-                     WHERE_CONDITION_BUFFER_SIZE,
-                     "WHERE obj_id = %" PRIu64
-                     " and obj_type = %d",
-                     lock_id,
-                     static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
+  OZ (databuff_printf(where_cond,
+                      WHERE_CONDITION_BUFFER_SIZE,
+                      "WHERE obj_id = %" PRIu64
+                      " and obj_type = %d",
+                      lock_id,
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
   OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                       "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DETECT_LOCK_INFO_TNAME));
   OZ (ObTableAccessHelper::read_single_row(tenant_id,
@@ -367,17 +367,24 @@ int ObLockFuncExecutor::check_lock_exist_(ObLockFuncContext &ctx, const uint64_t
   return ret;
 }
 
-int ObLockFuncExecutor::check_lock_exist_(ObLockFuncContext &ctx,
-                                          const int64_t raw_owner_id,
-                                          bool &exist)
+int ObLockFuncExecutor::check_owner_exist_(ObLockFuncContext &ctx,
+                                           const uint32_t client_session_id,
+                                           const uint64_t client_session_create_ts,
+                                           bool &exist)
 {
   int ret = OB_SUCCESS;
   ObSqlString where_cond;
-  if (OB_FAIL(where_cond.assign_fmt("owner_id = %ld", raw_owner_id))) {
-    LOG_WARN("fail to assign fmt", KR(ret));
-  } else if (OB_FAIL(check_lock_exist_(ctx, where_cond, exist))) {
-    LOG_WARN("check lock exist failed", K(ret));
+  ObTableLockOwnerID lock_owner;
+
+  OZ (lock_owner.convert_from_client_sessid(client_session_id, client_session_create_ts));
+  if (client_session_create_ts > 0) {
+    OZ (where_cond.assign_fmt("owner_id = %" PRId64, lock_owner.raw_value()));
+  } else {
+    // if client_session_create_ts <= 0, means there's no accurate client_session_create_ts
+    // (from lock live detector), so we only judge client_session_id in this situation
+    OZ (where_cond.assign_fmt("(owner_id & %" PRId64 ") = %" PRIu32, ObTableLockOwnerID::CLIENT_SESS_ID_MASK, client_session_id));
   }
+  OZ (check_lock_exist_(ctx, where_cond, exist));
   return ret;
 }
 
@@ -447,15 +454,18 @@ int ObLockFuncExecutor::check_client_ssid_(ObLockFuncContext &ctx,
 }
 
 int ObLockFuncExecutor::remove_session_record_(ObLockFuncContext &ctx,
-                                               const uint32_t client_session_id)
+                                               const uint32_t client_session_id,
+                                               const uint64_t client_session_create_ts)
 {
   int ret = OB_SUCCESS;
-  bool lock_exist = false;
+  bool owner_exist = false;
   char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
   ObTableLockOwnerID lock_owner;
   ObSqlString delete_sql;
   int64_t affected_rows = 0;
-  if (OB_SUCC(ret) && !lock_exist) {
+
+  OZ (check_owner_exist_(ctx, client_session_id, client_session_create_ts, owner_exist));
+  if (OB_SUCC(ret) && !owner_exist) {
     lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
     OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
                         "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_CLIENT_TO_SERVER_SESSION_INFO_TNAME));
@@ -605,6 +615,32 @@ void ObLockFuncExecutor::mark_lock_session_(sql::ObSQLSessionInfo *session, cons
               K(session->is_lock_session()),
               K(session->is_need_send_feedback_proxy_info()));
   }
+}
+
+int ObLockFuncExecutor::remove_expired_lock_id()
+{
+  int ret = OB_SUCCESS;
+  char table_name[MAX_FULL_TABLE_NAME_LENGTH] = {0};
+  char where_cond[WHERE_CONDITION_BUFFER_SIZE] = {0};
+  const int64_t now = ObTimeUtility::current_time();
+  // delete 10 rows each time, to avoid causing abnormal delays due to deleting too many rows
+  const int delete_limit = 10;
+
+  OZ (databuff_printf(table_name, MAX_FULL_TABLE_NAME_LENGTH,
+                      "%s.%s", OB_SYS_DATABASE_NAME, OB_ALL_DBMS_LOCK_ALLOCATED_TNAME));
+  OZ (databuff_printf(where_cond,
+                      WHERE_CONDITION_BUFFER_SIZE,
+                      "expiration <= usec_to_time(%" PRId64
+                      ") AND lockid NOT IN (SELECT obj_id FROM %s.%s where obj_type = %d or obj_type = %d)"
+                      "LIMIT %d",
+                      now,
+                      OB_SYS_DATABASE_NAME,
+                      OB_ALL_DETECT_LOCK_INFO_TNAME,
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC),
+                      static_cast<int>(ObLockOBJType::OBJ_TYPE_DBMS_LOCK),
+                      delete_limit));
+  OZ (ObTableAccessHelper::delete_row(MTL_ID(), table_name, where_cond));
+  return ret;
 }
 
 int ObGetLockExecutor::execute(ObExecContext &ctx,
@@ -778,17 +814,6 @@ int ObGetLockExecutor::write_lock_id_(ObLockFuncContext &ctx,
                                           insert_sql));
   OZ (ctx.execute_write(insert_sql, affected_rows));
   CK (OB_LIKELY(1 == affected_rows || 2 == affected_rows));
-
-  // clean lock_id which is expired and not locked
-  OZ(delete_sql.assign_fmt("DELETE FROM %s WHERE expiration <= usec_to_time(%" PRId64
-                           ") AND lockid NOT IN (SELECT obj_id FROM %s.%s where obj_type = %d)",
-                           table_name,
-                           now,
-                           OB_SYS_DATABASE_NAME,
-                           OB_ALL_DETECT_LOCK_INFO_TNAME,
-                           static_cast<int>(ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC)));
-  affected_rows = 0;
-  OZ (ctx.execute_write(delete_sql, affected_rows));
 
   return ret;
 }
@@ -1005,7 +1030,7 @@ int ObReleaseLockExecutor::execute(ObExecContext &ctx,
                session, LOCK_OBJECT, arg, need_remove_from_lock_table));
         if (OB_SUCC(ret) && need_remove_from_lock_table) {
           OZ (unlock_obj_(tx_desc, tx_param, arg));
-          OZ (remove_session_record_(stack_ctx, client_session_id));
+          OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
         } else if (OB_EMPTY_RESULT == ret) {
           if (OB_TMP_FAIL(check_lock_exist_(stack_ctx, lock_id, lock_id_existed))) {
             LOG_WARN("check lock_id existed failed", K(tmp_ret), K(lock_id));
@@ -1057,6 +1082,7 @@ int ObReleaseAllLockExecutor::execute(const int64_t raw_owner_id)
       OZ (session.init(0 /*default session id*/,
                        0 /*default proxy id*/,
                        &allocator));
+      OX (session.set_inner_session());
       OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
       OZ (guard.get_tenant_info(tenant_id, tenant_schema));
       OZ (session.init_tenant(tenant_schema->get_tenant_name_str(), tenant_id));
@@ -1103,7 +1129,7 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
                                tx_param,
                                owner_id,
                                release_cnt));
-        OZ (remove_session_record_(stack_ctx, client_session_id));
+        OZ (remove_session_record_(stack_ctx, client_session_id, client_session_create_ts));
       }
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx.destroy(ctx, *(ctx.get_my_session()), is_rollback))) {
@@ -1135,7 +1161,7 @@ int ObReleaseAllLockExecutor::execute_(ObExecContext &ctx,
         ObTxParam tx_param;
         OZ (ObInnerConnectionLockUtil::build_tx_param(session, tx_param));
         OZ (release_all_locks_(stack_ctx, session, tx_param, owner_id, release_cnt));
-        OZ (remove_session_record_(stack_ctx, client_session_id));
+        OZ (remove_session_record_(stack_ctx, client_session_id, 0));
       }
       is_rollback = (OB_SUCCESS != ret);
       if (OB_TMP_FAIL(stack_ctx.destroy(ctx, *(ctx.get_my_session()), is_rollback))) {

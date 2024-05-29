@@ -22,6 +22,7 @@
 #include "ob_log_utils.h"                        // get_timestamp
 #include "ob_log_factory.h"                      // ReadLogBuf, ReadLogBufFactory
 #include "ob_log_trace_id.h"                     // ObLogTraceIdGuard
+#include "ob_cdc_auto_config_mgr.h"              // CDC_CFG_MGR
 
 using namespace oceanbase::common;
 
@@ -138,13 +139,23 @@ int ObLogReader::push(ObLogEntryTask &task, const int64_t timeout)
     ret = OB_INVALID_ARGUMENT;
   } else {
     uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
-    void *push_task = static_cast<void *>(&task);
-    if (OB_FAIL(ReaderThread::push(push_task, hash_value, timeout))) {
-      if (OB_TIMEOUT != ret && OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("push task into ReaderThread fail", K(ret), K(push_task), K(hash_value));
-      }
+    const DmlRedoLogNode *redo_log_node = NULL;
+
+    if (OB_ISNULL(redo_log_node = task.get_redo_log_node())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("redo_log_node is NULL", KR(ret), K(redo_log_node), K(task));
     } else {
-      ATOMIC_INC(&log_entry_task_count_);
+      if (redo_log_node->is_direct_load_inc_log() && CDC_CFG_MGR.get_direct_load_inc_thread_num() < get_thread_num()) {
+        hash_value = hash_value % CDC_CFG_MGR.get_direct_load_inc_thread_num();
+      }
+      void *push_task = static_cast<void *>(&task);
+      if (OB_FAIL(ReaderThread::push(push_task, hash_value, timeout))) {
+        if (OB_TIMEOUT != ret && OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("push task into ReaderThread fail", K(ret), K(push_task), K(hash_value));
+        }
+      } else {
+        ATOMIC_INC(&log_entry_task_count_);
+      }
     }
   }
 

@@ -418,6 +418,9 @@ void ObIndexTreeMultiPrefetcher::reset()
 
 void ObIndexTreeMultiPrefetcher::reuse()
 {
+  for (int64_t i = 0; is_rowkey_sorted_ && i < index_tree_height_; ++i) {
+    level_handles_.at(i).reset();
+  }
   inner_reset();
   ObIndexTreePrefetcher::reuse();
 }
@@ -1669,7 +1672,7 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::c
 {
   int ret = OB_SUCCESS;
   if (ObStoreRowIterator::IteratorRowLockCheck == iter_type_ && !is_row_lock_checked) {
-    const int64_t read_snapshot_version = access_ctx_->trans_version_range_.snapshot_version_;
+    const int64_t read_snapshot_version = access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx();
     if (!index_info.contain_uncommitted_row()
           && index_info.get_max_merged_trans_version() <= read_snapshot_version) {
       ++cur_range_fetch_idx_;

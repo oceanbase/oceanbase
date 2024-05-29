@@ -1285,7 +1285,7 @@ private:
       const ObTableSchema &table_schema,
       uint64_t &tablet_cnt);
 
-  int check_has_fts_index(
+  int check_has_domain_index(
       ObSchemaGetterGuard &schema_guard,
       const uint64_t tenant_id,
       const uint64_t data_table_id,

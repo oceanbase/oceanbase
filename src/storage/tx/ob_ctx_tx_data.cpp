@@ -132,28 +132,6 @@ int ObCtxTxData::recover_tx_data(ObTxData *tmp_tx_data)
   return ret;
 }
 
-int ObCtxTxData::deep_copy_tx_data_out(ObTxDataGuard &tmp_tx_data_guard)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-
-  if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table)
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(deep_copy_tx_data_(tx_table, tmp_tx_data_guard))) {
-      TRANS_LOG(WARN, "deep copy tx data failed", K(ret), K(tmp_tx_data_guard), K(*this));
-    } else if (OB_ISNULL(tmp_tx_data_guard.tx_data())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "copied tmp tx data is null", KR(ret), K(*this));
-    }
-  }
-
-  return ret;
-}
-
 int ObCtxTxData::free_tmp_tx_data(ObTxData *&tmp_tx_data)
 {
   int ret = OB_SUCCESS;
@@ -209,6 +187,38 @@ int ObCtxTxData::set_state(int32_t state)
     ATOMIC_STORE(&(tx_data_guard_.tx_data()->state_), state);
   }
 
+  return ret;
+}
+
+int ObCtxTxData::add_abort_op(SCN op_scn)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+
+  ObTxOp abort_op;
+  if (OB_FAIL(check_tx_data_writable_())) {
+    TRANS_LOG(WARN, "tx data is not writeable", KR(ret), K(*this));
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->init_tx_op())) {
+    TRANS_LOG(WARN, "init_tx_op failed", KR(ret));
+  } else if (OB_FAIL(abort_op.init(ObTxOpCode::ABORT_OP, op_scn, &DEFAULT_TX_DUMMY_OP, 0))) {
+    TRANS_LOG(WARN, "init_tx_op failed", KR(ret));
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->op_guard_->add_tx_op(abort_op))) {
+    TRANS_LOG(WARN, "add_tx_op failed", KR(ret));
+  }
+  return ret;
+}
+
+int ObCtxTxData::reserve_tx_op_space(int64_t count)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (OB_FAIL(check_tx_data_writable_())) {
+    TRANS_LOG(WARN, "tx data is not writeable", KR(ret), K(*this));
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->init_tx_op())) {
+    TRANS_LOG(WARN, "init_tx_op failed", KR(ret));
+  } else if (OB_FAIL(tx_data_guard_.tx_data()->op_guard_->reserve_tx_op_space(count))) {
+    TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret));
+  }
   return ret;
 }
 
@@ -338,80 +348,6 @@ int ObCtxTxData::get_tx_data_ptr(storage::ObTxData *&tx_data_ptr)
   } else {
     tx_data_ptr = tx_data;
   }
-  return ret;
-}
-
-int ObCtxTxData::prepare_add_undo_action(ObUndoAction &undo_action,
-                                         storage::ObTxDataGuard &tmp_tx_data_guard,
-                                         storage::ObUndoStatusNode *&tmp_undo_status)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-  /*
-   * alloc undo_status_node used on commit stage
-   * alloc tx_data and add undo_action to it, which will be inserted
-   *       into tx_data_table after RollbackSavepoint log sync success
-   */
-  if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table);
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(tx_table->get_tx_data_table()->alloc_undo_status_node(tmp_undo_status))) {
-      TRANS_LOG(WARN, "alloc undo status fail", K(ret), KPC(this));
-    } else if (OB_ISNULL(tmp_undo_status)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "undo status is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tx_table->deep_copy_tx_data(tx_data_guard_, tmp_tx_data_guard))) {
-      TRANS_LOG(WARN, "copy tx data fail", K(ret), KPC(this));
-    } else if (OB_ISNULL(tmp_tx_data_guard.tx_data())) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "copied tx_data is null", KR(ret), KPC(this));
-    } else if (OB_FAIL(tmp_tx_data_guard.tx_data()->add_undo_action(tx_table, undo_action))) {
-      TRANS_LOG(WARN, "add undo action fail", K(ret), KPC(this));
-    }
-
-    if (OB_FAIL(ret) && OB_NOT_NULL(tmp_undo_status)) {
-      tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
-    }
-  }
-  return ret;
-}
-
-int ObCtxTxData::cancel_add_undo_action(storage::ObUndoStatusNode *tmp_undo_status)
-{
-  int ret = OB_SUCCESS;
-  ObTxTable *tx_table = nullptr;
-  GET_TX_TABLE_(tx_table);
-  if (OB_SUCC(ret)) {
-    ret = tx_table->get_tx_data_table()->free_undo_status_node(tmp_undo_status);
-  }
-  return ret;
-}
-
-int ObCtxTxData::commit_add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status)
-{
-  return add_undo_action(undo_action, tmp_undo_status);
-}
-
-int ObCtxTxData::add_undo_action(ObUndoAction &undo_action, storage::ObUndoStatusNode *tmp_undo_status)
-{
-  int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
-
-  if (OB_FAIL(check_tx_data_writable_())) {
-    TRANS_LOG(WARN, "tx data is not writeable", K(ret), K(*this));
-  } else {
-    ObTxTable *tx_table = nullptr;
-    GET_TX_TABLE_(tx_table);
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(tx_data_guard_.tx_data()->add_undo_action(tx_table, undo_action, tmp_undo_status))) {
-      TRANS_LOG(WARN, "add undo action failed", K(ret), K(undo_action), KP(tmp_undo_status), K(*this));
-    };
-  }
-
   return ret;
 }
 

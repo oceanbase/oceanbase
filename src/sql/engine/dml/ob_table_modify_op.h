@@ -137,6 +137,7 @@ public:
       uint64_t reserved_                        : 55;
     };
   };
+  int64_t das_dop_; // default is 0
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableModifySpec);
 };

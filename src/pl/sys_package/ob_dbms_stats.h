@@ -315,6 +315,7 @@ public:
                                     const ObObjParam &tab_name,
                                     const ObObjParam &colname,
                                     const ObObjParam &part_name,
+                                    ObObjMeta &col_meta,
                                     ObTableStatParam &param);
 
   static int parse_set_column_stats_options(ObExecContext &ctx,

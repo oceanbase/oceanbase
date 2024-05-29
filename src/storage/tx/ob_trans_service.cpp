@@ -80,7 +80,7 @@ int ObTransService::mtl_init(ObTransService *&it)
   obrpc::ObSrvRpcProxy *rpc_proxy = GCTX.srv_rpc_proxy_;
   share::ObAliveServerTracer *server_tracer = GCTX.server_tracer_;
   ObSrvNetworkFrame *net_frame = GCTX.net_frame_;
-  auto req_transport = net_frame->get_req_transport();
+  rpc::frame::ObReqTransport *req_transport = net_frame->get_req_transport();
   if (OB_FAIL(it->rpc_def_.init(it, req_transport, self, batch_rpc))) {
     TRANS_LOG(ERROR, "rpc init error", KR(ret));
   } else if (OB_FAIL(it->dup_table_rpc_def_.init(it, req_transport, self))) {
@@ -785,6 +785,7 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
   str.assign_ptr(buf, buf_len);
   int64_t local_retry_cnt = 0;
   int64_t retry_cnt = 0;
+  int64_t remain_timeout_us = 0;
   ObTxExecResult tx_result;
   ObTxParam tx_param;
   tx_param.cluster_id_ = tx_desc.cluster_id_;
@@ -871,9 +872,10 @@ int ObTransService::register_mds_into_tx(ObTxDesc &tx_desc,
                   K(ret), K(tx_desc), K(ls_id), K(type), K(buf_len), K(request_id));
       } else if (OB_FALSE_IT(arg.inc_request_id(-1))) {
       } else if (OB_FALSE_IT(time_guard.click("register by rpc begin"))) {
+      } else if (OB_FALSE_IT(remain_timeout_us = tx_desc.expire_ts_ - ObTimeUtil::fast_current_time())) {
       } else if (OB_FAIL(rpc_proxy_->to(ls_leader_addr)
                              .by(tx_desc.tenant_id_)
-                             .timeout(tx_desc.expire_ts_)
+                             .timeout(remain_timeout_us)
                              .register_tx_data(arg, result))) {
         TRANS_LOG(WARN, "register_tx_fata failed", KR(ret), K(ls_leader_addr), K(arg), K(tx_desc),
                   K(ls_id), K(result));

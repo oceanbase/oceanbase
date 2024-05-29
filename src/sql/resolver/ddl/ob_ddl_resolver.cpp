@@ -10276,20 +10276,14 @@ int ObDDLResolver::resolve_partition_hash_or_key(
           LOG_WARN("failed to generate default hash part", K(ret));
         }
         if (!stmt->use_def_sub_part()) {
-          if (table_schema.is_hash_like_subpart()) {
-            // partition by hash(c1) subpartition by hash(c2) subpartitions 3 partitions 3
-            for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
-              if (OB_FAIL(resolve_subpartition_elements(stmt,
-                                                        NULL, // dummy node
-                                                        table_schema,
-                                                        table_schema.get_part_array()[i],
-                                                        false))) {
-                LOG_WARN("failed to resolve subpartition elements", K(ret));
-              }
+          for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_first_part_num(); ++i) {
+            if (OB_FAIL(resolve_subpartition_elements(stmt,
+                                                      NULL, // dummy node
+                                                      table_schema,
+                                                      table_schema.get_part_array()[i],
+                                                      false))) {
+              LOG_WARN("failed to resolve subpartition elements", K(ret));
             }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("invalid partition define", K(ret));
           }
         }
       }
@@ -11900,32 +11894,6 @@ int ObDDLResolver::deep_copy_string_in_part_expr(ObPartitionedStmt* stmt)
   return ret;
 }
 
-int ObDDLResolver::get_ttl_columns(const ObString &ttl_definition, ObIArray<ObString> &ttl_columns)
-{
-  int ret = OB_SUCCESS;
-  if (ttl_definition.empty()) {
-    // do nothing
-  } else {
-    ObString right = ttl_definition;
-    bool is_end = false;
-    while (OB_SUCC(ret) && !is_end) {
-      ObString left = right.split_on(',');
-      if (left.empty()) {
-        left = right;
-        is_end = true;
-      }
-      ObString column_name = left.split_on('+').trim();
-      if (column_name.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null column name", K(ret));
-      } else if (OB_FAIL(ttl_columns.push_back(column_name))) {
-        LOG_WARN("fail to add column name", K(ret), K(column_name));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObDDLResolver::deep_copy_column_expr_name(common::ObIAllocator &allocator,
                                               ObIArray<ObRawExpr*> &exprs)
 {
@@ -11961,6 +11929,9 @@ int ObDDLResolver::parse_column_group(const ParseNode *column_group_node,
   if (OB_ISNULL(column_group_node)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("column gorup node should not be null", K(ret));
+  } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported table type to add column group", K(ret));
   } else {
     dst_table_schema.set_max_used_column_group_id(table_schema.get_max_used_column_group_id());
   }

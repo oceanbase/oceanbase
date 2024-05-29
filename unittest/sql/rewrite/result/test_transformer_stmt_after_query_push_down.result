@@ -6742,7 +6742,7 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
           "dl":"",
           "type":0
         },
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
 =======
         "is_lob_column":false,
@@ -6930,7 +6930,7 @@ SQL: select count(*) from (select * from t1) a group by a.c2 limit 1, 10;
         "dl":"",
         "type":0
       },
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],
@@ -7703,7 +7703,7 @@ SQL: select a.c2 from (select * from t1) a;
           "type":0
         },
         "linear_inter_expr":null,
-        "is_nested_aggr":false,
+        "expr_in_inner_stmt":false,
         "pl_agg_udf_expr":null
       },
       "is_alias":false,
@@ -7839,7 +7839,7 @@ SQL: select a.c2 from (select * from t1) a;
         "type":0
       },
       "linear_inter_expr":null,
-      "is_nested_aggr":false,
+      "expr_in_inner_stmt":false,
       "pl_agg_udf_expr":null
     }
   ],

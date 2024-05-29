@@ -30,7 +30,7 @@ int ObITabletMemtable::inc_unsubmitted_cnt()
   int64_t unsubmitted_cnt = inc_unsubmitted_cnt_();
   TRANS_LOG(DEBUG, "inc_unsubmitted_cnt", K(ls_id), KPC(this), K(lbt()));
 
-  if (ATOMIC_LOAD(&unset_active_memtable_logging_blocked_)) {
+  if (get_unset_active_memtable_logging_blocked()) {
     TRANS_LOG(WARN, "cannot inc unsubmitted_cnt", K(unsubmitted_cnt), K(ls_id), KPC(this));
   }
 
@@ -198,9 +198,20 @@ int ObITabletMemtable::set_start_scn(const share::SCN start_scn)
   } else if (ObScnRange::MAX_SCN == start_scn) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(start_scn));
-  } else if (start_scn >= get_end_scn()
-             || (max_end_scn_ != SCN::min_scn() && start_scn >= max_end_scn_)
-             || start_scn >= rec_scn_) {
+  } else if (
+      // Case1: the start_scn should not greater than its end_scn. Because the
+      // boundary of the memtable is left-open and right-closed.
+      start_scn >= get_end_scn()
+      // Case2: the start_scn should not greater than its max_end_scn except is
+      // has been backoffed. Because the memtable might have failed to sync all
+      // the logs and its right boundary belongs to its previos memtable.
+      || (max_end_scn_ != SCN::min_scn()
+          && start_scn >= max_end_scn_
+          && !get_has_backoffed())
+      // Case3: the start_scn should not greater than its rec_scn. Because the
+      // rec_scn is updated with real log and the start_scn should not be
+      // greater than the real log of its next memtable.
+      || start_scn >= rec_scn_) {
     ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(ERROR, "cannot set start ts now", K(ret), K(start_scn), K(ls_id), KPC(this));
   } else {
@@ -252,11 +263,20 @@ int ObITabletMemtable::set_max_end_scn(const SCN scn, bool allow_backoff)
   } else if (ObScnRange::MAX_SCN == scn) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid args", K(ret), K(scn));
-  } else if (scn <= get_start_scn() || scn > get_end_scn()) {
+  } else if (
+      // Case1: the max_end_scn should not smaller than its start_scn except it
+      // is during backoff. Because the memtable might have failed to sync all
+      // the logs and the max_end_scn belongs to its previous memtable
+      (!allow_backoff &&
+       scn <= get_start_scn())
+      // Case2: the max_end_scn should not smaller than its end_scn. Because the
+      // end_scn is resolved only when the max_end_scn is decided.
+      || scn > get_end_scn()) {
     ret = OB_SCN_OUT_OF_BOUND;
     TRANS_LOG(WARN, "cannot set max end log ts smaller to start log ts",
               K(ret), K(scn), K(ls_id), KPC(this));
   } else if (allow_backoff) {
+    set_has_backoffed();
     TRANS_LOG(INFO, "set max_end_scn force", K(scn), K(max_end_scn_.atomic_get()), K(key_), KPC(this));
     if (scn != max_end_scn_.atomic_get()) {
       max_end_scn_.dec_update(scn);
@@ -324,6 +344,21 @@ void ObITabletMemtable::set_max_schema_version(const int64_t schema_version)
 int64_t ObITabletMemtable::get_max_schema_version() const
 {
   return ATOMIC_LOAD(&max_schema_version_);
+}
+
+int ObITabletMemtable::replay_schema_version_change_log(const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_inited())) {
+    TRANS_LOG(WARN, "not init", K(*this));
+    ret = OB_NOT_INIT;
+  } else if (schema_version < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "invalid argument", K(ret), K(schema_version));
+  } else {
+    set_max_schema_version(schema_version);
+  }
+  return ret;
 }
 
 int64_t ObITabletMemtable::inc_unsubmitted_cnt_() { return ATOMIC_AAF(&unsubmitted_cnt_, 1); }

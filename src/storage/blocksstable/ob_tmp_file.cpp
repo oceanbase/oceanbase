@@ -1230,7 +1230,7 @@ int ObTmpFile::sync(const int64_t timeout_ms)
     const ObIArray<ObTmpFileExtent *> &extents = file_meta_.get_extents();
     common::hash::ObHashSet<int64_t> blk_id_set;
     lib::ObMemAttr attr(tenant_id_, "TmpBlkIDSet");
-    if (OB_FAIL(blk_id_set.create(extents.count(), attr))){
+    if (OB_FAIL(blk_id_set.create(min(extents.count(), 1024 * 1024), attr))){
       STORAGE_LOG(WARN, "create block id set failed", K(ret), K(timeout_ms));
     } else {
       // get extents block id set.

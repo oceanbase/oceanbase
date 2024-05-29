@@ -139,14 +139,20 @@ struct ObDDLTaskSerializeField final
 {
   OB_UNIS_VERSION(1);
 public:
-  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id), K_(is_abort), K_(sub_task_trace_id));
-  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0), consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0) {}
+  TO_STRING_KV(K_(task_version), K_(parallelism), K_(data_format_version), K_(consumer_group_id),
+               K_(is_abort), K_(sub_task_trace_id), K_(is_unique_index), K_(is_global_index) ,K_(is_pre_split));
+  ObDDLTaskSerializeField() : task_version_(0), parallelism_(0), data_format_version_(0),
+                              consumer_group_id_(0), is_abort_(false), sub_task_trace_id_(0),
+                              is_unique_index_(false), is_global_index_(false), is_pre_split_(false) {}
   ObDDLTaskSerializeField(const int64_t task_version,
                           const int64_t parallelism,
                           const uint64_t data_format_version,
                           const int64_t consumer_group_id,
                           const bool is_abort,
-                          const int32_t sub_task_trace_id);
+                          const int32_t sub_task_trace_id,
+                          const bool is_unique_index = false,
+                          const bool is_global_index = false,
+                          const bool is_pre_split = false);
   ~ObDDLTaskSerializeField() = default;
   void reset();
 public:
@@ -156,6 +162,9 @@ public:
   int64_t consumer_group_id_;
   bool is_abort_;
   int32_t sub_task_trace_id_;
+  bool is_unique_index_;
+  bool is_global_index_;
+  bool is_pre_split_;
 };
 
 struct ObCreateDDLTaskParam final
@@ -181,7 +190,7 @@ public:
   TO_STRING_KV(K_(tenant_id), K_(object_id), K_(schema_version), K_(parallelism), K_(consumer_group_id), K_(parent_task_id), K_(task_id),
                K_(type), KPC_(src_table_schema), KPC_(dest_table_schema), KPC_(ddl_arg), K_(tenant_data_version),
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(aux_doc_word_schema),
-               K_(ddl_need_retry_at_executor));
+               K_(ddl_need_retry_at_executor), K_(is_pre_split));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -201,6 +210,7 @@ public:
   const ObTableSchema *aux_doc_word_schema_;
   uint64_t tenant_data_version_;
   bool ddl_need_retry_at_executor_;
+  bool is_pre_split_;
 };
 
 class ObDDLTaskRecordOperator final
@@ -303,14 +313,14 @@ public:
       const share::ObDDLType ddl_type,
       bool &has_conflict_ddl);
 
-  static int check_has_index_task(
+  static int check_has_index_or_mlog_task(
       common::ObISQLClient &proxy,
       const uint64_t tenant_id,
       const uint64_t data_table_id,
       const uint64_t index_table_id,
       bool &has_index_task);
 
-  static int get_create_index_task_cnt(
+  static int get_create_index_or_mlog_task_cnt(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -518,7 +528,7 @@ public:
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0), is_pre_split_(false)
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -594,6 +604,7 @@ public:
   static int push_execution_id(
       const uint64_t tenant_id,
       const int64_t task_id,
+      const share::ObDDLType task_type,
       const bool ddl_can_retry,
       const int64_t data_format_version,
       int64_t &new_execution_id);
@@ -617,7 +628,7 @@ public:
       K_(task_version), K_(parallelism), K_(ddl_stmt_str), K_(compat_mode),
       K_(sys_task_id), K_(err_code_occurence_cnt), K_(stat_info),
       K_(next_schedule_ts), K_(delay_schedule_time), K(execution_id_), K(sql_exec_addr_), K_(data_format_version), K(consumer_group_id_),
-      K_(dst_tenant_id), K_(dst_schema_version));
+      K_(dst_tenant_id), K_(dst_schema_version), K_(is_pre_split));
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t DEFAULT_TASK_IDLE_TIME_US = 10L * 1000L; // 10ms
 protected:
@@ -692,6 +703,7 @@ protected:
   int64_t start_time_;
   uint64_t data_format_version_;
   int64_t consumer_group_id_;
+  bool is_pre_split_;
 };
 
 enum ColChecksumStat

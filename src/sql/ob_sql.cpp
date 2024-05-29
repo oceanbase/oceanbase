@@ -167,8 +167,8 @@ void ObSql::stat()
 
 #define CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, allow_ps)        \
  if (OB_SUCC(ret)) {                                                    \
-   auto stmt_type = result.get_stmt_type();                             \
-   auto &session = result.get_session();                                \
+   stmt::StmtType stmt_type = result.get_stmt_type();                   \
+   ObSQLSessionInfo &session = result.get_session();                    \
    if (!session.is_inner() && session.is_txn_free_route_temp()) {       \
      if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, allow_ps)) {        \
        ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                         \
@@ -3952,7 +3952,7 @@ int ObSql::execute_get_plan(ObPlanCache &plan_cache,
       if (OB_SQL_PC_NOT_EXIST == ret || OB_PC_LOCK_CONFLICT == ret) {
         // do nothing
       } else {
-        LOG_WARN("fail to get physical plan", K(ret));
+        LOG_WARN("fail to get physical plan", K(ret), KPC(guard.get_cache_obj()));
       }
     }
   }
@@ -5640,7 +5640,7 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
 
     // CHECK for `TXN_FREE_ROUTE`
     if (should_reroute && !session.is_inner() && session.is_in_transaction()) {
-      auto stmt_type = plan->get_stmt_type();
+      const stmt::StmtType stmt_type = plan->get_stmt_type();
       bool fixed_route = true;
       if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
         // current is multi-stmt

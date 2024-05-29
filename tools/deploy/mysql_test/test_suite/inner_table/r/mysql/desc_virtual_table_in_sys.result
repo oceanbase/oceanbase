@@ -6809,7 +6809,7 @@ IN_FILTER_ROWS	tinyint(4)	NO		0
 GROUP_ID	bigint(20)	YES		NULL	
 TX_ID	bigint(20)	YES		NULL	
 BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
-PLAN_HASH	bigint(20)	YES		NULL	
+PLAN_HASH	bigint(20) unsigned	YES		NULL	
 THREAD_ID	bigint(20)	YES		NULL	
 STMT_TYPE	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
@@ -7213,9 +7213,10 @@ Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
-response_time	bigint(14)	NO		0	
-count	bigint(14)	NO		0	
-total	bigint(14)	NO		0	
+response_time	bigint(20)	NO		0	
+count	bigint(20)	NO		0	
+total	bigint(20)	NO		0	
+sql_type	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_query_response_time;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7511,6 +7512,7 @@ target_unit_num	bigint(20)	NO		NULL
 target_primary_zone_num	bigint(20)	NO		NULL	
 status	varchar(64)	NO		NULL	
 comment	longtext	YES		NULL	
+max_end_time	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7528,6 +7530,7 @@ status	varchar(64)	NO		NULL
 comment	longtext	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
+max_end_time	timestamp(6)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_job_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7551,6 +7554,7 @@ child_list	varchar(1024)	YES		NULL
 current_transfer_task_id	bigint(20)	NO		NULL	
 job_id	bigint(20)	NO		NULL	
 comment	longtext	YES		NULL	
+balance_strategy	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7576,6 +7580,7 @@ job_id	bigint(20)	NO		NULL
 comment	longtext	YES		NULL	
 create_time	timestamp(6)	NO		NULL	
 finish_time	timestamp(6)	NO		NULL	
+balance_strategy	varchar(64)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_balance_task_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -8179,7 +8184,7 @@ event_id	bigint(20)	YES		NULL
 group_id	bigint(20)	YES		NULL	
 tx_id	bigint(20)	YES		NULL	
 blocking_session_id	bigint(20)	YES		NULL	
-plan_hash	bigint(20)	YES		NULL	
+plan_hash	bigint(20) unsigned	YES		NULL	
 thread_id	bigint(20)	YES		NULL	
 stmt_type	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;

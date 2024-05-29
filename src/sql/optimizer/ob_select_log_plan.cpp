@@ -389,6 +389,7 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
                                          bool &normal_sort_valid)
 {
   int ret = OB_SUCCESS;
+  bool has_keep_aggr = false;
   if (ignore_hint) {
     use_hash_valid = true;
     use_merge_valid = true;
@@ -403,10 +404,13 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(optimizer_context_.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_stmt()), K(optimizer_context_.get_query_ctx()), K(ret));
+  } else if (OB_FAIL(check_aggr_with_keep(get_stmt()->get_aggr_items(), has_keep_aggr))) {
+    LOG_WARN("failed to check aggr with keep", K(ret));
   } else if (get_stmt()->has_rollup()
              || group_by_exprs.empty()
-             || get_stmt()->has_distinct_or_concat_agg()) {
-    //group_concat and distinct aggregation hold all input rows temporary,
+             || get_stmt()->has_distinct_or_concat_agg()
+             || has_keep_aggr) {
+    //keep_aggr、group_concat and distinct aggregation hold all input rows temporary,
     //too much memory consumption for hash aggregate.
     use_hash_valid = false;
   }
@@ -1775,6 +1779,9 @@ int ObSelectLogPlan::generate_raw_plan_for_set()
     const ObSelectStmt *child_stmt = NULL;
     ObSelectLogPlan *child_plan = NULL;
     ObSelectLogPlan *nonrecursive_plan = NULL;
+    if (!select_stmt->is_recursive_union()) {
+      nonrecursive_plan = get_nonrecursive_plan_for_fake_cte();
+    }
     for (int64 i = 0; OB_SUCC(ret) && i < child_size; ++i) {
       child_input_filters.reuse();
       child_rename_filters.reuse();
@@ -7312,6 +7319,11 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     est_cost_info->logical_query_range_row_count_ = 1.0;
     est_cost_info->use_column_store_ = false;
     table_scan->set_est_cost_info(est_cost_info);
+    // set parallel info
+    table_scan->set_parallel(index_scan->get_parallel());
+    table_scan->set_op_parallel_rule(OpParallelRule::OP_INHERIT_DOP);
+    table_scan->set_available_parallel(index_scan->get_available_parallel()),
+    table_scan->set_server_cnt(index_scan->get_server_cnt());
     table_get = table_scan;
   }
   return ret;
@@ -7420,6 +7432,10 @@ int ObSelectLogPlan::allocate_late_materialization_join_as_top(ObLogicalOperator
       join->set_strong_sharding(left_child->get_sharding());
       join->set_interesting_order_info(left_child->get_interesting_order_info());
       join->set_fd_item_set(&left_child->get_fd_item_set());
+      // set parallel info
+      join->set_parallel(left_child->get_parallel());
+      join->set_available_parallel(left_child->get_available_parallel()),
+      join->set_server_cnt(left_child->get_server_cnt());
       join_op = join;
     }
   }
@@ -7907,6 +7923,22 @@ int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &orde
       } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
         LOG_WARN("failed to prune and keep best plans", K(ret));
       } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::check_aggr_with_keep(const ObIArray<ObAggFunRawExpr*> &aggr_items,
+                                          bool &has_keep_aggr)
+{
+  int ret = OB_SUCCESS;
+  has_keep_aggr = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !has_keep_aggr && i < aggr_items.count(); ++i) {
+    if (OB_ISNULL(aggr_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("aggr item is null", K(ret));
+    } else if (IS_KEEP_AGGR_FUN(aggr_items.at(i)->get_expr_type())) {
+      has_keep_aggr = true;
     }
   }
   return ret;

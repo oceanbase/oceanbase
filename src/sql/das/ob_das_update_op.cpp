@@ -260,7 +260,9 @@ int ObDASIndexDMLAdaptor<DAS_OP_TABLE_UPDATE, ObDASUpdIterator>::write_rows(cons
     if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
       LOG_WARN("update row to partition storage failed", K(ret));
     }
-  } else if (!ctdef.is_ignore_ && 0 == affected_rows) {
+  } else if (!(ctdef.is_ignore_ ||
+            ctdef.table_param_.get_data_table().is_domain_index())
+      && 0 == affected_rows) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected affected_rows after do update", K(affected_rows), K(ret));
   }

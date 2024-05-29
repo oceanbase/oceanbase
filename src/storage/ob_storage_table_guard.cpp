@@ -146,7 +146,7 @@ int ObStorageTableGuard::refresh_and_protect_memtable()
   int64_t warn_interval = DEFAULT_REFRESH_WARN_INTERVAL;
 
   do {
-    if (OB_FAIL(tablet_->get_boundary_memtable(handle))) {
+    if (OB_FAIL(tablet_->get_boundary_memtable_from_memtable_mgr(handle))) {
       // if there is no memtable, create a new one
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = create_data_memtable_(ls_id, tablet_id, need_retry);
@@ -233,7 +233,7 @@ void ObStorageTableGuard::reset()
 void ObStorageTableGuard::double_check_inc_write_ref(
     const uint32_t old_freeze_flag,
     const bool is_tablet_freeze,
-    ObIMemtable *memtable,
+    ObMemtable *memtable,
     bool &need_retry)
 {
   if (OB_ISNULL(memtable)) {
@@ -241,7 +241,7 @@ void ObStorageTableGuard::double_check_inc_write_ref(
   } else {
     memtable->inc_write_ref();
     const uint32 new_freeze_flag = memtable->get_freeze_flag();
-    const bool new_is_tablet_freeze = memtable->is_tablet_freeze();
+    const bool new_is_tablet_freeze = memtable->get_is_tablet_freeze();
     // do double-check to prevent concurrency problems
     if (old_freeze_flag != new_freeze_flag || is_tablet_freeze != new_is_tablet_freeze) {
       memtable->dec_write_ref();
@@ -284,7 +284,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObMemtable *memtable, boo
   if (OB_ISNULL(memtable)) {
     LOG_INFO("table is null, need to refresh", K(need_retry), K(ls_id), K(tablet_id));
   } else if (FALSE_IT(old_freeze_flag = memtable->get_freeze_flag())) {
-  } else if (FALSE_IT(is_tablet_freeze = memtable->is_tablet_freeze())) {
+  } else if (FALSE_IT(is_tablet_freeze = memtable->get_is_tablet_freeze())) {
   } else if (memtable->is_active_memtable()) {
     // the most recent memtable is active
     // no need to create a new memtable
@@ -305,7 +305,7 @@ int ObStorageTableGuard::check_freeze_to_inc_write_ref(ObMemtable *memtable, boo
         LOG_WARN("fail to get memtable from ObTableHandle", K(ret), K(need_retry), K(ls_id), K(tablet_id));
       } else {
         if (memtable != old_memtable) {
-          is_tablet_freeze = memtable->is_tablet_freeze();
+          is_tablet_freeze = memtable->get_is_tablet_freeze();
         }
         double_check_inc_write_ref(old_freeze_flag, is_tablet_freeze, memtable, need_retry);
       }

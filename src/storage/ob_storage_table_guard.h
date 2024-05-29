@@ -75,7 +75,7 @@ private:
   void double_check_inc_write_ref(
       const uint32_t old_freeze_flag,
       const bool is_tablet_freeze,
-      ObIMemtable *memtable,
+      memtable::ObMemtable *memtable,
       bool &bool_ret);
   int check_freeze_to_inc_write_ref(memtable::ObMemtable *table, bool &bool_ret);
   int create_data_memtable_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id, bool &no_need_create);

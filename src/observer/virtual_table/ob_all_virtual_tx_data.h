@@ -35,10 +35,11 @@ struct VirtualTxDataRow {
   share::SCN end_scn_;
   share::SCN commit_version_;
   char undo_status_list_str_[common::MAX_UNDO_LIST_CHAR_LENGTH];
+  char tx_op_str_[common::MAX_TX_OP_CHAR_LENGTH];
 
   VirtualTxDataRow() : state_(0), start_scn_(), end_scn_(), commit_version_() {}
 
-  TO_STRING_KV(K(state_), K(start_scn_), K(end_scn_), K(commit_version_), K(undo_status_list_str_));
+  TO_STRING_KV(K(state_), K(start_scn_), K(end_scn_), K(commit_version_), K(undo_status_list_str_), K(tx_op_str_));
 };
 
 class ObAllVirtualTxData : public common::ObVirtualTableScannerIterator {
@@ -53,7 +54,8 @@ private:
     START_SCN_COL,
     END_SCN_COL,
     COMMIT_VERSION_COL,
-    UNDO_STATUS_COL
+    UNDO_STATUS_COL,
+    TX_OP_COL
   };
 
 

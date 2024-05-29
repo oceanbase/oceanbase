@@ -22,6 +22,11 @@ int remove_ls(const share::ObLSID &ls_id,
 int acquire_tx(const char* buf, const int64_t len, int64_t &pos, ObTxDesc *&tx);
 int release_tx_ref(ObTxDesc &tx);
 /*
+ * used when session destroyed
+ * and TxDesc which referenced by session and the tenant unit has removed
+ */
+static void force_release_tx_when_session_destroy(ObTxDesc &tx);
+/*
  * interrupt any work in progress thread
  */
 int interrupt(ObTxDesc &tx, int cause);
@@ -360,6 +365,7 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const ObTxDesc *tx,
                               const bool for_transfer,
                               const ObTxSEQ from_scn,
+                              const int64_t request_id,
                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
@@ -380,7 +386,6 @@ int rollback_to_local_implicit_savepoint_(ObTxDesc &tx,
 int rollback_to_global_implicit_savepoint_(ObTxDesc &tx,
                                            const ObTxSEQ savepoint,
                                            const int64_t expire_ts,
-                                           const share::ObLSArray *extra_touched_ls,
                                            const int exec_errcode);
 int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const ObTxSEQ savepoint,
@@ -388,11 +393,11 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const int64_t tx_seq_base,
                                  const int64_t expire_ts,
                                  const ObTxSEQ specified_from_scn,
+                                 const int64_t request_id,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);
-// in_stmt means stmt is executing
-int tx_sanity_check_(ObTxDesc &tx, const bool in_stmt = false);
+int tx_sanity_check_(ObTxDesc &tx);
 bool tx_need_reset_(const int error_code) const;
 int get_tx_table_guard_(ObLS *ls,
                         const share::ObLSID &ls_id,

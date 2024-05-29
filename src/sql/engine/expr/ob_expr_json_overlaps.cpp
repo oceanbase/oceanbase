@@ -39,6 +39,7 @@ int ObExprJsonOverlaps::calc_result_type2(ObExprResType &type,
 {
   UNUSED(type_ctx); 
   int ret = OB_SUCCESS;
+  bool is_strict = false;
 
   type.set_int32();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);

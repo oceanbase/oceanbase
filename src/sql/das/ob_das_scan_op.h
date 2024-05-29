@@ -16,6 +16,7 @@
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/table/ob_index_lookup_op_impl.h"
+#include "sql/das/ob_group_scan_iter.h"
 
 namespace oceanbase
 {
@@ -46,7 +47,8 @@ public:
       external_files_(alloc),
       external_file_format_str_(alloc),
       trans_info_expr_(nullptr),
-      ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN)
+      ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
+      rowkey_exprs_(alloc)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -80,7 +82,8 @@ public:
                        K_(external_file_format_str),
                        K_(external_file_location),
                        KPC_(trans_info_expr),
-                       K_(ir_scan_type));
+                       K_(ir_scan_type),
+                       K_(rowkey_exprs));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -101,6 +104,7 @@ public:
   ObExternalFileFormat::StringData external_file_format_str_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
+  sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -290,7 +294,11 @@ public:
                        K_(datum_store),
                        KPC_(output_exprs),
                        K_(enable_rich_format),
-                       K_(vec_row_store));
+                       K_(vec_row_store),
+                       K_(io_read_bytes),
+                       K_(ssstore_read_bytes),
+                       K_(ssstore_read_row_cnt),
+                       K_(memstore_read_row_cnt));
 private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
@@ -301,6 +309,10 @@ private:
   ObDASExtraData *extra_result_;
   bool need_check_output_datum_;
   bool enable_rich_format_;
+  int64_t io_read_bytes_;
+  int64_t ssstore_read_bytes_;
+  int64_t ssstore_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
 };
 
 class ObLocalIndexLookupOp : public common::ObNewRowIterator, public ObIndexLookupOpImpl
@@ -372,6 +384,8 @@ public:
 protected:
   virtual int init_scan_param();
 protected:
+  void print_trans_info_and_key_range_();
+protected:
   const ObDASScanCtDef *lookup_ctdef_; //lookup ctdef
   ObDASScanRtDef *lookup_rtdef_; //lookup rtdef
   const ObDASScanCtDef *index_ctdef_;
@@ -398,14 +412,22 @@ protected:
 };
 
 // NOTE: ObDASGroupScanOp defined here is For cross-version compatibility， and it will be removed in future barrier-version;
-// For das remote execution in upgrade stage, ctrl(4.2.1) -> executor (4.2.3)
-// the executor will execute das group-rescan op as the logic of das-scan op, and return the result to ctr;
+// For das remote execution in upgrade stage,
+//   1. ctrl(4.2.1) -> executor(4.2.3):
+//        the executor will execute group scan task as the logic of das scan op, and return the result to ctr;
+//   2. ctrl(4.2.3) -> executor(4.2.1):
+//        the ctrl will send group scan task to executor to ensure exectuor will execute succeed;
 class ObDASGroupScanOp : public ObDASScanOp
 {
   OB_UNIS_VERSION(1);
 public:
   ObDASGroupScanOp(common::ObIAllocator &op_alloc);
   virtual ~ObDASGroupScanOp();
+  void init_group_range(int64_t cur_group_idx, int64_t group_size);
+private:
+  ObGroupScanIter iter_;
+  int64_t cur_group_idx_;
+  int64_t group_size_;
 };
 
 

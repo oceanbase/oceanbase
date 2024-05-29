@@ -164,6 +164,8 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       int64_t affected_rows = 0;
       if (oracle_mode) {
         sql_mode_ = SMO_STRICT_ALL_TABLES | SMO_PAD_CHAR_TO_FULL_LENGTH;
+      } else if (is_mview_complete_refresh_) {
+        sql_mode_ = SMO_STRICT_ALL_TABLES;
       }
       ObSessionParam session_param;
       session_param.sql_mode_ = reinterpret_cast<int64_t *>(&sql_mode_);
@@ -173,6 +175,7 @@ int ObDDLRedefinitionSSTableBuildTask::process()
       session_param.ddl_info_.set_dest_table_hidden(true);
       session_param.ddl_info_.set_heap_table_ddl(use_heap_table_ddl_plan_);
       session_param.ddl_info_.set_mview_complete_refresh(is_mview_complete_refresh_);
+      session_param.ddl_info_.set_refreshing_mview(is_mview_complete_refresh_);
       session_param.ddl_info_.set_retryable_ddl(is_retryable_ddl_);
       session_param.use_external_session_ = true;  // means session id dispatched by session mgr
       session_param.consumer_group_id_ = consumer_group_id_;

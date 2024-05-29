@@ -1365,9 +1365,9 @@ int ObInnerTableSchema::wr_active_session_history_schema(ObTableSchema &table_sc
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObIntType, //column_type
+      ObUInt64Type, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
+      sizeof(uint64_t), //column_length
       -1, //column_precision
       -1, //column_scale
       true, //is_nullable

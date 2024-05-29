@@ -459,7 +459,7 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
   if (OB_ISNULL(aggr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(aggr));
-  } else if (aggr->is_param_distinct() || aggr->is_nested_aggr()) {
+  } else if (aggr->is_param_distinct() || aggr->in_inner_stmt()) { // 这里判断完全没有has_nested_aggr_的时候in_inner_stmt 才会为true
     is_valid = false;
     append_fast_refreshable_note("nested aggr and aggr with distinct param not support", OB_MV_FAST_REFRESH_SIMPLE_MAV);
   } else {

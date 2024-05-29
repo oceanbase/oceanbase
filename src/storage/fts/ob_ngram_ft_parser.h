@@ -37,7 +37,8 @@ private:
   static int add_word(
     lib::ObFTParserParam *param,
     const char *word,
-    int64_t word_len);
+    const int64_t word_len,
+    const int64_t char_cnt);
 private:
   DISABLE_COPY_ASSIGN(ObNgramFTParser);
 };

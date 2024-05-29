@@ -450,7 +450,8 @@ int ObTmpPageCache::read_io(const ObTmpBlockIOInfo &io_info, ObITmpPageIOCallbac
   read_info.io_callback_ = callback;
   read_info.offset_ = io_info.offset_;
   read_info.size_ = io_info.size_;
-  read_info.io_desc_.set_group_id(ObIOModule::TMP_PAGE_CACHE_IO);
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::TMP_PAGE_CACHE_IO);
   if (OB_FAIL(ObBlockManager::async_read_block(read_info, handle))) {
     STORAGE_LOG(WARN, "fail to async read block", K(ret), K(read_info), KP(callback));
   }
@@ -954,7 +955,7 @@ int ObTmpTenantMemBlockManager::DestroyBlockMapOp::operator () (oceanbase::commo
     } else if (OB_FAIL(blk->give_back_buf_into_cache())) {
       STORAGE_LOG(WARN, "fail to put tmp block cache", K(ret), K(blk));
     } else {
-      OB_TMP_FILE_STORE.dec_block_cache_num(blk->get_tenant_id(), 1);
+      tenant_store_.dec_block_cache_num(1);
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -987,7 +988,7 @@ void ObTmpTenantMemBlockManager::destroy()
     }
   }
   ATOMIC_STORE(&washing_count_, 0);
-  DestroyBlockMapOp op;
+  DestroyBlockMapOp op(tenant_store_);
   if (OB_FAIL(t_mblk_map_.foreach_refactored(op))) {
     // overwrite ret
     STORAGE_LOG(WARN, "destroy mblk map failed", K(ret));
@@ -1266,7 +1267,7 @@ int ObTmpTenantMemBlockManager::check_and_free_mem_block(ObTmpMacroBlock *&t_mbl
   } else if (OB_FAIL(free_macro_block(t_mblk->get_block_id()))) {
     STORAGE_LOG(WARN, "fail to free tmp macro block for block cache", K(ret));
   } else {
-    OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
+    tenant_store_.dec_block_cache_num(1);
   }
   return ret;
 }
@@ -1459,7 +1460,8 @@ int ObTmpTenantMemBlockManager::write_io(
     write_info.offset_ = ObTmpMacroBlock::get_header_padding();
     write_info.size_ = io_info.size_;
     write_info.io_timeout_ms_ = io_info.io_timeout_ms_;
-    write_info.io_desc_.set_group_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
+    write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+    write_info.io_desc_.set_sys_module_id(ObIOModule::TMP_TENANT_MEM_BLOCK_IO);
     if (OB_FAIL(ObBlockManager::async_write_block(write_info, handle))) {
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(write_info), K(handle));
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.update_write_time(handle.get_macro_id(),
@@ -1527,6 +1529,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
         const int64_t free_page_nums = blk.get_free_page_nums();
         if (OB_FAIL(wait_info->exec_wait())) {
           STORAGE_LOG(WARN, "fail to exec io handle wait", K(ret), K_(tenant_id), KPC(wait_info));
+          ATOMIC_DEC(&washing_count_);
           int tmp_ret = OB_SUCCESS;
           if (OB_TMP_FAIL(blk.check_and_set_status(ObTmpMacroBlock::WASHING, ObTmpMacroBlock::MEMORY))) {
             STORAGE_LOG(ERROR, "fail to rollback block status", K(ret), K(tmp_ret), K(block_id), K(blk));
@@ -1548,7 +1551,7 @@ int ObTmpTenantMemBlockManager::exec_wait()
               }
             } else {
               ++wait_io_cnt;
-              OB_TMP_FILE_STORE.dec_block_cache_num(tenant_id_, 1);
+              tenant_store_.dec_block_cache_num(1);
               ObTaskController::get().allow_next_syslog();
               STORAGE_LOG(INFO, "succeed to wash a block", K(block_id), K(macro_id),
                   K(free_page_nums), K(t_mblk_map_.size()));

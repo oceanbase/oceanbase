@@ -1213,6 +1213,35 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   return ret;
 }
 
+int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schema, bool &is_drop_col_only)
+{
+  int ret = OB_SUCCESS;
+  is_drop_col_only = true;
+  ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
+  ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
+  for (; OB_SUCC(ret) && is_drop_col_only && it_begin != it_end; it_begin++) {
+    const AlterColumnSchema *alter_col = static_cast<AlterColumnSchema*>(*it_begin);
+    if (OB_ISNULL(alter_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter col should not be null", K(ret), K(alter_table_schema));
+    } else if (OB_DDL_DROP_COLUMN != alter_col->alter_type_) {
+      is_drop_col_only = false;
+    }
+  }
+  return ret;
+}
+
+bool ObSchemaUtils::can_add_column_group(const ObTableSchema &table_schema)
+{
+  bool can_add_cg = false;
+  if (table_schema.is_user_table()
+      || table_schema.is_tmp_table()
+      || table_schema.is_index_table()) {
+    can_add_cg = true;
+  }
+  return can_add_cg;
+}
+
 } // end schema
 } // end share
 } // end oceanbase

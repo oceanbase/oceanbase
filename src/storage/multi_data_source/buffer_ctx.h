@@ -16,6 +16,7 @@
 #include "lib/oblog/ob_log_module.h"
 #include "runtime_utility/common_define.h"
 #include "mds_writer.h"
+#include "runtime_utility/mds_tenant_service.h"
 
 namespace oceanbase
 {
@@ -82,7 +83,10 @@ public:
   }
   // 同事务状态一起持久化以及恢复
   int serialize(char*, const int64_t, int64_t&) const;// 要把实际的ctx类型编码进二进制中
-  int deserialize(const char*, const int64_t, int64_t&);// 要根据实际的ctx的类型，在编译期反射子类类型
+  int deserialize(const char*,
+                  const int64_t,
+                  int64_t&,
+                  ObIAllocator &allocator = MTL(ObTenantMdsService*)->get_buffer_ctx_allocator());// 要根据实际的ctx的类型，在编译期反射子类类型
   int64_t get_serialize_size(void) const;
   TO_STRING_KV(KP(this), KP_(ctx), KPC_(ctx));
 private:

@@ -126,6 +126,7 @@ private:
   int do_token_cnt_agg(const ObDocId &doc_id, int64_t &token_count);
   int get_inv_idx_scan_doc_id(ObDocId &doc_id);
   int fill_token_cnt_with_doc_len();
+  int fill_token_doc_cnt();
   int project_relevance_expr();
   int reuse_fwd_idx_iter();
   int gen_inv_idx_scan_range(const ObString &query_token, ObNewRange &scan_range);
@@ -162,6 +163,7 @@ private:
   common::ObNewRowIterator *forward_idx_iter_;
   ObObj *fwd_range_objs_;
   sql::ObExpr *doc_token_cnt_expr_;
+  int64_t token_doc_cnt_;
   bool need_fwd_idx_agg_;
   bool need_inv_idx_agg_;
   bool inv_idx_agg_evaluated_;

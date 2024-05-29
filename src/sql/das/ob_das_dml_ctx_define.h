@@ -485,6 +485,7 @@ public:
 private:
   void set_ctdef(const ObDASDMLBaseCtDef *das_ctdef);
   int get_next_domain_index_row(ObNewRow *&row);
+  int get_next_domain_index_rows(ObNewRow *&rows, int64_t &row_count);
 private:
   ObDASWriteBuffer &write_buffer_;
   const ObDASDMLBaseCtDef *das_ctdef_;

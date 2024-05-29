@@ -311,6 +311,7 @@ int ObMigrationDagNet::start_running_for_migration_()
   int tmp_ret = OB_SUCCESS;
   ObInitialMigrationDag *initial_migration_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -319,8 +320,10 @@ int ObMigrationDagNet::start_running_for_migration_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_migration_dag))) {
-    LOG_WARN("failed to alloc migration dag ", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_migration_dag))) {
+    LOG_WARN("failed to alloc migration dag ", K(ret), K(prio));
   } else if (OB_FAIL(initial_migration_dag->init(this))) {
     LOG_WARN("failed to init migration dag", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*initial_migration_dag))) {
@@ -549,8 +552,9 @@ int ObInitialMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inital migration dag migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObInitialMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObInitialMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -703,6 +707,7 @@ int ObInitialMigrationTask::generate_migration_dags_()
   ObMigrationFinishDag *migration_finish_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObInitialMigrationDag *initial_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -713,9 +718,11 @@ int ObInitialMigrationTask::generate_migration_dags_()
   } else if (OB_ISNULL(initial_migration_dag = static_cast<ObInitialMigrationDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("initial migration dag is null", K(ret), KP(initial_migration_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(start_migration_dag))) {
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_migration_dag))) {
     LOG_WARN("failed to alloc start migration dag ", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(migration_finish_dag))) {
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, migration_finish_dag))) {
     LOG_WARN("failed to alloc migration finish dag", K(ret));
   } else if (OB_FAIL(start_migration_dag->init(dag_net_))) {
     LOG_WARN("failed to init start migration dag", K(ret));
@@ -845,8 +852,9 @@ int ObStartMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObStartMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -1278,6 +1286,7 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
   ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObStartMigrationDag *start_migration_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1291,10 +1300,12 @@ int ObStartMigrationTask::generate_tablets_migration_dag_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(sys_tablets_migration_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, sys_tablets_migration_dag))) {
       LOG_WARN("failed to alloc sys tablets migration dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag(data_tablets_migration_dag))) {
+    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, data_tablets_migration_dag))) {
       LOG_WARN("failed to alloc data tablets migration dag ", K(ret));
     } else if (OB_FAIL(sys_tablets_migration_dag->init(dag_net))) {
       LOG_WARN("failed to init sys tablets migration dag", K(ret), K(*ctx_));
@@ -1697,8 +1708,9 @@ int ObSysTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) con
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObSysTabletsMigrationDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObSysTabletsMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -1866,6 +1878,7 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
   ObSysTabletsMigrationDag *sys_tablets_migration_dag = nullptr;
   ObLS *ls = nullptr;
   ObIDag *parent = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1885,6 +1898,8 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
   } else if (OB_FALSE_IT(parent = this->get_dag())) {
   } else if (OB_FAIL(tablet_migration_dag_array.push_back(parent))) {
     LOG_WARN("failed to push sys_tablets_migration_dag into array", K(ret), K(*ctx_));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
       const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i);
@@ -1892,7 +1907,7 @@ int ObSysTabletsMigrationTask::generate_sys_tablet_migartion_dag_()
       ObTabletHandle tablet_handle;
       if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
         LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_migration_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
         LOG_WARN("failed to alloc tablet migration dag ", K(ret));
       } else if (OB_FAIL(tablet_migration_dag_array.push_back(tablet_migration_dag))) {
         LOG_WARN("failed to push tablet migration dag into array", K(ret), K(*ctx_));
@@ -2033,8 +2048,9 @@ int ObTabletMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletMigrationDag: log_stream_id = %s, tablet_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), to_cstring(copy_tablet_ctx_.tablet_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObTabletMigrationDag: log_stream_id = %s, tablet_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), to_cstring(copy_tablet_ctx_.tablet_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx), K(copy_tablet_ctx_));
 
   }
@@ -2156,6 +2172,7 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
   const int64_t start_ts = ObTimeUtil::current_time();
   ObMigrationCtx *ctx = nullptr;
   ObLS *ls = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2175,6 +2192,8 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KPC(ctx));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
     while (OB_SUCC(ret)) {
       ObTabletHandle tablet_handle;
@@ -2197,7 +2216,7 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
         }
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_migration_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
         LOG_WARN("failed to alloc tablet migration dag", K(ret));
       } else {
         if (OB_FAIL(tablet_migration_dag->init(tablet_id, tablet_handle, dag_net, tablet_group_ctx_))) {
@@ -3139,8 +3158,9 @@ int ObDataTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) co
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObDataTabletsMigrationDag: log_stream_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObDataTabletsMigrationDag: log_stream_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -3551,6 +3571,7 @@ int ObDataTabletsMigrationTask::generate_tablet_group_dag_()
   ObDataTabletsMigrationDag *data_tablets_migration_dag = nullptr;
   ObHATabletGroupCtx *tablet_group_ctx = nullptr;
   ObArray<ObTabletID> tablet_id_array;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   DEBUG_SYNC(BEFORE_TABLET_GROUP_MIGRATION_GENERATE_NEXT_DAG);
 
@@ -3574,8 +3595,10 @@ int ObDataTabletsMigrationTask::generate_tablet_group_dag_()
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(tablet_group_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_group_dag))) {
       LOG_WARN("failed to alloc tablet group migration dag ", K(ret));
     } else if (OB_FAIL(tablet_group_dag->init(tablet_id_array, dag_net, finish_dag_, tablet_group_ctx))) {
       LOG_WARN("failed to init tablet group dag", K(ret), K(tablet_id_array));
@@ -3798,9 +3821,9 @@ int ObTabletGroupMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) co
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObTabletGroupMigrationDag: log_stream_id = %s, migration_type = %s, first_tablet_id = %s",
+       "ObTabletGroupMigrationDag: log_stream_id = %s, migration_type = %s, first_tablet_id = %s, dag_prio = %s",
        to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       to_cstring(tablet_id_array_.at(0))))) {
+       to_cstring(tablet_id_array_.at(0)), ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -3872,6 +3895,7 @@ int ObTabletGroupMigrationDag::generate_next_dag(share::ObIDag *&dag)
   ObArray<ObTabletID> tablet_id_array;
   ObDagId dag_id;
   const int64_t start_ts = ObTimeUtil::current_time();
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group migration dag do not init", K(ret));
@@ -3899,7 +3923,9 @@ int ObTabletGroupMigrationDag::generate_next_dag(share::ObIDag *&dag)
   } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(tablet_group_migration_dag))) {
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_group_migration_dag))) {
     LOG_WARN("failed to alloc tablet backfill tx migration dag ", K(ret));
   } else if (OB_FAIL(tablet_group_migration_dag->init(tablet_id_array, dag_net, finish_dag_, tablet_group_ctx))) {
     LOG_WARN("failed to init tablet migration dag", K(ret), KPC(ctx));
@@ -4075,6 +4101,7 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
   ObTabletGroupMigrationDag *tablet_group_migration_dag = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
   ObLS *ls = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   DEBUG_SYNC(BEFORE_TABLET_MIGRATION_GENERATE_NEXT_DAG);
 
@@ -4093,6 +4120,8 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), KP(ls));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
     ObIDag *parent = this->get_dag();
     ObTabletID tablet_id;
@@ -4112,7 +4141,7 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
         }
-      } else if (OB_FAIL(scheduler->alloc_dag(tablet_migration_dag))) {
+      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
         LOG_WARN("failed to alloc tablet migration dag ", K(ret));
       } else if (OB_FAIL(tablet_migration_dag->init(tablet_id, tablet_handle, dag_net, tablet_group_ctx_))) {
         LOG_WARN("failed to init tablet migration migration dag", K(ret), K(*ctx_));
@@ -4287,8 +4316,9 @@ int ObMigrationFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObMigrationFinishDag: ls_id = %s, migration_type = %s",
-       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_)))) {
+       "ObMigrationFinishDag: ls_id = %s, migration_type = %s, dag_prio = %s",
+       to_cstring(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
@@ -4412,6 +4442,7 @@ int ObMigrationFinishTask::generate_migration_init_dag_()
   ObInitialMigrationDag *initial_migration_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   ObMigrationFinishDag *migration_finish_dag = nullptr;
+  ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -4422,8 +4453,10 @@ int ObMigrationFinishTask::generate_migration_init_dag_()
   } else if (OB_ISNULL(migration_finish_dag = static_cast<ObMigrationFinishDag *>(this->get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration finish dag should not be NULL", K(ret), KP(migration_finish_dag));
+  } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
+    LOG_WARN("failed to get dag priority", K(ret));
   } else {
-    if (OB_FAIL(scheduler->alloc_dag(initial_migration_dag))) {
+    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_migration_dag))) {
       LOG_WARN("failed to alloc initial migration dag ", K(ret));
     } else if (OB_FAIL(initial_migration_dag->init(dag_net_))) {
       LOG_WARN("failed to init initial migration dag", K(ret));

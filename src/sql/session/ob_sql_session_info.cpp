@@ -317,6 +317,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     enable_early_lock_release_ = false;
     ps_session_info_map_.reuse();
     ps_name_id_map_.reuse();
+    in_use_ps_stmt_id_set_.reuse();
     next_client_ps_stmt_id_ = 0;
     is_remote_session_ = false;
     session_type_ = INVALID_TYPE;
@@ -353,6 +354,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     prelock_ = false;
     proxy_version_ = 0;
     min_proxy_version_ps_ = 0;
+    ddl_info_.reset();
     if (OB_NOT_NULL(mem_context_)) {
       destroy_contexts_map(contexts_map_, mem_context_->get_malloc_allocator());
       DESTROY_CONTEXT(mem_context_);
@@ -1077,7 +1079,7 @@ void ObSQLSessionInfo::get_session_priv_info(share::schema::ObSessionPrivInfo &s
   session_priv.db_ = get_database_name();
   session_priv.user_priv_set_ = user_priv_set_;
   session_priv.db_priv_set_ = db_priv_set_;
-  session_priv.enable_role_id_array_.assign(enable_role_array_);
+  session_priv.enable_role_id_array_.assign(get_enable_role_array());
 }
 
 ObPlanCache *ObSQLSessionInfo::get_plan_cache()
@@ -1308,6 +1310,42 @@ int ObSQLSessionInfo::remove_ps_session_info(const ObPsStmtId stmt_id)
   return ret;
 }
 
+int ObSQLSessionInfo::check_ps_stmt_id_in_use(const ObPsStmtId stmt_id, bool & is_in_use)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("map not created before insert any element", K(ret));
+  } else if (!in_use_ps_stmt_id_set_.empty() && OB_HASH_EXIST == in_use_ps_stmt_id_set_.exist_refactored(stmt_id)) {
+    is_in_use = true;
+  } else {
+    is_in_use = false;
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::add_ps_stmt_id_in_use(const ObPsStmtId stmt_id) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set not created before insert any element", K(ret));
+  } else if (OB_FAIL(in_use_ps_stmt_id_set_.set_refactored(stmt_id))) {
+    LOG_WARN("add ps stmt id failed", K(ret), K(stmt_id));
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::earse_ps_stmt_id_in_use(const ObPsStmtId stmt_id) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!in_use_ps_stmt_id_set_.created())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set not created before insert any element", K(ret));
+  } else if (OB_FAIL(in_use_ps_stmt_id_set_.erase_refactored(stmt_id))) {
+    LOG_WARN("ps stmt id not exist", K(stmt_id));
+  }
+  return ret;
+}
+
 int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
                                       const ObPsStmtInfo *stmt_info,
                                       ObPsStmtId &client_stmt_id,
@@ -1335,8 +1373,9 @@ int ObSQLSessionInfo::prepare_ps_stmt(const ObPsStmtId inner_stmt_id,
     LOG_TRACE("will add session info", K(proxy_version_), K(min_proxy_version_ps_),
               K(inner_stmt_id), K(client_stmt_id), K(next_client_ps_stmt_id_),
               K(is_new_proxy), K(ret), K(is_inner_sql));
-
-    if (OB_FAIL(try_create_ps_session_info_map())) {
+    if(lib::is_mysql_mode() && OB_FAIL(try_create_in_use_ps_stmt_id_set())) {
+      LOG_WARN("fail create in use ps stmt id", K(ret));
+    } else if (OB_FAIL(try_create_ps_session_info_map())) {
       LOG_WARN("fail create map", K(ret));
     } else {
       ret = ps_session_info_map_.get_refactored(client_stmt_id, session_info);
@@ -1918,7 +1957,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
         || EXECUTE_PS_GET_PIECE == mode
         || EXECUTE_PS_SEND_LONG_DATA == mode
         || EXECUTE_PS_FETCH == mode
-        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0)) {
+        || (EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0
+        && audit_record_.plan_id_ == 0)) {
       // spi_cursor_open may not use process_record to set audit_record_.sql_
       // so only EXECUTE_PL_EXECUTE == mode && audit_record_.sql_len_ > 0 do not set sql
       //ps模式对应的sql在协议层中设置, session的current_query_中没值
@@ -2831,7 +2871,7 @@ int ObSQLSessionInfo::end_nested_session(StmtSavedValue &saved_value)
 int ObSQLSessionInfo::set_enable_role_array(const ObIArray<uint64_t> &role_id_array)
 {
   int ret = OB_SUCCESS;
-  ret = enable_role_array_.assign(role_id_array);
+  ret = set_enable_role_ids(role_id_array);
   return ret;
 }
 

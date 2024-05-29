@@ -76,6 +76,36 @@ public:
   int64_t word_cnt_;
 };
 
+class ObAddWordFlag final
+{
+private:
+  static const uint64_t AWF_NONE         = 0;
+  static const uint64_t AWF_MIN_MAX_WORD = 1 << 0; // filter words that are less than a minimum or greater
+                                                   // than a maximum word length.
+  static const uint64_t AWF_STOPWORD     = 1 << 1; // filter by sotp word table.
+  static const uint64_t AWF_CASEDOWN     = 1 << 2; // convert characters from uppercase to lowercase.
+public:
+  ObAddWordFlag() : flag_(AWF_NONE) {}
+  ~ObAddWordFlag() = default;
+private:
+  void set_flag(const uint64_t flag) { flag_ |= flag; }
+  void clear_flag(const uint64_t flag) { flag_ &= ~flag; }
+  bool has_flag(const uint64 flag) const { return (flag_ & flag) == flag; }
+public:
+  void set_min_max_word() { set_flag(AWF_MIN_MAX_WORD); }
+  void set_stop_word() { set_flag(AWF_STOPWORD); }
+  void set_casedown() { set_flag(AWF_CASEDOWN); }
+  void clear() { flag_ = AWF_NONE; }
+  void clear_min_max_word() { clear_flag(AWF_MIN_MAX_WORD); }
+  void clear_stop_word() { clear_flag(AWF_STOPWORD); }
+  void clear_casedown() { clear_flag(AWF_CASEDOWN); }
+  bool min_max_word() const { return has_flag(AWF_MIN_MAX_WORD); }
+  bool stopword() const { return has_flag(AWF_STOPWORD); }
+  bool casedown() const { return has_flag(AWF_CASEDOWN); }
+private:
+  uint64_t flag_;
+};
+
 } // end namespace storage
 } // end namespace oceanbase
 

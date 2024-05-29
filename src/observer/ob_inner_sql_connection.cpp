@@ -639,12 +639,10 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
         if (!(sql_ctx.self_add_plan_) && sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 false, // false mean not first update plan stat
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         } else if (sql_ctx.self_add_plan_ && !sql_ctx.plan_cache_hit_) {
           plan->update_plan_stat(audit_record,
                                 true,
-                                result_set.get_exec_context().get_is_evolution(),
                                 table_row_count_list);
         }
       }
@@ -926,7 +924,9 @@ int ObInnerSQLConnection::retry_while_no_tenant_resource(const int64_t cluster_i
   const int64_t max_retry_us = 128 * 1000;
   int64_t retry_us = 2 * 1000;
   bool need_retry = is_in_trans() ? false : true;
-
+  if (get_session().get_ddl_info().is_ddl()) {  // ddl retry in ddl scheduler layer
+    need_retry = false;
+  }
   // timeout related
   int64_t abs_timeout_us = 0;
   int64_t start_time = ObTimeUtility::current_time();

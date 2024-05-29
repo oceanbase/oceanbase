@@ -103,6 +103,7 @@ private:
   rpc::frame::ObReqTransport *mysql_transport_;
   rpc::frame::ObReqTransport *batch_rpc_transport_;
   uint64_t last_ssl_info_hash_;
+  ObSpinLock lock_;
   int64_t standby_fetchlog_bw_limit_;
   uint64_t standby_fetchlog_bytes_;
   int64_t standby_fetchlog_time_;

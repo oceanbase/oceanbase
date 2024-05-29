@@ -623,6 +623,12 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
     OB_LOGGER.set_mod_log_levels(TCONF.log_level.str());
   }
 
+  if (OB_SUCC(ret)) {
+    const int64_t max_chunk_cache_size = CDC_CFG_MGR.get_max_chunk_cache_size();
+    CHUNK_MGR.set_max_chunk_cache_size(max_chunk_cache_size, true /*use_large_chunk_cache*/);
+    _LOG_INFO("[CHUNK_MGR] set max_chunk_cache_size: %s", SIZE_TO_STR(max_chunk_cache_size));
+  }
+
   return ret;
 }
 
@@ -2801,7 +2807,7 @@ void ObLogInstance::clean_log_()
 
 int64_t ObLogInstance::get_memory_hold_() const
 {
-  return lib::get_memory_used();
+  return lib::get_memory_hold();
 }
 
 int64_t ObLogInstance::get_memory_avail_() const

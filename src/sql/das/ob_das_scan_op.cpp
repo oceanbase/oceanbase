@@ -61,7 +61,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_format_str_,
                     trans_info_expr_,
                     group_by_column_ids_,
-                    ir_scan_type_);
+                    ir_scan_type_,
+                    rowkey_exprs_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -935,6 +936,7 @@ int ObDASScanOp::do_text_retrieve(common::ObNewRowIterator *&retrieval_iter)
   ObDASIRAuxLookupRtDef *aux_lookup_rtdef = nullptr;
   const ObDASSortCtDef *sort_ctdef = nullptr;
   ObDASSortRtDef *sort_rtdef = nullptr;
+  const bool has_lookup = nullptr != get_lookup_ctdef();
   if (OB_ISNULL(retrieval_op = OB_NEWx(ObTextRetrievalOp, &op_alloc_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate text retrieval op", K(ret));
@@ -947,15 +949,28 @@ int ObDASScanOp::do_text_retrieve(common::ObNewRowIterator *&retrieval_iter)
                                                      ir_scan_ctdef,
                                                      ir_scan_rtdef))) {
     LOG_WARN("find ir scan definition failed", K(ret));
-  } else if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef_,
-                                                     attach_rtdef_,
-                                                     DAS_OP_IR_AUX_LOOKUP,
-                                                     aux_lookup_ctdef,
-                                                     aux_lookup_rtdef))) {
+  } else if (has_lookup && OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef_,
+                                                                   attach_rtdef_,
+                                                                   DAS_OP_IR_AUX_LOOKUP,
+                                                                   aux_lookup_ctdef,
+                                                                   aux_lookup_rtdef))) {
     LOG_WARN("find aux lookup definition failed", K(ret));
-  } else if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
-    sort_ctdef = static_cast<const ObDASSortCtDef *>(aux_lookup_ctdef->get_doc_id_scan_ctdef());
-    sort_rtdef = static_cast<ObDASSortRtDef *>(aux_lookup_rtdef->get_doc_id_scan_rtdef());
+  }
+
+  if (OB_SUCC(ret)) {
+    if (has_lookup) {
+      // relevance sort would be child of aux lookup if aux lookup exists
+      if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
+        sort_ctdef = static_cast<const ObDASSortCtDef *>(aux_lookup_ctdef->get_doc_id_scan_ctdef());
+        sort_rtdef = static_cast<ObDASSortRtDef *>(aux_lookup_rtdef->get_doc_id_scan_rtdef());
+      }
+    } else {
+      // relevance sort would be the root attach ctdef if no aux/table lookup
+      if (DAS_OP_SORT == attach_ctdef_->op_type_) {
+        sort_ctdef = static_cast<const ObDASSortCtDef *>(attach_ctdef_);
+        sort_rtdef = static_cast<ObDASSortRtDef *>(attach_rtdef_);
+      }
+    }
   }
 
   if (FAILEDx(retrieval_op->init(ls_id_,
@@ -976,8 +991,8 @@ int ObDASScanOp::do_text_retrieve(common::ObNewRowIterator *&retrieval_iter)
 int ObDASScanOp::do_text_retrieve_rescan()
 {
   int ret = OB_SUCCESS;
-  ObTextRetrievalOp *text_retrieval_op = nullptr;
-  if (nullptr == result_ || result_->get_type() != ObNewRowIterator::IterType::ObLocalIndexLookupIterator) {
+  if (nullptr == result_ || (result_->get_type() != ObNewRowIterator::IterType::ObLocalIndexLookupIterator
+      && result_->get_type() != ObNewRowIterator::IterType::ObTextRetrievalOp)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected text retrieve rescan status", K(ret), KP_(result));
   } else {
@@ -991,32 +1006,54 @@ int ObDASScanOp::do_text_retrieve_rescan()
     ObDASIRAuxLookupRtDef *aux_lookup_rtdef = nullptr;
     const ObDASSortCtDef *sort_ctdef = nullptr;
     ObDASSortRtDef *sort_rtdef = nullptr;
-    ObFullTextIndexLookupOp *text_lookup_op = static_cast<ObFullTextIndexLookupOp *>(result_);
-    if (OB_FAIL(get_aux_lookup_tablet_id(aux_lookup_tablet_id))) {
-      LOG_WARN("failed to get doc id idx tablet id", K(ret), K_(related_tablet_ids));
-    } else if (FALSE_IT(text_retrieval_op = static_cast<ObTextRetrievalOp *>(
-        text_lookup_op->get_text_retrieval_iter()))) {
-    } else if (OB_FAIL(get_text_ir_tablet_ids(inv_idx_tablet_id, fwd_idx_tablet_id, doc_id_idx_tablet_id))) {
+    const bool has_lookup = nullptr != get_lookup_ctdef();
+    ObFullTextIndexLookupOp *text_lookup_op = has_lookup
+        ? static_cast<ObFullTextIndexLookupOp *>(result_)
+        : nullptr;
+    ObTextRetrievalOp * text_retrieval_op = has_lookup
+        ? static_cast<ObTextRetrievalOp *>(text_lookup_op->get_text_retrieval_iter())
+        : static_cast<ObTextRetrievalOp *>(result_);
+    if (OB_FAIL(get_text_ir_tablet_ids(inv_idx_tablet_id, fwd_idx_tablet_id, doc_id_idx_tablet_id))) {
       LOG_WARN("failed to get text ir tablet ids", K(ret));
-    } else if (OB_UNLIKELY(doc_id_idx_tablet_id != aux_lookup_tablet_id)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected aux lookup tablet id is not doc id idx tablet id", K(ret),
-          K(doc_id_idx_tablet_id), K(aux_lookup_tablet_id));
     } else if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef_,
                                                        attach_rtdef_,
                                                        DAS_OP_IR_SCAN,
                                                        ir_scan_ctdef,
                                                        ir_scan_rtdef))) {
       LOG_WARN("find ir scan definition failed", K(ret));
+    } else if (!has_lookup) {
+      // skip
+    } else if (OB_ISNULL(text_lookup_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr to text lookup op", K(ret), KPC(result_));
+    } else if (OB_FAIL(get_aux_lookup_tablet_id(aux_lookup_tablet_id))) {
+      LOG_WARN("failed to get doc id idx tablet id", K(ret), K_(related_tablet_ids));
     } else if (OB_FAIL(ObDASUtils::find_target_das_def(attach_ctdef_,
                                                       attach_rtdef_,
                                                       DAS_OP_IR_AUX_LOOKUP,
                                                       aux_lookup_ctdef,
                                                       aux_lookup_rtdef))) {
       LOG_WARN("find aux lookup definition failed", K(ret));
-    } else if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
-      sort_ctdef = static_cast<const ObDASSortCtDef *>(aux_lookup_ctdef->get_doc_id_scan_ctdef());
-      sort_rtdef = static_cast<ObDASSortRtDef *>(aux_lookup_rtdef->get_doc_id_scan_rtdef());
+    } else {
+      text_lookup_op->set_tablet_id(get_table_lookup_tablet_id());
+      text_lookup_op->set_ls_id(ls_id_);
+      text_lookup_op->set_doc_id_idx_tablet_id(aux_lookup_tablet_id);
+    }
+
+    if (OB_SUCC(ret)) {
+      if (has_lookup) {
+        // relevance sort would be child of aux lookup if aux lookup exists
+        if (DAS_OP_SORT == aux_lookup_ctdef->get_doc_id_scan_ctdef()->op_type_) {
+          sort_ctdef = static_cast<const ObDASSortCtDef *>(aux_lookup_ctdef->get_doc_id_scan_ctdef());
+          sort_rtdef = static_cast<ObDASSortRtDef *>(aux_lookup_rtdef->get_doc_id_scan_rtdef());
+        }
+      } else {
+        // relevance sort would be the root attach ctdef if no aux/table lookup
+        if (DAS_OP_SORT == attach_ctdef_->op_type_) {
+          sort_ctdef = static_cast<const ObDASSortCtDef *>(attach_ctdef_);
+          sort_rtdef = static_cast<ObDASSortRtDef *>(attach_rtdef_);
+        }
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -1032,10 +1069,6 @@ int ObDASScanOp::do_text_retrieve_rescan()
                                              trans_desc_,
                                              snapshot_))) {
       LOG_WARN("failed to do text retrieval rescan", K(ret));
-    } else {
-      text_lookup_op->set_tablet_id(get_table_lookup_tablet_id());
-      text_lookup_op->set_ls_id(ls_id_);
-      text_lookup_op->set_doc_id_idx_tablet_id(aux_lookup_tablet_id);
     }
   }
   return ret;
@@ -1092,16 +1125,25 @@ OB_SERIALIZE_MEMBER((ObDASScanOp, ObIDASTaskOp),
 OB_SERIALIZE_MEMBER(ObDASObsoletedObj, flag_);
 
 ObDASGroupScanOp::ObDASGroupScanOp(ObIAllocator &op_alloc)
-  : ObDASScanOp(op_alloc)
+  : ObDASScanOp(op_alloc),
+    iter_(),
+    cur_group_idx_(0),
+    group_size_(0)
 {
 
+}
+
+void ObDASGroupScanOp::init_group_range(int64_t cur_group_idx, int64_t group_size)
+{
+  cur_group_idx_ = cur_group_idx;
+  group_size_ = group_size;
 }
 
 ObDASGroupScanOp::~ObDASGroupScanOp()
 {
 }
 
-OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp));
+OB_SERIALIZE_MEMBER((ObDASGroupScanOp, ObDASScanOp), iter_, cur_group_idx_, group_size_);
 
 ObDASScanResult::ObDASScanResult()
   : ObIDASTaskResult(),
@@ -1112,7 +1154,11 @@ ObDASScanResult::ObDASScanResult()
     eval_ctx_(nullptr),
     extra_result_(nullptr),
     need_check_output_datum_(false),
-    enable_rich_format_(false)
+    enable_rich_format_(false),
+    io_read_bytes_(0),
+    ssstore_read_bytes_(0),
+    ssstore_read_row_cnt_(0),
+    memstore_read_row_cnt_(0)
 {
 }
 
@@ -1262,7 +1308,11 @@ int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
 OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
                     datum_store_,
                     enable_rich_format_,
-                    vec_row_store_);
+                    vec_row_store_,
+                    io_read_bytes_,
+                    ssstore_read_bytes_,
+                    ssstore_read_row_cnt_,
+                    memstore_read_row_cnt_);
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {
@@ -1305,12 +1355,31 @@ int ObLocalIndexLookupOp::get_next_row(ObNewRow *&row)
   return OB_NOT_IMPLEMENT;
 }
 
+void ObLocalIndexLookupOp::print_trans_info_and_key_range_()
+{
+  int ret = OB_ERR_DEFENSIVE_CHECK;
+  if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
+    for (int64_t i = 0; i < trans_info_array_.count(); i++) {
+      LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
+                KPC(trans_info_array_.at(i)), K(scan_param_.key_ranges_.at(i)));
+    }
+  } else {
+    for (int64_t i = 0; i < scan_param_.key_ranges_.count(); i++) {
+      LOG_ERROR("dump TableLookup DAS Task key_ranges",
+                K(i), K(scan_param_.key_ranges_.at(i)));
+    }
+  }
+}
+
 int ObLocalIndexLookupOp::get_next_row()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObIndexLookupOpImpl::get_next_row())) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from index table lookup failed", K(ret));
+      if (OB_ERR_DEFENSIVE_CHECK == ret) {
+        (void)print_trans_info_and_key_range_();
+      }
     } else {
       LOG_DEBUG("get next row from index table lookup", K(ret));
     }
@@ -1324,6 +1393,9 @@ int ObLocalIndexLookupOp::get_next_rows(int64_t &count, int64_t capacity)
   if (OB_FAIL(ObIndexLookupOpImpl::get_next_rows(count, capacity))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next rows from index table lookup failed", K(ret));
+      if (OB_ERR_DEFENSIVE_CHECK == ret) {
+        (void)print_trans_info_and_key_range_();
+      }
     } else {
       LOG_DEBUG("get next rows from index table lookup ", K(ret));
     }
@@ -1519,17 +1591,7 @@ int ObLocalIndexLookupOp::check_lookup_row_cnt()
                       KPC_(snapshot),
                       KPC_(tx_desc));
       concurrency_control::ObDataValidationService::set_delay_resource_recycle(ls_id_);
-      if (trans_info_array_.count() == scan_param_.key_ranges_.count()) {
-        for (int64_t i = 0; i < trans_info_array_.count(); i++) {
-          LOG_ERROR("dump TableLookup DAS Task trans_info and key_ranges", K(i),
-              KPC(trans_info_array_.at(i)), K(scan_param_.key_ranges_.at(i)));
-        }
-      } else {
-        for (int64_t i = 0; i < scan_param_.key_ranges_.count(); i++) {
-          LOG_ERROR("dump TableLookup DAS Task key_ranges",
-              K(i), K(scan_param_.key_ranges_.at(i)));
-        }
-      }
+      (void)print_trans_info_and_key_range_();
     }
   }
 

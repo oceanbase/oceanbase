@@ -62,7 +62,7 @@ public:
     : ObTransformRule(ctx, TransMethod::PRE_ORDER, T_MV_REWRITE),
       is_mv_info_generated_(false),
       mv_stmt_gen_count_(0) {}
-  virtual ~ObTransformMVRewrite() {}
+  virtual ~ObTransformMVRewrite();
   virtual int transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
@@ -77,7 +77,8 @@ private:
                mv_schema_(NULL),
                data_table_schema_(NULL),
                db_schema_(NULL),
-               view_stmt_(NULL) {}
+               view_stmt_(NULL),
+               select_mv_stmt_(NULL) {}
 
     MvInfo(uint64_t mv_id,
            uint64_t data_table_id,
@@ -90,7 +91,8 @@ private:
             mv_schema_(mv_schema),
             data_table_schema_(data_table_schema),
             db_schema_(db_schema),
-            view_stmt_(view_stmt) {}
+            view_stmt_(view_stmt),
+            select_mv_stmt_(NULL) {}
 
     TO_STRING_KV(
       K_(mv_id),
@@ -98,7 +100,8 @@ private:
       K_(mv_schema),
       K_(data_table_schema),
       K_(db_schema),
-      K_(view_stmt)
+      K_(view_stmt),
+      K_(select_mv_stmt)
     );
 
     uint64_t mv_id_;
@@ -107,6 +110,7 @@ private:
     const ObTableSchema *data_table_schema_;
     const ObDatabaseSchema *db_schema_;
     ObSelectStmt *view_stmt_;
+    ObSelectStmt *select_mv_stmt_;
   };
 
   struct GenerateStmtHelper {
@@ -207,6 +211,9 @@ private:
   int check_condition_match_index(const ObSelectStmt *new_stmt,
                                   bool &is_match_index);
   int add_param_constraint(const ObStmtMapInfo &map_info);
+
+  int check_mv_has_multi_part(const MvInfo &mv_info,
+                              bool &has_multi_part);
 
 private:
   ObSEArray<MvInfo, 4> mv_infos_;

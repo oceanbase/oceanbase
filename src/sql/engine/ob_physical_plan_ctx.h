@@ -477,8 +477,8 @@ public:
   ObIArray<ObArrayParamGroup> &get_array_param_groups() { return array_param_groups_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> &all_local_session_vars);
   int get_local_session_vars(int64_t idx, const ObSolidifiedVarsContext *&local_vars);
-  common::ObIArray<uint64_t> &get_mview_ids() {  return mview_ids_; }
-  common::ObIArray<uint64_t> &get_last_refresh_scns() {  return last_refresh_scns_; }
+  common::ObFixedArray<uint64_t, common::ObIAllocator> &get_mview_ids() {  return mview_ids_; }
+  common::ObFixedArray<uint64_t, common::ObIAllocator> &get_last_refresh_scns() {  return last_refresh_scns_; }
   uint64_t get_last_refresh_scn(uint64_t mview_id) const;
   void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
   int64_t get_tx_id() const { return tx_id_; }

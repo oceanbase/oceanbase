@@ -265,9 +265,9 @@ private:
   void try_freeze_tx_data_();
 
   /* inner subfunctions for freeze process */
-  int inner_logstream_freeze(ObFuture<int> *result);
+  void inner_logstream_freeze(ObFuture<int> *result);
   int submit_log_for_freeze(const bool is_tablet_freeze, const bool is_try);
-  int submit_log_if_needed_(const bool is_tablet_freeze, ObTableHandleV2 &handle);
+  void submit_log_if_needed_for_tablet_freeze_(ObTableHandleV2 &handle);
   void try_submit_log_for_freeze_(const bool is_tablet_freeze);
   int ls_freeze_task_();
   int tablet_freeze_task_(ObTableHandleV2 handle);
@@ -288,7 +288,7 @@ private:
                                        const ObTablet *tablet,
                                        const share::SCN freeze_snapshot_version,
                                        int &ret);
-  int submit_freeze_task_(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
+  void submit_freeze_task_(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
   void wait_memtable_ready_for_flush(ObITabletMemtable *tablet_memtable);
   int wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable);
   int handle_memtable_for_tablet_freeze(ObIMemtable *imemtable);
@@ -302,13 +302,15 @@ private:
                             ObFuture<int> *result = nullptr,
                             const bool for_direct_load = false);
   int freeze_ls_inner_tablet_(const ObTabletID &tablet_id);
-  int batch_tablet_freeze_(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids, ObFuture<int> *result, bool &need_freeze);
-  int submit_batch_tablet_freeze_task(const ObTableHandleArray &tables_array, ObFuture<int> *result);
+  int batch_tablet_freeze_(const int64_t trace_id, const ObIArray<ObTabletID> &tablet_ids,
+                           ObFuture<int> *result, bool &need_freeze);
+  void submit_batch_tablet_freeze_task(const ObTableHandleArray &tables_array, ObFuture<int> *result);
   int batch_tablet_freeze_task(ObTableHandleArray tables_array);
   int finish_freeze_with_ls_lock(ObITabletMemtable *tablet_memtable);
   int try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
                                                      bool &ready_for_flush,
-                                                     const int64_t start);
+                                                     const int64_t start,
+                                                     int64_t &last_submit_log_time);
   void submit_checkpoint_task();
 private:
   // flag whether the logsteram is freezing

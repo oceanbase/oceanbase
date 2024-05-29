@@ -342,7 +342,7 @@ bool ObDDLMacroBlockRedoInfo::is_valid() const
 {
   return table_key_.is_valid() && data_buffer_.ptr() != nullptr && block_type_ != ObDDLMacroBlockType::DDL_MB_INVALID_TYPE
          && logic_id_.is_valid() && start_scn_.is_valid_and_not_min() && data_format_version_ >= 0
-         && type_ > ObDirectLoadType::DIRECT_LOAD_INVALID && type_ < ObDirectLoadType::DIRECT_LOAD_MAX
+         && type_ < ObDirectLoadType::DIRECT_LOAD_MAX
          && (is_incremental_direct_load(type_) ? trans_id_.is_valid() : !trans_id_.is_valid());
 }
 

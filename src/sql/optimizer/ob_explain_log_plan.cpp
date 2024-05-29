@@ -131,8 +131,8 @@ int ObExplainLogPlan::check_explain_generate_plan_with_outline(ObLogPlan *real_p
       || OB_ISNULL(sql_ctx = exec_ctx->get_sql_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(real_plan), K(explain_stmt), K(session_info), K(exec_ctx), K(sql_ctx));
-  } else if (session_info->is_inner()) {
-    /* do not check explain for inner sql (include query in PL) */
+  } else if (session_info->is_inner() || sql_ctx->is_prepare_protocol_) {
+    /* do not check explain for inner sql (include query in PL) and prepare stmt */
   } else if (sql_ctx->multi_stmt_item_.is_part_of_multi_stmt()
              && sql_ctx->multi_stmt_item_.get_seq_num() > 0) {
     /* generate plan call by ObMPQuery::process_with_tmp_context use tmp context, do not check */

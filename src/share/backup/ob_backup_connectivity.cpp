@@ -590,7 +590,7 @@ int ObBackupCheckFile::check_multipart_upload_permission_(const ObBackupDest &ba
   }
 
   if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(device_handle->abort(fd))) {
+    if (OB_NOT_NULL(device_handle) && OB_TMP_FAIL(device_handle->abort(fd))) {
       ret = COVER_SUCC(tmp_ret);
       STORAGE_LOG(WARN, "fail to abort multipart upload", K(ret), K(tmp_ret), K(device_handle), K(fd));
     }

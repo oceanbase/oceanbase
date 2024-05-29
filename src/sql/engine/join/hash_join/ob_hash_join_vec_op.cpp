@@ -2552,6 +2552,7 @@ int ObHashJoinVecOp::probe()
 int ObHashJoinVecOp::probe_batch_output()
 {
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   if (INNER_JOIN == MY_SPEC.join_type_) {
     ret = inner_join_output();
   } else if (LEFT_SEMI_JOIN == MY_SPEC.join_type_) {

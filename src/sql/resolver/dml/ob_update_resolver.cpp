@@ -106,9 +106,6 @@ int ObUpdateResolver::resolve(const ParseNode &parse_tree)
         if ((NULL != (*it)->view_base_item_ || has_tg) &&
             OB_FAIL(add_all_column_to_updatable_view(*update_stmt, *(*it), has_tg))) {
           LOG_WARN("add all column for updatable view failed", K(ret));
-        } else if (is_oracle_mode() &&
-                   OB_FAIL(add_default_sequence_id_to_stmt((*it)->table_id_))) {
-          LOG_WARN("add default sequence id to stmt failed", K(ret));
         }
       }
     }
@@ -445,12 +442,8 @@ int ObUpdateResolver::resolve_table_list(const ParseNode &parse_tree)
       LOG_WARN("failed to resolve table", K(ret));
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
-      JoinedTable *joined_table = nullptr;
       if (OB_FAIL(column_namespace_checker_.add_reference_table(table_item))) {
         LOG_WARN("add reference table to namespace checker failed", K(ret));
-      } else if (OB_FAIL(try_add_join_table_for_fts(table_item, joined_table))) {
-        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
-      } else if (nullptr != joined_table && FALSE_IT(table_item = static_cast<TableItem *>(joined_table))) {
       } else if (OB_FAIL(update_stmt->add_from_item(table_item->table_id_, table_item->is_joined_table()))) {
         LOG_WARN("failed to add from item", K(ret));
       } else if (OB_FAIL(check_need_fired_trigger(table_item))) {
@@ -566,7 +559,13 @@ int ObUpdateResolver::generate_update_table_info(ObTableAssignment &table_assign
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(try_update_column_expr_for_fts(*table_item, table_info->column_exprs_))) {
+      TableItem *rowkey_doc = NULL;
+      if (OB_FAIL(try_add_join_table_for_fts(table_item, rowkey_doc))) {
+        LOG_WARN("fail to try add join table for fts", K(ret), KPC(table_item));
+      } else if (OB_NOT_NULL(rowkey_doc) && OB_FAIL(try_update_column_expr_for_fts(
+                                                                      *table_item,
+                                                                      rowkey_doc,
+                                                                      table_info->column_exprs_))) {
         LOG_WARN("fail to try update column expr for fts", K(ret), KPC(table_item));
       } else if (OB_FAIL(update_stmt->get_update_table_info().push_back(table_info))) {
         LOG_WARN("failed to push back table info", K(ret));

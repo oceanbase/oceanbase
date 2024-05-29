@@ -988,6 +988,7 @@ int ObMicroBlockReader::get_row_count(
     const int64_t *row_ids,
     const int64_t row_cap,
     const bool contains_null,
+    const share::schema::ObColumnParam *col_param,
     int64_t &count)
 {
   int ret = OB_SUCCESS;
@@ -1015,6 +1016,15 @@ int ObMicroBlockReader::get_row_count(
           col_idx,
           datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
+      } else if (datum.is_nop()) {
+        if (OB_UNLIKELY(nullptr == col_param || col_param->get_orig_default_value().is_nop_value())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Unexpected null col param or default value", K(ret), KPC(col_param));
+        } else if (col_param->get_orig_default_value().is_null()) {
+          datum.set_null();
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (!datum.is_null()) {
         ++count;
       }
@@ -1065,11 +1075,6 @@ int ObMicroBlockReader::get_aggregate_result(
           col_idx,
           tmp_datum))) {
         LOG_WARN("fail to read column", K(ret), K(i), K(col_idx), K(row_idx));
-      } else if (need_padding && OB_FAIL(pad_column(col_param.get_meta_type(),
-                                                    col_param.get_accuracy(),
-                                                    allocator_.get_inner_allocator(),
-                                                    tmp_datum))) {
-        LOG_WARN("Failed to pad column", K(ret), K(col_param), K(datum));
       } else if (!tmp_datum.is_nop() && OB_FAIL(datum.from_storage_datum(tmp_datum, map_type))) {
         LOG_WARN("Failed to convert storage datum", K(ret), K(i), K(col_offset), K(tmp_datum), K(obj_type), K(map_type));
       } else if (has_lob_out_row && !datum.is_nop() && !datum.is_null() && !datum.get_lob_data().in_row_) {

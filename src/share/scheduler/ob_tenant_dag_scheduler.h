@@ -211,6 +211,12 @@ public:
     TASK_TYPE_TENANT_SNAPSHOT_CREATE = 55,
     TASK_TYPE_TENANT_SNAPSHOT_GC = 56,
     TASK_TYPE_BATCH_FREEZE_TABLETS = 57,
+    TASK_TYPE_LOB_BUILD_MAP = 58,
+    TASK_TYPE_LOB_MERGE_MAP = 59,
+    TASK_TYPE_LOB_WRITE_DATA = 60,
+    TASK_TYPE_DDL_SPLIT_PREPARE = 61,
+    TASK_TYPE_DDL_SPLIT_WRITE = 62,
+    TASK_TYPE_DDL_SPLIT_MERGE = 63,
     TASK_TYPE_MAX,
   };
 
@@ -350,7 +356,7 @@ public:
   bool is_dag_failed() const { return ObIDag::DAG_STATUS_NODE_FAILED == dag_status_; }
   void set_add_time() { add_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_add_time() const { return add_time_; }
-  int64_t get_priority() const { return priority_; }
+  ObDagPrio::ObDagPrioEnum get_priority() const { return priority_; }
   void set_priority(ObDagPrio::ObDagPrioEnum prio) { priority_ = prio; }
   const ObDagId &get_dag_id() const { return id_; }
   int set_dag_id(const ObDagId &dag_id);
@@ -1056,6 +1062,8 @@ public:
   template<typename T>
   int alloc_dag(T *&dag);
   template<typename T>
+  int alloc_dag_with_priority(const ObDagPrio::ObDagPrioEnum &prio, T *&dag);
+  template<typename T>
   int create_and_add_dag_net(const ObIDagInitParam *param);
   void free_dag(ObIDag &dag);
   void inner_free_dag(ObIDag &dag);
@@ -1287,6 +1295,27 @@ int ObTenantDagScheduler::alloc_dag(T *&dag)
         dag = static_cast<T*>(new_dag);
       }
     }
+  }
+  return ret;
+}
+
+template <typename  T>
+int ObTenantDagScheduler::alloc_dag_with_priority(
+    const ObDagPrio::ObDagPrioEnum &prio, T *&dag)
+{
+  int ret = OB_SUCCESS;
+  dag = NULL;
+  if (prio < ObDagPrio::DAG_PRIO_COMPACTION_HIGH
+     || prio >= ObDagPrio::DAG_PRIO_MAX) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "get invalid arg", K(ret), K(prio));
+  } else if (OB_FAIL(alloc_dag(dag))) {
+    COMMON_LOG(WARN, "failed to alloc dag", K(ret));
+  } else if (OB_ISNULL(dag)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag should not be null", K(ret), KP(dag));
+  } else {
+    dag->set_priority(prio);
   }
   return ret;
 }

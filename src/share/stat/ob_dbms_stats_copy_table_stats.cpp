@@ -16,6 +16,7 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_dbms_stats_copy_table_stats.h"
+#include "share/stat/ob_dbms_stats_history_manager.h"
 
 int CopyTableStatHelper::copy_part_stat(ObIArray<ObOptTableStat *> &table_stats)
 {
@@ -419,8 +420,28 @@ int ObDbmsStatsCopyTableStats::copy_tab_col_stats(sql::ObExecContext &ctx,
     LOG_WARN("src table stat is not analyzed", K(table_stat_param.part_infos_.at(0).part_id_));
   } else if (OB_FAIL(copy_stat_helper.copy_part_col_stat(table_stat_param.is_subpart_name_, col_handles, table_stats, column_stats))) {
     LOG_WARN("failed to copy table column stat", K(ret), KPC(copy_stat_helper.src_part_stat_));
-  } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, table_stats, column_stats))) {
-    LOG_WARN("failed to split batch write stat", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObMySQLTransaction trans;
+    //begin trans
+    if (OB_FAIL(trans.start(ctx.get_sql_proxy(), table_stat_param.tenant_id_))) {
+      LOG_WARN("fail to start transaction", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsHistoryManager::backup_opt_stats(ctx, trans, table_stat_param, ObTimeUtility::current_time()))) {
+      LOG_WARN("failed to backup opt stats", K(ret));
+    } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, trans.get_connection(), table_stats, column_stats))) {
+      LOG_WARN("failed to split batch write", K(ret));
+    } else {/*do nothing*/}
+    //end trans
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
   }
   return ret;
 }

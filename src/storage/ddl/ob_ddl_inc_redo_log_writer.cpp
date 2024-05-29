@@ -85,6 +85,7 @@ ObDDLIncRedoLogWriter::ObDDLIncRedoLogWriter()
 
 ObDDLIncRedoLogWriter::~ObDDLIncRedoLogWriter()
 {
+  ddl_inc_log_handle_.reset();
   if (nullptr != buffer_) {
     ob_free(buffer_);
     buffer_ = nullptr;
@@ -234,10 +235,9 @@ int ObDDLIncRedoLogWriter::wait_inc_redo_log_finish()
       LOG_WARN("fail to wait io finish", K(ret));
     } else if (OB_FAIL(ddl_inc_log_handle_.cb_->get_ret_code())) {
       LOG_WARN("ddl redo callback executed failed", K(ret));
-    } else {
-      ddl_inc_log_handle_.reset();
     }
   }
+  ddl_inc_log_handle_.reset();
 
   return ret;
 }
@@ -643,6 +643,7 @@ ObDDLIncRedoLogWriterCallback::ObDDLIncRedoLogWriterCallback()
     table_key_(),
     task_id_(0),
     data_format_version_(0),
+    direct_load_type_(DIRECT_LOAD_INVALID),
     tx_desc_(nullptr),
     trans_id_()
 {
@@ -661,6 +662,7 @@ int ObDDLIncRedoLogWriterCallback::init(
     const int64_t task_id,
     const share::SCN &start_scn,
     const uint64_t data_format_version,
+    const ObDirectLoadType direct_load_type,
     ObTxDesc *tx_desc,
     const ObTransID &trans_id)
 {
@@ -669,9 +671,11 @@ int ObDDLIncRedoLogWriterCallback::init(
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
   } else if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid() || block_type == DDL_MB_INVALID_TYPE ||
-                         !table_key.is_valid() || task_id == 0 || data_format_version < 0 || OB_ISNULL(tx_desc) || !trans_id.is_valid())) {
+                         !table_key.is_valid() || task_id == 0 || data_format_version < 0 ||
+                         !is_valid_direct_load(direct_load_type) || OB_ISNULL(tx_desc) || !trans_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version), KP(tx_desc), K(trans_id));
+    LOG_WARN("invalid arguments", K(ret), K(ls_id), K(tablet_id), K(block_type), K(table_key), K(task_id), K(data_format_version),
+        K(direct_load_type), KP(tx_desc), K(trans_id));
   } else if (OB_FAIL(ddl_inc_writer_.init(ls_id, tablet_id))) {
     LOG_WARN("fail to init ddl_inc_writer_", K(ret), K(ls_id), K(tablet_id));
   } else {
@@ -680,6 +684,7 @@ int ObDDLIncRedoLogWriterCallback::init(
     task_id_ = task_id;
     start_scn_ = start_scn;
     data_format_version_ = data_format_version;
+    direct_load_type_ = direct_load_type;
     tx_desc_ = tx_desc;
     trans_id_ = trans_id;
     is_inited_ = true;
@@ -699,6 +704,7 @@ void ObDDLIncRedoLogWriterCallback::reset()
   task_id_ = 0;
   start_scn_.reset();
   data_format_version_ = 0;
+  direct_load_type_ = DIRECT_LOAD_INVALID;
   tx_desc_ = nullptr;
   trans_id_.reset();
 }
@@ -725,7 +731,7 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.logic_id_ = logic_id;
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
-    redo_info_.type_ = ObDirectLoadType::DIRECT_LOAD_INCREMENTAL;
+    redo_info_.type_ = direct_load_type_;
     redo_info_.trans_id_ = trans_id_;
     if (OB_FAIL(ddl_inc_writer_.write_inc_redo_log_with_retry(redo_info_, macro_block_id_, task_id_, tx_desc_))) {
       LOG_WARN("write ddl inc redo log fail", K(ret));

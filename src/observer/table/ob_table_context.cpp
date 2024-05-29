@@ -888,8 +888,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   const ObString &index_name = query.get_index_name();
   const ObIArray<ObString> &select_columns = query.get_select_columns();
   bool has_filter = (query.get_htable_filter().is_valid() || query.get_filter_string().length() > 0);
-  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || is_ttl_table_
-                                  || (has_filter && !is_htable());
+  const bool select_all_columns = select_columns.empty() || query.is_aggregate_query() || (has_filter && !is_htable());
   const ObColumnSchemaV2 *column_schema = nullptr;
   operation_type_ = ObTableOperationType::Type::SCAN;
   // init is_weak_read_,scan_order_
@@ -929,6 +928,13 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
     } else {
       // select_col_ids_ is same order with schema
       int64_t cell_idx = 0;
+      ObSEArray<ObString, 4> ttl_columns;
+      if (is_ttl_table_) {
+        const ObString &ttl_definition = table_schema_->get_ttl_definition();
+        if (OB_FAIL(ObTTLUtil::get_ttl_columns(ttl_definition, ttl_columns))) {
+          LOG_WARN("fail to get ttl columns", K(ret));
+        }
+      }
       for (ObTableSchema::const_column_iterator iter = table_schema_->column_begin();
           OB_SUCC(ret) && iter != table_schema_->column_end(); ++iter, cell_idx++) {
         const ObColumnSchemaV2 *column_schema = *iter;
@@ -950,7 +956,8 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
               OB_ISNULL(column_schema = index_schema_->get_column_schema(column_name))) {
             is_index_back_ = true;
           }
-        } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())) {
+        } else if (has_exist_in_columns(select_columns, column_schema->get_column_name_str())
+            || (is_ttl_table_ && has_exist_in_array(ttl_columns, column_schema->get_column_name_str()))) {
           if (OB_FAIL(select_col_ids_.push_back(column_schema->get_column_id()))) {
             LOG_WARN("fail to add column id", K(ret));
           } else if (is_index_scan_ && !is_index_back_ &&
@@ -960,11 +967,7 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
         }
       }
       if (OB_SUCC(ret)) {
-        if ((select_col_ids_.count() != select_columns.count()) && !select_all_columns) {
-          ret = OB_ERR_COLUMN_NOT_FOUND;
-          LOG_WARN("select_col_ids or select_metas count is not equal to select_columns",
-              K(select_columns), K(select_col_ids_));
-        } else if (!select_all_columns) {
+        if (!select_all_columns) {
           // query_col_ids_ is user query order
           for (int64_t i = 0; OB_SUCC(ret) && i < select_columns.count(); i++) {
             if (OB_ISNULL(column_schema = table_schema_->get_column_schema(select_columns.at(i)))) {

@@ -30,6 +30,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "common/ob_simple_iterator.h"
 #include "share/ob_common_id.h"
+#include "storage/memtable/ob_row_conflict_info.h"
 
 namespace oceanbase
 {
@@ -351,12 +352,13 @@ class ObTxExecResult
   bool incomplete_; // TODO: (yunxing.cyx) remove, required before sql use new API
   share::ObLSArray touched_ls_list_;
   ObTxPartList parts_;
-  ObSArray<ObTransIDAndAddr> cflict_txs_;
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST for cflict_txs_
+  ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 public:
   ObTxExecResult();
   ~ObTxExecResult();
   void reset();
-  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(cflict_txs));
+  TO_STRING_KV(K_(incomplete), K_(parts), K_(touched_ls_list), K_(conflict_txs));
   void set_incomplete() {
     TRANS_LOG(TRACE, "tx result incomplete:", KP(this));
     incomplete_ = true;
@@ -368,7 +370,7 @@ public:
   const share::ObLSArray &get_touched_ls() const { return touched_ls_list_; }
   int merge_result(const ObTxExecResult &r);
   int assign(const ObTxExecResult &r);
-  const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return cflict_txs_; }
+  const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return conflict_txs_; }
 };
 
 class RollbackMaskSet
@@ -392,6 +394,10 @@ public:
   int mask(const ObTxExecPart &part) {
     ObSpinLockGuard guard(lock_);
     return mask_set_.mask(part);
+  }
+  int unmask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.unmask(part);
   }
   bool is_all_mask() {
     ObSpinLockGuard guard(lock_);
@@ -543,12 +549,13 @@ protected:
   int16_t last_branch_id_;           // branch_id allocator, reset when stmt start
   ObTxPartList parts_;               // participant list
   ObTxSavePointList savepoints_;     // savepoints established
-  // cflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
+  // conflict_txs_ is used to store conflict trans id when try acquire row lock failed(meet lock conflict)
   // this information will used to detect deadlock
-  // cflict_txs_ is valid when transaction is not executed on local
-  // on scheduler, cflict_txs_ merges all participants executed results on remote
-  // on participant, cflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
-  ObSArray<ObTransIDAndAddr> cflict_txs_;
+  // conflict_txs_ is valid when transaction is not executed on local
+  // on scheduler, conflict_txs_ merges all participants executed results on remote
+  // on participant, conflict_txs_ temporary stores conflict information, and will be read by upper layers, bring back to scheduler
+  ObSArray<ObTransIDAndAddr> conflict_txs_; // FARM COMPAT WHITELIST for cflict_txs_
+  ObSArray<storage::ObRowConflictInfo> conflict_info_array_;
 
   // used during commit
   share::ObLSID coord_id_;           // coordinator ID
@@ -575,7 +582,7 @@ private:
   ObTxTimeoutTask commit_task_;     // commit retry task
   ObXACtx *xa_ctx_;                 // xa context
   ObTransTraceLog tlog_;
-#ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
   struct DLink {
     DLink(): next_(this), prev_(this) {}
     void reset() { next_ = this; prev_ = this; }
@@ -661,7 +668,7 @@ public:
                K_(flags_.BLOCK),
                K_(flags_.REPLICA),
                K_(can_elr),
-               K_(cflict_txs),
+               K_(conflict_txs),
                K_(abort_cause),
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
@@ -673,10 +680,10 @@ public:
   int alloc_branch_id(const int64_t count, int16_t &branch_id);
   int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
   void reset_conflict_txs()
-  { ObSpinLockGuard guard(lock_); cflict_txs_.reset(); }
+  { ObSpinLockGuard guard(lock_); conflict_txs_.reset(); }
   int add_conflict_tx(const ObTransIDAndAddr conflict_tx);
   int merge_conflict_txs(const ObIArray<ObTransIDAndAddr> &conflict_ids);
-  bool has_conflict_txs() const { return cflict_txs_.count() > 0; }
+  bool has_conflict_txs() const { return conflict_txs_.count() > 0; }
   bool contain(const ObTransID &trans_id) const { return tx_id_ == trans_id; } /*used by TransHashMap*/
   uint64_t get_tenant_id() const { return tenant_id_; }
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }
@@ -842,55 +849,69 @@ public:
   {
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
                    , lk_()
                    , list_()
-  #endif
+#endif
    {}
+#ifdef ENABLE_DEBUG_LOG
+    ~ObTxDescAlloc()
+    {
+      ObSpinLockGuard guard(lk_);
+      list_.remove();
+    }
+#endif
    ObTxDesc* alloc_value()
    {
      ATOMIC_INC(&alloc_cnt_);
      ObTxDesc *it = op_alloc(ObTxDesc);
-  #ifndef NDEBUG
-      ObSpinLockGuard guard(lk_);
-      list_.insert(it->alloc_link_);
-  #endif
+#ifdef ENABLE_DEBUG_LOG
+     ObSpinLockGuard guard(lk_);
+     list_.insert(it->alloc_link_);
+#endif
       return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
-  #endif
+#endif
         op_free(v);
       }
     }
+    static void force_free(ObTxDesc *v)
+    {
+      op_free(v);
+    }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
     template<typename Function>
     int for_each(Function &fn)
     {
       int ret = OB_SUCCESS;
       ObSpinLockGuard guard(lk_);
-      auto n = list_.next_;
+      ObTxDesc::DLink *n = list_.next_;
       while(n != &list_) {
-        auto tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);
+        ObTxDesc *tx = CONTAINER_OF(n, ObTxDesc, alloc_link_);
         ret = fn(tx);
         n = n->next_;
       }
       return ret;
     }
-  #endif
+#endif
     private:
       int64_t alloc_cnt_;
-  #ifndef NDEBUG
+#ifdef ENABLE_DEBUG_LOG
       ObSpinLock lk_;
       ObTxDesc::DLink list_;
-  #endif
+#endif
   };
+  static void force_release(ObTxDesc &tx) {
+    ObTxDescAlloc::force_free(&tx);
+  }
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
   ObTransService &txs_;

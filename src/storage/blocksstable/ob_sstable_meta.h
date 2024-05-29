@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_META_H
 #define OCEANBASE_STORAGE_BLOCKSSTABLE_OB_SSTABLE_META_H
 
+#include "lib/container/ob_iarray.h"
 #include "share/schema/ob_table_schema.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
@@ -29,6 +30,51 @@ struct ObTabletCreateSSTableParam;
 }
 namespace blocksstable
 {
+class ObTxContext final
+{
+public:
+  struct ObTxDesc final
+  {
+    int64_t tx_id_;
+    int64_t row_count_;
+    int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+    int deserialize(const char *buf, const int64_t buf_len, int64_t &pos);
+    int64_t get_serialize_size() const;
+    TO_STRING_KV(K(tx_id_), K(row_count_));
+  };
+
+  ObTxContext() : len_(0), count_(0), tx_descs_(nullptr) {};
+
+  int init(const common::ObIArray<ObTxDesc> &tx_descs, common::ObArenaAllocator &allocator);
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size() const;
+  int deserialize(common::ObArenaAllocator &allocator, const char *buf, const int64_t buf_len, int64_t &pos);
+  int deep_copy(
+    char *buf,
+    const int64_t buf_len,
+    int64_t &pos,
+    ObTxContext &dest) const;
+  int64_t get_variable_size() const;
+  OB_INLINE int64_t get_count() const { return count_; }
+  int64_t get_tx_id(const int64_t idx) const;
+  void reset()
+  {
+    len_ = 0;
+    count_ = 0;
+    tx_descs_ = nullptr;
+  }
+  TO_STRING_KV(K_(count), K(ObArrayWrap<ObTxDesc>(tx_descs_, count_)));
+private:
+  int push_back(const ObTxDesc &desc);
+
+private:
+  static const int64_t MAX_TX_IDS_COUNT = 16;
+  int32_t len_; // for compat
+  int64_t count_; // actual item count
+  ObTxDesc *tx_descs_;
+  DISALLOW_COPY_AND_ASSIGN(ObTxContext);
+};
+
 //For compatibility, the variables in this struct MUST NOT be deleted or moved.
 //You should ONLY add variables at the end.
 //Note that if you use complex structure as variables, the complex structure should also keep compatibility.
@@ -154,8 +200,8 @@ public:
   OB_INLINE const ObSSTableBasicMeta &get_basic_meta() const { return basic_meta_; }
   OB_INLINE int64_t get_col_checksum_cnt() const { return column_checksum_count_; }
   OB_INLINE int64_t *get_col_checksum() const { return column_checksums_; }
-  OB_INLINE int64_t get_tx_id_count() const { return tx_ids_.count(); }
-  OB_INLINE int64_t get_tx_ids(int64_t idx) const { return tx_ids_.at(idx); }
+  OB_INLINE int64_t get_tx_id_count() const { return tx_ctx_.get_count(); }
+  OB_INLINE int64_t get_tx_ids(const int64_t idx) const { return tx_ctx_.get_tx_id(idx); }
   OB_INLINE int64_t get_data_checksum() const { return basic_meta_.data_checksum_; }
   OB_INLINE int64_t get_rowkey_column_count() const { return basic_meta_.rowkey_column_count_; }
   OB_INLINE int64_t get_column_count() const { return basic_meta_.column_cnt_; }
@@ -245,7 +291,7 @@ public:
       const int64_t buf_len,
       int64_t &pos,
       ObSSTableMeta *&dest) const;
-  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ids), K_(is_inited));
+  TO_STRING_KV(K_(basic_meta), KP_(column_checksums), K_(column_checksum_count), K_(data_root_info), K_(macro_info), K_(cg_sstables), K_(tx_ctx), K_(is_inited));
 private:
   bool check_meta() const;
   int init_base_meta(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator &allocator);
@@ -255,6 +301,9 @@ private:
   int prepare_column_checksum(
       const common::ObIArray<int64_t> &column_checksums,
       common::ObArenaAllocator &allocator);
+  int prepare_tx_context(
+    const ObTxContext::ObTxDesc &tx_desc,
+    common::ObArenaAllocator &allocator);
   int serialize_(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize_(
       common::ObArenaAllocator &allocator,
@@ -265,7 +314,6 @@ private:
 private:
   friend class ObSSTable;
   static const int64_t SSTABLE_META_VERSION = 1;
-    static const int64_t MAX_TX_IDS_COUNT = 16;
 private:
   ObSSTableBasicMeta basic_meta_;
   ObRootBlockInfo data_root_info_;
@@ -273,7 +321,7 @@ private:
   ObSSTableArray cg_sstables_;
   int64_t *column_checksums_;
   int64_t column_checksum_count_;
-  ObSEArray<int64_t, MAX_TX_IDS_COUNT> tx_ids_;
+  ObTxContext tx_ctx_;
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);

@@ -2180,6 +2180,24 @@ collation_connection	varchar(128)	NO		NULL
 proc_type	bigint(20)	NO		NULL	
 collation_database	varchar(128)	NO		NULL	
 sql_mode	varchar(128)	NO		NULL	
+desc oceanbase.__all_virtual_global_transaction;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+gtrid	varbinary(128)	NO	PRI	NULL	
+bqual	varbinary(128)	NO	PRI	NULL	
+format_id	bigint(20)	NO	PRI	1	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+trans_id	bigint(20)	NO		NULL	
+coordinator	bigint(20)	YES		NULL	
+scheduler_ip	varchar(128)	NO		NULL	
+scheduler_port	bigint(20)	NO		NULL	
+is_readonly	tinyint(4)	NO		0	
+state	bigint(20)	NO		NULL	
+flag	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_global_transaction;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_deadlock_event_history;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	
@@ -3120,7 +3138,7 @@ IN_FILTER_ROWS	tinyint(4)	NO		0
 GROUP_ID	bigint(20)	YES		NULL	
 TX_ID	bigint(20)	YES		NULL	
 BLOCKING_SESSION_ID	bigint(20)	YES		NULL	
-PLAN_HASH	bigint(20)	YES		NULL	
+PLAN_HASH	bigint(20) unsigned	YES		NULL	
 THREAD_ID	bigint(20)	YES		NULL	
 STMT_TYPE	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ash;
@@ -3393,9 +3411,10 @@ Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO		NULL	
 svr_ip	varchar(46)	NO		NULL	
 svr_port	bigint(20)	NO		NULL	
-response_time	bigint(14)	NO		0	
-count	bigint(14)	NO		0	
-total	bigint(14)	NO		0	
+response_time	bigint(20)	NO		0	
+count	bigint(20)	NO		0	
+total	bigint(20)	NO		0	
+sql_type	varchar(128)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_query_response_time;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3908,7 +3927,7 @@ event_id	bigint(20)	YES		NULL
 group_id	bigint(20)	YES		NULL	
 tx_id	bigint(20)	YES		NULL	
 blocking_session_id	bigint(20)	YES		NULL	
-plan_hash	bigint(20)	YES		NULL	
+plan_hash	bigint(20) unsigned	YES		NULL	
 thread_id	bigint(20)	YES		NULL	
 stmt_type	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_wr_active_session_history;

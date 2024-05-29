@@ -805,9 +805,22 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
     ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
+  ObSSTable *first_sstable = static_cast<ObSSTable *>(result.handle_.get_table(0));
+  ObCOSSTableV2 *co_sstable = nullptr;
   ObCOMajorMergePolicy::ObCOMajorMergeType major_merge_type = ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE;
-  if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_merge_type(
-          result,
+  ObTabletTableIterator iter;
+  ObSEArray<ObITable*, OB_DEFAULT_SE_ARRAY_COUNT> tables;
+  if (OB_ISNULL(first_sstable) || OB_UNLIKELY(!first_sstable->is_co_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("first sstable in tables handle is null or not co sstable", K(ret), K(result.handle_));
+  } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
+  } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
+    LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));
+  } else if (OB_FAIL(iter.get_read_tables_from_tablet(medium_info.medium_snapshot_, false/*allow_no_ready_read*/, false/*major_sstable_only*/, tables))) {
+    LOG_WARN("failed to get read tables for estimate row cnt", K(ret), K(medium_info), K(iter));
+  } else if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_merge_type(
+          *co_sstable,
+          tables,
           medium_info.storage_schema_,
           tablet_handle_,
           major_merge_type))) {

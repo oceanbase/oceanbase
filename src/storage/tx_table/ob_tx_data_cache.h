@@ -107,7 +107,7 @@ public:
   TO_STRING_KV(K_(is_inited), KP_(tx_data), KPC_(tx_data), KP_(mtl_alloc_buf), KP(&reserved_buf_));
 
 public:  // derived from ObIKVCacheValue
-  virtual int64_t size() const { return (IS_INIT && OB_NOT_NULL(tx_data_)) ? sizeof(*this) + tx_data_->size() : 0; }
+  virtual int64_t size() const { return (IS_INIT && OB_NOT_NULL(tx_data_)) ? sizeof(*this) + tx_data_->size_need_cache() : 0; }
 
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheValue *&value) const;
 

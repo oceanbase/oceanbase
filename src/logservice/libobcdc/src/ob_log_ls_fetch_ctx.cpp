@@ -151,7 +151,7 @@ int LSFetchCtx::init(
   const int64_t start_tstamp_ns = start_parameters.get_start_tstamp_ns();
   const palf::LSN &start_lsn = start_parameters.get_start_lsn();
   // If the start lsn is 0, the service is started from creation
-  const bool start_serve_from_create = (palf::PALF_INITIAL_LSN_VAL == start_lsn.val_);
+  const bool start_serve_from_create = !tls_id.is_sys_log_stream() && palf::PALF_INITIAL_LSN_VAL == start_lsn.val_;
   ObBackupDest archive_dest;
 
   reset();

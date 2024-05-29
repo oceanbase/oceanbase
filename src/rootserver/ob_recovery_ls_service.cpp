@@ -474,7 +474,7 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         const ObTxBufferNodeArray &source_data =
             commit_log.get_multi_source_data();
         const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id_);
-        START_TRANSACTION(proxy_, exec_tenant_id)
+        ObMySQLTransaction trans;
         for (int64_t i = 0; OB_SUCC(ret) && i < source_data.count(); ++i) {
           const ObTxBufferNode &node = source_data.at(i);
           if (ObTxDataSourceType::STANDBY_UPGRADE == node.get_data_source_type()) {
@@ -484,6 +484,8 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
           } else if (ObTxDataSourceType::LS_TABLE != node.get_data_source_type()
                      && ObTxDataSourceType::TRANSFER_TASK != node.get_data_source_type()) {
             // nothing
+          } else if (! trans.is_started() && OB_FAIL(trans.start(proxy_, exec_tenant_id))) {
+            LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
           } else if (FALSE_IT(has_operation = true)) {
             //can not be there;
           } else if (OB_FAIL(check_valid_to_operator_ls_(sync_scn))) {
@@ -1228,6 +1230,12 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
       LOG_WARN("failed to remove task", KR(ret), K(tenant_id_), K(ls_balance_task));
     } else {
       LOG_INFO("task can be remove", KR(ret), K(ls_balance_task));
+      ROOTSERVICE_EVENT_ADD("standby_tenant", "remove_balance_task",
+          K_(tenant_id), "task_type", ls_balance_task.get_task_op(),
+          "task_scn", ls_balance_task.get_operation_scn(),
+          "switchover_status", tenant_info.get_switchover_status(),
+          "src_ls", ls_balance_task.get_src_ls(),
+          "dest_ls", ls_balance_task.get_dest_ls());
     }
     END_TRANSACTION(trans)
   }

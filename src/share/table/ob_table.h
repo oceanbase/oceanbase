@@ -230,6 +230,7 @@ void ObTableEntityFactory<T>::free_all()
 enum class ObQueryOperationType : int {
   QUERY_START = 0,
   QUERY_NEXT = 1,
+  QUERY_END = 2,
   QUERY_MAX
 };
 
@@ -251,6 +252,7 @@ struct ObTableOperationType
     CHECK_AND_INSERT_UP = 10,
     PUT = 11,
     TRIGGER = 12, // internal type for group commit trigger
+    REDIS = 13,
     INVALID = 15
   };
 };
@@ -948,15 +950,15 @@ public:
   ObTableQueryResult affected_entity_;
 };
 
-class ObTableQuerySyncResult: public ObTableQueryResult
+class ObTableQueryAsyncResult: public ObTableQueryResult
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableQuerySyncResult()
+  ObTableQueryAsyncResult()
     : is_end_(false),
       query_session_id_(0)
   {}
-  virtual ~ObTableQuerySyncResult() {}
+  virtual ~ObTableQueryAsyncResult() {}
 public:
   INHERIT_TO_STRING_KV("ObTableQueryResult", ObTableQueryResult, K_(is_end), K_(query_session_id));
 public:

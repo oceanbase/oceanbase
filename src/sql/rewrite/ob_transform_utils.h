@@ -961,6 +961,8 @@ public:
                                  const ObIArray<ObRawExpr *> &source_exprs,
                                  const ObSqlBitSet<> &table_set,
                                  ObIArray<ObRawExpr *> &table_exprs);
+  static int extract_table_rel_ids(const ObIArray<ObRawExpr*> &exprs,
+                                   ObRelIds& table_ids);
   static int get_table_joined_exprs(const ObDMLStmt &stmt,
                                     const TableItem &source,
                                     const TableItem &target,
@@ -1888,10 +1890,10 @@ public:
   static bool is_const_null(ObRawExpr &expr);
   static bool is_full_group_by(ObSelectStmt& stmt, ObSQLMode mode);
 
-  static int check_table_with_fulltext_recursively(TableItem *table,
+  static int check_table_with_fts_or_multivalue_recursively(TableItem *table,
                                                    ObSchemaChecker *schema_checker,
                                                    ObSQLSessionInfo *session_info,
-                                                   bool &has_fulltext_index);
+                                                   bool &has_fts_or_multivalue_index);
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
                                   ObRawExpr *expr);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
@@ -1942,6 +1944,16 @@ public:
                                            bool &is_ref);
 
   static int check_contain_correlated_lateral_table(ObDMLStmt *stmt, bool &is_contain);
+  // check whether the score calculated by match expr is actually utilized
+  static int check_need_calc_match_score(ObExecContext *exec_ctx,
+                                        const ObDMLStmt* stmt,
+                                        ObRawExpr* match_expr,
+                                        bool &need_calc,
+                                        ObIArray<ObExprConstraint> &constraints);
+  static int check_expr_eq_zero(ObExecContext *ctx,
+                                ObRawExpr *expr,
+                                bool &eq_zero,
+                                ObIArray<ObExprConstraint> &constraints);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -1991,6 +2003,11 @@ private:
   static int check_convert_string_safely(const ObRawExpr *expr,
                                          const ObRawExpr *src_expr,
                                          bool &is_safe);
+  static int inner_check_need_calc_match_score(ObExecContext *exec_ctx,
+                                              ObRawExpr* expr,
+                                              ObRawExpr* match_expr,
+                                              bool &need_calc,
+                                              ObIArray<ObExprConstraint> &constraints);
 };
 
 class StmtUniqueKeyProvider

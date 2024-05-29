@@ -414,7 +414,7 @@ int ObTableStoreIterator::set_retire_check()
     if (OB_UNLIKELY(!table_ptr.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected invalid table handle", K(ret), K(table_ptr), K(*this));
-    } else if (table_ptr.table_->is_data_memtable()) {
+    } else if (table_ptr.table_->is_memtable()) {
       first_memtable = table_ptr.table_;
     } else {
       break;
@@ -422,7 +422,7 @@ int ObTableStoreIterator::set_retire_check()
   }
 
   if (OB_SUCC(ret) && OB_NOT_NULL(first_memtable)) {
-    memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(first_memtable);
+    ObITabletMemtable *memtable = static_cast<ObITabletMemtable *>(first_memtable);
     memstore_retired_ = &memtable->get_read_barrier();
   }
   return ret;

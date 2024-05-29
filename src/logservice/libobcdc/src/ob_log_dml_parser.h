@@ -84,6 +84,7 @@ private:
   int dispatch_task_(ObLogEntryTask &log_entry_task, PartTransTask &part_trans_task, volatile bool &stop_flag);
   int handle_empty_stmt_(ObLogEntryTask &log_entry_task, PartTransTask &part_trans_task, volatile bool &stop_flag);
   int push_task_into_formatter_(ObLogEntryTask &log_entry_task, volatile bool &stop_flag);
+  int wait_until_parser_pause_down_(const int64_t thread_index, volatile bool &stop_flag);
 
 private:
   bool                  inited_;

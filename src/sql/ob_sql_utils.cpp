@@ -4009,8 +4009,8 @@ int ObVirtualTableResultConverter::convert_output_row(ObNewRow *&src_row)
       ObObj src_obj = src_row->get_cell(i);
       if (tenant_id_col_id_ == column_id) {
         src_obj.set_uint64(cur_tenant_id_);
-      } else if (src_row->get_cell(i).is_string_type() &&
-                0 == src_row->get_cell(i).get_data_length()) {
+      } else if ((src_row->get_cell(i).is_string_type() && 0 == src_row->get_cell(i).get_data_length()) ||
+                 (src_row->get_cell(i).is_timestamp() && src_row->get_cell(i).get_timestamp() <= 0)) {
         need_cast = false;
         convert_row_.cells_[i].set_null();
       }
@@ -4051,7 +4051,9 @@ int ObVirtualTableResultConverter::convert_column(ObObj &src_obj, uint64_t colum
       LOG_WARN("column is not match", K(ret), K(column_id), K(col_schema->get_column_id()));
     } else if (tenant_id_col_id_ == column_id) {
       dst_obj.set_uint64(cur_tenant_id_);
-    } else if (src_obj.is_null() || (src_obj.is_string_type() && 0 == src_obj.get_data_length())) {
+    } else if (src_obj.is_null() ||
+               (src_obj.is_string_type() && 0 == src_obj.get_data_length()) ||
+               (src_obj.is_timestamp() && src_obj.get_timestamp() <= 0)) {
       need_cast = false;
       src_obj.set_null();
     } else if (src_obj.is_ext()) {
@@ -4100,7 +4102,8 @@ int ObVirtualTableResultConverter::convert_output_row(
       } else if (OB_FAIL(datum->to_obj(convert_row_.cells_[i], expr->obj_meta_))) {
         LOG_WARN("failed to cast obj", K(ret));
       } else if (convert_row_.cells_[i].is_null() ||
-          (convert_row_.cells_[i].is_string_type() && 0 == convert_row_.cells_[i].get_data_length())) {
+                 (convert_row_.cells_[i].is_string_type() && 0 == convert_row_.cells_[i].get_data_length()) ||
+                 (convert_row_.cells_[i].is_timestamp() && convert_row_.cells_[i].get_timestamp() <= 0)) {
         convert_row_.cells_[i].set_null();
       } else if (convert_row_.cells_[i].is_lob_storage()) {
         ObLobLocatorV2 lob;
@@ -5311,18 +5314,36 @@ bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
-  ObString access_id;
-  ObString access_key;
+  ObString https_header = "https://";
+  ObString http_header = "http://";
+  ObString access_id = url.split_on(':').trim_space_only();
+  ObString access_key = url.split_on('@').trim_space_only();
   ObString host_name;
-  ObString access_info = url.split_on('/').trim_space_only();
-  if (access_info.empty()) {
+  int64_t header_len = 0;
+
+  url = url.trim_space_only();
+  if (url.prefix_match_ci(https_header)) {
+    header_len = https_header.length();
+  } else if (url.prefix_match_ci(http_header)) {
+    header_len = http_header.length();
+  } else {
+    header_len = 0;
+  }
+  if (header_len > 0) {
+    host_name = url;
+    url += header_len;
+    ObString temp = url.split_on('/');
+    host_name.assign_ptr(host_name.ptr(), header_len + temp.length());
+    host_name = host_name.trim_space_only();
+  } else {
+    host_name = url.split_on('/').trim_space_only();
+  }
+  url = url.trim_space_only();
+  if (access_id.empty() || access_key.empty() || host_name.empty() || url.empty()) {
     ret = OB_URI_ERROR;
     LOG_WARN("incorrect uri", K(ret));
-  } else {
-    access_id = access_info.split_on(':').trim_space_only();
-    access_key = access_info.split_on('@').trim_space_only();
-    host_name = access_info.trim_space_only();
   }
+  LOG_DEBUG("check access info", K(access_id), K(access_key), K(host_name), K(url));
 
   //fill storage_info
   if (OB_SUCC(ret)) {

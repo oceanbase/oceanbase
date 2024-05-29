@@ -626,7 +626,8 @@ ObTableModifySpec::ObTableModifySpec(common::ObIAllocator &alloc,
   : ObOpSpec(alloc, type),
     expr_frame_info_(NULL),
     ab_stmt_id_(nullptr),
-    flags_(0)
+    flags_(0),
+    das_dop_(0)
 {
 }
 
@@ -636,6 +637,7 @@ OB_DEF_SERIALIZE(ObTableModifySpec)
   BASE_SER((ObTableModifySpec, ObOpSpec));
   OB_UNIS_ENCODE(flags_);
   OB_UNIS_ENCODE(ab_stmt_id_);
+  OB_UNIS_ENCODE(das_dop_);
   return ret;
 }
 
@@ -645,6 +647,7 @@ OB_DEF_DESERIALIZE(ObTableModifySpec)
   BASE_DESER((ObTableModifySpec, ObOpSpec));
   OB_UNIS_DECODE(flags_);
   OB_UNIS_DECODE(ab_stmt_id_);
+  OB_UNIS_DECODE(das_dop_);
   return ret;
 }
 
@@ -654,6 +657,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableModifySpec)
   BASE_ADD_LEN((ObTableModifySpec, ObOpSpec));
   OB_UNIS_ADD_LEN(flags_);
   OB_UNIS_ADD_LEN(ab_stmt_id_);
+  OB_UNIS_ADD_LEN(das_dop_);
   return len;
 }
 

@@ -112,6 +112,7 @@ void ObIOManager::destroy()
   server_io_manager_ = nullptr;
   allocator_.destroy();
   is_inited_ = false;
+  LOG_INFO("io manager is destroyed");
 }
 
 int ObIOManager::start()
@@ -547,7 +548,7 @@ int ObTenantIOManager::mtl_new(ObTenantIOManager *&io_service)
   io_service = nullptr;
   if (is_virtual_tenant_id(MTL_ID())) {
     // do nothing
-  } else if (OB_ISNULL(buf = OB_IO_MANAGER.allocator_.alloc(sizeof(ObTenantIOManager)))) {
+  } else if (OB_ISNULL(buf = ob_malloc(sizeof(ObTenantIOManager), ObMemAttr(MTL_ID(), "IO_MGR")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     FLOG_WARN("failed to alloc tenant io mgr", K(ret));
   } else {
@@ -581,7 +582,7 @@ void ObTenantIOManager::mtl_destroy(ObTenantIOManager *&io_service)
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(io_service)) {
     io_service->~ObTenantIOManager();
-    OB_IO_MANAGER.allocator_.free(io_service);
+    ob_free(io_service);
     io_service = nullptr;
     FLOG_INFO("mtl destroy tenant io manager success", K(MTL_ID()));
   }
@@ -877,7 +878,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_UNLIKELY(!is_working())) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("tenant not working", K(ret), K(tenant_id_));
-  } else if (NULL != detector && detector->is_data_disk_has_fatal_error()) {
+  } else if (SLOG_IO != info.flag_.get_sys_module_id() && NULL != detector && detector->is_data_disk_has_fatal_error()) {
     ret = OB_DISK_HUNG;
     // for temporary positioning issue, get lbt of log replay
     LOG_DBA_ERROR(OB_DISK_HUNG, "msg", "disk has fatal error");

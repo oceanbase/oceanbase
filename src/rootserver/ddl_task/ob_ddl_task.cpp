@@ -133,7 +133,10 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
                                                  const uint64_t data_format_version,
                                                  const int64_t consumer_group_id,
                                                  const bool is_abort,
-                                                 const int32_t sub_task_trace_id)
+                                                 const int32_t sub_task_trace_id,
+                                                 const bool is_unique_index,
+                                                 const bool is_global_index,
+                                                 const bool is_pre_split)
 {
   task_version_ = task_version;
   parallelism_ = parallelism;
@@ -141,6 +144,9 @@ ObDDLTaskSerializeField::ObDDLTaskSerializeField(const int64_t task_version,
   consumer_group_id_ = consumer_group_id;
   is_abort_ = is_abort;
   sub_task_trace_id_ = sub_task_trace_id;
+  is_unique_index_ = is_unique_index;
+  is_global_index_ = is_global_index;
+  is_pre_split_ = is_pre_split;
 }
 
 void ObDDLTaskSerializeField::reset()
@@ -151,6 +157,9 @@ void ObDDLTaskSerializeField::reset()
   consumer_group_id_ = 0;
   is_abort_ = false;
   sub_task_trace_id_ = 0;
+  is_unique_index_ = false;
+  is_global_index_ = false;
+  is_pre_split_ = false;
 }
 
 OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
@@ -159,14 +168,17 @@ OB_SERIALIZE_MEMBER(ObDDLTaskSerializeField,
                     data_format_version_,
                     consumer_group_id_,
                     is_abort_,
-                    sub_task_trace_id_);
+                    sub_task_trace_id_,
+                    is_unique_index_,
+                    is_global_index_,
+                    is_pre_split_);
 
 ObCreateDDLTaskParam::ObCreateDDLTaskParam()
   : sub_task_trace_id_(0), tenant_id_(OB_INVALID_ID), object_id_(OB_INVALID_ID), schema_version_(0), parallelism_(0),
     consumer_group_id_(0), parent_task_id_(0), task_id_(0), type_(DDL_INVALID), src_table_schema_(nullptr),
     dest_table_schema_(nullptr), ddl_arg_(nullptr), allocator_(nullptr),
     aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr), aux_doc_word_schema_(nullptr),
-    tenant_data_version_(0), ddl_need_retry_at_executor_(false)
+    tenant_data_version_(0), ddl_need_retry_at_executor_(false), is_pre_split_(false)
 {
 }
 
@@ -186,7 +198,7 @@ ObCreateDDLTaskParam::ObCreateDDLTaskParam(const uint64_t tenant_id,
   : sub_task_trace_id_(0), tenant_id_(tenant_id), object_id_(object_id), schema_version_(schema_version), parallelism_(parallelism), consumer_group_id_(consumer_group_id),
     parent_task_id_(parent_task_id), task_id_(task_id), type_(type), src_table_schema_(src_table_schema), dest_table_schema_(dest_table_schema),
     ddl_arg_(ddl_arg), allocator_(allocator), aux_rowkey_doc_schema_(nullptr), aux_doc_rowkey_schema_(nullptr),
-    aux_doc_word_schema_(nullptr), ddl_need_retry_at_executor_(ddl_need_retry_at_executor)
+    aux_doc_word_schema_(nullptr), ddl_need_retry_at_executor_(ddl_need_retry_at_executor), is_pre_split_(false)
 {
 }
 
@@ -947,7 +959,7 @@ int ObDDLTask::set_ddl_stmt_str(const ObString &ddl_stmt_str)
 int ObDDLTask::serialize_params_to_message(char *buf, const int64_t buf_size, int64_t &pos) const
 {
   int ret = OB_SUCCESS;
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_pre_split_);
   if (OB_UNLIKELY(nullptr == buf || buf_size <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_size));
@@ -975,13 +987,14 @@ int ObDDLTask::deserialize_params_from_message(const uint64_t tenant_id, const c
     consumer_group_id_ = serialize_field.consumer_group_id_;
     is_abort_ = serialize_field.is_abort_;
     sub_task_trace_id_ = serialize_field.sub_task_trace_id_;
+    is_pre_split_ = serialize_field.is_pre_split_;
   }
   return ret;
 }
 
 int64_t ObDDLTask::get_serialize_param_size() const
 {
-  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_);
+  ObDDLTaskSerializeField serialize_field(task_version_, parallelism_, data_format_version_, consumer_group_id_, is_abort_, sub_task_trace_id_, is_pre_split_);
   return serialize_field.get_serialize_size();
 }
 
@@ -1439,13 +1452,14 @@ int64_t ObDDLTask::get_execution_id() const
   return execution_id_;
 }
 
-int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
+int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id, const share::ObDDLType task_type, const bool ddl_can_retry, const int64_t data_format_version, int64_t &new_execution_id)
 {
   int ret = OB_SUCCESS;
   ObMySQLTransaction trans;
   ObRootService *root_service = nullptr;
   int64_t task_status = 0;
   int64_t execution_id = 0;
+  new_execution_id = 0;
   int64_t ret_code = OB_SUCCESS;
   if (OB_ISNULL(root_service = GCTX.root_service_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1456,19 +1470,20 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
     if (OB_FAIL(ObDDLTaskRecordOperator::select_for_update(trans, tenant_id, task_id, task_status, execution_id, ret_code))) {
       LOG_WARN("select for update failed", K(ret), K(task_id));
     } else {
-      LOG_INFO("push execution id", K(tenant_id), K(task_id), K(task_status), K(execution_id), K(ret_code));
-      if (ObDDLUtil::use_idempotent_mode(data_format_version)) {
-        if (0 == execution_id) {
+      if (ObDDLUtil::use_idempotent_mode(data_format_version, task_type)) {
+        if (1 == execution_id) {
           // has been executed before
           if (!ddl_can_retry) {
-            ret = OB_NOT_SUPPORTED;
+            ret = OB_TASK_EXPIRED; //task can not be retry
             LOG_WARN("do not retry for heap table ddl plan", K(tenant_id), K(task_id), K(ddl_can_retry));
           } else {
-            if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, 0L/*execution id*/))) {
-              LOG_WARN("update task status failed", K(ret));
-            } else {
-              new_execution_id = 0L;
-            }
+            new_execution_id = 1L;
+          }
+        } else {
+          if (OB_FAIL(ObDDLTaskRecordOperator::update_execution_id(trans, tenant_id, task_id, 1L/*execution id*/))) {
+            LOG_WARN("update task status failed", K(ret));
+          } else {
+            new_execution_id = 1L;
           }
         }
       } else {
@@ -1479,6 +1494,7 @@ int ObDDLTask::push_execution_id(const uint64_t tenant_id, const int64_t task_id
         }
       }
     }
+    LOG_INFO("push execution id", K(ret), K(tenant_id), K(task_id), K(task_type), K(task_status), K(execution_id), K(ret_code), K(new_execution_id));
     bool commit = (OB_SUCCESS == ret);
     int tmp_ret = trans.end(commit);
     if (OB_SUCCESS != tmp_ret) {
@@ -3064,7 +3080,9 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
           } else if (task_record.task_id_ != task_id) {
             switch (ddl_type) {
               case ObDDLType::DDL_DROP_TABLE: {
-                if (task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX && task_record.target_object_id_ != task_record.object_id_) {
+                if ((task_record.ddl_type_ == ObDDLType::DDL_DROP_INDEX
+                    || task_record.ddl_type_ == ObDDLType::DDL_DROP_MLOG)
+                    && task_record.target_object_id_ != task_record.object_id_) {
                   LOG_WARN("conflict with ddl", K(task_record));
                   has_conflict_ddl = true;
                 }
@@ -3102,7 +3120,7 @@ int ObDDLTaskRecordOperator::check_has_conflict_ddl(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::check_has_index_task(
+int ObDDLTaskRecordOperator::check_has_index_or_mlog_task(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -3120,8 +3138,9 @@ int ObDDLTaskRecordOperator::check_has_index_task(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d)) as has",
-          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_DROP_INDEX))) {
+      if (OB_FAIL(sql_string.assign_fmt("SELECT EXISTS(SELECT 1 FROM %s WHERE object_id = %lu AND target_object_id = %lu AND ddl_type IN (%d, %d, %d, %d)) as has",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, index_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_DROP_INDEX,
+          ObDDLType::DDL_CREATE_MLOG, ObDDLType::DDL_DROP_MLOG))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));
@@ -3138,7 +3157,7 @@ int ObDDLTaskRecordOperator::check_has_index_task(
   return ret;
 }
 
-int ObDDLTaskRecordOperator::get_create_index_task_cnt(
+int ObDDLTaskRecordOperator::get_create_index_or_mlog_task_cnt(
     common::ObISQLClient &proxy,
     const uint64_t tenant_id,
     const uint64_t data_table_id,
@@ -3153,8 +3172,8 @@ int ObDDLTaskRecordOperator::get_create_index_task_cnt(
     ObSqlString sql_string;
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
-      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type = %d",
-          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, ObDDLType::DDL_CREATE_INDEX))) {
+      if (OB_FAIL(sql_string.assign_fmt("SELECT COUNT(*) as cnt FROM %s WHERE object_id = %lu AND ddl_type IN (%d, %d)",
+          OB_ALL_DDL_TASK_STATUS_TNAME, data_table_id, ObDDLType::DDL_CREATE_INDEX, ObDDLType::DDL_CREATE_MLOG))) {
         LOG_WARN("assign sql string failed", K(ret));
       } else if (OB_FAIL(proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("query ddl task record failed", K(ret), K(sql_string));

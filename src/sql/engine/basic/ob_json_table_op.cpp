@@ -2157,7 +2157,7 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
   ObDatum* tmp_datum = nullptr;
   uint8_t is_type_mismatch = 0;
   ObAccuracy accuracy = col_node.col_info_.data_type_.get_accuracy();
-  char col_str[col_node.col_info_.col_name_.length()];
+  char col_str[col_node.col_info_.col_name_.length() + 1];
   ObObjType dst_type = expr->datum_meta_.type_;
   ObJsonCastParam cast_param(dst_type, default_expr->datum_meta_.cs_type_, expr->datum_meta_.cs_type_, false);
   cast_param.is_only_check_ = true;
@@ -2173,7 +2173,7 @@ int RegularCol::check_default_value_inner_mysql(JtScanCtx* ctx,
   } else if (OB_FAIL(ObJsonUtil::cast_to_res(&ctx->row_alloc_, *ctx->eval_ctx_,
                             j_base, accuracy, cast_param, res, is_type_mismatch))) {
     ret = OB_OPERATE_OVERFLOW;
-    databuff_printf(col_str, col_node.col_info_.col_name_.length(), 0, "%s", col_node.col_info_.col_name_.length(), col_node.col_info_.col_name_.ptr());
+    databuff_printf(col_str, col_node.col_info_.col_name_.length() + 1, "%s", col_node.col_info_.col_name_.ptr());
     LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
   }
   return ret;

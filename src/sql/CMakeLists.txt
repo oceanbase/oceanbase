@@ -64,6 +64,7 @@ ob_set_subtarget(ob_sql das
   das/ob_das_domain_utils.cpp
   das/ob_text_retrieval_op.cpp
   das/ob_das_attach_define.cpp
+  das/ob_group_scan_iter.cpp
   das/iter/ob_das_iter.cpp
   das/iter/ob_das_merge_iter.cpp
   das/iter/ob_das_lookup_iter.cpp
@@ -909,6 +910,7 @@ ob_set_subtarget(ob_sql monitor
 
 ob_set_subtarget(ob_sql optimizer
   optimizer/ob_access_path_estimation.cpp
+  optimizer/ob_conflict_detector.cpp
   optimizer/ob_del_upd_log_plan.cpp
   optimizer/ob_delete_log_plan.cpp
   optimizer/ob_explain_log_plan.cpp

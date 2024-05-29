@@ -690,6 +690,8 @@ OB_INLINE int ObTableScanOp::create_one_das_task(ObDASTabletLoc *tablet_loc)
   if (OB_SUCC(ret)) {
     if (OB_FAIL(cherry_pick_range_by_tablet_id(scan_op))) {
       LOG_WARN("prune query range by partition id failed", K(ret), KPC(tablet_loc));
+    } else if (OB_NOT_NULL(DAS_GROUP_SCAN_OP(scan_op))) {
+      static_cast<ObDASGroupScanOp*>(scan_op)->init_group_range(0, tsc_rtdef_.group_size_);
     }
   }
   return ret;
@@ -885,6 +887,7 @@ int ObTableScanOp::prepare_all_das_tasks()
       }
     }
   }
+
   return ret;
 }
 
@@ -1640,64 +1643,71 @@ int ObTableScanOp::fill_storage_feedback_info()
 {
   int ret = OB_SUCCESS;
   // fill storage feedback info for acs
-  ObTableScanParam &scan_param = DAS_SCAN_OP(*scan_iter_->begin_task_iter())->get_scan_param();
-  bool is_index_back = scan_param.scan_flag_.index_back_;
-  ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
-  if (MY_SPEC.should_scan_index()) {
-    table_scan_stat.query_range_row_count_ = scan_param.idx_table_scan_stat_.access_row_cnt_;
-    if (is_index_back) {
-      table_scan_stat.indexback_row_count_ = scan_param.idx_table_scan_stat_.out_row_cnt_;
-      table_scan_stat.output_row_count_ = scan_param.main_table_scan_stat_.out_row_cnt_;
-    } else {
-      table_scan_stat.indexback_row_count_ = -1;
-      table_scan_stat.output_row_count_ = scan_param.idx_table_scan_stat_.out_row_cnt_;
-    }
-    LOG_DEBUG("index scan feedback info for acs",
-              K(scan_param.idx_table_scan_stat_), K(table_scan_stat));
+  ObDASScanOp *scan_op = DAS_SCAN_OP(*scan_iter_->begin_task_iter());
+  if (OB_ISNULL(scan_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr das scan op", K(ret));
   } else {
-    table_scan_stat.query_range_row_count_ = scan_param.main_table_scan_stat_.access_row_cnt_;
-    table_scan_stat.indexback_row_count_ = -1;
-    table_scan_stat.output_row_count_ = scan_param.main_table_scan_stat_.out_row_cnt_;
-    LOG_DEBUG("table scan feedback info for acs", K(scan_param.main_table_scan_stat_), K(table_scan_stat));
-  }
-
-  // 填充计划淘汰策略所需要的反馈信息
-  ObIArray<ObTableRowCount> &table_row_count_list =
-      GET_PHY_PLAN_CTX(ctx_)->get_table_row_count_list();
-  //仅索引回表时，存储层会将执行扫描索引数据放在idx_table_scan_stat_中;
-  //对于仅扫描主表或索引表的情况, 存储层会将执行扫描索引数据放在main_table_scan_stat_中
-  if (!got_feedback_) {
-    got_feedback_ = true;
-    if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.is_index_back()) {
-      if (scan_param.scan_flag_.is_need_feedback()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = table_row_count_list.push_back(ObTableRowCount(
-                                                                      MY_SPEC.id_, scan_param.idx_table_scan_stat_.access_row_cnt_)))) {
-          // 这里忽略插入失败时的错误码. OB的Array保证push_back失败的情况下count()仍是有效的
-          // 如果一张表的信息没有被插入成功，最多
-          // 只会导致后续判断计划能否淘汰时无法使用这张表的信息进行判断，从而
-          // 导致某些计划无法被淘汰，相当于回退到了没有这部分淘汰策略时的逻辑
-          // 这里不希望淘汰机制的错误码影响原有执行逻辑 @ banliu.zyd
-          LOG_WARN("push back table_id-row_count failed", K(tmp_ret), K(MY_SPEC.ref_table_id_),
-                   "access row count", scan_param.idx_table_scan_stat_.access_row_cnt_);
-        }
+    ObTableScanParam &scan_param = scan_op->get_scan_param();
+    bool is_index_back = scan_param.scan_flag_.index_back_;
+    ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
+    if (MY_SPEC.should_scan_index()) {
+      table_scan_stat.query_range_row_count_ = scan_param.idx_table_scan_stat_.access_row_cnt_;
+      if (is_index_back) {
+        table_scan_stat.indexback_row_count_ = scan_param.idx_table_scan_stat_.out_row_cnt_;
+        table_scan_stat.output_row_count_ = scan_param.main_table_scan_stat_.out_row_cnt_;
+      } else {
+        table_scan_stat.indexback_row_count_ = -1;
+        table_scan_stat.output_row_count_ = scan_param.idx_table_scan_stat_.out_row_cnt_;
       }
+      LOG_DEBUG("index scan feedback info for acs",
+                K(scan_param.idx_table_scan_stat_), K(table_scan_stat));
     } else {
-      if (scan_param.scan_flag_.is_need_feedback()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = table_row_count_list.push_back(ObTableRowCount(
-                                                                      MY_SPEC.id_, scan_param.main_table_scan_stat_.access_row_cnt_)))) {
-          LOG_WARN("push back table_id-row_count failed but we won't stop execution", K(tmp_ret));
-        }
-      }
+      table_scan_stat.query_range_row_count_ = scan_param.main_table_scan_stat_.access_row_cnt_;
+      table_scan_stat.indexback_row_count_ = -1;
+      table_scan_stat.output_row_count_ = scan_param.main_table_scan_stat_.out_row_cnt_;
+      LOG_DEBUG("table scan feedback info for acs", K(scan_param.main_table_scan_stat_), K(table_scan_stat));
     }
 
+    // 填充计划淘汰策略所需要的反馈信息
+    ObIArray<ObTableRowCount> &table_row_count_list =
+        GET_PHY_PLAN_CTX(ctx_)->get_table_row_count_list();
+    //仅索引回表时，存储层会将执行扫描索引数据放在idx_table_scan_stat_中;
+    //对于仅扫描主表或索引表的情况, 存储层会将执行扫描索引数据放在main_table_scan_stat_中
+    if (!got_feedback_) {
+      got_feedback_ = true;
+      if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.is_index_back()) {
+        if (scan_param.scan_flag_.is_need_feedback()) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = table_row_count_list.push_back(ObTableRowCount(
+                                                                        MY_SPEC.id_, scan_param.idx_table_scan_stat_.access_row_cnt_)))) {
+            // 这里忽略插入失败时的错误码. OB的Array保证push_back失败的情况下count()仍是有效的
+            // 如果一张表的信息没有被插入成功，最多
+            // 只会导致后续判断计划能否淘汰时无法使用这张表的信息进行判断，从而
+            // 导致某些计划无法被淘汰，相当于回退到了没有这部分淘汰策略时的逻辑
+            // 这里不希望淘汰机制的错误码影响原有执行逻辑 @ banliu.zyd
+            LOG_WARN("push back table_id-row_count failed", K(tmp_ret), K(MY_SPEC.ref_table_id_),
+                    "access row count", scan_param.idx_table_scan_stat_.access_row_cnt_);
+          }
+        }
+      } else {
+        if (scan_param.scan_flag_.is_need_feedback()) {
+          int tmp_ret = OB_SUCCESS;
+          if (OB_SUCCESS != (tmp_ret = table_row_count_list.push_back(ObTableRowCount(
+                                                                        MY_SPEC.id_, scan_param.main_table_scan_stat_.access_row_cnt_)))) {
+            LOG_WARN("push back table_id-row_count failed but we won't stop execution", K(tmp_ret));
+          }
+        }
+      }
+
+    }
+    LOG_DEBUG("table scan feed back info for buffer table",
+              K(MY_CTDEF.scan_ctdef_.ref_table_id_), K(MY_SPEC.should_scan_index()),
+              "is_need_feedback", scan_param.scan_flag_.is_need_feedback(),
+              "idx access row count", scan_param.idx_table_scan_stat_.access_row_cnt_,
+              "main access row count", scan_param.main_table_scan_stat_.access_row_cnt_);
   }
-  LOG_DEBUG("table scan feed back info for buffer table",
-            K(MY_CTDEF.scan_ctdef_.ref_table_id_), K(MY_SPEC.should_scan_index()),
-            "is_need_feedback", scan_param.scan_flag_.is_need_feedback(),
-            "idx access row count", scan_param.idx_table_scan_stat_.access_row_cnt_,
-            "main access row count", scan_param.main_table_scan_stat_.access_row_cnt_);
+
   return ret;
 }
 
@@ -1806,7 +1816,10 @@ int ObTableScanOp::local_iter_rescan()
     DASTaskIter task_iter = scan_iter_->begin_task_iter();
     for (; OB_SUCC(ret) && !task_iter.is_end(); ++task_iter) {
       ObDASScanOp *scan_op = DAS_SCAN_OP(*task_iter);
-      if (MY_SPEC.gi_above_) {
+      if (OB_ISNULL(scan_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr das scan op", K(ret));
+      } else if (MY_SPEC.gi_above_) {
         if (!MY_SPEC.is_index_global_ && MY_CTDEF.lookup_ctdef_ != nullptr) {
           //is local index lookup, need to set the lookup ctdef to the das scan op
           if (OB_FAIL(pushdown_normal_lookup_to_das(*scan_op))) {
@@ -1851,16 +1864,22 @@ int ObTableScanOp::local_iter_reuse()
   for (DASTaskIter task_iter = scan_iter_->begin_task_iter();
       !task_iter.is_end(); ++task_iter) {
     ObDASScanOp *scan_op = DAS_SCAN_OP(*task_iter);
-    bool need_switch_param = (scan_op->get_tablet_loc() != MY_INPUT.tablet_loc_ &&
-                                MY_INPUT.tablet_loc_ != nullptr);
-    if (MY_INPUT.tablet_loc_ != nullptr) {
-      scan_op->set_tablet_id(MY_INPUT.tablet_loc_->tablet_id_);
-      scan_op->set_ls_id(MY_INPUT.tablet_loc_->ls_id_);
-      scan_op->set_tablet_loc(MY_INPUT.tablet_loc_);
+    if (OB_ISNULL(scan_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das scan op", K(ret));
+    } else {
+      bool need_switch_param = (scan_op->get_tablet_loc() != MY_INPUT.tablet_loc_ &&
+                                  MY_INPUT.tablet_loc_ != nullptr);
+      if (MY_INPUT.tablet_loc_ != nullptr) {
+        scan_op->set_tablet_id(MY_INPUT.tablet_loc_->tablet_id_);
+        scan_op->set_ls_id(MY_INPUT.tablet_loc_->ls_id_);
+        scan_op->set_tablet_loc(MY_INPUT.tablet_loc_);
+      }
+      scan_op->reuse_iter();
     }
-    scan_op->reuse_iter();
   }
-  if (OB_FAIL(reuse_table_rescan_allocator())) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(reuse_table_rescan_allocator())) {
     LOG_WARN("get table allocator", K(ret));
   } else {
     tsc_rtdef_.scan_rtdef_.scan_allocator_.set_alloc(table_rescan_allocator_);
@@ -2191,19 +2210,25 @@ int ObTableScanOp::inner_get_next_row_for_tsc()
 //    } else if (DAS_SCAN_OP->get_scan_param().main_table_scan_stat_.bf_access_cnt_ > 0) {
 //      partition->feedback_scan_access_stat(DAS_SCAN_OP->get_scan_param());
 //    }
-    ObTableScanParam &scan_param = DAS_SCAN_OP(*scan_iter_->begin_task_iter())->get_scan_param();
-    ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
-    fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
-    if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.index_back_) {
-      fill_table_scan_stat(scan_param.idx_table_scan_stat_, table_scan_stat);
-    }
-    scan_param.main_table_scan_stat_.reset_cache_stat();
-    scan_param.idx_table_scan_stat_.reset_cache_stat();
-    iter_end_ = true;
-    if (OB_FAIL(report_ddl_column_checksum())) {
-      LOG_WARN("report checksum failed", K(ret));
+    ObDASScanOp *scan_op = DAS_SCAN_OP(*scan_iter_->begin_task_iter());
+    if (OB_ISNULL(scan_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected nullptr das scan op", K(ret));
     } else {
-      ret = OB_ITER_END;
+      ObTableScanParam &scan_param = scan_op->get_scan_param();
+      ObTableScanStat &table_scan_stat = GET_PHY_PLAN_CTX(ctx_)->get_table_scan_stat();
+      fill_table_scan_stat(scan_param.main_table_scan_stat_, table_scan_stat);
+      if (MY_SPEC.should_scan_index() && scan_param.scan_flag_.index_back_) {
+        fill_table_scan_stat(scan_param.idx_table_scan_stat_, table_scan_stat);
+      }
+      scan_param.main_table_scan_stat_.reset_cache_stat();
+      scan_param.idx_table_scan_stat_.reset_cache_stat();
+      iter_end_ = true;
+      if (OB_FAIL(report_ddl_column_checksum())) {
+        LOG_WARN("report checksum failed", K(ret));
+      } else {
+        ret = OB_ITER_END;
+      }
     }
   }
   return ret;

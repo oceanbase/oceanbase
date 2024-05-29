@@ -2504,7 +2504,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       inner_sql_exec_addr_,
       local_session_var_,
       mview_refresh_info_,
-      alter_algorithm_);
+      alter_algorithm_,
+      alter_auto_partition_attr_);
 
   return ret;
 }
@@ -2596,7 +2597,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       inner_sql_exec_addr_,
       local_session_var_,
       mview_refresh_info_,
-      alter_algorithm_);
+      alter_algorithm_,
+      alter_auto_partition_attr_);
   return ret;
 }
 
@@ -2641,7 +2643,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
         inner_sql_exec_addr_,
         local_session_var_,
         mview_refresh_info_,
-        alter_algorithm_);
+        alter_algorithm_,
+        alter_auto_partition_attr_);
   }
 
   if (OB_FAIL(ret)) {

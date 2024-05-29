@@ -110,6 +110,7 @@ public:
                                                  int64_t &cnt);
   static int do_detect_and_clear();
   static int remove_lock_by_owner_id(const int64_t raw_owner_id);
+  static int remove_expired_lock_id();
 
 private:
   static int record_detect_info_to_inner_table_(observer::ObInnerSQLConnection *inner_conn,

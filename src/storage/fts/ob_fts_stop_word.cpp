@@ -20,99 +20,87 @@ namespace oceanbase
 namespace storage
 {
 
-ObNoStopWordAddWord::ObNoStopWordAddWord(
+ObAddWord::ObAddWord(
     const ObCollationType &type,
+    const ObAddWordFlag &flag,
     common::ObIAllocator &allocator,
     common::ObIArray<ObFTWord> &word)
   : collation_type_(type),
     allocator_(allocator),
     words_(word),
-    word_count_(0)
+    min_max_word_cnt_(0),
+    non_stopword_cnt_(0),
+    stopword_cnt_(0),
+    flag_(flag)
 {
 }
 
-int ObNoStopWordAddWord::operator()(
+int ObAddWord::operator()(
     lib::ObFTParserParam *param,
     const char *word,
-    const int64_t word_len)
-{
-  int ret = OB_SUCCESS;
-  char *w_buf = nullptr;
-  if (OB_ISNULL(param) || OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KPC(param), KP(word), K(word_len));
-  } else if (OB_ISNULL(w_buf = static_cast<char *>(allocator_.alloc(word_len)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory for fulltext word", K(ret), K(word_len));
-  } else {
-    MEMCPY(w_buf, word, word_len);
-    ObFTWord ft_word(word_len, w_buf, collation_type_);
-    if (OB_FAIL(words_.push_back(ft_word))) {
-      LOG_WARN("fail to push word into words array", K(ret), K(ft_word));
-    } else {
-      ++word_count_;
-    }
-  }
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(w_buf)) {
-      allocator_.free(w_buf);
-      w_buf = nullptr;
-    }
-  }
-  LOG_DEBUG("add word", K(ret), KPC(param), KP(word), K(word_len));
-  return ret;
-}
-
-ObStopWordAddWord::ObStopWordAddWord(
-    const ObCollationType &type,
-    common::ObIAllocator &allocator,
-    common::ObIArray<ObFTWord> &word)
-  : collation_type_(type),
-    allocator_(allocator),
-    words_(word),
-    non_stopword_count_(0),
-    stopword_count_(0)
-{
-}
-
-int ObStopWordAddWord::operator()(
-    lib::ObFTParserParam *param,
-    const char *word,
-    const int64_t word_len)
+    const int64_t word_len,
+    const int64_t char_cnt)
 {
   int ret = OB_SUCCESS;
   bool is_stopword = false;
-  ObFTWord ft_word(word_len, word, collation_type_);
+  ObFTWord src_word(word_len, word, collation_type_);
+  ObFTWord dst_word;
   if (OB_ISNULL(param) || OB_ISNULL(word) || OB_UNLIKELY(0 >= word_len)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KPC(param), KP(word), K(word_len));
-  } else if (OB_FAIL(OB_FT_PLUGIN_MGR.check_stopword(ft_word, is_stopword))) {
-    LOG_WARN("fail to check stopword", K(ret));
-  } else if (is_stopword) {
-    // the word is stop word, just skip it.
-    ++stopword_count_;
+  } else if (is_min_max_word(char_cnt)) {
+    ++min_max_word_cnt_;
+    LOG_DEBUG("skip too small or large word", K(ret), K(src_word), K(char_cnt));
+  } else if (OB_FAIL(casedown_word(src_word, dst_word))) {
+    LOG_WARN("fail to casedown word", K(ret), K(src_word));
+  } else if (check_stopword(dst_word, is_stopword)) {
+    LOG_WARN("fail to check stopword", K(ret), K(dst_word));
+  } else if (OB_UNLIKELY(is_stopword)) {
+    ++stopword_cnt_;
+    LOG_DEBUG("skip stopword", K(ret), K(dst_word));
+  } else if (OB_FAIL(words_.push_back(dst_word))) {
+    LOG_WARN("fail to push word into words array", K(ret), K(dst_word));
   } else {
-    char *w_buf = nullptr;
-    if (OB_ISNULL(w_buf = static_cast<char *>(allocator_.alloc(word_len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate memory for fulltext word", K(ret), K(word_len));
-    } else {
-      MEMCPY(w_buf, word, word_len);
-      ObFTWord non_stopword_ft_word(word_len, w_buf, collation_type_);
-      if (OB_FAIL(words_.push_back(non_stopword_ft_word))) {
-        LOG_WARN("fail to push word into words array", K(ret), K(non_stopword_ft_word));
-      } else {
-        ++non_stopword_count_;
-      }
-    }
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(w_buf)) {
-        allocator_.free(w_buf);
-        w_buf = nullptr;
-      }
-    }
+    ++non_stopword_cnt_;
+    LOG_DEBUG("add word", K(ret), KPC(param), KP(word), K(word_len), K(char_cnt), K(src_word), K(dst_word));
   }
-  LOG_DEBUG("add word", K(ret), KPC(param), KP(word), K(word_len), K(is_stopword));
+  return ret;
+}
+
+bool ObAddWord::is_min_max_word(const int64_t c_len) const
+{
+  return flag_.min_max_word() && (c_len < FT_MIN_WORD_LEN || c_len > FT_MAX_WORD_LEN);
+}
+
+int ObAddWord::casedown_word(const ObFTWord &src, ObFTWord &dst)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(src.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid src ft word", K(ret), K(src));
+  } else if (flag_.casedown()) {
+    ObString dst_str;
+    if (OB_FAIL(ObCharset::tolower(collation_type_, src.get_word(), dst_str, allocator_))) {
+      LOG_WARN("fail to tolower", K(ret), K(src), K(collation_type_));
+    } else {
+      ObFTWord tmp(dst_str.length(), dst_str.ptr(), collation_type_);
+      dst = tmp;
+    }
+  } else {
+    dst = src;
+  }
+  return ret;
+}
+
+int ObAddWord::check_stopword(const ObFTWord &ft_word, bool &is_stopword)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ft_word.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K(ft_word));
+  } else if (flag_.stopword() && OB_FAIL(OB_FT_PLUGIN_MGR.check_stopword(ft_word, is_stopword))) {
+    LOG_WARN("fail to check stopword", K(ret));
+  }
   return ret;
 }
 

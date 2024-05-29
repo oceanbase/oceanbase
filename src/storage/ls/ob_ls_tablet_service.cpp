@@ -77,6 +77,7 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -2691,7 +2692,7 @@ int ObLSTabletService::insert_rows(
     void *ptr = nullptr;
     ObStoreRow *tbl_rows = nullptr;
     int64_t row_count = 0;
-    bool first_bulk = true;
+    int64_t row_buf_cnt = 0;
     ObNewRow *rows = nullptr;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
       LOG_WARN("failed to prepare dml running ctx", K(ret));
@@ -2717,12 +2718,16 @@ int ObLSTabletService::insert_rows(
           } else if (1 == row_count) {
             tbl_rows = &reserved_row;
             tbl_rows[0].flag_.set_flag(ObDmlFlag::DF_INSERT);
-          } else if (first_bulk) {
-            first_bulk = false;
+          } else if (row_buf_cnt < row_count) {
+            if (nullptr != ptr) {
+              work_allocator.free(ptr);
+              ptr = nullptr;
+            }
             if (OB_ISNULL(ptr = work_allocator.alloc(row_count * sizeof(ObStoreRow)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_ERROR("fail to allocate memory", K(ret), K(row_count));
             } else {
+              row_buf_cnt = row_count;
               tbl_rows = new (ptr) ObStoreRow[row_count];
               for (int64_t i = 0; i < row_count; i++) {
                 tbl_rows[i].flag_.set_flag(ObDmlFlag::DF_INSERT);
@@ -5887,6 +5892,11 @@ int ObLSTabletService::get_ls_min_end_scn(
         }
       }
     }
+    // now tx_data contains mds tx_op to remove retain_ctx
+    // so we need wait ls_checkpoint advance to recycle tx_data
+    if (ls_checkpoint < min_end_scn_from_latest_tablets) {
+      min_end_scn_from_latest_tablets = ls_checkpoint;
+    }
     LOG_INFO("get ls min end scn finish", K(ls_checkpoint));
   }
   return ret;
@@ -6063,7 +6073,19 @@ int ObLSTabletService::estimate_block_count_and_row_count(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null table", K(ret), K(tablet_iter.table_iter()));
     } else if (table->is_direct_load_memtable()) {
-      // FIXME : @suzhi.yt
+      ObDDLKV *ddl_kv = static_cast<ObDDLKV *>(table);
+      int64_t macro_block_count_in_ddl_kv = 0;
+      int64_t micro_block_count_in_ddl_kv = 0;
+      int64_t row_count_in_ddl_kv = 0;
+      if (OB_FAIL(ddl_kv->get_block_count_and_row_count(macro_block_count_in_ddl_kv,
+                                                        micro_block_count_in_ddl_kv,
+                                                        row_count_in_ddl_kv))) {
+        LOG_WARN("fail to get block count and row count", K(ret));
+      } else {
+        macro_block_count += macro_block_count_in_ddl_kv;
+        micro_block_count += micro_block_count_in_ddl_kv;
+        sstable_row_count += row_count_in_ddl_kv;
+      }
     } else if (table->is_data_memtable()) {
       memtable_row_count += static_cast<memtable::ObMemtable *>(table)->get_physical_row_cnt();
     } else if (table->is_sstable()) {
@@ -6280,20 +6302,17 @@ int ObLSTabletService::build_tablet_iter(ObLSTabletFastIter &iter, const bool ex
 int ObLSTabletService::set_allow_to_read_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-  share::ObLSRestoreStatus restore_status;
+  bool allow_read = false;
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("set allow to read get invalid argument", K(ret), KP(ls));
   } else {
-    if (OB_FAIL(ls->get_migration_and_restore_status(migration_status, restore_status))) {
-      LOG_WARN("failed to get ls migration and restore status", K(ret), KPC(ls));
-    } else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status
-          && ObMigrationStatus::OB_MIGRATION_STATUS_HOLD != migration_status)
-        || ObLSRestoreStatus::NONE != restore_status) {
+    if (OB_FAIL(ls->check_allow_read(allow_read))) {
+      LOG_WARN("failed to check allow read", K(ret), KPC(ls));
+    } else if (!allow_read) {
       allow_to_read_mgr_.disable_to_read();
-      FLOG_INFO("set ls do not allow to read", KPC(ls), K(migration_status), K(restore_status));
+      FLOG_INFO("set ls do not allow to read", KPC(ls));
     } else {
       allow_to_read_mgr_.enable_to_read();
     }
@@ -6537,6 +6556,58 @@ int ObLSTabletService::ha_get_tablet(
   } else if (OB_ISNULL(tablet = handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), K(tablet_id));
+  } else if (tablet->is_empty_shell()) {
+    // treat empty shell as tablet not exist.
+    ret = OB_TABLET_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObLSTabletService::get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
+  const bool force_alloc_new = true;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_ISNULL(t3m)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant meta mem mgr should not be null", K(ret), KP(t3m));
+  } else if (OB_FAIL(t3m->get_tablet_with_allocator(
+      priority, key, allocator, handle, force_alloc_new))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_TABLET_NOT_EXIST;
+    } else {
+      LOG_WARN("failed to get tablet with allocator", K(ret), K(priority), K(key));
+    }
+  } else if (OB_FAIL(handle.get_obj()->clear_memtables_on_table_store())) {
+    LOG_WARN("failed to clear memtables on table store", K(ret), K(key));
+  }
+  return ret;
+}
+
+int ObLSTabletService::ha_get_tablet_without_memtables(
+    const WashTabletPriority &priority,
+    const ObTabletMapKey &key,
+    common::ObArenaAllocator &allocator,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret), K_(is_inited));
+  } else if (OB_FAIL(get_tablet_without_memtables(priority, key, allocator, handle))) {
+    LOG_WARN("failed to get tablet without memtables", K(ret), K(priority), K(key));
+  } else if (OB_ISNULL(tablet = handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(key));
   } else if (tablet->is_empty_shell()) {
     // treat empty shell as tablet not exist.
     ret = OB_TABLET_NOT_EXIST;

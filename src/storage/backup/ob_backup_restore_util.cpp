@@ -159,7 +159,7 @@ int ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(const common::ObStr
     } else {
       for (int64_t i = 0; i < id_mappings_meta.sstable_count_; ++i) {
         const ObBackupMacroBlockIDMapping *mapping = id_mappings_meta.id_map_list_[i];
-        FLOG_INFO("read macro block id mapping metas", K(path), K(meta_index), KPC(mapping));
+        LOG_DEBUG("read macro block id mapping metas", K(path), K(meta_index), KPC(mapping));
       }
     }
   }
@@ -204,7 +204,7 @@ int ObLSBackupRestoreUtil::read_macro_block_data(const common::ObString &path, c
         LOG_WARN("failed to set pos", K(ret), K(*common_header), K(path), K(macro_index), K(read_buffer), K(data_buffer), K(macro_block_size));
       } else {
         MEMCPY(dest, read_buffer.current(), macro_block_size);
-        LOG_INFO("read macro block data", K(path), K(macro_index), K(data_buffer));
+        LOG_DEBUG("read macro block data", K(path), K(macro_index), K(data_buffer));
       }
     }
   }

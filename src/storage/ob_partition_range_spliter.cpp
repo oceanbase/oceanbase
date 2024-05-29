@@ -931,10 +931,6 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
   if (OB_ISNULL(table)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid table pointer", K(ret), KP(table));
-  } else if (table->is_direct_load_memtable()) {
-    // FIXME : @suzhi.yt
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "get single range from direct load memtable not supported", KR(ret), KPC(table));
   } else if (table->is_data_memtable()) {
     memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
     int64_t row_count = 0;
@@ -1010,6 +1006,11 @@ int ObPartitionRangeSpliter::get_single_range_info(const ObStoreRange &store_ran
         }
       }
     }
+  } else if (table->is_direct_load_memtable()) {
+    // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
+    total_size = 0;
+    macro_block_cnt = 0;
+    estimate_micro_block_cnt = 0;
   }
   return ret;
 }
@@ -1092,51 +1093,36 @@ int ObPartitionRangeSpliter::split_ranges_memtable(ObRangeSplitInfo &range_info,
   } else if (OB_ISNULL(table)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "Unexpected null table", K(ret), KP(table), K(range_info));
-  } else if (table->is_direct_load_memtable()) {
-    // FIXME : @suzhi.yt support direct load memtable?
-    ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "not supported memtable", KR(ret), KPC(table));
   } else if (table->is_data_memtable()) {
     ObSEArray<ObStoreRange, 16> store_ranges;
     memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
 
-    if (OB_FAIL(memtable->get_split_ranges(
-        &range_info.store_range_->get_start_key(),
-        &range_info.store_range_->get_end_key(),
-        range_info.parallel_target_count_,
-        store_ranges))) {
-      if (OB_ENTRY_NOT_EXIST == ret) {
-        STORAGE_LOG(WARN, "Failed to get split ranges from memtable, build single range instead", K(ret));
-        if (OB_FAIL(build_single_range(false/*for compaction*/, range_info, allocator, range_array))) {
-          STORAGE_LOG(WARN, "Failed to build single range", K(ret));
-        } else {
-          STORAGE_LOG(DEBUG, "try to make single split range for memtable", K(range_info), K(range_array));
-        }
-      } else {
-        STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
-      }
+    if (OB_ISNULL(memtable)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "Unexpected null memtable", K(ret), KP(memtable), K(range_info));
+    } else if (OB_FAIL(memtable->get_split_ranges(
+                   *range_info.store_range_, range_info.parallel_target_count_, store_ranges))) {
+      STORAGE_LOG(WARN, "Failed to get split ranges from memtable", K(ret));
     } else {
       ObStoreRange store_range;
       for (int64_t i = 0; OB_SUCC(ret) && i < store_ranges.count(); i++) {
         if (OB_FAIL(store_ranges.at(i).deep_copy(allocator, store_range))) {
           STORAGE_LOG(WARN, "Failed to deep copy store range", K(ret), K(store_ranges));
         } else if (FALSE_IT(store_range.set_table_id(range_info.store_range_->get_table_id()))) {
-        } else {
-          if (i == 0 && range_info.store_range_->get_border_flag().inclusive_start()) {
-            store_range.set_left_closed();
-          }
-          if (i == store_ranges.count() - 1 && range_info.store_range_->get_border_flag().inclusive_end()) {
-            store_range.set_right_closed();
-          }
-          if (OB_FAIL(range_array.push_back(store_range))) {
-            STORAGE_LOG(WARN, "Failed to push back store range", K(ret), K(store_range));
-          }
+        } else if (OB_FAIL(range_array.push_back(store_range))) {
+          STORAGE_LOG(WARN, "Failed to push back store range", K(ret), K(store_range));
         }
       }
     }
     STORAGE_LOG(DEBUG, "splite ranges with memtable", K(range_info), K(range_array));
+  } else if (table->is_direct_load_memtable()) {
+    // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
+    if (OB_FAIL(build_single_range(false/*for compaction*/, range_info, allocator, range_array))) {
+      STORAGE_LOG(WARN, "Failed to build single range", K(ret));
+    } else {
+      STORAGE_LOG(DEBUG, "try to make single split range for memtable", K(range_info), K(range_array));
+    }
   }
-
 
   return ret;
 }
@@ -1198,6 +1184,8 @@ int ObPartitionMultiRangeSpliter::get_split_tables(ObTableStoreIterator &table_i
           memtable_size = MAX(mem_size, memtable_size);
           max_memtable = table;
         }
+      } else if (table->is_direct_load_memtable()) {
+        // TODO : @suzhi.yt 可能会导致划分range不均衡, 后续实现
       }
     }
 

@@ -25,7 +25,7 @@ namespace sql
 
 class ObMaterialOpImpl {
 public:
-  explicit ObMaterialOpImpl(ObMonitorNode &op_monitor_info, ObSqlWorkAreaProfile &profile);
+  explicit ObMaterialOpImpl(ObMonitorNode &op_monitor_info);
   virtual ~ObMaterialOpImpl();
 
   void reset();
@@ -109,7 +109,7 @@ private:
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator datum_store_it_;
   ObEvalCtx *eval_ctx_;
-  ObSqlWorkAreaProfile &profile_;
+  ObSqlWorkAreaProfile profile_;
   ObSqlMemMgrProcessor sql_mem_processor_;
   ObIOEventObserver *io_event_observer_;
   int64_t input_rows_;

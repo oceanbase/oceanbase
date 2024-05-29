@@ -686,6 +686,7 @@ int ObPartitionMajorMerger::merge_partition(
         } else if (0 == minimum_iters_.count()) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "unexpected minimum_iters_ is null", K(ret));
+        } else if (FALSE_IT(set_base_iter(minimum_iters_))) {
         } else if (merge_helper_->is_need_skip()) {
           //move purge iters
           if (OB_FAIL(merge_helper_->move_iters_next(minimum_iters_))) {
@@ -1036,6 +1037,7 @@ int ObPartitionMinorMerger::merge_partition(
       } else if (rowkey_minimum_iters.empty()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected rowkey_minimum_iters is null", K(ret));
+      } else if (FALSE_IT(set_base_iter(rowkey_minimum_iters))) {
       } else if (1 == rowkey_minimum_iters.count()
           && nullptr == rowkey_minimum_iters.at(0)->get_curr_row()) {
         // only one iter, output its' macro block
@@ -1287,17 +1289,13 @@ int ObPartitionMinorMerger::set_result_flag(MERGE_ITER_ARRAY &fuse_iters,
         }
       }
     }
-    if (OB_SUCC(ret) && add_shadow_row) {
-      const ObDatumRow &result_row = partition_fuser_->get_result_row();
-      row_flag.set_shadow_row(true);
-      int64_t sql_sequence_col_idx = data_store_desc_.get_schema_rowkey_col_cnt() + 1;
-      result_row.storage_datums_[sql_sequence_col_idx].reuse();
-      result_row.storage_datums_[sql_sequence_col_idx].set_int(-INT64_MAX);
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(partition_fuser_->set_multi_version_flag(row_flag))) {
+    if (FAILEDx(partition_fuser_->set_multi_version_flag(row_flag))) {
       STORAGE_LOG(WARN, "Failed to set multi version row flag and dml", K(ret));
+    } else if (add_shadow_row && OB_FAIL(partition_fuser_->make_result_row_shadow(
+          data_store_desc_.get_schema_rowkey_col_cnt() + 1 /*sql_sequence_col_idx*/))) {
+        LOG_WARN("failed to make shadow row", K(ret),
+          "result_row", partition_fuser_->get_result_row(),
+          "sql_seq_col_idx", data_store_desc_.get_schema_rowkey_col_cnt() + 1);
     } else {
       STORAGE_LOG(DEBUG, "succ to set multi version row flag and dml", K(partition_fuser_->get_result_row()),
                   K(row_flag), KPC(base_row));

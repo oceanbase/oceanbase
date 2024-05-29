@@ -1511,6 +1511,20 @@ int ObFtsIndexBuilderUtil::get_doc_id_col(
   return ret;
 }
 
+int ObFtsIndexBuilderUtil::check_fts_or_multivalue_index_allowed(
+    ObTableSchema &data_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!data_schema.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(data_schema));
+  } else if (data_schema.is_partitioned_table() && data_schema.is_heap_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create full-text or multi-value index on partition table without primary key");
+  }
+  return ret;
+}
+
 int ObFtsIndexBuilderUtil::get_word_segment_col(
     const ObTableSchema &data_schema,
     const obrpc::ObCreateIndexArg *index_arg,
@@ -2210,7 +2224,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
         if (OB_FAIL(ret)) {
           //do nothing
         } else if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, pos,
-                                           "__mvi_%ld", /*naming rules are compatible with oracle*/
+                                           "SYS_NC_mvi_%ld", /*naming rules are compatible with oracle*/
                                            multival_col.get_column_id()))) {
           LOG_WARN("print generate column prefix name failed", K(ret));
         } else if (OB_FAIL(multival_col.set_column_name(col_name_buf))) {
@@ -2248,7 +2262,7 @@ int ObMulValueIndexBuilderUtil::generate_multivalue_column(
           multival_arr_col.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObJsonType]);
 
           if (OB_FAIL(databuff_printf(col_name_buf, OB_MAX_COLUMN_NAMES_LENGTH, pos,
-                                            "__mvi_arr_%ld", /*naming rules are compatible with oracle*/
+                                            "SYS_NC_mvi_arr_%ld", /*naming rules are compatible with oracle*/
                                             multival_arr_col.get_column_id()))) {
             LOG_WARN("print generate column prefix name failed", K(ret));
           } else if (OB_FAIL(multival_arr_col.set_column_name(col_name_buf))) {

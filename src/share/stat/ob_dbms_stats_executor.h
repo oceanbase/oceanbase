@@ -142,7 +142,9 @@ private:
   static int do_set_table_stats(const ObSetTableStatParam &param,
                                 ObOptTableStat *table_stat);
 
-  static int do_set_column_stats(const ObSetColumnStatParam &param,
+  static int do_set_column_stats(ObIAllocator &allocator,
+                                 const ObDataTypeCastParams &dtc_params,
+                                 const ObSetColumnStatParam &param,
                                  ObOptColumnStat *&column_stat);
 
   static int reset_table_locked_state(ObExecContext &ctx,

@@ -51,7 +51,9 @@ namespace sql
   class ObIndexSkylineDim;
   class ObIndexInfoCache;
   class ObSelectLogPlan;
-  struct CandiRangeExprs {
+  class ObConflictDetector;
+  struct CandiRangeExprs
+  {
     int64_t column_id_;
     int64_t index_;
     ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> eq_exprs_;
@@ -66,88 +68,7 @@ namespace sql
   /*
    * 用于指示inner join未来的连接条件
    */
-  struct JoinInfo
-  {
-    JoinInfo() :
-        table_set_(),
-        on_conditions_(),
-        where_conditions_(),
-        equal_join_conditions_(),
-        join_type_(UNKNOWN_JOIN)
-        {}
-
-    JoinInfo(ObJoinType join_type) :
-        table_set_(),
-        on_conditions_(),
-        where_conditions_(),
-        equal_join_conditions_(),
-        join_type_(join_type)
-        {}
-
-    virtual ~JoinInfo() {};
-    TO_STRING_KV(K_(join_type),
-                 K_(table_set),
-                 K_(on_conditions),
-                 K_(where_conditions),
-                 K_(equal_join_conditions));
-    ObRelIds table_set_; //要连接的表集合（即包含在join_qual_中的，除自己之外的所有表）
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> on_conditions_; //来自on的条件，如果是outer join
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> where_conditions_; //来自where的条件，如果是outer join，则是join filter，如果是inner join，则是join condition
-    common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> equal_join_conditions_;//是连接条件（outer的on condition，inner join的where condition）的子集，仅简单等值，在预测未来的mergejoin所需的序的时候使用
-    ObJoinType join_type_;
-  };
-
-  struct ConflictDetector {
-    ConflictDetector() :
-      join_info_(),
-      CR_(),
-      cross_product_rule_(),
-      delay_cross_product_rule_(),
-      L_TES_(),
-      R_TES_(),
-      L_DS_(),
-      R_DS_(),
-      is_degenerate_pred_(false),
-      is_commutative_(false),
-      is_redundancy_(false)
-      {}
-
-    virtual ~ConflictDetector() {}
-
-    static int build_confict(common::ObIAllocator &allocator, ConflictDetector* &detector);
-
-    TO_STRING_KV(K_(join_info),
-                 K_(CR),
-                 K_(cross_product_rule),
-                 K_(delay_cross_product_rule),
-                 K_(L_TES),
-                 K_(R_TES),
-                 K_(L_DS),
-                 K_(R_DS),
-                 K_(is_degenerate_pred),
-                 K_(is_commutative),
-                 K_(is_redundancy));
-
-    //table set包含的是当前join condition所引用的所有表，也就是SES
-    JoinInfo join_info_;
-    //conflict rules: R1 -> R2
-    common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> CR_;
-    common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> cross_product_rule_;
-    common::ObSEArray<std::pair<ObRelIds, ObRelIds> , 4, common::ModulePageAllocator, true> delay_cross_product_rule_;
-    //left total eligibility set
-    ObRelIds L_TES_;
-    //right total eligibility set
-    ObRelIds R_TES_;
-    //left degenerate set，用于检查join condition为退化谓词的合法性，存放的是左子树的所有表集
-    ObRelIds L_DS_;
-    //right degenerate set，存放的是右子树的所有表集
-    ObRelIds R_DS_;
-    bool is_degenerate_pred_;
-    //当前join是否可交换左右表
-    bool is_commutative_;
-    //为hint生成的冗余笛卡尔积
-    bool is_redundancy_;
-  };
+  struct JoinInfo;
 
   struct ValidPathInfo
   {
@@ -1384,6 +1305,7 @@ struct NullAwareAntiJoinInfo {
     int extract_used_columns(const uint64_t table_id,
                             const uint64_t ref_table_id,
                             bool only_normal_ref_expr,
+                            bool consider_rowkey,
                             ObIArray<uint64_t> &column_ids,
                             ObIArray<ColumnItem> &columns);
 
@@ -1509,11 +1431,11 @@ struct NullAwareAntiJoinInfo {
 
     inline void set_output_rows(double rows) { output_rows_ = rows;}
 
-    inline common::ObIArray<ConflictDetector*>& get_conflict_detectors() {return used_conflict_detectors_;}
-    inline const common::ObIArray<ConflictDetector*>& get_conflict_detectors() const {return used_conflict_detectors_;}
+    inline common::ObIArray<ObConflictDetector*>& get_conflict_detectors() {return used_conflict_detectors_;}
+    inline const common::ObIArray<ObConflictDetector*>& get_conflict_detectors() const {return used_conflict_detectors_;}
     int merge_conflict_detectors(ObJoinOrder *left_tree,
                                  ObJoinOrder *right_tree,
-                                 const common::ObIArray<ConflictDetector*>& detectors);
+                                 const common::ObIArray<ObConflictDetector*>& detectors);
     inline JoinInfo* get_join_info() {return join_info_;}
     inline const JoinInfo* get_join_info() const {return join_info_;}
 
@@ -1858,7 +1780,7 @@ struct NullAwareAntiJoinInfo {
     int init_join_order(const ObJoinOrder* left_tree,
                         const ObJoinOrder* right_tree,
                         const JoinInfo* join_info,
-                        const common::ObIArray<ConflictDetector*>& detectors);
+                        const common::ObIArray<ObConflictDetector*>& detectors);
     int compute_join_property(const ObJoinOrder *left_tree,
                               const ObJoinOrder *right_tree,
                               const JoinInfo *join_info);
@@ -2599,7 +2521,7 @@ struct NullAwareAntiJoinInfo {
     ObShardingInfo *sharding_info_; // only for base table and local index
     ObTableMetaInfo table_meta_info_; // only for base table
     JoinInfo* join_info_; //记录连接信息
-    common::ObSEArray<ConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器
+    common::ObSEArray<ObConflictDetector*, 8, common::ModulePageAllocator, true> used_conflict_detectors_; //记录当前join order用掉了哪些冲突检测器
     common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> restrict_info_set_; //对于基表（SubQuery）记录单表条件；对于普通Join为空
     common::ObSEArray<Path*, 32, common::ModulePageAllocator, true> interesting_paths_;
     bool is_at_most_one_row_;

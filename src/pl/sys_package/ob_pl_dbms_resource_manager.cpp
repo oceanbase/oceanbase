@@ -175,7 +175,7 @@ int ObPlDBMSResourceManager::delete_consumer_group(
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(proxy.delete_consumer_group(tenant_id, consumer_group))) {
-      LOG_WARN("fail create consumer_group", K(tenant_id), K(consumer_group), K(ret));
+      LOG_WARN("fail delete consumer_group", K(tenant_id), K(consumer_group), K(ret));
     }
   }
   return ret;

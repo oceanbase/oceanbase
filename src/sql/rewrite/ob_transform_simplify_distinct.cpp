@@ -86,7 +86,8 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
 {
   int ret = OB_SUCCESS;
   can_be = false;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->exec_ctx_) ||
+      OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt), K(ctx_));
   } else if (stmt->is_contains_assignment() ||
@@ -98,13 +99,16 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
              !stmt->has_rollup()) {
     // Only try to eliminate DISTINCT for plain SELECT
     int64_t limit_count = 0;
-    const ObConstRawExpr *limit_expr = static_cast<ObConstRawExpr *>(stmt->get_limit_expr());
     const ObRawExpr *limit_offset_expr = stmt->get_offset_expr();
-    if (limit_expr != NULL) {
-      limit_count = limit_expr->get_value().get_int();
-    }
-    if (!stmt->has_limit() ||
-        (limit_offset_expr == NULL && limit_count > 0)) {
+    bool is_null_value = false;
+    if (OB_FAIL(ObTransformUtils::get_expr_int_value(stmt->get_limit_expr(),
+                                                    &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                                                    ctx_->exec_ctx_,
+                                                    ctx_->allocator_,
+                                                    limit_count,
+                                                    is_null_value))) {
+      LOG_WARN("failed to get limit int value", K(ret));
+    } else if (!stmt->has_limit() || (limit_offset_expr == NULL && limit_count > 0)) {
       bool contain_only = true;
       EqualSets &equal_sets = ctx_->equal_sets_;
       ObArenaAllocator alloc;

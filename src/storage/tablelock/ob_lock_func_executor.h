@@ -120,7 +120,7 @@ public:
                                                          + OB_MAX_DATABASE_NAME_LENGTH
                                                          + 1);
   static constexpr int64_t MAX_LOCK_HANDLE_LEGNTH = 65;
-  static constexpr int64_t WHERE_CONDITION_BUFFER_SIZE = 100;
+  static constexpr int64_t WHERE_CONDITION_BUFFER_SIZE = 512;
   static constexpr int64_t LOCK_ID_LENGTH = 10;
   static constexpr int64_t MIN_LOCK_HANDLE_ID = 0x40000000;
   static constexpr int64_t MAX_LOCK_HANDLE_ID = 1999999999;
@@ -135,9 +135,10 @@ public:
   int check_lock_exist_(ObLockFuncContext &ctx,
                         const uint64_t &lock_id,
                         bool &exist);
-  int check_lock_exist_(ObLockFuncContext &ctx,
-                        const int64_t raw_owner_id,
-                        bool &exist);
+  int check_owner_exist_(ObLockFuncContext &ctx,
+                         const uint32_t client_session_id,
+                         const uint64_t client_session_create_ts,
+                         bool &exist);
   int check_lock_exist_(ObLockFuncContext &ctx,
                         ObSqlString &where_cond,
                         bool &exist);
@@ -148,7 +149,8 @@ public:
   int remove_lock_id_(ObLockFuncContext &ctx,
                       const int64_t lock_id);
   int remove_session_record_(ObLockFuncContext &ctx,
-                             const uint32_t client_session_id);
+                             const uint32_t client_session_id,
+                             const uint64_t client_session_create_ts);
   int unlock_obj_(transaction::ObTxDesc *tx_desc,
                   const transaction::ObTxParam &tx_param,
                   const ObUnLockObjsRequest &arg);
@@ -163,6 +165,8 @@ public:
                        uint64_t &lock_id);
   void mark_lock_session_(sql::ObSQLSessionInfo *session,
                           const bool is_lock_session);
+  int remove_expired_lock_id();
+  int remove_expired_lock_id_(sql::ObExecContext &ctx);
 };
 
 class ObGetLockExecutor : public ObLockFuncExecutor

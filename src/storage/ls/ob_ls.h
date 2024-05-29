@@ -386,6 +386,7 @@ public:
   int try_sync_reserved_snapshot(const int64_t new_reserved_snapshot, const bool update_flag);
   int check_can_replay_clog(bool &can_replay);
   int check_ls_need_online(bool &need_online);
+  int check_allow_read(bool &allow_read);
 
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle() const;
@@ -571,6 +572,8 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, rebuild_create_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_ha_data_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet, int);
+  DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_without_memtables, int);
+  DELEGATE_WITH_RET(ls_tablet_svr_, ha_get_tablet_without_memtables, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, update_tablet_restore_status, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, create_or_update_migration_tablet, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, flush_mds_table, int);
@@ -831,10 +834,12 @@ public:
   DELEGATE_WITH_RET(ls_tx_svr_, get_tx_ctx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, get_active_tx_count, int);
   DELEGATE_WITH_RET(ls_tx_svr_, print_all_tx_ctx, int);
+  DELEGATE_WITH_RET(ls_tx_svr_, retry_apply_start_working_log, int);
   //dup table ls meta interface
   CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
   DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);
 
+  DELEGATE_WITH_RET(ls_tx_svr_, filter_tx_need_transfer, int);
   // for transfer to modify active tx ctx state
   DELEGATE_WITH_RET(ls_tx_svr_, transfer_out_tx_op, int);
 
@@ -936,6 +941,10 @@ public:
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, add_dependent_medium_tablet, int);
   DELEGATE_WITH_RET(reserved_snapshot_mgr_, del_dependent_medium_tablet, int);
   int set_ls_migration_gc(bool &allow_gc);
+  int inner_check_allow_read_(
+      const ObMigrationStatus &migration_status,
+      const share::ObLSRestoreStatus &restore_status,
+      bool &allow_read);
 
 private:
   // StorageBaseUtil

@@ -225,6 +225,10 @@ public: // derived from ObITabletMemtable
   virtual bool is_inited() const override { return is_inited_; }
   virtual int64_t dec_write_ref() override;
   virtual bool is_frozen_memtable() override;
+  virtual int get_schema_info(
+    const int64_t input_column_cnt,
+    int64_t &max_schema_version_on_memtable,
+    int64_t &max_column_cnt_on_memtable) const override;
 
 public: // derived from ObITable
   // ==================== Memtable Operation Interface ==================
@@ -357,7 +361,6 @@ public: // derived from ObITable
       storage::ObStoreCtx &ctx,
       const share::SCN &scn,
       ObMemtableMutatorIterator *mmi);
-  virtual int replay_schema_version_change_log(const int64_t schema_version);
   virtual int safe_to_destroy(bool &is_safe);
 
 public:
@@ -369,10 +372,6 @@ public:
   int64_t get_max_data_schema_version() const;
   void set_max_column_cnt(const int64_t column_cnt);
   int64_t get_max_column_cnt() const;
-  int get_schema_info(
-    const int64_t input_column_cnt,
-    int64_t &max_schema_version_on_memtable,
-    int64_t &max_column_cnt_on_memtable) const;
   int row_compact(ObMvccRow *value,
                   const share::SCN snapshot_version,
                   const int64_t flag);
@@ -395,7 +394,9 @@ public:
   void set_contain_hotspot_row() { return ATOMIC_STORE(&contain_hotspot_row_, true); }
   virtual int64_t get_upper_trans_version() const override;
   virtual int estimate_phy_size(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, int64_t& total_bytes, int64_t& total_rows) override;
-  virtual int get_split_ranges(const ObStoreRowkey* start_key, const ObStoreRowkey* end_key, const int64_t part_cnt, common::ObIArray<common::ObStoreRange> &range_array) override;
+  virtual int get_split_ranges(const ObStoreRange &input_range,
+                               const int64_t part_cnt,
+                               ObIArray<ObStoreRange> &range_array) override;
   int split_ranges_for_sample(const blocksstable::ObDatumRange &table_scan_range,
                               const double sample_rate_percentage,
                               ObIAllocator &allocator,
@@ -450,7 +451,7 @@ public:
   int check_cleanout(bool &is_all_cleanout,
                      bool &is_all_delay_cleanout,
                      int64_t &count);
-  int dump2text(const char *fname);
+  virtual int dump2text(const char *fname) override;
   // TODO(handora.qc) ready_for_flush interface adjustment
 
   virtual int finish_freeze();
@@ -574,8 +575,7 @@ private:
                                const int64_t last_compact_cnt,
                                const int64_t total_trans_node_count);
   bool ready_for_flush_();
-  int64_t try_split_range_for_sample_(const ObStoreRowkey &start_key,
-                                      const ObStoreRowkey &end_key,
+  int64_t try_split_range_for_sample_(const ObStoreRange &input_range,
                                       const int64_t range_count,
                                       ObIAllocator &allocator,
                                       ObIArray<blocksstable::ObDatumRange> &sample_memtable_ranges);

@@ -23,7 +23,7 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
-ObMaterialOpImpl::ObMaterialOpImpl(ObMonitorNode &op_monitor_info, ObSqlWorkAreaProfile &profile)
+ObMaterialOpImpl::ObMaterialOpImpl(ObMonitorNode &op_monitor_info)
 : inited_(false),
   got_first_row_(false),
   tenant_id_(OB_INVALID_ID),
@@ -32,8 +32,8 @@ ObMaterialOpImpl::ObMaterialOpImpl(ObMonitorNode &op_monitor_info, ObSqlWorkArea
   datum_store_(ObModIds::OB_HASH_NODE_GROUP_ROWS),
   datum_store_it_(),
   eval_ctx_(nullptr),
-  profile_(profile),
-  sql_mem_processor_(profile, op_monitor_info),
+  profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
+  sql_mem_processor_(profile_, op_monitor_info),
   input_rows_(OB_INVALID_ID),
   input_width_(OB_INVALID_ID),
   op_type_(PHY_INVALID),

@@ -131,7 +131,6 @@ public:
   virtual int64_t dec_write_ref() { return OB_INVALID_COUNT; }
   virtual int64_t get_write_ref() const { return OB_INVALID_COUNT; }
   virtual uint32_t get_freeze_flag() { return 0; }
-  virtual bool is_tablet_freeze() { return false; }
   virtual int64_t get_occupied_size() const { return 0; }
   virtual int estimate_phy_size(const ObStoreRowkey *start_key,
                                 const ObStoreRowkey *end_key,
@@ -143,22 +142,18 @@ public:
     total_rows = 0;
     return OB_SUCCESS;
   }
-  virtual int get_split_ranges(const ObStoreRowkey *start_key,
-                               const ObStoreRowkey *end_key,
+
+  virtual int get_split_ranges(const ObStoreRange &input_range,
                                const int64_t part_cnt,
-                               common::ObIArray<common::ObStoreRange> &range_array)
+                               ObIArray<ObStoreRange> &range_array)
   {
-    UNUSEDx(start_key, end_key);
+    UNUSEDx(input_range);
     int ret = OB_SUCCESS;
     if (OB_UNLIKELY(part_cnt != 1)) {
       ret = OB_NOT_SUPPORTED;
-    } else {
-      ObStoreRange merge_range;
-      merge_range.set_start_key(ObStoreRowkey::MIN_STORE_ROWKEY);
-      merge_range.set_end_key(ObStoreRowkey::MAX_STORE_ROWKEY);
-      if (OB_FAIL(range_array.push_back(merge_range))) {
-        TRANS_LOG(ERROR, "push back to range array failed", K(ret));
-      }
+      STORAGE_LOG(WARN, "split a single range is not supported", KR(ret), K(input_range), K(part_cnt));
+    } else if (OB_FAIL(range_array.push_back(input_range))) {
+      STORAGE_LOG(WARN, "push back to range array failed", K(ret));
     }
     return ret;
   }

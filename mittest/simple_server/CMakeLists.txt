@@ -35,6 +35,7 @@ function(ob_offline_observer case case_file)
     EXCLUDE_FROM_ALL
     ${case_file}
     ${OBSERVER_TEST_SRCS}
+    ../${MIT_SRCS}
     )
   target_include_directories(${case} PUBLIC
     ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
@@ -53,6 +54,7 @@ endfunction()
 
 ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
 ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
+ob_offline_observer(test_tx_data test_tx_data.cpp)
 
 ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
@@ -111,6 +113,7 @@ ob_unittest_observer(test_callbacks_with_reverse_order test_callbacks_with_rever
 ob_unittest_observer(test_transfer_tx_data test_transfer_with_smaller_tx_data.cpp)
 ob_unittest_observer(test_transfer_in_after_abort test_transfer_in_after_abort.cpp)
 ob_unittest_observer(test_transfer_commit_action test_transfer_with_commit_action.cpp)
+ob_unittest_observer(test_transfer_rollback_to test_transfer_between_rollback_to.cpp)
 ob_unittest_observer(test_memtable_new_safe_to_destroy test_memtable_new_safe_to_destroy.cpp)
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
 # TODO(muwei.ym): open later

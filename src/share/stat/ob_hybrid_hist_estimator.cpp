@@ -354,16 +354,28 @@ int ObHybridHistEstimator::compute_estimate_percent(int64_t total_row_count,
     }
     if (OB_SUCC(ret) && need_sample) {
       if (total_row_count * est_percent / 100 >= MAGIC_MIN_SAMPLE_SIZE) {
-        /*do nothing*/
+        const int64_t MAGIC_MAX_SPECIFY_SAMPLE_SIZE = 1000000;
+        is_block_sample = !is_block_sample ? total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS : is_block_sample;
+        int64_t max_allowed_multiple = max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM ? 1 :
+                                                    max_num_bkts / ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM;
+        int64_t max_specify_sample_size = MAGIC_MAX_SPECIFY_SAMPLE_SIZE * max_allowed_multiple;
+        if (total_row_count * est_percent / 100 >= max_specify_sample_size) {
+          est_percent = max_specify_sample_size * 100.0 / total_row_count;
+        }
       } else if (total_row_count <= MAGIC_SAMPLE_SIZE) {
         need_sample = false;
         est_percent = 0.0;
         is_block_sample = false;
       } else {
-        is_block_sample = false;
+        is_block_sample = total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS;
         est_percent = (MAGIC_SAMPLE_SIZE * 100.0) / total_row_count;
       }
     }
+  } else if (total_row_count >= MAX_AUTO_GATHER_FULL_TABLE_ROWS) {
+    need_sample = true;
+    is_block_sample = true;
+    const int64_t MAGIC_MAX_SAMPLE_SIZE = 100000;
+    est_percent = MAGIC_MAX_SAMPLE_SIZE * 100.0 / total_row_count;
   } else if (total_row_count >= MAGIC_MAX_AUTO_SAMPLE_SIZE) {
     if (max_num_bkts <= ObColumnStatParam::DEFAULT_HISTOGRAM_BUCKET_NUM) {
       need_sample = true;

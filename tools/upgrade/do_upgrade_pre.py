@@ -23,9 +23,9 @@ class UpgradeParams:
   rollback_sql_filename = config.pre_upgrade_rollback_sql_filename
 
 class PasswordMaskingFormatter(logging.Formatter):
-    def format(self, record):
-        s = super(PasswordMaskingFormatter, self).format(record)
-        return re.sub(r'password=\".*?\"', 'password=\"******\"', s)
+  def format(self, record):
+    s = super(PasswordMaskingFormatter, self).format(record)
+    return re.sub(r'password="(?:[^"\\]|\\.)+"', 'password="******"', s)
 
 def config_logging_module(log_filenamme):
   logging.basicConfig(level=logging.INFO,\
@@ -96,7 +96,7 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
 
       if run_modules.MODULE_HEALTH_CHECK in my_module_set:
         logging.info('================begin to run health check action ===============')
-        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout, True) # need_check_major_status = True
+        upgrade_health_checker.do_check(my_host, my_port, my_user, my_passwd, upgrade_params, timeout)
         logging.info('================succeed to run health check action ===============')
 
     except Exception, e:
@@ -146,7 +146,7 @@ def do_upgrade_by_argv(argv):
         else:
           raise MyError('invalid module: {0}'.format(cmd_module))
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
-          host, port, user, password, timeout, module_set, log_filename)
+          host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
       do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
     except mysql.connector.Error, e:
       logging.exception('mysql connctor error')

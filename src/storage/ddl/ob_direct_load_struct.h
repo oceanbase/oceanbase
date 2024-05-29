@@ -419,7 +419,7 @@ public:
     datum_stores_.set_attr(ObMemAttr(MTL_ID(), "ChunkSlicStoreD"));
   }
   virtual ~ObChunkSliceStore() { reset(); }
-  int init(const int64_t rowkey_column_count, ObTabletHandle &tablet_handle, ObArenaAllocator &allocator,
+  int init(const int64_t rowkey_column_count, const ObStorageSchema *storage_schema, ObArenaAllocator &allocator,
            const ObIArray<ObColumnSchemaItem> &col_schema, const int64_t dir_id, const int64_t parallelism);
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int close() override;
@@ -427,7 +427,7 @@ public:
   virtual int64_t get_row_count() const { return row_cnt_; }
   TO_STRING_KV(K(is_inited_), K(target_store_idx_), K(row_cnt_), KP(arena_allocator_), K(datum_stores_), K(endkey_), K(rowkey_column_count_), K(cg_schemas_));
 private:
-  int prepare_datum_stores(const uint64_t tenant_id, ObTabletHandle &tablet_handle, ObIAllocator &allocator,
+  int prepare_datum_stores(const uint64_t tenant_id, const ObStorageSchema *storage_schema, ObIAllocator &allocator,
                            const ObIArray<ObColumnSchemaItem> &col_array, const int64_t dir_id, const int64_t parallelism);
   int64_t calc_chunk_limit(const ObStorageColumnGroupSchema &cg_schema);
 public:
@@ -492,7 +492,7 @@ public:
       const share::SCN &start_scn,
       const uint64_t table_id,
       const ObTabletID &curr_tablet_id,
-      ObTabletHandle &tablet_handle,
+      const ObStorageSchema *storage_schema,
       ObIStoreRowIterator *row_iter,
       const ObTableSchemaItem &schema_item,
       const ObDirectLoadType &direct_load_type,
@@ -559,7 +559,7 @@ private:
       const bool is_slice_store,
       const int64_t dir_id,
       const int64_t parallelism,
-      ObTabletHandle &tablet_handle,
+      const ObStorageSchema *storage_schema,
       const share::SCN &start_scn);
   int report_unique_key_dumplicated(
       const int ret_code,

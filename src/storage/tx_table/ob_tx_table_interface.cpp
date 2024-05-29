@@ -57,6 +57,17 @@ int ObTxTableGuard::check_row_locked(const transaction::ObTransID &read_tx_id,
   }
 }
 
+int ObTxTableGuard::load_tx_op(const transaction::ObTransID &tx_id, ObTxData &tx_data)
+{
+  if (OB_NOT_NULL(tx_table_)) {
+    ObReadTxDataArg arg(tx_id, epoch_, mini_cache_, false);
+    LoadTxOpFunctor functor(tx_data);
+    return tx_table_->check_with_tx_data(arg, functor);
+  } else {
+    return OB_NOT_INIT;
+  }
+}
+
 int ObTxTableGuard::check_sql_sequence_can_read(const transaction::ObTransID tx_id,
                                                 const transaction::ObTxSEQ &sql_sequence,
                                                 bool &can_read)

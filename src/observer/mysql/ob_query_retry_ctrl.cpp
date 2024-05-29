@@ -1242,7 +1242,14 @@ void ObQueryRetryCtrl::test_and_save_retry_state(const ObGlobalContext &gctx,
     retry_err_code_ = client_ret;
   }
   if (RETRY_TYPE_NONE != retry_type_) {
-    result.set_close_fail_callback([this](const int err, int &client_ret)-> void { this->on_close_resultset_fail_(err, client_ret); });
+    struct CloseFailFunctor {
+      ObQueryRetryCtrl* retry_ctl_;
+      CloseFailFunctor(ObQueryRetryCtrl* retry_ctl): retry_ctl_(retry_ctl) {}
+      void operator()(const int err, int &client_ret) {
+        retry_ctl_->on_close_resultset_fail_(err, client_ret);
+      }
+    } callback_functor(this);
+    result.set_close_fail_callback(callback_functor);
   }
 }
 

@@ -65,6 +65,7 @@ void TestParser::TearDown()
 {
 }
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, basic_test)
 {
   const char* test_file = "./test_parser.test";
@@ -93,7 +94,9 @@ TEST_F(TestParser, basic_test)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, filter_hint)
 {
   const char* test_file = "./test_parser_outline.test";
@@ -122,7 +125,9 @@ TEST_F(TestParser, filter_hint)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, print_parser_tree)
 {
   const char* test_file = "./test_parser.test";
@@ -154,6 +159,9 @@ TEST_F(TestParser, print_parser_tree)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
+
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, pre_parse)
 {
   constexpr int STR_NUM = 4;
@@ -201,6 +209,7 @@ TEST_F(TestParser, pre_parse)
    //verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
 void TestParser::print_parse_tree(const char *query_str, std::ofstream &of_result, int64_t expect_error) {
   ObSQLMode mode = test::clp.sql_mode;
@@ -236,6 +245,7 @@ void TestParser::print_parse_outline(const char *query_str, std::ofstream &of_re
   parser.free_result(parse_result);
 }
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, test_parser_outline)
 {
   const char* test_file = "./test_parser_outline.test";
@@ -264,7 +274,9 @@ TEST_F(TestParser, test_parser_outline)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, test_mysql_sql_keyword)
 {
   const char* test_file = "../../../../src/sql/parser/sql_parser_mysql_mode.y";
@@ -282,7 +294,9 @@ TEST_F(TestParser, test_mysql_sql_keyword)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, test_mysql_pl_keyword)
 {
   const char* test_file = "../../../../src/pl/parser/pl_parser_mysql_mode.y";
@@ -300,7 +314,9 @@ TEST_F(TestParser, test_mysql_pl_keyword)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, test_oracle_sql_keyword)
 {
   const char* test_file = "../../../../close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.y";
@@ -318,7 +334,9 @@ TEST_F(TestParser, test_oracle_sql_keyword)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
+#ifdef OB_BUILD_ORACLE_PARSER
 TEST_F(TestParser, test_oracle_pl_keyword)
 {
   const char* test_file = "../../../../close_modules/oracle_pl/pl/parser/pl_parser_oracle_mode.y";
@@ -336,6 +354,7 @@ TEST_F(TestParser, test_oracle_pl_keyword)
   // verify results
   is_equal_content(tmp_file,result_file);
 }
+#endif
 
 void TestParser::parse_keyword(std::ifstream &if_tests, std::ofstream &of_result, bool is_sql_keyword)
 {
