@@ -17460,6 +17460,9 @@ int ObDMLResolver::try_add_join_table_for_fts(const TableItem *left_table, Table
     right_table->table_name_ = table_schema->get_table_name_str();
     right_table->alias_name_ = table_schema->get_table_name_str();
     right_table->table_type_ = table_schema->get_table_type();
+    right_table->qb_name_ = left_table->qb_name_;
+    right_table->synonym_db_name_ = left_table->synonym_db_name_;
+    right_table->database_name_ = left_table->database_name_;
     if (OB_FAIL(get_stmt()->add_table_item(session_info_, right_table))) {
       STORAGE_FTS_LOG(WARN, "fail to add right table item", K(ret), K(right_table));
     } else if (OB_FAIL(get_stmt()->set_part_expr(right_table->table_id_, right_table->ref_id_, part_expr, subpart_expr))) {
