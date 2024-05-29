@@ -1012,6 +1012,7 @@ class ObConfigInfoInPC
 {
 public:
   static const int DEFAULT_PUSHDOWN_STORAGE_LEVEL = 4;
+  // static constexpr const char * const DEFAULT_REGEXP_ENGINE = "ICU";
 
   ObConfigInfoInPC()
   : pushdown_storage_level_(DEFAULT_PUSHDOWN_STORAGE_LEVEL),
@@ -1026,6 +1027,7 @@ public:
     is_enable_px_fast_reclaim_(false),
     enable_spf_batch_rescan_(false),
     enable_var_assign_use_das_(false),
+    enable_hyperscan_regexp_engine_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1069,6 +1071,7 @@ public:
   bool is_enable_px_fast_reclaim_;
   bool enable_spf_batch_rescan_;
   bool enable_var_assign_use_das_;
+  bool enable_hyperscan_regexp_engine_;
 
 private:
   // current cluster config version_

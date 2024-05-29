@@ -1250,5 +1250,11 @@ bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAd
   return is_valid;
 }
 
+bool ObConfigRegexpEngineChecker::check(const ObConfigItem &t) const
+{
+  return (0 == ObString::make_string("ICU").case_compare(t.str())) || 
+         (0 == ObString::make_string("Hyperscan").case_compare(t.str()));
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

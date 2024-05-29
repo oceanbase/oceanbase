@@ -2417,6 +2417,8 @@ private:
   bool config_use_rich_format_;
 
   common::ObSEArray<uint64_t, 4> enable_role_ids_;
+public:
+  bool get_enable_hyperscan_regexp_engine() const;
 };
 
 

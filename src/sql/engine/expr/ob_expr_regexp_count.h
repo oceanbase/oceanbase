@@ -35,6 +35,8 @@ public:
   virtual bool need_rt_ctx() const override { return true; }
 
   static int eval_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+
+  static int eval_hs_regexp_count(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprRegexpCount);
 };

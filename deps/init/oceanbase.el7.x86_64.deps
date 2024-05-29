@@ -10,6 +10,11 @@ arch=x86_64
 repo=http://mirrors.aliyun.com/oceanbase/community/stable/el/7/x86_64/
 
 
+[target-hyperscan]
+os=7
+arch=x86_64
+repo=http://ob-yum.oceanbase-dev.com/7/x86_64/test/devdeps-hyperscan
+
 [deps]
 devdeps-gtest-1.8.0-132022101316.el7.x86_64.rpm
 devdeps-isa-l-static-2.22.0-22022092915.el7.x86_64.rpm
@@ -34,6 +39,7 @@ devdeps-cos-c-sdk-5.0.16-52023070517.el7.x86_64.rpm
 devdeps-cloud-qpl-1.1.0-272023061419.el7.x86_64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el7.x86_64.rpm
 devdeps-protobuf-c-1.4.1-100000062023102016.el7.x86_64.rpm
+devdeps-hyperscan-5.4.2-32024041119.el7.x86_64.rpm target=hyperscan
 
 [tools]
 obdevtools-binutils-2.30-12022100413.el7.x86_64.rpm
