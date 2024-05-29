@@ -823,6 +823,7 @@ int ObTabletPersister::load_table_store(
 {
   int ret = OB_SUCCESS;
   void *ptr = nullptr;
+  ObTabletTableStore *tmp_store = nullptr;
   ObArenaAllocator io_allocator(common::ObMemAttr(MTL_ID(), "PersisterTmpIO"));
   if (OB_UNLIKELY(!addr.is_block())) {
     ret = OB_INVALID_ARGUMENT;
@@ -831,7 +832,7 @@ int ObTabletPersister::load_table_store(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate a buffer", K(ret), "sizeof", sizeof(ObTabletTableStore));
   } else {
-    ObTabletTableStore *tmp_store = new (ptr) ObTabletTableStore();
+    tmp_store = new (ptr) ObTabletTableStore();
     char *io_buf = nullptr;
     int64_t buf_len = -1;
     int64_t io_pos = 0;
@@ -851,6 +852,16 @@ int ObTabletPersister::load_table_store(
     } else {
       table_store = tmp_store;
       LOG_DEBUG("succeed to load table store", K(ret), K(addr), KPC(table_store), K(tablet));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(tmp_store)) {
+      // avoid memory leak, like: ObMajorChecksumInfo::column_checksums_
+      tmp_store->~ObTabletTableStore();
+    }
+    if (OB_NOT_NULL(ptr)) {
+      // ObArenaAllocator has no effect, but is a safety measure
+      allocator.free(ptr);
     }
   }
   return ret;
