@@ -1256,6 +1256,11 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_audit_log_stmt(select_stmt))) {
+      LOG_WARN("failed to check audit log stmt");
+    }
+  }
   return ret;
 }
 
@@ -7239,6 +7244,39 @@ int ObSelectResolver::resolve_values_table_from_union(const ObIArray<int64_t> &l
       LOG_WARN("failed to add cast to select list", K(ret));
     } else if (OB_FAIL(estimate_values_table_stats(*table_def))) {
       LOG_WARN("failed to estimate values table stats", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_contain = false;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (lib::is_mysql_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < select_stmt->get_select_item_size(); i++) {
+      ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+        is_contain = true;
+      }
+    }
+    if (OB_SUCC(ret) && is_contain) {
+      if (current_level_ > 0 || is_substmt() || select_stmt->get_table_size() > 0 ||
+          select_stmt->get_condition_size() > 0 || select_stmt->has_group_by() ||
+          select_stmt->has_having() || select_stmt->get_select_item_size() > 1 ||
+          select_stmt->has_order_by() || select_stmt->has_limit()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in complex query");
+      }
     }
   }
   return ret;

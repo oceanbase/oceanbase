@@ -122,6 +122,9 @@
 #endif
 #include "lib/xml/ob_libxml2_sax_handler.h"
 #include "ob_check_params.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_mgr.h"
+#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -515,6 +518,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 #endif
     else if (OB_FAIL(ObDetectManagerThread::instance().init(GCTX.self_addr(), net_frame_.get_req_transport()))) {
       LOG_WARN("init ObDetectManagerThread failed", KR(ret));
+#ifdef OB_BUILD_AUDIT_SECURITY
+    } else if (OB_FAIL(ObAuditLogMgr::get_instance().init())) {
+      LOG_WARN("init ObAuditLogMgr failed", KR(ret));
+#endif
     } else if (OB_FAIL(wr_service_.init())) {
       LOG_WARN("failed to init wr service", K(ret));
     } else if (OB_FAIL(ObStorageHADiagService::instance().init(GCTX.sql_proxy_))) {

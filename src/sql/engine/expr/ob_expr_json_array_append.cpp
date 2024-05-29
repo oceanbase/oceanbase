@@ -17,6 +17,7 @@
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;

@@ -327,6 +327,8 @@
 # 499: __all_transfer_partition_task_history
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 501: __wr_sqltext
+# 503: __all_audit_log_filter
+# 504: __all_audit_log_user
 # 505: __all_column_privilege
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
@@ -1043,6 +1045,10 @@
 # 12454: __wr_sqltext  # BASE_TABLE_NAME
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
+# 12460: __all_virtual_audit_log_filter
+# 12460: __all_audit_log_filter  # BASE_TABLE_NAME
+# 12461: __all_virtual_audit_log_user
+# 12461: __all_audit_log_user  # BASE_TABLE_NAME
 # 12462: __all_virtual_column_privilege
 # 12462: __all_column_privilege  # BASE_TABLE_NAME
 # 12463: __all_virtual_column_privilege_history
@@ -2061,6 +2067,8 @@
 # 21511: role_edges
 # 21512: default_roles
 # 21513: CDB_INDEX_USAGE
+# 21514: audit_log_filter
+# 21515: audit_log_user
 # 21516: columns_priv
 # 21523: DBA_OB_LS_REPLICA_TASK_HISTORY
 # 21524: CDB_OB_LS_REPLICA_TASK_HISTORY

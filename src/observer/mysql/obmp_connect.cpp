@@ -40,7 +40,10 @@
 #include "observer/omt/ob_tenant.h"
 #include "observer/ob_req_time_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"      //ObWeakReadUtil
+#ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/monitor/ob_security_audit_utils.h"
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 #include "sql/privilege_check/ob_privilege_check.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "lib/utility/ob_backtrace.h"
@@ -463,6 +466,12 @@ int ObMPConnect::process()
                                                         ObString::make_string("CONNECT"),
                                                         comment_text.string(),
                                                         proc_ret);
+      if (OB_SUCC(proc_ret)) {
+        ObAuditLogUtils::hanlde_connect_audit_log(*session, "LOGIN");
+      } else {
+        ObAuditLogUtils::hanlde_connect_fail_audit_log(*session, user_name_, client_ip_,
+                                                       db_name_, get_peer(), proc_ret);
+      }
 #endif
       // oracle temp table need to be refactored
       //if (OB_SUCCESS == proc_ret) {
@@ -807,6 +816,11 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
         } else if (OB_FAIL(check_audit_user(session_priv.tenant_id_, user_name_))) {
           LOG_WARN("fail to check audit user privilege", K(ret));
 #endif
+        } else if (OB_FAIL(load_audit_log_filter(session_priv.tenant_id_,
+                                                 user_name_,
+                                                 client_ip_,
+                                                 session))) {
+          LOG_WARN("failed to load audit log filter", K(ret));
         } else if (OB_FAIL(get_client_attribute_capability(client_attr_cap_flags))) {
           LOG_WARN("failed to get client attribute capability", K(ret));
         } else {
@@ -1054,6 +1068,25 @@ int ObMPConnect::check_audit_user(const uint64_t tenant_id, ObString &user_name)
   return ret;
 }
 #endif
+
+int ObMPConnect::load_audit_log_filter(const uint64_t tenant_id,
+                                       ObString &user_name,
+                                       ObString &client_ip,
+                                       sql::ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObString filter_name;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_SESSION);
+  if (OB_FAIL(ObAuditLogUtils::get_audit_filter_name(tenant_id, user_name, client_ip, allocator,
+                                                     filter_name))) {
+    LOG_WARN("failed to get filter name", K(ret));
+  } else if (OB_FAIL(session.set_audit_filter_name(filter_name))) {
+    LOG_WARN("failed to set filter name", K(ret));
+  }
+#endif
+  return ret;
+}
 
 int ObMPConnect::update_login_stat_in_trans(const uint64_t tenant_id,
                                             const bool is_login_succ,

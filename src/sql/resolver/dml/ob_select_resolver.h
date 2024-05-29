@@ -363,6 +363,7 @@ private:
   int check_union_leaf_to_values_table_valid(const ParseNode &parse_node, bool &is_valid);
   int resolve_values_table_from_union(const ObIArray<int64_t> &values_nodes,
                                       ObValuesTableDef *&table_def);
+  int check_audit_log_stmt(ObSelectStmt *select_stmt);
 protected:
   // data members
   /*these member is only for with clause*/

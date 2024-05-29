@@ -776,6 +776,8 @@ public:
                                  px_join_skew_handling_(true),
                                  px_join_skew_minfreq_(30),
                                  at_type_(ObAuditTrailType::NONE),
+                                 audit_log_enable_(false),
+                                 audit_log_query_sql_(0),
                                  sort_area_size_(128*1024*1024),
                                  hash_area_size_(128*1024*1024),
                                  enable_query_response_time_stats_(false),
@@ -793,6 +795,8 @@ public:
     bool get_enable_bloom_filter() const { return enable_bloom_filter_; }
     bool get_enable_sql_extension() const { return enable_sql_extension_; }
     ObAuditTrailType get_at_type() const { return at_type_; }
+    bool enable_audit_log() const { return audit_log_enable_; }
+    int64_t get_audit_log_query_sql() const { return audit_log_query_sql_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
     int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
@@ -811,6 +815,8 @@ public:
     bool px_join_skew_handling_;
     int64_t px_join_skew_minfreq_;
     ObAuditTrailType at_type_;
+    bool audit_log_enable_;
+    int64_t audit_log_query_sql_;
     int64_t sort_area_size_;
     int64_t hash_area_size_;
     bool enable_query_response_time_stats_;
@@ -1312,6 +1318,8 @@ public:
   int64_t get_current_dblink_sequence_id() const { return current_dblink_sequence_id_; }
   void set_client_non_standard(bool client_non_standard) { client_non_standard_ = client_non_standard; }
   bool client_non_standard() { return client_non_standard_; }
+  int set_audit_filter_name(const common::ObString &filter_name);
+  const common::ObString &get_audit_filter_name() const { return audit_filter_name_; }
   int get_mem_ctx_alloc(common::ObIAllocator *&alloc);
   int update_sess_sync_info(const SessionSyncInfoType sess_sync_info_type,
                                 const char *buf, const int64_t length, int64_t &pos);
@@ -1436,6 +1444,16 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_print_sample_ppm();
+  }
+  bool enable_audit_log()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_audit_log();
+  }
+  int64_t get_audit_log_query_sql()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_audit_log_query_sql();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
@@ -1747,6 +1765,7 @@ private:
   share::schema::ObUserLoginInfo login_info_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
   dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
+  common::ObString audit_filter_name_;
 };
 
 inline bool ObSQLSessionInfo::is_terminate(int &ret) const

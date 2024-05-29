@@ -480,6 +480,10 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
         || (T_FUN_SYS_SYSDATE == expr.get_expr_type() && !lib::is_oracle_mode())
         || T_FUN_NORMAL_UDF == expr.get_expr_type()
         || T_FUN_SYS_GENERATOR == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_USER == expr.get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr.get_expr_type()
         || (T_FUN_UDF == expr.get_expr_type()
             && !static_cast<ObUDFRawExpr&>(expr).is_deterministic())) {
       if (OB_FAIL(expr.add_flag(IS_STATE_FUNC))) {

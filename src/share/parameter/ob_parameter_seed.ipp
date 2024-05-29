@@ -1188,6 +1188,50 @@ DEF_STR_WITH_CHECKER(audit_trail, OB_TENANT_PARAMETER, "None",
          "enables or disables database auditing, support NONE;OS;DB;DB,EXTENDED;DB_EXTENDED",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(audit_log_enable, OB_TENANT_PARAMETER, "False",
+         "whether enable audit log",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(audit_log_buffer_size, OB_TENANT_PARAMETER, "16M", "[16M,)"
+         "the buffer size of async audit log"
+         "Range: [16M, total size of memory]",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_compression, OB_TENANT_PARAMETER, "NONE",
+         common::ObConfigAuditLogCompressionChecker,
+         "the type of compression for the audit log file, values: NONE, ZSTD",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_path, OB_TENANT_PARAMETER, "",
+         common::ObConfigAuditLogPathChecker,
+         "the directory of the audit log",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_format, OB_TENANT_PARAMETER, "CSV",
+         common::ObConfigAuditLogFormatChecker,
+         "the audit log file format, values: CSV",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(audit_log_max_size, OB_TENANT_PARAMETER, "0M", "[0M,)",
+         "the maximum combined size of the audit log files",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(audit_log_prune_seconds, OB_TENANT_PARAMETER, "0", "[0,)",
+         "the number of seconds after which audit log files become subject to pruning, range: [0,)",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_query_sql, OB_TENANT_PARAMETER, "ALL",
+         common::ObConfigAuditLogQuerySQLChecker,
+         "how to record the query sql. "
+         "ALL: record the original query sql. "
+         "DESENSITIVE: record the desensitive query sql. "
+         "NONE: not to record query sql.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_CAP(audit_log_rotate_on_size, OB_TENANT_PARAMETER, "256M", "[0,)"
+         "whenever a write to the audit log file causes its size to exceed the config value, "
+         "it will be renamed and a new audit log file using is opened, range: [0,)",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(audit_log_strategy, OB_TENANT_PARAMETER, "ASYNCHRONOUS",
+         common::ObConfigAuditLogStrategyChecker,
+         "the logging method used by the audit log plugin. "
+         "ASYNCHRONOUS: Log asynchronously. Wait for space in the output buffer. "
+         "PERFORMANCE: Log asynchronously. Drop requests when there is insufficient buffer. "
+         "SYNCHRONOUS: Log synchronously.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 //ddl 超时时间
 DEF_TIME(_ob_ddl_timeout, OB_CLUSTER_PARAMETER, "1000s", "[1s,)",
          "the config parameter of ddl timeout"

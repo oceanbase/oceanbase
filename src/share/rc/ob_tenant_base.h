@@ -60,6 +60,8 @@ namespace sql {
   class ObUDRMgr;
   class ObPlanCache;
   class ObPsCache;
+  class ObAuditLogger;
+  class ObAuditLogUpdater;
 }
 namespace blocksstable {
   class ObSharedMacroBlockMgr;
@@ -339,7 +341,9 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                 \
       share::ObIndexUsageInfoMgr*,                  \
       ObTenantDblinkKeep                            \
-      table::ObTableGroupCommitMgr*                \
+      table::ObTableGroupCommitMgr*,                \
+      sql::ObAuditLogger*,                          \
+      sql::ObAuditLogUpdater*                       \
   )
 
 

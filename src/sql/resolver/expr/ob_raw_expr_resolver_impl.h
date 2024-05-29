@@ -128,7 +128,7 @@ private:
   int process_json_array_node(const ParseNode *node, ObRawExpr *&expr);
   int process_json_mergepatch_node(const ParseNode *node, ObRawExpr *&expr);
   static void modification_type_to_int(ParseNode &node);
-  int process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr);
+  int process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr, const bool is_root_expr);
   int process_dll_udf_node(const ParseNode *node, ObRawExpr *&expr);
   int process_agg_udf_node(const ParseNode *node,
                            const share::schema::ObUDF &udf_info,

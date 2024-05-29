@@ -827,6 +827,10 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || (param_need_replace ? is_not_calculable_expr() : cnt_not_calculable_expr())
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_USER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())) {
      is_const_inherit = false;

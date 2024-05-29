@@ -371,6 +371,7 @@
 #include "ob_expr_password.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_transaction_id.h"
+#include "ob_expr_audit_log_func.h"
 
 namespace oceanbase
 {
@@ -1119,10 +1120,10 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprSTSymDifference::eval_st_symdifference,                       /* 650 */
   ObExprPrivSTAsMVTGeom::eval_priv_st_asmvtgeom,                      /* 651 */
   ObExprPrivSTMakeValid::eval_priv_st_makevalid,                      /* 652 */
-  NULL, //ObExprAuditLogSetFilter::eval_set_filter,                   /* 653 */
-  NULL, //ObExprAuditLogRemoveFilter::eval_remove_filter,             /* 654 */
-  NULL, //ObExprAuditLogSetUser::eval_set_user,                       /* 655 */
-  NULL, //ObExprAuditLogRemoveUser::eval_remove_user,                 /* 656 */
+  ObExprAuditLogSetFilter::eval_set_filter,                           /* 653 */
+  ObExprAuditLogRemoveFilter::eval_remove_filter,                     /* 654 */
+  ObExprAuditLogSetUser::eval_set_user,                               /* 655 */
+  ObExprAuditLogRemoveUser::eval_remove_user,                         /* 656 */
   NULL, //eval_questionmark_decint2nmb,                               /* 657 */
   NULL, //eval_questionmark_nmb2decint_eqcast,                        /* 658 */
   NULL, //eval_questionmark_decint2decint_eqcast,                     /* 659 */

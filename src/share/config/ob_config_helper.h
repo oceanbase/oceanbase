@@ -314,6 +314,61 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigAuditTrailChecker);
 };
 
+class ObConfigAuditLogCompressionChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogCompressionChecker() {}
+  virtual ~ObConfigAuditLogCompressionChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogCompressionChecker);
+};
+
+class ObConfigAuditLogPathChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogPathChecker() {}
+  virtual ~ObConfigAuditLogPathChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogPathChecker);
+};
+
+class ObConfigAuditLogFormatChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogFormatChecker() {}
+  virtual ~ObConfigAuditLogFormatChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogFormatChecker);
+};
+
+class ObConfigAuditLogQuerySQLChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogQuerySQLChecker() {}
+  virtual ~ObConfigAuditLogQuerySQLChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogQuerySQLChecker);
+};
+
+class ObConfigAuditLogStrategyChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigAuditLogStrategyChecker() {}
+  virtual ~ObConfigAuditLogStrategyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigAuditLogStrategyChecker);
+};
+
 class ObConfigWorkAreaPolicyChecker
   : public ObConfigChecker
 {

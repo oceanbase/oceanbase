@@ -1114,4 +1114,8 @@
 #define N_PRIV_ST_MAKEPOINT                 "_st_makepoint"
 #define N_INNER_TABLE_OPTION_PRINTER        "inner_table_option_printer"
 #define N_INNER_TABLE_SEQUENCE_GETTER       "inner_table_sequence_getter"
+#define N_AUDIT_LOG_FILTER_SET_FILTER       "audit_log_filter_set_filter"
+#define N_AUDIT_LOG_FILTER_REMOVE_FILTER    "audit_log_filter_remove_filter"
+#define N_AUDIT_LOG_FILTER_SET_USER         "audit_log_filter_set_user"
+#define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

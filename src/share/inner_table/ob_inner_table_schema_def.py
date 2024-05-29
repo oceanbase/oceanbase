@@ -6722,6 +6722,43 @@ def_table_schema(
     ],
 )
 
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_audit_log_filter',
+  table_id = '503',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('filter_name', 'varbinary:MAX_AUDIT_FILTER_NAME_LENGTH_BYTE'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+      ('definition', 'longtext'),
+      ('is_deleted', 'int'),
+  ],
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_audit_log_user',
+  table_id = '504',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('user_name', 'varbinary:MAX_AUDIT_USER_NAME_LENGTH_BYTE'),
+      ('host', 'varchar:OB_MAX_HOST_NAME_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+      ('filter_name', 'varbinary:MAX_AUDIT_FILTER_NAME_LENGTH_BYTE'),
+      ('is_deleted', 'int'),
+  ],
+)
+
 all_column_privilege_def = dict(
     owner = 'mingye.swj',
     table_name    = '__all_column_privilege',
@@ -13772,6 +13809,16 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12459',
   table_name = '__all_virtual_index_usage_info',
   keywords = all_def_keywords['__all_index_usage_info']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12460',
+  table_name = '__all_virtual_audit_log_filter',
+  keywords = all_def_keywords['__all_audit_log_filter']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12461',
+  table_name = '__all_virtual_audit_log_user',
+  keywords = all_def_keywords['__all_audit_log_user']))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12462',
@@ -33246,6 +33293,40 @@ def_table_schema(
       JOIN oceanbase.__all_virtual_database DB
       ON IUT.TENANT_ID = DB.TENANT_ID AND t.DATABASE_ID = DB.DATABASE_ID
     WHERE T.TABLE_ID = IUT.OBJECT_ID
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'audit_log_filter',
+  table_id        = '21514',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(filter_name AS CHAR(64)) collate utf8mb4_bin as NAME,
+           definition as FILTER
+    FROM oceanbase.__all_audit_log_filter WHERE tenant_id = 0 and is_deleted = 0;
+""".replace("\n", " "),
+)
+def_table_schema(
+  owner = 'sean.yyj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'audit_log_user',
+  table_id        = '21515',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(user_name AS CHAR(128)) collate utf8mb4_bin as USER,
+           host as HOST,
+           CAST(filter_name AS CHAR(64)) collate utf8mb4_bin as FILTERNAME
+    FROM oceanbase.__all_audit_log_user WHERE tenant_id = 0 and is_deleted = 0;
 """.replace("\n", " "),
 )
 

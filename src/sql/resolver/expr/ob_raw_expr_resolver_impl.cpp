@@ -1017,7 +1017,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
       case T_FUN_SYS_REGEXP_LIKE:
       case T_FUN_SYS: {
-        if (OB_FAIL(process_fun_sys_node(node, expr))) {
+        if (OB_FAIL(process_fun_sys_node(node, expr, is_root_expr))) {
           if (ret != OB_ERR_FUNCTION_UNKNOWN) {
             LOG_WARN("fail to process system function node", K(ret), K(node));
           } else if (OB_FAIL(process_dll_udf_node(node, expr))) {
@@ -2447,7 +2447,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
             OZ (process_agg_node(&func_node, func_expr));
           }else {
-            OZ (process_fun_sys_node(&func_node, func_expr));
+            OZ (process_fun_sys_node(&func_node, func_expr, false));
           }
           CK (OB_NOT_NULL(func_expr));
           OX (access_ident.sys_func_expr_ = func_expr);
@@ -6667,7 +6667,9 @@ int ObRawExprResolverImpl::cast_accuracy_check(const ParseNode *node, const char
   return ret;
 }
 
-int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
+                                                ObRawExpr *&expr,
+                                                const bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
@@ -6824,6 +6826,18 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_USER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == func_expr->get_expr_type()) {
+      if (OB_UNLIKELY(!is_root_expr)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function as param is");
+      }
+    }
+  }
+
   //mark expr is deterministic or not(default deterministic)
   if (OB_SUCC(ret)) {
     //bug:
@@ -6918,6 +6932,21 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
             LOG_WARN("the func expr3 is null or not const expr", K(ret));
           }
         }
+      break;
+    case T_FUN_SYS_AUDIT_LOG_SET_FILTER:
+    case T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER:
+    case T_FUN_SYS_AUDIT_LOG_SET_USER:
+    case T_FUN_SYS_AUDIT_LOG_REMOVE_USER:
+      for (int64_t i = 0; OB_SUCC(ret) && i < func_expr.get_param_count(); ++i) {
+        ObRawExpr *param_expr = func_expr.get_param_expr(i);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null epxr", K(ret));
+        } else if (OB_UNLIKELY(!param_expr->is_const_raw_expr())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const param of audit log function");
+        }
+      }
       break;
     default:
       break;

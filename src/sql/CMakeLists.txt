@@ -264,6 +264,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_at_time_zone.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_audit_log_func.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_between.cpp

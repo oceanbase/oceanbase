@@ -440,6 +440,7 @@
 #include "sql/engine/expr/ob_expr_priv_st_makepoint.h"
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 #include "sql/engine/expr/ob_expr_transaction_id.h"
+#include "sql/engine/expr/ob_expr_audit_log_func.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1073,6 +1074,10 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprWaitUntilSQLThreadAfterGTIDs);
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprTransactionId);
+    REG_OP(ObExprAuditLogSetFilter);
+    REG_OP(ObExprAuditLogRemoveFilter);
+    REG_OP(ObExprAuditLogSetUser);
+    REG_OP(ObExprAuditLogRemoveUser);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

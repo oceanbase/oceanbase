@@ -60,6 +60,9 @@
 #include "sql/executor/ob_maintain_dependency_info_task.h"
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 extern "C" {
 #include "sql/parser/ob_non_reserved_keywords.h"
 }
@@ -4617,6 +4620,9 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
           ret = OB_SUCCESS;
         }
       }
+#ifdef OB_BUILD_AUDIT_SECURITY
+      (void) ObAuditLogUtils::handle_sql_audit_log(session, audit_record, is_sensitive);
+#endif
     }
   }
   if (lib::is_diagnose_info_enabled()) {

@@ -273,6 +273,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 498	__all_transfer_partition_task	0	201001	1
 499	__all_transfer_partition_task_history	0	201001	1
 501	__wr_sqltext	0	201001	1
+503	__all_audit_log_filter	0	201001	1
+504	__all_audit_log_user	0	201001	1
 505	__all_column_privilege	0	201001	1
 506	__all_column_privilege_history	0	201001	1
 508	__all_ls_replica_task_history	0	201001	1
@@ -701,6 +703,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12452	__all_virtual_transfer_partition_task_history	2	201001	1
 12454	__all_virtual_wr_sqltext	2	201001	1
 12459	__all_virtual_index_usage_info	2	201001	1
+12460	__all_virtual_audit_log_filter	2	201001	1
+12461	__all_virtual_audit_log_user	2	201001	1
 12462	__all_virtual_column_privilege	2	201001	1
 12463	__all_virtual_column_privilege_history	2	201001	1
 12466	ENABLED_ROLES	2	201002	1
@@ -1113,6 +1117,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21511	role_edges	1	201003	1
 21512	default_roles	1	201003	1
 21513	CDB_INDEX_USAGE	1	201001	1
+21514	audit_log_filter	1	201003	1
+21515	audit_log_user	1	201003	1
 21516	columns_priv	1	201003	1
 21523	DBA_OB_LS_REPLICA_TASK_HISTORY	1	201001	1
 21524	CDB_OB_LS_REPLICA_TASK_HISTORY	1	201001	1

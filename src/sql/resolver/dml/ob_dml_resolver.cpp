@@ -4910,6 +4910,18 @@ int ObDMLResolver::resolve_special_expr(ObRawExpr *&expr, ObStmtScope scope)
   if (OB_SUCC(ret) && expr->has_flag(CNT_CUR_TIME)) {
     stmt->get_query_ctx()->fetch_cur_time_ = true;
   }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (stmt->is_select_stmt() && T_FIELD_LIST_SCOPE == scope) {
+    // do nothing
+  } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("use audit log function in dml stmt is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in dml stmt");
+  }
   return ret;
 }
 

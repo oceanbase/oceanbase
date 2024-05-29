@@ -146,6 +146,10 @@
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "observer/table/group/ob_table_tenant_group.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_logger.h"
+#include "sql/audit/ob_audit_log_mgr.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -553,6 +557,10 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(common::sqlclient::ObTenantDblinkKeeper::mtl_new, common::sqlclient::ObTenantDblinkKeeper::mtl_init, nullptr, nullptr, nullptr, common::sqlclient::ObTenantDblinkKeeper::mtl_destroy);
 #endif
     MTL_BIND2(mtl_new_default, table::ObTableGroupCommitMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+#ifdef OB_BUILD_AUDIT_SECURITY
+    MTL_BIND2(mtl_new_default, ObAuditLogger::mtl_init, ObAuditLogger::mtl_start, ObAuditLogger::mtl_stop, ObAuditLogger::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObAuditLogUpdater::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+#endif
   }
 
   if (OB_SUCC(ret)) {
@@ -1288,6 +1296,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_freezer_config_())) {
         LOG_WARN("failed to update tenant tenant freezer config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
+        LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
+      }
       if (tenant_config->enable_kv_group_commit && OB_TMP_FAIL(start_kv_group_commit_timer())) {
         LOG_WARN("failed to start kv group commit timer", K(tmp_ret), K(tenant_id));
       }
@@ -1386,6 +1397,23 @@ int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
       LOG_WARN("set tenant mem limit failed", K(ret));
     }
   }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_audit_log_config()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObAuditLogger *audit_logger = MTL(ObAuditLogger*);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(audit_logger)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("audit logger should not be null", K(ret));
+  } else {
+    audit_logger->reload_config();
+  }
+#endif
   return ret;
 }
 

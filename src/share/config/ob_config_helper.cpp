@@ -354,6 +354,47 @@ bool ObConfigAuditTrailChecker::check(const ObConfigItem &t) const
   return sql::get_audit_trail_type_from_string(tmp_string) != sql::ObAuditTrailType::INVALID ;
 }
 
+bool ObConfigAuditLogCompressionChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("NONE")
+      || 0 == tmp_string.case_compare("ZSTD");
+}
+
+bool ObConfigAuditLogPathChecker::check(const ObConfigItem &t) const
+{
+  int ret = OB_SUCCESS;
+  common::ObString tmp_string(t.str());
+  ObBackupDest dest;
+  if (tmp_string.empty()) {
+    // do nothing
+  } else if (OB_FAIL(dest.set(tmp_string))) {
+    OB_LOG(WARN, "failed to set backup dest", K(ret));
+  }
+  return OB_SUCCESS == ret;
+}
+
+bool ObConfigAuditLogFormatChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("CSV");
+}
+
+bool ObConfigAuditLogQuerySQLChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("ALL")
+      || 0 == tmp_string.case_compare("NONE");
+}
+
+bool ObConfigAuditLogStrategyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_string(t.str());
+  return 0 == tmp_string.case_compare("ASYNCHRONOUS")
+      || 0 == tmp_string.case_compare("PERFORMANCE")
+      || 0 == tmp_string.case_compare("SYNCHRONOUS");
+}
+
 bool ObConfigWorkAreaPolicyChecker::check(const ObConfigItem &t) const
 {
   const ObString tmp_str(t.str());

@@ -2003,6 +2003,8 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
                 } else if (OB_FAIL(item.value_.assign(str_val))) {
                   LOG_WARN("assign config value failed", K(ret), K(str_val));
                   break;
+                } else if (OB_FAIL(convert_param_value(item))) {
+                  LOG_WARN("convert config value failed", K(ret));
                 } else if (session_info_ != NULL && action_node->children_[4] == NULL &&
                     OB_FAIL(check_param_valid(session_info_->get_effective_tenant_id(),
                     ObString(item.name_.size(), item.name_.ptr()),
@@ -2317,6 +2319,29 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
     }
   }
 #endif
+  return ret;
+}
+
+int ObSetConfigResolver::convert_param_value(ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  if (0 == item.name_.str().case_compare("audit_log_path")) {
+    ObBackupDest dest;
+    ObBackupPathString path;
+    if (item.value_.str().empty()) {
+      // do nothing
+    } else if (OB_FAIL(dest.set(item.value_.str()))) {
+      LOG_WARN("failed to set backup dest", K(ret));
+      if (OB_INVALID_BACKUP_DEST == ret) {
+        // let config checker return the actual error info
+        ret = OB_SUCCESS;
+      }
+    } else if (OB_FAIL(dest.get_backup_dest_str(path.ptr(), path.capacity()))) {
+      LOG_WARN("failed to get backup dest", K(ret));
+    } else if (OB_FAIL(item.value_.assign(path.str()))) {
+      LOG_WARN("failed to assign config value", K(ret));
+    }
+  }
   return ret;
 }
 
