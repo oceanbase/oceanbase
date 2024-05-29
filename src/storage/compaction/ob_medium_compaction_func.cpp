@@ -573,7 +573,7 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot()
     }
 #ifdef ERRSIM
     if (OB_SUCC(ret) || OB_NO_NEED_MERGE == ret) {
-      ret = errsim_choose_medium_snapshot(max_sync_medium_scn, medium_info);
+      ret = errsim_choose_medium_snapshot(max_sync_medium_scn, medium_info, result);
     }
     if (OB_SUCC(ret)) {
       ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_FAILED) ret;
@@ -614,12 +614,15 @@ int ObMediumCompactionScheduleFunc::decide_medium_snapshot()
   return ret;
 }
 
+#ifdef ERRSIM
 int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
   const int64_t max_sync_medium_scn,
-  ObMediumCompactionInfo &medium_info)
+  ObMediumCompactionInfo &medium_info,
+  ObGetMergeTablesResult &result)
 {
   int ret = OB_SUCCESS;
-  if (tablet_handle_.get_obj()->get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
+  ObTablet &tablet = *tablet_handle_.get_obj();
+  if (tablet.get_tablet_meta().tablet_id_.id() > ObTabletID::MIN_USER_TABLET_ID) {
     ret = OB_E(EventTable::EN_SCHEDULE_MEDIUM_COMPACTION) ret;
   }
   if (OB_FAIL(ret)) {
@@ -629,18 +632,22 @@ int ObMediumCompactionScheduleFunc::errsim_choose_medium_snapshot(
     medium_info.medium_snapshot_ = MIN(weak_read_ts_, snapshot_gc_ts);
     medium_info.compaction_type_ = ObMediumCompactionInfo::MEDIUM_COMPACTION;
     int64_t max_reserved_snapshot = 0;
+    (void) result.reset();
     if (OB_FAIL(get_max_reserved_snapshot(max_reserved_snapshot))) {
       LOG_WARN("failed to get reserved snapshot", K(ret), KPC(this));
-    } else if (medium_info.medium_snapshot_ > max_sync_medium_scn
-        && medium_info.medium_snapshot_ >= max_reserved_snapshot) {
+    } else if (medium_info.medium_snapshot_ <= max_sync_medium_scn
+        || medium_info.medium_snapshot_ < max_reserved_snapshot) {
+      ret = OB_NO_NEED_MERGE;
+    } else if (OB_FAIL(ObPartitionMergePolicy::get_result_by_snapshot(tablet, medium_info.medium_snapshot_, result))) {
+      LOG_WARN("failed to get result by snapshot", K(ret), K(medium_info), KPC(this));
+    } else {
       FLOG_INFO("ERRSIM EN_SCHEDULE_MEDIUM_COMPACTION", KPC(this));
       ret = OB_SUCCESS;
-    } else {
-      ret = OB_NO_NEED_MERGE;
     }
   }
   return ret;
 }
+#endif
 
 int ObMediumCompactionScheduleFunc::init_schema_changed(
   ObMediumCompactionInfo &medium_info)
