@@ -204,6 +204,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     conn->set_is_load_data_exec(param->is_load_data_exec_);
     conn->set_use_external_session(param->use_external_session_);
     conn->set_group_id(param->consumer_group_id_);
+    conn->set_ob_enable_pl_cache(param->enable_pl_cache_);
     if (param->is_load_data_exec_) {
       is_user_sql = true;
     }

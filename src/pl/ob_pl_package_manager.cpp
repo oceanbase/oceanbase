@@ -39,14 +39,149 @@ using namespace sql;
 namespace pl
 {
 
-int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len, bool &eof)
+// Usage: ObCharStream *s -> s.open() -> s.next().is_eos() ... -> s.close()
+class ObCharStream
+{
+public:
+  ObCharStream(const char *name) : eos_flag_(false), name_(name) {}
+  virtual ~ObCharStream() {}
+  ObCharStream(const ObCharStream &) = delete;
+  const ObCharStream &operator=(const ObCharStream &) = delete;
+
+  const char *get_name() { return name_; }
+  virtual int open() = 0;
+  virtual const ObCharStream &next(char &c) = 0;
+  virtual bool is_eos() const { return eos_flag_; }
+  virtual int close() = 0;
+
+  VIRTUAL_TO_STRING_KV(K_(eos_flag), K_(name));
+
+protected:
+  static const char EOS = '\0';
+  bool eos_flag_;
+
+private:
+  const char *const name_;
+};
+
+// read package sql from array embeded in the oberver binary file
+class ObCStringStream final : public ObCharStream
+{
+public:
+  ObCStringStream(const char *package_name, const char *data)
+      : ObCharStream(package_name), data_(data), cursor_(nullptr) {}
+  ~ObCStringStream() {}
+
+  int open() override {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(data_)) {
+      ret = OB_ERR_NULL_VALUE;
+      LOG_WARN("package sql data is null", K(ret), K(data_));
+    } else if (0 == strlen(data_)) {
+      LOG_INFO("package sql file is empty or not exists", K(ret));
+    } else {
+      cursor_ = data_;
+    }
+    return ret;
+  }
+  const ObCharStream &next(char &c) override {
+    if (OB_NOT_NULL(cursor_) && !eos_flag_) {
+      c = *cursor_++;
+      eos_flag_ = (c == EOS);
+    } else {
+      c = EOS;
+    }
+    return *this;
+  }
+  int close() override {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(cursor_)) {
+      if (EOS != *(cursor_ - 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("C string stream has not been completely consumed", K(ret),
+                 K(cursor_ - data_), K(data_), K(cursor_));
+      } else {
+        cursor_ = nullptr;
+        eos_flag_ = false;
+      }
+    }
+    return ret;
+  }
+
+  INHERIT_TO_STRING_KV("ObCharStream", ObCharStream,
+                       "C string stream bytes comsumed", cursor_ - data_);
+
+private:
+  const char *const data_;
+  const char *cursor_;
+};
+
+// read package sql from file under admin/
+class ObFileStream final : public ObCharStream
+{
+public:
+  ObFileStream(const char *package_name, const char *file_path)
+      : ObCharStream(package_name), file_path_(file_path), file_(nullptr) {}
+  ~ObFileStream() {
+    // make sure file_ closed
+    if (file_) {
+      fclose(file_);
+      file_ = nullptr;
+    }
+  }
+
+  int open() override {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(file_path_) || 0 != access(file_path_, F_OK)) {
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("package sql file not exists", K(ret), K(file_path_));
+    } else if (OB_ISNULL(file_ = fopen(file_path_, "rb"))) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("package sql file open failed", K(ret), K(file_path_));
+    }
+    return ret;
+  }
+  const ObCharStream &next(char &c) override {
+    if (OB_NOT_NULL(file_) && !eos_flag_) {
+      if (EOF == (c = fgetc(file_))) {
+        c = EOS;
+        eos_flag_ = true;
+      }
+    } else {
+      c = EOS;
+    }
+    return *this;
+  }
+  int close() override {
+    int ret = OB_SUCCESS;
+    if (OB_NOT_NULL(file_)) {
+      if (0 == feof(file_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("file content has not been completely consumed", K(ret), K(errno));
+      } else if (0 != fclose(file_)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("close file failed", K(ret), K(file_path_), K(file_));
+      } else {
+        file_ = nullptr;
+        eos_flag_ = false;
+      }
+    }
+    return ret;
+  }
+
+  INHERIT_TO_STRING_KV("ObCharStream", ObCharStream, K_(file_path),
+                       "file stream bytes comsumed", file_ ? ftell(file_) : -1);
+
+private:
+  const char *const file_path_;
+  FILE *file_;
+};
+
+int ObPLPackageManager::read_package_sql(ObCharStream &stream, char* buf, int64_t buf_len, bool &eos)
 {
   int ret = OB_SUCCESS;
   enum {S_LINE_START, S_NORMAL, S_COMMENT, S_TERMINATE} state = S_LINE_START;
-  if (OB_ISNULL(file)) {
-    ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("package sql file is null", K(ret));
-  } else if (OB_ISNULL(buf)) {
+  if (OB_ISNULL(buf)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("sql buffer is null", K(ret));
   } else if (buf_len <= 0) {
@@ -56,13 +191,13 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
     char *p = buf;
     char *p_start = p;
     char *p_end = p + buf_len - 1;
-    int c;
+    char c;
     // clear buffer
     *p = '\0';
     *p_end = '\0';
     while (OB_SUCC(ret) && state != S_TERMINATE) {
-      if (EOF == (c = fgetc(file))) {
-        ret = OB_IO_ERROR;
+      if (stream.next(c).is_eos()) {
+        ret = OB_ITER_END;
       } else {
         if (p >= p_end) {
           ret = OB_INVALID_ARGUMENT;
@@ -77,18 +212,17 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
               } else if ('#' == c) {
                 state = S_COMMENT;
               } else if ('-' == c) {
-                c = fgetc(file);
-                if ('-' == c) {
+                if (stream.next(c).is_eos()) {
+                  ret = OB_ITER_END;
+                } else if ('-' == c) {
                   state = S_COMMENT;
-                } else if (EOF == c) {
-                  ret = OB_IO_ERROR;
                 } else {
                   *p++ = '-';
-                  *p++ = static_cast<char>(c);
+                  *p++ = c;
                   state = S_NORMAL;
                 }
               } else {
-                *p++ = static_cast<char>(c);
+                *p++ = c;
                 state = S_NORMAL;
               }
             }
@@ -107,11 +241,11 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
                   *(p - 1) = '\0';
                   state = S_TERMINATE;
                 } else {
-                  *p++ = static_cast<char>(c);
+                  *p++ = c;
                   state = S_NORMAL;
                 }
               } else {
-                *p++ = static_cast<char>(c);
+                *p++ = c;
                 if ('\n' == c) {
                   state = S_LINE_START;
                 } else {
@@ -130,19 +264,20 @@ int ObPLPackageManager::read_package_sql(FILE* file, char* buf, int64_t buf_len,
       }
     }
     if (OB_FAIL(ret)) {
-      if (feof(file)) {
-        eof = true;
+      if (stream.is_eos()) {
+        eos = true;
         ret = OB_SUCCESS;
       } else {
-        LOG_WARN("read package file error", K(errno), K(ret));
+        LOG_WARN("read package file error", K(ret), K(stream));
       }
     }
   }
   return ret;
 }
 
-int ObPLPackageManager::read_and_exec_package_sql(
-  ObMySQLProxy &sql_proxy, const char* package_full_path, ObCompatibilityMode compa_mode)
+int ObPLPackageManager::read_and_exec_package_sql(ObMySQLProxy &sql_proxy,
+                                                  ObCharStream &stream,
+                                                  ObCompatibilityMode compa_mode)
 {
   int ret = OB_SUCCESS;
   if (!sql_proxy.is_inited() || !sql_proxy.is_active()) {
@@ -150,13 +285,9 @@ int ObPLPackageManager::read_and_exec_package_sql(
     LOG_WARN("sql_proxy not inited or not active", "sql_proxy inited",
              sql_proxy.is_inited(), "sql_proxy active", sql_proxy.is_active(), K(ret));
   } else {
-    FILE* file = NULL;
     int64_t affected_rows = 0;
-    if (access(package_full_path, F_OK) != 0) {
-      LOG_INFO("package sql file not exists", K(package_full_path), K(ret));
-    } else if (OB_ISNULL(file = fopen(package_full_path, "rb"))) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("package sql file open failed", K(package_full_path), K(ret));
+    if (OB_FAIL(stream.open())) {
+      LOG_WARN("failed to open package file data stream", K(ret), K(stream));
     } else {
       // system tenant will run with mysql compatibility mode
       // but we need to create system packages with oralce compatibility
@@ -164,64 +295,113 @@ int ObPLPackageManager::read_and_exec_package_sql(
       bool eof = false;
       bool skip_affected_rows_check = false;
       ObSessionParam param;
-      ObSessionParam *param_ptr = nullptr;
-      char *last_slash = strrchr(const_cast<char*>(package_full_path), '/');
-      const char *pacakge_filename = (last_slash != NULL) ? last_slash + 1 : package_full_path;
       int64_t sql_mode = SMO_STRICT_ALL_TABLES | SMO_NO_ZERO_IN_DATE | SMO_NO_AUTO_CREATE_USER;
       // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
-      if (strcmp(pacakge_filename, "external_table_alert_log.sql") == 0) {
+      if (strcmp(stream.get_name(), "external_table_alert_log") == 0) {
         skip_affected_rows_check = true;
         param.sql_mode_ = &sql_mode;
-        param_ptr = &param;
       }
+      // do not cache the compilation results of system packages into the PL cache when loading system packages.
+      param.enable_pl_cache_ = false;
       SMART_VAR(char[OB_MAX_SQL_LENGTH], sql_buf) {
         while (OB_SUCC(ret) && !eof) {
-          if (OB_FAIL(read_package_sql(file, sql_buf, OB_MAX_SQL_LENGTH, eof))) {
-            LOG_WARN("fail to read package sql file", K(ret));
+          if (FAILEDx(read_package_sql(stream, sql_buf, OB_MAX_SQL_LENGTH, eof))) {
+            LOG_WARN("fail to read package sql data", K(ret));
           } else if (strlen(sql_buf) != 0
-                    && OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
+                     && OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
                                                 sql_buf,
                                                 affected_rows,
                                                 static_cast<int64_t>(compa_mode),
-                                                param_ptr))) {
+                                                &param))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
           } else if (affected_rows != 0 && !skip_affected_rows_check) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
+            LOG_WARN("affected_rows expected to be zero", K(ret), K(affected_rows), K(stream.get_name()));
           } else {
             OZ (ObSPIService::force_refresh_schema(OB_SYS_TENANT_ID));
           }
+          LOG_INFO("package source data consumed", K(ret), K(stream));
         }
       }
-      fclose(file);
     }
   }
   return ret;
 }
 
-int ObPLPackageManager::load_sys_package(
-  ObMySQLProxy &sql_proxy, const char *package_spec_name, const char *package_body_name, ObCompatibilityMode compa_mode)
+// import source file content array declarations, which is defined in system_package.cpp generated by CMake.
+extern const int64_t syspack_source_count;
+extern const std::pair<const char * const, const char* const> syspack_source_contents[];
+
+int ObPLPackageManager::get_syspack_source_file_content(const char *file_name, const char *&content)
 {
   int ret = OB_SUCCESS;
-  const int64_t begin_time = ObTimeUtility::current_time();
-  LOG_INFO("load sys package begin",
-           "package name", package_spec_name, "package body name", package_body_name);
-
-  if (OB_FAIL(read_and_exec_package_sql(sql_proxy, package_spec_name, compa_mode))) {
-    LOG_WARN("fail to read and exec package header sql", K(package_spec_name), K(ret));
-  } else if (OB_FAIL(read_and_exec_package_sql(sql_proxy, package_body_name, compa_mode))) {
-    LOG_WARN("fail to read and exec package body sql", K(package_body_name), K(ret));
+  OX (content = nullptr);
+  if (OB_ISNULL(file_name)) {
+    // return nullptr as `content`
+    LOG_INFO("file name c string is null", K(file_name));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < syspack_source_count; i++) {
+      if (0 == ObString(file_name).case_compare(syspack_source_contents[i].first)) {
+        content = syspack_source_contents[i].second;
+        break;
+      }
+    }
+    // `content` not found, report error
+    OV (OB_NOT_NULL(content), OB_ERR_UNEXPECTED, "system source file not found", ret, file_name);
   }
-
-  const int64_t now = ObTimeUtility::current_time();
-  LOG_INFO("load sys package finish", "total_time_used", now - begin_time);
   return ret;
 }
 
-static const char* sys_package_dir = "admin";
-static ObSysPackageFile oracle_sys_package_file_table[] = {
+int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
+                                         const ObSysPackageFile &pack_file_info,
+                                         ObCompatibilityMode compa_mode,
+                                         bool from_file)
+{
+  int ret = OB_SUCCESS;
+  const char *package_name = pack_file_info.package_name;
+  const char *spec_file = pack_file_info.package_spec_file_name;
+  const char *body_file = pack_file_info.package_body_file_name;
+
+  const int64_t begin_time = ObTimeUtility::current_time();
+  LOG_INFO("load sys package", K(package_name), K(spec_file), K(body_file), K(begin_time));
+
+  if (from_file) {
+    const char *sys_package_dir = "admin";
+    char spec_file_path[MAX_PATH_SIZE] = {0};
+    char body_file_path[MAX_PATH_SIZE] = {0};
+    if (OB_SUCC(ret) && OB_NOT_NULL(spec_file)) {
+      OZ (databuff_printf(spec_file_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, spec_file));
+      ObFileStream spec_stream{package_name, spec_file_path};
+      OZ (read_and_exec_package_sql(sql_proxy, spec_stream, compa_mode), spec_stream);
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(body_file)) {
+      OZ (databuff_printf(body_file_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, body_file));
+      ObFileStream body_stream{package_name, body_file_path};
+      OZ (read_and_exec_package_sql(sql_proxy, body_stream, compa_mode), body_stream);
+    }
+  } else {
+    const char *spec_content = nullptr;
+    const char *body_content = nullptr;
+    OZ (get_syspack_source_file_content(spec_file, spec_content));
+    if (OB_SUCC(ret) && OB_NOT_NULL(spec_content)) {
+      ObCStringStream spec_stream{package_name, spec_content};
+      OZ (read_and_exec_package_sql(sql_proxy, spec_stream, compa_mode), spec_stream);
+    }
+    OZ (get_syspack_source_file_content(body_file, body_content));
+    if (OB_SUCC(ret) && OB_NOT_NULL(body_content)) {
+      ObCStringStream body_stream{package_name, body_content};
+      OZ (read_and_exec_package_sql(sql_proxy, body_stream, compa_mode), body_stream);
+    }
+  }
+
+  const int64_t now = ObTimeUtility::current_time();
+  LOG_INFO("load sys package finish", K(ret), K(package_name), "total_time_used", now - begin_time);
+  return ret;
+}
+
+static const ObSysPackageFile oracle_syspack_file_list[] = {
 #ifdef OB_BUILD_ORACLE_PL
-  {"dbms_standard", "dbms_standard.sql", "dbms_standard_body.sql"},
+  {"dbms_standard", "dbms_standard.sql", nullptr},
   {"dbms_output", "dbms_output.sql", "dbms_output_body.sql"},
   {"dbms_metadata", "dbms_metadata.sql", "dbms_metadata_body.sql"},
   {"dbms_spm", "dbms_spm.sql", "dbms_spm_body.sql"},
@@ -234,7 +414,7 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"sa_sysdba", "sa_sysdba.sql", "sa_sysdba_body.sql"},
   {"sa_user_admin", "sa_user_admin.sql", "sa_user_admin_body.sql"},
   {"utl_i18n", "utl_i18n.sql", "utl_i18n_body.sql"},
-  {"dbms_crypto", "dbms_crypto.sql","dbms_crypto_body.sql"},
+  {"dbms_crypto", "dbms_crypto.sql", "dbms_crypto_body.sql"},
   {"dbms_random", "dbms_random.sql", "dbms_random_body.sql"},
   {"dbms_debug", "dbms_debug.sql", "dbms_debug_body.sql"},
   {"utl_inaddr", "utl_inaddr.sql", "utl_inaddr_body.sql"},
@@ -246,16 +426,15 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"dbms_xa", "dbms_xa.sql", "dbms_xa_body.sql"},
   {"dbms_resource_manager", "dbms_resource_manager.sql", "dbms_resource_manager_body.sql"},
   {"dbms_utility", "dbms_utility.sql", "dbms_utility_body.sql"},
-  {"odciconst", "odciconst.sql", "odciconst_body.sql"},
+  {"odciconst", "odciconst.sql", nullptr},
   {"dbms_stats", "dbms_stats.sql", "dbms_stats_body.sql"},
   {"dbms_any", "dbms_any.sql", "dbms_any_body.sql"},
   {"xml_type", "xml_type.sql", "xml_type_body.sql"},
-  {"dbms_crypto", "dbms_crypto.sql", "dbms_crypto_body.sql"},
   {"dbms_ijob", "dbms_ijob.sql", "dbms_ijob_body.sql"},
   {"dbms_job", "dbms_job.sql", "dbms_job_body.sql"},
   {"dbms_ischeduler", "dbms_ischeduler.sql", "dbms_ischeduler_body.sql"},
   {"dbms_scheduler", "dbms_scheduler.sql", "dbms_scheduler_body.sql"},
-  {"catodci", "catodci.sql", "catodci_body.sql"},
+  {"catodci", "catodci.sql", nullptr},
   {"dbms_describe", "dbms_describe.sql", "dbms_describe_body.sql"},
   {"utl_file", "utl_file.sql", "utl_file_body.sql"},
   {"dbms_plan_cache", "dbms_plancache.sql", "dbms_plancache_body.sql"},
@@ -274,13 +453,12 @@ static ObSysPackageFile oracle_sys_package_file_table[] = {
   {"json_object_t", "json_object_type.sql", "json_object_type_body.sql"},
   {"sdo_geometry", "sdo_geometry.sql", "sdo_geometry_body.sql"},
   {"json_array_t", "json_array_type.sql", "json_array_type_body.sql"},
-  {"xmlsequence", "xml_sequence_type.sql", "xml_sequence_type_body.sql"},
+  {"xmlsequence", "xml_sequence_type.sql", nullptr},
   {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
   {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
 #endif
 };
-
-static ObSysPackageFile mysql_sys_package_file_table[] = {
+static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"},
   {"dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"},
   {"dbms_application", "dbms_application_mysql.sql", "dbms_application_body_mysql.sql"},
@@ -294,119 +472,109 @@ static ObSysPackageFile mysql_sys_package_file_table[] = {
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
   {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
-  {"external_table_alert_log", "external_table_alert_log.sql", "none"}
+  {"external_table_alert_log", "external_table_alert_log.sql", nullptr}
 };
 
-int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy, ObString &package_name, ObCompatibilityMode compa_mode)
+// for now! we only have one special system package "__DBMS_UPGRADE"
+static const ObSysPackageFile oracle_special_syspack_file_list[] = {
+  {"__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql"},
+};
+static const ObSysPackageFile mysql_special_syspack_file_list[] = {
+  {"__dbms_upgrade", "__dbms_upgrade_mysql.sql", "__dbms_upgrade_body_mysql.sql"},
+};
+
+int ObPLPackageManager::load_sys_package(ObMySQLProxy &sql_proxy,
+                                         ObString &package_name,
+                                         ObCompatibilityMode compa_mode,
+                                         bool from_file)
 {
   int ret = OB_SUCCESS;
-  char package_spec_full_path[MAX_PATH_SIZE] = {};
-  char package_body_full_path[MAX_PATH_SIZE] = {};
-  bool dir_exists = false;
-  bool package_exists = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, dir_exists))) {
-    LOG_WARN("check sys package dir whether exist failed", K(ret), K(sys_package_dir));
-  } else if (!dir_exists) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("sys package dir not exist", K(ret), K(sys_package_dir));
-  }
+  const ObSysPackageFile *pack_file_info = nullptr;
+
+#define SEARCH_SYSPACK_FILE_BY_NAME(syspack_file_list)                                      \
+  do {                                                                                      \
+    if (pack_file_info == nullptr) {                                                        \
+      int sys_package_count = ARRAYSIZEOF(syspack_file_list);                               \
+      for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {                     \
+        if (0 == package_name.case_compare(ObString(syspack_file_list[i].package_name))) {  \
+          pack_file_info = &syspack_file_list[i];                                           \
+          break;                                                                            \
+        }                                                                                   \
+      }                                                                                     \
+    }                                                                                       \
+  } while (0)
+
   if (ObCompatibilityMode::ORACLE_MODE == compa_mode) {
-    int sys_package_count = ARRAYSIZEOF(oracle_sys_package_file_table);
-    for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-      if (0 == package_name.case_compare(ObString(oracle_sys_package_file_table[i].package_name))) {
-        const char *package_spec_name = oracle_sys_package_file_table[i].package_spec_file_name;
-        const char *package_body_name = oracle_sys_package_file_table[i].package_body_file_name;
-        OZ (databuff_printf(
-          package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-        OZ (databuff_printf(
-          package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-        OX (package_exists = true);
-        break;
-      }
-    }
+    SEARCH_SYSPACK_FILE_BY_NAME(oracle_syspack_file_list);
+    SEARCH_SYSPACK_FILE_BY_NAME(oracle_special_syspack_file_list);
   } else if (ObCompatibilityMode::MYSQL_MODE == compa_mode) {
-    int sys_package_count = ARRAYSIZEOF(mysql_sys_package_file_table);
-    for (int64_t i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-      if (0 == package_name.case_compare(ObString(mysql_sys_package_file_table[i].package_name))) {
-        const char *package_spec_name = mysql_sys_package_file_table[i].package_spec_file_name;
-        const char *package_body_name = mysql_sys_package_file_table[i].package_body_file_name;
-        OZ (databuff_printf(
-          package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-        OZ (databuff_printf(
-          package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-        OX (package_exists = true);
-        break;
-      }
-    }
+    SEARCH_SYSPACK_FILE_BY_NAME(mysql_syspack_file_list);
+    SEARCH_SYSPACK_FILE_BY_NAME(mysql_special_syspack_file_list);
   }
-  if (OB_SUCC(ret) && !package_exists) {
+#undef SEARCH_SYSPACK_FILE_BY_NAME
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(pack_file_info)) {
     ret = OB_ERR_PACKAGE_DOSE_NOT_EXIST;
-    LOG_WARN("package not exists", K(ret), K(package_name));
+    LOG_WARN("package not exists", K(ret), K(package_name), K(compa_mode));
     LOG_USER_ERROR(OB_ERR_PACKAGE_DOSE_NOT_EXIST,
                    "PACKAGE",
                    ObString("oceanbase").length(), ObString("oceanbase").ptr(),
                    package_name.length(), package_name.ptr());
+  } else {
+    OZ (load_sys_package(sql_proxy, *pack_file_info, compa_mode, from_file));
   }
-  OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, compa_mode));
   return ret;
 }
 
-int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy,
-                                                    const ObSysPackageFile *package_file,
-                                                    int sys_package_count,
-                                                    ObCompatibilityMode compa_mode)
+int ObPLPackageManager::load_sys_package_list(ObMySQLProxy &sql_proxy,
+                                              const ObSysPackageFile *sys_package_list,
+                                              int sys_package_count,
+                                              ObCompatibilityMode compa_mode,
+                                              bool from_file)
 {
   int ret = OB_SUCCESS;
-  char package_spec_full_path[MAX_PATH_SIZE] = {};
-  char package_body_full_path[MAX_PATH_SIZE] = {};
-  CK (OB_NOT_NULL(package_file));
-  LOG_INFO("load all sys package begin", "sys package total count", sys_package_count);
+  CK (OB_NOT_NULL(sys_package_list));
+  LOG_INFO("load sys package list begin", "sys package total count", sys_package_count);
   for (int i = 0; OB_SUCC(ret) && i < sys_package_count; ++i) {
-    const char *package_spec_name = package_file[i].package_spec_file_name;
-    const char *package_body_name = package_file[i].package_body_file_name;
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_spec_name));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, package_body_name));
-    if (OB_SUCC(ret)) {
-      LOG_INFO("load sys package begin", K(package_spec_name));
-      if (OB_FAIL(load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, compa_mode))) {
-        LOG_WARN("load sys package failed",
-                  K(package_spec_full_path), K(package_body_full_path), K(compa_mode), K(ret));
-      } else {
-        LOG_INFO("load sys package success", K(ret), K(package_spec_name));
-      }
-    }
+    OZ (load_sys_package(sql_proxy, sys_package_list[i], compa_mode, from_file));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("load sys package list failed", K(ret), K(compa_mode));
+  } else {
+    LOG_INFO("load sys package list success", K(ret), K(compa_mode));
   }
   return ret;
 }
 
-int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy, ObCompatibilityMode need_compa_mode)
-{
+int ObPLPackageManager::load_all_common_sys_package(
+    ObMySQLProxy &sql_proxy, ObCompatibilityMode compa_mode, bool from_file) {
   int ret = OB_SUCCESS;
-  bool exist = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, exist))) {
-    LOG_WARN("check sys package dir whether exist failed", K(sys_package_dir), K(ret));
-  } else if (!exist) {
-    LOG_INFO("sys package dir not exist", K(sys_package_dir));
-  } else {
-    if (need_compa_mode == ObCompatibilityMode::OCEANBASE_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, oracle_sys_package_file_table,
-          ARRAYSIZEOF(oracle_sys_package_file_table), ObCompatibilityMode::ORACLE_MODE));
-      OZ (load_all_common_sys_package(sql_proxy, mysql_sys_package_file_table,
-          ARRAYSIZEOF(mysql_sys_package_file_table), ObCompatibilityMode::MYSQL_MODE));
-    } else if (need_compa_mode == ObCompatibilityMode::ORACLE_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, oracle_sys_package_file_table,
-          ARRAYSIZEOF(oracle_sys_package_file_table), ObCompatibilityMode::ORACLE_MODE));
-    } else if (need_compa_mode == ObCompatibilityMode::MYSQL_MODE) {
-      OZ (load_all_common_sys_package(sql_proxy, mysql_sys_package_file_table,
-          ARRAYSIZEOF(mysql_sys_package_file_table), ObCompatibilityMode::MYSQL_MODE));
-    }
+  if (compa_mode == ObCompatibilityMode::OCEANBASE_MODE) {
+    OZ (load_sys_package_list(sql_proxy, oracle_syspack_file_list,
+                              ARRAYSIZEOF(oracle_syspack_file_list),
+                              ObCompatibilityMode::ORACLE_MODE,
+                              from_file));
+    OZ (load_sys_package_list(sql_proxy, mysql_syspack_file_list,
+                              ARRAYSIZEOF(mysql_syspack_file_list),
+                              ObCompatibilityMode::MYSQL_MODE,
+                              from_file));
+  } else if (compa_mode == ObCompatibilityMode::ORACLE_MODE) {
+    OZ (load_sys_package_list(sql_proxy, oracle_syspack_file_list,
+                              ARRAYSIZEOF(oracle_syspack_file_list),
+                              ObCompatibilityMode::ORACLE_MODE,
+                              from_file));
+  } else if (compa_mode == ObCompatibilityMode::MYSQL_MODE) {
+    OZ (load_sys_package_list(sql_proxy, mysql_syspack_file_list,
+                              ARRAYSIZEOF(mysql_syspack_file_list),
+                              ObCompatibilityMode::MYSQL_MODE,
+                              from_file));
   }
+
   if (OB_SUCC(ret)) {
-    LOG_INFO("load all common sys package success!");
+    LOG_INFO("load all common sys package success!", K(ret), K(from_file));
   } else {
-    LOG_INFO("load all common sys package failed!");
+    LOG_WARN("load all common sys package failed!", K(ret), K(from_file));
   }
   return ret;
 }
@@ -414,39 +582,23 @@ int ObPLPackageManager::load_all_common_sys_package(ObMySQLProxy &sql_proxy, ObC
 int ObPLPackageManager::load_all_special_sys_package(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  bool exist = false;
-  if (OB_FAIL(FileDirectoryUtils::is_exists(sys_package_dir, exist))) {
-    LOG_WARN("check sys package dir whether exist failed", K(sys_package_dir), K(ret));
-  } else if (!exist) {
-    LOG_INFO("sys package dir not exist", K(sys_package_dir));
-  } else {
-    // for now! we only have one special system package "__DBMS_UPGRADE"
-    char package_spec_full_path[MAX_PATH_SIZE] = {};
-    char package_body_full_path[MAX_PATH_SIZE] = {};
-
 #ifdef OB_BUILD_ORACLE_PL
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade.sql"));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_body.sql"));
-    OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, ObCompatibilityMode::ORACLE_MODE));
+  OZ (load_sys_package_list(sql_proxy, oracle_special_syspack_file_list,
+                            ARRAYSIZEOF(oracle_special_syspack_file_list),
+                            ObCompatibilityMode::ORACLE_MODE,
+                            false /* from_file */));
 #endif
-
-    memset(package_spec_full_path, 0, sizeof(package_spec_full_path));
-    memset(package_body_full_path, 0, sizeof(package_body_full_path));
-    OZ (databuff_printf(
-      package_spec_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_mysql.sql"));
-    OZ (databuff_printf(
-      package_body_full_path, MAX_PATH_SIZE, "%s/%s", sys_package_dir, "__dbms_upgrade_body_mysql.sql"));
-    OZ (load_sys_package(sql_proxy, package_spec_full_path, package_body_full_path, ObCompatibilityMode::MYSQL_MODE));
-  }
+  OZ (load_sys_package_list(sql_proxy, mysql_special_syspack_file_list,
+                            ARRAYSIZEOF(mysql_special_syspack_file_list),
+                            ObCompatibilityMode::MYSQL_MODE,
+                            false /* from_file */));
   return ret;
 }
 
 int ObPLPackageManager::load_all_sys_package(ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
-  OZ (load_all_common_sys_package(sql_proxy, ObCompatibilityMode::OCEANBASE_MODE));
+  OZ (load_all_common_sys_package(sql_proxy, ObCompatibilityMode::OCEANBASE_MODE, false /* from_file */));
   OZ (load_all_special_sys_package(sql_proxy));
   if (OB_SUCC(ret)) {
     LOG_INFO("load all sys package success!", K(ret));

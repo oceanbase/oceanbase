@@ -2307,6 +2307,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       }
       break;
     }
+    case SYS_VAR__ORACLE_SQL_SELECT_LIMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_oracle_sql_select_limit(int_val));
+      break;
+    }
     case SYS_VAR_AUTO_INCREMENT_OFFSET: {
       uint64_t uint_val = 0;
       OZ (val.get_uint64(uint_val), val);
@@ -2800,6 +2806,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_sql_select_limit(int_val));
+      break;
+    }
+    case SYS_VAR__ORACLE_SQL_SELECT_LIMIT: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_oracle_sql_select_limit(int_val));
       break;
     }
     case SYS_VAR_AUTO_INCREMENT_OFFSET: {

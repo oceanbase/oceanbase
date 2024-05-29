@@ -8074,15 +8074,29 @@ int ObPLCodeGenerator::final_expression(ObPLCompileUnit &pl_func)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < ast_.get_obj_access_exprs().count(); ++i) {
     ObRawExpr *expr = ast_.get_obj_access_expr(i);
+    ObObjAccessRawExpr *obj_access_expr = nullptr;
+    uint64_t addr = 0;
+
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("obj_access_expr is null");
     } else if (!expr->is_obj_access_expr()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("not a obj access", K(*expr), K(ret));
+    } else if (OB_ISNULL(obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL obj_access_expr", K(ret), K(*expr));
+    } else if (OB_FAIL(helper_.get_function_address(obj_access_expr->get_func_name(), addr))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_INFO("failed to find obj_access_expr symbol in JIT engine, will ignore this error",
+                 K(ret), K(obj_access_expr->get_func_name()));
+        ret = OB_SUCCESS;
+        obj_access_expr->set_get_attr_func_addr(0);
+      } else {
+        LOG_WARN("failed to compile obj_access_expr", K(ret), K(obj_access_expr->get_func_name()), K(addr));
+      }
     } else {
-      ObObjAccessRawExpr* obj_access_expr = static_cast<ObObjAccessRawExpr*>(expr);
-      obj_access_expr->set_get_attr_func_addr(helper_.get_function_address(obj_access_expr->get_func_name()));
+      obj_access_expr->set_get_attr_func_addr(addr);
     }
   }
 
@@ -8434,7 +8448,7 @@ int ObPLCodeGenerator::generate(ObPLPackage &pl_package)
     helper_.dump_module();
 #endif
     OZ (helper_.verify_module(), pl_package);
-    OX (helper_.compile_module(!debug_mode_));
+    OZ (helper_.compile_module(!debug_mode_));
   }
 
   OZ (final_expression(pl_package));
@@ -8586,10 +8600,12 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
     helper_.dump_module();
 #endif
     OZ (helper_.verify_module(), pl_func);
-OX (helper_.compile_module(!debug_mode_));
+    OZ (helper_.compile_module(!debug_mode_));
   }
 
   if (OB_SUCC(ret)) {
+    uint64_t addr = 0;
+
     if (OB_FAIL(final_expression(pl_func))) {
       LOG_WARN("generate obj access expr failed", K(ret));
     } else if (OB_FAIL(pl_func.set_variables(get_ast().get_symbol_table()))) {
@@ -8598,11 +8614,13 @@ OX (helper_.compile_module(!debug_mode_));
       LOG_WARN("failed to set ref objects", K(get_ast().get_dependency_table()), K(ret));
     } else if (OB_FAIL(pl_func.set_types(get_ast().get_user_type_table()))) {
       LOG_WARN("failed to set types", K(ret));
+    } else if (OB_FAIL(helper_.get_function_address(get_ast().get_name(), addr))) {
+      LOG_WARN("failed to compile pl routine", K(ret), K(get_ast().get_name()), K(addr));
     } else {
       pl_func.add_members(get_ast().get_flag());
       pl_func.set_pipelined(get_ast().get_pipelined());
-      pl_func.set_action(helper_.get_function_address(get_ast().get_name()));
-            pl_func.set_can_cached(get_ast().get_can_cached());
+      pl_func.set_action(addr);
+      pl_func.set_can_cached(get_ast().get_can_cached());
       pl_func.set_is_all_sql_stmt(get_ast().get_is_all_sql_stmt());
       pl_func.set_has_parallel_affect_factor(get_ast().has_parallel_affect_factor());
     }

@@ -192,6 +192,7 @@ public:
   virtual void set_is_load_data_exec(bool v);
   virtual void set_force_remote_exec(bool v) { force_remote_execute_ = v; }
   virtual void set_use_external_session(bool v) { use_external_session_ = v; }
+  virtual void set_ob_enable_pl_cache(bool v) override;
   bool is_nested_conn();
   virtual void set_user_timeout(int64_t timeout) { user_timeout_ = timeout; }
   virtual int64_t get_user_timeout() const { return user_timeout_; }

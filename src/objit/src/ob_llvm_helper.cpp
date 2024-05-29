@@ -20,7 +20,6 @@
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/DynamicLibrary.h"
 
 #include "share/ob_define.h"
 #include "objit/ob_llvm_helper.h"
@@ -513,18 +512,24 @@ int ObLLVMHelper::init()
   } else if (nullptr == (jc_ = OB_NEWx(core::JitContext, (&allocator_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for jit context", K(ret));
-#ifndef ORC2
   } else if (nullptr == (jit_ = OB_NEWx(core::ObOrcJit, (&allocator_), allocator_))) {
-#else
-  } else if (nullptr == (jit_ = core::ObOrcJit::create(allocator_))) {
-#endif
     jc_->~JitContext();
     allocator_.free(jc_);
     jc_ = nullptr;
 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for jit", K(ret));
-  } else if (OB_FAIL(jc_->InitializeModule(*jit_))) {
+  } else if (OB_FAIL(jit_->init())) {
+    jit_->~ObOrcJit();
+    allocator_.free(jit_);
+    jit_ = nullptr;
+
+    jc_->~JitContext();
+    allocator_.free(jc_);
+    jc_ = nullptr;
+
+    LOG_WARN("failed to init jit engine", K(ret));
+  } else if (OB_FAIL(jc_->InitializeModule(jit_->get_DL()))) {
     jit_->~ObOrcJit();
     allocator_.free(jit_);
     jit_ = nullptr;
@@ -559,8 +564,6 @@ int ObLLVMHelper::initialize()
   llvm::InitializeNativeTargetAsmPrinter();
   llvm::InitializeNativeTargetAsmParser();
 
-  llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
-
 /*Do not juse use !defined(__aarch64__) here*/
 //#if !defined(__aarch64__)
 #if defined(__x86_64__)
@@ -591,6 +594,7 @@ int ObLLVMHelper::init_llvm() {
   ObLLVMFunctionType ft;
   ObLLVMBasicBlock block;
   ObLLVMValue magic;
+  uint64_t addr;
 
   OZ (helper.get_llvm_type(ObIntType, int64_type));
   OZ (arg_types.push_back(int64_type));
@@ -601,22 +605,31 @@ int ObLLVMHelper::init_llvm() {
   OZ (helper.get_int64(OB_SUCCESS, magic));
   OZ (helper.create_ret(magic));
 
-  OX (helper.compile_module());
-  OX (helper.get_function_address(init_func_name));
+  OZ (helper.compile_module());
+  OZ (helper.get_function_address(init_func_name, addr));
 
   return ret;
 }
 
-void ObLLVMHelper::compile_module(bool optimization)
+int ObLLVMHelper::compile_module(bool optimization)
 {
-  if (optimization) {
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(jc_));
+
+  if (OB_SUCC(ret) && optimization) {
     OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN));
     jc_->optimize();
     LOG_INFO("================Optimized LLVM Module================");
     dump_module();
   }
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
-  jc_->compile();
+
+  if (OB_SUCC(ret)) {
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    OZ (jc_->compile(*jit_));
+  }
+
+  return ret;
 }
 
 void ObLLVMHelper::dump_module()
@@ -675,15 +688,23 @@ int ObLLVMHelper::verify_module()
   return ret;
 }
 
-uint64_t ObLLVMHelper::get_function_address(const ObString &name)
+int ObLLVMHelper::get_function_address(const ObString &name, uint64_t &addr)
 {
-  OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
-  return jc_->TheJIT->get_function_address(std::string(name.ptr(), name.length()));
+  int ret = OB_SUCCESS;
+
+  CK (OB_NOT_NULL(jit_));
+
+  if (OB_SUCC(ret)) {
+    OB_LLVM_MALLOC_GUARD(GET_PL_MOD_STRING(pl::OB_PL_JIT));
+    OZ (jit_->get_function_address(std::string(name.ptr(), name.length()), addr));
+  }
+
+  return ret;
 }
 
 void ObLLVMHelper::add_symbol(const ObString &name, void *value)
 {
-  llvm::sys::DynamicLibrary::AddSymbol(make_string_ref(name), value);
+  core::ObJitGlobalSymbolGenerator::add_symbol(make_string_ref(name), value);
 }
 
 ObDIRawData ObLLVMHelper::get_debug_info() const
@@ -2245,7 +2266,7 @@ int ObLLVMHelper::add_compiled_object(size_t length, const char *ptr)
   CK (OB_NOT_NULL(jit_));
   CK (OB_NOT_NULL(ptr));
   CK (OB_LIKELY(length > 0));
-  OX (jit_->add_compiled_object(length, ptr));
+  OZ (jit_->add_compiled_object(length, ptr));
   return ret;
 }
 

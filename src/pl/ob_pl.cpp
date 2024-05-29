@@ -4751,8 +4751,13 @@ int ObPL::check_session_alive(const ObBasicSessionInfo &session) {
 int ObPLFunction::gen_action_from_precompiled(const ObString &name, size_t length,
                                        const char *ptr) {
   int ret = OB_SUCCESS;
+
+  uint64_t addr = 0;
+
   OZ (helper_.add_compiled_object(length, ptr));
-  OX (set_action(helper_.get_function_address(name)));
+  OZ (helper_.get_function_address(name, addr));
+  OX (set_action(addr));
+
   return ret;
 }
 

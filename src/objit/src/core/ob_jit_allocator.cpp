@@ -370,6 +370,7 @@ void ObJitAllocator::reserve(const JitMemType mem_type, int64_t sz, int64_t alig
   }
 }
 
+// Returns true if an error occurred, false otherwise.
 bool ObJitAllocator::finalize()
 {
   int ret = OB_SUCCESS;
@@ -384,7 +385,7 @@ bool ObJitAllocator::finalize()
     LOG_WARN("fail to finalize code memory", K(ret));
   }
 
-  return OB_SUCC(ret);
+  return OB_FAIL(ret);
 }
 
 void ObJitAllocator::free() {

@@ -171,6 +171,7 @@ src/pl/parser/_gen_parser.error
 src/pl/parser/_gen_pl_parser.output
 src/pl/parser/pl_parser_mysql_mode.output
 src/pl/parser/pl_parser_oracle_mode.output
+src/share/inner_table/sys_package/system_package.cpp
 
 ############# close_modules #############
 close_modules/oracle_pl/pl/parser/*.output

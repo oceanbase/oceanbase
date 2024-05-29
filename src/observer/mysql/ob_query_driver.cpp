@@ -177,21 +177,26 @@ int ObQueryDriver::response_query_result(ObResultSet &result,
   can_retry = true;
   bool is_first_row = true;
   const ObNewRow *result_row = NULL;
-  bool has_top_limit = result.get_has_top_limit();
   bool is_cac_found_rows =  result.is_calc_found_rows();
-  int64_t limit_count = OB_INVALID_COUNT == fetch_limit ? INT64_MAX : fetch_limit;
   int64_t row_num = 0;
   ObSqlCtx *sql_ctx = result.get_exec_context().get_sql_ctx();
-  if (!has_top_limit && OB_INVALID_COUNT == fetch_limit) {
-    limit_count = INT64_MAX;
-    if (!lib::is_oracle_mode()) {
-      if (OB_FAIL(session_.get_sql_select_limit(limit_count))) {
-        LOG_WARN("fail tp get sql select limit", K(ret));
-      }
-    }
-  }
   bool is_packed = result.get_physical_plan() ? result.get_physical_plan()->is_packed() : false;
   MYSQL_PROTOCOL_TYPE protocol_type = is_ps_protocol ? MYSQL_PROTOCOL_TYPE::BINARY : MYSQL_PROTOCOL_TYPE::TEXT;
+
+  int64_t limit_count = INT64_MAX;
+  if (OB_FAIL(ret)) {
+  } else if (OB_INVALID_COUNT != fetch_limit) {
+    limit_count = fetch_limit;
+  } else if (lib::is_mysql_mode()) {
+    if (!result.get_has_top_limit() && OB_FAIL(session_.get_sql_select_limit(limit_count))) {
+      LOG_WARN("failed to get sytem variable sql_select_limit", K(ret));
+    }
+  } else { // lib::is_oracle_mode()
+    if (OB_FAIL(session_.get_oracle_sql_select_limit(limit_count))) {
+      LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+    }
+  }
+
   const common::ColumnsFieldIArray *fields = NULL;
   if (OB_SUCC(ret)) {
     fields = result.get_field_columns();

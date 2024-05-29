@@ -372,6 +372,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_ob_px_slave_mapping_threshold",
   "_optimizer_gather_stats_on_load",
   "_optimizer_null_aware_antijoin",
+  "_oracle_sql_select_limit",
   "_priv_control",
   "_px_broadcast_fudge_factor",
   "_px_dist_agg_partial_rollup_pushdown",
@@ -713,6 +714,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
   SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
+  SYS_VAR__ORACLE_SQL_SELECT_LIMIT,
   SYS_VAR__PRIV_CONTROL,
   SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,
   SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN,
@@ -1365,6 +1367,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "transaction_allow_batching",
   "transaction_prealloc_size",
   "transaction_write_set_extraction",
+  "_oracle_sql_select_limit",
   "innodb_read_only",
   "innodb_api_disable_rowlock",
   "innodb_autoinc_lock_mode",
@@ -1871,6 +1874,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarTransactionAllowBatching)
         + sizeof(ObSysVarTransactionPreallocSize)
         + sizeof(ObSysVarTransactionWriteSetExtraction)
+        + sizeof(ObSysVarOracleSqlSelectLimit)
         + sizeof(ObSysVarInnodbReadOnly)
         + sizeof(ObSysVarInnodbApiDisableRowlock)
         + sizeof(ObSysVarInnodbAutoincLockMode)
@@ -4879,6 +4883,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_TRANSACTION_WRITE_SET_EXTRACTION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarTransactionWriteSetExtraction));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOracleSqlSelectLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOracleSqlSelectLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ORACLE_SQL_SELECT_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOracleSqlSelectLimit));
       }
     }
     if (OB_SUCC(ret)) {
@@ -8596,6 +8609,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarTransactionWriteSetExtraction())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarTransactionWriteSetExtraction", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ORACLE_SQL_SELECT_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOracleSqlSelectLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOracleSqlSelectLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOracleSqlSelectLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOracleSqlSelectLimit", K(ret));
       }
       break;
     }

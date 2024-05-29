@@ -368,6 +368,11 @@ void ObInnerSQLConnection::set_is_load_data_exec(bool v)
   get_session().set_load_data_exec_session(v);
 }
 
+void ObInnerSQLConnection::set_ob_enable_pl_cache(bool v)
+{
+  get_session().set_local_ob_enable_pl_cache(v);
+}
+
 int ObInnerSQLConnection::init_session_info(
     sql::ObSQLSessionInfo *session,
     const bool is_extern_session,

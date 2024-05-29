@@ -23,22 +23,20 @@ namespace core
 
 using namespace llvm;
 
-int JitContext::InitializeModule(ObOrcJit &jit)
+int JitContext::InitializeModule(const ObDataLayout &DL)
 {
   int ret = OB_SUCCESS;
 
-  TheJIT = &jit;
-  if (nullptr == (TheModule = std::make_unique<Module>("PL/SQL", TheJIT->getContext()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for LLVM Module", K(ret));
-  } else if (nullptr == (Builder = std::make_unique<IRBuilder<>>(TheJIT->getContext()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for LLVM Builder", K(ret));
+  if (OB_FAIL(ob_jit_make_unique(TheContext))) {
+    LOG_WARN("failed to make jit context", K(ret));
+  } else if (OB_FAIL(ob_jit_make_unique(TheModule, "PL/SQL", *TheContext))) {
+    LOG_WARN("failed to make jit module", K(ret));
+  } else if (OB_FAIL(ob_jit_make_unique(Builder, *TheContext))) {
+    LOG_WARN("failed to make ir builder", K(ret));
+  } else if (OB_FAIL(ob_jit_make_unique(TheFPM, TheModule.get()))) {
+    LOG_WARN("failed to make FPM", K(ret));
   } else {
-    TheContext = &TheJIT->getContext();
-    TheModule->setDataLayout(TheJIT->getDataLayout());
-    Builder = std::make_unique<IRBuilder<>>(*TheContext);
-    TheFPM = std::make_unique<legacy::FunctionPassManager>(TheModule.get());
+    TheModule->setDataLayout(DL);
     TheFPM->add(createInstructionCombiningPass());
     TheFPM->add(createReassociatePass());
     TheFPM->add(createGVNPass());
@@ -49,12 +47,20 @@ int JitContext::InitializeModule(ObOrcJit &jit)
   return ret;
 }
 
-void JitContext::compile()
+int JitContext::compile(ObOrcJit &jit)
 {
-  if (!Compile && nullptr != TheJIT) {
-    TheJIT->addModule(std::move(TheModule));
+  int ret = OB_SUCCESS;
+
+  if (Compile) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("already compiled", K(ret), K(lbt()));
+  } else if (OB_FAIL(jit.addModule(std::move(TheModule), std::move(TheContext)))) {
+    LOG_WARN("failed to add module to jit engine", K(ret));
+  } else {
     Compile = true;
   }
+
+  return ret;
 }
 
 int JitContext::optimize()
