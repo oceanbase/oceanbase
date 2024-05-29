@@ -33,6 +33,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::observer;
 using namespace oceanbase::pl;
 
+namespace oceanbase
+{
 // copy from test_table_schema.cpp
 void fill_table_schema(ObTableSchema &table)
 {
@@ -175,6 +177,7 @@ void TestCreateExecutor::SetUp()
 
 void TestCreateExecutor::TearDown()
 {
+  MTL_CTX()=nullptr;
 }
 
 
@@ -541,6 +544,7 @@ TEST_F(TestCreateExecutor, test_cache)
     ASSERT_EQ(TABLE_API_EXEC_INSERT, spec->type_);
   }
 }
+} // end namespace oceanbase
 
 int main(int argc, char **argv)
 {
