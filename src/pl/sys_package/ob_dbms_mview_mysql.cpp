@@ -33,9 +33,12 @@ int ObDBMSMViewMysql::purge_log(ObExecContext &ctx, ParamStore &params, ObObj &r
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-  CK(OB_LIKELY(2 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()) /*master_name*/);
-  CK(OB_LIKELY(params.at(1).is_int32()) /*purge_log_parallel*/);
+  if (2 != params.count()
+      || !params.at(0).is_varchar()
+      || !params.at(1).is_int32()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for mlog purge", KR(ret));
+  }
   if (OB_SUCC(ret)) {
     ObMViewPurgeLogArg purge_params;
     ObMViewPurgeLogExecutor purge_executor;
@@ -59,10 +62,13 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
 {
   UNUSED(result);
   int ret = OB_SUCCESS;
-  CK(OB_LIKELY(3 == params.count()));
-  CK(OB_LIKELY(params.at(0).is_varchar()) /*mv_name*/,
-     OB_LIKELY(params.at(1).is_null() || params.at(1).is_varchar()) /*method*/,
-     OB_LIKELY(params.at(2).is_int32()) /*refresh_parallel*/);
+  if (3 != params.count()
+     || !params.at(0).is_varchar()
+     || (!params.at(1).is_null() && !params.at(1).is_varchar())
+     || !params.at(2).is_int32()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for materialized view refresh", KR(ret));
+  }
   if (OB_SUCC(ret)) {
     ObMViewRefreshArg refresh_params;
     ObMViewRefreshExecutor refresh_executor;
