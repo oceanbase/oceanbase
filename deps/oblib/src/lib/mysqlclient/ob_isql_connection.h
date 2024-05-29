@@ -101,7 +101,8 @@ public:
        last_set_client_charset_cstr_(NULL),
        last_set_connection_charset_cstr_(NULL),
        last_set_results_charset_cstr_(NULL),
-       next_conn_(NULL)
+       next_conn_(NULL),
+       check_priv_(false)
   {}
   virtual ~ObISQLConnection() {
     allocator_.reset();
@@ -265,6 +266,8 @@ public:
   void dblink_unwlock() { dblink_lock_.wlock()->unlock(); }
   ObISQLConnection *get_next_conn() { return next_conn_; }
   void set_next_conn(ObISQLConnection *conn) { next_conn_ = conn; }
+  void set_check_priv(bool on) { check_priv_ = on; }
+  bool is_check_priv() { return check_priv_; }
 protected:
   bool oracle_mode_;
   bool is_inited_; // for oracle dblink, we have to init remote env with some sql
@@ -283,6 +286,7 @@ protected:
   common::ObArenaAllocator allocator_;
   obsys::ObRWLock dblink_lock_;
   ObISQLConnection *next_conn_; // used in dblink_conn_map_
+  bool check_priv_;
 };
 
 } // end namespace sqlclient

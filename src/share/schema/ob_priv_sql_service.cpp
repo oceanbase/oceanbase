@@ -614,7 +614,7 @@ int ObPrivSqlService::delete_db_priv(
                                                exec_tenant_id, org_db_key.tenant_id_)))
         || OB_FAIL(dml.add_pk_column("USER_ID", ObSchemaUtils::get_extract_schema_id(
                                                exec_tenant_id, org_db_key.user_id_)))
-        || OB_FAIL(dml.add_pk_column("DATABASE_NAME", org_db_key.db_))
+        || OB_FAIL(dml.add_pk_column("DATABASE_NAME", ObHexEscapeSqlStr(org_db_key.db_)))
         || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -698,8 +698,8 @@ int ObPrivSqlService::delete_table_priv(
                                                exec_tenant_id, table_priv_key.tenant_id_)))
         || OB_FAIL(dml.add_pk_column("USER_ID", ObSchemaUtils::get_extract_schema_id(
                                                 exec_tenant_id, table_priv_key.user_id_)))
-        || OB_FAIL(dml.add_pk_column("DATABASE_NAME", table_priv_key.db_))
-        || OB_FAIL(dml.add_pk_column("TABLE_NAME", table_priv_key.table_))
+        || OB_FAIL(dml.add_pk_column("DATABASE_NAME", ObHexEscapeSqlStr(table_priv_key.db_)))
+        || OB_FAIL(dml.add_pk_column("TABLE_NAME", ObHexEscapeSqlStr(table_priv_key.table_)))
         || OB_FAIL(dml.add_gmt_modified())) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -930,8 +930,8 @@ int ObPrivSqlService::gen_table_priv_dml(
                                              exec_tenant_id, table_priv_key.tenant_id_)))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id, table_priv_key.user_id_)))
-      || OB_FAIL(dml.add_pk_column("database_name", table_priv_key.db_))
-      || OB_FAIL(dml.add_pk_column("table_name", table_priv_key.table_))
+      || OB_FAIL(dml.add_pk_column("database_name", ObHexEscapeSqlStr(table_priv_key.db_)))
+      || OB_FAIL(dml.add_pk_column("table_name", ObHexEscapeSqlStr(table_priv_key.table_)))
       || OB_FAIL(dml.add_column("PRIV_ALTER", priv_set & OB_PRIV_ALTER ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_CREATE", priv_set & OB_PRIV_CREATE ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_DELETE", priv_set & OB_PRIV_DELETE ? 1 : 0))
@@ -969,8 +969,8 @@ int ObPrivSqlService::gen_routine_priv_dml(
     if ((priv_set & OB_PRIV_GRANT) != 0) { all_priv |= 4; }
     if (OB_FAIL(dml.add_pk_column("tenant_id", 0))
         || OB_FAIL(dml.add_pk_column("user_id", routine_priv_key.user_id_))
-        || OB_FAIL(dml.add_pk_column("database_name", routine_priv_key.db_))
-        || OB_FAIL(dml.add_pk_column("routine_name", routine_priv_key.routine_))
+        || OB_FAIL(dml.add_pk_column("database_name", ObHexEscapeSqlStr(routine_priv_key.db_)))
+        || OB_FAIL(dml.add_pk_column("routine_name", ObHexEscapeSqlStr(routine_priv_key.routine_)))
         || OB_FAIL(dml.add_pk_column("routine_type", routine_priv_key.routine_type_))
         || OB_FAIL(dml.add_column("all_priv", all_priv))) {
       LOG_WARN("add column failed", K(ret));
@@ -997,7 +997,7 @@ int ObPrivSqlService::gen_db_priv_dml(
                                              exec_tenant_id, db_priv_key.tenant_id_)))
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id, db_priv_key.user_id_)))
-      || OB_FAIL(dml.add_pk_column("database_name", db_priv_key.db_))
+      || OB_FAIL(dml.add_pk_column("database_name", ObHexEscapeSqlStr(db_priv_key.db_)))
       || OB_FAIL(dml.add_column("PRIV_ALTER", priv_set & OB_PRIV_ALTER ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_CREATE", priv_set & OB_PRIV_CREATE ? 1 : 0))
       || OB_FAIL(dml.add_column("PRIV_DELETE", priv_set & OB_PRIV_DELETE ? 1 : 0))

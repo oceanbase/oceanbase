@@ -135,15 +135,15 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(SUPER);
                   NO_EXIST_PRIV_CASE(CREATE_TMP_TABLE);
                   NO_EXIST_PRIV_CASE(LOCK_TABLES);
-                  NO_EXIST_PRIV_CASE(EXECUTE);
+                  EXIST_PRIV_CASE(EXECUTE);
                   EXIST_PRIV_CASE(REPL_SLAVE);
                   EXIST_PRIV_CASE(REPL_CLIENT);
                   EXIST_PRIV_CASE(DROP_DATABASE_LINK);
                   EXIST_PRIV_CASE(CREATE_DATABASE_LINK);
                   EXIST_PRIV_CASE(CREATE_VIEW);
                   EXIST_PRIV_CASE(SHOW_VIEW);
-                  NO_EXIST_PRIV_CASE(CREATE_ROUTINE);
-                  NO_EXIST_PRIV_CASE(ALTER_ROUTINE);
+                  EXIST_PRIV_CASE(CREATE_ROUTINE);
+                  EXIST_PRIV_CASE(ALTER_ROUTINE);
                   EXIST_PRIV_CASE(CREATE_USER);
                   NO_EXIST_PRIV_CASE(EVENT);
                   NO_EXIST_PRIV_CASE(TRIGGER);

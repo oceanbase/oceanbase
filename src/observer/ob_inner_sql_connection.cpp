@@ -441,8 +441,8 @@ int ObInnerSQLConnection::init_result(ObInnerSQLResult &res,
   result_set.get_exec_context().set_sql_ctx(&res.sql_ctx());
   res.sql_ctx().retry_times_ = retry_cnt;
   res.sql_ctx().session_info_ = &get_session();
-  res.sql_ctx().disable_privilege_check_ = OB_SYS_TENANT_ID == res.sql_ctx().session_info_->get_priv_tenant_id()
-                                            ? PRIV_CHECK_FLAG_DISABLE : PRIV_CHECK_FLAG_DISABLE;
+  res.sql_ctx().disable_privilege_check_ = is_check_priv()
+                                            ? PRIV_CHECK_FLAG_NORMAL : PRIV_CHECK_FLAG_DISABLE;
   res.sql_ctx().secondary_namespace_ = secondary_namespace;
   res.sql_ctx().is_prepare_protocol_ = is_prepare_protocol;
   res.sql_ctx().is_prepare_stage_ = is_prepare_stage;

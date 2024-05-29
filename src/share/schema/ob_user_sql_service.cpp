@@ -1016,7 +1016,7 @@ int ObUserSqlService::gen_user_dml(
       || OB_FAIL(dml.add_pk_column("user_id", ObSchemaUtils::get_extract_schema_id(
                                               exec_tenant_id,user.get_user_id())))
       || OB_FAIL(dml.add_column("user_name", ObHexEscapeSqlStr(user.get_user_name())))
-      || OB_FAIL(dml.add_column("host", user.get_host_name()))
+      || OB_FAIL(dml.add_column("host", ObHexEscapeSqlStr(user.get_host_name())))
       || OB_FAIL(dml.add_column("passwd", user.get_passwd()))
       || OB_FAIL(dml.add_column("info", user.get_info()))
       || OB_FAIL(dml.add_column("PRIV_ALTER", user.get_priv(OB_PRIV_ALTER) ? 1 : 0))
