@@ -70,6 +70,8 @@ public:
                                   const ObColumnResolveStat &stat);
   int check_alter_geo_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
                                      const share::schema::ObColumnSchemaV2 &origin_col_schema);
+  int check_alter_multivalue_depend_column_allowed(const share::schema::AlterColumnSchema &alter_column_schema,
+                                                   const share::schema::ObColumnSchemaV2 &data_column_schema);
   int resolve_modify_column(const ParseNode &node,
                             bool &is_modify_column_visibility,
                             ObReducedVisibleColSet &reduced_visible_col_set);

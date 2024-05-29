@@ -1844,6 +1844,14 @@ int ObSqlParameterization::mark_tree(ParseNode *tree ,SqlInfo &sql_info)
         sql_info.ps_need_parameterized_ = false;
       } else if ((0 == func_name.case_compare("json_extract"))) {
         sql_info.ps_need_parameterized_ = false;
+        for (int64_t i = 1; OB_SUCC(ret) && i < tree->num_child_; i++) {
+          if (OB_ISNULL(tree->children_[i])) {
+            ret = OB_INVALID_ARGUMENT;
+            SQL_PC_LOG(WARN, "invalid argument", K(ret), K(tree->children_[i]));
+          } else {
+            tree->children_[i]->is_tree_not_param_ = true;
+          }
+        }
       } else if ((0 == func_name.case_compare("json_member_of"))) {
         sql_info.ps_need_parameterized_ = false;
         if (2 == tree->num_child_) {

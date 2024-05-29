@@ -4089,13 +4089,16 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
         LOG_WARN("get json array element result is null.", K(i), K(ret));
       } else if (OB_FAIL(ObJsonUtil::cast_json_scalar_to_sql_obj(&allocator_, exec_ctx, tmp_j_base,
                                                                   col_res_type, val))) {
-        ret = OB_SUCCESS;
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
       } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, *key_pos, val, cmp))) {
         LOG_WARN("failed to try cast value type", K(ret));
       } else if (cmp != 0) {
-        GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
         always_true = true;
       } else {
         val.set_collation_type(col_res_type.get_collation_type());
@@ -4107,7 +4110,9 @@ int ObQueryRange::get_json_array_in_keyparts(ObIJsonBase* j_base, ObKeyPart *&ou
     if (OB_SUCC(ret) && !always_true) {
       if (OB_UNLIKELY(new_param_meta->vals_.empty())) {
         // all always false
-        GET_ALWAYS_TRUE_OR_FALSE(false, out_key_part);
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, false))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
       } else if (OB_FAIL(out_key_part->in_keypart_->in_params_.push_back(new_param_meta))) {
         LOG_WARN("failed to push back param meta", K(ret));
       } else if (OB_FAIL(out_key_part->formalize_keypart(contain_row_))) {
@@ -4150,9 +4155,12 @@ int ObQueryRange::get_json_array_keyparts(ObIJsonBase* j_base, ObIArray<ObKeyPar
           ret = OB_SUCCESS;
           if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
             LOG_WARN("failed set normal key", K(ret));
-          } else if (OB_NOT_NULL(query_range_ctx_)) {
-            query_range_ctx_->cur_expr_is_precise_ = false;
+          } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params))) {
+            LOG_WARN("fail to get member of keyparts", K(ret));
+          } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
+            LOG_WARN("fail to push keypart", K(ret));
           }
+          break;
         } else if (OB_FAIL(get_member_of_keyparts(val, tmp_key_part, dtc_params))) {
           LOG_WARN("fail to get member of keyparts", K(ret));
         } else if (OB_FAIL(key_parts.push_back(tmp_key_part))) {
@@ -4215,7 +4223,11 @@ int ObQueryRange::get_contain_or_overlaps_keyparts(const common::ObObj &const_pa
     }
   } else {
     // must be object, can't extract query range
-    GET_ALWAYS_TRUE_OR_FALSE(true, out_key_part);
+    if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+      LOG_WARN("failed set normal key", K(ret));
+    } else if (OB_NOT_NULL(query_range_ctx_)) {
+      query_range_ctx_->cur_expr_is_precise_ = false;
+    }
   }
   return ret;
 }
