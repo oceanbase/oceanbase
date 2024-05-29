@@ -297,7 +297,7 @@ public:
 protected:
   static const int64_t DEFAULT_DATUM_OFFSET = -1;
   int fill_default_if_need(blocksstable::ObStorageDatum &datum);
-  int pad_column_if_need(blocksstable::ObStorageDatum &datum);
+  int pad_column_if_need(blocksstable::ObStorageDatum &datum, common::ObIAllocator &padding_allocator, bool alloc_need_reuse = true);
   int deep_copy_datum(const blocksstable::ObStorageDatum &src, common::ObIAllocator &tmp_alloc);
   int read_agg_datum(const blocksstable::ObMicroIndexInfo &index_info, const bool is_cg);
   void clear_group_by_info();
@@ -325,6 +325,7 @@ protected:
   ObBitmap *bitmap_;
   int64_t group_by_result_cnt_;
   bool is_assigned_to_group_by_processor_;
+  common::ObArenaAllocator padding_allocator_;
 private:
   virtual bool can_use_index_info() const { return true; }
   DISALLOW_COPY_AND_ASSIGN(ObAggCell);
