@@ -5329,6 +5329,10 @@ int ObDDLOperator::init_tenant_env(
     LOG_WARN("insert default tablegroup failed", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_databases(tenant_schema, sys_variable, trans))) {
     LOG_WARN("insert default databases failed,", K(tenant_id), K(ret));
+  } else if (OB_FAIL(init_tenant_optimizer_stats_info(sys_variable, tenant_id, trans))) {
+    LOG_WARN("failed to init tenant optimizer stats info", K(tenant_id), K(ret));
+  } else if (OB_FAIL(init_tenant_spm_configure(tenant_id, trans))) {
+    LOG_WARN("failed to init tenant spm configure", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_profile(tenant_id, sys_variable, trans))) {
     LOG_WARN("fail to init tenant profile", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_users(tenant_schema, sys_variable, trans))) {
@@ -5521,10 +5525,6 @@ int ObDDLOperator::init_tenant_databases(const ObTenantSchema &tenant_schema,
                                           OB_PUBLIC_SCHEMA_ID, "public schema",
                                           trans, is_oracle_mode))) {
     RS_LOG(WARN, "insert public schema failed", K(tenant_id), K(ret));
-  } else if (OB_FAIL(init_tenant_optimizer_stats_info(sys_variable, tenant_id, trans))) {
-    RS_LOG(WARN, "init tenant tenant optimizer control table", K(tenant_id), K(ret));
-  } else if (OB_FAIL(init_tenant_spm_configure(tenant_id, trans))) {
-    RS_LOG(WARN, "init tenant spm configure failed", K(tenant_id), K(ret));
   } else {
     if (!is_oracle_mode) {
       if (OB_FAIL(init_tenant_database(tenant_schema, mysql_schema,

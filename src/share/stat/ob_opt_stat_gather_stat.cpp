@@ -192,7 +192,7 @@ int ObOptStatGatherStat::deep_copy(common::ObIAllocator &allocator, ObOptStatGat
   return ret;
 }
 //-----------------------------------------------------
-int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_param,
+int ObOptStatRunningMonitor::add_table_info(const common::ObTableStatParam &table_param,
                                             double stale_percent)
 {
   int ret = OB_SUCCESS;
@@ -211,7 +211,7 @@ int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_para
     opt_stat_gather_stat_.set_table_id(table_param.table_id_);
     ObSqlString properties_sql_str;
     char *buf = NULL;
-    if (OB_FAIL(properties_sql_str.append_fmt("GRANULARITY:%.*s;METHOD_OPT:%.*s;DEGREE:%ld;ESTIMATE_PERCENT:%lf;BLOCK_SAMPLE:%d;STALE_PERCENT:%lf;",
+    if (OB_FAIL(properties_sql_str.append_fmt("GRANULARITY:%.*s;METHOD_OPT:%.*s;DEGREE:%ld;ESTIMATE_PERCENT:%lf;BLOCK_SAMPLE:%d;STALE_PERCENT:%lf;HIST_EST_PERCENT:%lf",
                                               table_param.granularity_.length(),
                                               table_param.granularity_.ptr(),
                                               table_param.method_opt_.length(),
@@ -219,7 +219,8 @@ int ObOptStatRunningMonitor::add_table_info(common::ObTableStatParam &table_para
                                               table_param.degree_,
                                               table_param.sample_info_.is_sample_ ? table_param.sample_info_.sample_value_ : 100.0,
                                               table_param.sample_info_.is_block_sample_,
-                                              stale_percent))) {
+                                              stale_percent,
+                                              table_param.hist_sample_info_.is_sample_ ? table_param.hist_sample_info_.sample_value_ : 100.0))) {
       LOG_WARN("failed to append fmt", K(ret));
     } else if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(properties_sql_str.length())))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

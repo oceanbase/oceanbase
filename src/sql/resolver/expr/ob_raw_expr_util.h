@@ -430,10 +430,10 @@ public:
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObRawExpr* expr,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_contain_exprs(ObRawExpr *raw_expr,
                                    const common::ObIArray<ObRawExpr*> &src_exprs,

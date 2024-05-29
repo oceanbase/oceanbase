@@ -657,6 +657,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check force use parallel das dml", K(ret));
   } else if (OB_FAIL(init_parallel_policy(stmt, *session_info))) { // call after check pdml enabled
     LOG_WARN("fail to check enable pdml", K(ret));
+  } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
+    LOG_WARN("failed to init correlation model", K(ret));
   }
   return ret;
 }
@@ -806,6 +808,38 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
                         K(ctx_.get_auto_dop_params()));
+  }
+  return ret;
+}
+
+int ObOptimizer::init_correlation_model(ObDMLStmt &stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  ObEstCorrelationModel* correlation_model = NULL;
+  int64_t type = 0;
+  bool has_hint = false;
+  if (OB_ISNULL(ctx_.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx", K(ret));
+  } else if (ctx_.get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_4) {
+    type = static_cast<int64_t>(ObEstCorrelationType::INDEPENDENT);
+  } else if (OB_FAIL(ctx_.get_global_hint().opt_params_.has_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, has_hint))) {
+    LOG_WARN("failed to check whether has hint param", K(ret));
+  } else if (has_hint) {
+    if (OB_FAIL(ctx_.get_global_hint().opt_params_.get_enum_opt_param(ObOptParamHint::CORRELATION_FOR_CARDINALITY_ESTIMATION, type))) {
+      LOG_WARN("failed to get bool hint param", K(ret));
+    }
+  } else if (OB_FAIL(session.get_sys_variable(share::SYS_VAR_CARDINALITY_ESTIMATION_MODEL, type))) {
+    LOG_WARN("failed to get sys variable", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_UNLIKELY(type < 0) ||
+        OB_UNLIKELY(type >= static_cast<int64_t>(ObEstCorrelationType::MAX))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected correlation type", K(type));
+    } else {
+      ctx_.set_correlation_type(static_cast<ObEstCorrelationType>(type));
+    }
   }
   return ret;
 }

@@ -51,7 +51,12 @@ enum StatOptionFlags
   OPT_FORCE            = 1 << 11,
   OPT_APPROXIMATE_NDV  = 1 << 12,
   OPT_ESTIMATE_BLOCK   = 1 << 13,
-  OPT_STAT_OPTION_ALL  = (1 << 14) -1
+  OPT_ASYNC_GATHER_STALE_RATION = 1 << 14,
+  OPT_ASYNC_GATHER_SAMPLE_SIZE  = 1 << 15,
+  OPT_ASYNC_GATHER_FULL_TABLE_SIZE = 1 << 16,
+  OPT_HIST_EST_PERCENT = 1 << 17,
+  OPT_HIST_BLOCK_SAMPLE = 1 << 18,
+  OPT_STAT_OPTION_ALL  = (1 << 19) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
@@ -66,6 +71,15 @@ const static int64_t MAX_NUM_OF_WRITE_STATS = 2000;
 const static int64_t DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE = 256;
 const static int64_t MIN_GATHER_WORK_ARANA_SIZE = 10 * 1024L * 1024L; //10M
 const int64_t MAX_OPT_STATS_PROCESS_RPC_TIMEOUT = 300000000;//one optimizer stats processing rpc time should not exceed 300 seconds
+const static int64_t DEFAULT_ASYNC_SAMPLE_SIZE = 1000000;
+const static int64_t DEFAULT_ASYNC_FULL_TABLE_SIZE = 10000000;
+const static int64_t DEFAULT_ASYNC_MIN_TABLE_SIZE = 10000;
+const static int64_t DEFAULT_ASYNC_STALE_MAX_TABLE_SIZE = 100000000;
+const static int64_t DEFAULT_ASYNC_MAX_SCAN_ROWCOUNT = 100000000;
+const static int64_t MINIMUM_OF_ASYNC_GATHER_STALE_RATIO = 2;
+const int64_t MAXIMUM_BLOCK_CNT_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 100000;
+const int64_t MAXIMUM_ROWS_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 10000000;
+const int64_t MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST = 16;
 
 enum StatLevel
 {
@@ -184,28 +198,55 @@ struct StatTable
     database_id_(OB_INVALID_ID),
     table_id_(OB_INVALID_ID),
     stale_percent_(0.0),
-    partition_stat_infos_()
+    partition_stat_infos_(),
+    is_async_gather_(false),
+    async_partition_ids_()
   {
     partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
+    async_partition_ids_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
   }
-  StatTable(uint64_t database_id, uint64_t table_id) :
+  StatTable(uint64_t database_id, uint64_t table_id, bool is_async_gather = false) :
     database_id_(database_id),
     table_id_(table_id),
     stale_percent_(0.0),
-    partition_stat_infos_()
+    partition_stat_infos_(),
+    is_async_gather_(is_async_gather),
+    async_partition_ids_()
   {
     partition_stat_infos_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
+    async_partition_ids_.set_attr(lib::ObMemAttr(MTL_ID(), "StatTable"));
   }
   bool operator<(const StatTable &other) const;
   int assign(const StatTable &other);
   TO_STRING_KV(K_(database_id),
                K_(table_id),
                K_(stale_percent),
-               K_(partition_stat_infos));
+               K_(partition_stat_infos),
+               K_(is_async_gather),
+               K_(async_partition_ids));
   uint64_t database_id_;
   uint64_t table_id_;
   double stale_percent_;
   ObArray<ObPartitionStatInfo> partition_stat_infos_;
+  bool is_async_gather_;
+  ObArray<int64_t> async_partition_ids_;
+};
+
+struct AsyncStatTable
+{
+  AsyncStatTable() :
+    table_id_(OB_INVALID_ID),
+    partition_ids_()
+  {}
+  AsyncStatTable(int64_t table_id) :
+    table_id_(table_id),
+    partition_ids_()
+  {}
+  int assign(const AsyncStatTable &other);
+  TO_STRING_KV(K_(table_id),
+               K_(partition_ids));
+  uint64_t table_id_;
+  ObArray<int64_t> partition_ids_;
 };
 
 enum ObStatTableType {
@@ -337,6 +378,7 @@ struct ObAnalyzeSampleInfo
   void set_percent(double percent);
   void set_rows(double row_num);
   void set_is_block_sample(bool is_block_sample) { is_block_sample_ = is_block_sample; }
+  bool is_specify_sample() const { return is_sample_ && sample_value_ >= 0.000001 && sample_value_ < 100.0; }
 
   TO_STRING_KV(K_(is_sample),
                K_(is_block_sample),
@@ -444,7 +486,12 @@ struct ObTableStatParam {
     need_estimate_block_(true),
     is_temp_table_(false),
     allocator_(NULL),
-    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE)
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
+    is_async_gather_(false),
+    async_gather_sample_size_(DEFAULT_ASYNC_SAMPLE_SIZE),
+    async_full_table_size_(DEFAULT_ASYNC_FULL_TABLE_SIZE),
+    async_partition_ids_(NULL),
+    hist_sample_info_()
   {}
 
   int assign(const ObTableStatParam &other);
@@ -469,6 +516,8 @@ struct ObTableStatParam {
   bool need_gather_stats() const { return global_stat_param_.need_modify_ ||
                                           part_stat_param_.need_modify_ ||
                                           subpart_stat_param_.need_modify_; }
+
+  bool is_specify_sample() const { return sample_info_.is_specify_sample(); }
 
   uint64_t tenant_id_;
 
@@ -523,6 +572,11 @@ struct ObTableStatParam {
   bool is_temp_table_;
   common::ObIAllocator *allocator_;
   share::schema::ObTableType ref_table_type_;
+  bool is_async_gather_;
+  int64_t async_gather_sample_size_;
+  int64_t async_full_table_size_;
+  const ObIArray<int64_t> *async_partition_ids_;
+  ObAnalyzeSampleInfo hist_sample_info_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -565,7 +619,12 @@ struct ObTableStatParam {
                K(data_table_id_),
                K(need_estimate_block_),
                K(is_temp_table_),
-               K(ref_table_type_));
+               K(ref_table_type_),
+               K(is_async_gather_),
+               K(async_gather_sample_size_),
+               K(async_full_table_size_),
+               KPC(async_partition_ids_),
+               K(hist_sample_info_));
 };
 
 struct ObOptStatGatherParam {
@@ -591,7 +650,11 @@ struct ObOptStatGatherParam {
     global_part_id_(-1),
     gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
     sepcify_scn_(0),
-    is_specify_partition_(false)
+    is_specify_partition_(false),
+    is_async_gather_(false),
+    async_gather_sample_size_(DEFAULT_ASYNC_SAMPLE_SIZE),
+    async_full_table_size_(DEFAULT_ASYNC_FULL_TABLE_SIZE),
+    hist_sample_info_()
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -617,6 +680,10 @@ struct ObOptStatGatherParam {
   int64_t gather_vectorize_;
   uint64_t sepcify_scn_;
   bool is_specify_partition_;
+  int64_t is_async_gather_;
+  int64_t async_gather_sample_size_;
+  int64_t async_full_table_size_;
+  ObAnalyzeSampleInfo hist_sample_info_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -637,7 +704,11 @@ struct ObOptStatGatherParam {
                K(global_part_id_),
                K(gather_vectorize_),
                K(sepcify_scn_),
-               K(is_specify_partition_));
+               K(is_specify_partition_),
+               K(is_async_gather_),
+               K(async_gather_sample_size_),
+               K(async_full_table_size_),
+               K(hist_sample_info_));
 };
 
 struct ObOptStat

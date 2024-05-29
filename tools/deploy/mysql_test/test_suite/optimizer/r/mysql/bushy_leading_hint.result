@@ -826,21 +826,21 @@ Query Plan
 ==================================================================
 |ID|OPERATOR                         |NAME |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------
-|0 |SCALAR GROUP BY                  |     |1       |59          |
-|1 |└─NESTED-LOOP JOIN CARTESIAN     |     |17      |58          |
-|2 |  ├─NESTED-LOOP JOIN CARTESIAN   |     |17      |49          |
-|3 |  │ ├─HASH JOIN                  |     |17      |45          |
-|4 |  │ │ ├─TABLE FULL SCAN          |a    |11      |5           |
-|5 |  │ │ └─HASH JOIN                |     |13      |38          |
-|6 |  │ │   ├─HASH SEMI JOIN         |     |10      |30          |
-|7 |  │ │   │ ├─TABLE FULL SCAN      |c    |11      |5           |
-|8 |  │ │   │ └─SUBPLAN SCAN         |VIEW1|26      |21          |
-|9 |  │ │   │   └─HASH JOIN          |     |26      |21          |
-|10|  │ │   │     ├─TABLE FULL SCAN  |z    |11      |5           |
-|11|  │ │   │     └─HASH JOIN        |     |17      |13          |
-|12|  │ │   │       ├─TABLE FULL SCAN|x    |11      |5           |
-|13|  │ │   │       └─TABLE FULL SCAN|y    |11      |5           |
-|14|  │ │   └─TABLE FULL SCAN        |b    |11      |5           |
+|0 |SCALAR GROUP BY                  |     |1       |57          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN     |     |13      |57          |
+|2 |  ├─NESTED-LOOP JOIN CARTESIAN   |     |13      |48          |
+|3 |  │ ├─HASH JOIN                  |     |13      |44          |
+|4 |  │ │ ├─HASH JOIN                |     |10      |37          |
+|5 |  │ │ │ ├─HASH SEMI JOIN         |     |8       |30          |
+|6 |  │ │ │ │ ├─TABLE FULL SCAN      |c    |11      |5           |
+|7 |  │ │ │ │ └─SUBPLAN SCAN         |VIEW1|26      |21          |
+|8 |  │ │ │ │   └─HASH JOIN          |     |26      |21          |
+|9 |  │ │ │ │     ├─TABLE FULL SCAN  |z    |11      |5           |
+|10|  │ │ │ │     └─HASH JOIN        |     |17      |13          |
+|11|  │ │ │ │       ├─TABLE FULL SCAN|x    |11      |5           |
+|12|  │ │ │ │       └─TABLE FULL SCAN|y    |11      |5           |
+|13|  │ │ │ └─TABLE FULL SCAN        |b    |11      |5           |
+|14|  │ │ └─TABLE FULL SCAN          |a    |11      |5           |
 |15|  │ └─MATERIAL                   |     |1       |4           |
 |16|  │   └─SUBPLAN SCAN             |VIEW2|1       |4           |
 |17|  │     └─TABLE FULL SCAN        |x2   |1       |4           |
@@ -862,40 +862,40 @@ Outputs & filters:
       conds(nil), nl_params_(nil), use_batch=false
   3 - output([b.d1]), filter(nil), rowset=16
       equal_conds([a.c1 = b.d1]), other_conds(nil)
-  4 - output([a.c1]), filter(nil), rowset=16
-      access([a.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([a.__pk_increment]), range(MIN ; MAX)always true
-  5 - output([b.d1]), filter(nil), rowset=16
+  4 - output([b.d1]), filter(nil), rowset=16
       equal_conds([b.d2 = c.c1]), other_conds(nil)
-  6 - output([c.c1]), filter(nil), rowset=16
+  5 - output([c.c1]), filter(nil), rowset=16
       equal_conds([c.c2 = VIEW1.x.c1]), other_conds(nil)
-  7 - output([c.c1], [c.c2]), filter(nil), rowset=16
+  6 - output([c.c1], [c.c2]), filter(nil), rowset=16
       access([c.c1], [c.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([c.__pk_increment]), range(MIN ; MAX)always true
-  8 - output([VIEW1.x.c1]), filter(nil), rowset=16
+  7 - output([VIEW1.x.c1]), filter(nil), rowset=16
       access([VIEW1.x.c1])
-  9 - output([x.c1]), filter(nil), rowset=16
+  8 - output([x.c1]), filter(nil), rowset=16
       equal_conds([y.d1 = z.c2]), other_conds(nil)
- 10 - output([z.c2]), filter(nil), rowset=16
+  9 - output([z.c2]), filter(nil), rowset=16
       access([z.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([z.__pk_increment]), range(MIN ; MAX)always true
- 11 - output([x.c1], [y.d1]), filter(nil), rowset=16
+ 10 - output([x.c1], [y.d1]), filter(nil), rowset=16
       equal_conds([x.c2 = y.d2]), other_conds(nil)
- 12 - output([x.c2], [x.c1]), filter(nil), rowset=16
+ 11 - output([x.c2], [x.c1]), filter(nil), rowset=16
       access([x.c2], [x.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([x.__pk_increment]), range(MIN ; MAX)always true
- 13 - output([y.d2], [y.d1]), filter(nil), rowset=16
+ 12 - output([y.d2], [y.d1]), filter(nil), rowset=16
       access([y.d2], [y.d1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([y.__pk_increment]), range(MIN ; MAX)always true
- 14 - output([b.d1], [b.d2]), filter(nil), rowset=16
+ 13 - output([b.d1], [b.d2]), filter(nil), rowset=16
       access([b.d1], [b.d2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([b.__pk_increment]), range(MIN ; MAX)always true
+ 14 - output([a.c1]), filter(nil), rowset=16
+      access([a.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([a.__pk_increment]), range(MIN ; MAX)always true
  15 - output(nil), filter(nil), rowset=16
  16 - output(nil), filter(nil), rowset=16
       access(nil)
@@ -944,7 +944,7 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR                           |NAME        |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION          |            |2       |158         |
+|0 |TEMP TABLE TRANSFORMATION          |            |2       |157         |
 |1 |├─TEMP TABLE INSERT                |TEMP1       |0       |153         |
 |2 |│ └─HASH JOIN                      |            |42      |145         |
 |3 |│   ├─HASH JOIN                    |            |272     |57          |

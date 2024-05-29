@@ -147,6 +147,7 @@ private:
                                       const ObIArray<uint64_t> &part_stattypes);
 
   static int check_need_split_gather(const ObTableStatParam &param,
+                                     const bool is_force_split_part,
                                      GatherHelper &gather_helper);
 
   static int prepare_conn_and_store_session_for_online_stats(sql::ObSQLSessionInfo *session,
@@ -194,6 +195,13 @@ private:
                                     const ObString &task_id,
                                     char *&svr_ip,
                                     int32_t &svr_port);
+
+  static int adjsut_async_gather_param(const PartitionIdBlockMap &partition_id_block_map,
+                                       ObTableStatParam &param,
+                                       bool &need_split_part);
+
+  static bool is_async_gather_partition_id(const int64_t partition_id,
+                                           const ObIArray<int64_t> *async_partition_ids);
 
 
 };

@@ -3458,6 +3458,10 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       OPT_TRACE_TITLE("Now", left_tree, "join", right_tree, join_info);
       if (OB_FAIL(ret)) {
         //do nothing
+      } else if (OB_FAIL(join_tree->revise_cardinality(left_tree,
+                                                       right_tree,
+                                                       join_info))) {
+        LOG_WARN("failed to revise ambient card", K(ret));
       } else if (OB_FAIL(join_tree->generate_join_paths(*left_tree,
                                                         *right_tree,
                                                         join_info,
@@ -6921,7 +6925,7 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   }
 
   if (OB_SUCC(ret)) {
-    get_selectivity_ctx().init_op_ctx(&best_plan->get_output_equal_sets(), best_plan->get_card());
+    get_selectivity_ctx().init_op_ctx(best_plan);
     if (group_rollup_exprs.empty()) {
       groupby_helper.group_ndv_ = 1.0;
     } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
@@ -6947,7 +6951,7 @@ int ObLogPlan::calculate_group_distinct_ndv(const ObIArray<ObRawExpr*> &groupby_
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
-    get_selectivity_ctx().init_op_ctx(&best_plan->get_output_equal_sets(), best_plan->get_card());
+    get_selectivity_ctx().init_op_ctx(best_plan);
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < groupby_helper.distinct_aggr_batch_.count(); ++i) {
     ObSEArray<ObRawExpr*, 8> group_distinct_exprs;
@@ -7009,7 +7013,7 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
   }
 
   if (OB_SUCC(ret)) {
-    get_selectivity_ctx().init_op_ctx(&best_plan->get_output_equal_sets(), best_plan->get_card());
+    get_selectivity_ctx().init_op_ctx(best_plan);
     if (distinct_exprs.empty()) {
       distinct_helper.group_ndv_ = 1.0;
     } else if (get_stmt()->is_set_stmt()) {
@@ -10118,14 +10122,14 @@ int ObLogPlan::candi_allocate_filter(const ObIArray<ObRawExpr*> &filter_exprs)
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(best_plan->get_input_equal_sets(equal_sets))) {
     LOG_WARN("failed to get input equal sets", K(ret));
-  } else if (OB_FALSE_IT(get_selectivity_ctx().init_op_ctx(&equal_sets, best_plan->get_card()))) {
+  } else if (OB_FALSE_IT(get_selectivity_ctx().init_op_ctx(best_plan))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_update_table_metas(),
                                                              get_selectivity_ctx(),
                                                              filter_exprs,
                                                              sel,
                                                              get_predicate_selectivities()))) {
     LOG_WARN("failed to calc selectivity", K(ret));
-  } else if (OB_FALSE_IT(get_selectivity_ctx().init_op_ctx(NULL, -1.0))) {
+  } else if (OB_FALSE_IT(get_selectivity_ctx().clear())) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
       ObLogicalOperator *top = NULL;
@@ -14583,12 +14587,13 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
     LOG_WARN("unexpected null", K(ret), K(get_stmt()));
   } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
     LOG_WARN("failed to get qb name", K(ret));
+  } else if (FALSE_IT(get_selectivity_ctx().clear())) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
-                                                    get_selectivity_ctx(),
-                                                    join_filter_info.rexprs_,
-                                                    join_filter_info.row_count_,
-                                                    join_filter_info.right_distinct_card_,
-                                                    false))) {
+                                                          get_selectivity_ctx(),
+                                                          join_filter_info.rexprs_,
+                                                          join_filter_info.row_count_,
+                                                          join_filter_info.right_distinct_card_,
+                                                          true/*todo*/))) {
     LOG_WARN("failed to calc distinct", K(ret));
   } else if (join_filter_info.table_id_ == join_filter_info.filter_table_id_) {
     /* do nothing */

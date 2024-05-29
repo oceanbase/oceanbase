@@ -311,7 +311,8 @@ int ObDBMSSchedTableOperator::update_for_end(ObDBMSSchedJobInfo &job_info, int e
     OZ (_build_job_drop_dml(now, job_info, sql1));
   } else {
     OX (job_info.failures_ = (err == 0) ? 0 : (job_info.failures_ + 1));
-    OX (job_info.flag_ = job_info.failures_ > 15 ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
+    //
+    OX (job_info.flag_ = (job_info.failures_ > 15 && !ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) ? (job_info.flag_ | 0x1) : (job_info.flag_ & 0xfffffffffffffffE));
     OX (job_info.total_ += (job_info.this_date_ > 0 ? now - job_info.this_date_ : 0));
     if (OB_SUCC(ret) && ((job_info.flag_ & 0x1) != 0)) {
       // when if failures > 16 then set broken state.

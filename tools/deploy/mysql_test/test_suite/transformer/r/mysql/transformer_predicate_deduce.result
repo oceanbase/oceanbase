@@ -642,7 +642,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |UPDATE           |    |1       |28          |
+|0 |UPDATE           |    |1       |29          |
 |1 |└─TABLE FULL SCAN|a   |1       |4           |
 =================================================
 Outputs & filters:
@@ -901,7 +901,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = a.c2], [round(cast(a.c1, BIGINT(-1, 0))) = 1]), rowset=16
+  0 - output([a.c1], [a.c2]), filter([round(cast(a.c1, BIGINT(-1, 0))) = 1], [round(cast(a.c1, BIGINT(-1, 0))) = a.c2]), rowset=16
       access([a.c1], [a.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
       range_key([a.__pk_increment]), range(MIN ; MAX)always true
@@ -3742,7 +3742,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   A:
@@ -3754,7 +3754,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
@@ -3826,7 +3826,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[c2, t2]
       pruned_index_name:[t2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   A:
@@ -3839,7 +3839,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[c1, t1]
       unstable_index_name:[t1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
@@ -3920,7 +3920,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   A:
@@ -3932,7 +3932,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
@@ -4327,7 +4327,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |7       |10          |
+|0 |HASH JOIN        |    |4       |10          |
 |1 |├─TABLE FULL SCAN|t3  |4       |5           |
 |2 |└─TABLE FULL SCAN|t2  |4       |5           |
 =================================================
@@ -4390,7 +4390,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |2       |10          |
+|0 |HASH JOIN        |    |1       |10          |
 |1 |├─TABLE FULL SCAN|t2  |1       |5           |
 |2 |└─TABLE FULL SCAN|t1  |2       |5           |
 =================================================
@@ -4416,7 +4416,7 @@ Query Plan
 =================================================
 |ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
 -------------------------------------------------
-|0 |HASH JOIN        |    |2       |10          |
+|0 |HASH JOIN        |    |1       |10          |
 |1 |├─TABLE FULL SCAN|t2  |1       |5           |
 |2 |└─TABLE FULL SCAN|t1  |2       |5           |
 =================================================

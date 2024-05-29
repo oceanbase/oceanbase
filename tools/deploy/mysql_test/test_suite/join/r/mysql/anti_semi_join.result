@@ -954,7 +954,7 @@ Query Plan
 ========================================================
 |ID|OPERATOR              |NAME  |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------
-|0 |NESTED-LOOP ANTI JOIN |      |66      |64          |
+|0 |NESTED-LOOP ANTI JOIN |      |66      |66          |
 |1 |├─TABLE FULL SCAN     |xy_x_t|74      |8           |
 |2 |└─MATERIAL            |      |16      |8           |
 |3 |  └─TABLE FULL SCAN   |xy_y_t|16      |5           |
@@ -2751,8 +2751,8 @@ Query Plan
 ====================================================
 |ID|OPERATOR           |NAME |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------
-|0 |SCALAR GROUP BY    |     |1       |992         |
-|1 |└─SUBPLAN FILTER   |     |29      |991         |
+|0 |SCALAR GROUP BY    |     |1       |993         |
+|1 |└─SUBPLAN FILTER   |     |42      |991         |
 |2 |  ├─TABLE FULL SCAN|xy_t1|116     |11          |
 |3 |  ├─TABLE FULL SCAN|xy_t3|1       |5           |
 |4 |  └─TABLE FULL SCAN|xy_t2|1       |5           |
@@ -2828,8 +2828,8 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                        |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |SCALAR GROUP BY                 |             |1       |4665        |
-|1 |└─SUBPLAN FILTER                |             |29      |4664        |
+|0 |SCALAR GROUP BY                 |             |1       |4666        |
+|1 |└─SUBPLAN FILTER                |             |42      |4664        |
 |2 |  ├─TABLE FULL SCAN             |xy_t1        |116     |11          |
 |3 |  ├─DISTRIBUTED TABLE RANGE SCAN|xy_t3(idx_c2)|1       |21          |
 |4 |  └─DISTRIBUTED TABLE RANGE SCAN|xy_t2(idx_c2)|1       |21          |
@@ -4031,7 +4031,7 @@ Query Plan
 =========================================================
 |ID|OPERATOR                |NAME |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------
-|0 |SORT                    |     |8       |10          |
+|0 |SORT                    |     |8       |11          |
 |1 |└─NESTED-LOOP ANTI JOIN |     |8       |10          |
 |2 |  ├─TABLE FULL SCAN     |xy_t1|8       |5           |
 |3 |  └─MATERIAL            |     |5       |5           |

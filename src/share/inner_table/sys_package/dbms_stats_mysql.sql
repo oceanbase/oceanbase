@@ -23,7 +23,9 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       statown            VARCHAR(65535) DEFAULT NULL,
       no_invalidate      BOOLEAN DEFAULT FALSE,
       stattype           VARCHAR(65535) DEFAULT 'DATA',
-      force              BOOLEAN DEFAULT FALSE
+      force              BOOLEAN DEFAULT FALSE,
+      hist_est_percent   DECIMAL DEFAULT AUTO_SAMPLE_SIZE,
+      hist_block_sample  BOOLEAN DEFAULT NULL
     );
 
     PROCEDURE gather_schema_stats (
@@ -415,4 +417,5 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
       pvalue         DECIMAL
     );
 
+    PROCEDURE async_gather_stats_job_proc (duration BIGINT DEFAULT NULL);
 END dbms_stats;

@@ -119,6 +119,7 @@ namespace sql
                                           const int64_t buf_len,
                                           int64_t &pos);
     virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+    virtual int est_ambient_card() override;
     /*
      * IN         right_child_sharding_info   the join's right child sharding info
      * IN         right_keys                  the right join equal condition

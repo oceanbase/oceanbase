@@ -948,6 +948,11 @@ public:
                                        const common::ObObj &in_val,
                                        const uint64_t tenant_id,
                                        uint64_t &version);
+  static int check_est_correlation_is_valid(sql::ObExecContext &ctx,
+                                             const ObSetVar &set_var,
+                                             const ObBasicSysVar &sys_var,
+                                             const common::ObObj &in_val,
+                                             common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,

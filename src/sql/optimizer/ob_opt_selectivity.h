@@ -51,11 +51,72 @@ struct ColumnItem;
 struct RangeExprs;
 struct ObExprSelPair;
 
-enum class FilterDependencyType
+class ObEstCorrelationModel
 {
-  INDEPENDENT,
-  MUTEX_OR,
-  EXPONENTIAL_BACKOFF,
+public:
+  static ObEstCorrelationModel &get_correlation_model(ObEstCorrelationType type);
+
+  virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const = 0;
+
+  virtual bool is_independent() const = 0;
+
+protected:
+  ObEstCorrelationModel() {}
+  virtual ~ObEstCorrelationModel() = default;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObEstCorrelationModel);
+};
+
+class ObIndependentModel : public ObEstCorrelationModel
+{
+public:
+  static ObEstCorrelationModel& get_model();
+
+  virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
+
+  virtual bool is_independent() const override { return true; };
+
+protected:
+  ObIndependentModel() {}
+  virtual ~ObIndependentModel() = default;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObIndependentModel);
+};
+
+class ObPartialCorrelationModel : public ObEstCorrelationModel
+{
+public:
+  static ObEstCorrelationModel& get_model();
+
+  virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
+
+  virtual bool is_independent() const { return false; }
+
+protected:
+  ObPartialCorrelationModel() {}
+  virtual ~ObPartialCorrelationModel() = default;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObPartialCorrelationModel);
+};
+
+class ObFullCorrelationModel : public ObEstCorrelationModel
+{
+public:
+  static ObEstCorrelationModel& get_model();
+
+  virtual double combine_filters_selectivity(ObIArray<double> &selectivities) const override;
+
+  virtual bool is_independent() const { return false; }
+
+protected:
+  ObFullCorrelationModel() {}
+  virtual ~ObFullCorrelationModel() = default;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObFullCorrelationModel);
 };
 
 class OptSelectivityCtx
@@ -72,7 +133,8 @@ class OptSelectivityCtx
     row_count_1_(-1.0),
     row_count_2_(-1.0),
     current_rows_(-1.0),
-    dependency_type_(FilterDependencyType::INDEPENDENT)
+    ambient_card_(NULL),
+    assumption_type_(UNKNOWN_JOIN)
   { }
 
   ObOptimizerContext &get_opt_ctx() const { return const_cast<ObOptimizerContext &>(opt_ctx_); }
@@ -108,30 +170,44 @@ class OptSelectivityCtx
   const ObRelIds *get_right_rel_ids() const { return right_rel_ids_; }
   double get_row_count_1() const { return row_count_1_; }
   double get_row_count_2() const { return row_count_2_; }
+  double get_left_row_count() const { return row_count_1_; }
+  double get_right_row_count() const { return row_count_2_; }
   
   double get_current_rows() const { return current_rows_; }
   void set_current_rows(const double current_rows) { current_rows_ = current_rows; }
-  FilterDependencyType get_dependency_type() const { return dependency_type_; }
-  void set_dependency_type(FilterDependencyType type) { dependency_type_ = type; }
+
+  const ObEstCorrelationModel &get_correlation_model() const
+  {
+    return ObEstCorrelationModel::get_correlation_model(opt_ctx_.get_correlation_type());
+  }
 
   uint64_t get_compat_version() const {
     return OB_ISNULL(opt_ctx_.get_query_ctx()) ? 0 :
            opt_ctx_.get_query_ctx()->optimizer_features_enable_version_;
   }
 
+  void set_ambient_card(const ObIArray<double> *ambient_card) { ambient_card_ = ambient_card; }
+  const ObIArray<double> *get_ambient_card() const { return ambient_card_; }
+  int get_ambient_card(const uint64_t table_id, double &table_ambient_card) const;
+  int get_ambient_card(const ObRelIds &rel_ids, double &table_ambient_card) const;
+  void set_assumption_type(ObJoinType type) { assumption_type_ = type; }
+  ObJoinType get_assumption_type() const {
+    return UNKNOWN_JOIN == assumption_type_ ? join_type_ : assumption_type_;
+  }
+
   void init_op_ctx(const EqualSets *equal_sets, const double current_rows,
-                   FilterDependencyType dependency_type = FilterDependencyType::INDEPENDENT)
+                   const ObIArray<double> *ambient_card = NULL)
   {
+    join_type_ = UNKNOWN_JOIN;
+    left_rel_ids_ = NULL;
+    right_rel_ids_ = NULL;
     equal_sets_ = equal_sets;
     current_rows_ = current_rows;
-    dependency_type_ = dependency_type;
+    ambient_card_ = ambient_card;
   }
-  void init_row_count(const double row_count1, const double row_count2)
-  {
-    row_count_1_ = row_count1;
-    row_count_2_ = row_count2;
-    dependency_type_ = FilterDependencyType::INDEPENDENT;
-  }
+
+  // child should be in the same query block
+  void init_op_ctx(ObLogicalOperator *child);
 
   void init_join_ctx(const ObJoinType join_type, const ObRelIds *left_rel_ids,
                      const ObRelIds *right_rel_ids, const double rc1, const double rc2,
@@ -144,13 +220,31 @@ class OptSelectivityCtx
     row_count_2_ = rc2;
     current_rows_ = -1.0;
     equal_sets_ = equal_sets;
-    dependency_type_ = FilterDependencyType::INDEPENDENT;
+    ambient_card_ = NULL;
   }
 
-  void clear_equal_sets() { equal_sets_ = NULL; }
+  void clear()
+  {
+    join_type_ = UNKNOWN_JOIN;
+    left_rel_ids_ = NULL;
+    right_rel_ids_ = NULL;
+    equal_sets_ = NULL;
+    current_rows_ = -1;
+    ambient_card_ = NULL;
+  }
+
+  void init_row_count(const double row_count1, const double row_count2)
+  {
+    join_type_ = UNKNOWN_JOIN;
+    left_rel_ids_ = NULL;
+    right_rel_ids_ = NULL;
+    row_count_1_ = row_count1;
+    row_count_2_ = row_count2;
+    ambient_card_ = NULL;
+  }
 
   TO_STRING_KV(KP_(stmt), KP_(equal_sets), K_(join_type), KP_(left_rel_ids), KP_(right_rel_ids),
-               K_(row_count_1), K_(row_count_2), K_(current_rows), K_(dependency_type));
+               K_(row_count_1), K_(row_count_2), K_(current_rows), KPC_(ambient_card));
 
  private:
   ObOptimizerContext &opt_ctx_;
@@ -171,7 +265,13 @@ class OptSelectivityCtx
   double row_count_1_;
   double row_count_2_;
   double current_rows_;
-  FilterDependencyType dependency_type_;
+  const ObIArray<double> *ambient_card_;
+
+  /**
+   * The join type which determines the estimation assumption.
+   * Used to calculate the selectivity of ambient card.
+  */
+  ObJoinType assumption_type_;
 };
 
 class OptColumnMeta
@@ -256,6 +356,7 @@ public:
     all_used_global_parts_(),
     scale_ratio_(1.0),
     distinct_rows_(0.0),
+    stale_stats_(false),
     table_partition_info_(NULL),
     base_meta_info_(NULL),
     real_rows_(-1.0)
@@ -318,7 +419,8 @@ public:
   void set_stat_locked(bool locked) { stat_locked_ = locked; }
   double get_distinct_rows() const { return distinct_rows_; }
   void set_distinct_rows(double rows) { distinct_rows_ = rows; }
-  void set_ndv_for_all_column(double ndv);
+  bool is_opt_stat_expired() const { return stale_stats_; }
+  void set_stale_stats(bool stale_stats) { stale_stats_ = stale_stats; }
 
   share::schema::ObTableType get_table_type() const { return table_type_; }
 
@@ -352,6 +454,8 @@ private:
 
   // only valid for child stmt meta of set distinct stmt
   double distinct_rows_;
+  //mark stat is expired
+  bool stale_stats_;
 
   // only for base table
   const ObTablePartitionInfo *table_partition_info_;
@@ -389,6 +493,7 @@ public:
                                const double scale_ratio,
                                int64_t last_analyzed,
                                bool is_stat_locked,
+                               bool stale_stats,
                                const ObTablePartitionInfo *table_partition_info,
                                const ObTableMetaInfo *base_meta_info);
 
@@ -420,12 +525,13 @@ public:
                               double &ndv);
 
   common::ObIArray<OptTableMeta>& get_table_metas() { return table_metas_; }
+  const common::ObIArray<OptTableMeta>& get_table_metas() const { return table_metas_; }
   const OptTableMeta* get_table_meta_by_table_id(const uint64_t table_id) const;
   OptTableMeta* get_table_meta_by_table_id(const uint64_t table_id);
   const OptColumnMeta* get_column_meta_by_table_id(const uint64_t table_id,
                                                    const uint64_t column_id) const;
 
-  int get_rows(const uint64_t table_id, double &rows);
+  double get_rows(const uint64_t table_id) const;
   TO_STRING_KV(K_(table_metas));
 private:
   common::ObSEArray<OptTableMeta, 16, common::ModulePageAllocator, true> table_metas_;
@@ -454,19 +560,50 @@ struct OptSelInfo
   bool has_range_exprs_;
   ObObj min_;
   ObObj max_;
+  ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> quals_;
 };
 
 class ObSelEstimator;
 
+struct OptDistinctHelper
+{
+public:
+  OptDistinctHelper() {}
+
+  TO_STRING_KV(K_(rel_id), K_(exprs));
+
+  ObRelIds rel_id_;
+  ObSEArray<ObRawExpr *, 2> exprs_;
+};
+
 class ObOptSelectivity
 {
 public:
+  static int calculate_selectivity(const OptTableMetas &table_metas,
+                                   const OptSelectivityCtx &ctx,
+                                   ObIArray<ObSelEstimator *> &sel_estimators,
+                                   double &selectivity);
+
   // @brief 计算一组条件的选择率，条件之间是and关系，基于独立性假设
   static int calculate_selectivity(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
                                    const common::ObIArray<ObRawExpr*> &quals,
                                    double &selectivity,
                                    common::ObIArray<ObExprSelPair> &all_predicate_sel);
+
+  static int calculate_conditional_selectivity(const OptTableMetas &table_metas,
+                                               const OptSelectivityCtx &ctx,
+                                               common::ObIArray<ObRawExpr *> &total_filters,
+                                               common::ObIArray<ObRawExpr *> &append_filters,
+                                               double &total_sel,
+                                               double &conditional_sel,
+                                               ObIArray<ObExprSelPair> &all_predicate_sel);
+
+  static int calculate_join_selectivity(const OptTableMetas &table_metas,
+                                        const OptSelectivityCtx &ctx,
+                                        const common::ObIArray<ObRawExpr*> &quals,
+                                        double &selectivity,
+                                        common::ObIArray<ObExprSelPair> &all_predicate_sel);
 
   static int calculate_qual_selectivity(const OptTableMetas &table_metas,
                                         const OptSelectivityCtx &ctx,
@@ -495,6 +632,19 @@ public:
                                              const ObNewRange &range,
                                              double &selectivity);
 
+  static int calculate_table_ambient_cardinality(const OptTableMetas &table_metas,
+                                                 const OptSelectivityCtx &ctx,
+                                                 const ObRelIds &rel_id,
+                                                 const double cur_rows,
+                                                 double &table_ambient_card);
+
+  static int calculate_distinct_in_single_table(const OptTableMetas &table_metas,
+                                                const OptSelectivityCtx &ctx,
+                                                const ObRelIds &rel_ids,
+                                                const common::ObIArray<ObRawExpr*>& exprs,
+                                                const double cur_rows,
+                                                double &rows);
+
   // @brief 计算一组变量的distinct
   static int calculate_distinct(const OptTableMetas &table_metas,
                                 const OptSelectivityCtx &ctx,
@@ -502,6 +652,17 @@ public:
                                 const double origin_rows,
                                 double &rows,
                                 const bool need_refine = true);
+
+  static int calculate_distinct(const OptTableMetas &table_metas,
+                                const OptSelectivityCtx &ctx,
+                                const ObRawExpr& expr,
+                                const double origin_rows,
+                                double &rows,
+                                const bool need_refine = true);
+
+  static double combine_two_ndvs(double ambient_card, double ndv1, double ndv2);
+
+  static double combine_ndvs(double ambient_card, ObIArray<double> &ndvs);
 
   // ndv 按照行数进行缩放.
   static double scale_distinct(double selected_rows, double rows, double ndv);
@@ -609,8 +770,8 @@ public:
                                    const ObRawExpr &expr,
                                    double *ndv_ptr,
                                    double *num_null_ptr,
-                                   double *row_count_ptr,
-                                   double *avg_len_ptr);
+                                   double *avg_len_ptr,
+                                   double *row_count_ptr);
 
   static int get_column_hist_scale(const OptTableMetas &table_metas,
                                    const OptSelectivityCtx &ctx,
@@ -718,9 +879,10 @@ public:
    * 检查一组expr是否包含所在表的主键
    */
   static int is_columns_contain_pkey(const OptTableMetas &table_metas,
-                                     const ObIArray<ObRawExpr *> &col_exprs,
+                                     const ObIArray<ObRawExpr *> &exprs,
                                      bool &is_pkey,
-                                     bool &is_union_pkey);
+                                     bool &is_union_pkey,
+                                     uint64_t *table_id_ptr = NULL);
 
   static int is_columns_contain_pkey(const OptTableMetas &table_metas,
                                      const ObIArray<uint64_t> &col_ids,
@@ -735,7 +897,13 @@ public:
                                 ObIArray<uint64_t> &col_ids,
                                 uint64_t &table_id);
 
-  static int classify_quals(const OptSelectivityCtx &ctx,
+  static int classify_quals_deprecated(const OptSelectivityCtx &ctx,
+                            const ObIArray<ObRawExpr*> &quals,
+                            ObIArray<ObExprSelPair> &all_predicate_sel,
+                            ObIArray<OptSelInfo> &column_sel_infos);
+
+  static int classify_quals(const OptTableMetas &table_metas,
+                            const OptSelectivityCtx &ctx,
                             const ObIArray<ObRawExpr*> &quals,
                             ObIArray<ObExprSelPair> &all_predicate_sel,
                             ObIArray<OptSelInfo> &column_sel_infos);
@@ -792,7 +960,6 @@ public:
   //                                  const ObIArray<ObRawExpr*> &predicates,
   //                                  ObOptDSJoinParam &ds_join_param);
 
-  static double get_filters_selectivity(ObIArray<double> &selectivities, FilterDependencyType type);
 
   static int get_column_min_max(ObRawExpr *expr, OptSelInfo &sel_info);
 
@@ -809,14 +976,19 @@ public:
   static bool is_special_expr(const ObRawExpr &expr);
   static int classify_exprs(const ObIArray<ObRawExpr*>& exprs,
                             ObIArray<ObRawExpr*>& column_exprs,
-                            ObIArray<ObRawExpr*>& special_exprs,
-                            const OptTableMetas &table_metas,
-                            const OptSelectivityCtx &ctx);
+                            ObIArray<ObRawExpr*>& special_exprs);
   static int classify_exprs(ObRawExpr* expr,
                             ObIArray<ObRawExpr*>& column_exprs,
-                            ObIArray<ObRawExpr*>& special_exprs,
-                            const OptTableMetas &table_metas,
-                            const OptSelectivityCtx &ctx);
+                            ObIArray<ObRawExpr*>& special_exprs);
+  static int classify_exprs(const ObIArray<ObRawExpr*>& exprs,
+                            ObIArray<OptDistinctHelper> &helpers,
+                            ObIArray<ObRawExpr*>& special_exprs);
+  static int classify_exprs(ObRawExpr *expr,
+                            ObIArray<OptDistinctHelper> &helpers,
+                            ObIArray<ObRawExpr*>& special_exprs);
+  static int add_expr_to_distinct_helper(ObIArray<OptDistinctHelper> &helpers,
+                                         const ObRelIds &rel_id,
+                                         ObRawExpr *expr);
 
   static int remove_ignorable_func_for_est_sel(const ObRawExpr *&expr);
   static int remove_ignorable_func_for_est_sel(ObRawExpr *&expr);

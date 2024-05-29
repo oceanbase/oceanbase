@@ -25,6 +25,8 @@
 #include "share/ls/ob_ls_status_operator.h"//get max ls id
 #include "share/ob_tenant_info_proxy.h"//update max ls id
 #include "ob_upgrade_utils.h"
+#include "share/stat/ob_dbms_stats_maintenance_window.h"
+#include "share/stat/ob_dbms_stats_preferences.h"
 
 namespace oceanbase
 {
@@ -1301,6 +1303,53 @@ int ObUpgradeFor4220Processor::post_upgrade_for_create_replication_role_in_oracl
   return ret;
 }
 /* =========== 4220 upgrade processor end ============= */
+
+int ObUpgradeFor4240Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_optimizer_stats())) {
+    LOG_WARN("failed to post upgrade for optimizer stats", K(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4240Processor::post_upgrade_for_optimizer_stats()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString extra_stats_perfs_sql;
+  ObSqlString add_async_stats_job_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary standby, no refer to gather stats, skip", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsPreferences::get_extra_stats_perfs_for_upgrade(extra_stats_perfs_sql))) {
+    LOG_WARN("failed to get extra stats perfs for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, extra_stats_perfs_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(sql_proxy_,
+                                                                                          tenant_id_,
+                                                                                          add_async_stats_job_sql))) {
+    LOG_WARN("failed to get async gather stats job for upgrade", K(ret));
+  } else if (OB_UNLIKELY(add_async_stats_job_sql.empty())) {
+    LOG_INFO("failed to add async stats job in upgrade, perhaps the join already exists, need check after the upgrade.");
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, add_async_stats_job_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for optimizer stats failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for optimizer stats succeed", K_(tenant_id));
+  }
+  return ret;
+}
+/* =========== 4240 upgrade processor end ============= */
 
 
 /* =========== special upgrade processor end   ============= */

@@ -224,6 +224,8 @@ public:
 
 class ObStatTopKHist : public ObStatColItem
 {
+  const static int64_t MIN_BUCKET_SIZE = 256;
+  const static int64_t MAX_BUCKET_SIZE = 2048;
 public:
   ObStatTopKHist() : ObStatColItem(), tab_stat_(NULL), max_disuse_cnt_(0) {}
   ObStatTopKHist(const ObColumnStatParam *param,
@@ -259,6 +261,8 @@ public:
   // const bucket_size = 256;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+  static int64_t get_window_size(int64_t bucket_num) {
+    return 1000 * (bucket_num < MIN_BUCKET_SIZE ? 1 : bucket_num / MIN_BUCKET_SIZE); }
 protected:
   ObOptTableStat *tab_stat_;
   int64_t max_disuse_cnt_;
@@ -301,7 +305,7 @@ public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
       macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
-      stat_locked_(false)
+      stat_locked_(false), sstable_row_cnt_(0), memtable_row_cnt_(0), stale_stats_(false)
   {}
 
   void add(int64_t rc, int64_t rs, int64_t ds, int64_t mac, int64_t mic);
@@ -318,7 +322,8 @@ public:
   bool get_stat_locked() const { return stat_locked_; }
   int64_t get_sstable_row_cnt() const { return sstable_row_cnt_; }
   int64_t get_memtable_row_cnt() const { return memtable_row_cnt_; }
-
+  void set_stale_stats(bool stale_stats) { stale_stats_ = stale_stats; }
+  bool get_stale_stats() const { return stale_stats_; }
 
   TO_STRING_KV(K(row_count_),
                K(row_size_),
@@ -329,7 +334,8 @@ public:
                K(last_analyzed_),
                K(stat_locked_),
                K(sstable_row_cnt_),
-               K(memtable_row_cnt_));
+               K(memtable_row_cnt_),
+               K(stale_stats_));
 
 private:
   int64_t row_count_;
@@ -342,6 +348,7 @@ private:
   bool stat_locked_;
   int64_t sstable_row_cnt_;
   int64_t memtable_row_cnt_;
+   bool stale_stats_;
 };
 
 class ObGlobalNullEval

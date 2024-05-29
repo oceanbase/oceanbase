@@ -89,7 +89,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -106,7 +106,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -140,7 +140,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -157,7 +157,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -174,7 +174,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -191,7 +191,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -208,7 +208,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR         |NAME                           |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                               |1       |4           |
+|0 |MERGE GROUP BY   |                               |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |4           |
 ============================================================================
 Outputs & filters:
@@ -226,7 +226,7 @@ Query Plan
 ========================================================================
 |ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                         |1       |8           |
+|0 |MERGE GROUP BY     |                         |1       |9           |
 |1 |└─MERGE JOIN       |                         |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c3_c2)         |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v2_v3_v4)|1       |4           |
@@ -304,7 +304,7 @@ Query Plan
 ========================================================================
 |ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                         |1       |8           |
+|0 |MERGE GROUP BY     |                         |1       |9           |
 |1 |└─MERGE JOIN       |                         |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |4           |
@@ -330,7 +330,7 @@ Query Plan
 ========================================================================
 |ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                         |1       |8           |
+|0 |MERGE GROUP BY     |                         |1       |9           |
 |1 |└─MERGE JOIN       |                         |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |4           |
@@ -356,7 +356,7 @@ Query Plan
 ========================================================================
 |ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                         |1       |8           |
+|0 |MERGE GROUP BY     |                         |1       |9           |
 |1 |└─MERGE JOIN       |                         |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)         |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v2)|1       |4           |
@@ -408,7 +408,7 @@ Query Plan
 ========================================================================
 |ID|OPERATOR           |NAME                     |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                         |1       |8           |
+|0 |MERGE GROUP BY     |                         |1       |9           |
 |1 |└─MERGE JOIN       |                         |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c3_c2)         |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v4_v2_v3)|1       |4           |
@@ -486,7 +486,7 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                            |1       |8           |
+|0 |MERGE GROUP BY     |                            |1       |9           |
 |1 |└─MERGE JOIN       |                            |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
@@ -512,7 +512,7 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                            |1       |8           |
+|0 |MERGE GROUP BY     |                            |1       |9           |
 |1 |└─MERGE JOIN       |                            |1       |8           |
 |2 |  ├─TABLE FULL SCAN|other(idx_c2_c3)            |1       |4           |
 |3 |  └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
@@ -702,7 +702,7 @@ Query Plan
 ===========================================================================
 |ID|OPERATOR           |NAME                        |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------
-|0 |MERGE GROUP BY     |                            |1       |8           |
+|0 |MERGE GROUP BY     |                            |1       |9           |
 |1 |└─MERGE JOIN       |                            |1       |8           |
 |2 |  ├─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 |3 |  └─TABLE FULL SCAN|other                       |1       |4           |
@@ -725,33 +725,30 @@ Outputs & filters:
       range_key([other.c1]), range(MIN ; MAX)always true
 explain select max(v1), tenant_id, v6 from skyline_int join other on v3 = c1 group by v5, v4, v3 order by v3, v4, v5;
 Query Plan
-================================================================================
-|ID|OPERATOR             |NAME                           |EST.ROWS|EST.TIME(us)|
---------------------------------------------------------------------------------
-|0 |SORT                 |                               |1       |9           |
-|1 |└─HASH GROUP BY      |                               |1       |9           |
-|2 |  └─MERGE JOIN       |                               |1       |8           |
-|3 |    ├─TABLE FULL SCAN|other                          |1       |4           |
-|4 |    └─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |4           |
-================================================================================
+==============================================================================
+|ID|OPERATOR           |NAME                           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------------
+|0 |MERGE GROUP BY     |                               |1       |9           |
+|1 |└─MERGE JOIN       |                               |1       |8           |
+|2 |  ├─TABLE FULL SCAN|skyline_int(idx_v3_v4_v5_v6_v2)|1       |4           |
+|3 |  └─TABLE FULL SCAN|other                          |1       |4           |
+==============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output([T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=16
-      sort_keys([skyline_int.v3, ASC], [skyline_int.v4, ASC], [skyline_int.v5, ASC])
-  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [T_FUN_MAX(skyline_int.v1)], [skyline_int.tenant_id], [skyline_int.v6]), filter(nil), rowset=16
-      group([skyline_int.v5], [skyline_int.v4], [skyline_int.v3]), agg_func([T_FUN_MAX(skyline_int.v1)])
-  2 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v1]), filter(nil), rowset=16
+      group([skyline_int.v3], [skyline_int.v4], [skyline_int.v5]), agg_func([T_FUN_MAX(skyline_int.v1)])
+  1 - output([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.tenant_id], [skyline_int.v6], [skyline_int.v1]), filter(nil), rowset=16
       equal_conds([skyline_int.v3 = other.c1]), other_conds(nil)
       merge_directions([ASC])
-  3 - output([other.c1]), filter(nil), rowset=16
-      access([other.c1]), partitions(p0)
-      is_index_back=false, is_global_index=false, 
-      range_key([other.c1]), range(MIN ; MAX)always true
-  4 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=16
+  2 - output([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), filter(nil), rowset=16
       access([skyline_int.v1], [skyline_int.tenant_id], [skyline_int.v3], [skyline_int.v6], [skyline_int.v5], [skyline_int.v4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([skyline_int.v3], [skyline_int.v4], [skyline_int.v5], [skyline_int.v6], [skyline_int.v2], [skyline_int.v1], [skyline_int.tenant_id]), range(MIN,
       MIN,MIN,MIN,MIN,MIN,MIN ; MAX,MAX,MAX,MAX,MAX,MAX,MAX)always true
+  3 - output([other.c1]), filter(nil), rowset=16
+      access([other.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([other.c1]), range(MIN ; MAX)always true
 explain select distinct(v3) from skyline_int join other on v3 = c1 order by v3, v4, v5;
 Query Plan
 ===========================================================================
@@ -841,8 +838,8 @@ Query Plan
 =============================================================================
 |ID|OPERATOR             |NAME                        |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------
-|0 |SORT                 |                            |1       |8           |
-|1 |└─HASH DISTINCT      |                            |1       |8           |
+|0 |SORT                 |                            |1       |9           |
+|1 |└─HASH DISTINCT      |                            |1       |9           |
 |2 |  └─MERGE JOIN       |                            |1       |8           |
 |3 |    ├─TABLE FULL SCAN|other                       |1       |4           |
 |4 |    └─TABLE FULL SCAN|skyline_int(idx_v4_v5_v2_v3)|1       |4           |
@@ -928,7 +925,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR            |NAME                        |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                            |1       |8           |
+|0 |MERGE UNION DISTINCT|                            |2       |8           |
 |1 |├─TABLE FULL SCAN   |skyline_int(idx_v3_v4_v5_v2)|1       |4           |
 |2 |└─TABLE FULL SCAN   |other                       |1       |4           |
 ============================================================================
@@ -971,7 +968,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                               |1       |8           |
+|0 |MERGE UNION DISTINCT|                               |2       |8           |
 |1 |├─TABLE FULL SCAN   |skyline_int(idx_v4_v5_v6_v2_v3)|1       |4           |
 |2 |└─TABLE FULL SCAN   |skyline_int(idx_v2_v3_v4)      |1       |4           |
 ===============================================================================
@@ -1350,7 +1347,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR            |NAME                           |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                               |1       |12          |
+|0 |MERGE UNION DISTINCT|                               |2       |12          |
 |1 |├─MERGE JOIN        |                               |1       |8           |
 |2 |│ ├─TABLE FULL SCAN |skyline_int(idx_v4_v5_v6_v2_v3)|1       |4           |
 |3 |│ └─TABLE FULL SCAN |other                          |1       |4           |
@@ -1397,7 +1394,7 @@ Query Plan
 =========================================================================
 |ID|OPERATOR         |NAME                        |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |MERGE GROUP BY   |                            |1       |4           |
+|0 |MERGE GROUP BY   |                            |1       |5           |
 |1 |└─TABLE FULL SCAN|skyline_int(idx_v2_v3_v4_v5)|1       |4           |
 =========================================================================
 Outputs & filters:
@@ -1414,7 +1411,7 @@ Query Plan
 =====================================================
 |ID|OPERATOR            |NAME |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------
-|0 |MERGE UNION DISTINCT|     |1       |8           |
+|0 |MERGE UNION DISTINCT|     |2       |8           |
 |1 |├─TABLE FULL SCAN   |other|1       |4           |
 |2 |└─TABLE FULL SCAN   |other|1       |4           |
 =====================================================

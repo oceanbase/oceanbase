@@ -243,7 +243,17 @@ private:
 };
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
+
+class ObUpgradeFor4240Processor : public ObBaseUpgradeProcessor
+{
+  public:
+  ObUpgradeFor4240Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4240Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  private:
+   int post_upgrade_for_optimizer_stats();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

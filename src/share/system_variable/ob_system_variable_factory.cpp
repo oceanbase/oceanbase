@@ -143,6 +143,12 @@ const char *ObSysVarObCompatibilityControl::OB_COMPATIBILITY_CONTROL_NAMES[] = {
   "MYSQL8.0",
   0
 };
+const char *ObSysVarCardinalityEstimationModel::CARDINALITY_ESTIMATION_MODEL_NAMES[] = {
+  "INDEPENDENT",
+  "PARTIAL",
+  "FULL",
+  0
+};
 const char *ObSysVarFlush::FLUSH_NAMES[] = {
   "OFF",
   "ON",
@@ -390,6 +396,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "binlog_row_image",
   "binlog_rows_query_log_events",
   "block_encryption_mode",
+  "cardinality_estimation_model",
   "character_set_client",
   "character_set_connection",
   "character_set_database",
@@ -730,6 +737,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_BINLOG_ROW_IMAGE,
   SYS_VAR_BINLOG_ROWS_QUERY_LOG_EVENTS,
   SYS_VAR_BLOCK_ENCRYPTION_MODE,
+  SYS_VAR_CARDINALITY_ESTIMATION_MODEL,
   SYS_VAR_CHARACTER_SET_CLIENT,
   SYS_VAR_CHARACTER_SET_CONNECTION,
   SYS_VAR_CHARACTER_SET_DATABASE,
@@ -1285,6 +1293,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_compatibility_control",
   "ob_compatibility_version",
   "ob_security_version",
+  "cardinality_estimation_model",
   "flush",
   "flush_time",
   "innodb_adaptive_flushing",
@@ -1790,6 +1799,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObCompatibilityControl)
         + sizeof(ObSysVarObCompatibilityVersion)
         + sizeof(ObSysVarObSecurityVersion)
+        + sizeof(ObSysVarCardinalityEstimationModel)
         + sizeof(ObSysVarFlush)
         + sizeof(ObSysVarFlushTime)
         + sizeof(ObSysVarInnodbAdaptiveFlushing)
@@ -4221,6 +4231,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SECURITY_VERSION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObSecurityVersion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCardinalityEstimationModel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCardinalityEstimationModel", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_CARDINALITY_ESTIMATION_MODEL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarCardinalityEstimationModel));
       }
     }
     if (OB_SUCC(ret)) {
@@ -7785,6 +7804,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSecurityVersion())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObSecurityVersion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_CARDINALITY_ESTIMATION_MODEL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarCardinalityEstimationModel)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarCardinalityEstimationModel)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarCardinalityEstimationModel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarCardinalityEstimationModel", K(ret));
       }
       break;
     }

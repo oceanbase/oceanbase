@@ -484,7 +484,8 @@ private:
                     const EqualSets &equal_sets,
                     const ObIArray<ObRawExpr*> &const_exprs,
                     const double card,
-                    const bool is_at_most_one_row)
+                    const bool is_at_most_one_row,
+                    const ObIArray<double> &ambient_card)
       : all_win_func_exprs_(all_win_func_exprs),
         win_dist_hint_(win_dist_hint),
         explicit_hint_(explicit_hint),
@@ -500,7 +501,8 @@ private:
         force_pushdown_(false),
         part_cnt_(false),
         win_op_idx_(false),
-        wf_aggr_status_expr_(NULL)
+        wf_aggr_status_expr_(NULL),
+        ambient_card_(ambient_card)
     {
     }
     virtual ~WinFuncOpHelper() {}
@@ -530,6 +532,7 @@ private:
     ObArray<double> sort_key_ndvs_;
     ObArray<std::pair<int64_t, int64_t>> pby_oby_prefixes_;
     ObArray<OrderItem> sort_keys_;
+    const ObIArray<double> &ambient_card_;
 
     TO_STRING_KV(K_(win_dist_method),
                  K_(win_op_idx),
@@ -541,7 +544,8 @@ private:
                  K_(part_cnt),
                  K_(ordered_win_func_exprs),
                  K_(win_dist_hint),
-                 K_(explicit_hint));
+                 K_(explicit_hint),
+                 K_(ambient_card));
   };
 
 private:

@@ -277,6 +277,7 @@ namespace share
   static const char* const OB_SV_COMPATIBILITY_CONTROL = "ob_compatibility_control";
   static const char* const OB_SV_COMPATIBILITY_VERSION = "ob_compatibility_version";
   static const char* const OB_SV_SECURITY_VERSION = "ob_security_version";
+  static const char* const OB_SV_CARDINALITY_ESTIMATION_MODEL = "cardinality_estimation_model";
   static const char* const OB_SV_FLUSH = "flush";
   static const char* const OB_SV_FLUSH_TIME = "flush_time";
   static const char* const OB_SV_INNODB_ADAPTIVE_FLUSHING = "innodb_adaptive_flushing";

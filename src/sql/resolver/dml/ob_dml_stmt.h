@@ -952,6 +952,7 @@ public:
 
   int relids_to_table_items(const ObRelIds &table_set, ObIArray<TableItem*> &tables) const;
   int relids_to_table_items(const ObSqlBitSet<> &table_set, ObIArray<TableItem*> &tables) const;
+  int relids_to_table_ids(const ObRelIds &table_set, ObIArray<uint64_t> &table_ids) const;
   int relids_to_table_ids(const ObSqlBitSet<> &table_set, ObIArray<uint64_t> &table_ids) const;
   int get_table_rel_ids(const TableItem &target, ObSqlBitSet<> &table_set) const;
   int get_table_rel_ids(const ObIArray<uint64_t> &table_ids, ObSqlBitSet<> &table_set) const;

@@ -1287,7 +1287,13 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     } else if (OB_ISNULL(table_meta =
       plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
       //do nothing
-    } else if (OB_FAIL(BUF_PRINTF("stats version:%ld", table_meta->get_version()))) {
+    } else if (OB_FAIL(BUF_PRINTF("stats info:[version=%ld", table_meta->get_version()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(", is_locked=%d", table_meta->is_stat_locked()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF(", is_expired=%d", table_meta->is_opt_stat_expired()))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else if (OB_FAIL(BUF_PRINTF("]"))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));

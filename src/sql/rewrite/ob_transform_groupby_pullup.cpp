@@ -1197,7 +1197,7 @@ int ObTransformGroupByPullup::calc_group_exprs_ndv(const ObIArray<ObRawExpr*> &g
     LOG_WARN("unexpect null logical operator", K(ret));
   } else {
     card = child_op->get_card();
-    plan->get_selectivity_ctx().init_op_ctx(&child_op->get_output_equal_sets(), card);
+    plan->get_selectivity_ctx().init_op_ctx(child_op);
     if (group_exprs.empty()) {
       group_ndv = 1.0;
     } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),

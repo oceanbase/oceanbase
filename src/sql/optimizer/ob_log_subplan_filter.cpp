@@ -191,6 +191,15 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
   return ret;
 }
 
+int ObLogSubPlanFilter::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_est_ambient_card_by_child(ObLogicalOperator::first_child))) {
+    LOG_WARN("failed to est ambient cards by first child", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
 int ObLogSubPlanFilter::est_cost()
 {
   int ret = OB_SUCCESS;
@@ -224,7 +233,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
     LOG_WARN("unexpected params", K(ret), K(get_plan()), K(child), K(param.need_parallel_));
   } else if (param.need_row_count_ < 0 || param.need_row_count_ >= child->get_card()) {
     param.need_row_count_ = -1;
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child->get_card()))) {
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(child))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                              get_plan()->get_selectivity_ctx(),
                                                              get_filter_exprs(),

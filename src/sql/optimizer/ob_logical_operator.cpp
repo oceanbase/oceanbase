@@ -1007,6 +1007,8 @@ int ObLogicalOperator::compute_property(Path *path)
     set_server_cnt(path->server_cnt_);
     if (OB_FAIL(server_list_.assign(path->server_list_))) {
       LOG_WARN("failed to assign path's server list to op", K(ret));
+    } else if (OB_FAIL(ambient_card_.assign(path->parent_->get_ambient_card()))) {
+      LOG_WARN("failed to assign ambient cards", K(ret));
     } else if (OB_FAIL(check_property_valid())) {
       LOG_WARN("failed to check property valid", K(ret));
     } else {
@@ -1213,6 +1215,8 @@ int ObLogicalOperator::compute_property()
     LOG_WARN("failed to compute width", K(ret));
   } else if (OB_FAIL(est_cost())) {
     LOG_WARN("failed to estimate cost", K(ret));
+  } else if (OB_FAIL(est_ambient_card())) {
+    LOG_WARN("failed to est ambient card");
   } else if (OB_FAIL(check_property_valid())) {
     LOG_WARN("failed to check property valid", K(ret));
   } else {
@@ -1236,6 +1240,41 @@ int ObLogicalOperator::compute_property()
               K(width_));
   }
 
+  return ret;
+}
+
+int ObLogicalOperator::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (1 == get_num_of_child()) {
+    if (OB_FAIL(inner_est_ambient_card_by_child(ObLogicalOperator::first_child))) {
+      LOG_WARN("failed to est ambient cards by first child", K(ret), K(get_type()));
+    }
+  } else if (0 == get_num_of_child()) {
+    // do nothing
+    // ambient cardinality of the leaf node is inited by the path
+  } else {
+    // ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("multi child op called default est_ambient_card function", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
+int ObLogicalOperator::inner_est_ambient_card_by_child(int64_t child_idx)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_UNLIKELY(child_idx >= get_num_of_child()) ||
+      OB_ISNULL(child = get_child(child_idx))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(child), K(ret));
+  } else if (OB_FAIL(ambient_card_.assign(child->get_ambient_card()))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    for (int64_t i = 0; i < ambient_card_.count(); i ++) {
+      ambient_card_.at(i) = ObOptSelectivity::scale_distinct(get_card(), child->get_card(), ambient_card_.at(i));
+    }
+  }
   return ret;
 }
 

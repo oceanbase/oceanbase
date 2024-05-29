@@ -318,6 +318,7 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
                                       "macro_blk_cnt as macro_block_num, "
                                       "micro_blk_cnt as micro_block_num, "
                                       "stattype_locked as stattype_locked,"
+                                      "stale_stats as stale_stats,"
                                       "last_analyzed FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
     } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld",
@@ -378,6 +379,7 @@ int ObOptStatSqlService::batch_fetch_table_stats(sqlclient::ObISQLConnection *co
                                         "macro_blk_cnt as macro_block_num, "
                                         "micro_blk_cnt as micro_block_num, "
                                         "stattype_locked as stattype_locked,"
+                                        "stale_stats as stale_stats,"
                                         "last_analyzed FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
         LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
       } else if (OB_FAIL(generate_in_list(part_ids, part_list))) {
@@ -1139,13 +1141,11 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, macro_block_num, stat, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, micro_block_num, stat, int64_t);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, stattype_locked, stat, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, stale_stats, stat, int64_t);
     if (OB_SUCCESS != (ret = result.get_timestamp("last_analyzed", NULL, int_value))) {
       LOG_WARN("fail to get column in row. ", "column_name", "last_analyzed", K(ret));
     } else {
       stat.set_last_analyzed(static_cast<int64_t>(int_value));
-      if (!stat.is_locked()) {
-        stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
-      }
     }
   }
   return ret;

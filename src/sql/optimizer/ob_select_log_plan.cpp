@@ -3454,8 +3454,7 @@ int ObSelectLogPlan::get_minimal_cost_set_plan(const int64_t in_parallel,
       bool is_local_order = right_child->get_is_local_order() && !is_fully_partition_wise;
       ObPQDistributeMethod::Type dist_method = ObOptimizerUtil::get_right_dist_method
                                         (*right_child->get_sharding(), set_dist_algo);
-      right_plan->get_selectivity_ctx().init_op_ctx(
-          &right_child->get_output_equal_sets(), right_child->get_card());
+      right_plan->get_selectivity_ctx().init_op_ctx(right_child);
       info.reset();
       // is single, may allocate exchange above, set need_parallel_ as 1 and compute exchange cost in cost_sort_and_exchange
       info.need_parallel_ = right_child->is_single() ? ObGlobalHint::DEFAULT_PARALLEL : in_parallel;
@@ -4802,7 +4801,8 @@ int ObSelectLogPlan::candi_allocate_window_function_with_hint(const ObIArray<ObW
                                     orig_top->get_output_equal_sets(),
                                     orig_top->get_output_const_exprs(),
                                     orig_top->get_card(),
-                                    orig_top->get_is_at_most_one_row());
+                                    orig_top->get_is_at_most_one_row(),
+                                    orig_top->get_ambient_card());
     while (OB_SUCC(ret) && !candi_plans.empty() && !remaining_exprs.empty()) {
       tmp_plans.reuse();
       if (OB_FAIL(init_win_func_helper_with_hint(candi_plans,
@@ -5036,7 +5036,8 @@ int ObSelectLogPlan::candi_allocate_window_function(const ObIArray<ObWinFunRawEx
                                     orig_top->get_output_equal_sets(),
                                     orig_top->get_output_const_exprs(),
                                     orig_top->get_card(),
-                                    orig_top->get_is_at_most_one_row());
+                                    orig_top->get_is_at_most_one_row(),
+                                    orig_top->get_ambient_card());
     for (int64_t i = 0; OB_SUCC(ret) && i < candi_plans.count(); ++i) {
       OPT_TRACE("generate window function for plan:", candi_plans.at(i));
       if (OB_FAIL(generate_window_functions_plan(win_func_helper,
@@ -5769,6 +5770,7 @@ int ObSelectLogPlan::calc_ndvs_and_pby_oby_prefix(const ObIArray<ObWinFunRawExpr
   ObSEArray<ObRawExpr *, 8> sort_key_exprs;
   sort_key_ndvs.reuse();
   pby_oby_prefixes.reuse();
+  get_selectivity_ctx().init_op_ctx(&win_func_helper.equal_sets_, card, &win_func_helper.ambient_card_);
 
   // Get NDV for each sort_keys prefix first.
   for (int64_t i = 0; i < sort_keys.count() && OB_SUCC(ret); i++) {
@@ -7491,6 +7493,7 @@ int ObSelectLogPlan::init_selectivity_metas_for_set(ObSelectLogPlan *sub_plan,
   } else if (OB_ISNULL(best_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(sub_plan->get_selectivity_ctx().init_op_ctx(best_plan))) {
   } else if (OB_FAIL(get_basic_table_metas().add_set_child_stmt_meta_info(
               get_stmt(), sub_stmt, child_offset,
               sub_plan->get_update_table_metas(),

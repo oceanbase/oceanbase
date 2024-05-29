@@ -39,6 +39,7 @@ public:
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   // re est children cost and gather cost infos
   int get_re_est_cost_infos(const EstimateCostInfo &param, ObIArray<ObBasicCostInfo> &cost_infos);
+  virtual int est_ambient_card() override;
 
   inline int add_subquery_exprs(const ObIArray<ObQueryRefRawExpr *> &query_exprs)
   {

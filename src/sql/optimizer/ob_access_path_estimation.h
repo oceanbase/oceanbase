@@ -94,7 +94,6 @@ private:
 
   static int do_estimate_rowcount(ObOptimizerContext &ctx,
                                   common::ObIArray<AccessPath*> &paths,
-                                  const bool is_inner_path,
                                   const ObIArray<ObRawExpr*> &filter_exprs,
                                   ObBaseTableEstMethod &valid_methods,
                                   ObBaseTableEstMethod &method);
@@ -133,7 +132,6 @@ private:
 
   static int process_dynamic_sampling_estimation(ObOptimizerContext &ctx,
                                                  ObIArray<AccessPath *> &paths,
-                                                 const bool is_inner_path,
                                                  const ObIArray<ObRawExpr*> &filter_exprs,
                                                  bool only_ds_basic_stat,
                                                  bool &is_success);
@@ -240,17 +238,18 @@ private:
                                  const ObIArray<ObRawExpr*> &filter_exprs,
                                  const bool specify_ds,
                                  ObIArray<ObDSResultItem> &ds_result_items,
-                                 bool only_ds_basic_stat);
+                                 bool only_ds_basic_stat,
+                                 bool only_ds_filter);
 
   static int update_table_stat_info_by_dynamic_sampling(AccessPath *path,
                                                         int64_t ds_level,
                                                         ObIArray<ObDSResultItem> &ds_result_items,
+                                                        bool only_ds_filter,
                                                         bool &no_ds_data);
   static int update_table_stat_info_by_default(AccessPath *path);
 
   static int estimate_path_rowcount_by_dynamic_sampling(const uint64_t table_id,
                                                         ObIArray<AccessPath *> &paths,
-                                                        const bool is_inner_path,
                                                         ObIArray<ObDSResultItem> &ds_result_items);
   static int classify_paths(common::ObIArray<AccessPath *> &paths,
                              common::ObIArray<AccessPath *> &normal_paths,

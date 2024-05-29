@@ -1308,6 +1308,9 @@ public:
   int re_est_cost(EstimateCostInfo &param, double &card, double &cost);
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost);
 
+  virtual int est_ambient_card();
+  int inner_est_ambient_card_by_child(int64_t child_idx);
+
   /**
    * @brief compute_property
    * convert property fields from a path into a logical operator
@@ -1681,6 +1684,8 @@ public:
   int pick_out_startup_filters();
   int check_contain_false_startup_filter(bool &contain_false);
 
+  inline ObIArray<double> &get_ambient_card() { return ambient_card_; }
+
 public:
   ObSEArray<ObLogicalOperator *, 16, common::ModulePageAllocator, true> child_;
   ObSEArray<ObPCParamEqualInfo, 4, common::ModulePageAllocator, true> equal_param_constraints_;
@@ -1749,6 +1754,7 @@ protected:
   const EqualSets *output_equal_sets_;
   const ObFdItemSet *fd_item_set_;
   const ObRelIds *table_set_;
+  common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
 
   uint64_t id_;                        // operator 0-based depth-first id
   uint64_t branch_id_;

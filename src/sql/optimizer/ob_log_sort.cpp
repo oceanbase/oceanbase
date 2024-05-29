@@ -418,7 +418,7 @@ int ObLogSort::inner_est_cost(const int64_t parallel, double child_card, double 
     if (NULL != topn_expr_) {
       double_topn_count = static_cast<double>(topn_count);
     }
-    get_plan()->get_selectivity_ctx().init_op_ctx(&child->get_output_equal_sets(), child_card);
+    get_plan()->get_selectivity_ctx().init_op_ctx(child);
     ObOptimizerContext &opt_ctx = get_plan()->get_optimizer_context();
     double child_card_per_dop = child_card / parallel;
     if (double_topn_count > child_card_per_dop) {

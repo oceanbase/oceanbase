@@ -95,6 +95,7 @@ struct ObOptParamHint
     DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)         \
     DEF(INLIST_REWRITE_THRESHOLD,)        \
     DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
+    DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -110,6 +111,7 @@ struct ObOptParamHint
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }
   void reset();
