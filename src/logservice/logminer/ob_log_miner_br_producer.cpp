@@ -33,9 +33,21 @@ public:
   {
     int64_t pos = 0;
     FOREACH(it, cdc_config_) {
-      databuff_print_kv(buf, buf_len, pos, it->first.c_str(), it->second.c_str());
+      if (need_print_config(it->first)) {
+        databuff_print_kv(buf, buf_len, pos, it->first.c_str(), it->second.c_str());
+      }
     }
     return pos;
+  }
+
+  bool need_print_config(const std::string &config_key) const {
+    bool need_print = true;
+    if ((0 == config_key.compare("tenant_password"))
+        || (0 == config_key.compare("archive_dest"))) {
+      need_print = false;
+    }
+
+    return need_print;
   }
 
 private:

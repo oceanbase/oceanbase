@@ -769,6 +769,36 @@ TEST(ObLogMinerArgs, test_log_miner_analyzer_flashbacker_args) {
       "-p", "password",
       "-O", "insert|delete",
       "-m", "analysis",
+      "-l", "*..",
+      "-s", "2023-12-31 16:35:20",
+      "-o", "output_dest",
+      nullptr);
+  EXPECT_EQ(OB_SUCCESS, miner_args.init(args->argc, args->argv));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, analyzer_args.init(miner_args));
+  miner_args.reset();
+  analyzer_args.reset();
+
+  args->build_cmd_args("oblogminer",
+      "-c", "cluster_url",
+      "-u", "username@tenant",
+      "-p", "password",
+      "-O", "insert|delete",
+      "-m", "analysis",
+      "-l", "*",
+      "-s", "2023-12-31 16:35:20",
+      "-o", "output_dest",
+      nullptr);
+  EXPECT_EQ(OB_SUCCESS, miner_args.init(args->argc, args->argv));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, analyzer_args.init(miner_args));
+  miner_args.reset();
+  analyzer_args.reset();
+
+  args->build_cmd_args("oblogminer",
+      "-c", "cluster_url",
+      "-u", "username@tenant",
+      "-p", "password",
+      "-O", "insert|delete",
+      "-m", "analysis",
       "-l", "*.db1.*|tenant.db2.*",
       "-s", "2023-12-31 16:35:20",
       "-o", "output_dest",

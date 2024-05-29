@@ -395,6 +395,8 @@ int ObLogMinerOpCond::init(const char *op_cond)
       } else {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("get unexpected operation", K(op_cond_), K(op_cond), K(op));
+        LOGMINER_STDOUT("parse operations failed\n");
+        break;
       }
       op = STRTOK_R(nullptr , OP_DELIMITER, &saveptr);
     }

@@ -16,15 +16,22 @@
 #include "ob_log_miner_args.h"
 #include "ob_log_miner_logger.h"
 #include "lib/oblog/ob_log.h"
+#include "share/rc/ob_tenant_base.h"
 
 using namespace oceanbase::oblogminer;
 using namespace oceanbase::common;
+using namespace oceanbase::share;
 
 int main(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
   ObLogMinerArgs args;
   ObLogMiner logminer_instance;
+  // set OB_SERVER_TENANT_ID as oblogminer's MTL_ID.
+  // if not set, `ob_malloc` maybe generate error logs
+  // due to `OB_INVALID_TENANT_ID`.
+  ObTenantBase tenant_ctx(OB_SERVER_TENANT_ID);
+  ObTenantEnv::set_tenant(&tenant_ctx);
 
   OB_LOGGER.set_file_name(ObLogMinerArgs::LOGMINER_LOG_FILE, true, false);
   OB_LOGGER.set_log_level("WDIAG");

@@ -481,6 +481,7 @@ int AnalyzerArgs::validate() const
       bool validate = true;
       if (OB_FAIL(validate_table_list_(tenant, validate))) {
         LOG_ERROR("validate table list failed", K(ret), KCSTRING(tenant), KCSTRING(table_list_));
+        LOGMINER_STDOUT("parse table_list failed\n");
       } else {
         if (!validate) {
           ret = OB_INVALID_ARGUMENT;
@@ -509,6 +510,8 @@ int AnalyzerArgs::validate_table_list_(const char *tenant_name, bool &validate) 
   ObString remain;
   ObString cur_pattern;
   ObString tenant_pattern;
+  ObString database_pattern;
+  ObString table_pattern;
   if (OB_ISNULL(buffer = reinterpret_cast<char*>(ob_malloc(buffer_size, "LogMnrTableList")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("err alloc string buffer", K(ret), K(buffer_size));
@@ -529,6 +532,7 @@ int AnalyzerArgs::validate_table_list_(const char *tenant_name, bool &validate) 
       if (tenant_pattern.empty()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_ERROR("invalid argment", K(ret), K(cur_pattern));
+        break;
       }
       if (OB_SUCC(ret)) {
         if (0 != tenant_pattern.compare(tenant_name) && 0 != tenant_pattern.compare("*")) {
@@ -537,6 +541,23 @@ int AnalyzerArgs::validate_table_list_(const char *tenant_name, bool &validate) 
               KCSTRING(tenant_name), K(tenant_pattern));
           break;
         }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      database_pattern = cur_pattern.split_on(name_delimiter);
+      if (database_pattern.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid argument", KR(ret), K(cur_pattern));
+        break;
+      }
+    }
+    // Table name.
+    if (OB_SUCC(ret)) {
+      table_pattern = cur_pattern;
+      if (table_pattern.empty()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid argment", KR(ret), K(cur_pattern));
+        break;
       }
     }
   } // while
