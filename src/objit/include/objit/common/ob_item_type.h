@@ -2514,6 +2514,9 @@ typedef enum ObItemType
   T_VEC_INDEX_COLUMN,
   T_VEC_INDEX_COLUMN_EXPR,
   T_BACKUP_CLUSTER_PARAMETERS,
+  // create mv build deferred
+  T_MV_REFRESH_OPT,
+  T_MV_BUILD_OPT,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
