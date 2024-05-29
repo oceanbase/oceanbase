@@ -1,0 +1,496 @@
+result_format: 4
+
+drop table if exists t1;
+create table t1(c1 blob);
+insert into t1 values('OceanBase');
+
+ALTER SYSTEM SET regexp_engine = 'Hyperscan';
+SELECT REGEXP;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REGEXP' at line 1
+SELECT 'OceanBase' REGEXP;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REGEXP' at line 1
+SELECT REGEXP 'OceanBase';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''OceanBase'' at line 1
+SELECT 'OceanBase' REGEXP 'a';
++------------------------+
+| 'OceanBase' REGEXP 'a' |
++------------------------+
+|                      1 |
++------------------------+
+SELECT 'OceanBase' REGEXP '[a-n]+';
++-----------------------------+
+| 'OceanBase' REGEXP '[a-n]+' |
++-----------------------------+
+|                           1 |
++-----------------------------+
+SELECT 'OceanBase' REGEXP 'o';
++------------------------+
+| 'OceanBase' REGEXP 'o' |
++------------------------+
+|                      1 |
++------------------------+
+SELECT 'OceanBase' RLIKE 'a';
++-----------------------+
+| 'OceanBase' RLIKE 'a' |
++-----------------------+
+|                     1 |
++-----------------------+
+SELECT 'OceanBase' RLIKE '[a-n]+';
++----------------------------+
+| 'OceanBase' RLIKE '[a-n]+' |
++----------------------------+
+|                          1 |
++----------------------------+
+SELECT 'OceanBase' RLIKE 'o';
++-----------------------+
+| 'OceanBase' RLIKE 'o' |
++-----------------------+
+|                     1 |
++-----------------------+
+SELECT 'Ocean\nBase' REGEXP '.';
++--------------------------+
+| 'Ocean\nBase' REGEXP '.' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '.';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '.' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT '\n\r' REGEXP '.';
++-------------------+
+| '\n\r' REGEXP '.' |
++-------------------+
+|                 1 |
++-------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^u';
++-----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^u' |
++-----------------------------------------+
+|                                       0 |
++-----------------------------------------+
+SELECT 'OceanBase' REGEXP '[a-zA-Z]{2}';
++----------------------------------+
+| 'OceanBase' REGEXP '[a-zA-Z]{2}' |
++----------------------------------+
+|                                1 |
++----------------------------------+
+SELECT 'OceanBase' REGEXP '';
+ERROR 42000: Got error from regexp
+SELECT c1 REGEXP 'a' from t1;
++---------------+
+| c1 REGEXP 'a' |
++---------------+
+|             1 |
++---------------+
+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$u';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP 'a?';
++-------------------------+
+| 'OceanBase' REGEXP 'a?' |
++-------------------------+
+|                       1 |
++-------------------------+
+SELECT 'OceanBase' REGEXP 'a{0}';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP 'a++';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '^?a';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '(?=b)';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP 'c(?>.{1,})n';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '(ase|xyz){1,2}+';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '^..\x02.{10,522}([^\00])\1{16}';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP 'foo\\g''bar';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP 'a\\g';
+ERROR HY000: Internal error
+SELECT 'OceanBase' REGEXP '^(O)\\g';
+ERROR HY000: Internal error
+SELECT 'abcabc' REGEXP 'a.+?c';
++-------------------------+
+| 'abcabc' REGEXP 'a.+?c' |
++-------------------------+
+|                       1 |
++-------------------------+
+SELECT 'aabbbbb' REGEXP '^[ab]{1,3}(ab*|b)';
++--------------------------------------+
+| 'aabbbbb' REGEXP '^[ab]{1,3}(ab*|b)' |
++--------------------------------------+
+|                                    1 |
++--------------------------------------+
+SELECT 'abcdef' REGEXP '[^a]{2,3}';
++-----------------------------+
+| 'abcdef' REGEXP '[^a]{2,3}' |
++-----------------------------+
+|                           1 |
++-----------------------------+
+SELECT 'XBBB' REGEXP 'a{,3}B';
++------------------------+
+| 'XBBB' REGEXP 'a{,3}B' |
++------------------------+
+|                      0 |
++------------------------+
+SELECT 'ab' REGEXP 'a(?)b';
++---------------------+
+| 'ab' REGEXP 'a(?)b' |
++---------------------+
+|                   1 |
++---------------------+
+SELECT 'abd' REGEXP '(|ab)*?d';
++-------------------------+
+| 'abd' REGEXP '(|ab)*?d' |
++-------------------------+
+|                       1 |
++-------------------------+
+SELECT '< >' REGEXP '<(?x:[a b])>';
++-----------------------------+
+| '< >' REGEXP '<(?x:[a b])>' |
++-----------------------------+
+|                           1 |
++-----------------------------+
+SELECT 'bon-bon' REGEXP '(?<A>bon)-\g{A}';
++------------------------------------+
+| 'bon-bon' REGEXP '(?<A>bon)-\g{A}' |
++------------------------------------+
+|                                  0 |
++------------------------------------+
+SELECT 'p' REGEXP '[abc[:x\]pq]';
++---------------------------+
+| 'p' REGEXP '[abc[:x\]pq]' |
++---------------------------+
+|                         0 |
++---------------------------+
+SELECT 'abc' REGEXP 'a\0yz';
++----------------------+
+| 'abc' REGEXP 'a\0yz' |
++----------------------+
+|                    1 |
++----------------------+
+SELECT 'a:axyz' REGEXP '(?\'abc\'\w+):\g{abc}{2}';
++--------------------------------------------+
+| 'a:axyz' REGEXP '(?\'abc\'\w+):\g{abc}{2}' |
++--------------------------------------------+
+|                                          0 |
++--------------------------------------------+
+SELECT 'Ocean\nBase' REGEXP '^';
++--------------------------+
+| 'Ocean\nBase' REGEXP '^' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '^';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '^' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^';
++----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^' |
++----------------------------------------+
+|                                      1 |
++----------------------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '$';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '$' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$';
++----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$' |
++----------------------------------------+
+|                                      1 |
++----------------------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '.';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '.' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT '\r' REGEXP '.';
++-----------------+
+| '\r' REGEXP '.' |
++-----------------+
+|               1 |
++-----------------+
+SELECT 'A\nB\rC\r\nD\n\rE\036F\025G' REGEXP '^e';
++-------------------------------------------+
+| 'A\nB\rC\r\nD\n\rE\036F\025G' REGEXP '^e' |
++-------------------------------------------+
+|                                         0 |
++-------------------------------------------+
+
+ALTER SYSTEM SET regexp_engine = 'ICU';
+SELECT REGEXP;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REGEXP' at line 1
+SELECT 'OceanBase' REGEXP;
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'REGEXP' at line 1
+SELECT REGEXP 'OceanBase';
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near ''OceanBase'' at line 1
+SELECT 'OceanBase' REGEXP 'a';
++------------------------+
+| 'OceanBase' REGEXP 'a' |
++------------------------+
+|                      1 |
++------------------------+
+SELECT 'OceanBase' REGEXP '[a-n]+';
++-----------------------------+
+| 'OceanBase' REGEXP '[a-n]+' |
++-----------------------------+
+|                           1 |
++-----------------------------+
+SELECT 'OceanBase' REGEXP 'o';
++------------------------+
+| 'OceanBase' REGEXP 'o' |
++------------------------+
+|                      1 |
++------------------------+
+SELECT 'OceanBase' RLIKE 'a';
++-----------------------+
+| 'OceanBase' RLIKE 'a' |
++-----------------------+
+|                     1 |
++-----------------------+
+SELECT 'OceanBase' RLIKE '[a-n]+';
++----------------------------+
+| 'OceanBase' RLIKE '[a-n]+' |
++----------------------------+
+|                          1 |
++----------------------------+
+SELECT 'OceanBase' RLIKE 'o';
++-----------------------+
+| 'OceanBase' RLIKE 'o' |
++-----------------------+
+|                     1 |
++-----------------------+
+SELECT 'Ocean\nBase' REGEXP '.';
++--------------------------+
+| 'Ocean\nBase' REGEXP '.' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '.';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '.' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT '\n\r' REGEXP '.';
++-------------------+
+| '\n\r' REGEXP '.' |
++-------------------+
+|                 0 |
++-------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^u';
++-----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^u' |
++-----------------------------------------+
+|                                       0 |
++-----------------------------------------+
+SELECT 'OceanBase' REGEXP '[a-zA-Z]{2}';
++----------------------------------+
+| 'OceanBase' REGEXP '[a-zA-Z]{2}' |
++----------------------------------+
+|                                1 |
++----------------------------------+
+SELECT 'OceanBase' REGEXP '';
+ERROR 42000: Got error from regexp
+SELECT c1 REGEXP 'a' from t1;
++---------------+
+| c1 REGEXP 'a' |
++---------------+
+|             1 |
++---------------+
+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$u';
++-----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$u' |
++-----------------------------------------+
+|                                       0 |
++-----------------------------------------+
+SELECT 'OceanBase' REGEXP '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}';
++---------------------------------------------------------------------------------------------------------------------------+
+| 'OceanBase' REGEXP '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}' |
++---------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                         0 |
++---------------------------------------------------------------------------------------------------------------------------+
+SELECT 'OceanBase' REGEXP 'a?';
++-------------------------+
+| 'OceanBase' REGEXP 'a?' |
++-------------------------+
+|                       1 |
++-------------------------+
+SELECT 'OceanBase' REGEXP 'a{0}';
++---------------------------+
+| 'OceanBase' REGEXP 'a{0}' |
++---------------------------+
+|                         1 |
++---------------------------+
+SELECT 'OceanBase' REGEXP 'a++';
++--------------------------+
+| 'OceanBase' REGEXP 'a++' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'OceanBase' REGEXP '^?a';
++--------------------------+
+| 'OceanBase' REGEXP '^?a' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'OceanBase' REGEXP '(?=b)';
++----------------------------+
+| 'OceanBase' REGEXP '(?=b)' |
++----------------------------+
+|                          1 |
++----------------------------+
+SELECT 'OceanBase' REGEXP 'c(?>.{1,})n';
++----------------------------------+
+| 'OceanBase' REGEXP 'c(?>.{1,})n' |
++----------------------------------+
+|                                0 |
++----------------------------------+
+SELECT 'OceanBase' REGEXP '(ase|xyz){1,2}+';
++--------------------------------------+
+| 'OceanBase' REGEXP '(ase|xyz){1,2}+' |
++--------------------------------------+
+|                                    1 |
++--------------------------------------+
+SELECT 'OceanBase' REGEXP '^..\x02.{10,522}([^\00])\1{16}';
++-----------------------------------------------------+
+| 'OceanBase' REGEXP '^..\x02.{10,522}([^\00])\1{16}' |
++-----------------------------------------------------+
+|                                                   0 |
++-----------------------------------------------------+
+SELECT 'OceanBase' REGEXP 'foo\\g''bar';
++----------------------------------+
+| 'OceanBase' REGEXP 'foo\\g''bar' |
++----------------------------------+
+|                                0 |
++----------------------------------+
+SELECT 'OceanBase' REGEXP '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}';
++--------------------------------------------------------------------------------------------------------------------------+
+| 'OceanBase' REGEXP '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}' |
++--------------------------------------------------------------------------------------------------------------------------+
+|                                                                                                                        1 |
++--------------------------------------------------------------------------------------------------------------------------+
+SELECT 'OceanBase' REGEXP 'a\\g';
++---------------------------+
+| 'OceanBase' REGEXP 'a\\g' |
++---------------------------+
+|                         0 |
++---------------------------+
+SELECT 'OceanBase' REGEXP '^(O)\\g';
++------------------------------+
+| 'OceanBase' REGEXP '^(O)\\g' |
++------------------------------+
+|                            0 |
++------------------------------+
+SELECT 'abcabc' REGEXP 'a.+?c';
++-------------------------+
+| 'abcabc' REGEXP 'a.+?c' |
++-------------------------+
+|                       1 |
++-------------------------+
+SELECT 'aabbbbb' REGEXP '^[ab]{1,3}(ab*|b)';
++--------------------------------------+
+| 'aabbbbb' REGEXP '^[ab]{1,3}(ab*|b)' |
++--------------------------------------+
+|                                    1 |
++--------------------------------------+
+SELECT 'abcdef' REGEXP '[^a]{2,3}';
++-----------------------------+
+| 'abcdef' REGEXP '[^a]{2,3}' |
++-----------------------------+
+|                           1 |
++-----------------------------+
+SELECT 'XBBB' REGEXP 'a{,3}B';
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT 'ab' REGEXP 'a(?)b';
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
+SELECT 'abd' REGEXP '(|ab)*?d';
+ERROR 42000: Got error 'U_REGEX_TIME_OUT' from regexp
+SELECT '< >' REGEXP '<(?x:[a b])>';
++-----------------------------+
+| '< >' REGEXP '<(?x:[a b])>' |
++-----------------------------+
+|                           0 |
++-----------------------------+
+SELECT 'bon-bon' REGEXP '(?<A>bon)-\g{A}';
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT 'p' REGEXP '[abc[:x\]pq]';
++---------------------------+
+| 'p' REGEXP '[abc[:x\]pq]' |
++---------------------------+
+|                         1 |
++---------------------------+
+SELECT 'abc' REGEXP 'a\0yz';
++----------------------+
+| 'abc' REGEXP 'a\0yz' |
++----------------------+
+|                    0 |
++----------------------+
+SELECT 'a:axyz' REGEXP '(?\'abc\'\w+):\g{abc}{2}';
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
+SELECT 'Ocean\nBase' REGEXP '^';
++--------------------------+
+| 'Ocean\nBase' REGEXP '^' |
++--------------------------+
+|                        1 |
++--------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '^';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '^' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^';
++----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '^' |
++----------------------------------------+
+|                                      1 |
++----------------------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '$';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '$' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$';
++----------------------------------------+
+| 'Ocean\nBase\rAnt\r\nGroup' REGEXP '$' |
++----------------------------------------+
+|                                      1 |
++----------------------------------------+
+SELECT 'Ocean\nBase\rAntGroup' REGEXP '.';
++------------------------------------+
+| 'Ocean\nBase\rAntGroup' REGEXP '.' |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT '\r' REGEXP '.';
++-----------------+
+| '\r' REGEXP '.' |
++-----------------+
+|               0 |
++-----------------+
+SELECT 'A\nB\rC\r\nD\n\rE\036F\025G' REGEXP '^e';
++-------------------------------------------+
+| 'A\nB\rC\r\nD\n\rE\036F\025G' REGEXP '^e' |
++-------------------------------------------+
+|                                         0 |
++-------------------------------------------+
+

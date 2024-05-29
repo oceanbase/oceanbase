@@ -1,0 +1,1204 @@
+result_format: 4
+
+drop table if exists t1;
+CREATE TABLE t1(c1 VARCHAR(100)) with column group (each column);
+insert into t1 values('OceanBase');
+drop table if exists t2;
+CREATE TABLE t2(c1 VARCHAR(100)) with column group (each column);
+insert into t2 values('Ocean\nBase');
+drop table if exists t3;
+CREATE TABLE t3(c1 VARCHAR(100)) with column group (each column);
+insert into t3 values('Ocean\nBase\rAntGroup');
+drop table if exists t4;
+CREATE TABLE t4(c1 VARCHAR(100)) with column group (each column);
+insert into t4 values('Ocean\nBase\rAnt\r\nGroup');
+drop table if exists t5;
+CREATE TABLE t5(c1 VARCHAR(100)) with column group (each column);
+insert into t5 values('\n\r');
+drop table if exists t6;
+CREATE TABLE t6(c1 VARCHAR(100)) with column group (each column);
+insert into t6 values('A\nB\rC\r\nD\n\rE\036F\025G');
+drop table if exists t7;
+create table t7(c1 blob);
+insert into t7 values('OceanBase');
+
+ALTER SYSTEM SET regexp_engine = 'Hyperscan';
+SELECT REGEXP_REPLACE();
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE() from t1;
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE('OceanBase');
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE(c1) from t1;
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE('OceanBase', 'a');
++----------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a') |
++----------------------------------+
+| OcenBse                          |
++----------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a') from t1;
++-------------------------+
+| REGEXP_REPLACE(c1, 'a') |
++-------------------------+
+| OcenBse                 |
++-------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2');
++---------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2') |
++---------------------------------------+
+| Oce2nB2se                             |
++---------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2') from t1;
++------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2') |
++------------------------------+
+| Oce2nB2se                    |
++------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 7);
++------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 7) |
++------------------------------------------+
+| OceanB2se                                |
++------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 7) from t1;
++---------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 7) |
++---------------------------------+
+| OceanB2se                       |
++---------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 1, 2);
++---------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 1, 2) |
++---------------------------------------------+
+| OceanB2se                                   |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 1, 2) from t1;
++------------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 1, 2) |
++------------------------------------+
+| OceanB2se                          |
++------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '[a-n]+', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '[a-n]+', '2') |
++--------------------------------------------+
+| O2s2                                       |
++--------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '[a-n]+', '2') from t1;
++-----------------------------------+
+| REGEXP_REPLACE(c1, '[a-n]+', '2') |
++-----------------------------------+
+| O2s2                              |
++-----------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'o', '2');
++---------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'o', '2') |
++---------------------------------------+
+| 2ceanBase                             |
++---------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'o', '2') from t1;
++------------------------------+
+| REGEXP_REPLACE(c1, 'o', '2') |
++------------------------------+
+| 2ceanBase                    |
++------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'c');
++--------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'c') |
++--------------------------------------------------+
+| OceanBase                                        |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'c') from t1;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'c') |
++-----------------------------------------+
+| OceanBase                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'i');
++--------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'i') |
++--------------------------------------------------+
+| Ocean2ase                                        |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'i') from t1;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'i') |
++-----------------------------------------+
+| Ocean2ase                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0);
++------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0) |
++------------------------------------------------+
+| Ocean
+Base                                     |
++------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^B', '2', 1, 0) from t2;
++-------------------------------------+
+| REGEXP_REPLACE(c1, '^B', '2', 1, 0) |
++-------------------------------------+
+| Ocean
+Base                          |
++-------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0, 'm');
++-----------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0, 'm') |
++-----------------------------------------------------+
+| Ocean
+2ase                                          |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^B', '2', 1, 0, 'm') from t2;
++------------------------------------------+
+| REGEXP_REPLACE(c1, '^B', '2', 1, 0, 'm') |
++------------------------------------------+
+| Ocean
+2ase                               |
++------------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0);
++-----------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0) |
++-----------------------------------------------+
+| 22222
+2222                                    |
++-----------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0) from t2;
++------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0) |
++------------------------------------+
+| 22222
+2222                         |
++------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0, 'n');
++----------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0, 'n') |
++----------------------------------------------------+
+| 2222222222                                         |
++----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') from t2;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') |
++-----------------------------------------+
+| 2222222222                              |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'n'));
++-----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'n')) |
++-----------------------------------------------------------------------+
+|                                                                    38 |
++-----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'n')) from t3;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'n')) |
++--------------------------------------------------+
+|                                               38 |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'n');
++---------------------------------------------+
+| REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'n') |
++---------------------------------------------+
+| 22                                          |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') from t5;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') |
++-----------------------------------------+
+| 22                                      |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^u', '2', 1, 0, 'm'));
++---------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^u', '2', 1, 0, 'm')) |
++---------------------------------------------------------------------------+
+|                                                                        21 |
++---------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^u', '2', 1, 0, 'm')) from t4;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^u', '2', 1, 0, 'm')) |
++--------------------------------------------------+
+|                                               21 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ci'));
++-------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ci')) |
++-------------------------------------------------------------------------------+
+|                                                                            21 |
++-------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ci')) from t6;
++----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ci')) |
++----------------------------------------------------+
+|                                                 21 |
++----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ic'));
++-------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ic')) |
++-------------------------------------------------------------------------------+
+|                                                                            19 |
++-------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ic')) from t6;
++----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ic')) |
++----------------------------------------------------+
+|                                                 19 |
++----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'cn'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'cn')) |
++--------------------------------------------------------------------------------+
+|                                                                             19 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'cn')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'cn')) |
++-----------------------------------------------------+
+|                                                  19 |
++-----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'in'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'in')) |
++--------------------------------------------------------------------------------+
+|                                                                             20 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'in')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'in')) |
++-----------------------------------------------------+
+|                                                  20 |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '[a-zA-Z]{2}', '2');
++-------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '[a-zA-Z]{2}', '2') |
++-------------------------------------------------+
+| 2222e                                           |
++-------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '[a-zA-Z]{2}', '2') from t1;
++----------------------------------------+
+| REGEXP_REPLACE(c1, '[a-zA-Z]{2}', '2') |
++----------------------------------------+
+| 2222e                                  |
++----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '', '2');
+ERROR 42000: Got error from regexp
+SELECT REGEXP_REPLACE(c1, '', '2') from t1;
+ERROR 42000: Got error from regexp
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 1, 3);
++---------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 1, 3) |
++---------------------------------------------+
+| OceanBase                                   |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 1, 3) from t1;
++------------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 1, 3) |
++------------------------------------+
+| OceanBase                          |
++------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2') from t7;
++------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2') |
++------------------------------+
+| Oce2nB2se                    |
++------------------------------+
+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'm'));
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'm')) from t4;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'mu'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'mu')) from t4;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_REPLACE('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'a?', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'a?', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'a{0}', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'a{0}', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'a++', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'a++', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '^?a', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '^?a', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '(?=b)', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '(?=b)', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'c(?>.{1,})n', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'c(?>.{1,})n', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '(ase|xyz){1,2}+', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '(ase|xyz){1,2}+', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '^..\x02.{10,522}([^\00])\1{16}', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '^..\x02.{10,522}([^\00])\1{16}', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'foo\\g''bar', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'foo\\g''bar', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', 'a\\g', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, 'a\\g', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('OceanBase', '^(O)\\g', '2');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '^(O)\\g', '2') from t1;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('abcabc', 'a.+?c', '2');
++----------------------------------------+
+| REGEXP_REPLACE('abcabc', 'a.+?c', '2') |
++----------------------------------------+
+| 2                                      |
++----------------------------------------+
+SELECT REGEXP_REPLACE('aabbbbb', '^[ab]{1,3}(ab*|b)', '2');
++-----------------------------------------------------+
+| REGEXP_REPLACE('aabbbbb', '^[ab]{1,3}(ab*|b)', '2') |
++-----------------------------------------------------+
+| 2                                                   |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE('abcdef', '[^a]{2,3}', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('abcdef', '[^a]{2,3}', '2') |
++--------------------------------------------+
+| a2ef                                       |
++--------------------------------------------+
+SELECT REGEXP_REPLACE('XBBB', 'a{,3}B', '2');
++---------------------------------------+
+| REGEXP_REPLACE('XBBB', 'a{,3}B', '2') |
++---------------------------------------+
+| XBBB                                  |
++---------------------------------------+
+SELECT REGEXP_REPLACE('ab', 'a(?)b', '2');
++------------------------------------+
+| REGEXP_REPLACE('ab', 'a(?)b', '2') |
++------------------------------------+
+| 2                                  |
++------------------------------------+
+SELECT REGEXP_REPLACE('abd', '(|ab)*?d', '2');
++----------------------------------------+
+| REGEXP_REPLACE('abd', '(|ab)*?d', '2') |
++----------------------------------------+
+| 2                                      |
++----------------------------------------+
+SELECT REGEXP_REPLACE('< >', '<(?x:[a b])>', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('< >', '<(?x:[a b])>', '2') |
++--------------------------------------------+
+| 2                                          |
++--------------------------------------------+
+SELECT REGEXP_REPLACE('bon-bon', '(?<A>bon)-\g{A}', '2');
++---------------------------------------------------+
+| REGEXP_REPLACE('bon-bon', '(?<A>bon)-\g{A}', '2') |
++---------------------------------------------------+
+| bon-bon                                           |
++---------------------------------------------------+
+SELECT REGEXP_REPLACE('p', '[abc[:x\]pq]', '2');
++------------------------------------------+
+| REGEXP_REPLACE('p', '[abc[:x\]pq]', '2') |
++------------------------------------------+
+| p                                        |
++------------------------------------------+
+SELECT REGEXP_REPLACE('abc', 'a\0yz', '2');
++-------------------------------------+
+| REGEXP_REPLACE('abc', 'a\0yz', '2') |
++-------------------------------------+
+| 2bc                                 |
++-------------------------------------+
+SELECT REGEXP_REPLACE('a:axyz', '(?\'abc\'\w+):\g{abc}{2}', '2');
++-----------------------------------------------------------+
+| REGEXP_REPLACE('a:axyz', '(?\'abc\'\w+):\g{abc}{2}', '2') |
++-----------------------------------------------------------+
+| a:axyz                                                    |
++-----------------------------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0);
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '^', '2', 1, 0) from t2;
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm') from t2;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'm'));
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) from t3;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'mu'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) from t3;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'm'));
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) from t4;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'mu'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) from t4;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'm'));
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) from t3;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'mu'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) from t3;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'm'));
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) from t4;
+ERROR HY000: Internal error
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'mu'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) from t4;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22'));
++------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22')) |
++------------------------------------------------------------+
+|                                                         37 |
++------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22')) from t3;
++---------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22')) |
++---------------------------------------+
+|                                    37 |
++---------------------------------------+
+SELECT length(REGEXP_REPLACE('\n\r', '.', '22'));
++-------------------------------------------+
+| length(REGEXP_REPLACE('\n\r', '.', '22')) |
++-------------------------------------------+
+|                                         3 |
++-------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22')) from t5;
++---------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22')) |
++---------------------------------------+
+|                                     3 |
++---------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'u'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'u')) from t3;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'u');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'u') from t5;
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '^e', '222', 1, 0, 'im'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '^e', '222', 1, 0, 'im')) |
++--------------------------------------------------------------------------------+
+|                                                                             19 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^e', '222', 1, 0, 'im')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^e', '222', 1, 0, 'im')) |
++-----------------------------------------------------+
+|                                                  19 |
++-----------------------------------------------------+
+
+ALTER SYSTEM SET regexp_engine = 'ICU';
+SELECT REGEXP_REPLACE();
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE() from t1;
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE('OceanBase');
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE(c1) from t1;
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_REPLACE'
+SELECT REGEXP_REPLACE('OceanBase', 'a');
++----------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a') |
++----------------------------------+
+| OcenBse                          |
++----------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a') from t1;
++-------------------------+
+| REGEXP_REPLACE(c1, 'a') |
++-------------------------+
+| OcenBse                 |
++-------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2');
++---------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2') |
++---------------------------------------+
+| Oce2nB2se                             |
++---------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2') from t1;
++------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2') |
++------------------------------+
+| Oce2nB2se                    |
++------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 7);
++------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 7) |
++------------------------------------------+
+| OceanB2se                                |
++------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 7) from t1;
++---------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 7) |
++---------------------------------+
+| OceanB2se                       |
++---------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 1, 2);
++---------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 1, 2) |
++---------------------------------------------+
+| OceanB2se                                   |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 1, 2) from t1;
++------------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 1, 2) |
++------------------------------------+
+| OceanB2se                          |
++------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '[a-n]+', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '[a-n]+', '2') |
++--------------------------------------------+
+| O2s2                                       |
++--------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '[a-n]+', '2') from t1;
++-----------------------------------+
+| REGEXP_REPLACE(c1, '[a-n]+', '2') |
++-----------------------------------+
+| O2s2                              |
++-----------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'o', '2');
++---------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'o', '2') |
++---------------------------------------+
+| 2ceanBase                             |
++---------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'o', '2') from t1;
++------------------------------+
+| REGEXP_REPLACE(c1, 'o', '2') |
++------------------------------+
+| 2ceanBase                    |
++------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'c');
++--------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'c') |
++--------------------------------------------------+
+| OceanBase                                        |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'c') from t1;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'c') |
++-----------------------------------------+
+| OceanBase                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'i');
++--------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'b', '2', 1, 0, 'i') |
++--------------------------------------------------+
+| Ocean2ase                                        |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'i') from t1;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, 'b', '2', 1, 0, 'i') |
++-----------------------------------------+
+| Ocean2ase                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0);
++------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0) |
++------------------------------------------------+
+| Ocean
+Base                                     |
++------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^B', '2', 1, 0) from t2;
++-------------------------------------+
+| REGEXP_REPLACE(c1, '^B', '2', 1, 0) |
++-------------------------------------+
+| Ocean
+Base                          |
++-------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0, 'm');
++-----------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^B', '2', 1, 0, 'm') |
++-----------------------------------------------------+
+| Ocean
+2ase                                          |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^B', '2', 1, 0, 'm') from t2;
++------------------------------------------+
+| REGEXP_REPLACE(c1, '^B', '2', 1, 0, 'm') |
++------------------------------------------+
+| Ocean
+2ase                               |
++------------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0);
++-----------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0) |
++-----------------------------------------------+
+| 22222
+2222                                    |
++-----------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0) from t2;
++------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0) |
++------------------------------------+
+| 22222
+2222                         |
++------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0, 'n');
++----------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '.', '2', 1, 0, 'n') |
++----------------------------------------------------+
+| 2222222222                                         |
++----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') from t2;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') |
++-----------------------------------------+
+| 2222222222                              |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'n'));
++-----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'n')) |
++-----------------------------------------------------------------------+
+|                                                                    38 |
++-----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'n')) from t3;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'n')) |
++--------------------------------------------------+
+|                                               38 |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'n');
++---------------------------------------------+
+| REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'n') |
++---------------------------------------------+
+| 22                                          |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') from t5;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0, 'n') |
++-----------------------------------------+
+| 22                                      |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^u', '2', 1, 0, 'm'));
++---------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^u', '2', 1, 0, 'm')) |
++---------------------------------------------------------------------------+
+|                                                                        21 |
++---------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^u', '2', 1, 0, 'm')) from t4;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^u', '2', 1, 0, 'm')) |
++--------------------------------------------------+
+|                                               21 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ci'));
++-------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ci')) |
++-------------------------------------------------------------------------------+
+|                                                                            21 |
++-------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ci')) from t6;
++----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ci')) |
++----------------------------------------------------+
+|                                                 21 |
++----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ic'));
++-------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', 'e', '222', 1, 0, 'ic')) |
++-------------------------------------------------------------------------------+
+|                                                                            19 |
++-------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ic')) from t6;
++----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, 'e', '222', 1, 0, 'ic')) |
++----------------------------------------------------+
+|                                                 19 |
++----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'cn'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'cn')) |
++--------------------------------------------------------------------------------+
+|                                                                             19 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'cn')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'cn')) |
++-----------------------------------------------------+
+|                                                  19 |
++-----------------------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'in'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '.e', '222', 1, 0, 'in')) |
++--------------------------------------------------------------------------------+
+|                                                                             20 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'in')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.e', '222', 1, 0, 'in')) |
++-----------------------------------------------------+
+|                                                  20 |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '[a-zA-Z]{2}', '2');
++-------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '[a-zA-Z]{2}', '2') |
++-------------------------------------------------+
+| 2222e                                           |
++-------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '[a-zA-Z]{2}', '2') from t1;
++----------------------------------------+
+| REGEXP_REPLACE(c1, '[a-zA-Z]{2}', '2') |
++----------------------------------------+
+| 2222e                                  |
++----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '', '2');
+ERROR 42000: Got error from regexp
+SELECT REGEXP_REPLACE(c1, '', '2') from t1;
+ERROR 42000: Got error from regexp
+SELECT REGEXP_REPLACE('OceanBase', 'a', '2', 1, 3);
++---------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a', '2', 1, 3) |
++---------------------------------------------+
+| OceanBase                                   |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2', 1, 3) from t1;
++------------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2', 1, 3) |
++------------------------------------+
+| OceanBase                          |
++------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a', '2') from t7;
++------------------------------+
+| REGEXP_REPLACE(c1, 'a', '2') |
++------------------------------+
+| Oce2nB2se                    |
++------------------------------+
+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'm'));
++---------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'm')) |
++---------------------------------------------------------------------------+
+|                                                                        21 |
++---------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'm')) from t4;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'm')) |
++--------------------------------------------------+
+|                                               21 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'mu'));
++----------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$u', '2', 1, 0, 'mu')) |
++----------------------------------------------------------------------------+
+|                                                                         21 |
++----------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'mu')) from t4;
++---------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$u', '2', 1, 0, 'mu')) |
++---------------------------------------------------+
+|                                                21 |
++---------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2');
++------------------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2') |
++------------------------------------------------------------------------------------------------------------------------------------------+
+| OceanBase                                                                                                                                |
++------------------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2') from t1;
++---------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_REPLACE(c1, '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}', '2') |
++---------------------------------------------------------------------------------------------------------------------------------+
+| OceanBase                                                                                                                       |
++---------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a?', '2');
++----------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a?', '2') |
++----------------------------------------+
+| 2O2c2e22n2B22s2e2                      |
++----------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a?', '2') from t1;
++-------------------------------+
+| REGEXP_REPLACE(c1, 'a?', '2') |
++-------------------------------+
+| 2O2c2e22n2B22s2e2             |
++-------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a{0}', '2');
++------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a{0}', '2') |
++------------------------------------------+
+| 2O2c2e2a2n2B2a2s2e2                      |
++------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a{0}', '2') from t1;
++---------------------------------+
+| REGEXP_REPLACE(c1, 'a{0}', '2') |
++---------------------------------+
+| 2O2c2e2a2n2B2a2s2e2             |
++---------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a++', '2');
++-----------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a++', '2') |
++-----------------------------------------+
+| Oce2nB2se                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a++', '2') from t1;
++--------------------------------+
+| REGEXP_REPLACE(c1, 'a++', '2') |
++--------------------------------+
+| Oce2nB2se                      |
++--------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '^?a', '2');
++-----------------------------------------+
+| REGEXP_REPLACE('OceanBase', '^?a', '2') |
++-----------------------------------------+
+| Oce2nB2se                               |
++-----------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^?a', '2') from t1;
++--------------------------------+
+| REGEXP_REPLACE(c1, '^?a', '2') |
++--------------------------------+
+| Oce2nB2se                      |
++--------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '(?=b)', '2');
++-------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '(?=b)', '2') |
++-------------------------------------------+
+| Ocean2Base                                |
++-------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '(?=b)', '2') from t1;
++----------------------------------+
+| REGEXP_REPLACE(c1, '(?=b)', '2') |
++----------------------------------+
+| Ocean2Base                       |
++----------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'c(?>.{1,})n', '2');
++-------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'c(?>.{1,})n', '2') |
++-------------------------------------------------+
+| OceanBase                                       |
++-------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'c(?>.{1,})n', '2') from t1;
++----------------------------------------+
+| REGEXP_REPLACE(c1, 'c(?>.{1,})n', '2') |
++----------------------------------------+
+| OceanBase                              |
++----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '(ase|xyz){1,2}+', '2');
++-----------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '(ase|xyz){1,2}+', '2') |
++-----------------------------------------------------+
+| OceanB2                                             |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '(ase|xyz){1,2}+', '2') from t1;
++--------------------------------------------+
+| REGEXP_REPLACE(c1, '(ase|xyz){1,2}+', '2') |
++--------------------------------------------+
+| OceanB2                                    |
++--------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '^..\x02.{10,522}([^\00])\1{16}', '2');
++--------------------------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '^..\x02.{10,522}([^\00])\1{16}', '2') |
++--------------------------------------------------------------------+
+| OceanBase                                                          |
++--------------------------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^..\x02.{10,522}([^\00])\1{16}', '2') from t1;
++-----------------------------------------------------------+
+| REGEXP_REPLACE(c1, '^..\x02.{10,522}([^\00])\1{16}', '2') |
++-----------------------------------------------------------+
+| OceanBase                                                 |
++-----------------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'foo\\g''bar', '2');
++-------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'foo\\g''bar', '2') |
++-------------------------------------------------+
+| OceanBase                                       |
++-------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'foo\\g''bar', '2') from t1;
++----------------------------------------+
+| REGEXP_REPLACE(c1, 'foo\\g''bar', '2') |
++----------------------------------------+
+| OceanBase                              |
++----------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2');
++-----------------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2') |
++-----------------------------------------------------------------------------------------------------------------------------------------+
+| 2Ocean22                                                                                                                                |
++-----------------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2') from t1;
++--------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_REPLACE(c1, '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}', '2') |
++--------------------------------------------------------------------------------------------------------------------------------+
+| 2Ocean22                                                                                                                       |
++--------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', 'a\\g', '2');
++------------------------------------------+
+| REGEXP_REPLACE('OceanBase', 'a\\g', '2') |
++------------------------------------------+
+| OceanBase                                |
++------------------------------------------+
+SELECT REGEXP_REPLACE(c1, 'a\\g', '2') from t1;
++---------------------------------+
+| REGEXP_REPLACE(c1, 'a\\g', '2') |
++---------------------------------+
+| OceanBase                       |
++---------------------------------+
+SELECT REGEXP_REPLACE('OceanBase', '^(O)\\g', '2');
++---------------------------------------------+
+| REGEXP_REPLACE('OceanBase', '^(O)\\g', '2') |
++---------------------------------------------+
+| OceanBase                                   |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^(O)\\g', '2') from t1;
++------------------------------------+
+| REGEXP_REPLACE(c1, '^(O)\\g', '2') |
++------------------------------------+
+| OceanBase                          |
++------------------------------------+
+SELECT REGEXP_REPLACE('abcabc', 'a.+?c', '2');
++----------------------------------------+
+| REGEXP_REPLACE('abcabc', 'a.+?c', '2') |
++----------------------------------------+
+| 22                                     |
++----------------------------------------+
+SELECT REGEXP_REPLACE('aabbbbb', '^[ab]{1,3}(ab*|b)', '2');
++-----------------------------------------------------+
+| REGEXP_REPLACE('aabbbbb', '^[ab]{1,3}(ab*|b)', '2') |
++-----------------------------------------------------+
+| 2bbb                                                |
++-----------------------------------------------------+
+SELECT REGEXP_REPLACE('abcdef', '[^a]{2,3}', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('abcdef', '[^a]{2,3}', '2') |
++--------------------------------------------+
+| a22                                        |
++--------------------------------------------+
+SELECT REGEXP_REPLACE('XBBB', 'a{,3}B', '2');
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT REGEXP_REPLACE('ab', 'a(?)b', '2');
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
+SELECT REGEXP_REPLACE('abd', '(|ab)*?d', '2');
+ERROR 42000: Got error 'U_REGEX_TIME_OUT' from regexp
+SELECT REGEXP_REPLACE('< >', '<(?x:[a b])>', '2');
++--------------------------------------------+
+| REGEXP_REPLACE('< >', '<(?x:[a b])>', '2') |
++--------------------------------------------+
+| < >                                        |
++--------------------------------------------+
+SELECT REGEXP_REPLACE('bon-bon', '(?<A>bon)-\g{A}', '2');
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT REGEXP_REPLACE('p', '[abc[:x\]pq]', '2');
++------------------------------------------+
+| REGEXP_REPLACE('p', '[abc[:x\]pq]', '2') |
++------------------------------------------+
+| 2                                        |
++------------------------------------------+
+SELECT REGEXP_REPLACE('abc', 'a\0yz', '2');
++-------------------------------------+
+| REGEXP_REPLACE('abc', 'a\0yz', '2') |
++-------------------------------------+
+| abc                                 |
++-------------------------------------+
+SELECT REGEXP_REPLACE('a:axyz', '(?\'abc\'\w+):\g{abc}{2}', '2');
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
+SELECT REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0);
++-----------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0) |
++-----------------------------------------------+
+| 2Ocean
+Base                                   |
++-----------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^', '2', 1, 0) from t2;
++------------------------------------+
+| REGEXP_REPLACE(c1, '^', '2', 1, 0) |
++------------------------------------+
+| 2Ocean
+Base                        |
++------------------------------------+
+SELECT REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0, 'm');
++----------------------------------------------------+
+| REGEXP_REPLACE('Ocean\nBase', '^', '2', 1, 0, 'm') |
++----------------------------------------------------+
+| 2Ocean
+2Base                                       |
++----------------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm') from t2;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm') |
++-----------------------------------------+
+| 2Ocean
+2Base                            |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'm'));
++----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'm')) |
++----------------------------------------------------------------------+
+|                                                                   22 |
++----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) from t3;
++-------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) |
++-------------------------------------------------+
+|                                              22 |
++-------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'mu'));
++-----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '^', '2', 1, 0, 'mu')) |
++-----------------------------------------------------------------------+
+|                                                                    21 |
++-----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) from t3;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) |
++--------------------------------------------------+
+|                                               21 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'm'));
++--------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'm')) |
++--------------------------------------------------------------------------+
+|                                                                       25 |
++--------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) from t4;
++-------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'm')) |
++-------------------------------------------------+
+|                                              25 |
++-------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'mu'));
++---------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '^', '2', 1, 0, 'mu')) |
++---------------------------------------------------------------------------+
+|                                                                        24 |
++---------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) from t4;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^', '2', 1, 0, 'mu')) |
++--------------------------------------------------+
+|                                               24 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'm'));
++----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'm')) |
++----------------------------------------------------------------------+
+|                                                                   22 |
++----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) from t3;
++-------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) |
++-------------------------------------------------+
+|                                              22 |
++-------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'mu'));
++-----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '$', '2', 1, 0, 'mu')) |
++-----------------------------------------------------------------------+
+|                                                                    21 |
++-----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) from t3;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) |
++--------------------------------------------------+
+|                                               21 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'm'));
++--------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'm')) |
++--------------------------------------------------------------------------+
+|                                                                       25 |
++--------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) from t4;
++-------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'm')) |
++-------------------------------------------------+
+|                                              25 |
++-------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'mu'));
++---------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAnt\r\nGroup', '$', '2', 1, 0, 'mu')) |
++---------------------------------------------------------------------------+
+|                                                                        24 |
++---------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) from t4;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '$', '2', 1, 0, 'mu')) |
++--------------------------------------------------+
+|                                               24 |
++--------------------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22'));
++------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22')) |
++------------------------------------------------------------+
+|                                                         36 |
++------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22')) from t3;
++---------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22')) |
++---------------------------------------+
+|                                    36 |
++---------------------------------------+
+SELECT length(REGEXP_REPLACE('\n\r', '.', '22'));
++-------------------------------------------+
+| length(REGEXP_REPLACE('\n\r', '.', '22')) |
++-------------------------------------------+
+|                                         2 |
++-------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22')) from t5;
++---------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22')) |
++---------------------------------------+
+|                                     2 |
++---------------------------------------+
+SELECT length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'u'));
++-----------------------------------------------------------------------+
+| length(REGEXP_REPLACE('Ocean\nBase\rAntGroup', '.', '22', 1, 0, 'u')) |
++-----------------------------------------------------------------------+
+|                                                                    37 |
++-----------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'u')) from t3;
++--------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '.', '22', 1, 0, 'u')) |
++--------------------------------------------------+
+|                                               37 |
++--------------------------------------------------+
+SELECT REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'u');
++---------------------------------------------+
+| REGEXP_REPLACE('\n\r', '.', '2', 1, 0, 'u') |
++---------------------------------------------+
+| 
+2                                          |
++---------------------------------------------+
+SELECT REGEXP_REPLACE(c1, '.', '2', 1, 0, 'u') from t5;
++-----------------------------------------+
+| REGEXP_REPLACE(c1, '.', '2', 1, 0, 'u') |
++-----------------------------------------+
+| 
+2                                      |
++-----------------------------------------+
+SELECT length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '^e', '222', 1, 0, 'im'));
++--------------------------------------------------------------------------------+
+| length(REGEXP_REPLACE('A\nB\rC\r\nD\n\rE\036F\025G', '^e', '222', 1, 0, 'im')) |
++--------------------------------------------------------------------------------+
+|                                                                             21 |
++--------------------------------------------------------------------------------+
+SELECT length(REGEXP_REPLACE(c1, '^e', '222', 1, 0, 'im')) from t6;
++-----------------------------------------------------+
+| length(REGEXP_REPLACE(c1, '^e', '222', 1, 0, 'im')) |
++-----------------------------------------------------+
+|                                                  21 |
++-----------------------------------------------------+
+

@@ -723,6 +723,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprOr);
     REG_OP(ObExprXor);
     REG_OP(ObExprRegexp);
+    REG_OP(ObExprRegexpCount);
     REG_OP(ObExprRegexpSubstr);
     REG_OP(ObExprRegexpInstr);
     REG_OP(ObExprRegexpReplace);

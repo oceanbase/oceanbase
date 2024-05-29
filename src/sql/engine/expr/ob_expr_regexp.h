@@ -52,6 +52,7 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_hs_regexp(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
 private:
   inline int need_fast_calc(common::ObExprCtx &expr_ctx, bool &result) const;
 private:

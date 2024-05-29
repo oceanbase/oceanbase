@@ -536,6 +536,8 @@ int ObConfigInfoInPC::load_influence_plan_config()
     min_cluster_version_ = GET_MIN_CLUSTER_VERSION();
     enable_spf_batch_rescan_ = tenant_config->_enable_spf_batch_rescan;
     enable_var_assign_use_das_ = tenant_config->_enable_var_assign_use_das;
+    enable_hyperscan_regexp_engine_ =
+        (0 == ObString::make_string("Hyperscan").case_compare(tenant_config->regexp_engine.str()));
   }
 
   return ret;
@@ -580,15 +582,19 @@ int ObConfigInfoInPC::serialize_configs(char *buf, int buf_len, int64_t &pos)
                                "%lu,", min_cluster_version_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(min_cluster_version_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", is_enable_px_fast_reclaim_))) {
+                               "%d,", is_enable_px_fast_reclaim_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(is_enable_px_fast_reclaim_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_spf_batch_rescan_))) {
+                               "%d,", enable_spf_batch_rescan_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_spf_batch_rescan_));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-                               "%d", enable_var_assign_use_das_))) {
+                               "%d,", enable_var_assign_use_das_))) {
     SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_var_assign_use_das_));
-  } else {
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                               "%d,", enable_hyperscan_regexp_engine_))) {
+    SQL_PC_LOG(WARN, "failed to databuff_printf", K(ret), K(enable_hyperscan_regexp_engine_));
+  } 
+  else {
     // do nothing
   }
   // trim last comma

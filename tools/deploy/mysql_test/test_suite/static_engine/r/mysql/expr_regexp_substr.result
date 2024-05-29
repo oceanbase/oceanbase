@@ -1,0 +1,678 @@
+result_format: 4
+
+drop table if exists t1;
+create table t1(c1 blob);
+insert into t1 values('OceanBase');
+
+ALTER SYSTEM SET regexp_engine = 'Hyperscan';
+SELECT REGEXP_SUBSTR();
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_SUBSTR'
+SELECT REGEXP_SUBSTR('OceanBase');
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_SUBSTR'
+SELECT REGEXP_SUBSTR('OceanBase', 'a');
++---------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a') |
++---------------------------------+
+| a                               |
++---------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a', 1);
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a', 1) |
++------------------------------------+
+| a                                  |
++------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a', 8);
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a', 8) |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 1);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 1) |
++---------------------------------------------+
+| abc                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 2);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 2) |
++---------------------------------------------+
+| def                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 3);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 3) |
++---------------------------------------------+
+| ghi                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '[a-n]+');
++--------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '[a-n]+') |
++--------------------------------------+
+| ceanBa                               |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'o');
++---------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'o') |
++---------------------------------+
+| O                               |
++---------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'c');
++--------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'c') |
++--------------------------------------------+
+| NULL                                       |
++--------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'i');
++--------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'i') |
++--------------------------------------------+
+| B                                          |
++--------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^B');
++------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^B') |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^B', 1, 1, 'm');
++-----------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^B', 1, 1, 'm') |
++-----------------------------------------------+
+| B                                             |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '.');
++-----------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '.') |
++-----------------------------------+
+| O                                 |
++-----------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '.', 1, 1, 'n');
++----------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '.', 1, 1, 'n') |
++----------------------------------------------+
+| O                                            |
++----------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'n');
++--------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'n') |
++--------------------------------------------------------+
+| O                                                      |
++--------------------------------------------------------+
+SELECT REGEXP_SUBSTR('\n\r', '.', 1, 1, 'n');
++---------------------------------------+
+| REGEXP_SUBSTR('\n\r', '.', 1, 1, 'n') |
++---------------------------------------+
+| 
+                                     |
++---------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 'm');
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 'm') |
++-------------------------------------------------------------+
+| NULL                                                        |
++-------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ci');
++---------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ci') |
++---------------------------------------------------------------+
+| E                                                             |
++---------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ic');
++---------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ic') |
++---------------------------------------------------------------+
+| NULL                                                          |
++---------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'cn');
++----------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'cn') |
++----------------------------------------------------------------+
+| NULL                                                           |
++----------------------------------------------------------------+
+SELECT LENGTH(REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'in'));
++------------------------------------------------------------------------+
+| LENGTH(REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'in')) |
++------------------------------------------------------------------------+
+|                                                                      2 |
++------------------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '[a-zA-Z]{2}');
++-------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '[a-zA-Z]{2}') |
++-------------------------------------------+
+| Oc                                        |
++-------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '');
+ERROR 42000: Got error from regexp
+SELECT REGEXP_SUBSTR(c1, 'a') from t1;
++------------------------+
+| REGEXP_SUBSTR(c1, 'a') |
++------------------------+
+| a                      |
++------------------------+
+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'mu');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'a?');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'a{0}');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'a++');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '^?a');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '(?=b)');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'c(?>.{1,})n');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '(ase|xyz){1,2}+');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '^..\x02.{10,522}([^\00])\1{16}');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'foo\\g''bar');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', 'a\\g');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('OceanBase', '^(O)\\g');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('abcabc', 'a.+?c');
++----------------------------------+
+| REGEXP_SUBSTR('abcabc', 'a.+?c') |
++----------------------------------+
+| abcabc                           |
++----------------------------------+
+SELECT REGEXP_SUBSTR('aabbbbb', '^[ab]{1,3}(ab*|b)');
++-----------------------------------------------+
+| REGEXP_SUBSTR('aabbbbb', '^[ab]{1,3}(ab*|b)') |
++-----------------------------------------------+
+| aabbbbb                                       |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('abcdef', '[^a]{2,3}');
++--------------------------------------+
+| REGEXP_SUBSTR('abcdef', '[^a]{2,3}') |
++--------------------------------------+
+| bcd                                  |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('XBBB', 'a{,3}B');
++---------------------------------+
+| REGEXP_SUBSTR('XBBB', 'a{,3}B') |
++---------------------------------+
+| NULL                            |
++---------------------------------+
+SELECT REGEXP_SUBSTR('ab', 'a(?)b');
++------------------------------+
+| REGEXP_SUBSTR('ab', 'a(?)b') |
++------------------------------+
+| ab                           |
++------------------------------+
+SELECT REGEXP_SUBSTR('abd', '(|ab)*?d');
++----------------------------------+
+| REGEXP_SUBSTR('abd', '(|ab)*?d') |
++----------------------------------+
+| abd                              |
++----------------------------------+
+SELECT REGEXP_SUBSTR('< >', '<(?x:[a b])>');
++--------------------------------------+
+| REGEXP_SUBSTR('< >', '<(?x:[a b])>') |
++--------------------------------------+
+| < >                                  |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('bon-bon', '(?<A>bon)-\g{A}');
++---------------------------------------------+
+| REGEXP_SUBSTR('bon-bon', '(?<A>bon)-\g{A}') |
++---------------------------------------------+
+| NULL                                        |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('p', '[abc[:x\]pq]');
++------------------------------------+
+| REGEXP_SUBSTR('p', '[abc[:x\]pq]') |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('abc', 'a\0yz');
++-------------------------------+
+| REGEXP_SUBSTR('abc', 'a\0yz') |
++-------------------------------+
+| a                             |
++-------------------------------+
+SELECT REGEXP_SUBSTR('a:axyz', '(?\'abc\'\w+):\g{abc}{2}');
++-----------------------------------------------------+
+| REGEXP_SUBSTR('a:axyz', '(?\'abc\'\w+):\g{abc}{2}') |
++-----------------------------------------------------+
+| NULL                                                |
++-----------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'mu');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'mu');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'mu');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'm');
+ERROR HY000: Internal error
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'mu');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.');
++---------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.') |
++---------------------------------------------+
+| O                                           |
++---------------------------------------------+
+SELECT LENGTH(REGEXP_SUBSTR('\n\r', '.'));
++------------------------------------+
+| LENGTH(REGEXP_SUBSTR('\n\r', '.')) |
++------------------------------------+
+|                                  1 |
++------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'u');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT LENGTH(REGEXP_SUBSTR('\n\r', '.', 1, 1, 'u'));
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 'im');
++----------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 'im') |
++----------------------------------------------------------------+
+| NULL                                                           |
++----------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('abc', 'a', 1, 1, 'x');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('abcdefghi', 'abc(d(e(f)gh)i)', 1, 1, 'i', 2);
+ERROR HY000: Incorrect arguments to hyperscan does not support subexpr argument in regexp_instr
+
+ALTER SYSTEM SET regexp_engine = 'ICU';
+SELECT REGEXP_SUBSTR();
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_SUBSTR'
+SELECT REGEXP_SUBSTR('OceanBase');
+ERROR 42000: Incorrect parameter count in the call to native function 'REGEXP_SUBSTR'
+SELECT REGEXP_SUBSTR('OceanBase', 'a');
++---------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a') |
++---------------------------------+
+| a                               |
++---------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a', 1);
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a', 1) |
++------------------------------------+
+| a                                  |
++------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a', 8);
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a', 8) |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 1);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 1) |
++---------------------------------------------+
+| abc                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 2);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 2) |
++---------------------------------------------+
+| def                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 3);
++---------------------------------------------+
+| REGEXP_SUBSTR('abc,def,ghi', '[^,]+', 1, 3) |
++---------------------------------------------+
+| ghi                                         |
++---------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '[a-n]+');
++--------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '[a-n]+') |
++--------------------------------------+
+| ceanBa                               |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'o');
++---------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'o') |
++---------------------------------+
+| O                               |
++---------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'c');
++--------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'c') |
++--------------------------------------------+
+| NULL                                       |
++--------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'i');
++--------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'b', 1, 1, 'i') |
++--------------------------------------------+
+| B                                          |
++--------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^B');
++------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^B') |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^B', 1, 1, 'm');
++-----------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^B', 1, 1, 'm') |
++-----------------------------------------------+
+| B                                             |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '.');
++-----------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '.') |
++-----------------------------------+
+| O                                 |
++-----------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '.', 1, 1, 'n');
++----------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '.', 1, 1, 'n') |
++----------------------------------------------+
+| O                                            |
++----------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'n');
++--------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'n') |
++--------------------------------------------------------+
+| O                                                      |
++--------------------------------------------------------+
+SELECT REGEXP_SUBSTR('\n\r', '.', 1, 1, 'n');
++---------------------------------------+
+| REGEXP_SUBSTR('\n\r', '.', 1, 1, 'n') |
++---------------------------------------+
+| 
+                                     |
++---------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 'm');
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 'm') |
++-------------------------------------------------------------+
+| NULL                                                        |
++-------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ci');
++---------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ci') |
++---------------------------------------------------------------+
+| E                                                             |
++---------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ic');
++---------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 'ic') |
++---------------------------------------------------------------+
+| NULL                                                          |
++---------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'cn');
++----------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'cn') |
++----------------------------------------------------------------+
+| NULL                                                           |
++----------------------------------------------------------------+
+SELECT LENGTH(REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'in'));
++------------------------------------------------------------------------+
+| LENGTH(REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 'in')) |
++------------------------------------------------------------------------+
+|                                                                      2 |
++------------------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '[a-zA-Z]{2}');
++-------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '[a-zA-Z]{2}') |
++-------------------------------------------+
+| Oc                                        |
++-------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '');
+ERROR 42000: Got error from regexp
+SELECT REGEXP_SUBSTR(c1, 'a') from t1;
++------------------------+
+| REGEXP_SUBSTR(c1, 'a') |
++------------------------+
+| a                      |
++------------------------+
+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'm');
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'm') |
++-------------------------------------------------------------+
+| NULL                                                        |
++-------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'mu');
++--------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 'mu') |
++--------------------------------------------------------------+
+| NULL                                                         |
++--------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}');
++------------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}') |
++------------------------------------------------------------------------------------------------------------------------------------+
+| NULL                                                                                                                               |
++------------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a?');
++----------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a?') |
++----------------------------------+
+| NULL                             |
++----------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a{0}');
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a{0}') |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a++');
++-----------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a++') |
++-----------------------------------+
+| a                                 |
++-----------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '^?a');
++-----------------------------------+
+| REGEXP_SUBSTR('OceanBase', '^?a') |
++-----------------------------------+
+| a                                 |
++-----------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '(?=b)');
++-------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '(?=b)') |
++-------------------------------------+
+| NULL                                |
++-------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'c(?>.{1,})n');
++-------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'c(?>.{1,})n') |
++-------------------------------------------+
+| NULL                                      |
++-------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '(ase|xyz){1,2}+');
++-----------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '(ase|xyz){1,2}+') |
++-----------------------------------------------+
+| ase                                           |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '^..\x02.{10,522}([^\00])\1{16}');
++--------------------------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '^..\x02.{10,522}([^\00])\1{16}') |
++--------------------------------------------------------------+
+| NULL                                                         |
++--------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'foo\\g''bar');
++-------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'foo\\g''bar') |
++-------------------------------------------+
+| NULL                                      |
++-------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}');
++-----------------------------------------------------------------------------------------------------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}') |
++-----------------------------------------------------------------------------------------------------------------------------------+
+| NULL                                                                                                                              |
++-----------------------------------------------------------------------------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', 'a\\g');
++------------------------------------+
+| REGEXP_SUBSTR('OceanBase', 'a\\g') |
++------------------------------------+
+| NULL                               |
++------------------------------------+
+SELECT REGEXP_SUBSTR('OceanBase', '^(O)\\g');
++---------------------------------------+
+| REGEXP_SUBSTR('OceanBase', '^(O)\\g') |
++---------------------------------------+
+| NULL                                  |
++---------------------------------------+
+SELECT REGEXP_SUBSTR('abcabc', 'a.+?c');
++----------------------------------+
+| REGEXP_SUBSTR('abcabc', 'a.+?c') |
++----------------------------------+
+| abc                              |
++----------------------------------+
+SELECT REGEXP_SUBSTR('aabbbbb', '^[ab]{1,3}(ab*|b)');
++-----------------------------------------------+
+| REGEXP_SUBSTR('aabbbbb', '^[ab]{1,3}(ab*|b)') |
++-----------------------------------------------+
+| aabb                                          |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('abcdef', '[^a]{2,3}');
++--------------------------------------+
+| REGEXP_SUBSTR('abcdef', '[^a]{2,3}') |
++--------------------------------------+
+| bcd                                  |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('XBBB', 'a{,3}B');
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT REGEXP_SUBSTR('ab', 'a(?)b');
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 4.' from regexp
+SELECT REGEXP_SUBSTR('abd', '(|ab)*?d');
+ERROR 42000: Got error 'U_REGEX_TIME_OUT' from regexp
+SELECT REGEXP_SUBSTR('< >', '<(?x:[a b])>');
++--------------------------------------+
+| REGEXP_SUBSTR('< >', '<(?x:[a b])>') |
++--------------------------------------+
+| NULL                                 |
++--------------------------------------+
+SELECT REGEXP_SUBSTR('bon-bon', '(?<A>bon)-\g{A}');
+ERROR 42000: Got error 'U_REGEX_BAD_INTERVAL' from regexp
+SELECT REGEXP_SUBSTR('p', '[abc[:x\]pq]');
++------------------------------------+
+| REGEXP_SUBSTR('p', '[abc[:x\]pq]') |
++------------------------------------+
+| p                                  |
++------------------------------------+
+SELECT REGEXP_SUBSTR('abc', 'a\0yz');
++-------------------------------+
+| REGEXP_SUBSTR('abc', 'a\0yz') |
++-------------------------------+
+| NULL                          |
++-------------------------------+
+SELECT REGEXP_SUBSTR('a:axyz', '(?\'abc\'\w+):\g{abc}{2}');
+ERROR 42000: Got error 'U_REGEX_RULE_SYNTAX, Syntax error in regular expression on line 1, character 3.' from regexp
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^');
++-----------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^') |
++-----------------------------------+
+| NULL                              |
++-----------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase', '^', 1, 1, 'm');
++----------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase', '^', 1, 1, 'm') |
++----------------------------------------------+
+| NULL                                         |
++----------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'm');
++--------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'm') |
++--------------------------------------------------------+
+| NULL                                                   |
++--------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'mu');
++---------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 'mu') |
++---------------------------------------------------------+
+| NULL                                                    |
++---------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'm');
++------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'm') |
++------------------------------------------------------------+
+| NULL                                                       |
++------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'mu');
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 'mu') |
++-------------------------------------------------------------+
+| NULL                                                        |
++-------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'm');
++--------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'm') |
++--------------------------------------------------------+
+| NULL                                                   |
++--------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'mu');
++---------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 'mu') |
++---------------------------------------------------------+
+| NULL                                                    |
++---------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'm');
++------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'm') |
++------------------------------------------------------------+
+| NULL                                                       |
++------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'mu');
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 'mu') |
++-------------------------------------------------------------+
+| NULL                                                        |
++-------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.');
++---------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.') |
++---------------------------------------------+
+| O                                           |
++---------------------------------------------+
+SELECT LENGTH(REGEXP_SUBSTR('\n\r', '.'));
++------------------------------------+
+| LENGTH(REGEXP_SUBSTR('\n\r', '.')) |
++------------------------------------+
+|                               NULL |
++------------------------------------+
+SELECT REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'u');
++--------------------------------------------------------+
+| REGEXP_SUBSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 'u') |
++--------------------------------------------------------+
+| O                                                      |
++--------------------------------------------------------+
+SELECT LENGTH(REGEXP_SUBSTR('\n\r', '.', 1, 1, 'u'));
++-----------------------------------------------+
+| LENGTH(REGEXP_SUBSTR('\n\r', '.', 1, 1, 'u')) |
++-----------------------------------------------+
+|                                             1 |
++-----------------------------------------------+
+SELECT REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 'im');
++----------------------------------------------------------------+
+| REGEXP_SUBSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 'im') |
++----------------------------------------------------------------+
+| E                                                              |
++----------------------------------------------------------------+
+SELECT REGEXP_SUBSTR('abc', 'a', 1, 1, 'x');
+ERROR HY000: Incorrect arguments to use match param in regexp expression
+SELECT REGEXP_SUBSTR('abcdefghi', 'abc(d(e(f)gh)i)', 1, 1, 'i', 2);
++-------------------------------------------------------------+
+| REGEXP_SUBSTR('abcdefghi', 'abc(d(e(f)gh)i)', 1, 1, 'i', 2) |
++-------------------------------------------------------------+
+| efgh                                                        |
++-------------------------------------------------------------+
+

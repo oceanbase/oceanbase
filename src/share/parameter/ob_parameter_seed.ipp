@@ -1966,3 +1966,9 @@ DEF_BOOL(_enable_dbms_job_package, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_kv_feature, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable OBKV feature.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+// regexp engine
+DEF_STR_WITH_CHECKER(regexp_engine, OB_TENANT_PARAMETER, "ICU",
+                     common::ObConfigRegexpEngineChecker,
+                     "specifies the regexp engine. Values: ICU(International Components for Unicode), Hyperscan",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

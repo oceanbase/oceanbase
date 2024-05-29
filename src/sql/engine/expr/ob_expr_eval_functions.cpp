@@ -1200,6 +1200,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
   NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
   NULL, // ObExprArray::eval_array,                                   /* 720 */
+  ObExprRegexp::eval_hs_regexp,                                       /* 721 */
+  ObExprRegexpCount::eval_hs_regexp_count,                            /* 722 */
+  ObExprRegexpInstr::eval_hs_regexp_instr,                            /* 723 */
+  ObExprRegexpLike::eval_hs_regexp_like,                              /* 724 */
+  ObExprRegexpReplace::eval_hs_regexp_replace,                        /* 725 */
+  ObExprRegexpSubstr::eval_hs_regexp_substr,                          /* 726 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1455,6 +1461,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
   NULL,//ObExprCeilFloor::calc_ceil_floor_vector,               /* 114 */
   NULL,//ObExprRepeat::eval_repeat_vector,                      /* 115 */
+  ObExprRegexpReplace::eval_hs_regexp_replace_vector,           /* 116 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,

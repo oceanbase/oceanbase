@@ -1,0 +1,281 @@
+# owner: bin.lb
+# owner group: sql2
+
+--disable_abort_on_error
+--result_format 4
+
+connect (syscon, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection syscon;
+sleep 2;
+
+
+--disable_warnings
+drop table if exists t1;
+create table t1(c1 blob);
+insert into t1 values('OceanBase');
+sleep 2;
+--enable_warnings
+
+
+# hyperscan
+ALTER SYSTEM SET regexp_engine = 'Hyperscan';
+sleep 10;
+# # Cases in which ICU and hyperscan perform consistently
+# ## Zero parameters
+SELECT REGEXP_INSTR();
+# ## One parameter
+SELECT REGEXP_INSTR('OceanBase');
+# ## Two parameters
+SELECT REGEXP_INSTR('OceanBase', 'a');
+# ## Three parameters
+SELECT REGEXP_INSTR('OceanBase', 'a', 1);
+SELECT REGEXP_INSTR('OceanBase', 'a', 8);
+# ## Four parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 2);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 3);
+# ## Five parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 0);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 1);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 2);
+# ## Six parameters -> match_type
+# ### Default case insensitive (depending on the current collation)
+SELECT REGEXP_INSTR('OceanBase', '[a-n]+');
+SELECT REGEXP_INSTR('OceanBase', 'o');
+# ### 'c' is case sensitive
+SELECT REGEXP_INSTR('OceanBase', 'b', 1, 1, 0, 'c');
+# ### 'i' is case insensitive
+SELECT REGEXP_INSTR('OceanBase', 'b', 1, 1, 0, 'i');
+# ### 'm' multi-line mode
+SELECT REGEXP_INSTR('Ocean\nBase', '^B');
+SELECT REGEXP_INSTR('Ocean\nBase', '^B', 1, 1, 0, 'm');
+# ### 'n' contains newlines
+SELECT REGEXP_INSTR('Ocean\nBase', '.');
+SELECT REGEXP_INSTR('Ocean\nBase', '.', 1, 1, 0, 'n');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 0, 'n');
+SELECT REGEXP_INSTR('\n\r', '.', 1, 1, 0, 'n');
+# ### 'u' unix lines
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 0, 'm');
+# ### Multiple match types
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 0, 'ci');
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 0, 'ic');
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 0, 'cn');
+SELECT LENGTH(REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 0, 'in'));
+# ## Seven parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 0, 'i', 0);
+# ## Multiple matching problem
+SELECT REGEXP_INSTR('OceanBase', '[a-zA-Z]{2}');
+# ## empty pattern
+SELECT REGEXP_INSTR('OceanBase', '');
+# ## blob type
+SELECT REGEXP_INSTR(c1, 'a') from t1;
+
+# # Inconsistencies between ICU and hyperscan
+# ## embedded anchors: Hyperscan does not support characters before ^ and after $
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 0, 'mu');
+# ## hyperscan is not support too large NFA
+SELECT REGEXP_INSTR('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}');
+# ## vacuous patterns
+SELECT REGEXP_INSTR('OceanBase', 'a?');
+# ##illegal bounds
+SELECT REGEXP_INSTR('OceanBase', 'a{0}');
+# ## nothing to repeat
+SELECT REGEXP_INSTR('OceanBase', 'a++');
+# ## repeating boundaries is not allowed (UE-1007)
+SELECT REGEXP_INSTR('OceanBase', '^?a');
+# ## zero width asserts ("lookarounds")
+SELECT REGEXP_INSTR('OceanBase', '(?=b)');
+# ## atomic groups
+SELECT REGEXP_INSTR('OceanBase', 'c(?>.{1,})n');
+# ## possessive quantifiers
+SELECT REGEXP_INSTR('OceanBase', '(ase|xyz){1,2}+');
+# ## back-reference inside a repeat (also too big, actually)
+SELECT REGEXP_INSTR('OceanBase', '^..\x02.{10,522}([^\00])\1{16}');
+# ## unhandled subroutines and backrefs
+SELECT REGEXP_INSTR('OceanBase', 'foo\\g''bar');
+# ## truly enormous and with complicated assert resolution (UE-1107)
+SELECT REGEXP_INSTR('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}');
+# ## bogus \g backrefs
+SELECT REGEXP_INSTR('OceanBase', 'a\\g');
+# ## malformed \g backrefs (see UE-950)
+SELECT REGEXP_INSTR('OceanBase', '^(O)\\g');
+# ## Non-greedy matching
+SELECT REGEXP_INSTR('abcabc', 'a.+?c');
+# ## The matching intervals of multiple groups of rules intersect
+SELECT REGEXP_INSTR('aabbbbb', '^[ab]{1,3}(ab*|b)');
+# ## A rule is matched multiple times and the matching Spaces intersect
+SELECT REGEXP_INSTR('abcdef', '[^a]{2,3}');
+# ## {n, m}
+SELECT REGEXP_INSTR('XBBB', 'a{,3}B');
+# ## (?)
+SELECT REGEXP_INSTR('ab', 'a(?)b');
+# ## timeout
+SELECT REGEXP_INSTR('abd', '(|ab)*?d');
+# ## Anonymous capture (non-capture grouping)
+SELECT REGEXP_INSTR('< >', '<(?x:[a b])>');
+# ## named capture
+SELECT REGEXP_INSTR('bon-bon', '(?<A>bon)-\g{A}');
+# ## [] grammar problem
+SELECT REGEXP_INSTR('p', '[abc[:x\]pq]');
+# ## Different interpretations of \0
+SELECT REGEXP_INSTR('abc', 'a\0yz');
+# ## Some patterns are not supported by the ICU
+SELECT REGEXP_INSTR('a:axyz', '(?\'abc\'\w+):\g{abc}{2}');
+# ## '^' and '$'
+SELECT REGEXP_INSTR('Ocean\nBase', '^');
+SELECT REGEXP_INSTR('Ocean\nBase', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 0, 'mu');
+# ## '.' and match_type='n'
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.');
+SELECT LENGTH(REGEXP_INSTR('\n\r', '.'));
+# ## hyperscan is not support match_type='u'
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 0, 'u');
+SELECT LENGTH(REGEXP_INSTR('\n\r', '.', 1, 1, 0, 'u'));
+# ## Newline: Hyperscan unix_lines By default, this parameter is not supported
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 0, 'im');
+# ## hyperscan is not support match_type='x'
+SELECT REGEXP_INSTR('abc', 'a', 1, 1, 0, 'x');
+# ## hyperscan is not support capturing group  -> Six parameters: subexpr
+SELECT REGEXP_INSTR('abcdefghi', 'abc(d(e(f)gh)i)', 1, 1, 0, 'i', 2);
+
+
+# ICU
+ALTER SYSTEM SET regexp_engine = 'ICU';
+sleep 10;
+# # Cases in which ICU and hyperscan perform consistently
+# ## Zero parameters
+SELECT REGEXP_INSTR();
+# ## One parameter
+SELECT REGEXP_INSTR('OceanBase');
+# ## Two parameters
+SELECT REGEXP_INSTR('OceanBase', 'a');
+# ## Three parameters
+SELECT REGEXP_INSTR('OceanBase', 'a', 1);
+SELECT REGEXP_INSTR('OceanBase', 'a', 8);
+# ## Four parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 2);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 3);
+# ## Five parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 0);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 1);
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 2);
+# ## Six parameters -> match_type
+# ### Default case insensitive (depending on the current collation)
+SELECT REGEXP_INSTR('OceanBase', '[a-n]+');
+SELECT REGEXP_INSTR('OceanBase', 'o');
+# ### 'c' is case sensitive
+SELECT REGEXP_INSTR('OceanBase', 'b', 1, 1, 0, 'c');
+# ### 'i' is case insensitive
+SELECT REGEXP_INSTR('OceanBase', 'b', 1, 1, 0, 'i');
+# ### 'm' multi-line mode
+SELECT REGEXP_INSTR('Ocean\nBase', '^B');
+SELECT REGEXP_INSTR('Ocean\nBase', '^B', 1, 1, 0, 'm');
+# ### 'n' contains newlines
+SELECT REGEXP_INSTR('Ocean\nBase', '.');
+SELECT REGEXP_INSTR('Ocean\nBase', '.', 1, 1, 0, 'n');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 0, 'n');
+SELECT REGEXP_INSTR('\n\r', '.', 1, 1, 0, 'n');
+# ### 'u' unix lines
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^u', 1, 1, 0, 'm');
+# ### Multiple match types
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 0, 'ci');
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', 'e', 1, 1, 0, 'ic');
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 0, 'cn');
+SELECT LENGTH(REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '.e', 1, 1, 0, 'in'));
+# ## Seven parameters
+SELECT REGEXP_INSTR('abc,def,ghi', '[^,]+', 1, 1, 0, 'i', 0);
+# ## Multiple matching problem
+SELECT REGEXP_INSTR('OceanBase', '[a-zA-Z]{2}');
+# ## empty pattern
+SELECT REGEXP_INSTR('OceanBase', '');
+# ## blob type
+SELECT REGEXP_INSTR(c1, 'a') from t1;
+
+# # Inconsistencies between ICU and hyperscan
+# ## embedded anchors: Hyperscan does not support characters before ^ and after $
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$u', 1, 1, 0, 'mu');
+# ## hyperscan is not support too large NFA
+SELECT REGEXP_INSTR('OceanBase', '(ewh|m?uit|f|snmv.g.gx[yofl]|.[^g][hbd])((.h|((y|vypfw|dfg{4}|x+|o.|y{8,}))+|k{9}t|cgp...gsk+)){17,}');
+# ## vacuous patterns
+SELECT REGEXP_INSTR('OceanBase', 'a?');
+# ##illegal bounds
+SELECT REGEXP_INSTR('OceanBase', 'a{0}');
+# ## nothing to repeat
+SELECT REGEXP_INSTR('OceanBase', 'a++');
+# ## repeating boundaries is not allowed (UE-1007)
+SELECT REGEXP_INSTR('OceanBase', '^?a');
+# ## zero width asserts ("lookarounds")
+SELECT REGEXP_INSTR('OceanBase', '(?=b)');
+# ## atomic groups
+SELECT REGEXP_INSTR('OceanBase', 'c(?>.{1,})n');
+# ## possessive quantifiers
+SELECT REGEXP_INSTR('OceanBase', '(ase|xyz){1,2}+');
+# ## back-reference inside a repeat (also too big, actually)
+SELECT REGEXP_INSTR('OceanBase', '^..\x02.{10,522}([^\00])\1{16}');
+# ## unhandled subroutines and backrefs
+SELECT REGEXP_INSTR('OceanBase', 'foo\\g''bar');
+# ## truly enormous and with complicated assert resolution (UE-1107)
+SELECT REGEXP_INSTR('OceanBase', '((c(p|p)h{2,}bh.|p|((((cq|j|c|(\\b)|.[^nbgn]|(\\B)[qfh]a)){10,12}|ih|a|mnde[pa].|.g)){5,8})){21,29}');
+# ## bogus \g backrefs
+SELECT REGEXP_INSTR('OceanBase', 'a\\g');
+# ## malformed \g backrefs (see UE-950)
+SELECT REGEXP_INSTR('OceanBase', '^(O)\\g');
+# ## Non-greedy matching
+SELECT REGEXP_INSTR('abcabc', 'a.+?c');
+# ## The matching intervals of multiple groups of rules intersect
+SELECT REGEXP_INSTR('aabbbbb', '^[ab]{1,3}(ab*|b)');
+# ## A rule is matched multiple times and the matching Spaces intersect
+SELECT REGEXP_INSTR('abcdef', '[^a]{2,3}');
+# ## {n, m}
+SELECT REGEXP_INSTR('XBBB', 'a{,3}B');
+# ## (?)
+SELECT REGEXP_INSTR('ab', 'a(?)b');
+# ## timeout
+SELECT REGEXP_INSTR('abd', '(|ab)*?d');
+# ## Anonymous capture (non-capture grouping)
+SELECT REGEXP_INSTR('< >', '<(?x:[a b])>');
+# ## named capture
+SELECT REGEXP_INSTR('bon-bon', '(?<A>bon)-\g{A}');
+# ## [] grammar problem
+SELECT REGEXP_INSTR('p', '[abc[:x\]pq]');
+# ## Different interpretations of \0
+SELECT REGEXP_INSTR('abc', 'a\0yz');
+# ## Some patterns are not supported by the ICU
+SELECT REGEXP_INSTR('a:axyz', '(?\'abc\'\w+):\g{abc}{2}');
+# ## '^' and '$'
+SELECT REGEXP_INSTR('Ocean\nBase', '^');
+SELECT REGEXP_INSTR('Ocean\nBase', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '^', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '^', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '$', 1, 1, 0, 'mu');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 0, 'm');
+SELECT REGEXP_INSTR('Ocean\nBase\rAnt\r\nGroup', '$', 1, 1, 0, 'mu');
+# ## '.' and match_type='n'
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.');
+SELECT LENGTH(REGEXP_INSTR('\n\r', '.'));
+# ## hyperscan is not support match_type='u'
+SELECT REGEXP_INSTR('Ocean\nBase\rAntGroup', '.', 1, 1, 0, 'u');
+SELECT LENGTH(REGEXP_INSTR('\n\r', '.', 1, 1, 0, 'u'));
+# ## Newline: Hyperscan unix_lines By default, this parameter is not supported
+SELECT REGEXP_INSTR('A\nB\rC\r\nD\n\rE\036F\025G', '^e', 1, 1, 0, 'im');
+# ## hyperscan is not support match_type='x'
+SELECT REGEXP_INSTR('abc', 'a', 1, 1, 0, 'x');
+# ## hyperscan is not support capturing group  -> Six parameters: subexpr
+SELECT REGEXP_INSTR('abcdefghi', 'abc(d(e(f)gh)i)', 1, 1, 0, 'i', 2);
+
+
+connection syscon;
+--sleep 2

@@ -133,6 +133,11 @@ public:
                                       common::ObString &out_str,
                                       const common::ObCollationType &out_collation,
                                       common::ObIAllocator &alloc);
+  static int convert_string_collation_for_regexp(const common::ObString &in_str,
+                                                 const common::ObCollationType &in_collation,
+                                                 common::ObString &out_str,
+                                                 const common::ObCollationType &out_collation,
+                                                 common::ObIAllocator &alloc);
   static int need_convert_string_collation(const common::ObCollationType &in_collation,
                                            const common::ObCollationType &out_collation,
                                            bool &need_convert);

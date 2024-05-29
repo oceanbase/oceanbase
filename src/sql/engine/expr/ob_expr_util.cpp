@@ -649,6 +649,40 @@ int ObExprUtil::convert_string_collation(const ObString &in_str,
   return ret;
 }
 
+int ObExprUtil::convert_string_collation_for_regexp(const ObString &in_str,
+                                                    const ObCollationType &in_collation,
+                                                    ObString &out_str,
+                                                    const ObCollationType &out_collation,
+                                                    ObIAllocator &alloc)
+{
+  int ret = OB_SUCCESS;
+  if (in_str.empty()) {
+    out_str.reset();
+  } else if (OB_UNLIKELY(!ObCharset::is_valid_collation(in_collation) ||
+                         !ObCharset::is_valid_collation(out_collation))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(in_collation), K(out_collation));
+  } else if (ObCharset::charset_type_by_coll(in_collation) ==
+             ObCharset::charset_type_by_coll(out_collation)) {
+    out_str = in_str;
+  } else {
+    char *buf = NULL;
+    int32_t buf_len = in_str.length() * ObCharset::CharConvertFactorNum;
+    uint32_t result_len = 0;
+    if (OB_ISNULL(buf = static_cast<char*>(alloc.alloc(buf_len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
+    } else if (OB_FAIL(ObCharset::charset_convert(in_collation, in_str.ptr(), in_str.length(),
+                                                  out_collation, buf, buf_len,
+                                                  result_len))) {
+      LOG_WARN("charset convert failed", K(ret));
+    } else {
+      out_str.assign_ptr(buf, result_len);
+    }
+  }
+  return ret;
+}
+
 int ObExprUtil::deep_copy_str(const ObString &src, ObString &out, ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
