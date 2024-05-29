@@ -992,6 +992,17 @@ int ObPhysicalPlanCtx::get_field(const int64_t idx, ObField &field)
   return ret;
 }
 
+bool ObPhysicalPlanCtx::is_subschema_ctx_inited()
+{
+  bool b_ret = false;
+  if (OB_NOT_NULL(phy_plan_)) {
+    b_ret = phy_plan_->get_subschema_ctx().is_inited();
+  } else {
+    b_ret = subschema_ctx_.is_inited();
+  }
+  return b_ret;
+}
+
 int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)
 {
   int ret = OB_SUCCESS;

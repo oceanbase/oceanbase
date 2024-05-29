@@ -497,6 +497,7 @@ public:
   void set_spm_timeout_timestamp(const int64_t timeout) { spm_ts_timeout_us_ = timeout; }
 
   int get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta);
+  bool is_subschema_ctx_inited();
   int get_subschema_id_by_udt_id(uint64_t udt_type_id,
                                  uint16_t &subschema_id,
                                  share::schema::ObSchemaGetterGuard *schema_guard = NULL);
