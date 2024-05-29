@@ -79,7 +79,7 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
 
 int ObTxData::add_undo_action(ObTxTable *tx_table,
                               transaction::ObUndoAction &new_undo_action,
-                              ObUndoStatusNode *undo_node)
+                              ObUndoStatusNode *&undo_node)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");
   UNUSED(undo_node);

@@ -39,6 +39,7 @@ public:
   static int g_select_uint64(uint64_t tenant_id, const char *sql, uint64_t &val);
 
   static int select_int64(sqlclient::ObISQLConnection *conn, const char *sql, int64_t &val);
+  static int select_int64(ObMySQLTransaction &trans, uint64_t tenant_id, const char *sql, int64_t &val);
 
   static int select_varchar(sqlclient::ObISQLConnection *conn, const char *sql, ObString &val);
   static int g_select_varchar(uint64_t tenant_id, const char *sql, ObString &val);

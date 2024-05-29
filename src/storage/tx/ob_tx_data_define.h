@@ -317,7 +317,12 @@ public:
    */
   OB_NOINLINE int add_undo_action(ObTxTable *tx_table,
                                   transaction::ObUndoAction &undo_action,
-                                  ObUndoStatusNode *undo_node = nullptr);
+                                  ObUndoStatusNode *&undo_node);
+  OB_NOINLINE int add_undo_action(ObTxTable *tx_table,
+                                  transaction::ObUndoAction &undo_action) {
+    ObUndoStatusNode *undo_status_node = nullptr;
+    return add_undo_action(tx_table, undo_action, undo_status_node);
+  }
   /**
    * @brief Check if this tx data is valid
    */

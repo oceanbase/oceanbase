@@ -123,6 +123,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.enable_tenant_ctx_check_ = false;
   tenant_.set(&fake_tenant_freezer_);
   tenant_.set(&fake_part_trans_ctx_pool_);
+  fake_shared_mem_alloc_mgr_.init();
+  tenant_.set(&fake_shared_mem_alloc_mgr_);
   tenant_.start();
   ObTenantEnv::set_tenant(&tenant_);
   ObTableHandleV2 lock_memtable_handle;

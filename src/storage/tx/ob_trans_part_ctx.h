@@ -666,7 +666,10 @@ private:
                          bool is_replay);
   int replay_mds_to_tx_table_(const ObTxBufferNodeArray &mds_node_array, const share::SCN op_scn);
   int insert_mds_to_tx_table_(ObTxLogCb &log_cb);
-  int insert_undo_action_to_tx_table_(ObUndoAction &undo_action, ObTxDataGuard &new_tx_data_guard, const share::SCN op_scn);
+  int insert_undo_action_to_tx_table_(ObUndoAction &undo_action,
+                                      ObTxDataGuard &new_tx_data_guard,
+                                      storage::ObUndoStatusNode *&undo_node,
+                                      const share::SCN op_scn);
   int replay_undo_action_to_tx_table_(ObUndoAction &undo_action, const share::SCN op_scn);
   int decide_state_log_barrier_type_(const ObTxLogType &state_log_type,
                                      logservice::ObReplayBarrierType &final_barrier_type);

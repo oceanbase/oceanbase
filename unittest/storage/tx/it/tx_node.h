@@ -305,6 +305,7 @@ public:
   ObLockTable fake_lock_table_;
   ObFakeTxTable fake_tx_table_;
   ObTenantFreezer fake_tenant_freezer_;
+  ObSharedMemAllocMgr fake_shared_mem_alloc_mgr_;
   ObLS fake_ls_;
   ObFreezer fake_freezer_;
   ObTxNodeRole role_;

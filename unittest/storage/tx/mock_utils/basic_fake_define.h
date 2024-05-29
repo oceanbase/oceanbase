@@ -56,6 +56,7 @@ public:
     slice_allocator_.set_nway(32);
     FAKE_ALLOCATOR->init("FAKE_A");
     FAKE_ALLOCATOR2->init();
+    tx_data_allocator_ = FAKE_ALLOCATOR;
     is_inited_ = true;
   }
   virtual int init(ObLS *ls, ObTxCtxTable *tx_ctx_table) override
