@@ -2649,29 +2649,29 @@ public:
   {
     OB_UNIS_VERSION(1);
   public:
-    ObIndexColumnGroupItem() : is_each_cg_(false), column_list_()
-    {}
-    ObIndexColumnGroupItem(const bool is_each_cg) : is_each_cg_(is_each_cg), column_list_()
-    {}
+    ObIndexColumnGroupItem() : is_each_cg_(false), column_list_(), cg_type_(ObColumnGroupType::SINGLE_COLUMN_GROUP)
+    {} /* to compat former version, force to set default value as single column group*/
     ~ObIndexColumnGroupItem()
     {
       reset();
     }
     bool is_valid() const
     {
-      return is_each_cg_;
+      return cg_type_ < ObColumnGroupType::NORMAL_COLUMN_GROUP;
     }
     void reset()
     {
       is_each_cg_ = false;
       column_list_.reset();
+      cg_type_ = ObColumnGroupType::SINGLE_COLUMN_GROUP;
     }
     int assign(const ObIndexColumnGroupItem &other);
-    TO_STRING_KV(K(is_each_cg_), K(column_list_));
+    TO_STRING_KV(K(is_each_cg_), K(column_list_), K(cg_type_));
 
   public:
     bool is_each_cg_;
-    ObCGColumnList column_list_;
+    ObCGColumnList column_list_; /* column list not used yet, wait user define cg*/
+    ObColumnGroupType cg_type_;
   };
 
 public:

@@ -3108,12 +3108,13 @@ bool ObCreateIndexArg::is_valid() const
          && index_using_type_ >= USING_BTREE
          && index_using_type_ < USING_TYPE_MAX;
 }
-OB_SERIALIZE_MEMBER(ObCreateIndexArg::ObIndexColumnGroupItem, is_each_cg_, column_list_);
+OB_SERIALIZE_MEMBER(ObCreateIndexArg::ObIndexColumnGroupItem, is_each_cg_, column_list_, cg_type_);
 
 int ObCreateIndexArg::ObIndexColumnGroupItem::assign(const ObCreateIndexArg::ObIndexColumnGroupItem &other)
 {
   int ret = OB_SUCCESS;
   is_each_cg_ = other.is_each_cg_;
+  cg_type_ = other.cg_type_;
   if (OB_FAIL(column_list_.assign(other.column_list_))) {
     LOG_WARN("fail to assign array", K(ret));
   }

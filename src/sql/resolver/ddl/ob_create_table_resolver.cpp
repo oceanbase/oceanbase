@@ -3331,10 +3331,10 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
         }
       }
 
-      // only when not cg node use default format
+      /* build column group when cg node is null && tenant cg valid*/
       ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
-      if (OB_SUCC(ret) && OB_LIKELY(tenant_config.is_valid()) && nullptr == cg_node) {
-
+      if (OB_FAIL(ret)) {
+      } else if ( OB_LIKELY(tenant_config.is_valid()) && nullptr == cg_node) {
         /* force to build each cg*/
         if (!ObSchemaUtils::can_add_column_group(table_schema)) {
         } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
@@ -3343,11 +3343,7 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
           LOG_WARN("fail to get table store format", K(ret), K(table_store_type));
         } else if (ObTableStoreFormat::is_with_column(table_store_type)) {
           /* for default is column store, must add each column group*/
-          bool is_each_column_exist = false;
-          if (OB_FAIL(table_schema.is_column_group_exist(OB_EACH_COLUMN_GROUP_NAME, is_each_column_exist))) {
-            LOG_WARN("fail to check is each column group exist", K(ret));
-          } else if (is_each_column_exist) {
-          } else if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
+          if (OB_FAIL(ObSchemaUtils::build_add_each_column_group(table_schema, table_schema))) {
             LOG_WARN("fail to add each column group", K(ret));
           }
         }
@@ -3357,10 +3353,7 @@ int ObCreateTableResolver::resolve_column_group(const ParseNode *cg_node)
         if (OB_FAIL(ret)) {
         } else if (!ObSchemaUtils::can_add_column_group(table_schema)) {
         } else if (ObTableStoreFormat::is_row_with_column_store(table_store_type)) {
-          bool is_all_cg_exist = false;
-          if (OB_FAIL(table_schema.is_column_group_exist(OB_ALL_COLUMN_GROUP_NAME, is_all_cg_exist))) {
-            LOG_WARN("fail to check is all column group exist", K(ret));
-          } else if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
+          if (OB_FAIL(ObSchemaUtils::build_all_column_group(table_schema, table_schema.get_tenant_id(),
                                                                    table_schema.get_max_used_column_group_id() + 1, all_cg))) {
             LOG_WARN("fail to add all column group", K(ret));
           } else if (OB_FAIL(table_schema.add_column_group(all_cg))) {
