@@ -425,7 +425,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
   } else {
     //TODO::unpivot open @xifeng
     if (func.contain_unpivot_query_ || func.contain_enum_set_values_ || func.contain_geometry_values_ ||
-        func.contain_fulltext_search_) {
+        func.contain_fulltext_search_ || func.contain_dml_with_doc_id_) {
        disable_list = ObTransformRule::ALL_TRANSFORM_RULES;
     }
     if (func.contain_sequence_) {
@@ -561,6 +561,26 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
                        stmt->is_insert_stmt())) {
     const ObDelUpdStmt *del_upd_stmt = static_cast<const ObDelUpdStmt *>(stmt);
     func.update_global_index_ = func.update_global_index_ || del_upd_stmt->has_global_index();
+  }
+  if (OB_SUCC(ret) && (stmt->is_update_stmt() || stmt->is_delete_stmt())) {
+    ObSqlSchemaGuard &schema_guard = stmt->query_ctx_->sql_schema_guard_;
+    for (int64_t i = 0; OB_SUCC(ret) && !func.contain_dml_with_doc_id_ &&
+                        i < stmt->get_table_items().count(); ++i) {
+      const ObTableSchema *table_schema;
+      if (OB_ISNULL(stmt->get_table_items().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null table item", K(ret));
+      } else if (!stmt->get_table_items().at(i)->get_table_name().suffix_match("rowkey_doc")) {
+        // do nothing
+      } else if (OB_FAIL(schema_guard.get_table_schema(stmt->get_table_items().at(i)->ref_id_, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get invalid table schema", K(table_schema));
+      } else if (table_schema->is_rowkey_doc_id()) {
+        func.contain_dml_with_doc_id_ = true;
+      }
+    }
   }
   if (OB_SUCC(ret) && !func.all_found()) {
     ObSEArray<ObSelectStmt*, 8> child_stmts;
