@@ -143,7 +143,6 @@ public:
   bool is_row_store_only_co_table() const { return is_cgs_empty_co_ && is_all_cg_base(); }
   bool is_cgs_empty_co_table() const { return is_cgs_empty_co_; }
   int fill_cg_sstables(const common::ObIArray<ObITable *> &cg_tables);
-  int build_cs_meta_without_cgs();
   OB_INLINE const ObCOSSTableMeta &get_cs_meta() const { return cs_meta_; }
   OB_INLINE bool is_all_cg_base() const { return ObCOSSTableBaseType::ALL_CG_TYPE == base_type_; }
   OB_INLINE bool is_rowkey_cg_base() const { return ObCOSSTableBaseType::ROWKEY_CG_TYPE == base_type_; }
@@ -213,6 +212,7 @@ public:
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:
   int build_cs_meta();
+  int build_cs_meta_without_cgs();
 protected:
   ObCOSSTableMeta cs_meta_;
   ObCOSSTableBaseType base_type_;

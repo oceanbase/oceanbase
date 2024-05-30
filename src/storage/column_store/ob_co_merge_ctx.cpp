@@ -489,9 +489,6 @@ int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected cg sstable", K(ret), KPC(base_co_table), K(cg_tables_handle), K(cg_schemas));
     CTX_SET_DIAGNOSE_LOCATION(*this);
-  } else if (OB_FAIL(co_sstable->build_cs_meta_without_cgs())) {
-    LOG_WARN("failed to build cs meta without cgs", K(ret), KPC(this));
-    CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
     // only exist one co table here, emtpy or empty cg sstables
     new_sstable = static_cast<ObSSTable *>(base_co_table);
