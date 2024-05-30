@@ -2,9 +2,9 @@ name: Compile
 
 on:
   push:
-    branches: [ master, develop ]
+    branches: [ master, develop, vector_search ]
   pull_request:
-    branches: [ master, develop ]
+    branches: [ master, develop, vector_search ]
     paths-ignore:
       - 'docs/**'
       - '.github/**'
