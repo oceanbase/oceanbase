@@ -129,11 +129,11 @@ int ObTypeVector::vector_cmp(const ObTypeVector& other)
     5/1e016, 5/1e017, 5/1e018, 5/1e019, 5/1e020, 5/1e021, 5/1e022, 5/1e023,
     5/1e024, 5/1e025, 5/1e026, 5/1e027, 5/1e028, 5/1e029, 5/1e030, 5/1e031
   };
-  if (OB_UNLIKELY(size_ != other.count())) {
+  if (OB_UNLIKELY(dims_ != other.dims())) {
     cmp_res = ObObjCmpFuncs::CR_OB_ERROR;
   } else {
     double p = P[precision+1];
-    for (int64_t i = 0; i < size_; ++i) {
+    for (int64_t i = 0; i < dims_; ++i) {
       if (vals_[i] == other.at(i) || fabs(vals_[i] - other.at(i)) < p) {
         continue;
       } else if (vals_[i] < other.at(i)) {
