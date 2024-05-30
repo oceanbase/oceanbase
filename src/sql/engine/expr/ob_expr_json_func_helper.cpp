@@ -24,6 +24,7 @@
 #include "rpc/obmysql/ob_mysql_global.h" // DOUBLE_TO_STRING_CONVERSION_BUFFER_SIZE
 #include "sql/ob_result_set.h"
 #include "sql/ob_spi.h"
+#include "sql/engine/expr/ob_json_param_type.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -2627,6 +2628,50 @@ int ObJsonExprHelper::get_session_query_timeout_ts(ObEvalCtx &ctx, int64_t &time
     timeout_ts = session->get_query_timeout_ts();
   }
   return ret;
+}
+
+bool ObJsonExprHelper::is_json_special_same_as_expr(ObItemType type, int64_t index)
+{
+  bool is_special = false;
+  if ((T_FUN_SYS_JSON_VALUE == type &&
+        (JSN_VAL_EMPTY == index || JSN_VAL_ERROR == index)) ||
+      (T_FUN_SYS_JSON_QUERY == type &&
+        (JSN_QUE_EMPTY == index || JSN_QUE_ERROR == index || JSN_QUE_MISMATCH == index))) {
+    is_special = true;
+  }
+  return is_special;
+}
+
+bool ObJsonExprHelper::check_json_inner_same_as(const ObSysFunRawExpr *expr1,
+                                                const ObSysFunRawExpr *expr2,
+                                                int64_t index,
+                                                ObExprEqualCheckContext *check_context)
+{
+  bool bool_ret = true;
+  if (!expr1->get_param_expr(index)->same_as(*expr2->get_param_expr(index), check_context)) {
+    if (T_INT == expr1->get_param_expr(index)->get_expr_type()
+        && T_INT == expr2->get_param_expr(index)->get_expr_type()) {
+      const ObConstRawExpr* val1 = static_cast<const ObConstRawExpr*>(expr1->get_param_expr(index));
+      const ObConstRawExpr* val2 = static_cast<const ObConstRawExpr*>(expr2->get_param_expr(index));
+      int64_t int_value1 = val1->get_value().get_int();
+      int64_t int_value2 = val2->get_value().get_int();
+      if (T_FUN_SYS_JSON_VALUE == expr1->get_expr_type()) {
+        if (!((int_value1 == 1 && int_value2 == 3) || (int_value1 == 3 && int_value2 == 1))) {
+          bool_ret = false;
+        }
+      } else if (T_FUN_SYS_JSON_QUERY == expr1->get_expr_type()) {
+        if ((JSN_QUE_ERROR == index || JSN_QUE_EMPTY == index) && !((int_value1 == 1 && int_value2 == 5) || (int_value1 == 5 && int_value2 == 1))) {
+          bool_ret = false;
+        } else if (JSN_QUE_MISMATCH == index && !((int_value1 == 1 && int_value2 == 2) || (int_value1 == 2 && int_value2 == 1)))   {
+          bool_ret = false;
+        }
+      }
+    } else {
+      bool_ret = false;
+    }
+  }
+
+  return bool_ret;
 }
 
 /********** ObJsonExprHelper for json partial update  ****************/
