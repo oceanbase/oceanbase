@@ -880,6 +880,7 @@ typedef enum ObItemType
   T_FUN_SYS_INNER_TABLE_SEQUENCE_GETTER = 1815,
   T_FUN_SYS_DECODE_TRACE_ID = 1816,
   T_FUN_SYS_DOC_LENGTH = 1817,
+  T_FUN_SYS_GET_PATH = 1818,
   T_FUN_SYS_VEC_VID = 1900,   // vector index
   T_FUN_SYS_VEC_TYPE = 1901,
   T_FUN_SYS_VEC_VECTOR = 1902,
@@ -2523,6 +2524,8 @@ typedef enum ObItemType
   // create mv build deferred
   T_MV_REFRESH_OPT,
   T_MV_BUILD_OPT,
+  T_PSEUDO_EXTERNAL_FILE_ROW,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
