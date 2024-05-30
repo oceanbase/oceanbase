@@ -6327,7 +6327,11 @@ int ObPartTransCtx::get_tx_ctx_table_info_(ObTxCtxTableInfo &info)
     info.tx_id_ = trans_id_;
     info.ls_id_ = ls_id_;
     info.cluster_id_ = cluster_id_;
-    info.cluster_version_ = cluster_version_;
+    if (cluster_version_accurate_) {
+      info.cluster_version_ = cluster_version_;
+    } else {
+      info.cluster_version_ = 0;
+    }
     if (OB_FAIL(mt_ctx_.get_table_lock_store_info(info.table_lock_info_))) {
       TRANS_LOG(WARN, "get_table_lock_store_info failed", K(ret), K(info));
     } else {
@@ -9558,7 +9562,7 @@ inline int ObPartTransCtx::correct_cluster_version_(uint64_t cluster_version_in_
   if (cluster_version_in_log > 0 && cluster_version_ != cluster_version_in_log) {
     if (cluster_version_accurate_) {
       ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "cluster_version is different with TxCtx", K(ret), KPC(this));
+      TRANS_LOG(ERROR, "cluster_version is different with TxCtx", K(ret), K(cluster_version_in_log), KPC(this));
     } else {
       cluster_version_ = cluster_version_in_log;
       cluster_version_accurate_ = true;
