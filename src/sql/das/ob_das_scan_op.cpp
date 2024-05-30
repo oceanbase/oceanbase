@@ -271,6 +271,7 @@ int ObDASScanOp::init_scan_param()
   // TODO: add if(query_flag.is_read_latest) ..
   if (OB_NOT_NULL(trans_desc_)) {
     scan_param_.tx_id_ = trans_desc_->get_tx_id();
+    scan_param_.tx_seq_base_ = trans_desc_->get_seq_base();
   } else {
     scan_param_.tx_id_.reset();
   }
@@ -1201,6 +1202,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   // TODO: add if(query_flag.is_read_latest) ..
   if (OB_NOT_NULL(tx_desc_)) {
     scan_param_.tx_id_ = tx_desc_->get_tx_id();
+    scan_param_.tx_seq_base_ = tx_desc_->get_seq_base();
   } else {
     scan_param_.tx_id_.reset();
   }

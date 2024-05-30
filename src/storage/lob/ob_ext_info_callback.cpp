@@ -214,7 +214,6 @@ ObExtInfoCbRegister::~ObExtInfoCbRegister()
     // date_iter is alloc from ObLobManager::query
     // that use ob_malloc alloc memory, so here use ob_delete
     data_iter_->reset();
-    data_iter_->~ObLobQueryIter();
     OB_DELETE(ObLobQueryIter, "unused", data_iter_);
     data_iter_ = nullptr;
   }

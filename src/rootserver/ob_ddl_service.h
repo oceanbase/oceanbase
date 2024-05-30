@@ -1583,6 +1583,19 @@ private:
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
                                  share::ObDDLType &ddl_type);
+
+  bool is_dec_table_lob_inrow_threshold(
+      const obrpc::ObAlterTableArg &alter_table_arg,
+      const AlterTableSchema &alter_table_schema,
+      const ObTableSchema *orig_table_schema) const;
+
+  int check_alter_lob_inrow_threshold(
+      obrpc::ObAlterTableArg &alter_table_arg,
+      const AlterTableSchema &alter_table_schema,
+      const ObTableSchema *orig_table_schema,
+      bool &is_dec_lob_inrow_threshold,
+      share::ObDDLType &ddl_type) const;
+
   int check_is_add_identity_column(const share::schema::ObTableSchema &orig_table_schema,
                                    const share::schema::ObTableSchema &hidden_table_schema,
                                    bool &is_add_identity_column);

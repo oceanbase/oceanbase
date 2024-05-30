@@ -23,6 +23,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObLobMetaIterator;
+
 class ObPersistentLobApator : public ObILobApator
 {
 public:
@@ -38,42 +40,31 @@ public:
 
   virtual void destroy();
 
-  int get_meta_table_param(const ObTableParam *&table_param);
-  int get_meta_table_dml_param(const ObTableDMLParam *&table_param);
-  virtual int scan_lob_meta(ObLobAccessParam &param,
-    ObTableScanParam &scan_param,
-    common::ObNewRowIterator *&meta_iter) override;
-
-  int scan_lob_meta_with_ctx(
+  virtual int scan_lob_meta(
       ObLobAccessParam &param,
-      ObTableScanParam &scan_param,
-      common::ObNewRowIterator *&meta_iter);
-  int do_scan_lob_meta(
+      ObLobMetaIterator *&iter);
+  int scan_with_ctx(
       ObLobAccessParam &param,
-      ObTableScanParam &scan_param,
-      common::ObNewRowIterator *&meta_iter);
+      ObLobMetaIterator *&meta_iter);
 
   virtual int get_lob_data(ObLobAccessParam &param,
     uint64_t piece_id,
     ObLobPieceInfo& info) override;
-  virtual int revert_scan_iter(common::ObNewRowIterator *iter) override;
+  virtual int revert_scan_iter(ObLobMetaIterator *iter) override;
   virtual int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id) override;
   // write meta tablet
   virtual int write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
-  virtual int write_lob_metas(ObLobAccessParam& param, ObNewRowIterator *iter) override {return OB_NOT_IMPLEMENT; };
-  // write piece tablet
-  int write_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // erase meta tablet item
   virtual int erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) override;
-  // erase piece tablet item
-  int erase_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
-  // update piece tabliet item
-  int update_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row);
   // update lob meta tablet item
   virtual int update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row) override;
 
-  int build_persist_lob_writer(ObLobAccessParam &param);
-  int build_persist_lob_deleter(ObLobAccessParam &param);
+  // write piece tablet
+  int write_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row) {return OB_NOT_IMPLEMENT; };
+  // erase piece tablet item
+  int erase_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row) {return OB_NOT_IMPLEMENT; };
+  // update piece tabliet item
+  int update_lob_piece_tablet(ObLobAccessParam& param, ObLobPieceInfo& in_row) {return OB_NOT_IMPLEMENT; };
   static void set_lob_meta_row(
       ObObj* cell,
       ObNewRow& new_row,
@@ -83,19 +74,19 @@ public:
   int erase_lob_meta(ObLobAccessParam &param, ObNewRowIterator& row_iter);
   int update_lob_meta(ObLobAccessParam& param, ObNewRowIterator &row_iter);
 
-  int build_common_scan_param(
+  int prepare_table_scan_param(
       const ObLobAccessParam &param,
       const bool is_get,
-      uint32_t col_num,
-      ObTableScanParam& scan_param);
-  int build_common_scan_param(
-      const ObLobAccessParam &param,
-      ObIAllocator *allocator,
-      const bool is_get,
-      uint32_t col_num,
-      ObTableScanParam& scan_param);
+      ObTableScanParam &scan_param,
+      ObIAllocator *scan_allocator);
+  int prepare_lob_tablet_id(ObLobAccessParam& param);
+  int prepare_scan_param_schema_version(
+      ObLobAccessParam &param,
+      ObTableScanParam &scan_param);
 
 private:
+  int get_meta_table_param(const ObTableParam *&table_param);
+  int get_meta_table_dml_param(const ObTableDMLParam *&table_param);
   // get schema from schema service 
   int get_lob_tablet_schema(
       uint64_t tenant_id,
@@ -109,14 +100,6 @@ private:
       ObTabletHandle &lob_meta_tablet,
       ObTabletHandle &lob_piece_tablet);
 
-  int get_lob_tablets_id(
-      ObLobAccessParam& param,
-      common::ObTabletID &lob_meta_tablet_id,
-      common::ObTabletID &lob_piece_tablet_id);
-  int prepare_table_param(
-      const ObLobAccessParam &param,
-      ObTableScanParam &scan_param,
-      bool is_meta);
   int inner_get_tablet(
       const ObLobAccessParam &param,
       const common::ObTabletID &tablet_id,
@@ -126,22 +109,12 @@ private:
       const common::ObTabletID &lob_meta_tablet_id,
       const common::ObTabletID &lob_piece_tablet_id);
 
-  int build_lob_piece_table_dml(
-      ObLobAccessParam& param,
-      const uint64_t tenant_id,
-      ObTableDMLParam& dml_param,
-      ObDMLBaseParam& dml_base_param,
-      ObSEArray<uint64_t, 3>& column_ids,
-      const ObTabletHandle& data_tablet,
-      const ObTabletHandle& lob_piece_tablet);
-
   int prepare_lob_meta_dml(ObLobAccessParam& param);
 
   int build_lob_meta_table_dml(ObLobAccessParam& param);
   int build_lob_meta_table_dml(
       ObLobAccessParam& param,
-      ObDMLBaseParam& dml_base_param,
-      ObSEArray<uint64_t, 6>& column_ids);
+      ObDMLBaseParam& dml_base_param);
 
   int set_lob_piece_row(
       char* buf,
@@ -153,16 +126,17 @@ private:
 
   int init_table_param();
   int init_meta_column_ids(ObSEArray<uint64_t, 6> &meta_column_ids);
-  int prepare_piece_table_param(
-      const ObLobAccessParam &param,
-      ObTableScanParam &scan_param);
-  int prepare_lob_tablet_id(ObLobAccessParam& param);
   int set_dml_seq_no(ObLobAccessParam &param);
 
-  int prepare_single_get(
-      ObLobAccessParam &param,
-      ObTableScanParam &scan_param,
-      uint64_t &table_id);
+  int build_common_scan_param(
+      const ObLobAccessParam &param,
+      const bool is_get,
+      uint32_t col_num,
+      ObTableScanParam& scan_param,
+      ObIAllocator *scan_allocator);
+  int prepare_table_param(
+      const ObLobAccessParam &param,
+      ObTableScanParam &scan_param);
 
 private:
 

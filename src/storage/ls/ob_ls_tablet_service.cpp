@@ -4553,7 +4553,7 @@ int ObLSTabletService::process_lob_row(
               ObLobCommon *lob_common = reinterpret_cast<ObLobCommon*>(val_str.ptr());
               if (!lob_common->in_row_ && data_tbl_rowkey_change) {
                 ObLobAccessParam lob_param;
-                if (val_str.length() < ObLobManager::LOB_WITH_OUTROW_CTX_SIZE) {
+                if (val_str.length() < ObLobConstants::LOB_WITH_OUTROW_CTX_SIZE) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("not enough space for lob header", K(ret), K(val_str), K(i));
                 } else if (OB_FAIL(delete_lob_col(run_ctx, run_ctx.col_descs_->at(i), old_obj, old_sql_obj, lob_common, lob_param))) {

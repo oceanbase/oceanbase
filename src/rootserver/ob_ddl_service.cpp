@@ -11885,8 +11885,16 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       ddl_type = ObDDLType::DDL_NORMAL_TYPE;
     }
 
+    bool is_dec_lob_inrow_threshold = false;
+    if (OB_SUCC(ret) && OB_FAIL(check_alter_lob_inrow_threshold(
+          alter_table_arg, alter_table_schema, orig_table_schema,
+          is_dec_lob_inrow_threshold, ddl_type))) {
+      LOG_WARN("fail to check alter lob_inrow_threshold", K(ret));
+    }
+
     if (OB_SUCC(ret)
         && is_long_running_ddl(ddl_type)
+        && ! is_dec_lob_inrow_threshold
         && (alter_table_arg.is_alter_options_
         || !alter_table_arg.alter_table_schema_.get_foreign_key_infos().empty())) {
       if (alter_table_arg.is_alter_options_) {// alter options
@@ -12312,6 +12320,21 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           LOG_WARN("failed to convert to character", K(ret));
         }
       }
+
+      if (OB_SUCC(ret) && ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
+          && is_dec_table_lob_inrow_threshold(alter_table_arg, alter_table_schema, orig_table_schema)) {
+        new_table_schema.set_lob_inrow_threshold(alter_table_schema.get_lob_inrow_threshold());
+        OZ (create_user_hidden_table(*orig_table_schema,
+                                    new_table_schema,
+                                    &alter_table_arg.sequence_ddl_arg_,
+                                    false/*bind_tablets*/,
+                                    schema_guard,
+                                    schema_guard,
+                                    ddl_operator,
+                                    trans,
+                                    alter_table_arg.allocator_));
+      }
+
       if (OB_SUCC(ret) && need_redistribute_column_id) {
         if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
           LOG_WARN("failed to redistribute column ids", K(ret));
@@ -38030,6 +38053,68 @@ int ObDDLService::add_extra_tenant_init_config_(
   }
   return ret;
 }
+
+bool ObDDLService::is_dec_table_lob_inrow_threshold(
+    const obrpc::ObAlterTableArg &alter_table_arg,
+    const AlterTableSchema &alter_table_schema,
+    const ObTableSchema *orig_table_schema) const
+{
+  return OB_NOT_NULL(orig_table_schema)
+        && alter_table_arg.is_alter_options_
+        && alter_table_schema.alter_option_bitset_.has_member(ObAlterTableArg::LOB_INROW_THRESHOLD)
+        && alter_table_schema.get_lob_inrow_threshold() < orig_table_schema->get_lob_inrow_threshold();
+}
+
+int ObDDLService::check_alter_lob_inrow_threshold(
+    obrpc::ObAlterTableArg &alter_table_arg,
+    const AlterTableSchema &alter_table_schema,
+    const ObTableSchema *orig_table_schema,
+    bool &is_dec_lob_inrow_threshold,
+    share::ObDDLType &ddl_type) const
+{
+  int ret = OB_SUCCESS;
+  if (! is_dec_table_lob_inrow_threshold(alter_table_arg, alter_table_schema, orig_table_schema)) {
+    // inc or not change lob inrow threshold is online
+  } else if (ddl_type != ObDDLType::DDL_INVALID) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("There are several mutually exclusive DDL in single statement", K(ret), K(ddl_type));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "There are several mutually exclusive DDL in single statement");
+  } else {
+    ObTableSchema::const_column_iterator tmp_begin = orig_table_schema->column_begin();
+    ObTableSchema::const_column_iterator tmp_end = orig_table_schema->column_end();
+    bool is_origin_table_has_lob_column = false;
+
+    for (int32_t i = ObAlterTableArg::AUTO_INCREMENT;
+        OB_SUCC(ret) && i < ObAlterTableArg::MAX_OPTION; ++i) {
+      if (alter_table_schema.alter_option_bitset_.has_member(i) && i != ObAlterTableArg::LOB_INROW_THRESHOLD) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("There are several mutually exclusive DDL in single statement", K(ret), K(ddl_type), K(alter_table_schema));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "There are several mutually exclusive DDL in single statement");
+      }
+    }
+
+    for (; OB_SUCC(ret) && tmp_begin != tmp_end && ! is_origin_table_has_lob_column; tmp_begin++) {
+      ObColumnSchemaV2 *column = (*tmp_begin);
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is NULL", K(ret));
+      } else if (is_lob_storage(column->get_data_type())) {
+        is_origin_table_has_lob_column = true;
+      }
+    }
+
+    // online if no lob storage column in origin table
+    // offline if has lob storage column and dec lob inrow threshold
+    if (OB_SUCC(ret) && is_origin_table_has_lob_column) {
+      ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
+      is_dec_lob_inrow_threshold = true;
+    }
+    LOG_TRACE("alter lob inrow threahold", K(ret), K(is_origin_table_has_lob_column), K(ddl_type),
+        "old_value", alter_table_schema.get_lob_inrow_threshold(), "new_value", orig_table_schema->get_lob_inrow_threshold());
+  }
+  return ret;
+}
+
 
 } // end namespace rootserver
 } // end namespace oceanbase

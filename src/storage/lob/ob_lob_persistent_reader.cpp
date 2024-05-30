@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_lob_persistent_reader.h"
+#include "storage/lob/ob_lob_persistent_iterator.h"
 
 namespace oceanbase
 {
@@ -23,13 +24,14 @@ ObPersistLobReaderCache::~ObPersistLobReaderCache()
 {
   int ret = OB_SUCCESS;
   DLIST_FOREACH(curr, list_) {
-    curr->reader_->~ObPersistLobReader();
+    curr->reader_->reset();
+    curr->reader_->~ObLobMetaIterator();
     curr->reader_ = nullptr;
   }
   list_.clear();
 }
 
-int ObPersistLobReaderCache::get(ObPersistLobReaderCacheKey key, ObPersistLobReader *&reader)
+int ObPersistLobReaderCache::get(ObPersistLobReaderCacheKey key, ObLobMetaIterator *&reader)
 {
   int ret = OB_SUCCESS;
   DLIST_FOREACH_X(curr, list_, OB_SUCC(ret) && nullptr == reader) {
@@ -48,7 +50,7 @@ int ObPersistLobReaderCache::get(ObPersistLobReaderCacheKey key, ObPersistLobRea
   return ret;
 }
 
-int ObPersistLobReaderCache::put(ObPersistLobReaderCacheKey key, ObPersistLobReader *reader)
+int ObPersistLobReaderCache::put(ObPersistLobReaderCacheKey key, ObLobMetaIterator *reader)
 {
   int ret = OB_SUCCESS;
   ObPersistLobReaderCacheNode *node = nullptr;
@@ -85,7 +87,7 @@ int ObPersistLobReaderCache::remove_first()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null", K(ret), K(list_));
   } else {
-    node->reader_->~ObPersistLobReader();
+    node->reader_->~ObLobMetaIterator();
     allocator_.free(node->reader_);
     node->reader_ = nullptr;
     allocator_.free(node);
@@ -93,75 +95,9 @@ int ObPersistLobReaderCache::remove_first()
   return ret;
 }
 
-ObPersistLobReader::~ObPersistLobReader()
+ObLobMetaIterator* ObPersistLobReaderCache::alloc_reader(const ObLobAccessCtx *access_ctx)
 {
-  if (OB_NOT_NULL(adaptor_)) {
-    if (OB_NOT_NULL(row_iter_)) {
-      adaptor_->revert_scan_iter(row_iter_);
-      row_iter_ = nullptr;
-    }
-  }
-}
-
-ObPersistLobReader* ObPersistLobReaderCache::alloc_reader()
-{
-  return OB_NEWx(ObPersistLobReader, &allocator_);
-}
-
-int ObPersistLobReader::open(ObPersistentLobApator* adaptor, ObLobAccessParam &param, ObNewRowIterator *&meta_iter)
-{
-  int ret = OB_SUCCESS;
-  // scan may be fail, must be sure adaptor not null
-  // then deconstrcutor can release correctly
-  adaptor_ = adaptor;
-
-  ObNewRange range;
-  if (OB_ISNULL(adaptor)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("adaptor is null", KR(ret), K(param));
-  } else if (! param.lob_meta_tablet_id_.is_valid() || ! param.lob_piece_tablet_id_.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("tablet_id invalid", KR(ret), K(param));
-  } else if (OB_FAIL(param.get_rowkey_range(rowkey_objs_, range))) {
-    LOG_WARN("get_rowkey_range fail", K(ret));
-  } else if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
-    LOG_WARN("failed to push key range.", K(ret), K(scan_param_), K(range));
-  } else if (OB_FAIL(adaptor->do_scan_lob_meta(param, scan_param_, row_iter_))) {
-    LOG_WARN("do_scan_lob_meta fail", K(ret));
-  } else {
-    meta_iter = row_iter_;
-    lob_meta_tablet_id_ = param.lob_meta_tablet_id_;
-    lob_piece_tablet_id_ = param.lob_piece_tablet_id_;
-  }
-  return ret;
-}
-
-int ObPersistLobReader::rescan(ObLobAccessParam &param, ObNewRowIterator *&meta_iter)
-{
-  int ret = OB_SUCCESS;
-  ObNewRange range;
-  ObAccessService *oas = MTL(ObAccessService*);
-
-  param.lob_meta_tablet_id_ =  lob_meta_tablet_id_;
-  param.lob_piece_tablet_id_ =  lob_piece_tablet_id_;
-
-  if (OB_FAIL(oas->reuse_scan_iter(false/*tablet id same*/, row_iter_))) {
-    LOG_WARN("fail to reuse scan iter", K(ret));
-  } else if (OB_FAIL(param.get_rowkey_range(rowkey_objs_, range))) {
-    LOG_WARN("get_rowkey_range fail", K(ret));
-  } else if (OB_FAIL(adaptor_->build_common_scan_param(param, param.has_single_chunk(), ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param_))) {
-    LOG_WARN("build common scan param failed.", K(ret));
-  } else {
-    scan_param_.key_ranges_.reset();
-    if (OB_FAIL(scan_param_.key_ranges_.push_back(range))) {
-      LOG_WARN("failed to push key range.", K(ret), K(scan_param_), K(range));
-    } else if (OB_FAIL(oas->table_rescan(scan_param_, row_iter_))) {
-      LOG_WARN("fail to do table rescan", K(ret), K(scan_param_));
-    } else {
-      meta_iter = row_iter_;
-    }
-  }
-  return ret;
+  return OB_NEWx(ObLobMetaIterator, &allocator_, access_ctx);
 }
 
 } // storage

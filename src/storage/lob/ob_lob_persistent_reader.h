@@ -13,35 +13,15 @@
 #ifndef OCEABASE_STORAGE_OB_LOB_PERSISTENT_READER_
 #define OCEABASE_STORAGE_OB_LOB_PERSISTENT_READER_
 
+#include "storage/lob/ob_lob_access_param.h"
+
 namespace oceanbase
 {
 namespace storage
 {
 
 
-class ObPersistLobReader
-{
-public:
-  ObPersistLobReader():
-    adaptor_(nullptr),
-    row_iter_(nullptr),
-    scan_param_(),
-    lob_meta_tablet_id_(),
-    lob_piece_tablet_id_()
-  {}
-  ~ObPersistLobReader();
-  int rescan(ObLobAccessParam &param, ObNewRowIterator *&meta_iter);
-  int open(ObPersistentLobApator* adpter, ObLobAccessParam &param, ObNewRowIterator *&meta_iter);
-
-private:
-  ObPersistentLobApator *adaptor_;
-  ObNewRowIterator *row_iter_;
-  ObObj rowkey_objs_[4];
-  ObTableScanParam scan_param_;
-  common::ObTabletID lob_meta_tablet_id_;
-  common::ObTabletID lob_piece_tablet_id_;
-
-};
+class ObLobMetaIterator;
 
 struct ObPersistLobReaderCacheKey
 {
@@ -72,7 +52,7 @@ struct ObPersistLobReaderCacheNode : public ObDLinkBase<ObPersistLobReaderCacheN
   {}
 
   ObPersistLobReaderCacheKey key_;
-  ObPersistLobReader *reader_;
+  ObLobMetaIterator *reader_;
 };
 
 class ObPersistLobReaderCache
@@ -87,10 +67,10 @@ public:
   {}
   ~ObPersistLobReaderCache();
 
-  int get(ObPersistLobReaderCacheKey key, ObPersistLobReader *&reader);
-  int put(ObPersistLobReaderCacheKey key, ObPersistLobReader *reader);
+  int get(ObPersistLobReaderCacheKey key, ObLobMetaIterator *&reader);
+  int put(ObPersistLobReaderCacheKey key, ObLobMetaIterator *reader);
 
-  ObPersistLobReader* alloc_reader();
+  ObLobMetaIterator* alloc_reader(const ObLobAccessCtx *access_ctx);
   ObIAllocator& get_allocator() { return allocator_; }
 
 private:

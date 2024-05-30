@@ -134,7 +134,7 @@ void ObTxSavePoint::release()
 void ObTxSavePoint::rollback()
 {
   if (is_snapshot() && snapshot_) {
-    snapshot_->valid_ = false;
+    snapshot_->invalid();
   }
   release();
 }
@@ -143,7 +143,7 @@ void ObTxSavePoint::init(ObTxReadSnapshot *snapshot)
 {
   type_ = T::SNAPSHOT;
   snapshot_ = snapshot;
-  scn_ = snapshot->core_.scn_;
+  scn_ = snapshot->tx_seq();
 }
 
 int ObTxSavePoint::init(const ObTxSEQ &scn, const ObString &name, const uint32_t session_id, const bool user_create, const bool stash)
@@ -195,6 +195,82 @@ OB_SERIALIZE_MEMBER(ObTxReadSnapshot,
                     snapshot_ls_role_,
                     committed_,
                     snapshot_acquire_addr_);
+
+
+// for lob aux table tx read snapshot
+#define PREPARE_LOB_PARTS(parts, ls_id)         \
+  ObSEArray<ObTxLSEpochPair, 1> parts;          \
+  ARRAY_FOREACH_NORET(parts_, i) {              \
+   if (parts_.at(i).left_ == ls_id) {           \
+     parts.push_back(parts_.at(i));             \
+     break;                                     \
+   }                                            \
+}                                               \
+
+int ObTxReadSnapshot::serialize_for_lob(const share::ObLSID &ls_id, SERIAL_PARAMS) const
+{
+  int ret = OB_SUCCESS;
+  PREPARE_LOB_PARTS(parts, ls_id);
+  LST_DO_CODE(OB_UNIS_ENCODE, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts);
+  return ret;
+}
+
+int ObTxReadSnapshot::deserialize_for_lob(DESERIAL_PARAMS)
+{
+  int ret = OB_SUCCESS;
+  LST_DO_CODE(OB_UNIS_DECODE, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts_);
+  if (OB_SUCC(ret)) {
+    valid_ = true;
+  }
+  return ret;
+}
+
+int64_t ObTxReadSnapshot::get_serialize_size_for_lob(const share::ObLSID &ls_id) const
+{
+  int64_t len = 0;
+  PREPARE_LOB_PARTS(parts, ls_id);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, core_, source_, snapshot_lsid_, snapshot_ls_role_, parts);
+  return len;
+}
+
+int ObTxReadSnapshot::build_snapshot_for_lob(const ObTxSnapshot &core, const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  core_ = core;
+  valid_= true;
+  source_ = ObTxReadSnapshot::SRC::LS;
+  snapshot_lsid_ = ls_id;
+  return ret;
+}
+
+int ObTxReadSnapshot::build_snapshot_for_lob(
+    const int64_t snapshot_version,
+    const int64_t snapshot_tx_id,
+    const int64_t snapshot_seq,
+    const share::ObLSID &ls_id)
+{
+  int ret = OB_SUCCESS;
+  core_.version_.convert_for_tx(snapshot_version);
+  core_.tx_id_ = snapshot_tx_id;
+  core_.scn_ = ObTxSEQ::cast_from_int(snapshot_seq);
+  valid_ = true;
+  source_ = ObTxReadSnapshot::SRC::LS;
+  snapshot_lsid_ = ls_id;
+  return ret;
+}
+
+int ObTxReadSnapshot::refresh_seq_no(const int64_t tx_seq_base)
+{
+  int ret = OB_SUCCESS;
+  if (tx_seq_base < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    TRANS_LOG(WARN, "tx_seq_base invalid", K(ret), K(tx_seq_base));
+  } else {
+    core_.scn_ = core_.scn_.clone_with_seq(ObSequence::get_max_seq_no(), tx_seq_base);
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
 DEFINE_SERIALIZE(ObTxDesc::FLAG::FOR_FIXED_SER_VAL)
@@ -1134,6 +1210,8 @@ ObTxParam::~ObTxParam()
 
 ObTxSnapshot::ObTxSnapshot()
   : version_(), tx_id_(), scn_(), elr_(false) {}
+ObTxSnapshot::ObTxSnapshot(const share::SCN &version)
+  : version_(version), tx_id_(), scn_(), elr_(false) {}
 
 ObTxSnapshot::~ObTxSnapshot()
 {

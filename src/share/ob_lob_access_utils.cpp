@@ -126,6 +126,9 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   if (OB_ISNULL(lob_iter_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "Lob: invalid lob iter ctx.", K(ret));
+  } else if (OB_ISNULL(allocator = (allocator == nullptr ? lob_iter_ctx->alloc_: allocator))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "Lob: allocator is null", K(ret), KP(allocator), KP(lob_iter_ctx->alloc_));
   } else if (!lob_iter_ctx->locator_.is_persist_lob()) {
     ret = OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "Lob: outrow temp lob is not supported", K(ret), K(lob_iter_ctx->locator_));
@@ -145,10 +148,10 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(lob_mngr->build_lob_param(param, *lob_iter_ctx->alloc_, cs_type,
+  } else if (OB_FAIL(lob_mngr->build_lob_param(param, *allocator, cs_type,
                   0, UINT64_MAX, timeout_ts, lob_iter_ctx->locator_))) {
     LOG_WARN("build_lob_param fail", K(ret), K(*lob_iter_ctx));
-  } else if (! param.snapshot_.core_.tx_id_.is_valid()) {
+  } else if (! param.snapshot_.tx_id().is_valid()) {
     // if tx_id is valid, means read may be in a tx
     // lob can not set read_latest flag
     // so reuse lob aux table iterator only if tx_id is invalid
@@ -158,7 +161,6 @@ static int init_lob_access_param(storage::ObLobAccessParam &param,
     // second read shoud get "v11" not "v0"
     param.access_ctx_ = lob_iter_ctx->lob_access_ctx_;
   }
-
   return ret;
 }
 
@@ -1109,7 +1111,7 @@ int ObTextStringResult::calc_buffer_len(int64_t res_len)
       bool has_extern = lib::is_oracle_mode(); // even oracle may not need extern for temp data
       ObMemLobExternFlags extern_flags(has_extern);
       res_len += sizeof(ObLobCommon);
-      buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), false);
+      buff_len_ = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, static_cast<uint32_t>(res_len), 0, false);
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("Lob: out row temp lob not implemented, not support length bigger than 512M",
@@ -1126,7 +1128,7 @@ int ObTextStringResult::calc_inrow_templob_len(uint32 inrow_data_len, int64_t &t
     bool has_extern = lib::is_oracle_mode();
     ObMemLobExternFlags extern_flags(has_extern);
     inrow_data_len += sizeof(ObLobCommon);
-    templob_len = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, inrow_data_len, false);
+    templob_len = ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, inrow_data_len, 0, false);
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Lob: not support length bigger than 512M", K(ret), K(inrow_data_len));
@@ -1137,7 +1139,7 @@ int ObTextStringResult::calc_inrow_templob_len(uint32 inrow_data_len, int64_t &t
 int64_t ObTextStringResult::calc_inrow_templob_locator_len()
 {
   ObMemLobExternFlags extern_flags(lib::is_oracle_mode());
-  return static_cast<int64_t>(ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, 0, false));
+  return static_cast<int64_t>(ObLobLocatorV2::calc_locator_full_len(extern_flags, 0, 0, 0, false));
 }
 
 int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, char *buf, int64_t buf_len)
@@ -1161,6 +1163,7 @@ int ObTextStringResult::fill_inrow_templob_header(const int64_t inrow_data_len, 
                              rowkey_str,
                              &lob_common,
                              static_cast<uint32_t>(inrow_data_len + sizeof(ObLobCommon)),
+                             0,
                              0,
                              false))) {
       LOG_WARN("Lob: fill temp lob locator failed", K(ret), K(inrow_data_len), K(buf), K(buf_len));
@@ -1195,6 +1198,7 @@ int ObTextStringResult::fill_temp_lob_header(const int64_t res_len)
                              rowkey_str,
                              &lob_common,
                              static_cast<uint32_t>(res_len + sizeof(ObLobCommon)),
+                             0,
                              0,
                              false))) {
       LOG_WARN("Lob: fill temp lob locator failed", K(type_), K(ret));

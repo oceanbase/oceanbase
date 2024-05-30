@@ -23,23 +23,17 @@ namespace oceanbase
 namespace storage
 {
 
-typedef struct ObLobPieceInfo ObLobPieceInfo;
-
+class ObLobMetaIterator;
 // TODO interface define
 class ObILobApator {
 public:
   virtual int write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) = 0;
-  virtual int write_lob_metas(ObLobAccessParam& param, ObNewRowIterator *iter) = 0;
   virtual int update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row) = 0;
   virtual int erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info) = 0;
-  virtual int scan_lob_meta(ObLobAccessParam &param, ObTableScanParam &scan_param, common::ObNewRowIterator *&meta_iter_) = 0;
+  virtual int scan_lob_meta(ObLobAccessParam &param, ObLobMetaIterator *&meta_iter) = 0;
   virtual int get_lob_data(ObLobAccessParam &param, uint64_t piece_id, ObLobPieceInfo& info) = 0;
-  virtual int revert_scan_iter(common::ObNewRowIterator *iter) = 0;
+  virtual int revert_scan_iter(ObLobMetaIterator *iter) = 0;
   virtual int fetch_lob_id(ObLobAccessParam& param, uint64_t &lob_id) = 0;
-  virtual int prepare_single_get(
-      ObLobAccessParam &param,
-      ObTableScanParam &scan_param,
-      uint64_t &table_id) = 0;
 };
 
 } // storage
