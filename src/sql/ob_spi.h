@@ -313,6 +313,7 @@ public:
     PLPrepareResult() :
         mem_context_(nullptr),
         mem_context_destroy_guard_(mem_context_),
+        result_set_(nullptr),
         sql_ctx_(),
         schema_guard_(share::schema::ObSchemaMgrItem::MOD_PL_PREPARE_RESULT) {}
     ~PLPrepareResult() { reset(); }
