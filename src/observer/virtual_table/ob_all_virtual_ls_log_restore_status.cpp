@@ -123,7 +123,7 @@ int ObVirtualLSLogRestoreStatus::inner_get_next_row(common::ObNewRow *&row)
                             && OB_FAIL(insert_ls_restore_status_info_(restore_status_info))) {
                   SERVER_LOG(WARN, "fail to insert ls restore status info", K(restore_status_info));
                 } else {
-                  SERVER_LOG(TRACE, "iterate sys log_stream success", K(ls));
+                  SERVER_LOG(TRACE, "iterate sys log_stream success", K(ls->get_ls_id()));
                   scanner_.add_row(cur_row_);
                 }
               }
