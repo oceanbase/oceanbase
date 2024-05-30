@@ -2,7 +2,7 @@ name: Farm
 
 on:
   pull_request:
-    branches: [ master,develop ]
+    branches: [ master,develop,vector_search ]
     paths-ignore:
       - 'docs/**'
       - '.github/**'
