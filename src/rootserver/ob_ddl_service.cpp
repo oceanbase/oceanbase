@@ -20297,7 +20297,8 @@ int ObDDLService::drop_table_in_trans(
     const ObString *ddl_stmt_str,
     ObMySQLTransaction *sql_trans,
     DropTableIdHashSet *drop_table_set,
-    ObMockFKParentTableSchema *mock_fk_parent_table_ptr /* will use it when drop a fk_parent_table */)
+    ObMockFKParentTableSchema *mock_fk_parent_table_ptr, /* will use it when drop a fk_parent_table */
+    const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   UNUSED(is_index);
@@ -20376,7 +20377,7 @@ int ObDDLService::drop_table_in_trans(
         }
         if (OB_SUCC(ret) && OB_FAIL(ddl_operator.drop_table(
                                     table_schema, trans, ddl_stmt_str,
-                                    false/*is_truncate_table*/, drop_table_set, false))) {
+                                    false/*is_truncate_table*/, drop_table_set, false, delete_priv))) {
           LOG_WARN("ddl_operator drop_table failed", K(table_schema), KR(ret));
         }
       }
@@ -22882,7 +22883,7 @@ int ObDDLService::add_table_schema(
   return ret;
 }
 
-int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema)
+int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_schema, const bool delete_priv)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
@@ -22911,7 +22912,7 @@ int ObDDLService::drop_inner_table(const share::schema::ObTableSchema &table_sch
                                          table_schema.is_index_table(),
                                          false, /* to recyclebin*/
                                          stmt,
-                                         NULL, NULL, NULL))) {
+                                         NULL, NULL, NULL, delete_priv))) {
     LOG_WARN("drop table in transaction failed", KR(ret), K(tenant_id), K(table_id));
   }
   LOG_INFO("[UPGRADE] drop inner table", KR(ret),
