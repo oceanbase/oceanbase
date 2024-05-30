@@ -19,9 +19,11 @@
 
 #include "lib/oblog/ob_log.h"
 #include "share/object/ob_obj_cast.h"
+#include "share/ob_compatibility_control.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -234,7 +236,30 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
   } else if (text->is_null()
              || (is_mysql && from->is_null())
              || (is_mysql && NULL != to && to->is_null())) {
-    expr_datum.set_null();
+    if (is_mysql && !from->is_null() && 0 == from->len_) {
+      ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      uint64_t compat_version = 0;
+      ObCompatType compat_type = COMPAT_MYSQL57;
+      bool is_enable = false;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else if (OB_FAIL(helper.get_compat_version(compat_version))) {
+        LOG_WARN("failed to get compat version", K(ret));
+      } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                              ObCompatFeatureType::FUNC_REPLACE_NULL, is_enable))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+        LOG_WARN("failed to get compat type", K(ret));
+      } else if (is_enable && COMPAT_MYSQL57 == compat_type) {
+        expr_datum.set_datum(*text);
+      } else {
+        expr_datum.set_null();
+      }
+    } else {
+      expr_datum.set_null();
+    }
   } else if (is_clob && (0 == text->len_)) {
     expr_datum.set_datum(*text);
   } else if (!is_lob_res) { // non text tc inputs
@@ -288,8 +313,9 @@ int ObExprReplace::eval_replace(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprReplace, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
+  SET_LOCAL_SYSVAR_CAPACITY(2);
   EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_OB_COMPATIBILITY_VERSION);
   return ret;
 }
 

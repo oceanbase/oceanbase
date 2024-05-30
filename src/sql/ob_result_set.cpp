@@ -1159,7 +1159,9 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlanCtx *plan_ctx = NULL;
-  if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx())) {
+  ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(plan_ctx = get_exec_context().get_physical_plan_ctx()) ||
+      OB_ISNULL(session_info = get_exec_context().get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("physical plan ctx is null or ref handle is invalid",
              K(ret), K(plan_ctx));
@@ -1168,7 +1170,7 @@ int ObResultSet::from_plan(const ObPhysicalPlan &phy_plan, const ObIArray<ObPCPa
     // 因为会修改ObField中的cname_，所以这里深拷计划中的field_columns_
     LOG_WARN("failed to copy field columns", K(ret));
   } else if (phy_plan.contain_paramed_column_field()
-             && OB_FAIL(construct_field_name(raw_params, false))) {
+             && OB_FAIL(construct_field_name(raw_params, false, *session_info))) {
     LOG_WARN("failed to construct field name", K(ret));
   } else {
     int64_t ps_param_count = plan_ctx->get_orig_question_mark_cnt();
@@ -1592,11 +1594,15 @@ int ObResultSet::copy_field_columns(const ObPhysicalPlan &plan)
 }
 
 int ObResultSet::construct_field_name(const common::ObIArray<ObPCParam *> &raw_params,
-                                      const bool is_first_parse)
+                                      const bool is_first_parse,
+                                      const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < field_columns_.count(); i++) {
-    if (OB_FAIL(construct_display_field_name(field_columns_.at(i), raw_params, is_first_parse))) {
+    if (OB_FAIL(construct_display_field_name(field_columns_.at(i),
+                                             raw_params,
+                                             is_first_parse,
+                                             session_info))) {
       LOG_WARN("failed to construct display name", K(ret), K(field_columns_.at(i)));
     } else {
       // do nothing
@@ -1607,7 +1613,8 @@ int ObResultSet::construct_field_name(const common::ObIArray<ObPCParam *> &raw_p
 
 int ObResultSet::construct_display_field_name(common::ObField &field,
                                               const ObIArray<ObPCParam *> &raw_params,
-                                              const bool is_first_parse)
+                                              const bool is_first_parse,
+                                              const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
@@ -1617,7 +1624,7 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
   int32_t buf_len = MAX_COLUMN_CHAR_LENGTH * 2;
   int32_t pos = 0;
   int32_t name_pos = 0;
-
+  bool enable_modify_null_name = false;
   if (!field.is_paramed_select_item_ || NULL == field.paramed_ctx_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(field.is_paramed_select_item_), K(field.paramed_ctx_));
@@ -1625,6 +1632,9 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
     // 1. 参数化的cname长度为0，说明指定了列名
     // 2. 指定了别名，别名存在cname_里，直接使用即可
     // do nothing
+  } else if (OB_FAIL(my_session_.check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                      enable_modify_null_name))) {
+    LOG_WARN("failed to check feature enable", K(ret));
   } else if (OB_ISNULL(buf = static_cast<char *>(get_mem_pool().alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret), K(buf_len));
@@ -1697,6 +1707,14 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
               buf[pos++] = '\'';
             }
           }
+        } else if (lib::is_mysql_mode() &&
+                   0 == field.paramed_ctx_->paramed_cname_.compare("?") &&
+                   1 == PARAM_CTX->param_idxs_.count() &&
+                   T_NULL == raw_params.at(idx)->node_->type_ &&
+                   enable_modify_null_name) {
+          // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+          copy_str_len = strlen("NULL");
+          copy_str = "NULL";
         } else {
           copy_str_len = raw_params.at(idx)->node_->text_len_;
           copy_str = raw_params.at(idx)->node_->raw_text_;

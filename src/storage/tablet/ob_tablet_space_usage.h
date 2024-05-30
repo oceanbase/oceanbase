@@ -38,6 +38,15 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
   int32_t get_serialize_size() const;
+
+  bool is_valid() const
+  {
+    return (OB_INVALID_SIZE != shared_data_size_)
+        && (OB_INVALID_SIZE != data_size_)
+        && (OB_INVALID_SIZE != shared_meta_size_)
+        && (OB_INVALID_SIZE != meta_size_)
+        && (OB_INVALID_SIZE != occupy_bytes_);
+  }
 public:
   static const int32_t TABLET_SPACE_USAGE_INFO_VERSION = 1;
 public:

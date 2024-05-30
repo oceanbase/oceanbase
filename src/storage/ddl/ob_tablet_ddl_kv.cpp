@@ -1428,17 +1428,7 @@ bool ObDDLKV::ready_for_flush_() {
 
   // STEP 2 : compare max_decided_scn with end_scn
   SCN max_decided_scn = SCN::min_scn();
-  const SCN end_scn = ObITabletMemtable::get_end_scn();
-  if (OB_FAIL(ret)) {
-  } else if (end_scn.is_max()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("end_scn should not be max scn", K(ret), K(ls_id), KPC(this));
-  } else if (OB_FAIL(get_ls_current_right_boundary_(max_decided_scn))) {
-    LOG_WARN("get max decided scn failed", K(ret), K(ls_id));
-  } else if (max_decided_scn >= end_scn) {
-    set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
-    ready_for_flush = true;
-  }
+  ready_for_flush = data_has_completed_(max_decided_scn);
 
   // STEP 3 : print debug info if not ready_for_flush for long time
   if (!ready_for_flush && 0 != get_frozen_time()) {
@@ -1456,6 +1446,26 @@ bool ObDDLKV::ready_for_flush_() {
   }
 
   return ready_for_flush;
+}
+
+
+bool ObDDLKV::data_has_completed_(SCN &max_decided_scn)
+{
+  int ret = OB_SUCCESS;
+  bool data_has_completed = false;
+  const SCN end_scn = ObITabletMemtable::get_end_scn();
+  if (OB_FAIL(ret)) {
+  } else if (end_scn.is_max()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("end_scn should not be max scn", K(ret), K(get_ls_id()), KPC(this));
+  } else if (OB_FAIL(get_ls_current_right_boundary_(max_decided_scn))) {
+    LOG_WARN("get max decided scn failed", K(ret), K(get_ls_id()));
+  } else if (max_decided_scn >= end_scn) {
+    set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
+    data_has_completed = true;
+  }
+
+  return data_has_completed;
 }
 
 int ObDDLKV::decide_right_boundary()
@@ -1605,7 +1615,14 @@ int ObDDLKV::get_frozen_schema_version(int64_t &schema_version) const
 
 bool ObDDLKV::can_be_minor_merged()
 {
-  return ready_for_flush() && ObITabletMemtable::can_be_minor_merged();
+  bool can_be_minor_merge = false;
+  if (!is_frozen_memtable()){
+  } else if (ObITabletMemtable::get_end_scn().is_max()) {
+  } else {
+    SCN max_decided_scn;
+    can_be_minor_merge = data_has_completed_(max_decided_scn) && ObITabletMemtable::can_be_minor_merged();
+  }
+  return can_be_minor_merge;
 }
 
 int ObDDLKV::get_schema_info(

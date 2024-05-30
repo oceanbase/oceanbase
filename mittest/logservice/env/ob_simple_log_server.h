@@ -391,6 +391,8 @@ protected:
                                    const int64_t new_log_disk_size,
                                    int64_t &allowed_log_disk_size);
   int update_disk_opts_no_lock_(const PalfDiskOptions &opts);
+  int init_log_kv_cache_();
+
 
 private:
   int64_t node_id_;

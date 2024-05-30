@@ -188,7 +188,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
 
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
-  OZ (jit_lock_.init(32));
+  OZ (jit_lock_.first.init(1024));
+  OZ (jit_lock_.second.init(1024));
   OZ (interface_service_.init());
   OX (serialize_composite_callback = ObUserDefinedType::serialize_obj);
   OX (deserialize_composite_callback = ObUserDefinedType::deserialize_obj);
@@ -3798,6 +3799,9 @@ int ObPL::check_exec_priv(
                                       exec_ctx.get_my_session()->get_database_name(),
                                       session_priv))) {
           LOG_WARN("fail to get_session_priv_info", K(ret));
+      } else if (OB_FAIL(exec_ctx.get_my_session()->get_security_version(
+                                                          session_priv.security_version_))) {
+        LOG_WARN("fail to get security version", K(ret));
       } else if (OB_UNLIKELY(!session_priv.is_valid())) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
@@ -4256,7 +4260,8 @@ ObPLCompileUnit::ObPLCompileUnit(sql::ObLibCacheNameSpace ns,
                                  lib::MemoryContext &mem_context)
     : ObPLCacheObject(ns, mem_context), routine_table_(allocator_),
       type_table_(), helper_(allocator_), di_helper_(allocator_),
-      can_cached_(true)
+      can_cached_(true),
+      exec_env_()
 {
 #ifndef USE_MCJIT
   int ret = OB_SUCCESS;

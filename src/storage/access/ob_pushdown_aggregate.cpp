@@ -395,7 +395,8 @@ ObAggCell::ObAggCell(const ObAggCellBasicInfo &basic_info, common::ObIAllocator 
       group_by_result_datum_buf_(nullptr),
       bitmap_(nullptr),
       group_by_result_cnt_(0),
-      is_assigned_to_group_by_processor_(false)
+      is_assigned_to_group_by_processor_(false),
+      padding_allocator_("ObStorageAgg", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   if (basic_info_.col_param_ != nullptr) {
     is_lob_col_ = basic_info_.col_param_->get_meta_type().is_lob_storage();
@@ -428,6 +429,7 @@ void ObAggCell::reset()
   free_group_by_buf(allocator_, group_by_result_datum_buf_);
   group_by_result_cnt_ = 0;
   is_assigned_to_group_by_processor_ = false;
+  padding_allocator_.reset();
 }
 
 void ObAggCell::reuse()
@@ -446,6 +448,7 @@ void ObAggCell::reuse()
       col_datums_[i].set_null();
     }
   }
+  padding_allocator_.reuse();
 }
 
 void ObAggCell::clear_group_by_info()
@@ -666,7 +669,7 @@ int ObAggCell::prepare_def_datum()
     if (!def_cell.is_nop_value()) {
       if (OB_FAIL(def_datum_.from_obj_enhance(def_cell))) {
         STORAGE_LOG(WARN, "Failed to transfer obj to datum", K(ret));
-      } else if (OB_FAIL(pad_column_if_need(def_datum_))) {
+      } else if (OB_FAIL(pad_column_if_need(def_datum_, allocator_, false))) {
         LOG_WARN("Failed to pad default datum", K(ret), K_(basic_info), K_(def_datum));
       } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
         // lob def value must have no lob header when not null, should add lob header for default value
@@ -706,14 +709,17 @@ int ObAggCell::fill_default_if_need(blocksstable::ObStorageDatum &datum)
   return ret;
 }
 
-int ObAggCell::pad_column_if_need(blocksstable::ObStorageDatum &datum)
+int ObAggCell::pad_column_if_need(blocksstable::ObStorageDatum &datum, common::ObIAllocator &padding_allocator, bool alloc_need_reuse)
 {
   int ret = OB_SUCCESS;
+  if (alloc_need_reuse){
+    padding_allocator.reuse();
+  }
   if (OB_ISNULL(basic_info_.col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected, col param is null", K(ret), K(basic_info_.col_offset_));
   } else if (!basic_info_.need_padding()) {
-  } else if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(), basic_info_.col_param_->get_accuracy(), allocator_, datum))) {
+  } else if (OB_FAIL(pad_column(basic_info_.col_param_->get_meta_type(), basic_info_.col_param_->get_accuracy(), padding_allocator, datum))) {
     LOG_WARN("Fail to pad column", K(ret), K(basic_info_.col_offset_), KPC(this));
   }
   return ret;
@@ -1236,7 +1242,7 @@ int ObMinAggCell::eval(blocksstable::ObStorageDatum &storage_datum, const int64_
   } else if (OB_FAIL(fill_default_if_need(storage_datum))) {
     LOG_WARN("Failed to fill default", K(ret), K(storage_datum), K(*this));
   } else if (storage_datum.is_null()) {
-  } else if (OB_FAIL(pad_column_if_need(storage_datum))) {
+  } else if (OB_FAIL(pad_column_if_need(storage_datum, padding_allocator_))) {
     LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(storage_datum));
   } else if (result_datum_.is_null()) {
     if (OB_FAIL(result_datum_.deep_copy(storage_datum, datum_allocator_))) {
@@ -1419,7 +1425,7 @@ int ObMaxAggCell::eval(blocksstable::ObStorageDatum &storage_datum, const int64_
   } else if (OB_FAIL(fill_default_if_need(storage_datum))) {
     LOG_WARN("Failed to fill default", K(ret), K(storage_datum), K(*this));
   } else if (storage_datum.is_null()) {
-  } else if (OB_FAIL(pad_column_if_need(storage_datum))) {
+  } else if (OB_FAIL(pad_column_if_need(storage_datum, padding_allocator_))) {
     LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(storage_datum));
   } else if (result_datum_.is_null()) {
     if (OB_FAIL(result_datum_.deep_copy(storage_datum, datum_allocator_))) {
@@ -1630,7 +1636,7 @@ int ObHyperLogLogAggCell::eval(blocksstable::ObStorageDatum &storage_datum, cons
     }
   } else if (storage_datum.is_null()) {
     // ndv does not consider null
-  } else if (OB_FAIL(pad_column_if_need(storage_datum))) {
+  } else if (OB_FAIL(pad_column_if_need(storage_datum, padding_allocator_))) {
     LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(storage_datum));
   } else if (OB_FAIL(hash_func_(storage_datum, hash_value, hash_value))) {
     LOG_WARN("Failed to do hash", K(ret));
@@ -1802,7 +1808,7 @@ int ObSumOpSizeAggCell::eval(blocksstable::ObStorageDatum &storage_datum, const 
     LOG_WARN("Invalid row count", K(ret), K(row_count));
   } else if (storage_datum.is_nop()) {
     total_size_ += def_op_size_ * row_count;
-  } else if (OB_FAIL(pad_column_if_need(storage_datum))) {
+  } else if (OB_FAIL(pad_column_if_need(storage_datum, padding_allocator_))) {
     LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(storage_datum));
   } else if (OB_FAIL(get_datum_op_size(storage_datum, length))) {
     LOG_WARN("Failed to get datum length", K(ret), K(storage_datum));
@@ -3118,7 +3124,7 @@ int ObFirstRowAggCell::eval(blocksstable::ObStorageDatum &datum, const int64_t r
   } else if (!aggregated_) {
     if (OB_FAIL(fill_default_if_need(datum))) {
       LOG_WARN("Failed to fill default", K(ret), KPC(this));
-    } else if (OB_FAIL(pad_column_if_need(datum))) {
+    } else if (OB_FAIL(pad_column_if_need(datum, padding_allocator_))) {
       LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(datum));
     } else if (OB_FAIL(result_datum_.deep_copy(datum, datum_allocator_))) {
       LOG_WARN("Failed to deep copy datum", K(ret), K(datum));
@@ -3148,7 +3154,7 @@ int ObFirstRowAggCell::eval_micro_block(
         LOG_WARN("Failed to get first datum", K(ret), K(col_offset), K(row_ids[0]), K(row_count));
       } else if (OB_FAIL(fill_default_if_need(datum))) {
         LOG_WARN("Failed to fill default", K(ret), KPC(this));
-      } else if (OB_FAIL(pad_column_if_need(datum))) {
+      } else if (OB_FAIL(pad_column_if_need(datum, padding_allocator_))) {
         LOG_WARN("Failed to pad column", K(ret), K_(basic_info), K(datum));
       } else if (OB_FAIL(result_datum_.deep_copy(datum, datum_allocator_))) {
         LOG_WARN("Failed to deep copy datum", K(ret), K(datum));

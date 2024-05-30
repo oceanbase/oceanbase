@@ -60,6 +60,9 @@
 #define ROLLBACK_TO_IMPLICIT_SAVEPOINT(n1, tx, sp, timeout_us)          \
     n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_us(timeout_us), nullptr)
 
+#define ROLLBACK_TO_IMPLICIT_SAVEPOINT_X(n1, tx, sp, timeout_us, extra_touched_ls)          \
+    n1->rollback_to_implicit_savepoint(tx, sp, n1->ts_after_us(timeout_us), extra_touched_ls)
+
 #define INJECT_LINK_FAILURE(n1, n2)                                     \
     ASSERT_EQ(OB_SUCCESS, bus_.inject_link_failure(n1->addr_, n2->addr_)); \
     LOG_INFO("##JINECT_LINK_FAILURE##", K(n1->addr_), K(n2->addr_));
@@ -92,3 +95,39 @@
 
 #define COMMIT_TX(n1, tx, timeout_us)                   \
     n1->commit_tx(tx, n1->ts_after_us(timeout_us));
+
+#define FLUSH_REDO(n1)                                                  \
+    do {                                                                \
+        ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;                             \
+        ASSERT_EQ(n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr), OB_SUCCESS); \
+        ObTransID fail_tx_id;                                           \
+        ASSERT_EQ(ls_tx_ctx_mgr->traverse_tx_to_submit_redo_log(fail_tx_id, UINT32_MAX), OB_SUCCESS); \
+    } while(0)
+
+#define SWITCH_TO_FOLLOWER_FORCEDLY(n1)                                 \
+    do {                                                                \
+        ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;                             \
+        ASSERT_EQ(n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr), OB_SUCCESS); \
+        ASSERT_EQ(ls_tx_ctx_mgr->switch_to_follower_forcedly(), OB_SUCCESS); \
+    } while(0)
+
+#define SWITCH_TO_FOLLOWER_GRACEFULLY(n1)                               \
+    do {                                                                \
+        ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;                             \
+        ASSERT_EQ(n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr), OB_SUCCESS); \
+        ASSERT_EQ(ls_tx_ctx_mgr->switch_to_follower_gracefully(), OB_SUCCESS); \
+    } while(0)
+
+#define SWITCH_TO_LEADER(n1)                                            \
+    do {                                                                \
+        ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;                             \
+        ASSERT_EQ(n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr), OB_SUCCESS); \
+        ASSERT_EQ(ls_tx_ctx_mgr->switch_to_leader(), OB_SUCCESS);       \
+        /* wait state to LEADER */                                      \
+        while (!ls_tx_ctx_mgr->is_master()) {                           \
+            if (REACH_TIME_INTERVAL(500_ms)) {                          \
+                TRANS_LOG(INFO, "wait LS TxCtxMgr to be leader", KPC(ls_tx_ctx_mgr)); \
+            }                                                           \
+            usleep(10_ms);                                              \
+        }                                                               \
+    } while(0)

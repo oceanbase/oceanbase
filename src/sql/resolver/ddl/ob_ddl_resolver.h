@@ -50,7 +50,7 @@ struct PartitionInfo
 
 enum NUMCHILD {
   CREATE_TABLE_NUM_CHILD = 8,
-  CREATE_TABLE_AS_SEL_NUM_CHILD = 10,
+  CREATE_TABLE_AS_SEL_NUM_CHILD = 11,
   COLUMN_DEFINITION_NUM_CHILD = 4,
   COLUMN_DEF_NUM_CHILD = 3,
   INDEX_NUM_CHILD = 5,
@@ -530,7 +530,7 @@ protected:
       const common::ObIArray<uint64_t> &column_ids,
       const uint64_t cg_id,
       share::schema::ObColumnGroupSchema &column_group);
-  int parse_cg_node(const ParseNode &cg_node, bool &exist_all_column_group) const;
+  int parse_cg_node(const ParseNode &cg_node, obrpc::ObCreateIndexArg &create_index_arg) const;
   int parse_column_group(const ParseNode *cg_node,const share::schema::ObTableSchema &table_schema, share::schema::ObTableSchema &dst_table_schema);
   int resolve_index_column_group(const ParseNode *node, obrpc::ObCreateIndexArg &create_index_arg);
   bool need_column_group(const ObTableSchema &table_schema);

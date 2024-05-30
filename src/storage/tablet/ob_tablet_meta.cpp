@@ -181,6 +181,7 @@ int ObTabletMeta::init(
     ddl_data_format_version_ = MAX(old_tablet_meta.ddl_data_format_version_, ddl_info.data_format_version_);
     mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
     transfer_info_ = old_tablet_meta.transfer_info_;
+    space_usage_ = old_tablet_meta.space_usage_;
     is_inited_ = true;
   }
 
@@ -229,6 +230,7 @@ int ObTabletMeta::init(
     max_serialized_medium_scn_ = old_tablet_meta.max_serialized_medium_scn_;
     mds_checkpoint_scn_ = flush_scn;
     transfer_info_ = old_tablet_meta.transfer_info_;
+    space_usage_ = old_tablet_meta.space_usage_;
     is_inited_ = true;
   }
 
@@ -323,6 +325,7 @@ int ObTabletMeta::init(
     ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
     mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
     transfer_info_ = old_tablet_meta.transfer_info_;
+    space_usage_ = old_tablet_meta.space_usage_;
     is_inited_ = true;
   }
 
@@ -410,6 +413,7 @@ int ObTabletMeta::init(
       ddl_data_format_version_ = old_tablet_meta.ddl_data_format_version_;
       transfer_info_ = transfer_info;
       mds_checkpoint_scn_ = old_tablet_meta.mds_checkpoint_scn_;
+      space_usage_ = old_tablet_meta.space_usage_;
 
       is_inited_ = true;
     }
@@ -474,7 +478,8 @@ bool ObTabletMeta::is_valid() const
               && clog_checkpoint_scn_ >= INIT_CLOG_CHECKPOINT_SCN
               && start_scn_ >= INIT_CLOG_CHECKPOINT_SCN
               && start_scn_ <= clog_checkpoint_scn_))
-      && create_schema_version_ >= 0;
+      && create_schema_version_ >= 0
+      && space_usage_.is_valid();
 }
 
 int ObTabletMeta::assign(const ObTabletMeta &other)

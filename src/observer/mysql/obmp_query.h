@@ -61,6 +61,7 @@ protected:
   int deserialize();
   int check_readonly_stmt(ObMySQLResultSet &result);
   int is_readonly_stmt(ObMySQLResultSet &result, bool &is_readonly);
+  void assign_sql(const char * sql, int64_t sql_length) { sql_.assign_ptr(sql, sql_length); }
 private:
   int response_result(ObMySQLResultSet &result, bool force_sync_resp, bool &async_resp_used);
   int get_tenant_schema_info_(const uint64_t tenant_id,

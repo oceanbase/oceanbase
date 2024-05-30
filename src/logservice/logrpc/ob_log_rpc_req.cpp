@@ -197,7 +197,7 @@ void LogConfigChangeCmd::reset()
 
 OB_SERIALIZE_MEMBER(LogConfigChangeCmd, src_, palf_id_, added_member_, removed_member_,
 curr_member_list_, curr_replica_num_, new_replica_num_, cmd_type_, timeout_us_, lock_owner_,
-config_version_, added_list_, removed_list_);
+config_version_, added_list_, removed_list_, new_member_list_);
 // ============= LogConfigChangeCmd end =============
 
 // ============= LogConfigChangeCmdResp begin ===========

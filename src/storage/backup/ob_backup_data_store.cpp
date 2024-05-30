@@ -77,6 +77,20 @@ bool ObBackupDeletedTabletToLSDesc::is_valid() const
 }
 
 /*
+ *------------------------------ObBackupResourcePool----------------------------------------
+ */
+int ObBackupResourcePool::assign(const ObBackupResourcePool &that)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(resource_pool_.assign(that.resource_pool_))) {
+    LOG_WARN("failed to assign resource pool", K(ret));
+  } else if (OB_FAIL(unit_config_.assign(that.unit_config_))) {
+    LOG_WARN("failed to assign unit config", K(ret));
+  }
+  return ret;
+}
+
+/*
  *------------------------------ObExternTenantLocalityInfo----------------------------
  */
 OB_SERIALIZE_MEMBER(ObExternTenantLocalityInfoDesc, tenant_id_, backup_set_id_, cluster_id_, compat_mode_,
@@ -99,6 +113,8 @@ int ObExternTenantLocalityInfoDesc::assign(const ObExternTenantLocalityInfoDesc 
   int ret = OB_SUCCESS;
   if (OB_FAIL(sys_time_zone_wrap_.deep_copy(that.sys_time_zone_wrap_))) {
     LOG_WARN("failed to deep copy", K(ret));
+  } else if (OB_FAIL(resource_pool_infos_.assign(that.resource_pool_infos_))) {
+    LOG_WARN("failed to assign resource pool infos", K(ret));
   } else {
     tenant_id_ = that.tenant_id_;
     backup_set_id_ = that.backup_set_id_;

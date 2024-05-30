@@ -813,8 +813,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const ObString &database_name,
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));
@@ -1208,8 +1209,9 @@ int ObInfoSchemaColumnsTable::fill_row_cells(const common::ObString &database_na
             int64_t buf_len = 200;
             int64_t pos = 0;
             ObSessionPrivInfo session_priv;
-            session_->get_session_priv_info(session_priv);
-            if (OB_UNLIKELY(!session_priv.is_valid())) {
+            if (OB_FAIL(session_->get_session_priv_info(session_priv))) {
+              SERVER_LOG(WARN, "fail to get session priv info", K(ret));
+            } else if (OB_UNLIKELY(!session_priv.is_valid())) {
               ret = OB_INVALID_ARGUMENT;
               SERVER_LOG(WARN, "session priv is invalid", "tenant_id", session_priv.tenant_id_,
                          "user_id", session_priv.user_id_, K(ret));

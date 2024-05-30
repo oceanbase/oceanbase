@@ -25,6 +25,9 @@ class ObTablet;
 class ObDDLKV;
 
 class ObDirectLoadTableGuard {
+private:
+  static const int64_t MAX_RETRY_CREATE_MEMTABLE_TIME = 1LL * 1000LL * 1000LL; // 1 second
+
 public:
   DISABLE_COPY_ASSIGN(ObDirectLoadTableGuard);
   ObDirectLoadTableGuard(ObTablet &tablet, const share::SCN &scn, const bool for_replay);

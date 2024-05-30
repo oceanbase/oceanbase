@@ -192,7 +192,7 @@ int ObMLogPurger::prepare_for_purge()
   }
   if (OB_SUCC(ret) && need_purge_) {
     if (OB_FAIL(ObMViewRefreshHelper::generate_purge_mlog_sql(
-          schema_guard, tenant_id, mlog_table_id, purge_scn_, purge_sql_))) {
+          schema_guard, tenant_id, mlog_table_id, purge_scn_, purge_param_.purge_log_parallel_, purge_sql_))) {
       LOG_WARN("fail to generate purge mlog sql", KR(ret), K(mlog_table_id), K(purge_scn_));
     }
   }

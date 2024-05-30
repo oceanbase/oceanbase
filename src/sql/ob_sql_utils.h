@@ -30,6 +30,7 @@
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
+#include "share/ob_compatibility_control.h"
 namespace oceanbase
 {
 namespace share {
@@ -529,6 +530,8 @@ public:
                                                   ObCollationType &cs_type);
   static int merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
                                                           int64_t &max_allowed_packet);
+  static int merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+                                                      uint64_t &compat_version);
 
   static bool is_oracle_sys_view(const ObString &table_name);
 
@@ -710,6 +713,13 @@ public:
   static int compatibility_check_for_mysql_role_and_column_priv(uint64_t tenant_id);
   static bool is_data_version_ge_422_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
+  static bool is_data_version_ge_423_or_432(uint64_t data_version);
+
+  static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
+                                            const ObIArray<uint64_t> &role_id_option_array,
+                                            const ObProxyInfo &proxied_info,
+                                            ObIArray<uint64_t> &new_role_id_array,
+                                            ObIArray<uint64_t> &new_role_id_option_array);
 private:
   static bool check_mysql50_prefix(common::ObString &db_name);
   static bool part_expr_has_virtual_column(const ObExpr *part_expr);

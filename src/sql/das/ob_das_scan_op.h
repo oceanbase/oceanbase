@@ -48,7 +48,8 @@ public:
       external_file_format_str_(alloc),
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
-      rowkey_exprs_(alloc)
+      rowkey_exprs_(alloc),
+      table_scan_opt_()
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -83,7 +84,8 @@ public:
                        K_(external_file_location),
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
-                       K_(rowkey_exprs));
+                       K_(rowkey_exprs),
+                       K_(table_scan_opt));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -105,6 +107,7 @@ public:
   ObExpr *trans_info_expr_; // transaction information pseudo-column
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup
+  ObTableScanOption table_scan_opt_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef

@@ -120,6 +120,7 @@ enum TabletMemtableFreezeState : int64_t {
   READY_FOR_FLUSH = 3,
   FLUSHED = 4,
   RELEASED = 5,
+  FORCE_RELEASED = 6,
   MAX_FREEZE_STATE
 };
 
@@ -134,7 +135,9 @@ const static char *TABLET_MEMTABLE_FREEZE_STATE_TO_STR(const int64_t state)
   STATIC_ASSERT(TabletMemtableFreezeState::READY_FOR_FLUSH == 3, "Invalid State Enum");
   STATIC_ASSERT(TabletMemtableFreezeState::FLUSHED == 4, "Invalid State Enum");
   STATIC_ASSERT(TabletMemtableFreezeState::RELEASED == 5, "Invalid State Enum");
-  const static char TABLET_MEMTABLE_FREEZE_STATE_TO_STR[6][20] = {"INVALID", "ACTIVE", "FREEZING", "READY_FOR_FLUSH", "FLUSHED", "RELEASED"};
+  STATIC_ASSERT(TabletMemtableFreezeState::FORCE_RELEASED == 6, "Invalid State Enum");
+  const static char TABLET_MEMTABLE_FREEZE_STATE_TO_STR[7][20] =
+    {"INVALID", "ACTIVE", "FREEZING", "READY_FOR_FLUSH", "FLUSHED", "RELEASED", "FORCE_RELEASED"};
   return TABLET_MEMTABLE_FREEZE_STATE_TO_STR[state];
 }
 
@@ -290,6 +293,7 @@ public:
   virtual void print_ready_for_flush() = 0;
   virtual void set_allow_freeze(const bool allow_freeze) = 0;
   virtual int set_frozen() = 0;
+  virtual bool is_force_released() const;
   virtual int get_schema_info(
     const int64_t input_column_cnt,
     int64_t &max_schema_version_on_memtable,
@@ -326,7 +330,7 @@ public:
   void set_push_table_into_gc_queue_time(const int64_t timestamp) { mt_stat_.push_table_into_gc_queue_time_ = timestamp; }
   void set_freeze_state(const TabletMemtableFreezeState state)
   {
-    if (state >= TabletMemtableFreezeState::ACTIVE && state <= TabletMemtableFreezeState::RELEASED) {
+    if (state >= TabletMemtableFreezeState::ACTIVE && state <= TabletMemtableFreezeState::FORCE_RELEASED) {
       freeze_state_ = state;
     }
   }

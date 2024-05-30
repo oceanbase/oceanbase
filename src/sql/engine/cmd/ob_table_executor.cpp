@@ -104,23 +104,67 @@ int ObCreateTableExecutor::ObInsSQLPrinter::inner_print(char *buf, int64_t buf_l
   const char sep_char = lib::is_oracle_mode()? '"': '`';
   const ObSelectStmt *select_stmt = NULL;
   int64_t pos1 = 0;
+  uint64_t insert_mode = 0;
   if (OB_ISNULL(stmt_) || OB_ISNULL(select_stmt= stmt_->get_sub_select())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null stmt", K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
-                              do_osg_
-                              ? "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
-                              : "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
-                              stmt_->get_parallelism(),
-                              sep_char,
-                              stmt_->get_database_name().length(),
-                              stmt_->get_database_name().ptr(),
-                              sep_char,
-                              sep_char,
-                              stmt_->get_table_name().length(),
-                              stmt_->get_table_name().ptr(),
-                              sep_char))) {
-    LOG_WARN("fail to print insert into string", K(ret));
+  } else {
+    insert_mode = stmt_->get_insert_mode();
+    if (insert_mode != 0 &&
+        insert_mode != 1 &&
+        insert_mode != 2 ) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected insert_mode", K(insert_mode), K(ret));
+    } else if (insert_mode == 1 /*ignore*/) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                  do_osg_
+                                  ? "insert ignore /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                  : "insert ignore /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                  stmt_->get_parallelism(),
+                                  sep_char,
+                                  stmt_->get_database_name().length(),
+                                  stmt_->get_database_name().ptr(),
+                                  sep_char,
+                                  sep_char,
+                                  stmt_->get_table_name().length(),
+                                  stmt_->get_table_name().ptr(),
+                                  sep_char))) {
+        LOG_WARN("fail to print insert into string", K(ret));
+      }
+    } else if (insert_mode == 2 /*replace*/) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                  do_osg_
+                                  ? "replace /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                  : "replace /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                  stmt_->get_parallelism(),
+                                  sep_char,
+                                  stmt_->get_database_name().length(),
+                                  stmt_->get_database_name().ptr(),
+                                  sep_char,
+                                  sep_char,
+                                  stmt_->get_table_name().length(),
+                                  stmt_->get_table_name().ptr(),
+                                  sep_char))) {
+        LOG_WARN("fail to print insert into string", K(ret));
+      }
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos1,
+                                       do_osg_
+                                       ? "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c"
+                                       : "insert /*+ ENABLE_PARALLEL_DML PARALLEL(%lu) NO_GATHER_OPTIMIZER_STATISTICS*/ into %c%.*s%c.%c%.*s%c",
+                                       stmt_->get_parallelism(),
+                                       sep_char,
+                                       stmt_->get_database_name().length(),
+                                       stmt_->get_database_name().ptr(),
+                                       sep_char,
+                                       sep_char,
+                                       stmt_->get_table_name().length(),
+                                       stmt_->get_table_name().ptr(),
+                                       sep_char))) {
+      LOG_WARN("fail to print insert into string", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    //do nothing
   } else if (lib::is_oracle_mode()) {
     const ObTableSchema &table_schema = stmt_->get_create_table_arg().schema_;
     int64_t used_column_count = 0;

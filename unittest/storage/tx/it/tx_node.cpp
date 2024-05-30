@@ -123,6 +123,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.enable_tenant_ctx_check_ = false;
   tenant_.set(&fake_tenant_freezer_);
   tenant_.set(&fake_part_trans_ctx_pool_);
+  fake_shared_mem_alloc_mgr_.init();
+  tenant_.set(&fake_shared_mem_alloc_mgr_);
   tenant_.start();
   ObTenantEnv::set_tenant(&tenant_);
   ObTableHandleV2 lock_memtable_handle;
@@ -266,6 +268,26 @@ void ObTxNode::dump_msg_queue_()
     MsgInfo msg_info;
     OZ (get_msg_info(msg, msg_info));
     TRANS_LOG(INFO,"[dump_msg]", K(i), K(msg_info), K(ret), KPC(this));
+  }
+}
+
+void ObTxNode::wait_all_msg_consumed()
+{
+  while (msg_queue_.size() > 0 || !msg_consumer_.is_idle()) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait msg_queue to be empty", K(msg_queue_.size()), KPC(this));
+    }
+    usleep(5_ms);
+  }
+}
+
+void ObTxNode::wait_tx_log_synced()
+{
+  while(fake_tx_log_adapter_->get_inflight_cnt() > 0) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait tx log synced...", K(fake_tx_log_adapter_->get_inflight_cnt()), KPC(this));
+    }
+    usleep(5_ms);
   }
 }
 

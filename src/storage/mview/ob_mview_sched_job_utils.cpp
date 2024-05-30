@@ -143,7 +143,7 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.job_action_ = job_action;
       job_info.lowner_ = ObString("oceanbase");
       job_info.cowner_ = ObString("oceanbase");
-      job_info.powner_ = lib::is_oracle_mode() ? ObString("ROOT") : ObString("root@%");
+      job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
       job_info.job_class_ = ObString("DATE_EXPRESSION_JOB_CLASS");

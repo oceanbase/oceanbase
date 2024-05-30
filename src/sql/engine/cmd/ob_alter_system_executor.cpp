@@ -1955,7 +1955,8 @@ int ObChangeTenantExecutor::execute(ObExecContext &ctx, ObChangeTenantStmt &stmt
     LOG_WARN("ptr is null", KR(ret));
   } else if (FALSE_IT(pre_effective_tenant_id = session_info->get_effective_tenant_id())) {
   } else if (FALSE_IT(login_tenant_id = session_info->get_login_tenant_id())) {
-  } else if (FALSE_IT(session_info->get_session_priv_info(session_priv))) {
+  } else if (OB_FAIL(session_info->get_session_priv_info(session_priv))) {
+    LOG_WARN("fail to get session priv info", K(ret));
   } else if (effective_tenant_id == pre_effective_tenant_id) {
     // do nothing
   } else if (OB_SYS_TENANT_ID != login_tenant_id) { //case 1

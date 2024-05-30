@@ -259,7 +259,8 @@ public:
     ObPartTransCtx *tx_ctx = store_ctx->mvcc_acc_ctx_.tx_ctx_;
     ObTxDataGuard tx_data_guard;
     EXPECT_EQ(OB_SUCCESS, tx_ctx->ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(tx_data_guard));
-    EXPECT_EQ(OB_SUCCESS, tx_ctx->insert_undo_action_to_tx_table_(undo, tx_data_guard, SCN::min_scn()));
+    ObUndoStatusNode *undo_node = NULL;
+    EXPECT_EQ(OB_SUCCESS, tx_ctx->insert_undo_action_to_tx_table_(undo, tx_data_guard, undo_node, SCN::min_scn()));
     ObMemtableCtx *mt_ctx = store_ctx->mvcc_acc_ctx_.mem_ctx_;
     ObTxCallbackList &cb_list = mt_ctx->trans_mgr_.callback_list_;
     for (ObMvccRowCallback *iter = (ObMvccRowCallback *)(cb_list.get_guard()->get_next());

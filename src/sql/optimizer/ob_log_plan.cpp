@@ -6375,6 +6375,10 @@ int ObLogPlan::classify_candidates_based_on_sharding(
           LOG_WARN("get unexpected error", K(ret));
         } else if (candidates.at(i).plan_tree_->get_parallel() != temp_candidate.at(0).plan_tree_->get_parallel()) {
           /*do nothing*/
+        } else if (candidates.at(i).plan_tree_->is_exchange_allocated() != temp_candidate.at(0).plan_tree_->is_exchange_allocated()) {
+          /*do nothing*/
+        } else if (candidates.at(i).plan_tree_->get_contains_pw_merge_op() != temp_candidate.at(0).plan_tree_->get_contains_pw_merge_op()) {
+          /*do nothing*/
         } else if (OB_FAIL(ObShardingInfo::is_sharding_equal(
                             candidates.at(i).plan_tree_->get_strong_sharding(),
                             candidates.at(i).plan_tree_->get_weak_sharding(),
@@ -11839,6 +11843,10 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
                                           ObIArray<uint64_t> &sfu_table_list)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < sfu_table_list.count(); ++i) {
     ObSEArray<uint64_t, 1> need_alloc_list;
     if (table_is_allocated_for_update(sfu_table_list.at(i))) {
@@ -11857,11 +11865,21 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
       ObSEArray<IndexDMLInfo*, 1> index_dml_infos;
       for (int64_t j = 0; OB_SUCC(ret) && j < need_alloc_list.count(); ++j) {
         IndexDMLInfo *index_dml_info = NULL;
-        if (OB_FAIL(get_table_for_update_info(need_alloc_list.at(j),
-                                              index_dml_info,
-                                              wait_ts,
-                                              skip_locked))) {
-          LOG_WARN("failed to get for update info", K(ret));
+        bool is_hierarchical = false;
+        if (OB_FAIL(is_hierarchical_for_update(is_hierarchical))) {
+          LOG_WARN("failed to check hierarchical query", K(ret));
+        } else if (is_hierarchical) {
+          if (OB_FAIL(get_table_for_update_info_for_hierarchical(need_alloc_list.at(j),
+                                                                 index_dml_infos,
+                                                                 wait_ts,
+                                                                 skip_locked))) {
+            LOG_WARN("failed to get table for update info for hierarchical", K(ret), KPC(get_stmt()));
+          }
+        } else if (OB_FAIL(get_table_for_update_info(need_alloc_list.at(j),
+                                                     index_dml_info,
+                                                     wait_ts,
+                                                     skip_locked))) {
+          LOG_WARN("failed to get for update info", K(ret), KPC(get_stmt()));
         } else if (OB_ISNULL(index_dml_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(index_dml_info));
@@ -11896,6 +11914,37 @@ int ObLogPlan::allocate_for_update_as_top(ObLogicalOperator *&top,
         LOG_TRACE("succced to allocate for update as top", K(sfu_table_list), K(alloc_sfu_list_));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::is_hierarchical_for_update(bool &is_hierarchical)
+{
+  int ret = OB_SUCCESS;
+  is_hierarchical = false;
+  const TableItem *table = NULL;
+  const ObSelectStmt *ref_view = NULL;
+  if (OB_ISNULL(get_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is NULL", K(ret));
+  } else if (get_stmt()->is_hierarchical_query()) {
+    is_hierarchical = true;
+  } else if (get_stmt()->get_table_size() != 1) {
+    is_hierarchical = false;
+  } else if (OB_ISNULL(table = get_stmt()->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table item is NULL", K(ret));
+  } else if (!table->for_update_ || !table->is_generated_table()) {
+    is_hierarchical = false;
+  } else if (OB_UNLIKELY(static_cast<const ObSelectStmt*>(get_stmt())->get_for_update_dml_infos().count() == 0)) {
+    // For "select * from (select c1 from t1 connect by xxx) view1 where xxx for update;"
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("for update dml info is null", K(ret), KPC(static_cast<const ObSelectStmt*>(get_stmt())));
+  } else if (OB_ISNULL(ref_view = table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret));
+  } else if (ref_view->is_hierarchical_query()) {
+    is_hierarchical = true;
   }
   return ret;
 }
@@ -12037,6 +12086,148 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
                                                           K(wait_ts), K(skip_locked));
       }
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_table_for_update_info_for_hierarchical(const uint64_t table_id,
+                                                          ObIArray<IndexDMLInfo*> &index_dml_infos,
+                                                          int64_t &wait_ts,
+                                                          bool &skip_locked)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = NULL;
+  const TableItem *table = NULL;
+  skip_locked = false;
+  wait_ts = 0;
+  if (OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(table = get_stmt()->get_table_item_by_id(table_id)) ||
+      OB_UNLIKELY(!table->for_update_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(get_stmt()), KPC(table));
+  } else if (OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is not a select stmt", K(ret), KPC(get_stmt()));
+  } else if (OB_FALSE_IT(select_stmt = static_cast<const ObSelectStmt*>(get_stmt()))) {
+  } else if (table->is_generated_table()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_for_update_dml_infos().count(); ++i) {
+      const ForUpdateDMLInfo *for_update_info = NULL;
+      IndexDMLInfo *index_dml_info = NULL;
+      const TableItem *base_table = NULL;
+      if (OB_ISNULL(for_update_info = select_stmt->get_for_update_dml_infos().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("for update info is null", K(ret), KPC(select_stmt));
+      } else if (table_id != for_update_info->table_id_) {
+        // do nothing
+      } else if (OB_ISNULL(index_dml_info = static_cast<IndexDMLInfo *>(
+                        get_optimizer_context().get_allocator().alloc(sizeof(IndexDMLInfo))))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for index dml info", K(ret));
+      } else if (OB_ISNULL(table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ref query is null", K(ret), KPC(table));
+      } else if (OB_FAIL(check_hierarchical_for_update(table, for_update_info->base_table_id_))) {
+        LOG_WARN("failed to check hierarchical for update", K(ret), KPC(for_update_info));
+      } else {
+        index_dml_info = new (index_dml_info) IndexDMLInfo();
+        index_dml_info->table_id_ = for_update_info->table_id_;
+        index_dml_info->loc_table_id_ = for_update_info->base_table_id_;
+        index_dml_info->ref_table_id_ = for_update_info->ref_table_id_;
+        index_dml_info->distinct_algo_ = T_DISTINCT_NONE;
+        index_dml_info->rowkey_cnt_ = for_update_info->rowkey_cnt_;
+        index_dml_info->need_filter_null_ = for_update_info->is_nullable_;
+        index_dml_info->is_primary_index_ = true;
+        skip_locked = for_update_info->skip_locked_;
+        wait_ts = for_update_info->for_update_wait_us_;
+        for (int64_t j = 0; OB_SUCC(ret) && j < for_update_info->unique_column_ids_.count(); ++j) {
+          ObColumnRefRawExpr *col_expr = select_stmt->get_column_expr_by_id(for_update_info->table_id_,
+                                                              for_update_info->unique_column_ids_.at(j));
+          if (OB_ISNULL(col_expr)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column expr is null", K(ret));
+          } else if (OB_FAIL(index_dml_info->column_exprs_.push_back(col_expr))) {
+            LOG_WARN("failed to push back column expr", K(ret));
+          } else {
+            col_expr->set_explicited_reference();
+          }
+        }
+
+        if (OB_FAIL(ret)){
+          // do nothing
+        } else if (OB_SUCC(ret) && OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
+          LOG_WARN("failed to push back", K(ret));
+        } else {
+          LOG_TRACE("Succeed to get table for update info for hierarchical", K(table_id), K(for_update_info),
+                    KPC(index_dml_info), K(wait_ts), K(skip_locked));
+        }
+      }
+    }
+  } else if (table->is_basic_table()) {
+    IndexDMLInfo *index_dml_info = NULL;
+    if (OB_FAIL(get_table_for_update_info(table_id,
+                                          index_dml_info,
+                                          wait_ts,
+                                          skip_locked))) {
+      LOG_WARN("failed to get for update info", K(ret));
+    } else if (OB_ISNULL(index_dml_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(index_dml_info));
+    } else if (OB_FAIL(index_dml_infos.push_back(index_dml_info))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table table type", K(ret), KPC(table));
+  }
+  return ret;
+}
+
+int ObLogPlan::check_hierarchical_for_update(const TableItem *table,
+                                             uint64_t base_tid)
+{
+  int ret = OB_SUCCESS;
+  TableItem *base_table = NULL;
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(get_stmt()), K(table));
+  } else if (OB_UNLIKELY(!table->is_generated_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is not a generated table", K(ret), KPC(table));
+  } else if (OB_ISNULL(table->ref_query_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ref query is NULL", K(ret));
+  } else if (get_stmt()->is_hierarchical_query()) {
+    base_table = table->ref_query_->get_table_item_by_id(base_tid);
+  } else if (table->ref_query_->is_hierarchical_query()) {
+    for (int i = 0; OB_SUCC(ret) && i < table->ref_query_->get_table_size(); ++i) {
+      TableItem *mocked_join_table = table->ref_query_->get_table_item(i);
+      if(OB_ISNULL(mocked_join_table)
+          || OB_UNLIKELY(!mocked_join_table->is_generated_table())
+          || OB_ISNULL(mocked_join_table->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected mocked join table", K(ret), KPC(mocked_join_table));
+      } else {
+        base_table = mocked_join_table->ref_query_->get_table_item_by_id(base_tid);
+        if (base_table != NULL) {
+          break;
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("not a hierarchical query", K(ret), KPC(get_stmt()));
+  }
+  // check base table
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(base_table)) {
+    // base table is not in hierarchical query mocked view, maybe in the
+    // inner generated table which not be merged.
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("base table is not in hierarchical query mocked view", K(ret), KPC(table->ref_query_), K(base_tid));
+  } else if (OB_UNLIKELY(!base_table->is_basic_table() || is_virtual_table(base_table->ref_id_))) {
+    // invalid usage
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("base table is not basic table", K(ret), KPC(base_table));
   }
   return ret;
 }

@@ -2747,6 +2747,8 @@ int ObSchemaPrinter::print_index_table_definition(
       OB_LOG(WARN, "fail to print partition info for index", K(ret), K(*index_table_schema));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ";\n"))) {
       OB_LOG(WARN, "fail to print end ;", K(ret));
+    } else if ((!strict_compat_) && OB_FAIL(print_table_definition_column_group(*index_table_schema, buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print column_group", K(ret), K(*index_table_schema));
     }
     OB_LOG(DEBUG, "print table schema", K(ret), K(*index_table_schema));
   }

@@ -33,6 +33,7 @@
 #include "storage/tablet/ob_tablet_mds_data_cache.h"
 #include "storage/tablet/ob_tablet_block_aggregated_info.h"
 #include "storage/tablet/ob_tablet_block_header.h"
+#include "storage/tablet/ob_tablet_space_usage.h"
 #include "storage/tx/ob_trans_define.h"
 #include "share/scn.h"
 #include "ob_i_tablet_mds_interface.h"
@@ -602,6 +603,8 @@ private:
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
   int inner_release_memtables(const share::SCN scn);
+  int calc_sstable_occupy_size(int64_t &occupy_size);
+  inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;

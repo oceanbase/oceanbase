@@ -23,6 +23,7 @@
 #include "sql/resolver/dcl/ob_lock_user_stmt.h"
 #include "sql/resolver/dcl/ob_rename_user_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_profile_stmt.h"
+#include "sql/resolver/dcl/ob_alter_user_proxy_stmt.h"
 #include "sql/resolver/dcl/ob_alter_user_primary_zone_stmt.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -268,6 +269,16 @@ int ObCreateUserExecutor::create_user(obrpc::ObCommonRpcProxy *rpc_proxy,
   return ret;
 }
 
+int ObDropUserExecutor::build_fail_msg_for_one(const ObString &user, const ObString &host,
+                                               common::ObSqlString &msg) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
+                                    user.length(), user.ptr(),
+                                    host.length(), host.ptr()))) {
+    LOG_WARN("Build msg fail", K(user), K(host), K(ret));
+  }
+  return ret;
+}
 
 int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> &users,
     const common::ObIArray<common::ObString> &hosts, common::ObSqlString &msg)
@@ -284,10 +295,8 @@ int ObDropUserExecutor::build_fail_msg(const common::ObIArray<common::ObString> 
       if (OB_SUCC(ret)) {
         const ObString &user = users.at(i);
         const ObString &host = hosts.at(i);
-        if (OB_FAIL(msg.append_fmt("'%.*s'@'%.*s'",
-                                    user.length(), user.ptr(),
-                                    host.length(), host.ptr()))) {
-          LOG_WARN("Build msg fail", K(user), K(host), K(ret));
+        if (OB_FAIL(build_fail_msg_for_one(user, host, msg))) {
+          LOG_WARN("Build fail msg fail", K(user), K(host), K(ret));
         }
       }
     }
@@ -373,7 +382,7 @@ int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(drop_user(common_rpc_proxy, arg))) {
+      if (OB_FAIL(drop_user(common_rpc_proxy, arg, stmt.get_if_exists()))) {
         LOG_WARN("Drop user completely failed", K(ret));
       } else {
         //do nothing
@@ -384,7 +393,8 @@ int ObDropUserExecutor::execute(ObExecContext &ctx, ObDropUserStmt &stmt)
 }
 
 int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
-                                  const obrpc::ObDropUserArg &arg)
+                                  const obrpc::ObDropUserArg &arg,
+                                  bool if_exist_stmt)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!arg.is_valid())) {
@@ -409,12 +419,28 @@ int ObDropUserExecutor::drop_user(obrpc::ObCommonRpcProxy *rpc_proxy,
                                                                  failed_index, failed_users,
                                                                  failed_hosts))) {
         LOG_WARN("Failed to extract user name", K(arg), K(ret));
-      } else if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
-        LOG_WARN("Build fail msg error", K(arg), K(ret));
-      } else {
-        const char *ERR_CMD = (arg.is_role_ && lib::is_mysql_mode()) ? "DROP ROLE" : "DROP USER";
-        ret = OB_CANNOT_USER;
-        LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen(ERR_CMD), ERR_CMD, (int)fail_msg.length(), fail_msg.ptr());
+      } else if (if_exist_stmt) {
+        if (OB_UNLIKELY(failed_users.count() < 1) || OB_UNLIKELY(failed_users.count() != failed_users.count())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(failed_users.count()), K(failed_users.count()), K(ret));
+        } else {
+          for (int i = 0; OB_SUCC(ret) && i < failed_users.count(); ++i) {
+            ObSqlString fail_msg_one;
+            if (OB_FAIL(ObDropUserExecutor::build_fail_msg_for_one(failed_users.at(i), failed_hosts.at(i), fail_msg_one))) {
+              LOG_WARN("Build fail msg error", K(arg), K(ret));
+            } else {
+              LOG_USER_WARN(OB_CANNOT_USER_IF_EXISTS, (int)fail_msg_one.length(), fail_msg_one.ptr());
+            }
+          }
+        }
+      } else if (!if_exist_stmt) {
+        if (OB_FAIL(ObDropUserExecutor::build_fail_msg(failed_users, failed_hosts, fail_msg))) {
+          LOG_WARN("Build fail msg error", K(arg), K(ret));
+        } else {
+          const char *ERR_CMD = (arg.is_role_ && lib::is_mysql_mode()) ? "DROP ROLE" : "DROP USER";
+          ret = OB_CANNOT_USER;
+          LOG_USER_ERROR(OB_CANNOT_USER, (int)strlen(ERR_CMD), ERR_CMD, (int)fail_msg.length(), fail_msg.ptr());
+        }
       }
     }
   }
@@ -604,6 +630,28 @@ int ObAlterUserProfileExecutor::execute(ObExecContext &ctx, ObAlterUserProfileSt
     LOG_WARN("get common rpc proxy failed", K(ret));
   } else if (OB_FAIL(common_rpc_proxy->alter_user_profile(stmt.get_ddl_arg()))) {
     LOG_WARN("alter user profile failed", K(stmt.get_ddl_arg()), K(ret));
+  }
+  return ret;
+}
+
+int ObAlterUserProxyExecutor::execute(ObExecContext &ctx, ObAlterUserProxyStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  ObTaskExecutorCtx *task_exec_ctx = NULL;
+  obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
+  obrpc::ObAlterUserProxyRes res;
+  if (OB_ISNULL(stmt.get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret));
+  } else if (OB_FALSE_IT(stmt.get_ddl_arg().ddl_stmt_str_ = stmt.get_query_ctx()->get_sql_stmt())) {
+  } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get task executor context failed", K(ret));
+  } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("get common rpc proxy failed", K(ret));
+  } else if (OB_FAIL(common_rpc_proxy->alter_user_proxy(stmt.get_ddl_arg(), res))) {
+    LOG_WARN("alter user proxy failed", K(stmt.get_ddl_arg()), K(ret));
   }
   return ret;
 }

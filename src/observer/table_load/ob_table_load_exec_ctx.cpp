@@ -22,6 +22,26 @@ namespace observer
 {
 using namespace common;
 using namespace sql;
+using namespace transaction;
+
+/**
+ * ObTableLoadExecCtx
+ */
+
+int ObTableLoadExecCtx::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
+    ret = OB_SERVER_IS_STOPPING;
+    LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
+  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
+    LOG_WARN("fail to check tenant", KR(ret));
+  } else if (nullptr != tx_desc_ && OB_UNLIKELY(tx_desc_->is_tx_timeout())) {
+    ret = OB_TRANS_TIMEOUT;
+    LOG_WARN("trans timeout", KR(ret), KPC(tx_desc_));
+  }
+  return ret;
+}
 
 /**
  * ObTableLoadSqlExecCtx
@@ -48,11 +68,8 @@ ObSQLSessionInfo *ObTableLoadSqlExecCtx::get_session_info()
 int ObTableLoadSqlExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
-    ret = OB_SERVER_IS_STOPPING;
-    LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
-  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
+  if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
+    LOG_WARN("fail to check status", KR(ret));
   } else if (OB_FAIL(exec_ctx_->check_status())) {
     LOG_WARN("fail to check exec ctx status", KR(ret));
   }
@@ -66,11 +83,8 @@ int ObTableLoadSqlExecCtx::check_status()
 int ObTableLoadClientExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
-    ret = OB_SERVER_IS_STOPPING;
-    LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
-  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
+  if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
+    LOG_WARN("fail to check status", KR(ret));
   } else if (OB_UNLIKELY(timeout_ts_ < ObTimeUtil::current_time())) {
     ret = OB_TIMEOUT;
     LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));

@@ -41,6 +41,7 @@
 #endif
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "share/ob_compatibility_control.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -666,10 +667,37 @@ int ObBasicSessionInfo::set_user(const ObString &user_name, const ObString &host
       LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
     } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.host_name_))) {
       LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
-    } else if (OB_FAIL(name_pool_.write_string(tmp_string, &thread_data_.user_at_host_name_))) {
-      LOG_WARN("fail to write user_at_host_name to string_buf_", K(tmp_string), K(ret));
     } else {
       user_id_ = user_id;
+    }
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::set_proxy_user(const ObString &user_name, const ObString &host_name, const uint64_t user_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(user_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)
+      || OB_UNLIKELY(host_name.length() > common::OB_MAX_USER_NAME_LENGTH_STORE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("name length invalid_", K(user_name), K(host_name), K(ret));
+  } else if (user_id == OB_INVALID_ID) {
+    proxy_user_id_ = user_id;
+    LockGuard lock_guard(thread_data_mutex_);
+    thread_data_.proxy_user_name_.reset();
+    thread_data_.proxy_host_name_.reset();
+  } else {
+    char tmp_buf[common::OB_MAX_USER_NAME_LENGTH_STORE + common::OB_MAX_USER_NAME_LENGTH_STORE + 2] = {};
+    snprintf(tmp_buf, sizeof(tmp_buf), "%.*s@%.*s", user_name.length(), user_name.ptr(),
+                                                    host_name.length(), host_name.ptr());
+    ObString tmp_string(tmp_buf);
+    LockGuard lock_guard(thread_data_mutex_);
+    if (OB_FAIL(name_pool_.write_string(user_name, &thread_data_.proxy_user_name_))) {
+      LOG_WARN("fail to write username to string_buf_", K(user_name), K(ret));
+    } else if (OB_FAIL(name_pool_.write_string(host_name, &thread_data_.proxy_host_name_))) {
+      LOG_WARN("fail to write hostname to string_buf_", K(host_name), K(ret));
+    } else {
+      proxy_user_id_ = user_id;
     }
   }
   return ret;
@@ -2739,6 +2767,18 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_CONTROL: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_compat_type(static_cast<share::ObCompatType>(int_val)));
+      break;
+    }
+    case SYS_VAR_OB_COMPATIBILITY_VERSION: {
+      uint64_t uint_val = 0;
+      OZ (val.get_uint64(uint_val), val);
+      OX (sys_vars_cache_.set_compat_version(uint_val));
       break;
     }
     default: {
@@ -4822,13 +4862,20 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   OB_UNIS_DECODE(sql_id);
   if (OB_SUCC(ret)) {
     set_cur_sql_id(sql_id.ptr());
-  }
-  if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
                 thread_data_.proxy_host_name_,
                 enable_role_ids_);
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_user_name_,
+                                          &thread_data_.proxy_user_name_))) {
+        LOG_WARN("fail to write username to string_buf_", K(thread_data_.proxy_user_name_), K(ret));
+      } else if (OB_FAIL(name_pool_.write_string(thread_data_.proxy_host_name_,
+                                                &thread_data_.proxy_host_name_))) {
+        LOG_WARN("fail to write userhost to string_buf_", K(thread_data_.proxy_host_name_), K(ret));
+      }
+    }
   }
   return ret;
 }
@@ -5942,6 +5989,50 @@ int ObBasicSessionInfo::get_sql_audit_mem_conf(int64_t &mem_pct)
   return ret;
 }
 
+int ObBasicSessionInfo::get_compatibility_control(ObCompatType &compat_type) const
+{
+  compat_type = sys_vars_cache_.get_compat_type();
+  return OB_SUCCESS;
+}
+
+int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) const
+{
+  compat_version = sys_vars_cache_.get_compat_version();
+  return OB_SUCCESS;
+}
+
+int ObBasicSessionInfo::get_security_version(uint64_t &security_version) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_sys_variable(SYS_VAR_OB_SECURITY_VERSION, security_version))) {
+    LOG_WARN("fail to get ob security version", K(ret));
+  }
+  return ret;
+}
+
+int ObBasicSessionInfo::check_feature_enable(const ObCompatFeatureType feature_type,
+                                             bool &is_enable) const
+{
+  int ret = OB_SUCCESS;
+  uint64_t version = 0;
+  is_enable = false;
+  if (feature_type < ObCompatFeatureType::COMPAT_FEATURE_END) {
+    if (OB_FAIL(get_compatibility_version(version))) {
+      LOG_WARN("failed to get compat version", K(ret));
+    }
+  } else {
+    if (OB_FAIL(get_security_version(version))) {
+      LOG_WARN("failed to get security version", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(version,
+                                                           feature_type, is_enable))) {
+    LOG_WARN("failed to get feature enable", K(ret));
+  }
+  return ret;
+}
+
 //session 当前的query处于非retry的packet处理时
 //  1）如果thread_data_.state_ == SESSION_KILLED时，调用该接口直接返回OB_ERR_SESSION_INTERRUPTED错误；
 //  2）如果thread_data_.state_ != SESSION_KILLED时，进行session state的设置
@@ -6116,7 +6207,8 @@ int ObBasicSessionInfo::base_restore_session(BaseSavedValue &saved_value)
   OZ (cur_stmt_tables_.assign(saved_value.cur_stmt_tables_));
   OZ (total_stmt_tables_.assign(saved_value.total_stmt_tables_));
 //OX (thread_data_.cur_query_start_time_ = saved_value.cur_query_start_time_);
-  int64_t len = MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1);
+  // 4013 scene, len may be -1, illegal.
+  int64_t len = MAX(MIN(saved_value.cur_query_len_, thread_data_.cur_query_buf_len_ - 1), 0);
   OX (thread_data_.cur_query_len_ = len);
   if (thread_data_.cur_query_ != nullptr) {
     OX (MEMCPY(thread_data_.cur_query_, saved_value.cur_query_, len));
@@ -6397,6 +6489,9 @@ void ObExecEnv::reset()
   collation_connection_ = CS_TYPE_INVALID;
   collation_database_ = CS_TYPE_INVALID;
   plsql_ccflags_.reset();
+
+  // default PLSQL_OPTIMIZE_LEVEL = 2
+  plsql_optimize_level_ = 2;
 }
 
 bool ObExecEnv::operator==(const ObExecEnv &other) const
@@ -6405,7 +6500,8 @@ bool ObExecEnv::operator==(const ObExecEnv &other) const
       && charset_client_ == other.charset_client_
       && collation_connection_ == other.collation_connection_
       && collation_database_ == other.collation_database_
-      && plsql_ccflags_ == other.plsql_ccflags_;
+      && plsql_ccflags_ == other.plsql_ccflags_
+      && plsql_optimize_level_ == other.plsql_optimize_level_;
 }
 
 bool ObExecEnv::operator!=(const ObExecEnv &other) const
@@ -6444,7 +6540,8 @@ int ObExecEnv::gen_exec_env(const ObBasicSessionInfo &session, char* buf, int64_
       case SQL_MODE:
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
-      case COLLATION_DATABASE: {
+      case COLLATION_DATABASE:
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         val.reset();
         OZ (session.get_sys_variable(ExecEnvMap[i], val));
@@ -6506,7 +6603,8 @@ int ObExecEnv::gen_exec_env(const share::schema::ObSysVariableSchema &sys_variab
       case SQL_MODE:
       case CHARSET_CLIENT:
       case COLLATION_CONNECTION:
-      case COLLATION_DATABASE: {
+      case COLLATION_DATABASE:
+      case PLSQL_OPTIMIZE_LEVEL: {
         int64_t size = 0;
         if (OB_FAIL(sys_variable.get_sysvar_schema(ExecEnvMap[i], sysvar_schema))) {
           LOG_WARN("failed to get sysvar schema", K(ret));
@@ -6562,7 +6660,14 @@ int ObExecEnv::init(const ObString &exec_env)
   int ret = OB_SUCCESS;
   ObString value_str;
   ObString start = exec_env;
+  bool is_oracle_mode = lib::is_oracle_mode();
+
   for (int64_t i = 0; OB_SUCC(ret) && i < MAX_ENV; ++i) {
+    // mysql mode do not have plsql_ccflags_length
+    if (PLSQL_CCFLAGS == i && !is_oracle_mode) {
+      continue;
+    }
+
     GET_ENV_VALUE(start, value_str);
     if (OB_SUCC(ret)) {
       switch (i) {
@@ -6588,11 +6693,20 @@ int ObExecEnv::init(const ObString &exec_env)
         } else {
           int32_t plsql_ccflags_length = 0;
           SET_ENV_VALUE(plsql_ccflags_length, int32_t);
+          CK (plsql_ccflags_length >= 0);
           if (OB_FAIL(ret)) {
           } else if (plsql_ccflags_length > 0) {
             plsql_ccflags_.assign(start.ptr(), plsql_ccflags_length);
-            start += plsql_ccflags_length + 1;// 1 for ','
           }
+          OX (start += plsql_ccflags_length + 1);// 1 for ','
+        }
+      }
+      break;
+      case PLSQL_OPTIMIZE_LEVEL: {
+        if (value_str.empty()) {
+          // do nothing, old routine object version do not have plsql_optimize_level
+        } else {
+          SET_ENV_VALUE(plsql_optimize_level_, int64_t);
         }
       }
       break;
@@ -6646,6 +6760,10 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
         }
       }
       break;
+      case PLSQL_OPTIMIZE_LEVEL: {
+        plsql_optimize_level_ = static_cast<int64_t>(val.get_int());
+      }
+      break;
       default: {
         ret = common::OB_ERR_UNEXPECTED;
         LOG_WARN("Invalid env type", K(i), K(ret));
@@ -6683,6 +6801,10 @@ int ObExecEnv::store(ObBasicSessionInfo &session)
     case PLSQL_CCFLAGS: {
       val.set_varchar(plsql_ccflags_);
       val.set_collation_type(ObCharset::get_system_collation());
+    }
+    break;
+    case PLSQL_OPTIMIZE_LEVEL: {
+      val.set_int(plsql_optimize_level_);
     }
     break;
     default: {

@@ -549,7 +549,7 @@ int ObTxData::reserve_undo(ObTxTable *tx_table)
   return ret;
 }
 
-int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *undo_node)
+int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &new_undo_action, ObUndoStatusNode *&undo_node)
 {
   // STORAGE_LOG(DEBUG, "do add_undo_action");
   int ret = OB_SUCCESS;
@@ -598,10 +598,6 @@ int ObTxData::add_undo_action(ObTxTable *tx_table, transaction::ObUndoAction &ne
           STORAGE_LOG(ERROR, "node is unexpected nullptr", KR(ret), KPC(this));
         }
       }
-    }
-
-    if (OB_NOT_NULL(undo_node)) {
-      tx_data_table->free_undo_status_node(undo_node);
     }
   }
   return ret;

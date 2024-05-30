@@ -2898,12 +2898,15 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   ObCollationType nation_collation = OB_NOT_NULL(ctx_.session_info_) ? ctx_.session_info_->get_nls_collation_nation() : CS_TYPE_INVALID;
   uint64_t tenant_data_ver = 0;
   bool enable_decimal_int = false;
-  if (nullptr == session_info) {
+  ObCompatType compat_type = COMPAT_MYSQL57;
+  if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else if (lib::is_oracle_mode() && OB_FAIL(
     session_info->get_sys_variable(share::SYS_VAR_COLLATION_SERVER, server_collation))) {
     LOG_WARN("get sys variables failed", K(ret));
+  } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
   } else if (lib::is_oracle_mode() && ctx_.is_expanding_view_) {
@@ -2924,6 +2927,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              &(ctx_.parents_expr_info_),
                                              session_info->get_sql_mode(),
                                              enable_decimal_int, // FIXME: enable decimal int
+                                             compat_type,
                                              nullptr != ctx_.secondary_namespace_))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
@@ -8390,7 +8394,8 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool is_internal = false;
   if (OB_FAIL(ret)) {
   } else if (ctx_.session_info_->is_inner()
-             || is_sys_view(ctx_.view_ref_id_)) {
+             || is_sys_view(ctx_.view_ref_id_)
+             || ctx_.is_from_show_resolver_) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {
   } else if (exist && is_internal) {

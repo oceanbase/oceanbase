@@ -78,6 +78,9 @@ public:
   const obrpc::ObSequenceDDLArg &get_sequence_ddl_arg() const;
   void set_masked_sql(const common::ObString &masked_sql) { masked_sql_ = masked_sql; }
   common::ObString get_masked_sql() const { return masked_sql_; }
+  void set_insert_mode(uint64_t mode) { insert_mode_ = mode; }
+  uint64_t get_insert_mode() const { return insert_mode_; }
+
   ObTableType get_table_type() const { return create_table_arg_.schema_.get_table_type(); }
   INHERIT_TO_STRING_KV("ObTableStmt", ObTableStmt, K_(stmt_type), K_(create_table_arg), K_(index_arg_list));
 private:
@@ -100,6 +103,17 @@ private:
 protected:
   ObSelectStmt *sub_select_stmt_; //create table  ... as select...
   ObSelectStmt *view_define_;
+  /**
+   * @brief insert_mode_
+   *example: create table t1 [ignore/replace] select * from t2
+   *1.  create table ctas_t1(xxx);
+   *2.  construct inner sql
+   *  a. insert_mode_ = 0 -> normal insert -> insert into ctas_t1 select * from t2
+   *  b. insert_mode_ = 1 -> insert ignore -> insert ignore into ctas_t1 select * from t2
+   *  c. insert_mode_ = 2 -> replace into  -> replace into ctas_t1 select * from t2
+   3. rename ctas_t1 as t1
+   */
+  uint64_t insert_mode_;
 };
 
 inline obrpc::ObCreateTableArg &ObCreateTableStmt::get_create_table_arg()

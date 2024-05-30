@@ -41,6 +41,7 @@
 #include "sql/parser/ob_parser_utils.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "sql/engine/expr/ob_expr_unistr.h"
+#include "lib/charset/ob_ctype.h"
 
 namespace oceanbase
 {
@@ -2290,6 +2291,7 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_SHOW_TRIGGERS);
       SET_STMT_TYPE(T_HELP);
       SET_STMT_TYPE(T_SHOW_RECYCLEBIN);
+      SET_STMT_TYPE(T_SHOW_PROFILE);
       SET_STMT_TYPE(T_SHOW_TENANT);
       SET_STMT_TYPE(T_SHOW_SEQUENCES);
       SET_STMT_TYPE(T_SHOW_STATUS);
@@ -2319,6 +2321,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_REVOKE_ROLE);
       SET_STMT_TYPE(T_CREATE_CONTEXT);
       SET_STMT_TYPE(T_DROP_CONTEXT);
+      SET_STMT_TYPE(T_SHOW_ENGINE);
+      SET_STMT_TYPE(T_SHOW_OPEN_TABLES);
+      SET_STMT_TYPE(T_REPAIR_TABLE);
+      SET_STMT_TYPE(T_CHECKSUM_TABLE);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {
@@ -2492,6 +2498,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
                                    ObExprInfo *parents_expr_info,
                                    const ObSQLMode sql_mode,
                                    bool enable_decimal_int_type,
+                                   const ObCompatType compat_type,
                                    bool is_from_pl /* false */)
 {
   int ret = OB_SUCCESS;
@@ -3128,10 +3135,16 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
       break;
     }
     case T_NULL: {
-      val.set_null();
-      val.unset_result_flag(NOT_NULL_FLAG);
-      val.set_length(0);
-      val.set_param_meta(val.get_meta());
+      if (OB_UNLIKELY(compat_type == COMPAT_MYSQL8 && node->value_ == 1)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "\\N in MySQL8");
+        LOG_WARN("\\N is not supprted in MySQL8", K(ret));
+      } else {
+        val.set_null();
+        val.unset_result_flag(NOT_NULL_FLAG);
+        val.set_length(0);
+        val.set_param_meta(val.get_meta());
+      }
       break;
     }
     default: {
@@ -5489,6 +5502,41 @@ int ObResolverUtils::check_comment_length(
         ret = OB_ERR_TOO_LONG_FIELD_COMMENT;
         LOG_USER_ERROR(OB_ERR_TOO_LONG_FIELD_COMMENT, max_len);
       }
+    }
+  }
+  return ret;
+}
+
+int ObResolverUtils::check_user_variable_length(char *str, int64_t str_len)
+{
+  int ret = OB_SUCCESS;
+  char *name = str;
+  char *end = str + str_len;
+  int name_length = 0;
+  bool last_char_is_space = true;
+  if ((NULL == str  && str_len != 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null pointer", K(str), K(ret));
+  } else {
+    const ObCharsetInfo *cs = ObCharset::get_charset(CS_TYPE_UTF8MB4_GENERAL_CI);
+    while (name < end) {
+      last_char_is_space = ObCharset::is_space(CS_TYPE_UTF8MB4_GENERAL_CI, *str);
+      if (use_mb(cs)) {
+        uint64_t char_len = ob_ismbchar(cs, str, str+cs->mbmaxlen);
+        if (char_len) {
+          name += char_len;
+          name_length++;
+        } else {
+          name++;
+          name_length++;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (last_char_is_space || (name_length > MAX_NAME_CHAR_LEN)) {
+      ret = OB_ERR_ILLEGAL_USER_VAR;
+      LOG_USER_ERROR(OB_ERR_ILLEGAL_USER_VAR, name_length, str);
     }
   }
   return ret;
@@ -8899,9 +8947,12 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
   const bool is_paramlize = false;
   int64_t server_collation = CS_TYPE_INVALID;
   obj_param.reset();
+  ObCompatType compat_type = COMPAT_MYSQL57;
   if (OB_ISNULL(pc_param) || OB_ISNULL(raw_param = pc_param->node_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
+  } else if (OB_FAIL(session.get_compatibility_control(compat_type))) {
+    LOG_WARN("failed to get compat type", K(ret));
   } else if (not_param_index.has_member(param_idx)) {
     /* do nothing */
     is_param = false;
@@ -8933,7 +8984,8 @@ int ObResolverUtils::resolver_param(ObPlanCacheCtx &pc_ctx,
                        session.get_actual_nls_length_semantics(),
                        static_cast<ObCollationType>(server_collation), NULL,
                        session.get_sql_mode(),
-                       enable_decimal_int))) {
+                       enable_decimal_int,
+                       compat_type))) {
       SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
     } else if (FALSE_IT(obj_param.set_raw_text_info(static_cast<int32_t>(raw_param->raw_sql_offset_),
                                                     static_cast<int32_t>(raw_param->text_len_)))) {

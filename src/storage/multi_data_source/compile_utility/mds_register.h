@@ -171,6 +171,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
   //                                         ::oceanbase::storage::mds::ObAbortTransferInMdsCtx,\
   //                                         32,\
   //                                         TRANSFER_IN_ABORTED)
+  // GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::share::ObUpgradeDataVersionMDSHelper, \
+  //                                         ::oceanbase::storage::mds::MdsCtx, \
+  //                                         33,\
+  //                                         STANDBY_UPGRADE_DATA_VERSION)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif

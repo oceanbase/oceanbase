@@ -228,7 +228,6 @@ int calc_##tritype##_expr(const ObExpr &expr, ObEvalCtx &ctx,                 \
 
 class ObSolidifiedVarsContext
 {
-  OB_UNIS_VERSION(1);
 public:
   ObSolidifiedVarsContext() :
     local_session_var_(NULL),
@@ -242,8 +241,10 @@ public:
     local_tz_wrap_(NULL)
   {
   }
-  virtual ~ObSolidifiedVarsContext() {
+  virtual ~ObSolidifiedVarsContext()
+  {
     if (NULL != local_tz_wrap_ && NULL != alloc_) {
+      local_tz_wrap_->~ObTimeZoneInfoWrap();
       alloc_->free(local_tz_wrap_);
       local_tz_wrap_ = NULL;
     }
@@ -276,6 +277,7 @@ public:
   int get_local_nls_timestamp_tz_format(ObString &format);
   int get_local_nls_format_by_type(const ObObjType type, ObString &format_str);
   int get_max_allowed_packet(int64_t &max_size);
+  int get_compat_version(uint64_t &compat_version);
   //get the specified solidified var
   int get_local_var(share::ObSysVarClassType var_type, share::schema::ObSessionSysVar *&sys_var);
 private:

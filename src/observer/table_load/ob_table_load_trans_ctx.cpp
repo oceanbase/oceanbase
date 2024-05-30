@@ -47,7 +47,7 @@ int ObTableLoadTransCtx::advance_trans_status(ObTableLoadTransStatusType trans_s
       ret = error_code_;
       LOG_WARN("trans has error", KR(ret));
     } else if (OB_UNLIKELY(ObTableLoadTransStatusType::ABORT == trans_status_)) {
-      ret = OB_TRANS_KILLED;
+      ret = OB_CANCELED;
       LOG_WARN("trans is abort", KR(ret));
     }
     // 正常运行阶段, 状态是一步步推进的
@@ -71,7 +71,7 @@ int ObTableLoadTransCtx::set_trans_status_error(int error_code)
   } else {
     obsys::ObWLockGuard guard(rwlock_);
     if (OB_UNLIKELY(trans_status_ == ObTableLoadTransStatusType::ABORT)) {
-      ret = OB_TRANS_KILLED;
+      ret = OB_CANCELED;
     } else if (trans_status_ != ObTableLoadTransStatusType::ERROR) {
       trans_status_ = ObTableLoadTransStatusType::ERROR;
       error_code_ = error_code;
@@ -96,7 +96,7 @@ int ObTableLoadTransCtx::check_trans_status(ObTableLoadTransStatusType trans_sta
     if (ObTableLoadTransStatusType::ERROR == trans_status_) {
       ret = error_code_;
     } else if (ObTableLoadTransStatusType::ABORT == trans_status_) {
-      ret = OB_TRANS_KILLED;
+      ret = OB_CANCELED;
     } else {
       ret = OB_STATE_NOT_MATCH;
     }

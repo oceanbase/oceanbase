@@ -441,12 +441,15 @@ int ObRawExprInfoExtractor::visit(ObCaseOpRawExpr &expr)
 int ObRawExprInfoExtractor::visit(ObAggFunRawExpr &expr)
 {
   int ret = OB_SUCCESS;
+  const bool is_inner_added = expr.has_flag(IS_INNER_ADDED_EXPR);
   if (OB_FAIL(clear_info(expr))) {
     LOG_WARN("fail to clear info", K(ret));
   } else if (OB_FAIL(pull_info(expr))) {
     LOG_WARN("fail to add pull info", K(ret));
   } else if (OB_FAIL(expr.add_flag(IS_AGG))) {
-      LOG_WARN("failed to add flag IS_AGG", K(ret));
+    LOG_WARN("failed to add flag IS_AGG", K(ret));
+  } else if (is_inner_added && OB_FAIL(expr.add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("failed to add inner added expr flag", K(ret));
   } else { }
   return ret;
 }

@@ -832,6 +832,8 @@ const uint64_t COLUMN_GROUP_START_ID = 1000;
 const uint64_t DEFAULT_CUSTOMIZED_CG_NUM = 2;
 const int64_t OB_CG_NAME_PREFIX_LENGTH = 5; // length of cg prefix like "__cg_"
 const int64_t OB_MAX_COLUMN_GROUP_NAME_LENGTH = OB_MAX_COLUMN_NAME_LENGTH * OB_MAX_CHAR_LEN + OB_CG_NAME_PREFIX_LENGTH; //(max_column_name_length(128) * ob_max_char_len(3)) + prefix
+const int64_t MAX_NAME_CHAR_LEN = 64;
+
 //Oracle
 const int64_t MAX_ORACLE_COMMENT_LENGTH = 4000;
 
@@ -1507,7 +1509,7 @@ const char *const OB_MYSQL_OCI_CLIENT_NAME = "OceanBase Connector/C";
 const char *const OB_MYSQL_JAVA_CLIENT_MODE_NAME = "__ob_java_client";
 const char *const OB_MYSQL_OCI_CLIENT_MODE_NAME = "__ob_libobclient";
 const char *const OB_MYSQL_JDBC_CLIENT_MODE_NAME = "__ob_jdbc_client";
-
+const char *const OB_MYSQL_CLIENT_PROXY_USER_NAME = "__ob_client_proxy_user_name";
 const char *const OB_MYSQL_CLIENT_ATTRIBUTE_CAPABILITY_FLAG = "__ob_client_attribute_capability_flag";
 
 enum ObClientMode

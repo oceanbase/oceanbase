@@ -76,6 +76,7 @@ public:
     }
 
     if (OB_ISNULL(log_service)) {
+      ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "get_log_service failed");
     } else if (FALSE_IT(rpc_proxy = log_service->get_rpc_proxy())) {
     } else if (FALSE_IT(self = log_service->get_self())) {

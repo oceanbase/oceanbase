@@ -187,6 +187,25 @@ int SimpleServerHelper::select_int64(sqlclient::ObISQLConnection *conn, const ch
   return ret;
 }
 
+int SimpleServerHelper::select_int64(ObMySQLTransaction &trans, uint64_t tenant_id, const char *sql, int64_t &val)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    if (OB_FAIL(trans.read(res, tenant_id, sql))) {
+    } else {
+      sqlclient::ObMySQLResult *result = res.get_result();
+      if (result == nullptr) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_FAIL(result->next())) {
+      } else if (OB_FAIL(result->get_int("val", val))) {
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("select failed", KR(ret), K(sql));
+  }
+  return ret;
+}
 int SimpleServerHelper::g_select_varchar(uint64_t tenant_id, const char *sql, ObString &val)
 {
   int ret = OB_SUCCESS;

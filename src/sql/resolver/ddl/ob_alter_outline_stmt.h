@@ -42,6 +42,7 @@ public:
   common::ObString &get_target_sql() { return alter_outline_arg_.alter_outline_info_.get_outline_target_str(); }
   ObStmt *&get_outline_stmt() { return outline_stmt_; }
   obrpc::ObAlterOutlineArg &get_alter_outline_arg() { return alter_outline_arg_; }
+  const obrpc::ObAlterOutlineArg &get_alter_outline_arg() const { return alter_outline_arg_; }
   virtual obrpc::ObDDLArg &get_ddl_arg() { return alter_outline_arg_; }
   TO_STRING_KV(K_(alter_outline_arg),
                K_(outline_stmt));

@@ -16,6 +16,7 @@
 #include "sql/rewrite/ob_query_range.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/engine/expr/ob_datum_cast.h"
 
 namespace oceanbase
 {
@@ -1445,10 +1446,10 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("keypart isn't normal key", K_(key_type));
   } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
-                                               normal_keypart_->start_, start_cmp))) {
+                                               normal_keypart_->start_, start_cmp, common::CO_LE, true))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else if (OB_FAIL(ObKeyPart::try_cast_value(dtc_params, allocator_, pos_,
-                                               normal_keypart_->end_, end_cmp))) {
+                                               normal_keypart_->end_, end_cmp, common::CO_LE, false))) {
     LOG_WARN("failed to try cast value type", K(ret));
   } else {
     if (start_cmp < 0) {
@@ -1479,7 +1480,8 @@ int ObKeyPart::cast_value_type(const ObDataTypeCastParams &dtc_params, bool cont
 }
 
 int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocator &alloc,
-                              const ObKeyPartPos &pos, ObObj &value, int64_t &cmp)
+                              const ObKeyPartPos &pos, ObObj &value, int64_t &cmp,
+                              common::ObCmpOp cmp_op /* CO_EQ */, bool left_border /*true*/)
 {
   int ret = OB_SUCCESS;
   if (!value.is_min_value() && !value.is_max_value() && !value.is_unknown()
@@ -1491,6 +1493,15 @@ int ObKeyPart::try_cast_value(const ObDataTypeCastParams &dtc_params, ObIAllocat
     ObAccuracy acc(pos.column_type_.get_accuracy());
     if (pos.column_type_.is_decimal_int()) {
       cast_ctx.res_accuracy_ = &acc;
+      int32_t out_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(acc.get_precision());
+      int32_t in_bytes = value.get_int_bytes();
+      ObScale out_scale = acc.get_scale();
+      ObScale in_scale = value.get_scale();
+      if ((value.is_decimal_int()
+            && ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes))
+          || !value.is_decimal_int()) {
+        cast_ctx.cast_mode_ = ObRelationalExprOperator::get_const_cast_mode(cmp_op, !left_border);
+      }
     }
     ObObj &tmp_start = value;
     ObExpectType expect_type;

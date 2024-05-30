@@ -6420,4 +6420,7 @@ TRIM( SUBSTRING( SUBSTRING( '‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚à ‚ä ‚à 
 1
 1
 1
+select cast('NAMEXX' as BINARY) regexp BINARY '^[A-Z]+$', cast('NAME66' as BINARY) regexp BINARY '^[A-Z]+$';
+cast('NAMEXX' as BINARY) regexp BINARY '^[A-Z]+$'	cast('NAME66' as BINARY) regexp BINARY '^[A-Z]+$'
+1	0
 drop database ly;

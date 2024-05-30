@@ -222,6 +222,7 @@ private:
   */
   int deal_with_miss_(const bool enable_fill_cache,
                       const int64_t has_read_size,
+                      const int64_t buf_len,
                       LSN &lsn,
                       int64_t &in_read_size,
                       int64_t &out_read_size,

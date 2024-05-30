@@ -2357,6 +2357,12 @@ int ObPartTransCtx::replay_mds_to_tx_table_(const ObTxBufferNodeArray &mds_node_
             ls_id_, op_scn, tx_op_batch))) {
        TRANS_LOG(WARN, "add_tx_op_batch failed", KR(ret));
     }
+    // tx_op_batch not put into tx_data, need to release
+    if (OB_FAIL(ret)) {
+      for (int64_t idx = 0; idx < tx_op_batch.count(); idx++) {
+        tx_op_batch.at(idx).release();
+      }
+    }
   }
   // tx_ctx and tx_data checkpoint independent
   if (OB_FAIL(ret)) {
@@ -2442,6 +2448,7 @@ int ObPartTransCtx::insert_mds_to_tx_table_(ObTxLogCb &log_cb)
 
 int ObPartTransCtx::insert_undo_action_to_tx_table_(ObUndoAction &undo_action,
                                                     ObTxDataGuard &new_tx_data_guard,
+                                                    storage::ObUndoStatusNode *&undo_node,
                                                     const share::SCN op_scn)
 {
   int ret = OB_SUCCESS;
@@ -2451,7 +2458,7 @@ int ObPartTransCtx::insert_undo_action_to_tx_table_(ObUndoAction &undo_action,
     TRANS_LOG(WARN, "get tx data failed", KR(ret));
   } else if (OB_FAIL(tx_data_guard.tx_data()->init_tx_op())) {
     TRANS_LOG(WARN, "init tx op failed", KR(ret));
-  } else if (OB_FAIL(tx_data_guard.tx_data()->add_undo_action(ls_tx_ctx_mgr_->get_tx_table(), undo_action))) {
+  } else if (OB_FAIL(tx_data_guard.tx_data()->add_undo_action(ls_tx_ctx_mgr_->get_tx_table(), undo_action, undo_node))) {
     TRANS_LOG(WARN, "add undo action failed", KR(ret));
   } else {
     *new_tx_data_guard.tx_data() = *tx_data_guard.tx_data();
@@ -2461,7 +2468,7 @@ int ObPartTransCtx::insert_undo_action_to_tx_table_(ObUndoAction &undo_action,
        TRANS_LOG(WARN, "insert tx data failed", KR(ret));
      }
   }
-  TRANS_LOG(INFO, "insert undo_action to tx_table", KR(ret), K(undo_action), K(trans_id_), K(ls_id_), K(op_scn));
+  TRANS_LOG(INFO, "insert undo_action to tx_table", KR(ret), K(undo_action), K(trans_id_), K(ls_id_), K(op_scn), KP(undo_node));
   return ret;
 }
 
@@ -2585,10 +2592,14 @@ int ObPartTransCtx::on_success_ops_(ObTxLogCb *log_cb)
         TRANS_LOG(INFO, "apply commit info log", KR(ret), K(*this), K(two_phase_log_type));
       }
     } else if (ObTxLogType::TX_ROLLBACK_TO_LOG == log_type) {
-      if (OB_FAIL(insert_undo_action_to_tx_table_(log_cb->get_undo_action(), log_cb->get_tx_data_guard(), log_ts))) {
+      if (OB_FAIL(insert_undo_action_to_tx_table_(log_cb->get_undo_action(),
+                                                  log_cb->get_tx_data_guard(),
+                                                  log_cb->get_undo_node(),
+                                                  log_ts))) {
         TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
       } else {
         log_cb->set_tx_data(nullptr);
+        log_cb->reset_undo_node();
       }
     } else if (ObTxLogTypeChecker::is_state_log(log_type)) {
       sub_state_.clear_state_log_submitting();
@@ -7164,7 +7175,9 @@ int ObPartTransCtx::prepare_mds_tx_op_(const ObTxBufferNodeArray &mds_array,
     } else if (OB_FAIL(tx_op_array.push_back(tx_op))) {
       TRANS_LOG(WARN, "push buffer_node to list fail", KR(ret));
     }
+    // attention tx_op is not put into tx_op_array
     if (OB_FAIL(ret) && OB_NOT_NULL(new_node_wrapper)) {
+      new_node_wrapper->~ObTxBufferNodeWrapper();
       tx_op_allocator.free(new_node_wrapper);
     }
   }
@@ -8276,7 +8289,7 @@ int ObPartTransCtx::supplement_tx_op_if_exist_(const bool for_replay, const SCN 
 
 int ObPartTransCtx::recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const SCN replay_scn)
 {
-  TRANS_LOG(INFO, "recover_tx_ctx_from_tx_op_", K(tx_op_list.get_count()), K(replay_scn), KPC(this));
+  TRANS_LOG(INFO, "recover tx_ctx from_tx_op begin", K(tx_op_list.get_count()), K(replay_scn), KPC(this));
   int ret = OB_SUCCESS;
   // filter tx_op for this tx_ctx life_cycle
   ObTxOpArray ctx_tx_op;
@@ -8305,19 +8318,6 @@ int ObPartTransCtx::recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const S
       const ObTxBufferNode &node = node_wrapper.get_node();
       if (OB_FAIL(mds_array.push_back(node))) {
         TRANS_LOG(WARN, "failed to push node to array", KR(ret), KPC(this));
-      } else if (node.type_ == ObTxDataSourceType::TABLE_LOCK) {
-        // to recover table_lock
-        ObTableLockOp lock_op;
-        int64_t pos = 0;
-        const char *buf = node.data_.ptr();
-        const int64_t len = node.data_.length();
-        if (OB_FAIL(lock_op.deserialize(buf, node.get_data_size(), pos))) {
-          TRANS_LOG(WARN, "deserialize fail", KR(ret), KPC(this));
-        } else if (OB_FAIL(mt_ctx_.replay_lock(lock_op, tx_op.get_op_scn()))) {
-          TRANS_LOG(WARN, "recover lock_op failed", KR(ret), KPC(this));
-        } else {
-          TRANS_LOG(INFO, "recover lock_op from tx_op", KPC(this), K(lock_op), K(node_wrapper));
-        }
       }
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -8336,7 +8336,7 @@ int ObPartTransCtx::recover_tx_ctx_from_tx_op_(ObTxOpVector &tx_op_list, const S
   if (exec_info_.multi_data_source_.count() > 0) {
     ctx_max_register_no = exec_info_.multi_data_source_.at(exec_info_.multi_data_source_.count() - 1).get_register_no();
   }
-  TRANS_LOG(INFO, "recover tx_ctx from tx_op", KR(ret), K(tx_op_list.get_count()), K(ctx_tx_op.count()),
+  TRANS_LOG(INFO, "recover tx_ctx from tx_op finish", KR(ret), K(tx_op_list.get_count()), K(ctx_tx_op.count()),
       K(mds_array.count()), K(exec_info_.multi_data_source_.count()),
       K(mds_max_register_no), K(ctx_max_register_no),
       KPC(this));
@@ -8690,6 +8690,7 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
   ObTxRollbackToLog log(from_scn, to_scn);
   ObTxLogCb *log_cb = NULL;
   int64_t replay_hint = trans_id_.get_id();
+  ObUndoStatusNode *undo_node = NULL;
   logservice::ObReplayBarrierType barrier = logservice::ObReplayBarrierType::NO_NEED_BARRIER;
   if (to_scn.support_branch() && is_parallel_logging()) {
     const int16_t branch_id = to_scn.get_branch();
@@ -8716,6 +8717,15 @@ int ObPartTransCtx::submit_rollback_to_log_(const ObTxSEQ from_scn,
     log_cb = NULL;
   } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
     TRANS_LOG(WARN, "alloc_tx_data failed", KR(ret), KPC(this));
+    return_log_cb_(log_cb);
+    log_cb = NULL;
+  } else if (OB_ISNULL(undo_node = (ObUndoStatusNode*)MTL(ObSharedMemAllocMgr*)->tx_data_allocator().alloc(true, INT64_MAX))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc_undo_status_node failed", KR(ret), KPC(this));
+    return_log_cb_(log_cb);
+    log_cb = NULL;
+  } else if (FALSE_IT(new (undo_node) ObUndoStatusNode())) {
+  } else if (FALSE_IT(log_cb->get_undo_node() = undo_node)) {
   } else if (OB_FAIL(submit_log_block_out_(log_block, SCN::min_scn(), log_cb, replay_hint, barrier))) {
     TRANS_LOG(WARN, "submit log fail", K(ret), K(log_block), KPC(this));
     return_log_cb_(log_cb);

@@ -289,9 +289,7 @@ private:
                                        const share::SCN freeze_snapshot_version,
                                        int &ret);
   void submit_freeze_task_(const bool is_ls_freeze, ObFuture<int> *result, ObTableHandleV2 &handle);
-  void wait_memtable_ready_for_flush(ObITabletMemtable *tablet_memtable);
   int wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable);
-  int handle_memtable_for_tablet_freeze(ObIMemtable *imemtable);
   int try_set_tablet_freeze_begin_();
   void set_tablet_freeze_begin_();
   void set_tablet_freeze_end_();
@@ -309,6 +307,7 @@ private:
   int finish_freeze_with_ls_lock(ObITabletMemtable *tablet_memtable);
   int try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
                                                      bool &ready_for_flush,
+                                                     bool &is_force_released,
                                                      const int64_t start,
                                                      int64_t &last_submit_log_time);
   void submit_checkpoint_task();

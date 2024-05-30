@@ -450,7 +450,7 @@ TEST_F(TestObSimpleLogClusterSingleReplica, single_replica_flashback_restart)
   LogStorage *log_storage = &new_leader.palf_handle_impl_->log_engine_.log_storage_;
   SCN block_end_scn;
   {
-    PalfGroupBufferIterator iterator;
+    PalfGroupBufferIterator iterator(palf_id_);
     auto get_file_end_lsn = [](){
       return LSN(PALF_BLOCK_SIZE);
     };

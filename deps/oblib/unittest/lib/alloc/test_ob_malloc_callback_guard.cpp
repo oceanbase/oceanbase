@@ -44,7 +44,7 @@ TEST_F(TestObMallocCallbackGuard, AllocAndFree)
   ObMallocCallbackGuard guard(cb);
   auto *ptr = ob_malloc(2113, ObNewModIds::TEST);
   std::cout << "alloc" << std::endl;
-  ASSERT_EQ(hold, 8192);
+  ASSERT_EQ(hold, 2113);
   ob_free(ptr);
   std::cout << "free" << std::endl << std::endl;
   ASSERT_EQ(hold, 0);
@@ -53,8 +53,8 @@ TEST_F(TestObMallocCallbackGuard, AllocAndFree)
     MallocCallback cb(hold2);
     ObMallocCallbackGuard guard(cb);
     auto *ptr = ob_malloc(2113, ObNewModIds::TEST);
-    ASSERT_EQ(hold, 8192);
-    ASSERT_EQ(hold2, 8192);
+    ASSERT_EQ(hold, 2113);
+    ASSERT_EQ(hold2, 2113);
     std::cout << "alloc" << std::endl;
     ob_free(ptr);
     ASSERT_EQ(hold, 0);
@@ -62,7 +62,7 @@ TEST_F(TestObMallocCallbackGuard, AllocAndFree)
     std::cout << "free" << std::endl << std::endl;
   }
   ptr = ob_malloc(2113, ObNewModIds::TEST);
-  ASSERT_EQ(hold, 8192);
+  ASSERT_EQ(hold, 2113);
   std::cout << "alloc" << std::endl;
   ob_free(ptr);
   std::cout << "free" << std::endl;

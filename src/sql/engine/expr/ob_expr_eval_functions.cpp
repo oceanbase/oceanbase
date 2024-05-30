@@ -375,6 +375,9 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_inner_table_option_printer.h"
+#include "ob_expr_password.h"
+
 
 namespace oceanbase
 {
@@ -1141,14 +1144,14 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprXmlConcat::eval_xml_concat,                           /* 662 */
   NULL, //ObExprXmlForest::eval_xml_forest,                           /* 663 */
   NULL, //ObExprExistsNodeXml::eval_existsnode_xml,                   /* 664 */
-  NULL, //ObExprPassword::eval_password,                              /* 665 */
+  ObExprPassword::eval_password,                                      /* 665 */
   ObExprDocID::generate_doc_id,                                       /* 666 */
   ObExprWordSegment::generate_fulltext_column,                        /* 667 */
   ObExprWordCount::generate_word_count,                               /* 668 */
   ObExprBM25::eval_bm25_relevance_expr,                               /* 669 */
   ObExprTransactionId::eval_transaction_id,                           /* 670 */
-  NULL, //ObExprInnerTableOptionPrinter::eval_inner_table_option_printer, /* 671 */
-  NULL, //ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter, /* 672 */
+  ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
+  ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
   NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
   ObExprInnerRowCmpVal::eval_inner_row_cmp_val,                       /* 674 */
   ObExprIs::json_is_true,                                             /* 675 */
@@ -1197,6 +1200,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbFromString::eval_rb_from_string,                   /* 718 */
   NULL, // ObExprRbIterate::eval_rb_iterate,                          /* 719 */
   NULL, // ObExprArray::eval_array,                                   /* 720 */
+  NULL, // ObExprVectorL1Distance::calc_l1_distance,                  /* 721 */
+  NULL, // ObExprVectorL2Distance::calc_l2_distance,                  /* 722 */
+  NULL, // ObExprVectorCosineDistance::calc_cosine_distance,          /* 723 */
+  NULL, // ObExprVectorIPDistance::calc_inner_product,                /* 724 */
+  NULL, // ObExprVectorDims::calc_dims,                               /* 725 */
+  NULL, // ObExprVectorNorm::calc_norm,                               /* 726 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

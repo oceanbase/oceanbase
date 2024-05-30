@@ -1311,6 +1311,12 @@ public:
                                 IndexDMLInfo *&index_dml_info,
                                 int64_t &wait_ts,
                                 bool &skip_locked);
+  int get_table_for_update_info_for_hierarchical(const uint64_t table_id,
+                                                 ObIArray<IndexDMLInfo *> &index_dml_infos,
+                                                 int64_t &wait_ts,
+                                                 bool &skip_locked);
+  int is_hierarchical_for_update(bool &is_hierarchical);
+  int check_hierarchical_for_update(const TableItem *table, uint64_t base_tid);
 
   int get_part_column_exprs(const uint64_t table_id,
                             const uint64_t ref_table_id,

@@ -296,6 +296,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"field_optionally_enclosed_by", FIELD_OPTIONALLY_ENCLOSED_BY},
   {"field_delimiter", FIELD_DELIMITER},
   {"file", FILEX},
+  {"file_block_size", FILE_BLOCK_SIZE},
   {"file_id", FILE_ID},
   {"final_count", FINAL_COUNT},
   {"first", FIRST},

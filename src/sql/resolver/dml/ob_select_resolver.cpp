@@ -1395,12 +1395,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
     }
   }
 
-  if (OB_SUCC(ret) && select_stmt->has_for_update() && select_stmt->is_hierarchical_query()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("for update with hierarchical not support", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "for update with hierarchical");
-  }
-
   if (OB_SUCC(ret) && has_top_limit_) {
     has_top_limit_ = false;
     select_stmt->set_has_top_limit(NULL != parse_tree.children_[PARSE_SELECT_LIMIT]);
@@ -1600,6 +1594,8 @@ int ObSelectResolver::resolve_query_options(const ParseNode *node)
           ret = OB_ERR_CANT_USE_OPTION_HERE;
           LOG_USER_ERROR(OB_ERR_CANT_USE_OPTION_HERE, "SQL_CALC_FOUND_ROWS");
         }
+      } else if (option_node->type_ == T_STRAIGHT_JOIN) {
+        select_stmt->set_select_straight_join(true);
       }
     }
   }
@@ -1878,6 +1874,9 @@ int ObSelectResolver::set_for_update_oracle(ObSelectStmt &stmt,
         if (OB_ISNULL(view = table->ref_query_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("view is invalid", K(ret), K(*table));
+        } else if (0 == view->get_table_size()) {
+          // table is DUAL, does not need FOR UPDATE
+          table->for_update_ = false;
         } else if (NULL != col) {
           int64_t sel_id = col->get_column_id() - OB_APP_MIN_COLUMN_ID;
           ObRawExpr *sel_expr = NULL;
@@ -2068,6 +2067,7 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
   ParseNode *alias_node = NULL;
   bool is_bald_star = false;
   ObSelectStmt *select_stmt = NULL;
+  bool enable_modify_null_name = false;
   //LOG_INFO("resolve_select_1", "usec", ObSQLUtils::get_usec());
   current_scope_ = T_FIELD_LIST_SCOPE;
   if (OB_ISNULL(session_info_) || OB_ISNULL(select_stmt = get_select_stmt())) {
@@ -2105,6 +2105,17 @@ int ObSelectResolver::resolve_field_list(const ParseNode &node)
         if (OB_FAIL(ob_write_string(*allocator_, alias_name, select_item.alias_name_))) {
           LOG_WARN("Can not malloc space for alias name", K(ret));
         }
+      }
+    } else if (OB_FAIL(session_info_->check_feature_enable(ObCompatFeatureType::PROJECT_NULL,
+                                                           enable_modify_null_name))) {
+      LOG_WARN("failed to check feature enable", K(ret));
+    } else if (is_mysql_mode() && node.children_[i]->children_[0]->type_ == T_NULL &&
+               enable_modify_null_name) {
+      // MySQL sets the alias of standalone null value("\N","null"...) to "NULL" during projection.
+      // Note: when null value is in a composite expression, its alias is not modified.
+      ObString alias_name = ObString::make_string("NULL");
+      if (OB_FAIL(ob_write_string(*allocator_, alias_name, select_item.alias_name_))) {
+        LOG_WARN("Can not malloc space for alias name", K(ret));
       }
     } else {
       select_item.alias_name_.assign_ptr(node.children_[i]->str_value_,

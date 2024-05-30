@@ -433,6 +433,7 @@ namespace share
   static const char* const OB_SV_INNODB_AUTOINC_LOCK_MODE = "innodb_autoinc_lock_mode";
   static const char* const OB_SV_SKIP_EXTERNAL_LOCKING = "skip_external_locking";
   static const char* const OB_SV_SUPER_READ_ONLY = "super_read_only";
+  static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
 
 }
 }

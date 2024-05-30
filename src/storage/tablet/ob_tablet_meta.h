@@ -188,6 +188,7 @@ private:
   int inner_check_(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
+  inline void set_space_usage_ (const ObTabletSpaceUsage &space_usage) { space_usage_ = space_usage; }
 private:
   static const int32_t TABLET_META_VERSION = 1;
 private:

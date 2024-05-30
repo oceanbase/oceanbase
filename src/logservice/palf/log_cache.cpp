@@ -547,7 +547,7 @@ int LogColdCache::read(const int64_t flashback_version,
              K(in_read_size), K(cache_lines_read_size), PRINT_INFO);
   } else if (OB_FAIL(allow_filling_cache_(iterator_info, enable_fill_cache))) {
     PALF_LOG(WARN, "allow_filling_cache failed", K(ret), K(enable_fill_cache), PRINT_INFO);
-  } else if (OB_FAIL(deal_with_miss_(enable_fill_cache, cache_lines_read_size, read_lsn,
+  } else if (OB_FAIL(deal_with_miss_(enable_fill_cache, cache_lines_read_size, read_buf.buf_len_, read_lsn,
                                      real_read_size, cache_out_read_size, iterator_info))) {
     PALF_LOG(WARN, "fail to deal with miss", K(ret), K(cache_lines_read_size), K(enable_fill_cache),
              K(read_lsn), K(real_read_size), K(out_read_size), K(cache_out_read_size), PRINT_INFO);
@@ -564,7 +564,8 @@ int LogColdCache::read(const int64_t flashback_version,
     } else if (OB_FAIL(fill_cache_lines_(flashback_version, read_lsn, disk_out_read_size, read_buf.buf_ + cache_out_read_size))) {
       PALF_LOG(WARN, "fail to fill cache", K(ret), K(read_lsn), K(flashback_version), K(out_read_size), PRINT_INFO);
     } else if (0 == cache_out_read_size) {
-      // after cache miss, adjust read_lsn to new_read_lsn to read more log (up to 'diff') for filling first missing cache line
+      // if read_buf isn't large enough, read_lsn is equal to lsn, which means 'diff' is 0;
+      // if read_buf is large enough, adjust read_lsn to new_read_lsn to read more log (up to 'diff') for filling first missing cache line
       // so, adjust buf_ to ignore 'diff' part before return
       offset_t diff = lsn - read_lsn;
       out_read_size = out_read_size - diff;
@@ -609,6 +610,7 @@ int LogColdCache::allow_filling_cache_(LogIteratorInfo *iterator_info, bool &ena
 
 int LogColdCache::deal_with_miss_(const bool enable_fill_cache,
                                   const int64_t has_read_size,
+                                  const int64_t buf_len,
                                   LSN &lsn,
                                   int64_t &in_read_size,
                                   int64_t &out_read_size,
@@ -624,11 +626,18 @@ int LogColdCache::deal_with_miss_(const bool enable_fill_cache,
     lsn.val_ += real_read_size;
     in_read_size -= real_read_size;
     out_read_size = real_read_size;
-  } else if (enable_fill_cache) {
-    // adjust lsn to lower_aligned_lsn to fill first miss cache line
+  } else {
+    // try to fill the first missing cache line
     LSN new_read_start_lsn = LogCacheUtils::lower_align_with_start(lsn, CACHE_LINE_SIZE);
-    in_read_size += (lsn - new_read_start_lsn);
-    lsn = new_read_start_lsn;
+    offset_t backoff = lsn - new_read_start_lsn;
+
+    if (buf_len < in_read_size + backoff) {
+      // buf isn't large enough to fill the first missing cache line
+    } else if (enable_fill_cache) {
+      // adjust lsn to lower_aligned_lsn to fill first miss cache line
+      in_read_size += backoff;
+      lsn = new_read_start_lsn;
+    }
   }
 
   iterator_info->inc_miss_cnt();
@@ -702,6 +711,7 @@ int LogColdCache::get_cache_line_(const LSN &cache_read_lsn,
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(WARN, "get null buf from log kv cache", K(ret), K(key));
   } else {
+    // buf_size is either CACHE_LINE_SIZE or LAST_CACHE_LINE_SIZE
     int64_t buf_size = val_handle.value_->get_buf_size();
     if (0 == diff) {
       // start with aligned_lsn
@@ -715,7 +725,7 @@ int LogColdCache::get_cache_line_(const LSN &cache_read_lsn,
 
     MEMCPY(buf + read_pos, cache_log_buf + diff, curr_round_read_size);
 
-    PALF_LOG(TRACE, "cache hit, read from log cold cache", K(key), K(read_pos), K(cache_read_lsn),
+    PALF_LOG(TRACE, "cache hit, read from log cold cache", K(key), K(read_pos), K(cache_read_lsn), K(flashback_version),
              K(aligned_lsn), K(in_read_size), K(curr_round_read_size), PRINT_INFO);
   }
 
@@ -736,7 +746,9 @@ int LogColdCache::fill_cache_lines_(const int64_t flashback_version,
     PALF_LOG(WARN, "invalid argument", K(ret), K(lsn), K(fill_size), K(flashback_version));
   } else {
     // lsn is always expected to be aligned to CACHE_LINE_SIZE
-    // if not, it means lsn is aligned to 4KB in deal_with_miss() for DIO. This part is already in kvcache, so need to ignore
+    // In the following situations, it's not align to CACHE_LINE_SIZE:
+    // 1. lsn is aligned to 4KB in deal_with_miss_() for DIO. This part is already in kvcache, so need to ignore
+    // 2. the buf isn't large enough to fill first missing cache line. Filling log cache from the second cache line
     LSN fill_lsn = LogCacheUtils::is_lower_align_with_start(lsn, CACHE_LINE_SIZE) ?
                    lsn : LogCacheUtils::upper_align_with_start(lsn, CACHE_LINE_SIZE);
     int64_t diff = fill_lsn - lsn;
@@ -883,7 +895,7 @@ void LogColdCache::LogCacheStat::print_stat_info(int64_t cache_store_size, int64
     int64_t total_cnt = (interval_hit_cnt + interval_miss_cnt == 0) ? 1 : interval_hit_cnt + interval_miss_cnt;
     PALF_LOG(INFO, "[PALF STAT LOG COLD CACHE HIT RATE]", "hit_cnt", interval_hit_cnt,
              "miss_cnt", interval_miss_cnt, "hit_rate",
-             interval_hit_cnt * 1.0 / (interval_hit_cnt + interval_miss_cnt),
+             interval_hit_cnt * 1.0 / total_cnt,
              "cache_read_size", interval_cache_read_size, K(cache_store_size),
              K(cache_fill_amplification_), K(palf_id), K(MTL_ID()));
     last_record_hit_cnt_ = hit_cnt_;

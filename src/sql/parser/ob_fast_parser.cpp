@@ -2518,6 +2518,20 @@ int ObFastParserMysql::process_identifier_begin_with_n()
   return ret;
 }
 
+int ObFastParserMysql::process_identifier_begin_with_backslash()
+{
+  int ret = OB_SUCCESS;
+  if (raw_sql_.char_at(raw_sql_.cur_pos_) == 'N') {
+    raw_sql_.scan(1);
+    if (-1 == is_identifier_flags(raw_sql_.cur_pos_)) {
+      cur_token_type_ = PARAM_TOKEN;
+      OZ (add_null_type_node());
+    }
+  } else {
+  }
+  return ret;
+}
+
 int ObFastParserMysql::process_values(const char *str)
 {
   int ret = OB_SUCCESS;
@@ -2645,6 +2659,10 @@ int ObFastParserMysql::process_identifier(bool is_number_begin)
         if ('\'' == ch && OB_FAIL(process_hex_number(true))) {
           LOG_WARN("failed to process hex", K(ret));
         }
+        break;
+      }
+      case '\\': {
+        OZ (process_identifier_begin_with_backslash());
         break;
       }
       default: {
@@ -2802,6 +2820,11 @@ int ObFastParserMysql::parse_next_token()
         int64_t next_idf_pos = is_identifier_flags(raw_sql_.cur_pos_);
         if (-1 != next_idf_pos) {
           raw_sql_.cur_pos_ = next_idf_pos;
+          if (OB_LIKELY(process_idf_func_ != nullptr)) {
+            OZ ((this->*process_idf_func_)(false));
+          }
+        } else if (is_mysql_mode() && raw_sql_.char_at(raw_sql_.cur_pos_) == '\\') {
+          raw_sql_.cur_pos_ += 1;
           if (OB_LIKELY(process_idf_func_ != nullptr)) {
             OZ ((this->*process_idf_func_)(false));
           }

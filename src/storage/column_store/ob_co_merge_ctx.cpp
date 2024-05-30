@@ -466,6 +466,7 @@ int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
   const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = get_schema()->get_column_groups();
   const ObTablesHandleArray &cg_tables_handle = merged_cg_tables_handle_;
   ObITable *base_co_table = nullptr;
+  ObCOSSTableV2 *co_sstable = nullptr;
 
   /*
    * There are only 2 case:
@@ -484,9 +485,12 @@ int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else if (FALSE_IT(base_co_table = cg_tables_handle.get_table(0))) {
   } else if (OB_UNLIKELY(NULL == base_co_table || !base_co_table->is_co_sstable()
-      || !static_cast<ObCOSSTableV2 *>(base_co_table)->is_cgs_empty_co_table())) {
+      || OB_ISNULL(co_sstable = static_cast<ObCOSSTableV2 *>(base_co_table)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected cg sstable", K(ret), KPC(base_co_table), K(cg_tables_handle), K(cg_schemas));
+    CTX_SET_DIAGNOSE_LOCATION(*this);
+  } else if (OB_FAIL(co_sstable->build_cs_meta_without_cgs())) {
+    LOG_WARN("failed to build cs meta without cgs", K(ret), KPC(this));
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
     // only exist one co table here, emtpy or empty cg sstables

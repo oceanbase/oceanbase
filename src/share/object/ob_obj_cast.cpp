@@ -9643,15 +9643,15 @@ static int pl_extend_string(const ObObjType expect_type, ObObjCastParams &params
         // then call this directly: select replace(xml_data,xml_data2 ,'1') into stringval from dual;
         out.set_null();
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_NOT_SUPPORTED;
         LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
       }
     } else {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("not expected obj type convert", K(ret), K(expect_type), K(in), K(out), K(cast_mode));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_NOT_SUPPORTED;
     LOG_WARN("Unexpected type to convert format", K(ret), K(expect_type), K(in));
   }
 #else

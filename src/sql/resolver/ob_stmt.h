@@ -477,6 +477,7 @@ public:
             || stmt_type == stmt::T_ALTER_PROFILE
             || stmt_type == stmt::T_DROP_PROFILE
             || stmt_type == stmt::T_ALTER_USER_PROFILE
+            || stmt_type == stmt::T_ALTER_USER_PROXY
             || stmt_type == stmt::T_ALTER_USER_PRIMARY_ZONE
             || stmt_type == stmt::T_ALTER_USER
             //

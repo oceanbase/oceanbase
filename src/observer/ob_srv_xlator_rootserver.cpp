@@ -288,5 +288,6 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObGetRootKeyP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObReloadMasterKeyP, *gctx_.root_service_);
 #endif
+    RPC_PROCESSOR(rootserver::ObRpcAlterUserProxyP, *gctx_.root_service_);
 
 }

@@ -3673,10 +3673,15 @@ static struct VarsInit{
       ObSysVars[260].info_ = "specifies the compatible verision when the behaviors of different release version are different" ;
       ObSysVars[260].name_ = "ob_compatibility_version" ;
       ObSysVars[260].data_type_ = ObUInt64Type ;
+      ObSysVars[260].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_version" ;
       ObSysVars[260].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[260].base_class_ = "ObVersionSysVar" ;
+      ObSysVars[260].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_version" ;
+      ObSysVars[260].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_compat_version" ;
       ObSysVars[260].id_ = SYS_VAR_OB_COMPATIBILITY_VERSION ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_COMPATIBILITY_VERSION)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OB_COMPATIBILITY_VERSION] = 260 ;
+      ObSysVars[260].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
       ObSysVars[260].base_value_ = "17180000512" ;
     ObSysVars[260].alias_ = "OB_SV_COMPATIBILITY_VERSION" ;
     }();
@@ -3686,10 +3691,15 @@ static struct VarsInit{
       ObSysVars[261].info_ = "specifies the security verision when the behaviors of different release version are different" ;
       ObSysVars[261].name_ = "ob_security_version" ;
       ObSysVars[261].data_type_ = ObUInt64Type ;
+      ObSysVars[261].to_show_str_func_ = "ObSysVarToStrFuncs::to_str_version" ;
       ObSysVars[261].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[261].base_class_ = "ObVersionSysVar" ;
+      ObSysVars[261].to_select_obj_func_ = "ObSysVarToObjFuncs::to_obj_version" ;
+      ObSysVars[261].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_security_version" ;
       ObSysVars[261].id_ = SYS_VAR_OB_SECURITY_VERSION ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_SECURITY_VERSION)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_OB_SECURITY_VERSION] = 261 ;
+      ObSysVars[261].get_meta_type_func_ = "ObSysVarGetMetaTypeFuncs::get_meta_type_varchar" ;
       ObSysVars[261].base_value_ = "17180000512" ;
     ObSysVars[261].alias_ = "OB_SV_SECURITY_VERSION" ;
     }();
@@ -3911,7 +3921,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[277].default_value_ = "" ;
+      ObSysVars[277].default_value_ = "ib_buffer_pool" ;
       ObSysVars[277].info_ = "Specifies the name of the file that holds the list of tablespace IDs and page IDs produced by innodb_buffer_pool_dump_at_shutdown or innodb_buffer_pool_dump_now" ;
       ObSysVars[277].name_ = "innodb_buffer_pool_filename" ;
       ObSysVars[277].data_type_ = ObVarcharType ;
@@ -5876,13 +5886,26 @@ static struct VarsInit{
     ObSysVars[416].alias_ = "OB_SV_SUPER_READ_ONLY" ;
     }();
 
+    [&] (){
+      ObSysVars[417].default_value_ = "2" ;
+      ObSysVars[417].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
+      ObSysVars[417].name_ = "plsql_optimize_level" ;
+      ObSysVars[417].data_type_ = ObIntType ;
+      ObSysVars[417].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[417].id_ = SYS_VAR_PLSQL_OPTIMIZE_LEVEL ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_OPTIMIZE_LEVEL] = 417 ;
+      ObSysVars[417].base_value_ = "2" ;
+    ObSysVars[417].alias_ = "OB_SV_PLSQL_OPTIMIZE_LEVEL" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 417;
+static int64_t var_amount = 418;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
