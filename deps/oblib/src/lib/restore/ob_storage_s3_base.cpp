@@ -392,7 +392,7 @@ void fin_s3_env()
       OB_LOG(WARN, "force fin_s3_env", K(ret), K(flying_io_cnt));
       break;
     }
-    usleep(100 * 1000L); // 100ms
+    ob_usleep(100 * 1000L); // 100ms
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 

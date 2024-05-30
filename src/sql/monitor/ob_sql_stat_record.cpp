@@ -291,6 +291,7 @@ int ObExecutingSqlStatRecord::move_to_sqlstat_cache(
   if (is_px_remote_exec) {
     key.set_source_addr(session_info.get_peer_addr());
   }
+  LOG_DEBUG("view sqlstat cache key and query_sql", K(ret), K(key), K(cur_sql));
 
   if (key.is_valid()) {
     if (OB_ISNULL(plan)) {

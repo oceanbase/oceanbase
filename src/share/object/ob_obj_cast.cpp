@@ -7552,6 +7552,41 @@ static int otimestamp_otimestamp(const ObObjType expect_type, ObObjCastParams &p
   return ret;
 }
 
+//only use to convert Oracle timestamp type class to MySQL datetime type class,
+//for scenarios such as: scan inner table in the Oracle tenant, since the inner table use the MySQL type system,
+//when index conditions are involved,
+//it is necessary to convert the scan range that includes Oracle timestamp type class to the MySQL datetime type class.
+static int otimestamp_mydatetime(const ObObjType expect_type, ObObjCastParams &params,
+                                 const ObObj &in, ObObj &out, const ObCastMode cast_mode)
+{
+  UNUSED(cast_mode);
+  int ret = OB_SUCCESS;
+  int64_t dt_value = 0;
+  if (OB_UNLIKELY(ObOTimestampTC != in.get_type_class())
+      || OB_UNLIKELY(ObDateTimeTC != ob_obj_type_class(expect_type))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("invalid input type", K(ret), K(in), K(expect_type));
+  } else if (OB_FAIL(ObTimeConverter::otimestamp_to_odate(in.get_type(), in.get_otimestamp_value(), params.dtc_params_.tz_info_, dt_value))) {
+    LOG_WARN("fail to timestamp_tz_to_timestamp", K(ret), K(in), K(expect_type));
+  } else if (ObTimestampType == expect_type) {
+    int64_t utc_value = 0;
+    if (OB_FAIL(ObTimeConverter::datetime_to_timestamp(dt_value,
+                                                       params.dtc_params_.tz_info_,
+                                                       utc_value))) {
+      LOG_WARN("failed to convert datetime to timestamp", K(ret));
+    } else {
+      dt_value = utc_value;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObTimeConverter::trunc_datetime(OB_MAX_DATETIME_PRECISION, dt_value);
+    out.set_datetime(expect_type, dt_value);
+    out.set_scale(OB_MAX_DATE_PRECISION);
+  }
+  SET_RES_ACCURACY(DEFAULT_PRECISION_FOR_TEMPORAL, in.get_scale(), DEFAULT_LENGTH_FOR_TEMPORAL);
+  return ret;
+}
+
 ////////////////////////////////////////////////////////////
 // Interval -> XXX
 static int interval_string(const ObObjType expect_type, ObObjCastParams &params,
@@ -10173,7 +10208,7 @@ ObObjCastFunc OB_OBJ_CAST[ObMaxTC][ObMaxTC] =
     cast_not_expected,/*float*/
     cast_not_expected,/*double*/
     cast_not_expected,/*number*/
-    cast_not_expected,/*datetime*/
+    otimestamp_mydatetime,/*datetime*/
     cast_not_expected,/*date*/
     cast_not_expected,/*time*/
     cast_not_expected,/*year*/

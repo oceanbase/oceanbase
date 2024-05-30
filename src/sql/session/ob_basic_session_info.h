@@ -949,6 +949,7 @@ public:
   const ObString get_cur_sql_id() const { return ObString(sql_id_); }
   void get_cur_sql_id(char *sql_id_buf, int64_t sql_id_buf_size) const;
   void set_cur_sql_id(char *sql_id);
+  void reset_cur_sql_id() {sql_id_[0] = '\0';}
   int set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan);
   void reset_cur_phy_plan_to_null();
 
@@ -1207,7 +1208,9 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
+  void reset_current_plan_id() { plan_id_ = 0; }
   uint64_t get_current_plan_hash() const { return plan_hash_; }
+  void reset_current_plan_hash() { plan_hash_ = 0; }
   uint64_t get_last_plan_id() const { return last_plan_id_; }
   void set_last_plan_id(uint64_t plan_id) { last_plan_id_ = plan_id; }
   void set_current_execution_id(int64_t execution_id) { current_execution_id_ = execution_id; }

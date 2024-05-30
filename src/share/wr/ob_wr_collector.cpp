@@ -178,15 +178,21 @@ int ObWrCollector::collect_ash()
                    "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, tm_delta_db_time from "
                    "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
                    "sample_time between usec_to_time(%ld) and usec_to_time(%ld)";
-    const char *ASH_VIEW_SQL_422 = "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, sample_id, session_id, "
-                   "time_to_usec(sample_time) as sample_time, "
-                   "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, time_waited, "
-                   "p1, p2, p3, sql_plan_line_id, group_id, time_model, module, action, "
-                   "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, tm_delta_db_time, "
-                   "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, plsql_object_id, "
-                   "plsql_subprogram_id, plsql_subprogram_name  from "
-                   "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
-                   "sample_time between usec_to_time(%ld) and usec_to_time(%ld)";
+    const char *ASH_VIEW_SQL_422 =
+        "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
+        "sample_id, session_id, "
+        "time_to_usec(sample_time) as sample_time, "
+        "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
+        "time_waited, "
+        "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, group_id, time_model, "
+        "module, action, "
+        "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, "
+        "tm_delta_db_time, "
+        "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
+        "plsql_object_id, "
+        "plsql_subprogram_id, plsql_subprogram_name  from "
+        "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
+        "sample_time between usec_to_time(%ld) and usec_to_time(%ld)";
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
       LOG_WARN("get_min_data_version failed", K(ret), K(tenant_id));
     } else if (OB_UNLIKELY(query_timeout <= 0)) {
@@ -261,6 +267,18 @@ int ObWrCollector::collect_ash()
               int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
           EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
               *result, "plsql_subprogram_name", ash.plsql_subprogram_name_, sizeof(ash.plsql_subprogram_name_), tmp_real_str_len);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "thread_id", ash.thread_id_, int64_t,
+              skip_null_error, skip_column_error, default_value);
+          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "stmt_type", ash.stmt_type_, int64_t,
+              skip_null_error, skip_column_error, default_value);
+          EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
+              uint64_t, skip_null_error, skip_column_error, default_value);
+
+          char plan_hash_char[64] = "";
+          if (OB_SUCC(ret)) {
+            sprintf(plan_hash_char, "%lu", ash.plan_hash_);
+          }
+
           if (OB_SUCC(ret)) {
             if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
               LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
@@ -396,6 +414,24 @@ int ObWrCollector::collect_ash()
             } else if (ash.plsql_subprogram_name_[0] != '\0'  &&
                        OB_FAIL(dml_splicer.add_column("plsql_subprogram_name", ash.plsql_subprogram_name_))) {
               LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
+            } else if (ash.plan_hash_ == static_cast<uint64_t>(-1) &&
+                       OB_FAIL(dml_splicer.add_column(true, "plan_hash"))) {
+              LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
+            } else if (ash.plan_hash_ != static_cast<uint64_t>(-1) &&
+                       OB_FAIL(dml_splicer.add_column("plan_hash", plan_hash_char))) {
+              LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
+            } else if (ash.thread_id_ < 0 &&
+                       OB_FAIL(dml_splicer.add_column(true, "thread_id"))) {
+              LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
+            } else if (ash.thread_id_ >= 0 &&
+                       OB_FAIL(dml_splicer.add_column("thread_id", ash.thread_id_))) {
+              LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
+            } else if (ash.stmt_type_ < 0 &&
+                       OB_FAIL(dml_splicer.add_column(true, "stmt_type"))) {
+              LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
+            } else if (ash.stmt_type_ >= 0 &&
+                       OB_FAIL(dml_splicer.add_column("stmt_type", ash.stmt_type_))) {
+              LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
             } else if (OB_FAIL(dml_splicer.finish_row())) {
               LOG_WARN("failed to finish row", KR(ret));
             }
@@ -1020,7 +1056,7 @@ int ObWrCollector::collect_sqltext()
               int64_t affected_rows = 0;
               uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
               query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
-              ObHexEscapeSqlStr query_sql = ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_));
+              const char* query_sql = to_cstring(ObHexEscapeSqlStr(ObString::make_string(sqltext.query_sql_)));
               if (OB_UNLIKELY(query_timeout <= 0)) {
                 ret = OB_TIMEOUT;
                 LOG_WARN("wr snapshot timeout", KR(tmp_ret), K_(timeout_ts));
@@ -1030,7 +1066,7 @@ int ObWrCollector::collect_sqltext()
                   "(%ld, %ld, %ld, '%s',\"%.*s\" , %ld)",
                   query_timeout, OB_WR_SQLTEXT_TNAME,
                   tenant_id, cluster_id, snap_id_, sqltext.sql_id_,
-                  query_sql.str().length(), query_sql.str().ptr(), sqltext.sql_type_))) {
+                  static_cast<int>(strlen(query_sql)), query_sql, sqltext.sql_type_))) {
                 LOG_WARN("failed to assign insert query string", KR(tmp_ret));
               } else if (OB_TMP_FAIL(GCTX.sql_proxy_->write(exec_tenant_id, insert_sql.ptr(), affected_rows))) {
                 LOG_WARN("execute sql failed", KR(tmp_ret), K(tenant_id), K(exec_tenant_id), K(insert_sql));

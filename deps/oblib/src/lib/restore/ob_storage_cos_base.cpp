@@ -43,7 +43,7 @@ void fin_cos_env()
       OB_LOG(INFO, "force fin_cos_env", K(flying_io_cnt));
       break;
     }
-    usleep(100 * 1000L); // 100ms
+    ob_usleep(100 * 1000L); // 100ms
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 

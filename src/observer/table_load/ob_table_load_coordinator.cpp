@@ -446,7 +446,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
                 LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count));
               }
             }
-            usleep(RESOURCE_OP_WAIT_INTERVAL_US);
+            ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
           }
         }
       }
@@ -790,7 +790,7 @@ public:
       else if (OB_FAIL(coordinator.check_peers_merge_result(is_merge_finish))) {
         LOG_WARN("fail to check peers merge result", KR(ret));
       } else if (!is_merge_finish) {
-        usleep(WAIT_INTERVAL_US);  // 等待1s后重试
+        ob_usleep(WAIT_INTERVAL_US);  // 等待1s后重试
       } else {
         break;
       }
@@ -1349,7 +1349,7 @@ int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *tran
     else if (OB_FAIL(check_peers_trans_commit(trans, is_peers_commit))) {
       LOG_WARN("fail to check peers trans commit", KR(ret));
     } else if (!is_peers_commit) {
-      usleep(WAIT_INTERVAL_US);  // 等待1s后重试
+      ob_usleep(WAIT_INTERVAL_US);  // 等待1s后重试
     } else {
       break;
     }

@@ -3870,7 +3870,7 @@ int ObTransService::ask_tx_state_for_4377(const ObLSID ls_id,
     }
 
     if (OB_FAIL(ret)) {
-      usleep(SLEEP_DURATION_FOR_ASK_STATE_FOR_4377);
+      ob_usleep(SLEEP_DURATION_FOR_ASK_STATE_FOR_4377);
     }
 
     if (OB_FAIL(ret) && ObTimeUtility::current_time() - start_ts >= MAX_ALLOWED_ASK_STATE_FOR_4377_TIMES) {

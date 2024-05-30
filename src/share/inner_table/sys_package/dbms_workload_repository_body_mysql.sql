@@ -19,30 +19,33 @@ CREATE OR REPLACE PACKAGE BODY dbms_workload_repository
     topnsql       INT    DEFAULT  NULL);
   PRAGMA INTERFACE(C, WR_MODIFY_SNAPSHOT_SETTINGS);
 
-  FUNCTION ASH_REPORT_TEXT(BTIME         DATETIME,
-                           ETIME         DATETIME,
+  FUNCTION ASH_REPORT_TEXT(BTIME         TIMESTAMP,
+                           ETIME         TIMESTAMP,
                            SQL_ID        VARCHAR(64)  DEFAULT NULL,
                            TRACE_ID      VARCHAR(64)  DEFAULT NULL,
                            WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
                            SVR_IP        VARCHAR(64)  DEFAULT NULL,
-                           SVR_PORT      INT          DEFAULT NULL
+                           SVR_PORT      INT          DEFAULT NULL,
+                           TENANT_ID     INT          DEFAULT NULL,
+                           REPORT_TYPE   VARCHAR(64)  DEFAULT 'text'
   )RETURN TEXT;
   PRAGMA INTERFACE(C, GENERATE_ASH_REPORT_TEXT);
 
   PROCEDURE ASH_REPORT(
-    BTIME         DATETIME,
-    ETIME         DATETIME,
+    BTIME         TIMESTAMP,
+    ETIME         TIMESTAMP,
     SQL_ID        VARCHAR(64)  DEFAULT NULL,
     TRACE_ID      VARCHAR(64)  DEFAULT NULL,
     WAIT_CLASS    VARCHAR(64)  DEFAULT NULL,
     REPORT_TYPE   VARCHAR(64)  DEFAULT 'text',
     SVR_IP        VARCHAR(64)  DEFAULT NULL,
-    SVR_PORT      INT          DEFAULT NULL)
+    SVR_PORT      INT          DEFAULT NULL,
+    TENANT_ID     INT          DEFAULT NULL)
   BEGIN
-    IF LOWER(REPORT_TYPE) = 'text' THEN
-        SELECT DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME,SQL_ID,TRACE_ID,WAIT_CLASS, SVR_IP, SVR_PORT) AS REPORT ;
+    IF (LOWER(REPORT_TYPE) = 'text' OR LOWER(REPORT_TYPE) = 'html') THEN
+        SELECT DBMS_WORKLOAD_REPOSITORY.ASH_REPORT_TEXT(BTIME, ETIME,SQL_ID,TRACE_ID,WAIT_CLASS, SVR_IP, SVR_PORT, TENANT_ID, LOWER(REPORT_TYPE)) AS REPORT ;
     ELSE
-        SELECT "Other formats are not currently supported besides TEXT" AS Message;
+        SELECT "Other formats are not currently supported besides text and html" AS Message;
     END IF;
   END ;
 

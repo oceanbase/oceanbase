@@ -183,6 +183,7 @@ inline void ob_usleep(const useconds_t v)
   oceanbase::common::ObSleepEventGuard<event_id> wait_guard((int64_t)v);
   ::usleep(v);
 }
+
 template <oceanbase::common::ObWaitEventIds::ObWaitEventIdEnum event_id =
               oceanbase::common::ObWaitEventIds::DEFAULT_SLEEP>
 inline void ob_usleep(const useconds_t v, const bool is_idle_sleep)

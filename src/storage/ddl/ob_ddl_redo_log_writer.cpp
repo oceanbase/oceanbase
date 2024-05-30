@@ -1426,7 +1426,7 @@ int ObDDLSSTableRedoWriter::write_commit_log_with_retry(ObTabletHandle &tablet_h
       LOG_WARN("write ddl commit log failed", K(ret));
     }
     if (ObDDLRedoLogWriter::need_retry(ret)) {
-      usleep(1000L * 1000L); // 1s
+      ob_usleep(1000L * 1000L); // 1s
       ++retry_count;
       LOG_INFO("retry write ddl commit log", K(ret), K(table_key), K(retry_count));
     } else {
@@ -1721,7 +1721,7 @@ int ObDDLRedoLogWriterCallback::retry(const int64_t timeout_us)
         FLOG_INFO("retry write ddl macro redo success", K(ret), K(table_key_), K(macro_block_id_));
       }
       if (ObDDLRedoLogWriter::need_retry(ret)) {
-        usleep(1000L * 1000L); // 1s
+        ob_usleep(1000L * 1000L); // 1s
         ++retry_count;
         LOG_INFO("retry write ddl macro redo log", K(ret), K(table_key_), K(retry_count));
       } else {

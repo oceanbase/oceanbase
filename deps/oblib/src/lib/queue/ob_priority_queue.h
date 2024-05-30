@@ -229,6 +229,7 @@ private:
         }
       }
       if (OB_FAIL(ret)) {
+        ObBKGDSessInActiveGuard inactive_guard;
         cond_.wait(timeout_us);
         data = NULL;
       } else {

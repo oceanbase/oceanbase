@@ -63,7 +63,11 @@ public:
         delta_time_(0),
         delta_cpu_time_(0),
         delta_db_time_(0),
-        group_id_(0)
+        group_id_(0),
+        tid_(0),
+        plan_hash_(0),
+        tx_id_(0),
+        stmt_type_(0)
   {
     sql_id_[0] = '\0';
     top_level_sql_id_[0] = '\0';
@@ -103,6 +107,10 @@ public:
     module_[0] = '\0';
     action_[0] = '\0';
     client_id_[0] = '\0';
+    tid_ = 0;
+    plan_hash_ = 0;
+    tx_id_ = 0;
+    stmt_type_ = 0;
   }
 public:
   enum SessionType
@@ -159,6 +167,10 @@ public:
   int64_t delta_cpu_time_;
   int64_t delta_db_time_;
   int32_t group_id_;
+  int64_t tid_;  // record current tid for cpu time verification
+  int64_t plan_hash_;
+  int64_t tx_id_;
+  int64_t stmt_type_;
   char program_[ASH_PROGRAM_STR_LEN];
   char module_[ASH_MODULE_STR_LEN];
   char action_[ASH_ACTION_STR_LEN];
@@ -187,7 +199,6 @@ public:
         prev_idle_wait_time_(0),
         prev_non_idle_wait_time_(0),
         total_cpu_time_(0),
-        tid_(0),
         is_bkgd_active_(true),
         inner_sql_wait_type_id_(ObInnerSqlWaitTypeId::NULL_INNER_SQL),
         pcode_(0),
@@ -215,7 +226,6 @@ public:
     prev_idle_wait_time_ = 0;
     prev_non_idle_wait_time_ = 0;
     total_cpu_time_ = 0;
-    tid_ = 0;
     fixup_index_ = -1;
     // NOTICE: reset of fixup_ash_buffer_ is in ObActiveSessionStat::fixup_last_stat
     // fixup_ash_buffer_.reset();
@@ -259,7 +269,6 @@ public:
   uint64_t prev_idle_wait_time_;
   uint64_t prev_non_idle_wait_time_;
   uint64_t total_cpu_time_;  // total cpu time since last ash sample. for cpu-time verification.
-  int64_t tid_;  // record current tid for cpu time verification
   bool is_bkgd_active_; // Identifies whether the status of the background session is active.
                         // Inactive background thread session will not be collected in ASH.
   ObInnerSqlWaitTypeId inner_sql_wait_type_id_;

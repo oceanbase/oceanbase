@@ -346,7 +346,7 @@ int ObLSService::wait()
     if (retry_times % 100 == 0) {
       LOG_WARN("ls service wait empty for too much time", K(retry_times), K(begin_time));
     }
-    usleep(100 * 1000); // 100 ms
+    ob_usleep(100 * 1000); // 100 ms
   }
   retry_times = 0;
   while(ATOMIC_LOAD(&iter_cnt_) != 0) {
@@ -354,7 +354,7 @@ int ObLSService::wait()
     if (retry_times % 100 == 0) {
       LOG_WARN("ls service wait ls iter for too much time", K(retry_times), K_(iter_cnt), K(begin_time));
     }
-    usleep(100 * 1000); // 100 ms
+    ob_usleep(100 * 1000); // 100 ms
   }
   return ret;
 }
@@ -868,7 +868,7 @@ int ObLSService::gc_ls_after_replay_slog()
               ls->wait();
             }
             if (OB_SUCCESS != tmp_ret) {
-              usleep(SLEEP_TS);
+              ob_usleep(SLEEP_TS);
             }
           } while(tmp_ret != OB_SUCCESS);
         }
@@ -879,7 +879,7 @@ int ObLSService::gc_ls_after_replay_slog()
               LOG_ERROR("fail to write create ls abort slog", K(tmp_ret), KPC(ls));
             }
             if (OB_TMP_FAIL(tmp_ret)) {
-              usleep(SLEEP_TS);
+              ob_usleep(SLEEP_TS);
             }
           } while (tmp_ret != OB_SUCCESS);
           remove_ls_(ls, true/*remove_from_disk*/, false/*write_slog*/);

@@ -389,6 +389,42 @@ int ObVirtualASH::convert_node_to_row(const ObActiveSessionStatItem &node, ObNew
         cells[cell_idx].set_int(node.group_id_);
         break;
       }
+      case TX_ID: {
+        if (node.tx_id_ != 0) {
+          cells[cell_idx].set_int(node.tx_id_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case BLOCKING_SESSION_ID: {
+        cells[cell_idx].set_null();
+        break;
+      }
+      case PLAN_HASH: {
+        if (node.plan_hash_ != 0) {
+          cells[cell_idx].set_uint64(node.plan_hash_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case THREAD_ID: {
+        if (node.tid_ != 0) {
+          cells[cell_idx].set_int(node.tid_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
+      case STMT_TYPE: {
+        if (node.stmt_type_ != 0) {
+          cells[cell_idx].set_int(node.stmt_type_);
+        } else {
+          cells[cell_idx].set_null();
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "invalid column id", K(column_id), K(cell_idx),

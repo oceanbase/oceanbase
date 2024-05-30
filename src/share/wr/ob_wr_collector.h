@@ -86,13 +86,18 @@ public:
     tm_delta_time_ = -1;
     tm_delta_cpu_time_ = -1;
     tm_delta_db_time_ = -1;
+    plan_hash_ = 0;
+    thread_id_ = -1;
+    stmt_type_ = -1;
   };
 
   TO_STRING_KV(K_(svr_ip), K_(svr_port), K_(sample_id), K_(session_id), K_(sample_time),
-      K_(user_id), K_(session_type), K_(sql_id), K_(trace_id), K_(event_no), K_(event_id), K_(time_waited),
-      K_(p1), K_(p2), K_(p3), K_(sql_plan_line_id), K_(group_id), K_(time_model), K_(module), K_(action),
-      K_(client_id), K_(plan_id), K_(top_level_sql_id), K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id),
-      K_(plsql_entry_subprogram_name), K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name));
+      K_(user_id), K_(session_type), K_(sql_id), K_(trace_id), K_(event_no), K_(event_id),
+      K_(time_waited), K_(p1), K_(p2), K_(p3), K_(sql_plan_line_id), K_(group_id), K_(time_model),
+      K_(module), K_(action), K_(client_id), K_(plan_id), K_(top_level_sql_id),
+      K_(plsql_entry_object_id), K_(plsql_entry_subprogram_id), K_(plsql_entry_subprogram_name),
+      K_(plsql_object_id), K_(plsql_subprogram_id), K_(plsql_subprogram_name), K_(plan_hash),
+      K_(thread_id), K_(stmt_type));
   char svr_ip_[OB_IP_STR_BUFF];
   int64_t svr_port_;
   int64_t sample_id_;
@@ -127,6 +132,9 @@ public:
   int64_t plsql_object_id_;
   int64_t plsql_subprogram_id_;
   char plsql_subprogram_name_[common::OB_MAX_ASH_PL_NAME_LENGTH + 1];
+  uint64_t plan_hash_;
+  int64_t thread_id_;
+  int64_t stmt_type_;
 };
 
 

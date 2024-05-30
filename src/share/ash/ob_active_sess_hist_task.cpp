@@ -206,6 +206,10 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
         sess_info->get_cur_sql_id(stat.top_level_sql_id_, sizeof(stat.top_level_sql_id_));
       }
       sess_info->get_cur_sql_id(stat.sql_id_, sizeof(stat.sql_id_));
+
+      stat.stmt_type_ = sess_info->get_stmt_type();
+      stat.plan_hash_ = sess_info->get_current_plan_hash();
+      stat.tx_id_ = sess_info->get_tx_id().get_id();
       ObActiveSessionStat::calc_db_time(stat, sample_time_);
 
       stat.program_[0] = '\0';

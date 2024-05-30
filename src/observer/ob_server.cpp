@@ -3057,7 +3057,7 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
                                   gctx_.schema_service_->is_tenant_refreshed(tenant_id) : true;
         if (!tenant_schema_refreshed) {
           // check wait and retry
-          usleep(1000 * 1000);
+          ob_usleep(1000 * 1000);
           if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             FLOG_INFO("[OBSERVER_NOTICE] Refreshing user tenant schema, need to wait ", K(tenant_id));
           }
@@ -3094,7 +3094,7 @@ void ObServer::check_log_replay_over(const ObIArray<uint64_t> &tenant_ids, const
       weak_read_service_.check_tenant_can_start_service(tenant_id, can_start_service, min_version);
         // check wait and retry
       if (!can_start_service) {
-        usleep(1000 * 1000);
+        ob_usleep(1000 * 1000);
         // check success
       } else if (i == tenant_ids.count() -1) {
         FLOG_INFO("[OBSERVER_NOTICE] all tenant replay log finished, start to service ", K(tenant_ids));

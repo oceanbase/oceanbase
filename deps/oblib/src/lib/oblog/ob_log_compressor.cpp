@@ -393,7 +393,7 @@ void ObLogCompressor::log_compress_loop_()
                  K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size));
         cost_time = cost_time >= 0 ? cost_time:0;
         if (!stopped_ && cost_time < loop_interval_) {
-          usleep(loop_interval_ - cost_time);
+          ob_usleep(loop_interval_ - cost_time);
         }
       } // if (!stopped_)
     } // while (!stopped_)
@@ -481,7 +481,7 @@ int ObLogCompressor::compress_single_file_(const char *file_name, char *src_buf,
             LOG_ERROR("failed to write file", K(ret), K(errno), K(compressed_file_name));
           }
         }
-        usleep(sleep_us);
+        ob_usleep(sleep_us);
       }
       fclose(input_file);
       fclose(output_file);

@@ -24,8 +24,19 @@ class ObDbmsWorkloadRepository
 public:
   struct AshReportParams
   {
-    AshReportParams()
-      :ash_begin_time(0), ash_end_time(0),sql_id(),trace_id(),wait_class(),svr_ip(),port(-1)
+    AshReportParams(const common::ObTimeZoneInfo *tz_info)
+        : ash_begin_time(0),
+          ash_end_time(0),
+          sql_id(),
+          trace_id(),
+          wait_class(),
+          svr_ip(),
+          port(-1),
+          tenant_id(0),
+          tz_info(tz_info),
+          is_html(false),
+          user_input_ash_begin_time(0),
+          user_input_ash_end_time(0)
     {}
     int64_t ash_begin_time;
     int64_t ash_end_time;
@@ -34,6 +45,11 @@ public:
     ObString wait_class;
     ObString svr_ip;
     int64_t port;
+    int64_t tenant_id;
+    const common::ObTimeZoneInfo *tz_info;
+    bool is_html;
+    int64_t user_input_ash_begin_time;
+    int64_t user_input_ash_end_time;
   };
 
 public:
@@ -51,12 +67,14 @@ public:
   static int lpad(const char *src, const int64_t size, const char *pad, ObStringBuffer &buff);
   static int format_row(const int64_t column_size, const char *column_contents[],
       const int64_t column_widths[], const char *pad, const char *sep, ObStringBuffer &buff);
+  static int print_text_table_frame(const int64_t column_size, const int64_t column_widths[], ObStringBuffer &buff);
   static bool phase_cmp_func(
       const std::pair<const char *, int64_t> &a, const std::pair<const char *, int64_t> &b)
   {
     return a.second > b.second;  // Sort in descending order based on the value of int64_t.
   }
-  static int usec_to_string(const int64_t usec, char *buf, int64_t buf_len, int64_t &pos);
+  static int usec_to_string(const common::ObTimeZoneInfo *tz_info,
+    const int64_t usec, char *buf, int64_t buf_len, int64_t &pos);
   static int append_fmt_ash_view_sql(
       const AshReportParams &ash_report_params, ObSqlString &sql_string);
   static int get_ash_begin_and_end_time(
@@ -66,30 +84,57 @@ public:
   static int print_ash_summary_info(const AshReportParams &ash_report_params, const int64_t l_btime,
       const int64_t l_etime, int64_t &dur_elapsed_time, int64_t &num_samples, int64_t &num_events,
       ObStringBuffer &buff, bool &no_data);
-  static int print_ash_top_user_event_info(const AshReportParams &ash_report_params,
+  static int print_ash_top_active_tenants(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
-  static int print_ash_top_events_and_value(const AshReportParams &ash_report_params,
+  static int print_ash_top_node_load(const AshReportParams &ash_report_params,
       const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
-  static int print_ash_top_exec_phase(const AshReportParams &ash_report_params,
-      const int64_t num_samples, const int64_t dur_elapsed_time, ObStringBuffer &buff);
-  static int print_ash_top_sql_with_event(
-      const AshReportParams &ash_report_params, const int64_t num_events, ObStringBuffer &buff);
-  static int print_ash_top_sql_with_blocking_event(
-      const AshReportParams &ash_report_params, const int64_t num_events, ObStringBuffer &buff);
-  static int print_ash_sql_text_list(
-      const AshReportParams &ash_report_params, ObStringBuffer &buff);
-  static int print_ash_top_plsql(
-    const AshReportParams &ash_report_params, const int64_t num_events, ObStringBuffer &buff);
-  static int print_ash_top_session_info(const AshReportParams &ash_report_params,
-      const int64_t num_samples, const int64_t num_events, const int64_t dur_elapsed_time,
-      ObStringBuffer &buff);
-  static int print_ash_top_blocking_session_info(const AshReportParams &ash_report_params,
-      const int64_t num_samples, const int64_t num_events, const int64_t dur_elapsed_time,
-      ObStringBuffer &buff);
-  static int print_ash_top_latches_info(
-      const AshReportParams &ash_report_params, const int64_t num_samples, ObStringBuffer &buff);
-  static int print_ash_node_load(
-      const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int print_ash_foreground_db_time(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_top_execution_phase(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_background_db_time(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_top_sessions(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_top_group(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_top_latches(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_activity_over_time(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_sql_with_top_db_time(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_sql_with_top_wait_events(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_sql_command_type(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_sql_with_top_operator(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_plsql(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_top_sql_text(const AshReportParams &ash_report_params,
+      const int64_t num_samples, const int64_t num_events, ObStringBuffer &buff);
+  static int print_ash_report_header(const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int print_section_header(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);
+  static int print_subsection_header(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);
+  static int print_section_column_header(const AshReportParams &ash_report_params,
+      ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
+      const int64_t column_widths[]);
+  static int print_section_column_row(const AshReportParams &ash_report_params,
+      ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
+      const int64_t column_widths[], bool with_color = true);
+  static int print_sql_section_column_row(const AshReportParams &ash_report_params,
+      ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
+      const int64_t column_widths[], bool with_color, int sql_id_column, int query_column);
+  static int print_sqltext_section_column_row(const AshReportParams &ash_report_params,
+      ObStringBuffer &buff, const int64_t column_size, const char *column_contents[],
+      const int64_t column_widths[], bool with_color = true);
+  static int print_section_column_end(const AshReportParams &ash_report_params,
+      ObStringBuffer &buff, const int64_t column_size, const int64_t column_widths[]);
+  static int print_ash_report_end(const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int print_section_explaination_begin(const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int print_section_explaination_end(const AshReportParams &ash_report_params, ObStringBuffer &buff);
+  static int insert_section_explaination_line(const AshReportParams &ash_report_params, ObStringBuffer &buff, const char *str);
 private:
   static int check_snapshot_task_success_for_snap_id(int64_t snap_id, bool &is_all_success);
   static int check_drop_task_success_for_snap_id_range(const int64_t low_snap_id, const int64_t high_snap_id, bool &is_all_success);
