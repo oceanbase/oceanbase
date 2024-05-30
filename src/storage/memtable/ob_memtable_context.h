@@ -426,6 +426,7 @@ public:
   int clean_unlog_callbacks();
   int check_tx_mem_size_overflow(bool &is_overflow);
 public:
+  void on_key_duplication_retry(const ObMemtableKey& key);
   void on_tsc_retry(const ObMemtableKey& key,
                     const share::SCN snapshot_version,
                     const share::SCN max_trans_version,

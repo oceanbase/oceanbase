@@ -304,6 +304,13 @@ void ObMemtableCtx::on_wlock_retry(const ObMemtableKey& key, const transaction::
   retry_info_.on_conflict();
 }
 
+void ObMemtableCtx::on_key_duplication_retry(const ObMemtableKey& key)
+{
+  if (retry_info_.need_print()) {
+    TRANS_LOG_RET(WARN, OB_SUCCESS, "primary key duplication conflict", K(key), KPC(this));
+  }
+}
+
 void ObMemtableCtx::on_tsc_retry(const ObMemtableKey& key,
                                  const SCN snapshot_version,
                                  const SCN max_trans_version,

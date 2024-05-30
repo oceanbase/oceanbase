@@ -129,49 +129,50 @@ int ObDASInsertOp::insert_rows()
   }
   return ret;
 }
-
-int ObDASInsertOp::insert_row_with_fetch()
+int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
+                                           ObDASDMLIterator &dml_iter,
+                                           ObDASConflictIterator *result_iter,
+                                           const ObDASInsCtDef *ins_ctdef,
+                                           ObDASInsRtDef *ins_rtdef,
+                                           storage::ObStoreCtxGuard &store_ctx_guard,
+                                           const UIntFixedArray *duplicated_column_ids,
+                                           common::ObTabletID tablet_id)
 {
   int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
   ObNewRow *insert_row = NULL;
-  ObDASConflictIterator *result_iter = nullptr;
-  void *buf = nullptr;
-  ObAccessService *as = MTL(ObAccessService *);
+  int64_t affected_rows = 0;
   ObDMLBaseParam dml_param;
-  ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
-  if (ins_ctdef_->table_rowkey_types_.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table_rowkey_types is invalid", K(ret));
-  } else if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef_, *ins_rtdef_, *snapshot_, op_alloc_, dml_param))) {
-    LOG_WARN("init dml param failed", K(ret), KPC_(ins_ctdef), KPC_(ins_rtdef));
-  } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate ObDASConflictIterator", K(ret));
-  } else {
-    result_iter = new(buf) ObDASConflictIterator(ins_ctdef_->table_rowkey_types_,
-                                                 op_alloc_);
-    result_ = result_iter;
+  if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef,
+                                           *ins_rtdef,
+                                           *snapshot_,
+                                           op_alloc_,
+                                           store_ctx_guard,
+                                           dml_param))) {
+    LOG_WARN("init index dml param failed", K(ret), KPC(ins_ctdef), KPC(ins_rtdef));
   }
-
   while (OB_SUCC(ret) && OB_SUCC(dml_iter.get_next_row(insert_row))) {
     ObNewRowIterator *duplicated_rows = NULL;
     if (OB_ISNULL(insert_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert_row is null", K(ret));
     } else if (OB_FAIL(as->insert_row(ls_id_,
-                                      tablet_id_,
+                                      tablet_id,
                                       *trans_desc_,
                                       dml_param,
-                                      ins_ctdef_->column_ids_,
-                                      ins_ctdef_->table_rowkey_cids_,
+                                      ins_ctdef->column_ids_,
+                                      *duplicated_column_ids,
                                       *insert_row,
                                       INSERT_RETURN_ALL_DUP,
                                       affected_rows,
                                       duplicated_rows))) {
       if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
         ret = OB_SUCCESS;
-        if (OB_ISNULL(duplicated_rows)) {
+        bool is_local_index_table = ins_ctdef->table_param_.get_data_table().is_index_local_storage();
+        bool is_unique_index = ins_ctdef->table_param_.get_data_table().is_unique_index();
+        if (is_local_index_table && !is_unique_index) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected duplicate key error", K(ret), K(ins_ctdef->table_param_.get_data_table()));
+        } else if (OB_ISNULL(duplicated_rows)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("duplicated_row is null", K(ret));
         } else if (OB_FAIL(result_iter->get_duplicated_iter_array().push_back(duplicated_rows))) {
@@ -187,71 +188,101 @@ int ObDASInsertOp::insert_row_with_fetch()
       duplicated_rows = NULL;
     }
   }
+
   ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+  return ret;
+}
+
+int ObDASInsertOp::insert_row_with_fetch()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  ObNewRow *insert_row = NULL;
+  ObDASConflictIterator *result_iter = nullptr;
+  void *buf = nullptr;
+  ObAccessService *as = MTL(ObAccessService *);
+  ObDMLBaseParam dml_param;
+  ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
+  storage::ObStoreCtxGuard store_ctx_guard;
+
+  if (ins_ctdef_->table_rowkey_types_.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_rowkey_types is invalid", K(ret));
+  } else if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
+                                                   ins_rtdef_->timeout_ts_,
+                                                   *trans_desc_,
+                                                   *snapshot_,
+                                                   store_ctx_guard))) {
+    LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
+  } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate ObDASConflictIterator", K(ret));
+  } else {
+    result_iter = new(buf) ObDASConflictIterator(ins_ctdef_->table_rowkey_types_,
+                                                 op_alloc_);
+    result_ = result_iter;
+  }
+
+  // 1. insert primary table
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(insert_index_with_fetch(as,
+                                            dml_iter,
+                                            result_iter,
+                                            ins_ctdef_,
+                                            ins_rtdef_,
+                                            store_ctx_guard,
+                                            &ins_ctdef_->table_rowkey_cids_,
+                                            tablet_id_))) {
+    LOG_WARN("fail to insert primary table", K(ret));
+  }
+
+  // 2. insert unique index
   for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_.count(); ++i) {
     const ObDASInsCtDef *index_ins_ctdef = static_cast<const ObDASInsCtDef*>(related_ctdefs_.at(i));
     ObDASInsRtDef *index_ins_rtdef = static_cast<ObDASInsRtDef*>(related_rtdefs_.at(i));
     ObTabletID index_tablet_id = related_tablet_ids_.at(i);
-    if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
+    const bool is_local_unique_index = index_ins_ctdef->table_param_.get_data_table().is_unique_index();
+    if (!is_local_unique_index) {
+      // insert it later
+    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
       LOG_WARN("rewind dml iter failed", K(ret));
-    } else if (OB_FAIL(ObDMLService::init_dml_param(*index_ins_ctdef,
-                                                    *index_ins_rtdef,
-                                                    *snapshot_,
-                                                    op_alloc_,
-                                                    dml_param))) {
-      LOG_WARN("init index dml param failed", K(ret), KPC(index_ins_ctdef), KPC(index_ins_rtdef));
+    } else if (OB_FAIL(insert_index_with_fetch(as,
+                                               dml_iter,
+                                               result_iter,
+                                               index_ins_ctdef,
+                                               index_ins_rtdef,
+                                               store_ctx_guard,
+                                               &ins_ctdef_->table_rowkey_cids_,
+                                               index_tablet_id))) {
+      LOG_WARN("fail to insert local unique index", K(ret), K(index_ins_ctdef->table_param_.get_data_table()));
     }
+  }
 
-    const UIntFixedArray *duplicated_column_ids = nullptr;
+  // 3. insert non_unique idnex
+  for (int64_t i = 0; OB_SUCC(ret) && i < related_ctdefs_.count(); ++i) {
+    const ObDASInsCtDef *index_ins_ctdef = static_cast<const ObDASInsCtDef*>(related_ctdefs_.at(i));
+    ObDASInsRtDef *index_ins_rtdef = static_cast<ObDASInsRtDef*>(related_rtdefs_.at(i));
+    ObTabletID index_tablet_id = related_tablet_ids_.at(i);
     const bool is_local_unique_index = index_ins_ctdef->table_param_.get_data_table().is_unique_index();
     if (is_local_unique_index) {
-      duplicated_column_ids = &(ins_ctdef_->table_rowkey_cids_);
-    } else {
-      // For non-unique local index, We check for duplications on all columns because the partition key is not stored in storage level
-      duplicated_column_ids = &(index_ins_ctdef->column_ids_);
+      // insert it before
+    } else if (is_duplicated_) {
+      LOG_TRACE("is duplicated before, not need write non_unique index");
+    } else if (OB_FAIL(dml_iter.rewind(index_ins_ctdef))) {
+      LOG_WARN("rewind dml iter failed", K(ret));
+    } else if (OB_FAIL(insert_index_with_fetch(as,
+                                               dml_iter,
+                                               result_iter,
+                                               index_ins_ctdef,
+                                               index_ins_rtdef,
+                                               store_ctx_guard,
+                                               &(index_ins_ctdef->column_ids_),
+                                               index_tablet_id))) {
+      // For non-unique local index,
+      // We check for duplications on all columns because the partition key is not stored in storage level
+      LOG_WARN("fail to insert non_unique index", K(ret), K(index_ins_ctdef->table_param_.get_data_table()));
     }
-
-    while (OB_SUCC(ret) && OB_SUCC(dml_iter.get_next_row(insert_row))) {
-      ObNewRowIterator *duplicated_rows = NULL;
-      if (OB_ISNULL(insert_row)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("insert_row is null", K(ret));
-      } else if (OB_FAIL(as->insert_row(ls_id_,
-                                        index_tablet_id,
-                                        *trans_desc_,
-                                        dml_param,
-                                        index_ins_ctdef->column_ids_,
-                                        *duplicated_column_ids,
-                                        *insert_row,
-                                        INSERT_RETURN_ALL_DUP,
-                                        affected_rows,
-                                        duplicated_rows))) {
-        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-          ret = OB_SUCCESS;
-          if (OB_ISNULL(duplicated_rows)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("duplicated_row is null", K(ret));
-          } else if (is_local_unique_index) {
-            // push the duplicated_row of local unique index, ignore the duplicated_row of local non-unique index
-            if (OB_FAIL(result_iter->get_duplicated_iter_array().push_back(duplicated_rows))) {
-              LOG_WARN("fail to push duplicated_row iter", K(ret));
-            } else {
-              LOG_DEBUG("insert one row and conflicted", KPC(insert_row));
-              is_duplicated_ = true;
-            }
-          } else {
-            // 需要释放iter的内存， 否则会内存泄漏
-            ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
-            duplicated_rows = NULL;
-          }
-        }
-      }
-      if (OB_FAIL(ret) && OB_NOT_NULL(duplicated_rows)) {
-        ObQueryIteratorFactory::free_insert_dup_iter(duplicated_rows);
-        duplicated_rows = NULL;
-      }
-    }
-    ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
   }
 
   if (OB_SUCC(ret)) {

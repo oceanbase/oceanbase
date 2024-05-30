@@ -58,7 +58,7 @@ public:
   void reuse();
   void reset_for_switch();
   virtual void reset();
-  ObAccessService::ObStoreCtxGuard &get_ctx_guard() { return ctx_guard_; }
+  ObStoreCtxGuard &get_ctx_guard() { return ctx_guard_; }
 
   // A offline ls will disable replay status and kill all part_ctx on the follower.
   // We can not read the uncommitted data which has not replay commit log yet.
@@ -107,7 +107,7 @@ private:
   ObTableAccessContext main_table_ctx_;
   ObGetTableParam get_table_param_;
 
-  ObAccessService::ObStoreCtxGuard ctx_guard_;
+  ObStoreCtxGuard ctx_guard_;
   ObTableScanParam *scan_param_;
   ObTableScanRange table_scan_range_;
   ObQueryRowIterator *main_iter_;

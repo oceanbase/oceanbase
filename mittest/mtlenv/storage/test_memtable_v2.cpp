@@ -441,7 +441,7 @@ public:
       TRANS_LOG(WARN, "Fail to init access context", K(ret));
     }
 
-    EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, columns_, write_row, encrypt_meta_)));
+    EXPECT_EQ(expect_ret, (ret = memtable->set(iter_param_, context, columns_, write_row, encrypt_meta_, false)));
 
     TRANS_LOG(INFO, "======================= end write tx ======================",
               K(ret), K(wtx->mvcc_acc_ctx_.tx_id_), K(*wtx), K(snapshot), K(expire_time), K(write_row));
@@ -3349,14 +3349,16 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
                                              context,
                                              columns_,
                                              write_row,
-                                             encrypt_meta_)));
+                                             encrypt_meta_,
+                                             false)));
 
   start_pdml_stmt(wtx, scn_3000, read_seq_no, 1000000000/*expire_time*/);
   EXPECT_EQ(OB_ERR_PRIMARY_KEY_DUPLICATE, (ret = memtable->set(iter_param_,
                                                                context,
                                                                columns_,
                                                                write_row,
-                                                               encrypt_meta_)));
+                                                               encrypt_meta_,
+                                                               false)));
   memtable->destroy();
 }
 

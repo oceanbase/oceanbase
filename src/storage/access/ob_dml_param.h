@@ -47,6 +47,7 @@ struct ObStorageDatum;
 }
 namespace storage
 {
+class ObStoreCtxGuard;
 
 //
 // Project storage output row to expression array, the core project logic is:
@@ -180,6 +181,7 @@ struct ObDMLBaseParam
         prelock_(false),
         is_batch_stmt_(false),
         dml_allocator_(nullptr),
+        store_ctx_guard_(nullptr),
         encrypt_meta_(NULL),
         encrypt_meta_legacy_(),
         spec_seq_no_(),
@@ -205,7 +207,7 @@ struct ObDMLBaseParam
   bool prelock_;
   bool is_batch_stmt_;
   mutable common::ObIAllocator *dml_allocator_;
-
+  mutable ObStoreCtxGuard *store_ctx_guard_;
   // table_id_, local_index_id_ and its encrypt_meta
   const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_;
   common::ObSEArray<transaction::ObEncryptMetaCache, 1> encrypt_meta_legacy_;
@@ -218,7 +220,7 @@ struct ObDMLBaseParam
   // write flag for inner write processing
   concurrent_control::ObWriteFlag write_flag_;
   bool check_schema_version_;
-  bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0); }
+  bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;
 };

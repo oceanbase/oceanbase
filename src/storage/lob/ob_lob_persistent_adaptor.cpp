@@ -205,6 +205,17 @@ int ObPersistentLobApator::prepare_lob_meta_dml(ObLobAccessParam& param)
     LOG_WARN("failed to build meta schema", K(ret), K(param));
   } else if (OB_FAIL(set_dml_seq_no(param))) {
     LOG_WARN("update_seq_no fail", K(ret), K(param));
+  } else {
+    param.dml_base_param_->store_ctx_guard_->reset();
+    ObAccessService *oas = MTL(ObAccessService *);
+    if (OB_FAIL(oas->get_write_store_ctx_guard(param.ls_id_,
+                                               param.timeout_,
+                                               *param.tx_desc_,
+                                               param.snapshot_,
+                                               *param.dml_base_param_->store_ctx_guard_,
+                                               param.dml_base_param_->spec_seq_no_ ))) {
+      LOG_WARN("fail to get write store tx ctx guard", K(ret), K(param));
+    }
   }
   return ret;
 }
@@ -213,11 +224,15 @@ int ObPersistentLobApator::build_lob_meta_table_dml(ObLobAccessParam& param)
 {
   int ret = OB_SUCCESS;
   // dml param may be share, so use res_allocator
+  ObStoreCtxGuard *store_ctx_guard = nullptr;
   if (param.dml_base_param_ != nullptr) {
   } else if (OB_ISNULL(param.dml_base_param_ = OB_NEWx(ObDMLBaseParam, param.allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc dml base param", K(ret));
-  } else if (OB_FAIL(build_lob_meta_table_dml(param, *param.dml_base_param_))) {
+  } else if (OB_ISNULL(store_ctx_guard = OB_NEWx(ObStoreCtxGuard,  param.allocator_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc store_ctx_guard", K(ret));
+  } else if (OB_FAIL(build_lob_meta_table_dml(param, *param.dml_base_param_, store_ctx_guard))) {
     LOG_WARN("failed to build meta schema", K(ret), K(param));
   }
   return ret;
@@ -225,7 +240,8 @@ int ObPersistentLobApator::build_lob_meta_table_dml(ObLobAccessParam& param)
 
 int ObPersistentLobApator::build_lob_meta_table_dml(
     ObLobAccessParam& param,
-    ObDMLBaseParam &dml_base_param)
+    ObDMLBaseParam &dml_base_param,
+    ObStoreCtxGuard *store_ctx_guard)
 {
   int ret = OB_SUCCESS;
   // dml base
@@ -238,6 +254,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.check_schema_version_ = false; // lob tablet should not check schema version
   dml_base_param.schema_version_ = 0;
   dml_base_param.write_flag_.set_lob_aux();
+  dml_base_param.store_ctx_guard_ = store_ctx_guard;
 
   if (OB_FAIL(get_meta_table_dml_param(dml_base_param.table_param_))) {
     LOG_WARN("get_meta_table_dml_param fail", KR(ret));

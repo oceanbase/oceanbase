@@ -113,7 +113,10 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
           TRANS_LOG(WARN, "ObIStore is null", K(ret), K(i));
         } else if (stores->at(i)->is_data_memtable()) {
           ObMemtable *memtable = static_cast<ObMemtable *>(stores->at(i));
-          if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(ctx->mvcc_acc_ctx_, &mtk, lock_state))) {
+          if (OB_FAIL(memtable->get_mvcc_engine().check_row_locked(ctx->mvcc_acc_ctx_,
+                                                                   &mtk,
+                                                                   lock_state,
+                                                                   row_state))) {
             TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(mtk));
           }
         } else if (stores->at(i)->is_sstable()) {
@@ -181,10 +184,11 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccess
                                                                     ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
+  storage::ObRowState row_state;
   if (OB_ISNULL(value)) {
     ret = OB_BAD_NULL_ERROR;
     TRANS_LOG(ERROR, "the ObMvccValueIterator is null", K(ret));
-  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
+  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state, row_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), K(lock_state));
   } else {
     const ObTransID my_tx_id = ctx.get_tx_id();
@@ -296,7 +300,8 @@ int ObRowConflictHandler::post_row_read_conflict(ObMvccAccessCtx &acc_ctx,
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {
-        if (OB_FAIL(lock_state.mvcc_row_->check_row_locked(acc_ctx, lock_state))) {
+        storage::ObRowState row_state;
+        if (OB_FAIL(lock_state.mvcc_row_->check_row_locked(acc_ctx, lock_state, row_state))) {
           TRANS_LOG(WARN, "re-check row locked via mvcc_row fail", K(ret), K(tx_id), K(lock_state));
         }
       }

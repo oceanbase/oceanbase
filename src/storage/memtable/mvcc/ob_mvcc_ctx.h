@@ -88,6 +88,7 @@ public: // for mvcc engine invoke
   virtual int read_lock_yield() { return common::OB_SUCCESS; }
   virtual int write_lock_yield() { return common::OB_SUCCESS; }
   virtual int append_callback(ObITransCallback *cb) = 0;
+  virtual void on_key_duplication_retry(const ObMemtableKey& key) = 0;
   virtual void on_tsc_retry(const ObMemtableKey& key,
                             const share::SCN snapshot_version,
                             const share::SCN max_trans_version,
@@ -159,7 +160,8 @@ public:
       const ObRowData *old_row,
       ObMemtable *memtable,
       const transaction::ObTxSEQ seq_no,
-      const int64_t column_cnt);
+      const int64_t column_cnt,
+      const bool is_non_unique_local_index);
   int register_row_replay_cb(
       const ObMemtableKey *key,
       ObMvccRow *value,

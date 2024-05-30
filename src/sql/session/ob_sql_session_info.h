@@ -783,6 +783,8 @@ public:
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
+                                 _query_record_size_limit_(65536),
+                                 _ob_sqlstat_enable_(true),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
                                  session_(session)
@@ -805,6 +807,8 @@ public:
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
     int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
+    int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
+    bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -822,6 +826,8 @@ public:
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     int64_t range_optimizer_max_mem_size_;
+    int64_t _query_record_size_limit_;
+    bool _ob_sqlstat_enable_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
@@ -1348,7 +1354,7 @@ public:
   bool is_var_assign_use_das_enabled() const;
   int is_enable_range_extraction_for_not_in(bool &enabled) const;
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
-  bool is_sqlstat_enabled() const;
+  bool is_sqlstat_enabled();
   bool is_spf_mlj_group_rescan_enabled() const;
   bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
@@ -1454,6 +1460,16 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_audit_log_query_sql();
+  }
+  int64_t get_tenant_query_record_size_limit()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_query_record_size_limit();
+  }
+  bool get_tenant_ob_sqlstat_enable()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_ob_sqlstat_enable();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

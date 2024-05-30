@@ -370,8 +370,15 @@ int ObMemtable::multi_set(
     if (row_count > 1) {
       ret = multi_set_(param, columns, rows, row_count, check_exist, mtk_generator, context, rows_info);
     } else {
-      ret = set_(param, columns, rows[0], nullptr, nullptr, mtk_generator[0], context, nullptr,
-                 check_exist && !rows_info.is_row_exist_checked(0));
+      ret = set_(param,
+                 columns,
+                 rows[0],
+                 nullptr, /*old_row*/
+                 nullptr, /*update_idx*/
+                 mtk_generator[0],
+                 check_exist,
+                 context,
+                 nullptr /*mvcc_row*/);
     }
     guard.set_memtable(this);
   }
@@ -382,14 +389,13 @@ int ObMemtable::multi_set(
     }
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
-    ObLockWaitMgr* p_lock_wait_mgr = MTL(ObLockWaitMgr*);
-    if (OB_ISNULL(p_lock_wait_mgr)) {
-      TRANS_LOG(WARN, "lock wait mgr is null", K(ret));
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
     } else {
       for (int64_t idx = 0; idx < mtk_generator.count(); ++idx) {
-        p_lock_wait_mgr->set_hash_holder(key_.get_tablet_id(),
-                                         mtk_generator[idx],
-                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                             mtk_generator[idx],
+                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
       }
     }
     /***********************/
@@ -411,10 +417,14 @@ int ObMemtable::check_rows_locked(
   for (int64_t i = 0; OB_SUCC(ret) && i < rows_info.rowkeys_.count(); i++) {
     const blocksstable::ObDatumRowkey &rowkey = rows_info.get_rowkey(i);
     ObStoreRowLockState &lock_state = rows_info.get_row_lock_state(i);
-    if (rows_info.is_row_lock_checked(i)) {
+    ObRowState row_state;
+    if (rows_info.is_row_checked(i)) {
     } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
       TRANS_LOG(WARN, "Failed to enocde memtable key", K(ret));
-    } else if (OB_FAIL(get_mvcc_engine().check_row_locked(ctx.mvcc_acc_ctx_, &mtk, lock_state))) {
+    } else if (OB_FAIL(get_mvcc_engine().check_row_locked(ctx.mvcc_acc_ctx_,
+                                                          &mtk,
+                                                          lock_state,
+                                                          row_state))) {
       TRANS_LOG(WARN, "Failed to check row lock in mvcc engine", K(ret), K(mtk));
     } else if (lock_state.is_lock_decided()) {
       if (lock_state.is_locked_ && lock_state.lock_trans_id_ != my_tx_id) {
@@ -425,8 +435,12 @@ int ObMemtable::check_rows_locked(
         rows_info.set_conflict_rowkey(i);
         rows_info.set_error_code(OB_TRANSACTION_SET_VIOLATION);
         break;
+      } else if (check_exist && !row_state.is_delete()) {
+        rows_info.set_conflict_rowkey(i);
+        rows_info.set_error_code(OB_ERR_PRIMARY_KEY_DUPLICATE);
+        break;
       } else {
-        rows_info.set_row_lock_checked(i, check_exist);
+        rows_info.set_row_checked(i);
       }
     }
   }
@@ -434,11 +448,12 @@ int ObMemtable::check_rows_locked(
 }
 
 int ObMemtable::set(
-    const storage::ObTableIterParam &param,
-    storage::ObTableAccessContext &context,
-    const common::ObIArray<share::schema::ObColDesc> &columns,
-    const storage::ObStoreRow &row,
-    const share::ObEncryptMeta *encrypt_meta)
+  const storage::ObTableIterParam &param,
+  storage::ObTableAccessContext &context,
+  const common::ObIArray<share::schema::ObColDesc> &columns,
+  const storage::ObStoreRow &row,
+  const share::ObEncryptMeta *encrypt_meta,
+  const bool check_exist)
 {
   int ret = OB_SUCCESS;
   ObMvccWriteGuard guard(ret);
@@ -472,8 +487,15 @@ int ObMemtable::set(
     TRANS_LOG(WARN, "not allow to write", K(*context.store_ctx_));
   } else {
     lib::CompatModeGuard compat_guard(mode_);
-
-    ret = set_(param, columns, row, NULL, NULL, mtk_generator[0], context);
+    ret = set_(param,
+               columns,
+               row,
+               NULL, /*old_row*/
+               NULL, /*update_idx*/
+               mtk_generator[0],
+               check_exist,
+               context,
+               nullptr /*mvcc_row*/);
     guard.set_memtable(this);
   }
 
@@ -482,15 +504,15 @@ int ObMemtable::set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
+
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
-    ObLockWaitMgr* p_lock_wait_mgr = MTL(ObLockWaitMgr*);
-    if (OB_ISNULL(p_lock_wait_mgr)) {
-      TRANS_LOG(WARN, "lock wait mgr is null", K(ret));
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
     } else {
-      p_lock_wait_mgr->set_hash_holder(key_.get_tablet_id(),
-                                       mtk_generator[0],
-                                       context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+       MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                            mtk_generator[0],
+                                            context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
     }
     /***********************/
   }
@@ -537,7 +559,15 @@ int ObMemtable::set(
   } else {
     lib::CompatModeGuard compat_guard(mode_);
 
-    ret = set_(param, columns, new_row, &old_row, &update_idx, mtk_generator[0], context);
+    ret = set_(param,
+               columns,
+               new_row,
+               &old_row,
+               &update_idx,
+               mtk_generator[0],
+               false/*check_exist*/,
+               context,
+               nullptr /*mvcc_row*/);
     guard.set_memtable(this);
   }
 
@@ -548,13 +578,12 @@ int ObMemtable::set(
     }
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
-    ObLockWaitMgr* p_lock_wait_mgr = MTL(ObLockWaitMgr*);
-    if (OB_ISNULL(p_lock_wait_mgr)) {
-      TRANS_LOG(WARN, "lock wait mgr is null", K(ret));
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for local index table
     } else {
-      p_lock_wait_mgr->set_hash_holder(key_.get_tablet_id(),
-                                       mtk_generator[0],
-                                       context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                           mtk_generator[0],
+                                           context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
     }
     /***********************/
   }
@@ -578,6 +607,11 @@ int ObMemtable::lock(
   } else if (!acc_ctx.is_write() || row.count_ < param.get_schema_rowkey_count()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(row), K(param));
+  } else if (OB_UNLIKELY(param.is_non_unique_local_index_)) {
+    // since checking lock on non-unique local index is optimized out, so do a defensive judgment here,
+    // actually, there is no circumstance in where locking the index table is need.
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(row), K(param));
   } else if (OB_FAIL(tmp_key.assign(row.cells_, param.get_schema_rowkey_count()))) {
     TRANS_LOG(WARN, "Failed to assign rowkey", K(row), K(param));
   } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &tmp_key))) {
@@ -604,14 +638,9 @@ int ObMemtable::lock(
   if (OB_SUCC(ret)) {
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
-    ObLockWaitMgr* p_lock_wait_mgr = MTL(ObLockWaitMgr*);
-    if (OB_ISNULL(p_lock_wait_mgr)) {
-      TRANS_LOG(WARN, "lock wait mgr is null", K(ret));
-    } else {
-      p_lock_wait_mgr->set_hash_holder(key_.get_tablet_id(),
-                                       mtk,
-                                       context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
+    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                         mtk,
+                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
     /***********************/
   }
   return ret;
@@ -633,6 +662,11 @@ int ObMemtable::lock(
   } else if (!acc_ctx.is_write() || !rowkey.is_memtable_valid()) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "invalid param", K(ret), K(rowkey));
+  } else if (OB_UNLIKELY(param.is_non_unique_local_index_)) {
+    // since checking lock on non-unique local index is optimized out, so do a defensive judgment here,
+    // actually, there is no circumstance in where locking the index table is need.
+    ret = OB_NOT_SUPPORTED;
+    TRANS_LOG(WARN, "locking the non-unique local index is not supported", K(ret), K(param));
   } else if (OB_FAIL(mtk.encode(param.get_read_info()->get_columns_desc(), &rowkey.get_store_rowkey()))) {
     TRANS_LOG(WARN, "encode mtk failed", K(ret), K(param));
   } else if (acc_ctx.write_flag_.is_check_row_locked()) {
@@ -656,14 +690,9 @@ int ObMemtable::lock(
   if (OB_SUCC(ret)) {
     /*****[for deadlock]*****/
     // recored this row is hold by this trans for deadlock detector
-    ObLockWaitMgr* p_lock_wait_mgr = MTL(ObLockWaitMgr*);
-    if (OB_ISNULL(p_lock_wait_mgr)) {
-      TRANS_LOG(WARN, "lock wait mgr is null", K(ret));
-    } else {
-      p_lock_wait_mgr->set_hash_holder(key_.get_tablet_id(),
-                                       mtk,
-                                       context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
+    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                         mtk,
+                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
     /***********************/
   }
   return ret;
@@ -1240,13 +1269,19 @@ int ObMemtable::lock_row_on_frozen_stores_(
   ObStoreRowLockState &lock_state = res.lock_state_;
   ObStoreCtx &ctx = *(context.store_ctx_);
   const ObTxSEQ reader_seq_no = ctx.mvcc_acc_ctx_.snapshot_.scn_;
+
   if (OB_ISNULL(value) || !ctx.mvcc_acc_ctx_.is_write() || NULL == key) {
     TRANS_LOG(WARN, "invalid param", KP(value), K(ctx), KP(key));
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_ISNULL(ctx.table_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "tables handle or iterator in context is null", K(ret), K(ctx));
+  } else if (lock_state.row_exist_decided()) {
+    // in the suitation, row already exists, so we need not examine any
+    // existance or lock status of the row in the following tables
   } else if (!check_exist && value->is_lower_lock_scaned()) {
+  } else if (!check_exist && param.is_non_unique_local_index_) {
+    // skip if it is non-unique index for which the lock has been checked in primary table
   } else {
     ObRowState row_state;
     ObStoreRowLockState tmp_lock_state;
@@ -1254,6 +1289,7 @@ int ObMemtable::lock_row_on_frozen_stores_(
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
     ObTransID my_tx_id = ctx.mvcc_acc_ctx_.get_tx_id();
+
     while (OB_SUCC(ret)) {
       ObITable *table_ptr = nullptr;
       if (OB_FAIL(ctx.table_iter_->get_next(table_ptr))) {
@@ -1294,8 +1330,14 @@ int ObMemtable::lock_row_on_frozen_stores_(
 //            TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(lock_state));
 //          }
 
-          if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_, key, tmp_lock_state))) {
+          if (OB_FAIL(mvcc_engine.check_row_locked(ctx.mvcc_acc_ctx_,
+                                                   key,
+                                                   tmp_lock_state,
+                                                   row_state))) {
             TRANS_LOG(WARN, "mvcc engine check row lock fail", K(ret), K(lock_state), K(tmp_lock_state));
+          } else {
+            TRANS_LOG(DEBUG, "check_row_locked meet memtable", K(ret), K(check_exist), K(*key), K(*memtable),
+                      K(lock_state), K(tmp_lock_state), K(row_state));
           }
         } else if (stores->at(i)->is_sstable()) {
           blocksstable::ObDatumRowkeyHelper rowkey_converter;
@@ -1303,14 +1345,17 @@ int ObMemtable::lock_row_on_frozen_stores_(
           ObITable *sstable = stores->at(i);
           if (OB_FAIL(rowkey_converter.convert_datum_rowkey(key->get_rowkey()->get_rowkey(), datum_rowkey))) {
             STORAGE_LOG(WARN, "Failed to convert datum rowkey", K(ret), KPC(key));
-          } else if (OB_FAIL(static_cast<ObSSTable *>(sstable)->check_row_locked(param, datum_rowkey,
-                                                                                 context, tmp_lock_state,
-                                                                                 row_state, check_exist))) {
+          } else if (OB_FAIL(static_cast<ObSSTable *>(sstable)->check_row_locked(param,
+                                                                                 datum_rowkey,
+                                                                                 context,
+                                                                                 tmp_lock_state,
+                                                                                 row_state,
+                                                                                 check_exist))) {
             TRANS_LOG(WARN, "sstable check row lock fail", K(ret), K(datum_rowkey), K(*key), K(lock_state),
                       K(tmp_lock_state), K(row_state));
           }
-          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(check_exist), K(*key), K(*sstable), K(lock_state), K(tmp_lock_state),
-                    K(row_state));
+          TRANS_LOG(DEBUG, "check_row_locked meet sstable", K(ret), K(check_exist), K(*key), K(*sstable),
+                    K(lock_state), K(tmp_lock_state), K(row_state));
         } else {
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(ERROR, "unknown store type", K(ret), K(*stores), K(i));
@@ -1487,6 +1532,9 @@ int ObMemtable::lock_rows_on_frozen_stores_(
   if (OB_ISNULL(ctx.table_iter_)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "Table iterator in context is null", K(ret), K(ctx));
+  } else if (!check_exist && param.is_non_unique_local_index_) {
+    // skip if it is non-unique index table for which the transaction conflict has checked in primary table,
+    // so there is no need to check transaction conflict again.
   } else {
     common::ObSEArray<ObITable *, 4> iter_tables;
     ctx.table_iter_->resume();
@@ -2973,7 +3021,15 @@ int ObMemtable::multi_set_(
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
       const uint32_t permutation_idx = rows_info.get_permutation_idx(i);
-      if (OB_FAIL(set_(param, columns, rows[i], nullptr, nullptr, memtable_keys[i], context, &(mvcc_rows[permutation_idx]), check_exist))) {
+      if (OB_FAIL(set_(param,
+                       columns,
+                       rows[i],
+                       nullptr, /*old_row*/
+                       nullptr, /*update_idx*/
+                       memtable_keys[i],
+                       check_exist,
+                       context,
+                       &(mvcc_rows[permutation_idx])))) {
         if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret)) {
           TRANS_LOG(WARN, "Failed to insert new row", K(ret), K(i), K(permutation_idx), K(rows[i]));
         }
@@ -2984,10 +3040,13 @@ int ObMemtable::multi_set_(
   if (OB_SUCC(ret)) {
     for (int64_t i = 0 ; i < row_count; ++i) {
       ObMvccRowAndWriteResult &result = mvcc_rows[i];
-      rows_info.set_row_lock_state(i, &(result.write_result_.lock_state_));
-      if (result.mvcc_row_->is_lower_lock_scaned()) {
+      if (result.write_result_.lock_state_.row_exist_decided()) {
+        rows_info.set_row_checked(i);
+      } else if (result.mvcc_row_->is_lower_lock_scaned()) {
         rows_info.set_row_lock_checked(i, check_exist);
       }
+      TRANS_LOG(DEBUG, "set row lock state", K(result), K(i), K(rows_info));
+      rows_info.set_row_lock_state(i, &(result.write_result_.lock_state_));
     }
   }
 
@@ -3040,9 +3099,9 @@ int ObMemtable::set_(
     const storage::ObStoreRow *old_row,
     const common::ObIArray<int64_t> *update_idx,
     const ObMemtableKey &mtk,
+    const bool check_exist,
     storage::ObTableAccessContext &context,
-    ObMvccRowAndWriteResult *mvcc_row,
-    bool check_exist)
+    ObMvccRowAndWriteResult *mvcc_row)
 {
   int ret = OB_SUCCESS;
   blocksstable::ObRowWriter row_writer;
@@ -3087,23 +3146,30 @@ int ObMemtable::set_(
           timestamp_,  /*memstore_version*/
           ctx.mvcc_acc_ctx_.tx_scn_,  /*seq_no*/
           new_row.row_val_.count_ /*column_cnt*/);
-      if (OB_FAIL(mvcc_write_(param, context, &mtk, arg, is_new_locked, mvcc_row, check_exist))) {
+      if (OB_FAIL(mvcc_write_(param,
+                              context,
+                              &mtk,
+                              arg,
+                              check_exist,
+                              is_new_locked,
+                              mvcc_row))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
             OB_TRANSACTION_SET_VIOLATION != ret &&
             OB_ERR_PRIMARY_KEY_DUPLICATE != ret) {
           TRANS_LOG(WARN, "mvcc write fail", K(mtk), K(ret));
         }
       } else {
-        TRANS_LOG(DEBUG, "set end, success",
-            "ret", ret,
-            "tablet_id_", key_.tablet_id_,
-            "dml_flag", new_row.flag_.get_dml_flag(),
-            "columns", strarray<ObColDesc>(columns),
-            "old_row", to_cstring(old_row),
-            "new_row", to_cstring(new_row),
-            "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
-            "mtd", to_cstring(mtd),
-            K(arg));
+        TRANS_LOG(TRACE, "set end, success",
+                  "ret", ret,
+                  "tablet_id_", key_.tablet_id_,
+                  "dml_flag", new_row.flag_.get_dml_flag(),
+                  "columns", strarray<ObColDesc>(columns),
+                  "old_row", to_cstring(old_row),
+                  "new_row", to_cstring(new_row),
+                  "update_idx", (update_idx == NULL ? "" : to_cstring(update_idx)),
+                  "mtd", to_cstring(mtd),
+                  K(arg),
+                  KPC(mvcc_row));
       }
     }
   }
@@ -3162,7 +3228,13 @@ int ObMemtable::lock_(
                     timestamp_,              /*memstore_version*/
                     acc_ctx.tx_scn_,         /*seq_no*/
                     rowkey.get_obj_cnt());   /*column_cnt*/
-    if (OB_FAIL(mvcc_write_(param, context, &mtk, arg, is_new_locked))) {
+    if (OB_FAIL(mvcc_write_(param,
+                            context,
+                            &mtk,
+                            arg,
+                            false, /*check_exist*/
+                            is_new_locked,
+                            nullptr /*mvcc_row*/))) {
     } else if (OB_UNLIKELY(!is_new_locked)) {
       TRANS_LOG(DEBUG, "lock twice, no need to store lock trans node");
     }
@@ -3215,12 +3287,12 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
 
 int ObMemtable::mvcc_write_(
     const storage::ObTableIterParam &param,
-	  storage::ObTableAccessContext &context,
-	  const ObMemtableKey *key,
-	  const ObTxNodeArg &arg,
-	  bool &is_new_locked,
-    ObMvccRowAndWriteResult *mvcc_row,
-    bool check_exist)
+    storage::ObTableAccessContext &context,
+    const ObMemtableKey *key,
+    const ObTxNodeArg &arg,
+    const bool check_exist,
+    bool &is_new_locked,
+    ObMvccRowAndWriteResult *mvcc_row)
 {
   int ret = OB_SUCCESS;
   bool is_new_add = false;
@@ -3257,6 +3329,8 @@ int ObMemtable::mvcc_write_(
                             snapshot_version,
                             value->get_max_trans_version(),
                             value->get_max_trans_id());
+    } else if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+      mem_ctx->on_key_duplication_retry(*key);
     } else {
       TRANS_LOG(WARN, "mvcc write fail", K(ret));
     }
@@ -3282,7 +3356,8 @@ int ObMemtable::mvcc_write_(
                                                         arg.old_row_,
                                                         this,
                                                         arg.seq_no_,
-                                                        arg.column_cnt_))) {
+                                                        arg.column_cnt_,
+                                                        param.is_non_unique_local_index_))) {
     (void)mvcc_engine_.mvcc_undo(value);
     res.is_mvcc_undo_ = true;
     TRANS_LOG(WARN, "register row commit failed", K(ret));
@@ -3346,6 +3421,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
     ObFunction<int(bool&, bool&)> recheck_func([&](bool &locked, bool &wait_on_row) -> int {
       int ret = OB_SUCCESS;
       lock_state.is_locked_ = false;
+      storage::ObRowState row_state;
       if (lock_state.is_delayed_cleanout_) {
         transaction::ObTxSEQ lock_data_sequence = lock_state.lock_data_sequence_;
         storage::ObTxTableGuards &tx_table_guards = acc_ctx.get_tx_table_guards();
@@ -3354,7 +3430,7 @@ int ObMemtable::post_row_write_conflict_(ObMvccAccessCtx &acc_ctx,
           TRANS_LOG(WARN, "re-check row locked via tx_table fail", K(ret), K(tx_id), K(lock_state));
         }
       } else {
-        if (OB_FAIL(lock_state.mvcc_row_->check_row_locked(acc_ctx, lock_state))) {
+        if (OB_FAIL(lock_state.mvcc_row_->check_row_locked(acc_ctx, lock_state, row_state))) {
           TRANS_LOG(WARN, "re-check row locked via mvcc_row fail", K(ret), K(tx_id), K(lock_state));
         }
       }

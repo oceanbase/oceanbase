@@ -137,6 +137,7 @@ void ObStoreRowLockState::reset()
   lock_data_sequence_.reset();
   lock_dml_flag_ = blocksstable::ObDmlFlag::DF_NOT_EXIST;
   is_delayed_cleanout_ = false;
+  exist_flag_ = ObExistFlag::UNKNOWN;
   mvcc_row_ = NULL;
   trans_scn_ = SCN::max_scn();
 }

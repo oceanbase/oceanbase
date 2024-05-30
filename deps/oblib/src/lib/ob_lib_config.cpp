@@ -18,7 +18,6 @@ namespace lib
 
 volatile bool ObLibConfig::enable_diagnose_info_ = true;
 volatile bool ObLibConfig::enable_trace_log_ = true;
-thread_local bool ObDisableDiagnoseGuard::in_disable_diagnose_guard_ = false;
 
 } //lib
 } //oceanbase

@@ -667,7 +667,8 @@ void ObTableApiProcessorBase::end_audit()
     if (nullptr == req_manager) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get request manager for current tenant", K(ret));
-    } else if (OB_FAIL(req_manager->record_request(audit_record_, true))) {
+    } else if (OB_FAIL(req_manager->record_request(audit_record_, true,
+               ObSQLUtils::get_query_record_size_limit(credential_.tenant_id_)))) {
       if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
         LOG_DEBUG("cannot allocate mem for record", K(ret));
         ret = OB_SUCCESS;

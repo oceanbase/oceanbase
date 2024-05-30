@@ -218,6 +218,37 @@ private:
   int64_t row_version_;
 };
 
+enum class ObExistFlag : uint8_t
+{
+  EXIST        = 0,
+  UNKNOWN      = 1,
+  NOT_EXIST    = 2,
+};
+
+static ObExistFlag extract_exist_flag_from_dml_flag(const blocksstable::ObDmlFlag dml_flag)
+{
+  ObExistFlag exist_flag = ObExistFlag::UNKNOWN;
+  switch (dml_flag) {
+  case blocksstable::ObDmlFlag::DF_NOT_EXIST:
+    exist_flag = ObExistFlag::UNKNOWN;
+    break;
+  case blocksstable::ObDmlFlag::DF_LOCK:
+    exist_flag = ObExistFlag::EXIST;
+    break;
+  case blocksstable::ObDmlFlag::DF_UPDATE:
+  case blocksstable::ObDmlFlag::DF_INSERT:
+    exist_flag = ObExistFlag::EXIST;
+    break;
+  case blocksstable::ObDmlFlag::DF_DELETE:
+    exist_flag = ObExistFlag::NOT_EXIST;
+    break;
+  default:
+    ob_abort();
+    break;
+  }
+  return exist_flag;
+}
+
 struct ObStoreRowLockState
 {
 public:
@@ -228,8 +259,18 @@ public:
     lock_data_sequence_(),
     lock_dml_flag_(blocksstable::ObDmlFlag::DF_NOT_EXIST),
     is_delayed_cleanout_(false),
+    exist_flag_(ObExistFlag::UNKNOWN),
     mvcc_row_(NULL),
     trans_scn_(share::SCN::max_scn()) {}
+  inline bool row_exist_decided() const
+  {
+    return ObExistFlag::EXIST == exist_flag_
+      || ObExistFlag::NOT_EXIST == exist_flag_;
+  }
+  inline bool row_exist() const
+  {
+    return ObExistFlag::EXIST == exist_flag_;
+  }
   inline bool is_lock_decided() const
   {
     return is_locked_ || !trans_version_.is_min();
@@ -245,6 +286,7 @@ public:
                K_(lock_data_sequence),
                K_(lock_dml_flag),
                K_(is_delayed_cleanout),
+               K_(exist_flag),
                KP_(mvcc_row),
                K_(trans_scn));
 
@@ -254,6 +296,7 @@ public:
   transaction::ObTxSEQ lock_data_sequence_;
   blocksstable::ObDmlFlag lock_dml_flag_;
   bool is_delayed_cleanout_;
+  ObExistFlag exist_flag_;
   memtable::ObMvccRow *mvcc_row_;
   share::SCN trans_scn_; // sstable takes end_scn, memtable takes scn_ of ObMvccTransNode
 };

@@ -229,7 +229,8 @@ int ObMvccEngine::estimate_scan_row_count(
 
 int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
                                    const ObMemtableKey *key,
-                                   ObStoreRowLockState &lock_state)
+                                   ObStoreRowLockState &lock_state,
+                                   ObRowState &row_state)
 {
   int ret = OB_SUCCESS;
   ObMemtableKey stored_key;
@@ -243,7 +244,7 @@ int ObMvccEngine::check_row_locked(ObMvccAccessCtx &ctx,
       // rewrite ret
       ret = OB_SUCCESS;
     }
-  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
+  } else if (OB_FAIL(value->check_row_locked(ctx, lock_state, row_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), KPC(value), K(ctx), K(lock_state));
   }
 

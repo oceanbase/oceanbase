@@ -301,7 +301,8 @@ public:
       storage::ObTableAccessContext &context,
       const common::ObIArray<share::schema::ObColDesc> &columns, // TODO: remove columns
       const storage::ObStoreRow &row,
-      const share::ObEncryptMeta *encrypt_meta);
+      const share::ObEncryptMeta *encrypt_meta,
+      const bool check_exist);
   virtual int set(
       const storage::ObTableIterParam &param,
 	    storage::ObTableAccessContext &context,
@@ -644,9 +645,9 @@ private:
 	    storage::ObTableAccessContext &context,
 	    const ObMemtableKey *key,
 	    const ObTxNodeArg &arg,
+      const bool check_exist,
 	    bool &is_new_locked,
-      ObMvccRowAndWriteResult *mvcc_row = nullptr,
-      bool check_exist = false);
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
 
   int mvcc_replay_(storage::ObStoreCtx &ctx,
                    const ObMemtableKey *key,
@@ -709,9 +710,9 @@ private:
       const storage::ObStoreRow *old_row,
       const common::ObIArray<int64_t> *update_idx,
       const ObMemtableKey &mtk,
+      const bool check_exist,
       storage::ObTableAccessContext &context,
-      ObMvccRowAndWriteResult *mvcc_row = nullptr,
-      bool check_exist = false);
+      ObMvccRowAndWriteResult *mvcc_row = nullptr);
   int multi_set_(
       const storage::ObTableIterParam &param,
       const common::ObIArray<share::schema::ObColDesc> &columns,

@@ -563,8 +563,6 @@ private:
       ObObj &obj,
       ObLobAccessParam *del_param,
       ObLobCommon *lob_common);
-  static int check_lob_tablet_valid(
-      ObTabletHandle &data_tablet);
   static int insert_lob_tablet_row(
       ObTabletHandle &data_tablet,
       ObDMLRunningCtx &run_ctx,
@@ -702,6 +700,7 @@ private:
       ObStoreRow &store_row,
       const bool need_copy_cells);
   static int insert_row_to_tablet(
+      const bool check_exist,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
       ObStoreRow &tbl_row);

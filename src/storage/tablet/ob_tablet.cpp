@@ -2770,44 +2770,6 @@ int ObTablet::get_memtables(common::ObIArray<storage::ObITable *> &memtables, co
   return inner_get_memtables(memtables, need_active);
 }
 
-int ObTablet::insert_row(
-    ObRelativeTable &relative_table,
-    ObStoreCtx &store_ctx,
-    const ObColDescIArray &col_descs,
-    const ObStoreRow &row)
-{
-  int ret = OB_SUCCESS;
-  bool b_exist = false;
-  common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr = NULL;
-  if (OB_UNLIKELY(!store_ctx.is_valid() || col_descs.count() <= 0 || !row.is_valid()
-      || !relative_table.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(store_ctx), K(col_descs), K(row), K(ret));
-  } else {
-    bool check_exists = !relative_table.is_storage_index_table()
-                              || relative_table.is_unique_index();
-    ret = OB_E(EventTable::EN_ENABLE_ROWKEY_CONFLICT_CHECK) OB_SUCCESS;
-    if (OB_ERR_UNEXPECTED == ret) {
-      check_exists = false;
-      ret = OB_SUCCESS;
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("failed to get rowkey columns");
-    } else if (check_exists
-        && OB_FAIL(rowkey_exists(relative_table, store_ctx, row.row_val_, b_exist))) {
-      LOG_WARN("failed to check whether row exists", K(row), K(ret));
-    } else if (OB_UNLIKELY(b_exist)) {
-      ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-      LOG_WARN("rowkey already exists",  K(relative_table.get_table_id()), K(row), K(ret));
-    } else if (OB_FAIL(insert_row_without_rowkey_check(relative_table, store_ctx, col_descs, row, encrypt_meta_arr))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        LOG_WARN("failed to set row", K(row), K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObTablet::update_row(
     ObRelativeTable &relative_table,
     storage::ObStoreCtx &store_ctx,
@@ -2854,7 +2816,13 @@ int ObTablet::update_row(
       ObTableAccessContext context;
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("prepare param ctx fail, ", K(ret));
-      } else if (OB_FAIL(write_memtable->set(param, context, col_descs, update_idx, old_row, new_row, encrypt_meta))) {
+      } else if (OB_FAIL(write_memtable->set(param,
+                                             context,
+                                             col_descs,
+                                             update_idx,
+                                             old_row,
+                                             new_row,
+                                             encrypt_meta))) {
         LOG_WARN("failed to set memtable, ", K(ret));
       }
     }
@@ -2915,6 +2883,7 @@ int ObTablet::insert_rows(
 int ObTablet::insert_row_without_rowkey_check(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
+    const bool check_exist,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
     const storage::ObStoreRow &row,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
@@ -2953,7 +2922,12 @@ int ObTablet::insert_row_without_rowkey_check(
       ObTableAccessContext context;
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
         LOG_WARN("prepare param ctx fail, ", K(ret));
-      } else if (OB_FAIL(write_memtable->set(param, context, col_descs, row, encrypt_meta))) {
+      } else if (OB_FAIL(write_memtable->set(param,
+                                             context,
+                                             col_descs,
+                                             row,
+                                             encrypt_meta,
+                                             check_exist))) {
         LOG_WARN("fail to set memtable", K(ret));
       }
     }
@@ -4966,6 +4940,8 @@ int ObTablet::prepare_param_ctx(
   param.table_id_ = relative_table.get_table_id();
   param.tablet_id_ = tablet_meta_.tablet_id_;
   param.read_info_ = rowkey_read_info_;
+  param.is_non_unique_local_index_ = relative_table.is_storage_index_table() &&
+            relative_table.is_index_local_storage() && !relative_table.is_unique_index();
 
   if (OB_FAIL(context.init(query_flag, ctx, allocator, trans_version_range))) {
     LOG_WARN("Fail to init access context", K(ret));

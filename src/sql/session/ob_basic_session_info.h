@@ -683,6 +683,8 @@ public:
   int get_influence_plan_sys_var(ObSysVarInPC &sys_vars) const;
   const common::ObString &get_sys_var_in_pc_str() const { return sys_var_in_pc_str_; }
   const common::ObString &get_config_in_pc_str() const { return config_in_pc_str_; }
+  uint64_t get_sys_var_config_hash_val() const { return sys_var_config_hash_val_; }
+  void eval_sys_var_config_hash_val();
   int gen_sys_var_in_pc_str();
   int gen_configs_in_pc_str();
   uint32_t get_sessid() const { return sessid_; }
@@ -1591,8 +1593,9 @@ public:
         runtime_filter_wait_time_ms_(0),
         runtime_filter_max_in_num_(0),
         runtime_bloom_filter_max_size_(INT_MAX32),
-        ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID)
-
+        ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
+        compat_type_(share::ObCompatType::COMPAT_MYSQL57),
+        compat_version_(0)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1655,6 +1658,8 @@ public:
       runtime_bloom_filter_max_size_ = INT32_MAX;
       ncharacter_set_connection_ = ObCharsetType::CHARSET_INVALID;
       default_lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+      compat_type_ = share::ObCompatType::COMPAT_MYSQL57;
+      compat_version_ = 0;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1701,7 +1706,9 @@ public:
             log_row_value_option_ == other.log_row_value_option_ &&
             ob_max_read_stale_time_ == other.ob_max_read_stale_time_  &&
             ncharacter_set_connection_ == other.ncharacter_set_connection_ &&
-            default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_;
+            default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_ &&
+            compat_type_ == other.compat_type_ &&
+            compat_version_ == other.compat_version_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -1882,6 +1889,8 @@ public:
     int64_t runtime_bloom_filter_max_size_;
 
     ObCharsetType ncharacter_set_connection_;
+    share::ObCompatType compat_type_;
+    uint64_t compat_version_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -1997,6 +2006,8 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, ncharacter_set_connection);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, default_lob_inrow_threshold);
+    DEF_SYS_VAR_CACHE_FUNCS(share::ObCompatType, compat_type);
+    DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2068,6 +2079,8 @@ private:
         bool inc_ncharacter_set_connection_:1;
         bool inc_default_lob_inrow_threshold_:1;
         bool inc_ob_enable_pl_cache_:1;
+        bool inc_compat_type_:1;
+        bool inc_compat_version_:1;
       };
     };
   };
@@ -2314,6 +2327,7 @@ private:
   // Currently, when inner sql is executed, the session will be created from session_mgr in most cases. We think he is an inner session;
   // In addition, in situations such as PL execution, the external session will be passed to the inner sql Connection. In this case, it is not considered an inner session.
   // There are differences between the two in terms of ASH statistics and so on, so they should be distinguished.
+  uint64_t sys_var_config_hash_val_;
 };
 
 

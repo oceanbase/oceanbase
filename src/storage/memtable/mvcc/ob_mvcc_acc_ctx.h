@@ -177,6 +177,14 @@ public:
   {
     tx_table_guards_.transfer_start_scn_ = transfer_scn;
   }
+  void set_write_flag(const concurrent_control::ObWriteFlag write_flag)
+  {
+    write_flag_ = write_flag;
+  }
+  void set_abs_lock_timeout_ts(const int64_t abs_lock_timeout)
+  {
+    abs_lock_timeout_ts_ = abs_lock_timeout;
+  }
   void init_replay(transaction::ObPartTransCtx &tx_ctx,
                    ObMemtableCtx &mem_ctx,
                    const transaction::ObTransID &tx_id)

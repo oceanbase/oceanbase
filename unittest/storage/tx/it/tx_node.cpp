@@ -150,6 +150,8 @@ ObTxNode::ObTxNode(const int64_t ls_id,
   tenant_.set(&txs_);
   OZ(fake_opt_stat_mgr_.init(tenant_id_));
   tenant_.set(&fake_opt_stat_mgr_);
+  OZ(fake_lock_wait_mgr_.init());
+  tenant_.set(&fake_lock_wait_mgr_);
   OZ (create_memtable_(100000, memtable_));
   {
     ObColDesc col_desc;
@@ -657,7 +659,7 @@ int ObTxNode::write(ObTxDesc &tx,
   param.read_info_ = &read_info;
 
   context.init(query_flag, write_store_ctx, allocator, trans_version_range);
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
   OZ(txs_.revert_store_ctx(write_store_ctx));
   delete iter;
   return ret;
@@ -695,7 +697,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
   ObStoreRow row;
   ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.flag_ = blocksstable::ObDmlFlag::DF_INSERT;
+  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.row_val_.cells_ = cols;
   row.row_val_.count_ = 2;
 
@@ -718,7 +720,7 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
 
   OZ(context.init(query_flag, write_store_ctx, allocator, trans_version_range));
 
-  OZ(memtable_->set(param, context, columns_, row, encrypt_meta));
+  OZ(memtable_->set(param, context, columns_, row, encrypt_meta, false));
 
   return ret;
 }

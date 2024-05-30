@@ -615,16 +615,11 @@ int ObSQLSessionInfo::is_adj_index_cost_enabled(bool &enabled, int64_t &stats_co
 }
 
 
-bool ObSQLSessionInfo::is_sqlstat_enabled() const
+bool ObSQLSessionInfo::is_sqlstat_enabled()
 {
   bool bret = false;
   if (lib::is_diagnose_info_enabled()) {
-    int64_t tenant_id = get_effective_tenant_id();
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid()) {
-      bret = tenant_config->_ob_sqlstat_enable;
-      // sqlstat has a dependency on the statistics mechanism, so turning off perf event will turn off sqlstat at the same time.
-    }
+    bret = get_tenant_ob_sqlstat_enable();
   }
   return bret;
 }
@@ -2022,7 +2017,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     } else {
       ObString sql = get_current_query_string();
       audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), ObSQLUtils::get_query_record_size_limit(get_effective_tenant_id()));
+      audit_record_.sql_len_ = min(sql.length(), get_tenant_query_record_size_limit());
       audit_record_.sql_cs_type_ = get_local_collation_connection();
     }
 
@@ -3019,6 +3014,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
+      ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
+      ATOMIC_STORE(&_ob_sqlstat_enable_, tenant_config->_ob_sqlstat_enable);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,

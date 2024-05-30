@@ -173,15 +173,22 @@ void TestTrans::insert_rows(ObLSID &ls_id, ObTabletID &tablet_id, ObTxDesc &tx_d
   ObSEArray<uint64_t, 1> column_ids;
   column_ids.push_back(16); // pk
   ASSERT_EQ(OB_SUCCESS, table_dml_param.convert(&table_schema_, 1000, column_ids));
+  ObStoreCtxGuard store_ctx_guard;
   ObDMLBaseParam dml_param;
   dml_param.timeout_ = ObTimeUtility::current_time() + 100000000;
   dml_param.schema_version_ = 1000;
   dml_param.table_param_ = &table_dml_param;
   dml_param.snapshot_ = snapshot;
+  dml_param.store_ctx_guard_ = &store_ctx_guard;
 
-  auto das = MTL(ObAccessService*);
+  auto as = MTL(ObAccessService*);
   LOG_INFO("storage access by dml");
-  ASSERT_EQ(OB_SUCCESS, das->insert_rows(ls_id,
+  ASSERT_EQ(OB_SUCCESS, as->get_write_store_ctx_guard(ls_id,
+                                                      dml_param.timeout_,
+                                                      tx_desc,
+                                                      snapshot,
+                                                      store_ctx_guard));
+  ASSERT_EQ(OB_SUCCESS, as->insert_rows(ls_id,
                                          tablet_id,
                                          tx_desc,
                                          dml_param,

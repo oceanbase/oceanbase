@@ -24,6 +24,7 @@ namespace storage
 {
 
 class ObLobMetaIterator;
+class ObStoreCtxGuard;
 
 class ObPersistentLobApator : public ObILobApator
 {
@@ -112,9 +113,11 @@ private:
   int prepare_lob_meta_dml(ObLobAccessParam& param);
 
   int build_lob_meta_table_dml(ObLobAccessParam& param);
+
   int build_lob_meta_table_dml(
       ObLobAccessParam& param,
-      ObDMLBaseParam& dml_base_param);
+      ObDMLBaseParam &dml_base_param,
+      ObStoreCtxGuard *store_ctx_guard);
 
   int set_lob_piece_row(
       char* buf,

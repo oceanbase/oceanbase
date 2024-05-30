@@ -303,7 +303,8 @@ private:
   int delete_constraint(common::ObISQLClient &sql_client,
                         const ObTableSchema &table_schema,
                         const int64_t new_schema_version);
-  int add_sequence(const uint64_t tenant_id,
+  int add_sequence(common::ObISQLClient &sql_client,
+                   const uint64_t tenant_id,
                    const uint64_t table_id,
                    const uint64_t column_id,
                    const uint64_t auto_increment,

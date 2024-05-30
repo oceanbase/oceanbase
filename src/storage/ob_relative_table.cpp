@@ -448,6 +448,11 @@ bool ObRelativeTable::is_storage_index_table() const
   return schema_param_->is_storage_index_table();
 }
 
+bool ObRelativeTable::is_index_local_storage() const
+{
+  return schema_param_->is_index_local_storage();
+}
+
 bool ObRelativeTable::can_read_index() const
 {
   return schema_param_->can_read_index();

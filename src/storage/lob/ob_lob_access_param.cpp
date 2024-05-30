@@ -14,6 +14,7 @@
 #include "storage/lob/ob_lob_access_param.h"
 #include "storage/lob/ob_lob_util.h"
 #include "storage/lob/ob_lob_meta.h"
+#include "storage/tx_storage/ob_access_service.h"
 
 namespace oceanbase
 {
@@ -23,6 +24,9 @@ namespace storage
 ObLobAccessParam::~ObLobAccessParam()
 {
   if (OB_NOT_NULL(dml_base_param_)) {
+    if (OB_NOT_NULL(dml_base_param_->store_ctx_guard_)) {
+      dml_base_param_->store_ctx_guard_->~ObStoreCtxGuard();
+    }
     dml_base_param_->~ObDMLBaseParam();
   }
 }

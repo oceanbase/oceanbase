@@ -253,11 +253,6 @@ public:
   void trim_tablet_list();
 
   // dml operation
-  int insert_row(
-      ObRelativeTable &relative_table,
-      ObStoreCtx &store_ctx,
-      const ObColDescIArray &col_descs,
-      const ObStoreRow &row);
   int insert_rows(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -270,6 +265,7 @@ public:
   int insert_row_without_rowkey_check(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
+      const bool check_exist,
       const ObColDescIArray &col_descs,
       const storage::ObStoreRow &row,
       const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);

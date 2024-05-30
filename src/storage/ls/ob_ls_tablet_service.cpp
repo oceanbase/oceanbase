@@ -2830,7 +2830,6 @@ int ObLSTabletService::insert_row(
                             lob_allocator,
                             ObDmlFlag::DF_INSERT);
     ObIAllocator &work_allocator = run_ctx.allocator_;
-    duplicated_rows = nullptr;
     ObStoreRow &tbl_row = run_ctx.tbl_row_;
     const ObRelativeTable &data_table = run_ctx.relative_table_;
     if (OB_FAIL(prepare_dml_running_ctx(&column_ids, nullptr, tablet_handle, run_ctx))) {
@@ -2838,48 +2837,40 @@ int ObLSTabletService::insert_row(
     } else {
       tbl_row.flag_.set_flag(ObDmlFlag::DF_INSERT);
       tbl_row.row_val_ = row;
-      if (OB_FAIL(get_conflict_rows(tablet_handle,
-                                    run_ctx,
-                                    flag,
-                                    duplicated_column_ids,
-                                    tbl_row.row_val_,
-                                    duplicated_rows))) {
-        LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
-      } else if (nullptr == duplicated_rows) {
-        if (OB_FAIL(insert_row_to_tablet(tablet_handle, run_ctx, tbl_row))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-            LOG_WARN("failed to write row", K(ret));
-          }
-
-          if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
-            int tmp_ret = OB_SUCCESS;
-            // For primary key conflicts caused by concurrent insertions within
-            // a statement, we need to return the corresponding duplicated_rows.
-            // However, under circumstances where an exception may unexpectedly
-            // prevent us from reading the conflicting rows within statements,
-            // at such times, it becomes necessary for us to mock the rows.
-            if (OB_TMP_FAIL(get_conflict_rows(tablet_handle,
-                                              run_ctx,
-                                              flag,
-                                              duplicated_column_ids,
-                                              tbl_row.row_val_,
-                                              duplicated_rows))) {
-              LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+      const bool check_exist = !data_table.is_storage_index_table() || data_table.is_unique_index();
+      if (OB_FAIL(insert_row_to_tablet(check_exist,
+                                       tablet_handle,
+                                       run_ctx,
+                                       tbl_row))) {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+          int tmp_ret = OB_SUCCESS;
+          // For primary key conflicts caused by concurrent insertions within
+          // a statement, we need to return the corresponding duplicated_rows.
+          // However, under circumstances where an exception may unexpectedly
+          // prevent us from reading the conflicting rows within statements,
+          // at such times, it becomes necessary for us to mock the rows.
+          if (OB_TMP_FAIL(get_conflict_rows(tablet_handle,
+                                            run_ctx,
+                                            flag,
+                                            duplicated_column_ids,
+                                            tbl_row.row_val_,
+                                            duplicated_rows))) {
+            LOG_WARN("failed to get conflict row(s)", K(ret), K(duplicated_column_ids), K(row));
+            ret = tmp_ret;
+          } else if (nullptr == duplicated_rows) {
+            if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
+              LOG_WARN("failed to mock duplicated row(s)", K(ret), K(duplicated_column_ids), K(row));
               ret = tmp_ret;
-            } else if (nullptr == duplicated_rows) {
-              if (OB_TMP_FAIL(mock_duplicated_rows_(duplicated_rows))) {
-                LOG_WARN("failed to mock duplicated row(s)", K(ret), K(duplicated_column_ids), K(row));
-                ret = tmp_ret;
-              }
             }
           }
-        } else {
-          LOG_DEBUG("succeeded to insert row", K(ret), K(row));
-          affected_rows = 1;
-          EVENT_INC(STORAGE_INSERT_ROW_COUNT);
+        }
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+          LOG_WARN("failed to write row", K(ret));
         }
       } else {
-        ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
+        LOG_DEBUG("succeeded to insert row", K(ret), K(row));
+        affected_rows = 1;
+        EVENT_INC(STORAGE_INSERT_ROW_COUNT);
       }
     }
     lob_allocator.reset();
@@ -3141,7 +3132,10 @@ int ObLSTabletService::put_rows(
       if (cur_time > dml_param.timeout_) {
         ret = OB_TIMEOUT;
         LOG_WARN("query timeout", K(ret), K(cur_time), K(dml_param));
-      } else if (OB_FAIL(insert_row_to_tablet(tmp_handle, run_ctx, tbl_row))) {
+      } else if (OB_FAIL(insert_row_to_tablet(false/*check_exist*/,
+                                              tmp_handle,
+                                              run_ctx,
+                                              tbl_row))) {
         if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
           LOG_WARN("failed to write row", K(ret));
         }
@@ -3919,7 +3913,7 @@ int ObLSTabletService::insert_tablet_rows(
   int ret = OB_SUCCESS;
   ObRelativeTable &table = run_ctx.relative_table_;
   const bool check_exists = !table.is_storage_index_table() || table.is_unique_index();
-  bool exists = false;
+
   // 1. Defensive checking of new rows.
   if (GCONF.enable_defensive_check()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
@@ -3930,21 +3924,7 @@ int ObLSTabletService::insert_tablet_rows(
     }
   }
 
-  // 2. Check uniqueness constraint in memetable only(active + frozen).
-  // It would be more efficient and elegant to completely merge the uniqueness constraint
-  // and write conflict checking, but the implementation currently is to minimize intrusion
-  // into the memtable.
-  if (OB_FAIL(ret)) {
-  } else if (check_exists && OB_FAIL(tablet_handle.get_obj()->rowkeys_exists(run_ctx.store_ctx_, table,
-                                                                      rows_info, exists))) {
-    LOG_WARN("Failed to check the uniqueness constraint", K(ret), K(rows_info));
-  } else if (exists) {
-    ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-    blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
-    LOG_WARN("Rowkey already exist", K(ret), K(table), K(duplicate_rowkey));
-  }
-
-  // 3. Insert rows with uniqueness constraint and write conflict checking.
+  // 2. Insert rows with uniqueness constraint and write conflict checking.
   // Check write conflict in memtable + sstable.
   // Check uniqueness constraint in sstable only.
   if (OB_SUCC(ret)) {
@@ -4047,23 +4027,6 @@ int ObLSTabletService::insert_lob_col(
   return ret;
 }
 
-int ObLSTabletService::check_lob_tablet_valid(ObTabletHandle &data_tablet)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid_aux_lob_table = false;
-  ObTabletBindingMdsUserData ddl_data;
-  if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
-  } else {
-    is_valid_aux_lob_table = ddl_data.lob_meta_tablet_id_.is_valid() && ddl_data.lob_piece_tablet_id_.is_valid();
-    if (!is_valid_aux_lob_table) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("aux lob table must valid when lob column exist", K(ret), K(ddl_data));
-    }
-  }
-  return ret;
-}
-
 int ObLSTabletService::insert_lob_tablet_row(
     ObTabletHandle &data_tablet,
     ObDMLRunningCtx &run_ctx,
@@ -4072,7 +4035,6 @@ int ObLSTabletService::insert_lob_tablet_row(
   int ret = OB_SUCCESS;
   int64_t col_cnt = run_ctx.col_descs_->count();
   ObLobManager *lob_mngr = MTL(ObLobManager*);
-  bool check_lob = false;
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[STORAGE_LOB]failed to get lob manager handle.", K(ret));
@@ -4086,15 +4048,7 @@ int ObLSTabletService::insert_lob_tablet_row(
       if (obj.is_null() || obj.is_nop_value()) {
         // do nothing
       } else if (column.col_type_.is_lob_storage()) {
-        if (!check_lob) {
-          if (OB_FAIL(check_lob_tablet_valid(data_tablet))) {
-            LOG_WARN("failed to check_lob_tablet_valid", K(ret), K(data_tablet));
-          } else {
-            check_lob = true;
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if(OB_FAIL(insert_lob_col(run_ctx, column, obj, nullptr, nullptr))) {
+        if(OB_FAIL(insert_lob_col(run_ctx, column, obj, nullptr, nullptr))) {
           LOG_WARN("[STORAGE_LOB]failed to insert lob col.", K(ret), K(row), K(i));
         }
       }
@@ -4480,7 +4434,6 @@ int ObLSTabletService::process_lob_row(
     ObStoreRow &new_row)
 {
   int ret = OB_SUCCESS;
-  bool check_lob = false;
   if (OB_UNLIKELY(old_row.row_val_.get_count() != new_row.row_val_.get_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[STORAGE_LOB]invalid args", K(old_row), K(new_row), K(ret));
@@ -4502,13 +4455,6 @@ int ObLSTabletService::process_lob_row(
           }
         }
         if (is_update) {
-          if (!check_lob) {
-            if (OB_FAIL(check_lob_tablet_valid(tablet_handle))) {
-              LOG_WARN("failed to check_lob_tablet_valid", K(ret), K(tablet_handle));
-            } else {
-              check_lob = true;
-            }
-          }
           // get new lob locator
           ObString new_lob_str = (new_obj.is_null() || new_obj.is_nop_value())
                                  ? ObString(0, nullptr) : new_obj.get_string();
@@ -4705,7 +4651,11 @@ int ObLSTabletService::process_old_row(
       del_row.flag_.set_flag(ObDmlFlag::DF_DELETE);
       if (!is_delete_total_quantity_log) {
         if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-            run_ctx.store_ctx_, col_descs, del_row, run_ctx.dml_param_.encrypt_meta_))) {
+                                                                             run_ctx.store_ctx_,
+                                                                             false /*check_exist*/,
+                                                                             col_descs,
+                                                                             del_row,
+                                                                             run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to write data tablet row", K(ret), K(del_row));
           }
@@ -4717,7 +4667,12 @@ int ObLSTabletService::process_old_row(
         del_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
         ObSEArray<int64_t, 8> update_idx;
         if (OB_FAIL(tablet_handle.get_obj()->update_row(relative_table,
-            run_ctx.store_ctx_, col_descs, update_idx, del_row, new_tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
+                                                        run_ctx.store_ctx_,
+                                                        col_descs,
+                                                        update_idx,
+                                                        del_row,
+                                                        new_tbl_row,
+                                                        run_ctx.dml_param_.encrypt_meta_))) {
           if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
             LOG_WARN("failed to write data tablet row", K(ret), K(del_row), K(new_tbl_row));
           }
@@ -4798,49 +4753,45 @@ int ObLSTabletService::process_data_table_row(
         K(is_update_total_quantity_log), K(rowkey_change));
   } else {
     const ObColDescIArray &col_descs = *run_ctx.col_descs_;
-    bool exists = false;
-    if (rowkey_change && OB_FAIL(data_tablet.get_obj()->rowkey_exists(
-                                  relative_table,
-                                  ctx,
-                                  new_tbl_row.row_val_,
-                                  exists))) {
-      LOG_WARN("failed to check rowkey exists", K(ret), K(new_tbl_row));
-    } else if (exists) {
-      char buffer[OB_TMP_BUF_SIZE_256];
-      ObStoreRowkey rowkey;
-      ret = OB_ERR_PRIMARY_KEY_DUPLICATE;
-      if (OB_SUCCESS != rowkey.assign(new_tbl_row.row_val_.cells_, relative_table.get_rowkey_column_num())) {
-        LOG_WARN("Failed to assign rowkey", K(new_tbl_row));
-      } else if (OB_SUCCESS != extract_rowkey(relative_table, rowkey, buffer, OB_TMP_BUF_SIZE_256, tz_info)) {
-        LOG_WARN("extract rowkey failed", K(rowkey));
-      } else {
-        ObString index_name = "PRIMARY";
-        if (relative_table.is_index_table()) {
-          relative_table.get_index_name(index_name);
+    ObStoreRow new_row;
+    new_row.flag_.set_flag(rowkey_change ? ObDmlFlag::DF_INSERT : ObDmlFlag::DF_UPDATE);
+    new_row.row_val_ = new_tbl_row.row_val_;
+
+    if (is_update_total_quantity_log && !rowkey_change) {
+      ObStoreRow old_row;
+      old_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
+      old_row.row_val_ = old_tbl_row.row_val_;
+      if (OB_FAIL(data_tablet.get_obj()->update_row(relative_table,
+          ctx, col_descs, update_idx, old_row, new_row, run_ctx.dml_param_.encrypt_meta_))) {
+        if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+          LOG_WARN("failed to update to row", K(ret), K(old_row), K(new_row));
         }
-        LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, buffer, index_name.length(), index_name.ptr());
       }
-      LOG_WARN("rowkey already exists", K(ret), K(new_tbl_row));
     } else {
-      ObStoreRow new_row;
-      new_row.flag_.set_flag(rowkey_change ? ObDmlFlag::DF_INSERT : ObDmlFlag::DF_UPDATE);
-      new_row.row_val_ = new_tbl_row.row_val_;
-      if (is_update_total_quantity_log && !rowkey_change) {
-        ObStoreRow old_row;
-        old_row.flag_.set_flag(ObDmlFlag::DF_UPDATE);
-        old_row.row_val_ = old_tbl_row.row_val_;
-        if (OB_FAIL(data_tablet.get_obj()->update_row(relative_table,
-            ctx, col_descs, update_idx, old_row, new_row, run_ctx.dml_param_.encrypt_meta_))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-            LOG_WARN("failed to update to row", K(ret), K(old_row), K(new_row));
+      const bool check_exist = rowkey_change && (!relative_table.is_storage_index_table() || relative_table.is_unique_index());
+      if (OB_FAIL(data_tablet.get_obj()->insert_row_without_rowkey_check(relative_table,
+                                                                         ctx,
+                                                                         check_exist,
+                                                                         col_descs,
+                                                                         new_row,
+                                                                         run_ctx.dml_param_.encrypt_meta_))) {
+        if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+          char buffer[OB_TMP_BUF_SIZE_256];
+          ObStoreRowkey rowkey;
+          if (OB_SUCCESS != rowkey.assign(new_tbl_row.row_val_.cells_, relative_table.get_rowkey_column_num())) {
+            LOG_WARN("Failed to assign rowkey", K(new_tbl_row));
+          } else if (OB_SUCCESS != extract_rowkey(relative_table, rowkey, buffer, OB_TMP_BUF_SIZE_256, tz_info)) {
+            LOG_WARN("extract rowkey failed", K(rowkey));
+          } else {
+            ObString index_name = "PRIMARY";
+            if (relative_table.is_index_table()) {
+              relative_table.get_index_name(index_name);
+            }
+            LOG_USER_ERROR(OB_ERR_PRIMARY_KEY_DUPLICATE, buffer, index_name.length(), index_name.ptr());
           }
-        }
-      } else {
-        if (OB_FAIL(data_tablet.get_obj()->insert_row_without_rowkey_check(relative_table,
-            ctx, col_descs, new_row, run_ctx.dml_param_.encrypt_meta_))) {
-          if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
-            LOG_WARN("failed to update to row", K(ret), K(new_row));
-          }
+          LOG_WARN("rowkey already exists", K(ret), K(new_tbl_row));
+        } else if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
+          LOG_WARN("failed to update to row", K(ret), K(new_row));
         }
       }
     }
@@ -5222,9 +5173,10 @@ int ObLSTabletService::get_next_row_from_iter(
 }
 
 int ObLSTabletService::insert_row_to_tablet(
-    ObTabletHandle &tablet_handle,
-    ObDMLRunningCtx &run_ctx,
-    ObStoreRow &tbl_row)
+  const bool check_exist,
+  ObTabletHandle &tablet_handle,
+  ObDMLRunningCtx &run_ctx,
+  ObStoreRow &tbl_row)
 {
   int ret = OB_SUCCESS;
   ObStoreCtx &store_ctx = run_ctx.store_ctx_;
@@ -5248,6 +5200,7 @@ int ObLSTabletService::insert_row_to_tablet(
     if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(
                                                 relative_table,
                                                 store_ctx,
+                                                check_exist /*check_exist*/,
                                                 col_descs,
                                                 tbl_row,
                                                 run_ctx.dml_param_.encrypt_meta_))) {
@@ -5418,7 +5371,11 @@ int ObLSTabletService::delete_row_in_tablet(
     LOG_WARN("failed to delete lob rows.", K(ret), K(tbl_row), K(row));
   } else if (!dml_param.is_total_quantity_log_) {
     if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(relative_table,
-        ctx, *run_ctx.col_descs_, tbl_row, dml_param.encrypt_meta_))) {
+                                                                         ctx,
+                                                                         false /*check_exist*/,
+                                                                         *run_ctx.col_descs_,
+                                                                         tbl_row,
+                                                                         dml_param.encrypt_meta_))) {
       if (OB_TRY_LOCK_ROW_CONFLICT != ret && OB_TRANSACTION_SET_VIOLATION != ret) {
         LOG_WARN("failed to set row", K(ret), K(*run_ctx.col_descs_), K(tbl_row));
       }

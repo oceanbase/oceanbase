@@ -42,6 +42,7 @@ ObTableIterParam::ObTableIterParam()
       has_lob_column_out_(false),
       is_for_foreign_check_(false),
       limit_prefetch_(false),
+      is_non_unique_local_index_(false),
       ss_rowkey_prefix_cnt_(0),
       op_(nullptr),
       pd_storage_flag_(0)
@@ -73,6 +74,7 @@ void ObTableIterParam::reset()
   is_for_foreign_check_ = false;
   limit_prefetch_ = false;
   op_ = nullptr;
+  is_non_unique_local_index_ = false;
 }
 
 bool ObTableIterParam::is_valid() const
@@ -135,6 +137,7 @@ DEF_TO_STRING(ObTableIterParam)
        K_(has_lob_column_out),
        K_(is_for_foreign_check),
        K_(limit_prefetch),
+       K_(is_non_unique_local_index),
        K_(ss_rowkey_prefix_cnt));
   J_OBJ_END();
   return pos;

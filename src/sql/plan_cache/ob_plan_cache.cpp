@@ -2319,6 +2319,7 @@ OB_INLINE int ObPlanCache::construct_plan_cache_key(ObSQLSessionInfo &session,
   pc_key.namespace_ = ns;
   pc_key.sys_vars_str_ = session.get_sys_var_in_pc_str();
   pc_key.config_str_ = session.get_config_in_pc_str();
+  pc_key.sys_var_config_hash_val_ = session.get_sys_var_config_hash_val();
   pc_key.is_weak_read_ = is_weak;
   return ret;
 }

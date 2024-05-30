@@ -61,14 +61,24 @@ int ObLSTabletService::insert_tablet_rows(
   //   TRANS_LOG(WARN, "rowkeys already exist", K(ret), K(table), K(rows_info));
   // }
 
-  TRANS_LOG(INFO, "qqc debug2", K(run_ctx.store_ctx_.mvcc_acc_ctx_.tx_id_));
-
-  for (int64_t k = 0; OB_SUCC(ret) && k < row_count; k++) {
-    ObStoreRow &tbl_row = rows[k];
-    if (OB_FAIL(tablet_handle.get_obj()->insert_row_without_rowkey_check(table, run_ctx.store_ctx_,
-        *run_ctx.col_descs_, tbl_row, run_ctx.dml_param_.encrypt_meta_))) {
-      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-        TRANS_LOG(WARN, "fail to insert row to data tablet", K(ret), K(tbl_row));
+  // 3. Insert rows with uniqueness constraint and write conflict checking.
+  // Check write conflict in memtable + sstable.
+  // Check uniqueness constraint in sstable only.
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(tablet_handle.get_obj()->insert_rows(table,
+                                                     run_ctx.store_ctx_,
+                                                     rows,
+                                                     rows_info,
+                                                     check_exists,
+                                                     *run_ctx.col_descs_,
+                                                     row_count,
+                                                     run_ctx.dml_param_.encrypt_meta_))) {
+      if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
+        blocksstable::ObDatumRowkey &duplicate_rowkey = rows_info.get_conflict_rowkey();
+        TRANS_LOG(WARN, "Rowkey already exist", K(ret), K(table), K(duplicate_rowkey),
+                 K(rows_info.get_conflict_idx()));
+      } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        TRANS_LOG(WARN, "Failed to insert rows to tablet", K(ret), K(rows_info));
       }
     }
   }
