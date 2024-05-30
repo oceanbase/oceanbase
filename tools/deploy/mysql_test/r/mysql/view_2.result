@@ -393,7 +393,7 @@ insert into t1 values(1, 1);
 create view v as select * from t1 where not exists(select * from t1 where c1>0);
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS select `view`.`t1`.`c1` AS `c1`,`view`.`t1`.`c2` AS `c2` from `view`.`t1` where not exists((select `t1`.`c1`,`t1`.`c2` from `view`.`t1` `t1` where (`t1`.`c1` > 0)))	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS select `view`.`t1`.`c1` AS `c1`,`view`.`t1`.`c2` AS `c2` from `view`.`t1` where not exists((select `view`.`t1`.`c1`,`view`.`t1`.`c2` from `view`.`t1` where (`view`.`t1`.`c1` > 0)))	utf8mb4	utf8mb4_general_ci
 select * from v;
 c1	c2
 create view xy as select 123 from dual where not exists (select 1 from dual) limit 1;
@@ -416,7 +416,7 @@ create table t1 (k int, v int);
 create view v as (select k, v from t1) union (select 1, 1 from t1);
 show create view v;
 View	Create View	character_set_client	collation_connection
-v	CREATE VIEW `v` AS (select `view`.`t1`.`k` AS `k`,`view`.`t1`.`v` AS `v` from `view`.`t1`) union (select 1 AS `1`,1 AS `1` from `view`.`t1` `t1`)	utf8mb4	utf8mb4_general_ci
+v	CREATE VIEW `v` AS (select `view`.`t1`.`k` AS `k`,`view`.`t1`.`v` AS `v` from `view`.`t1`) union (select 1 AS `1`,1 AS `1` from `view`.`t1`)	utf8mb4	utf8mb4_general_ci
 drop table if exists t1;
 drop table if exists t2;
 CREATE TABLE `t11` ( `a` int(11) NOT NULL, `b` int(11) DEFAULT NULL, `c` int(11) DEFAULT NULL, PRIMARY KEY (`a`) );
