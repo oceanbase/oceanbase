@@ -105,6 +105,8 @@ OB_DEF_DESERIALIZE(ObDynamicSamplePieceMsg)
           }
           if (OB_FAIL(ret) && nullptr != tmp_store) {
             tmp_store->~ObChunkDatumStore();
+            // The corresponding memory does not need to be manually released;
+            // it will be automatically freed upon the destruction of arena_.
           }
         }
       }
