@@ -8023,6 +8023,7 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
 
       ObArray<uint64_t> gtt_trans_scope_ids;
       ObArray<uint64_t> gtt_session_scope_ids;
+      ObArray<uint64_t> immediate_refresh_external_table_ids;
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_table->count(); i++) {
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
           const ObTableSchema *table_schema = NULL;
@@ -8042,10 +8043,15 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
               if (OB_FAIL(gtt_session_scope_ids.push_back(object_id))) {
                 LOG_WARN("fail to push back", K(ret));
               }
+            } else if (table_schema->is_external_table() && table_schema->is_external_table_immediate_refresh()) {
+              if (OB_FAIL(add_var_to_array_no_dup(immediate_refresh_external_table_ids, (uint64_t)object_id))) {
+                LOG_WARN("fail to push back", K(ret));
+              }
             }
             LOG_DEBUG("plan contain temporary table",
                       "trx level", table_schema->is_oracle_trx_tmp_table(),
-                      "session level", table_schema->is_oracle_sess_tmp_table());
+                      "session level", table_schema->is_oracle_sess_tmp_table(),
+                      "auto refresh external_table", table_schema->is_external_table());
           }
         }
       }
@@ -8053,6 +8059,8 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
         if (OB_FAIL(phy_plan.get_gtt_trans_scope_ids().assign(gtt_trans_scope_ids))) {
           LOG_WARN("fail to assign array", K(ret));
         } else if (OB_FAIL(phy_plan.get_gtt_session_scope_ids().assign(gtt_session_scope_ids))) {
+          LOG_WARN("fail to assign array", K(ret));
+        } else if (OB_FAIL(phy_plan.get_immediate_refresh_external_table_ids().assign(immediate_refresh_external_table_ids))) {
           LOG_WARN("fail to assign array", K(ret));
         }
       }

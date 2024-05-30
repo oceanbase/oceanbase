@@ -4844,6 +4844,16 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         LOG_WARN("fail to set all local session vars", K(ret));
       }
     }
+    if (OB_SUCC(ret) && NULL != phy_plan) {
+      CK (pc_ctx.exec_ctx_.get_sql_ctx()->schema_guard_ != NULL);
+      for (int64_t i = 0; OB_SUCC(ret) && i < phy_plan->get_immediate_refresh_external_table_ids().count(); i++) {
+        int64_t object_id = phy_plan->get_immediate_refresh_external_table_ids().at(i);
+        OZ (ObExternalTableFileManager::get_instance().refresh_external_table(session.get_effective_tenant_id(),
+                                                                              object_id,
+                                                                              *pc_ctx.exec_ctx_.get_sql_ctx()->schema_guard_,
+                                                                              pc_ctx.exec_ctx_));
+      }
+    }
   } else {
     // not phy_plan, ignore
   }

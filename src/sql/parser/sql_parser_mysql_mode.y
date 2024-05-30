@@ -264,7 +264,7 @@ END_P SET_VAR DELIMITER
         ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ARRAY ASCII ASIS AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AVG AVG_ROW_LENGTH
-        ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN
+        ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -7122,6 +7122,30 @@ TABLE_MODE opt_equal_mark STRING_VALUE
 | lob_storage_clause
 {
   $$ = $1;
+}
+| AUTO_REFRESH opt_equal_mark OFF
+{
+  (void)($2) ; /* make bison mute */
+  ParseNode *int_node = NULL;
+  malloc_terminal_node(int_node, result->malloc_pool_, T_INT);
+  int_node->value_ = 0;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_TABLE_AUTO_REFRESH, 1, int_node);
+}
+| AUTO_REFRESH opt_equal_mark IMMEDIATE
+{
+  (void)($2) ; /* make bison mute */
+  ParseNode *int_node = NULL;
+  malloc_terminal_node(int_node, result->malloc_pool_, T_INT);
+  int_node->value_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_TABLE_AUTO_REFRESH, 1, int_node);
+}
+| AUTO_REFRESH opt_equal_mark INTERVAL
+{
+  (void)($2) ; /* make bison mute */
+  ParseNode *int_node = NULL;
+  malloc_terminal_node(int_node, result->malloc_pool_, T_INT);
+  int_node->value_ = 2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_TABLE_AUTO_REFRESH, 1, int_node);
 }
 ;
 
@@ -21558,6 +21582,7 @@ ACCOUNT
 |       AUTOEXTEND_SIZE
 |       AUTO_INCREMENT
 |       AUTO_INCREMENT_MODE
+|       AUTO_REFRESH
 |       AVG
 |       AVG_ROW_LENGTH
 |       BACKUP

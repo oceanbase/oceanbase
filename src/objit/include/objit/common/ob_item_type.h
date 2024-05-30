@@ -2525,7 +2525,7 @@ typedef enum ObItemType
   T_MV_REFRESH_OPT,
   T_MV_BUILD_OPT,
   T_PSEUDO_EXTERNAL_FILE_ROW,
-
+  T_EXTERNAL_TABLE_AUTO_REFRESH,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
