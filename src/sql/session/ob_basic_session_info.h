@@ -231,7 +231,7 @@ public:
 
   static const int64_t MIN_CUR_QUERY_LEN = 512;
   static const int64_t MAX_CUR_QUERY_LEN = 16 * 1024;
-  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024 * 1024;
+  static const int64_t MAX_QUERY_STRING_LEN = 64 * 1024;
   class TransFlags
   {
   public:
