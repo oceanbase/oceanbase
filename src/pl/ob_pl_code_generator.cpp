@@ -8408,8 +8408,10 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_prototype())) {
     LOG_WARN("failed to generate a pointer", K(ret));
+#if !defined(__powerpc64__)
   } else if (OB_FAIL(func_.set_personality(get_eh_service().eh_personality_))) {
     LOG_WARN("failed to set_personality", K(ret));
+#endif
   } else if (OB_FAIL(helper_.create_block(ObString("entry"), func_, entry_))) {
     LOG_WARN("failed to create block", K(ret));
   } else if (OB_FAIL(helper_.create_block(ObString("exit"), func_, exit_))) {
