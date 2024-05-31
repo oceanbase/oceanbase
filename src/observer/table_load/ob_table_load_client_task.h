@@ -107,6 +107,7 @@ private:
                           sql::ObFreeSessionCtx &free_session_ctx);
   int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
 
+  int get_column_idxs(ObIArray<int64_t> &column_idxs) const;
   int init_instance();
   int commit_instance();
   void destroy_instance();

@@ -448,6 +448,8 @@ int ObTableLoadService::check_support_direct_load(
     bool has_udt_column = false;
     bool has_fts_index = false;
     bool has_multivalue_index = false;
+    bool has_invisible_column = false;
+    bool has_unused_column = false;
     if (OB_FAIL(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
@@ -506,6 +508,22 @@ int ObTableLoadService::check_support_direct_load(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("direct-load does not support table has udt column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has udt column");
+    }
+    // check has invisible column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_invisible_column(table_schema, has_invisible_column))) {
+      LOG_WARN("fail to check has invisible column", KR(ret));
+    } else if (has_invisible_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has invisible column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has invisible column");
+    }
+    // check has unused column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_unused_column(table_schema, has_unused_column))) {
+      LOG_WARN("fail to check has unused column", KR(ret));
+    } else if (has_unused_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has unused column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "direct-load does not support table has unused column");
     }
     // check if table has mlog
     else if (table_schema->has_mlog_table()) {

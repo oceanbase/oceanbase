@@ -110,8 +110,9 @@ int ObTableLoadSchema::get_table_schema(uint64_t tenant_id, uint64_t table_id,
   return ret;
 }
 
-int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAllocator &allocator,
-                                        ObIArray<ObString> &column_names)
+int ObTableLoadSchema::get_user_column_names(const ObTableSchema *table_schema,
+                                             ObIAllocator &allocator,
+                                             ObIArray<ObString> &column_names)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(table_schema)) {
@@ -131,7 +132,9 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
       } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is null", KR(ret));
-      } else if (!column_schema->is_hidden() && !column_schema->is_invisible_column()) {
+      } else if (column_schema->is_hidden()) {
+        // 不显示隐藏pk
+      } else {
         ObString column_name;
         if (OB_FAIL(
               ob_write_string(allocator, column_schema->get_column_name_str(), column_name))) {
@@ -145,46 +148,32 @@ int ObTableLoadSchema::get_column_names(const ObTableSchema *table_schema, ObIAl
   return ret;
 }
 
-int ObTableLoadSchema::get_column_idxs(uint64_t tenant_id, uint64_t table_id,
-                                       ObIArray<int64_t> &column_idxs)
+int ObTableLoadSchema::get_user_column_ids(const ObTableSchema *table_schema,
+                                           ObIArray<int64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
-  column_idxs.reset();
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else {
-    ret = get_column_idxs(table_schema, column_idxs);
-  }
-  return ret;
-}
-
-int ObTableLoadSchema::get_column_idxs(const ObTableSchema *table_schema,
-                                       ObIArray<int64_t> &column_idxs)
-{
-  int ret = OB_SUCCESS;
-  column_idxs.reset();
+  column_ids.reset();
   if (OB_ISNULL(table_schema)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(table_schema));
   } else {
-    ObArray<ObColDesc> column_descs;
-    column_descs.set_tenant_id(MTL_ID());
-    if (OB_FAIL(table_schema->get_column_ids(column_descs, false))) {
-      LOG_WARN("fail to get column ids", KR(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && (i < column_descs.count()); ++i) {
-      ObColDesc &col_desc = column_descs.at(i);
-      const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
-      if (OB_ISNULL(column_schema)) {
+    ObColumnIterByPrevNextID iter(*table_schema);
+    const ObColumnSchemaV2 *column_schema = NULL;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter.next(column_schema))) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("fail to iterate all table columns", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(column_schema)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("The column is null", KR(ret));
-      } else if (!column_schema->is_hidden() && !column_schema->is_invisible_column()) {
-        const int64_t idx = col_desc.col_id_ - OB_APP_MIN_COLUMN_ID;
-        if (OB_FAIL(column_idxs.push_back(idx))) {
-          LOG_WARN("fail to push back idx", KR(ret), K(idx));
-        }
+      } else if (column_schema->is_hidden()) {
+        // 不显示隐藏pk
+      } else if (OB_FAIL(column_ids.push_back(column_schema->get_column_id()))) {
+        LOG_WARN("fail to push back column id", KR(ret));
       }
     }
   }
@@ -272,6 +261,42 @@ int ObTableLoadSchema::get_lob_meta_tid(
     // bypass
   } else {
     lob_meta_table_id = data_table_schema->get_aux_lob_meta_tid();
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::check_has_invisible_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else if (column_schema->is_invisible_column()) {
+      bret = true;
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else if (column_schema->is_unused()) {
+      bret = true;
+      break;
+    }
   }
   return ret;
 }
