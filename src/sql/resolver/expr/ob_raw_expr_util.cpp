@@ -8508,6 +8508,8 @@ int ObRawExprUtils::build_common_aggr_expr(ObRawExprFactory &expr_factory,
   } else if (OB_ISNULL(aggr_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("agg_expr is null", K(ret), K(aggr_expr));
+  } else if (OB_FAIL(aggr_expr->add_flag(IS_INNER_ADDED_EXPR))) {
+    LOG_WARN("failed to add flag", K(ret));
   } else if (OB_FAIL(aggr_expr->add_real_param_expr(param_expr))) {
     LOG_WARN("failed to add param expr to agg expr", K(ret));
   } else if (OB_FAIL(aggr_expr->formalize(session_info))) {

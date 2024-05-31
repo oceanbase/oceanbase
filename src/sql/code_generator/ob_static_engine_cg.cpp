@@ -6320,6 +6320,11 @@ int ObStaticEngineCG::generate_spec(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected output type of subplan scan", K(ret), K(from->get_result_type()),
                   K(col_expr->get_result_type()));
+        } else if (ob_is_decimal_int_tc(from_type) &&
+            ObRawExprUtils::decimal_int_need_cast(from->get_accuracy(), col_expr->get_accuracy())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("decimal int datum meta is not match", K(ret), K(from->get_accuracy()),
+                                                          K(col_expr->get_accuracy()));
         }
         OZ(generate_rt_expr(*from, rt_expr));
         OZ(spec.projector_.push_back(rt_expr));
