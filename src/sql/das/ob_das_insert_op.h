@@ -126,7 +126,6 @@ public:
   virtual int get_next_row() override;
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset() override;
-  virtual int link_extra_result(ObDASExtraData &extra_result) override;
   int init_result_newrow_iter(const ObjMetaFixedArray *output_types);
   ObDASWriteBuffer &get_result_buffer() { return result_buffer_; }
   int64_t get_affected_rows() const { return affected_rows_; }

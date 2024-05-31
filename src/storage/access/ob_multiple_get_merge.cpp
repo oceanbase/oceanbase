@@ -207,6 +207,7 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
           STORAGE_LOG(WARN, "tmp_row is NULL", K(ret));
         } else {
           // fuse working row and result row
+          REALTIME_MONITOR_INC_READ_ROW_CNT(iters_[i], access_ctx_);
           if (!final_result) {
             if (OB_FAIL(ObRowFuse::fuse_row(*tmp_row, fuse_row, nop_pos_, final_result))) {
               STORAGE_LOG(WARN, "failed to merge rows", K(*tmp_row), K(row), K(ret));
@@ -256,16 +257,6 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
     }
   }
   return ret;
-}
-
-void ObMultipleGetMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.multi_get_stat_.call_cnt_++;
-  stat.multi_get_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-  if (access_ctx_->query_flag_.is_index_back()) {
-    stat.index_back_stat_.call_cnt_++;
-    stat.index_back_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
-  }
 }
 
 }

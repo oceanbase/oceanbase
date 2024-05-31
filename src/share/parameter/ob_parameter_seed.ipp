@@ -1679,6 +1679,9 @@ DEF_BOOL(_ob_enable_direct_load, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(enable_dblink, OB_CLUSTER_PARAMETER, "True",
          "Enable or disable dblink",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_display_mysql_version, OB_CLUSTER_PARAMETER, "5.7.25", common::ObMySQLVersionLengthChecker,
+        "dynamic mysql version of mysql mode observer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_px_join_skew_handling, OB_TENANT_PARAMETER, "False",
         "enables skew handling for parallel joins. The  default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

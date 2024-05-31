@@ -2090,6 +2090,8 @@ const char *ObJoinHint::get_dist_algo_str(DistAlgo dist_algo)
     case DistAlgo::DIST_EXT_PARTITION_WISE: return  "NONE NONE";
     case DistAlgo::DIST_NONE_ALL:           return  "NONE ALL";
     case DistAlgo::DIST_ALL_NONE:           return  "ALL NONE";
+    case DistAlgo::DIST_RANDOM_ALL:         return  "RANDOM ALL";
+    case DistAlgo::DIST_HASH_ALL:           return  "HASH ALL";
     default:  return NULL;
   }
   return  NULL;

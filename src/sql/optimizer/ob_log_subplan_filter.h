@@ -83,6 +83,7 @@ public:
   bool is_my_subquery_expr(const ObQueryRefRawExpr *query_expr);
   bool is_my_exec_expr(const ObRawExpr *expr);
   bool is_my_onetime_expr(const ObRawExpr *expr);
+  inline bool is_in_random_shuffle_senario() { return dist_algo_ == DistAlgo::DIST_RANDOM_ALL || dist_algo_ == DistAlgo::DIST_HASH_ALL; }
 
   int get_exists_style_exprs(ObIArray<ObRawExpr*> &subquery_exprs);
 
@@ -140,6 +141,7 @@ private:
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+
 protected:
   DistAlgo dist_algo_;
   common::ObSEArray<ObQueryRefRawExpr *, 8, common::ModulePageAllocator, true> subquery_exprs_;

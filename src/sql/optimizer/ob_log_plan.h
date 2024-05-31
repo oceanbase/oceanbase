@@ -662,6 +662,19 @@ public:
                                                            const ObIArray<ObExecParamRawExpr *> &params,
                                                            ObExchangeInfo &exch_info);
 
+  /**
+   * @brief Compute to check whether we need add random shuffle exchange for subplan filter
+   * @param[in] top  Left child of subplan filter operator
+   * @param[in] params  Exec exprs of subplan filter operator, used to construct Hash Shuffle Exchange
+   * @param[in] dist_algo
+   * @param[out] exch_info Shuffle exchange operator info that generate
+   * @return
+   */
+  int compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top,
+                                                 const ObIArray<ObExecParamRawExpr *> &params,
+                                                 const DistAlgo dist_algo,
+                                                 ObExchangeInfo &exch_info);
+
   int find_base_sharding_table_scan(const ObLogicalOperator &op,
                                     const ObLogTableScan *&tsc);
 

@@ -19,6 +19,7 @@
 #include "sql/engine/ob_des_exec_context.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "storage/concurrency_control/ob_data_validation_service.h"
+#include "sql/engine/ob_mock_vec2.h"
 
 namespace oceanbase
 {
@@ -195,6 +196,7 @@ int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
     snapshot_ = &remote_info->snapshot_;
     scan_rtdef_->stmt_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
     scan_rtdef_->scan_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
+    scan_rtdef_->tsc_monitor_info_ = remote_info->tsc_monitor_info_;
     if (OB_FAIL(scan_rtdef_->init_pd_op(*remote_info->exec_ctx_, *scan_ctdef_))) {
       LOG_WARN("init scan pushdown operator failed", K(ret));
     } else {
@@ -206,6 +208,7 @@ int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
       ObDASScanRtDef *lookup_rtdef = get_lookup_rtdef();
       lookup_rtdef->stmt_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
       lookup_rtdef->scan_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
+      lookup_rtdef->tsc_monitor_info_ = remote_info->tsc_monitor_info_;
       if (OB_FAIL(lookup_rtdef->init_pd_op(*remote_info->exec_ctx_, *lookup_ctdef))) {
         LOG_WARN("init lookup pushdown operator failed", K(ret));
       } else {
@@ -253,6 +256,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.pd_storage_flag_ = scan_ctdef_->pd_expr_spec_.pd_storage_flag_;
   scan_param_.fb_snapshot_ = scan_rtdef_->fb_snapshot_;
   scan_param_.fb_read_tx_uncommitted_ = scan_rtdef_->fb_read_tx_uncommitted_;
+  scan_param_.main_table_scan_stat_.tsc_monitor_info_ = scan_rtdef_->tsc_monitor_info_;
   if (scan_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = trans_desc_;
   }
@@ -520,6 +524,8 @@ int ObDASScanOp::decode_task_result(ObIDASTaskResult *task_result)
 #if !defined(NDEBUG)
   CK(typeid(*task_result) == typeid(ObDASScanResult));
   CK(task_id_ == task_result->get_task_id());
+  CK(OB_NOT_NULL(scan_rtdef_));
+  CK(OB_NOT_NULL(scan_rtdef_->tsc_monitor_info_));
 #endif
   if (need_check_output_datum()) {
     reset_access_datums_ptr();
@@ -530,6 +536,14 @@ int ObDASScanOp::decode_task_result(ObIDASTaskResult *task_result)
     LOG_WARN("init scan result iterator failed", K(ret));
   } else {
     result_ = scan_result;
+    // Aggregate the remote TSC statistical information into the local monitor node.
+    if (OB_NOT_NULL(scan_rtdef_->tsc_monitor_info_)) {
+      ObTSCMonitorInfo &tsc_monitor_info = *scan_rtdef_->tsc_monitor_info_;
+      tsc_monitor_info.add_io_read_bytes(scan_result->get_io_read_bytes());
+      tsc_monitor_info.add_ssstore_read_bytes(scan_result->get_ssstore_read_bytes());
+      tsc_monitor_info.add_ssstore_read_row_cnt(scan_result->get_ssstore_read_row_cnt());
+      tsc_monitor_info.add_memstore_read_row_cnt(scan_result->get_memstore_read_row_cnt());
+    }
   }
   return ret;
 }
@@ -611,6 +625,13 @@ int ObDASScanOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_more,
     ret = OB_SUCCESS;
   }
   memory_limit -= datum_store.get_mem_used();
+  if (OB_SUCC(ret) && OB_NOT_NULL(scan_rtdef_->tsc_monitor_info_)) {
+    scan_result.add_io_read_bytes(*scan_rtdef_->tsc_monitor_info_->io_read_bytes_);
+    scan_result.add_ssstore_read_bytes(*scan_rtdef_->tsc_monitor_info_->ssstore_read_bytes_);
+    scan_result.add_ssstore_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->ssstore_read_row_cnt_);
+    scan_result.add_memstore_read_row_cnt(*scan_rtdef_->tsc_monitor_info_->memstore_read_row_cnt_);
+    scan_rtdef_->tsc_monitor_info_->reset_stat();
+  }
   return ret;
 }
 
@@ -624,14 +645,14 @@ int ObDASScanOp::fill_extra_result()
   if (OB_ISNULL(output_result_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("output result iter is null", K(ret));
-  } else  if (OB_FAIL(result_mgr.save_task_result(task_id_,
-                                          &result_output,
-                                          &eval_ctx,
-                                          *output_result_iter,
-                                          remain_row_cnt_,
-                                          scan_ctdef_,
-                                          scan_rtdef_,
-                                          *this))) {
+  } else if (OB_FAIL(result_mgr.save_task_result(task_id_,
+                                                 &result_output,
+                                                 &eval_ctx,
+                                                 *output_result_iter,
+                                                 remain_row_cnt_,
+                                                 scan_ctdef_,
+                                                 scan_rtdef_,
+                                                 *this))) {
     LOG_WARN("save task result failed", KR(ret), K(task_id_));
   }
   return ret;
@@ -739,7 +760,11 @@ ObDASScanResult::ObDASScanResult()
     output_exprs_(nullptr),
     eval_ctx_(nullptr),
     extra_result_(nullptr),
-    need_check_output_datum_(false)
+    need_check_output_datum_(false),
+    io_read_bytes_(0),
+    ssstore_read_bytes_(0),
+    ssstore_read_row_cnt_(0),
+    memstore_read_row_cnt_(0)
 {
 }
 
@@ -844,16 +869,74 @@ int ObDASScanResult::reuse()
   return ret;
 }
 
-int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result)
+int ObDASScanResult::link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op)
 {
   extra_result.set_output_info(output_exprs_, eval_ctx_);
   extra_result.set_need_check_output_datum(need_check_output_datum_);
   extra_result_ = &extra_result;
+  ObTSCMonitorInfo *tsc_monitor_info =
+    static_cast<ObDASScanRtDef *>(task_op->get_rtdef())->tsc_monitor_info_;
+  extra_result.set_tsc_monitor_info(tsc_monitor_info);
   return OB_SUCCESS;
 }
 
-OB_SERIALIZE_MEMBER((ObDASScanResult, ObIDASTaskResult),
-                    datum_store_);
+OB_DEF_SERIALIZE(ObDASScanResult)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIDASTaskResult::serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize ObIDASTaskResult", K(ret), K(buf_len), K(pos));
+  } else {
+    bool mock_enable_rich_format = false;
+    MockObTempRowStore mock_vec_row_store;
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                datum_store_,
+                mock_enable_rich_format,
+                mock_vec_row_store,
+                io_read_bytes_,
+                ssstore_read_bytes_,
+                ssstore_read_row_cnt_,
+                memstore_read_row_cnt_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASScanResult)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIDASTaskResult::deserialize(buf, data_len, pos))) {
+    LOG_WARN("fail to deserialize ObIDASTaskResult", K(ret), K(data_len), K(pos));
+  } else {
+    bool mock_enable_rich_format = false;
+    MockObTempRowStore mock_vec_row_store;
+    LST_DO_CODE(OB_UNIS_DECODE,
+                datum_store_,
+                mock_enable_rich_format,
+                mock_vec_row_store,
+                io_read_bytes_,
+                ssstore_read_bytes_,
+                ssstore_read_row_cnt_,
+                memstore_read_row_cnt_);
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASScanResult)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  len += ObIDASTaskResult::get_serialize_size();
+  bool mock_enable_rich_format = false;
+  MockObTempRowStore mock_vec_row_store;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              datum_store_,
+              mock_enable_rich_format,
+              mock_vec_row_store,
+              io_read_bytes_,
+              ssstore_read_bytes_,
+              ssstore_read_row_cnt_,
+              memstore_read_row_cnt_);
+  return len;
+}
 
 ObLocalIndexLookupOp::~ObLocalIndexLookupOp()
 {
@@ -1183,6 +1266,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
   scan_param_.fb_read_tx_uncommitted_ = lookup_rtdef_->fb_read_tx_uncommitted_;
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
+  scan_param_.main_table_scan_stat_.tsc_monitor_info_ = lookup_rtdef_->tsc_monitor_info_;
   if (lookup_rtdef_->is_for_foreign_check_) {
     scan_param_.trans_desc_ = tx_desc_;
   }

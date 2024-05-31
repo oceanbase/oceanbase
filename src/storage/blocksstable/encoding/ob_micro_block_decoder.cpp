@@ -699,8 +699,12 @@ int ObEncodeBlockGetReader::init_by_read_info(
       }
     }
 
-    if (OB_SUCC(ret) && OB_FAIL(do_init(block_data, request_cnt))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(do_init(block_data, request_cnt))) {
       LOG_WARN("failed to do init", K(ret), K(block_data), K(request_cnt));
+    } else {
+      row_count_ = header_->row_count_;
+      original_data_length_ = header_->original_length_;
     }
   }
   return ret;
@@ -1341,6 +1345,7 @@ int ObMicroBlockDecoder::do_init(const ObMicroBlockData &block_data)
       request_cnt_ = read_info_->get_request_count();
     }
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     row_data_ = block_data.get_buf() + header_->row_data_offset_;
     const int64_t row_data_len = block_data.get_buf_size() - header_->row_data_offset_;
 

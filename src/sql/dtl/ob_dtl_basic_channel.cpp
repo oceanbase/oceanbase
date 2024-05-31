@@ -1146,6 +1146,12 @@ int ObDtlBasicChannel::switch_buffer(const int64_t min_size, const bool is_eof,
         if (OB_NOT_NULL(sql_session)) {
           write_buffer_->set_database_id(sql_session->get_database_id());
         }
+        write_buffer_->set_op_id(get_op_id());
+        ObOperatorKit *kit = eval_ctx->exec_ctx_.get_operator_kit(get_op_id());
+        if (OB_NOT_NULL(kit) && OB_NOT_NULL(kit->op_)) {
+          write_buffer_->set_input_rows(kit->op_->get_spec().rows_);
+          write_buffer_->set_input_width(kit->op_->get_spec().width_);
+        }
       }
       write_buffer_->timeout_ts() = timeout_ts;
       msg_writer_->write_msg_type(write_buffer_);

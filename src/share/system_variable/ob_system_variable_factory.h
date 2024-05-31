@@ -2471,40 +2471,47 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ORACLE_SQL_SELECT_LIMIT; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(333); }
 };
+class ObSysVarEnableSqlPlanMonitor : public ObBoolSysVar
+{
+public:
+  ObSysVarEnableSqlPlanMonitor() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_ENABLE_SQL_PLAN_MONITOR; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(334); }
+};
 class ObSysVarInnodbReadOnly : public ObBoolSysVar
 {
 public:
   ObSysVarInnodbReadOnly() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_READ_ONLY; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(334); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(335); }
 };
 class ObSysVarInnodbApiDisableRowlock : public ObBoolSysVar
 {
 public:
   ObSysVarInnodbApiDisableRowlock() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_API_DISABLE_ROWLOCK; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(335); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(336); }
 };
 class ObSysVarInnodbAutoincLockMode : public ObIntSysVar
 {
 public:
   ObSysVarInnodbAutoincLockMode() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_INNODB_AUTOINC_LOCK_MODE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(336); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(337); }
 };
 class ObSysVarSkipExternalLocking : public ObBoolSysVar
 {
 public:
   ObSysVarSkipExternalLocking() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SKIP_EXTERNAL_LOCKING; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(337); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(338); }
 };
 class ObSysVarSuperReadOnly : public ObBoolSysVar
 {
 public:
   ObSysVarSuperReadOnly() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_SUPER_READ_ONLY; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(338); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(339); }
 };
 
 
@@ -2526,7 +2533,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 240;
+  const static int64_t OB_SYS_VARS_COUNT = 241;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 

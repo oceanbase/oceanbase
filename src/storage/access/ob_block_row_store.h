@@ -15,7 +15,6 @@
 
 #include "common/object/ob_object.h"
 #include "lib/container/ob_bitmap.h"
-#include "storage/ob_table_store_stat_mgr.h"
 
 namespace oceanbase
 {
@@ -37,6 +36,7 @@ struct ObTableAccessContext;
 struct ObTableAccessParam;
 struct ObTableIterParam;
 struct ObStoreRow;
+struct ObTableScanStoreStat;
 struct PushdownFilterInfo
 {
   PushdownFilterInfo() :
@@ -80,7 +80,7 @@ public:
       blocksstable::ObIMicroBlockRowScanner &micro_scanner,
       const int64_t row_count,
       const bool can_pushdown,
-      ObTableStoreStat &table_store_stat);
+      ObTableScanStoreStat &table_store_stat);
   int get_result_bitmap(const common::ObBitmap *&bitmap);
   virtual bool is_end() const { return false; }
   virtual bool is_empty() const { return true; }

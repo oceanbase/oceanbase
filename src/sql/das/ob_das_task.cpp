@@ -16,6 +16,7 @@
 #include "sql/ob_sql_trans_control.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "sql/engine/ob_mock_vec2.h"
 
 namespace oceanbase
 {
@@ -532,15 +533,73 @@ int ObDASDataEraseReq::init(const uint64_t tenant_id, const int64_t task_id)
   return OB_SUCCESS;
 }
 
-OB_SERIALIZE_MEMBER(ObDASDataFetchRes,
-                    datum_store_,
-                    tenant_id_, task_id_, has_more_);
+OB_DEF_SERIALIZE(ObDASDataFetchRes)
+{
+  int ret = OB_SUCCESS;
+  bool mock_enable_rich_format = false;
+  MockObTempRowStore mock_vec_row_store;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              datum_store_,
+              tenant_id_,
+              task_id_,
+              has_more_,
+              mock_enable_rich_format,
+              mock_vec_row_store,
+              io_read_bytes_,
+              ssstore_read_bytes_,
+              ssstore_read_row_cnt_,
+              memstore_read_row_cnt_);
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASDataFetchRes)
+{
+  int ret = OB_SUCCESS;
+  bool mock_enable_rich_format = false;
+  MockObTempRowStore mock_vec_row_store;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              datum_store_,
+              tenant_id_,
+              task_id_,
+              has_more_,
+              mock_enable_rich_format,
+              mock_vec_row_store,
+              io_read_bytes_,
+              ssstore_read_bytes_,
+              ssstore_read_row_cnt_,
+              memstore_read_row_cnt_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASDataFetchRes)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  bool mock_enable_rich_format = false;
+  MockObTempRowStore mock_vec_row_store;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              datum_store_,
+              tenant_id_,
+              task_id_,
+              has_more_,
+              mock_enable_rich_format,
+              mock_vec_row_store,
+              io_read_bytes_,
+              ssstore_read_bytes_,
+              ssstore_read_row_cnt_,
+              memstore_read_row_cnt_);
+  return len;
+}
 
 ObDASDataFetchRes::ObDASDataFetchRes()
         : datum_store_("DASDataFetch"),
           tenant_id_(0),
           task_id_(0),
-          has_more_(false)
+          has_more_(false),
+          io_read_bytes_(0),
+          ssstore_read_bytes_(0),
+          ssstore_read_row_cnt_(0),
+          memstore_read_row_cnt_(0)
 {
 }
 

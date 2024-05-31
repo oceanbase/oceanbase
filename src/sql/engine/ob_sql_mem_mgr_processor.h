@@ -59,18 +59,13 @@ public:
   }
 
   // register and set cache size
-  // outside_op: When accessing automatic memory management,
-  //             the operator has not been created yet,
-  //             so some of the information used for statistics cannot be obtained.
   int init(
     ObIAllocator *allocator,
     uint64_t tenant_id,
     int64_t cache_size,
     const ObPhyOperatorType op_type,
     const uint64_t op_id,
-    ObExecContext *exec_ctx,
-    dtl::ObDtlLinkedBuffer *buffer = nullptr,
-    bool outside_op = false);
+    ObSqlProfileExecInfo exec_info);
 
   void destroy()
   {
@@ -207,6 +202,20 @@ public:
     const int64_t tenant_id,
     ObExecContext *exec_ctx,
     int64_t &value
+  );
+
+  static int get_workarea_size(
+    const ObSqlWorkAreaType wa_type,
+    const int64_t tenant_id,
+    ObSqlProfileExecInfo &exec_info,
+    int64_t &value
+  );
+
+  static int get_workarea_size(
+    const ObSqlWorkAreaType wa_type,
+    const int64_t tenant_id,
+    int64_t &value,
+    ObSQLSessionInfo *session = nullptr
   );
 };
 

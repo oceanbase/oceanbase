@@ -28,6 +28,7 @@
 #include "share/ob_order_perserving_encoder.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "sql/optimizer/ob_log_join.h"
+#include "sql/optimizer/ob_opt_est_cost_model.h"
 
 using namespace oceanbase;
 using namespace sql;
@@ -8127,6 +8128,8 @@ ObPQDistributeMethod::Type ObOptimizerUtil::get_left_dist_method(const ObShardin
     dist_method = ObPQDistributeMethod::PARTITION;
   } else if (DistAlgo::DIST_HASH_NONE == dist_algo) {
     dist_method = ObPQDistributeMethod::HASH;
+  } else if (DistAlgo::DIST_RANDOM_ALL == dist_algo) {
+    dist_method = ObPQDistributeMethod::RANDOM;
   } else if (DistAlgo::DIST_PULL_TO_LOCAL == dist_algo &&
              sharding.is_sharding()) {
     dist_method = ObPQDistributeMethod::LOCAL;
@@ -9597,5 +9600,47 @@ int ObOptimizerUtil::check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObR
   } else {
     is_static_false = !is_result_true;
   }
+  return ret;
+}
+
+int ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerContext *opt_ctx,
+                                                                   uint64_t ref_table_id,
+                                                                   const ObTableMetaInfo * esti_table_meta_info,
+                                                                   int64_t compute_parallel,
+                                                                   int64_t &px_expected_work_count)
+{
+  int ret = OB_SUCCESS;
+
+  ObSqlSchemaGuard *schema_guard = opt_ctx->get_sql_schema_guard();
+  const ObTableSchema *table_schema = NULL;
+  if (OB_NOT_NULL(schema_guard)
+      && OB_FAIL(schema_guard->get_table_schema(ref_table_id, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret));
+  } else if (OB_UNLIKELY(NULL == table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get table schame", K(ret));
+  } else {
+    ObParallelBlockRangeTaskParams params;
+    params.parallelism_ = compute_parallel;
+    params.expected_task_load_ = table_schema->get_tablet_size() / 1024 / 1024;
+    //convert from B -> MB
+    int64_t esti_table_size = (esti_table_meta_info->micro_block_count_ * esti_table_meta_info->micro_block_size_) / 1024 / 1024;
+    double query_range_filter_ratio = esti_table_meta_info->row_count_ / esti_table_meta_info->table_row_count_;
+    esti_table_size *= query_range_filter_ratio;
+    int64_t esti_task_cnt_by_data_size = 0;
+    if (OB_FAIL(ObGranuleUtil::compute_total_task_count(params, esti_table_size,
+                                                        esti_task_cnt_by_data_size))) {
+      LOG_WARN("compute total task count failed", K(ret));
+    } else {
+      //if table is so small, px still ensures at least one task per partition
+      if (esti_table_size == 0) {
+        px_expected_work_count = esti_table_meta_info->part_count_;
+      } else {
+        px_expected_work_count = esti_task_cnt_by_data_size;
+      }
+      LOG_TRACE("OPT: get nlj/spf none_all join bound parallel: ", K(esti_table_size), K(esti_task_cnt_by_data_size), K(px_expected_work_count), K(compute_parallel));
+    }
+  }
+
   return ret;
 }

@@ -83,7 +83,8 @@ class ObDtlOpInfo
   OB_UNIS_VERSION(1);
 public:
   ObDtlOpInfo() :
-    dop_(-1), plan_id_(-1), exec_id_(-1), session_id_(-1), database_id_(0)
+    dop_(-1), plan_id_(-1), exec_id_(-1), session_id_(-1), database_id_(0),
+    op_id_(UINT64_MAX), input_rows_(0), input_width_(-1)
   {
     sql_id_[0] = '\0';
   }
@@ -106,7 +107,10 @@ public:
         && exec_id_ == other.exec_id_
         && session_id_ == other.session_id_
         && database_id_ == other.database_id_
-        && memcmp(sql_id_, other.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
+        && memcmp(sql_id_, other.sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1)
+        && op_id_ == other.op_id_
+        && input_rows_ == other.input_rows_
+        && input_width_ == other.input_width_;
   }
 
   void set(int64_t dop,
@@ -114,13 +118,19 @@ public:
           int64_t exec_id,
           int64_t session_id,
           uint64_t database_id,
-          const char *sql_id)
+          const char *sql_id,
+          uint64_t op_id,
+          int64_t input_rows,
+          int64_t input_width)
   {
     dop_ = dop;
     plan_id_ = plan_id;
     exec_id_ = exec_id;
     session_id_ = session_id;
     database_id_ = database_id;
+    op_id_ = op_id;
+    input_rows_ = input_rows;
+    input_width_ = input_width;
     if (OB_ISNULL(sql_id)) {
       sql_id_[0] = '\0';
     } else {
@@ -135,6 +145,9 @@ public:
   int64_t get_session_id() { return session_id_; }
   uint64_t get_database_id() { return database_id_; }
   const char *get_sql_id() { return sql_id_; };
+  uint64_t get_op_id() { return op_id_; }
+  int64_t get_input_rows() { return input_rows_; }
+  int64_t get_input_width() { return input_width_; }
 
   TO_STRING_KV(K_(dop), K_(plan_id), K_(exec_id), K_(session_id), K_(sql_id), K_(database_id));
 public:
@@ -144,6 +157,9 @@ public:
   int64_t session_id_;
   uint64_t database_id_;
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];
+  uint64_t op_id_;
+  int64_t input_rows_;
+  int64_t input_width_;
 };
 
 class ObDtlSqcInfo
@@ -466,6 +482,15 @@ public:
       op_info_.sql_id_[OB_MAX_SQL_ID_LENGTH] = '\0';
     }
   }
+
+  uint64_t get_op_id() { return op_info_.op_id_; }
+  void set_op_id(uint64_t op_id) { op_info_.op_id_ = op_id; }
+
+  int64_t get_input_rows() { return op_info_.input_rows_; }
+  void set_input_rows(int64_t input_rows) { op_info_.input_rows_ = input_rows; }
+
+  int64_t get_input_width() { return op_info_.input_width_; }
+  void set_input_width(int64_t input_width) { op_info_.input_width_ = input_width; }
 
 private:
 /*

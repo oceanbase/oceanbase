@@ -18,7 +18,6 @@
 #include "sql/monitor/ob_monitor_info_manager.h"
 #include "sql/monitor/ob_phy_plan_monitor_info.h"
 #include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
-#include "observer/ob_server.h"
 #include <algorithm> // std::sort
 
 using namespace oceanbase::observer;
@@ -694,7 +693,6 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
   }
-  uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
   for (int64_t cell_idx = 0;
        OB_SUCC(ret) && cell_idx < output_column_ids_.count();
        ++cell_idx) {
@@ -733,11 +731,11 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
       }
       case DB_TIME: {
         // concept:
-        cells[cell_idx].set_int(node.db_time_ / cpu_khz);
+        cells[cell_idx].set_int(node.db_time_);
         break;
       }
       case USER_IO_WAIT_TIME: {
-        cells[cell_idx].set_int(node.block_time_ / cpu_khz);
+        cells[cell_idx].set_int(node.block_time_);
         break;
       }
       case FIRST_REFRESH_TIME: {

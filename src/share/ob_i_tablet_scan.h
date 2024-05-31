@@ -24,6 +24,7 @@
 #include "share/schema/ob_schema_getter_guard.h"
 #include "storage/tx/ob_trans_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"
+#include "share/diagnosis/ob_sql_plan_monitor_node_list.h"
 
 namespace oceanbase
 {
@@ -107,6 +108,87 @@ struct ObLimitParam
   OB_UNIS_VERSION(1);
 };
 
+struct ObTSCMonitorInfo
+{
+  int64_t* io_read_bytes_;
+  int64_t* ssstore_read_bytes_;
+  int64_t* ssstore_read_row_cnt_;
+  int64_t* memstore_read_row_cnt_;
+
+  ObTSCMonitorInfo()
+    : io_read_bytes_(nullptr),
+      ssstore_read_bytes_(nullptr),
+      ssstore_read_row_cnt_(nullptr),
+      memstore_read_row_cnt_(nullptr) {}
+
+  ObTSCMonitorInfo(int64_t* io_read_bytes,
+                    int64_t* ssstore_read_bytes,
+                    int64_t* ssstore_read_row_cnt,
+                    int64_t* memstore_read_row_cnt)
+    : io_read_bytes_(io_read_bytes),
+      ssstore_read_bytes_(ssstore_read_bytes),
+      ssstore_read_row_cnt_(ssstore_read_row_cnt),
+      memstore_read_row_cnt_(memstore_read_row_cnt) {}
+
+  void init(int64_t* io_read_bytes,
+            int64_t* ssstore_read_bytes,
+            int64_t* ssstore_read_row_cnt,
+            int64_t* memstore_read_row_cnt)
+  {
+    io_read_bytes_ = io_read_bytes;
+    ssstore_read_bytes_ = ssstore_read_bytes;
+    ssstore_read_row_cnt_ = ssstore_read_row_cnt;
+    memstore_read_row_cnt_ = memstore_read_row_cnt;
+  }
+
+  void add_io_read_bytes(int64_t io_read_bytes) {
+    if (OB_NOT_NULL(io_read_bytes_)) {
+      *io_read_bytes_ += io_read_bytes;
+    }
+  }
+
+  void add_ssstore_read_bytes(int64_t ssstore_read_bytes) {
+    if (OB_NOT_NULL(ssstore_read_bytes_)) {
+      *ssstore_read_bytes_ += ssstore_read_bytes;
+    }
+  }
+
+  void add_ssstore_read_row_cnt(int64_t ssstore_read_row_cnt) {
+    if (OB_NOT_NULL(ssstore_read_row_cnt_)) {
+      *ssstore_read_row_cnt_ += ssstore_read_row_cnt;
+    }
+  }
+
+  void add_memstore_read_row_cnt(int64_t memstore_read_row_cnt) {
+    if (OB_NOT_NULL(memstore_read_row_cnt_)) {
+      *memstore_read_row_cnt_ += memstore_read_row_cnt;
+    }
+  }
+
+  void reset_stat()
+  {
+    if (OB_NOT_NULL(io_read_bytes_)) {
+      *io_read_bytes_ = 0;
+    }
+    if (OB_NOT_NULL(ssstore_read_bytes_)) {
+      *ssstore_read_bytes_ = 0;
+    }
+    if (OB_NOT_NULL(ssstore_read_row_cnt_)) {
+      *ssstore_read_row_cnt_ = 0;
+    }
+    if (OB_NOT_NULL(memstore_read_row_cnt_)) {
+      *memstore_read_row_cnt_ = 0;
+    }
+  }
+
+  DEFINE_TO_STRING(
+    OB_ISNULL(io_read_bytes_) ? J_KV(K(io_read_bytes_)) : J_KV(K(*io_read_bytes_));
+    OB_ISNULL(ssstore_read_bytes_) ? J_KV(K(ssstore_read_bytes_)) : J_KV(K(*ssstore_read_bytes_));
+    OB_ISNULL(ssstore_read_row_cnt_) ? J_KV(K(ssstore_read_row_cnt_)) : J_KV(K(*ssstore_read_row_cnt_));
+    OB_ISNULL(memstore_read_row_cnt_) ? J_KV(K(memstore_read_row_cnt_)) : J_KV(K(*memstore_read_row_cnt_));
+  )
+};
+
 struct ObTableScanStatistic
 {
   //storage access row cnt before filter
@@ -123,6 +205,8 @@ struct ObTableScanStatistic
   int64_t block_cache_hit_cnt_;
   int64_t block_cache_miss_cnt_;
   int64_t rowkey_prefix_;
+  ObTSCMonitorInfo *tsc_monitor_info_;
+
   ObTableScanStatistic()
     : access_row_cnt_(0),
       out_row_cnt_(0),
@@ -135,8 +219,10 @@ struct ObTableScanStatistic
       row_cache_miss_cnt_(0),
       block_cache_hit_cnt_(0),
       block_cache_miss_cnt_(0),
-      rowkey_prefix_(0)
+      rowkey_prefix_(0),
+      tsc_monitor_info_(nullptr)
   {}
+
   OB_INLINE void reset()
   {
     access_row_cnt_ = 0;
@@ -152,6 +238,7 @@ struct ObTableScanStatistic
     block_cache_miss_cnt_ = 0;
     rowkey_prefix_ = 0;
   }
+
   OB_INLINE void reset_cache_stat()
   {
     bf_filter_cnt_ = 0;
@@ -163,6 +250,7 @@ struct ObTableScanStatistic
     block_cache_hit_cnt_ = 0;
     block_cache_miss_cnt_ = 0;
   }
+
   TO_STRING_KV(
       K_(access_row_cnt),
       K_(out_row_cnt),
@@ -173,7 +261,8 @@ struct ObTableScanStatistic
       K_(row_cache_miss_cnt),
       K_(fuse_row_cache_hit_cnt),
       K_(fuse_row_cache_miss_cnt),
-      K_(rowkey_prefix));
+      K_(rowkey_prefix),
+      KPC_(tsc_monitor_info));
 };
 
 static const int64_t OB_DEFAULT_FILTER_EXPR_COUNT = 4;

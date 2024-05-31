@@ -594,6 +594,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTTLDutyDurationChecker);
 };
 
+class ObMySQLVersionLengthChecker : public ObConfigChecker {
+public:
+  ObMySQLVersionLengthChecker()
+  {}
+  virtual ~ObMySQLVersionLengthChecker(){};
+  bool check(const ObConfigItem& t) const;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObMySQLVersionLengthChecker);
+};
+
 class ObConfigPublishSchemaModeChecker
   : public ObConfigChecker
 {

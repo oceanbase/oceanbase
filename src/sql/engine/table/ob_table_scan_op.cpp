@@ -624,7 +624,8 @@ ObTableScanOp::ObTableScanOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOp
     iter_tree_(nullptr),
     scan_iter_(nullptr),
     group_rescan_cnt_(0),
-    group_id_(0)
+    group_id_(0),
+    tsc_monitor_info_()
 {
 }
 
@@ -871,6 +872,7 @@ OB_INLINE int ObTableScanOp::init_das_scan_rtdef(const ObDASScanCtDef &das_ctdef
   das_rtdef.tx_lock_timeout_ = my_session->get_trx_lock_timeout();
   das_rtdef.scan_flag_ = MY_CTDEF.scan_flags_;
   das_rtdef.scan_flag_.is_show_seed_ = plan_ctx->get_show_seed();
+  das_rtdef.tsc_monitor_info_ = &tsc_monitor_info_;
   if(is_foreign_check_nested_session()) {
     das_rtdef.is_for_foreign_check_ = true;
     if (plan_ctx->get_phy_plan()->has_for_update() && ObSQLUtils::is_iter_uncommitted_row(&ctx_)) {
@@ -1257,6 +1259,7 @@ int ObTableScanOp::inner_open()
   DASTableLocList &table_locs = ctx_.get_das_ctx().get_table_loc_list();
   ObSQLSessionInfo *my_session = NULL;
   cur_trace_id_ = ObCurTraceId::get();
+  init_scan_monitor_info();
   if (OB_ISNULL(my_session = GET_MY_SESSION(ctx_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get my session", K(ret));
@@ -1343,9 +1346,6 @@ int ObTableScanOp::inner_close()
       LOG_WARN("failed to reuse scan iter", K(ret));
     }
   }
-  if (OB_SUCC(ret)) {
-    fill_sql_plan_monitor_info();
-  }
   if (OB_SUCC(ret) && MY_SPEC.should_scan_index()) {
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
     if (OB_NOT_NULL(session)) {
@@ -1362,24 +1362,6 @@ int ObTableScanOp::inner_close()
     need_init_before_get_row_ = true;
   }
   return ret;
-}
-
-void ObTableScanOp::fill_sql_plan_monitor_info()
-{
-  oceanbase::common::ObDiagnoseSessionInfo *di = oceanbase::common::ObDiagnoseSessionInfo::get_local_diagnose_info();
-  if (OB_LIKELY(di)) {
-    // Hope to demostrate:
-    // 1. how many bytes read from io (IO_READ_BYTES)
-    // 2. how many bytes in total (DATA_BLOCK_READ_CNT + INDEX_BLOCK_READ_CNT) * 16K (approximately, many diff for each table)
-    // 3. how many rows processed before filtering (MEMSTORE_READ_ROW_COUNT + SSSTORE_READ_ROW_COUNT)
-    op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::IO_READ_BYTES;
-    op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::TOTAL_READ_BYTES;
-    op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::TOTAL_READ_ROW_COUNT;
-    op_monitor_info_.otherstat_1_value_ = EVENT_GET(ObStatEventIds::IO_READ_BYTES, di);
-    // NOTE: this is not always accurate, as block size change be change from default 16K to any value
-    op_monitor_info_.otherstat_2_value_ = (EVENT_GET(ObStatEventIds::DATA_BLOCK_READ_CNT, di) + EVENT_GET(ObStatEventIds::INDEX_BLOCK_READ_CNT, di)) * 16 * 1024;
-    op_monitor_info_.otherstat_3_value_ = EVENT_GET(ObStatEventIds::MEMSTORE_READ_ROW_COUNT, di) + EVENT_GET(ObStatEventIds::SSSTORE_READ_ROW_COUNT, di);
-  }
 }
 
 int ObTableScanOp::do_init_before_get_row()
@@ -1440,6 +1422,18 @@ void ObTableScanOp::destroy()
   }
   output_ = nullptr;
   scan_iter_ = nullptr;
+}
+
+void ObTableScanOp::init_scan_monitor_info()
+{
+  op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::IO_READ_BYTES;
+  op_monitor_info_.otherstat_2_id_ = ObSqlMonitorStatIds::SSSTORE_READ_BYTES;
+  op_monitor_info_.otherstat_3_id_ = ObSqlMonitorStatIds::SSSTORE_READ_ROW_COUNT;
+  op_monitor_info_.otherstat_4_id_ = ObSqlMonitorStatIds::MEMSTORE_READ_ROW_COUNT;
+  tsc_monitor_info_.init(&(op_monitor_info_.otherstat_1_value_),
+                         &(op_monitor_info_.otherstat_2_value_),
+                         &(op_monitor_info_.otherstat_3_value_),
+                         &(op_monitor_info_.otherstat_4_value_));
 }
 
 int ObTableScanOp::fill_storage_feedback_info()

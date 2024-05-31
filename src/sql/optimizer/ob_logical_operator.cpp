@@ -669,6 +669,7 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
   int ret = OB_SUCCESS;
   const ObLogicalOperator *max_parallel_child = NULL;
   bool max_parallel_from_exch = false;
+  ObPQDistributeMethod::Type child_distribute_method_type = ObPQDistributeMethod::NONE;
   int64_t max_available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
   const ObLogicalOperator *child = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < get_num_of_child(); ++i) {
@@ -679,12 +680,11 @@ int ObLogicalOperator::compute_normal_multi_child_parallel_and_server_info()
       max_parallel_child = child;
       max_available_parallel = max_parallel_child->get_available_parallel();
       max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();
-    } else if (!max_parallel_from_exch &&
-               LOG_EXCHANGE == child->get_type()) {
-      //do nothing
+    } else if (!max_parallel_from_exch && LOG_EXCHANGE == child->get_type()) {
+      // do nothing
     } else {
       if (max_parallel_child->get_parallel() < child->get_parallel() ||
-          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type())) {
+          (max_parallel_from_exch && LOG_EXCHANGE != child->get_type() && !child->is_match_all())) {
         max_available_parallel = child->get_available_parallel();
         max_parallel_child = child;
         max_parallel_from_exch = LOG_EXCHANGE == max_parallel_child->get_type();

@@ -350,6 +350,7 @@ namespace share
   static const char* const OB_SV_TRANSACTION_PREALLOC_SIZE = "transaction_prealloc_size";
   static const char* const OB_SV_TRANSACTION_WRITE_SET_EXTRACTION = "transaction_write_set_extraction";
   static const char* const OB_SV__ORACLE_SQL_SELECT_LIMIT = "_oracle_sql_select_limit";
+  static const char* const OB_SV_ENABLE_SQL_PLAN_MONITOR = "enable_sql_plan_monitor";
   static const char* const OB_SV_INNODB_READ_ONLY = "innodb_read_only";
   static const char* const OB_SV_INNODB_API_DISABLE_ROWLOCK = "innodb_api_disable_rowlock";
   static const char* const OB_SV_INNODB_AUTOINC_LOCK_MODE = "innodb_autoinc_lock_mode";

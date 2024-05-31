@@ -63,7 +63,6 @@ protected:
   virtual int calc_scan_range() override;
   virtual int construct_iters() override;
   virtual int inner_get_next_row(blocksstable::ObDatumRow &row);
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
 private:
   void reset_with_fuse_row_cache();
 private:

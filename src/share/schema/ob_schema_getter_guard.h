@@ -460,6 +460,7 @@ public:
 
   // for readonly
   int verify_read_only(const uint64_t tenant_id, const ObStmtNeedPrivs &stmt_need_privs);
+  int is_user_empty_passwd(const ObUserLoginInfo &login_info, bool &is_empty_passwd_account);
   int check_user_access(const ObUserLoginInfo &login_info,
                         ObSessionPrivInfo &s_priv,
                         SSL *ssl_st,

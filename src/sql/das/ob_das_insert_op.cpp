@@ -495,12 +495,6 @@ int ret = OB_NOT_IMPLEMENT;
 return ret;
 }
 
-int ObDASInsertResult::link_extra_result(ObDASExtraData &extra_result)
-{
-  UNUSED(extra_result);
-  return OB_NOT_IMPLEMENT;
-}
-
 int ObDASInsertResult::init_result_newrow_iter(const ObjMetaFixedArray *output_types)
 {
   int ret = OB_SUCCESS;

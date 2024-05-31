@@ -15,7 +15,6 @@
 
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/encoding/ob_micro_block_decoder.h"
-#include "storage/ob_table_store_stat_mgr.h"
 #include "ob_datum_row.h"
 #include "ob_row_cache.h"
 
@@ -41,6 +40,11 @@ public:
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
       const blocksstable::ObSSTable *sstable);
+  OB_INLINE int64_t get_average_row_length() const
+  {
+    return nullptr != reader_ && 0 < reader_->row_count()  ?
+      reader_->original_data_length() / reader_->row_count() : 0;
+  }
 protected:
   int prepare_reader(const ObRowStoreType store_type);
   const storage::ObTableIterParam *param_;

@@ -5870,6 +5870,9 @@ int JoinPath::compute_join_path_sharding()
       if (OB_FAIL(append(weak_sharding_, right_path_->weak_sharding_))) {
         LOG_WARN("failed to append weak sharding", K(ret));
       } else { /*do nothing*/ }
+    } else if (DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
+      strong_sharding_ = opt_ctx.get_distributed_sharding();
+      inherit_sharding_index_ = -1;
     } else if (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_ ||
                DistAlgo::DIST_EXT_PARTITION_WISE == join_dist_algo_) {
       if (LEFT_OUTER_JOIN == join_type_) {
@@ -6225,10 +6228,11 @@ int JoinPath::compute_join_path_parallel_and_server_info()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(parent_), K(ret));
   } else if (OB_FALSE_IT(opt_ctx = &parent_->get_plan()->get_optimizer_context())) {
-  } else if (OB_FAIL(compute_join_path_parallel_and_server_info(opt_ctx->get_local_server_addr(),
+  } else if (OB_FAIL(compute_join_path_parallel_and_server_info(opt_ctx,
                                                                 left_path_,
                                                                 right_path_,
                                                                 join_dist_algo_,
+                                                                join_algo_,
                                                                 is_slave_mapping_,
                                                                 parallel_,
                                                                 available_parallel_,
@@ -6236,13 +6240,15 @@ int JoinPath::compute_join_path_parallel_and_server_info()
                                                                 server_list_))) {
     LOG_WARN("failed to compute server info", K(ret));
   }
+
   return ret;
 }
 
-int JoinPath::compute_join_path_parallel_and_server_info(const common::ObAddr &local_server_addr,
+int JoinPath::compute_join_path_parallel_and_server_info(ObOptimizerContext *opt_ctx,
                                                          const Path *left_path,
                                                          const Path *right_path,
                                                          const DistAlgo join_dist_algo,
+                                                         const JoinAlgo join_algo,
                                                          bool const is_slave_mapping,
                                                          int64_t &parallel,
                                                          int64_t &available_parallel,
@@ -6252,6 +6258,8 @@ int JoinPath::compute_join_path_parallel_and_server_info(const common::ObAddr &l
   int ret = OB_SUCCESS;
   parallel = ObGlobalHint::DEFAULT_PARALLEL;
   available_parallel = ObGlobalHint::DEFAULT_PARALLEL;
+  int64_t px_expected_work_count = 0;
+  const common::ObAddr &local_server_addr = opt_ctx->get_local_server_addr();
   server_cnt = 0;
   server_list.reuse();
   if (OB_ISNULL(left_path) || OB_ISNULL(right_path)) {
@@ -6286,7 +6294,8 @@ int JoinPath::compute_join_path_parallel_and_server_info(const common::ObAddr &l
       if (OB_FAIL(server_list.push_back(local_server_addr))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
-    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo) {
+    } else if (DistAlgo::DIST_NONE_ALL == join_dist_algo ||
+               DistAlgo::DIST_RANDOM_ALL == join_dist_algo) {
       parallel = left_path->parallel_;
       server_cnt = left_path->server_cnt_;
       if (OB_FAIL(server_list.assign(left_path->server_list_))) {
@@ -6322,8 +6331,8 @@ int JoinPath::compute_join_path_parallel_and_server_info(const common::ObAddr &l
       if (OB_FAIL(server_list.assign(inherit_child->server_list_))) {
         LOG_WARN("failed to assign server list", K(ret));
       }
-    } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo ||
-               DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) {
+    } else if (DistAlgo::DIST_BROADCAST_NONE == join_dist_algo
+               || DistAlgo::DIST_BC2HOST_NONE == join_dist_algo) {
       parallel = right_path->parallel_;
       server_cnt = right_path->server_cnt_;
       if (OB_FAIL(server_list.assign(right_path->server_list_))) {
@@ -6467,6 +6476,7 @@ int JoinPath::can_use_batch_nlj(bool &use_batch_nlj)
     bool right_has_gi_or_exchange = false;
     if (DistAlgo::DIST_BASIC_METHOD == join_dist_algo_ ||
         DistAlgo::DIST_NONE_ALL == join_dist_algo_ ||
+        DistAlgo::DIST_RANDOM_ALL == join_dist_algo_ ||
         (DistAlgo::DIST_PARTITION_WISE == join_dist_algo_ &&
         !is_slave_mapping_ &&
         !left_path_->exchange_allocated_ &&
@@ -6877,7 +6887,8 @@ int JoinPath::cost_nest_loop_join(int64_t join_parallel,
       right_rows /= in_parallel;
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, 1);
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
-               DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
+               DistAlgo::DIST_NONE_ALL == join_dist_algo_ ||
+              DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
     } else if (DistAlgo::DIST_PULL_TO_LOCAL == join_dist_algo_) {
       left_rows = ObJoinOrder::calc_single_parallel_rows(left_rows, in_parallel);
@@ -7105,7 +7116,8 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
       right_rows /= in_parallel;
       left_rows = left_rows / in_parallel * server_cnt_;
     } else if (DistAlgo::DIST_NONE_BROADCAST == join_dist_algo_ ||
-               DistAlgo::DIST_NONE_ALL == join_dist_algo_) {
+               DistAlgo::DIST_NONE_ALL == join_dist_algo_ ||
+               DistAlgo::DIST_RANDOM_ALL == join_dist_algo_) {
       left_rows /= in_parallel;
     } else {
       left_rows /= in_parallel;
@@ -9341,6 +9353,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
         distributed_methods &= ~DIST_BROADCAST_NONE;
         distributed_methods &= ~DIST_NONE_BROADCAST;
         distributed_methods &= ~DIST_NONE_ALL;
+        distributed_methods &= ~DIST_RANDOM_ALL;
         distributed_methods &= ~DIST_ALL_NONE;
         distributed_methods &= ~DIST_PARTITION_NONE;
         distributed_methods &= ~DIST_HASH_NONE;
@@ -9386,6 +9399,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     if (left_sharding->is_local() || left_sharding->is_match_all()) {
       distributed_methods &= ~DIST_NONE_BROADCAST;
       distributed_methods &= ~DIST_NONE_ALL;
+      distributed_methods &= ~DIST_RANDOM_ALL;
     }
     if (left_sharding->is_match_all()) {
       distributed_methods &= ~DIST_BC2HOST_NONE;
@@ -9402,8 +9416,39 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     }
   }
 
+  // if match none_all, check whether can use random all
+  if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_RANDOM_ALL)) {
+    if (join_algo == NESTED_LOOP_JOIN && left_path.is_access_path()
+        && left_sharding->is_distributed() && right_sharding->is_match_all()) {
+      if (distributed_methods == DistAlgo::DIST_RANDOM_ALL) {
+        distributed_methods = DistAlgo::DIST_RANDOM_ALL;
+        OPT_TRACE("plan will use random all method by hint");
+      } else {
+        int64_t px_expected_work_count = 0;
+        int64_t compute_parallel = left_path.parallel_;
+        AccessPath *left_access_path = static_cast<AccessPath *>(&left_path);
+        const ObTableMetaInfo *table_meta_info = left_access_path->est_cost_info_.table_meta_info_;
+        LOG_TRACE("SPF random shuffle est table meta info", K(*table_meta_info));
+        if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
+              &get_plan()->get_optimizer_context(), left_access_path->get_ref_table_id(),
+              table_meta_info, compute_parallel, px_expected_work_count))) {
+          LOG_WARN("Fail to compute none_all nlj storage compute parallel skew", K(ret));
+        } else if (px_expected_work_count < compute_parallel) {
+          // we have more compute resources, so we should add a random shuffle, not choose none_all
+          distributed_methods &= ~DIST_NONE_ALL;
+          LOG_TRACE("NLJ none-all actual compute parallel:", K(compute_parallel),
+                    K(px_expected_work_count));
+        } else {
+          distributed_methods &= ~DistAlgo::DIST_RANDOM_ALL;
+        }
+      }
+    } else {
+      distributed_methods &= ~DistAlgo::DIST_RANDOM_ALL;
+    }
+  }
+
   // check if match none_all sharding info
-  if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_ALL)) {
+  if (OB_SUCC(ret) && distributed_methods & DIST_NONE_ALL) {
     if (left_sharding->is_distributed() && right_sharding->is_match_all()) {
       distributed_methods = DIST_NONE_ALL;
     } else {
@@ -9936,10 +9981,11 @@ int ObJoinOrder::find_minimal_cost_merge_path(const Path &left_path,
                 left_merge_key.need_sort_ && right_need_sort && prune_mj) {
       // do nothing
       OPT_TRACE("prune merge join,because both left and right path need sort");
-    } else if (OB_FAIL(JoinPath::compute_join_path_parallel_and_server_info(opt_ctx.get_local_server_addr(),
+    } else if (OB_FAIL(JoinPath::compute_join_path_parallel_and_server_info(&opt_ctx,
                                                                             &left_path,
                                                                             right_path,
                                                                             join_dist_algo,
+                                                                            MERGE_JOIN,
                                                                             is_slave_mapping,
                                                                             in_parallel,
                                                                             available_parallel,
@@ -11534,19 +11580,18 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
                                        DIST_BC2HOST_NONE | DIST_PARTITION_NONE |
                                        DIST_NONE_PARTITION | DIST_PARTITION_WISE |
                                        DIST_EXT_PARTITION_WISE | DIST_BASIC_METHOD |
-                                       DIST_NONE_ALL | DIST_ALL_NONE;
+                                       DIST_NONE_ALL | DIST_ALL_NONE |
+                                       DIST_RANDOM_ALL;
     }
-    if (!ignore_hint && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(),
-                                                              both_access,
-                                                              contain_fake_cte,
-                                                              path_info))) {
+    if (!ignore_hint
+        && OB_FAIL(get_valid_path_info_from_hint(right_tree.get_tables(), both_access,
+                                                 contain_fake_cte, path_info))) {
       LOG_WARN("failed to get valid path info from hint", K(ret));
-    } else if (RIGHT_OUTER_JOIN == path_info.join_type_ ||
-               FULL_OUTER_JOIN == path_info.join_type_) {
+    } else if (RIGHT_OUTER_JOIN == path_info.join_type_
+               || FULL_OUTER_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
       OPT_TRACE("right or full outer join can not use nested loop join");
-    } else if (RIGHT_SEMI_JOIN == path_info.join_type_ ||
-               RIGHT_ANTI_JOIN == path_info.join_type_) {
+    } else if (RIGHT_SEMI_JOIN == path_info.join_type_ || RIGHT_ANTI_JOIN == path_info.join_type_) {
       path_info.local_methods_ &= ~NESTED_LOOP_JOIN;
       path_info.local_methods_ &= ~MERGE_JOIN;
       OPT_TRACE("right semi/anti join can not use nested loop/merge join");
@@ -11630,6 +11675,7 @@ int ObJoinOrder::get_valid_path_info(const ObJoinOrder &left_tree,
         // without BC2HOST DIST_NONE_BROADCAST
         path_info.distributed_methods_ &= ~DIST_NONE_BROADCAST;
         path_info.distributed_methods_ &= ~DIST_NONE_ALL;
+        path_info.distributed_methods_ &= ~DIST_RANDOM_ALL;
         OPT_TRACE("right anti/semi/outer join can not use none broadcast method");
       }
       OPT_TRACE("candi local methods:");

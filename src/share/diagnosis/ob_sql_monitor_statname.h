@@ -58,8 +58,9 @@ SQL_MONITOR_STATNAME_DEF(DDL_TASK_ID, sql_monitor_statname::INT, "ddl task id", 
 SQL_MONITOR_STATNAME_DEF(SSTABLE_INSERT_ROW_COUNT, sql_monitor_statname::INT, "sstable insert row count", "sstable insert row count")
 // Table Scan stat
 SQL_MONITOR_STATNAME_DEF(IO_READ_BYTES, sql_monitor_statname::CAPACITY, "total io bytes read from disk", "total io bytes read from storage")
-SQL_MONITOR_STATNAME_DEF(TOTAL_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by storage", "total bytes processed by storage, including memtable")
-SQL_MONITOR_STATNAME_DEF(TOTAL_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by storage", "total rows processed by storage, including memtable")
+SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_BYTES, sql_monitor_statname::CAPACITY, "total bytes processed by ssstore", "total bytes processed by ssstore")
+SQL_MONITOR_STATNAME_DEF(SSSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by ssstore", "total rows processed by ssstore")
+SQL_MONITOR_STATNAME_DEF(MEMSTORE_READ_ROW_COUNT, sql_monitor_statname::INT, "total rows processed by memstore", "total rows processed by memstore")
 
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, sql_monitor_statname::INVALID, "monitor end", "monitor stat name end")

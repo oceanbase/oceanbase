@@ -179,6 +179,7 @@ int ObMicroBlockGetReader::inner_init(
     LOG_WARN("failed to init reader", K(ret), K(block_data), K(read_info));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = &read_info;
     if (OB_FAIL(ObIMicroBlockGetReader::init_hash_index(block_data, hash_index_, header_))) {
       LOG_WARN("failed to init micro block hash index", K(ret), K(rowkey), K(block_data), K(read_info));
@@ -354,6 +355,7 @@ int ObMicroBlockReader::init(
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = &read_info;
     datum_utils_ = &(read_info.get_datum_utils());
     is_inited_ = true;
@@ -377,6 +379,7 @@ int ObMicroBlockReader::init(
     LOG_WARN("fail to init, ", K(ret));
   } else {
     row_count_ = header_->row_count_;
+    original_data_length_ = header_->original_length_;
     read_info_ = nullptr;
     datum_utils_ = datum_utils;
     is_inited_ = true;

@@ -117,7 +117,7 @@ int ObBlockRowStore::apply_blockscan(
     blocksstable::ObIMicroBlockRowScanner &micro_scanner,
     const int64_t row_count,
     const bool can_pushdown,
-    ObTableStoreStat &table_store_stat)
+    ObTableScanStoreStat &table_store_stat)
 {
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_filter_rows);
   int ret = OB_SUCCESS;
@@ -145,11 +145,8 @@ int ObBlockRowStore::apply_blockscan(
     // Check pushdown filter successed
     can_blockscan_ = true;
     ++table_store_stat.pushdown_micro_access_cnt_;
-    table_store_stat.pushdown_row_access_cnt_ += row_count;
     if (!filter_applied_ || nullptr == pd_filter_info_.filter_) {
-      table_store_stat.pushdown_row_select_cnt_ += row_count;
     } else {
-      table_store_stat.pushdown_row_select_cnt_ += pd_filter_info_.filter_->get_result()->popcnt();
       EVENT_ADD(ObStatEventIds::PUSHDOWN_STORAGE_FILTER_ROW_CNT, pd_filter_info_.filter_->get_result()->popcnt());
     }
     EVENT_ADD(ObStatEventIds::BLOCKSCAN_ROW_CNT, row_count);

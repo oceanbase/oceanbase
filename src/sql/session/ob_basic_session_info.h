@@ -1247,6 +1247,7 @@ public:
   int64_t get_runtime_filter_max_in_num() const { return sys_vars_cache_.get_runtime_filter_max_in_num(); }
   int64_t get_runtime_bloom_filter_max_size() const { return sys_vars_cache_.get_runtime_bloom_filter_max_size(); }
 
+  bool get_enable_sql_plan_monitor() const { return sys_vars_cache_.get_enable_sql_plan_monitor(); }
 
   const ObString &get_app_trace_id() const { return app_trace_id_; }
   void set_app_trace_id(common::ObString trace_id) {
@@ -1594,6 +1595,7 @@ public:
         runtime_filter_max_in_num_(0),
         runtime_bloom_filter_max_size_(INT_MAX32),
         ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
+        enable_sql_plan_monitor_(false),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0)
     {
@@ -1658,6 +1660,7 @@ public:
       runtime_bloom_filter_max_size_ = INT32_MAX;
       ncharacter_set_connection_ = ObCharsetType::CHARSET_INVALID;
       default_lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
+      enable_sql_plan_monitor_ = false;
       compat_type_ = share::ObCompatType::COMPAT_MYSQL57;
       compat_version_ = 0;
     }
@@ -1889,6 +1892,7 @@ public:
     int64_t runtime_bloom_filter_max_size_;
 
     ObCharsetType ncharacter_set_connection_;
+    bool enable_sql_plan_monitor_;
     share::ObCompatType compat_type_;
     uint64_t compat_version_;
   private:
@@ -2006,6 +2010,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, runtime_bloom_filter_max_size);
     DEF_SYS_VAR_CACHE_FUNCS(ObCharsetType, ncharacter_set_connection);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, default_lob_inrow_threshold);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     DEF_SYS_VAR_CACHE_FUNCS(share::ObCompatType, compat_type);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     void set_autocommit_info(bool inc_value)
@@ -2079,6 +2084,7 @@ private:
         bool inc_ncharacter_set_connection_:1;
         bool inc_default_lob_inrow_threshold_:1;
         bool inc_ob_enable_pl_cache_:1;
+        bool inc_enable_sql_plan_monitor_:1;
         bool inc_compat_type_:1;
         bool inc_compat_version_:1;
       };

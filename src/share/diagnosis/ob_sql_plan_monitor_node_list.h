@@ -28,6 +28,7 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObOperator;
 
 // 用于统计一段代码的执行时间
 class TimingGuard
@@ -47,7 +48,7 @@ private:
   int64_t begin_;
 };
 
-class ObMonitorNode final : public common::ObDLinkBase<ObMonitorNode>
+class ObMonitorNode
 {
   friend class ObPlanMonitorNodeList;
   typedef common::ObCurTraceId::TraceId TraceId;
@@ -59,6 +60,7 @@ public:
       output_batches_(0),
       skipped_rows_count_(0),
       op_type_(PHY_INVALID),
+      op_(nullptr),
       rt_node_id_(OB_INVALID_ID),
       open_time_(0),
       first_row_time_(0),
@@ -99,6 +101,7 @@ public:
     *this = that;
     return common::OB_SUCCESS;
   }
+  void set_op(ObOperator *op) { op_ = op; }
   void set_operator_type(ObPhyOperatorType type) { op_type_ = type; }
   void set_operator_id(int64_t op_id) { op_id_ = op_id; }
   void set_tenant_id(int64_t tenant_id) { tenant_id_ = tenant_id; }
@@ -111,9 +114,10 @@ public:
   const TraceId& get_trace_id() const { return trace_id_; }
   int64_t get_thread_id() { return thread_id_; }
   int64_t get_rt_node_id() { return rt_node_id_;}
-  int add_rt_monitor_node(ObMonitorNode *node);
   void update_memory(int64_t delta_size);
   void update_tempseg(int64_t delta_size);
+  uint64_t calc_db_time();
+  void covert_to_static_node();
   TO_STRING_KV(K_(tenant_id), K_(op_id), "op_name", get_operator_name(), K_(thread_id));
 public:
   int64_t tenant_id_;
@@ -122,6 +126,7 @@ public:
   int64_t output_batches_; // for batch
   int64_t skipped_rows_count_; // for batch
   ObPhyOperatorType op_type_;
+  ObOperator *op_;
 private:
   int64_t thread_id_;
   TraceId trace_id_;
@@ -195,8 +200,9 @@ public:
   public:
     ObMonitorNodeTraverseCall(common::ObIArray<ObMonitorNode> &node_array) :
         node_array_(node_array), ret_(OB_SUCCESS) {}
-  int operator() (common::hash::HashMapPair<ObMonitorNodeKey,
-      ObMonitorNode *> &entry);
+    int operator() (common::hash::HashMapPair<ObMonitorNodeKey,
+        ObMonitorNode *> &entry);
+    int recursive_add_node_to_array(ObMonitorNode &node);
     common::ObIArray<ObMonitorNode> &node_array_;
     int ret_;
   };

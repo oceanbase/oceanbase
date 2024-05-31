@@ -778,7 +778,11 @@ int ObDTLIntermResultManager::init_mem_profile(const ObDTLMemProfileKey &key,
       ret = OB_SUCCESS;
       void *info_buf = nullptr;
       ObMemAttr mem_info_attr(MTL_ID(), "IRMMemInfo", common::ObCtxIds::EXECUTE_CTX_ID);
-      ObMemAttr allocator_attr(MTL_ID(), "DtlIntermRes");
+      ObMemAttr allocator_attr(MTL_ID(), "DtlIntermRes", common::ObCtxIds::WORK_AREA);
+      int64_t cache_size = buffer.get_input_rows() * buffer.get_input_width();
+      if (cache_size <= 0 || cache_size > ObDTLMemProfileInfo::CACHE_SIZE) {
+        cache_size = ObDTLMemProfileInfo::CACHE_SIZE;
+      }
       if (OB_ISNULL(info_buf = ob_malloc(sizeof(ObDTLMemProfileInfo), mem_info_attr))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc mem_profile_info", K(ret));
@@ -795,15 +799,10 @@ int ObDTLIntermResultManager::init_mem_profile(const ObDTLMemProfileKey &key,
         } else if (OB_FAIL(info->sql_mem_processor_.init(
                           &info->allocator_,
                           MTL_ID(),
-                          // todo:
-                          // The accuracy of this value is relatively low.
-                          // It is being considered to be calculated based on the buffer in the future.
-                          ObDTLMemProfileInfo::CACHE_SIZE, // 16M
+                          cache_size,
                           PHY_PX_FIFO_RECEIVE,
-                          buffer.get_dfo_id(), // replacing op_id with dfo_id.
-                          nullptr,
-                          &buffer,
-                          true))) {
+                          buffer.get_op_id(),
+                          &buffer))) {
           LOG_WARN("failed to init sql memory manager processor", K(ret));
         } else if (OB_FAIL(mem_profile_map_.set_refactored(key, info))) {
           LOG_WARN("fail to set row store in result manager", K(ret));

@@ -288,8 +288,6 @@ public:
   int ret_;
 };
 
-class ObDTLIntermResultManager;
-
 class ObAtomicAppendBlockCall
 {
 public:

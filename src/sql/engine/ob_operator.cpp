@@ -286,7 +286,6 @@ int ObOpSpec::create_op_input_recursive(ObExecContext &exec_ctx) const
 int ObOpSpec::create_operator(ObExecContext &exec_ctx, ObOperator *&op) const
 {
   int ret = OB_SUCCESS;
-  ObMonitorNode *pre_node = nullptr;
   // Do some sanity check,
   // we no longer need to check the validity of those pointers in ObOperator.
   if (OB_ISNULL(GET_MY_SESSION(exec_ctx))
@@ -296,8 +295,6 @@ int ObOpSpec::create_operator(ObExecContext &exec_ctx, ObOperator *&op) const
     LOG_WARN("invalid argument", K(ret));
   } else if (OB_FAIL(create_operator_recursive(exec_ctx, op))) {
     LOG_WARN("create operator recursive failed", K(ret));
-  } else if (OB_FAIL(link_sql_plan_monitor_node_recursive(exec_ctx, pre_node))) {
-    LOG_WARN("fail to link sql plan monitor node recursive", K(ret));
   } else if (OB_FAIL(create_exec_feedback_node_recursive(exec_ctx))) {
     LOG_WARN("fail to create exec feedback node", K(ret));
   }
@@ -364,6 +361,7 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
         LOG_WARN("create operator failed", K(ret), KP(kit->op_), K(*this));
       } else {
         op = kit->op_;
+        op->get_monitor_info().set_op(op);
         op->get_monitor_info().set_operator_id(id_);
         op->get_monitor_info().set_operator_type(type_);
         op->get_monitor_info().set_plan_depth(plan_depth_);
@@ -397,33 +395,6 @@ int ObOpSpec::create_operator_recursive(ObExecContext &exec_ctx, ObOperator *&op
     }
   }
 
-  return ret;
-}
-
-int ObOpSpec::link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMonitorNode *&pre_node) const
-{
-  int ret = OB_SUCCESS;
-  ObOperatorKit *kit = exec_ctx.get_operator_kit(id_);
-  if (OB_ISNULL(kit) || OB_ISNULL(kit->op_)) {
-    LOG_TRACE("operator kit is NULL", K(ret));
-  } else if (OB_NOT_NULL(kit->op_->get_monitor_info().get_next()) ||
-             OB_NOT_NULL(kit->op_->get_monitor_info().get_prev())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("cur monitor info is unexpected", K(ret));
-  } else if (OB_ISNULL(pre_node)) {
-    pre_node = &(kit->op_->get_monitor_info());
-  } else {
-    pre_node->add_rt_monitor_node(&(kit->op_->get_monitor_info()));
-    pre_node = &(kit->op_->get_monitor_info());
-  }
-  for (int i = 0; OB_SUCC(ret) && i < child_cnt_; ++i) {
-    if (nullptr == children_[i]) {
-      continue;
-    } else if (OB_FAIL(SMART_CALL(children_[i]->link_sql_plan_monitor_node_recursive(
-        exec_ctx, pre_node)))) {
-      LOG_WARN("fail to link sql plan monitor", K(ret));
-    }
-  }
   return ret;
 }
 
@@ -524,6 +495,7 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     fb_node_idx_(OB_INVALID_INDEX),
     io_event_observer_(op_monitor_info_),
     cpu_begin_time_(0),
+    cpu_begin_level_(0),
     total_time_(0),
     batch_reach_end_(false),
     row_reach_end_(false),
@@ -993,14 +965,14 @@ int ObOperator::setup_op_feedback_info()
     ObExecFeedbackInfo &fb_info = ctx_.get_feedback_info();
     common::ObIArray<ObExecFeedbackNode> &nodes = fb_info.get_feedback_nodes();
     int64_t &total_db_time = fb_info.get_total_db_time();
-    total_db_time +=  op_monitor_info_.db_time_;
+    uint64_t db_time = op_monitor_info_.calc_db_time();
+    uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
+    db_time = db_time * 1000 / cpu_khz;
+    total_db_time += db_time;
     if (fb_node_idx_ >= 0 && fb_node_idx_ < nodes.count()) {
-      uint64_t cpu_khz = OBSERVER.get_cpu_frequency_khz();
       ObExecFeedbackNode &node = nodes.at(fb_node_idx_);
-      node.block_time_ = op_monitor_info_.block_time_;
-      node.block_time_ /= cpu_khz;
-      node.db_time_ = op_monitor_info_.db_time_;
-      node.db_time_ /= cpu_khz;
+      node.block_time_ = op_monitor_info_.block_time_ * 1000 / cpu_khz;;
+      node.db_time_ = db_time;
       node.op_close_time_ = op_monitor_info_.close_time_;
       node.op_first_row_time_ = op_monitor_info_.first_row_time_;
       node.op_last_row_time_ = op_monitor_info_.last_row_time_;
@@ -1021,23 +993,6 @@ int ObOperator::submit_op_monitor_node()
     // Reference document:
     op_monitor_info_.close_time_ = oceanbase::common::ObClockGenerator::getClock();
     ObPlanMonitorNodeList *list = MTL(ObPlanMonitorNodeList*);
-
-    // exclude time cost in children, but px receive have no real children in exec view
-    int64_t db_time = total_time_; // use temp var to avoid dis-order close
-    if (!spec_.is_receive()) {
-      for (int64_t i = 0; i < child_cnt_; i++) {
-        db_time -= children_[i]->total_time_;
-      }
-    }
-    if (db_time < 0) {
-      db_time = 0;
-    }
-    // exclude io time cost
-    // Change to divide by cpu_khz when generating the virtual table.
-    // Otherwise, the unit of this field is inconsistent during SQL execution and after SQL execution is completed.
-    op_monitor_info_.db_time_ = 1000 * db_time;
-    op_monitor_info_.block_time_ = 1000 * op_monitor_info_.block_time_;
-
     if (list && spec_.plan_) {
       if (spec_.plan_->get_phy_plan_hint().monitor_
           || (ctx_.get_my_session()->is_user_session()
@@ -1070,11 +1025,9 @@ int ObOperator::get_next_row()
     } else if (OB_UNLIKELY(get_spec().is_vectorized())) {
       // Operator itself supports vectorization, while parent operator does NOT.
       // Use vectorize method to get next row.
-      end_cpu_time_counting();
       if (OB_FAIL(get_next_row_vectorizely())) {
         // do nothing
       }
-      begin_cpu_time_counting();
     } else {
       if (OB_UNLIKELY(!startup_passed_)) {
         bool filtered = false;
@@ -1275,13 +1228,11 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
     } else {
-      end_cpu_time_counting();
       // Operator does NOT support vectorization, while its parent does. Return
       // the batch with only 1 row
       if (OB_FAIL(get_next_batch_with_onlyone_row())) {
         // do nothing
       }
-      begin_cpu_time_counting();
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(spec_.need_check_output_datum_) && brs_checker_ && !brs_.end_ && brs_.size_ > 0) {
@@ -1362,9 +1313,9 @@ int ObOperator::filter_batch_rows(const ObExprPtrIArray &exprs,
 int ObOperator::drain_exch()
 {
   int ret = OB_SUCCESS;
-  uint64_t cpu_begin_time = rdtsc();
+  begin_cpu_time_counting();
   ret = do_drain_exch();
-  total_time_ += (rdtsc() - cpu_begin_time);
+  end_cpu_time_counting();
   return ret;
 }
 

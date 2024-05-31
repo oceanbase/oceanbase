@@ -94,6 +94,7 @@ ob_set_subtarget(ob_sql engine
   engine/ob_exec_context.cpp
   engine/ob_exec_feedback_info.cpp
   engine/ob_operator.cpp
+  engine/ob_mock_vec2.cpp
   engine/ob_operator_factory.cpp
   engine/ob_phy_operator_type.cpp
   engine/ob_physical_plan.cpp

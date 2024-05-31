@@ -440,7 +440,7 @@ int ObSSTable::exist(
       ObTabletStat &stat = context.store_ctx_->tablet_stat_;
       stat.ls_id_ = context.ls_id_.id();
       stat.tablet_id_ = context.tablet_id_.id();
-      stat.query_cnt_ = context.table_store_stat_.exist_row_.empty_read_cnt_ > 0;
+      stat.query_cnt_ = context.table_store_stat_.empty_read_cnt_ > 0;
 
       iter->~ObStoreRowIterator();
       context.stmt_allocator_->free(iter);

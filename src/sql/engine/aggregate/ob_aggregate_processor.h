@@ -310,7 +310,7 @@ public:
     bool is_inited_;
     bool need_rewind_;
     common::ObIAllocator &alloc_;
-    ObMonitorNode op_monitor_info_;
+    ObMonitorNode &op_monitor_info_;
 
   public:
     // for distinct calculate may be replace by hash based distinct in the future.

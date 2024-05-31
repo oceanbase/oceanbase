@@ -3034,7 +3034,7 @@ int ObTablet::do_rowkeys_exist(
     tablet_stat.exist_row_read_table_cnt_ = check_table_cnt;
     tablet_stat.exist_row_total_table_cnt_ = tables_iter.count();
     int tmp_ret = OB_SUCCESS;
-    if (0 == access_ctx.table_store_stat_.exist_row_.empty_read_cnt_) {
+    if (0 == access_ctx.table_store_stat_.empty_read_cnt_) {
       // ROWKEY IN_ROW_CACHE / NOT EXIST
     } else if (MTL(ObTenantTabletScheduler *)->enable_adaptive_compaction()) {
       bool report_succ = false; /*placeholder*/

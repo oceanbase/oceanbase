@@ -48,7 +48,6 @@ protected:
   virtual int can_batch_scan(bool &can_batch) override;
   virtual int is_range_valid() const override;
   virtual int prepare() override;
-  virtual void collect_merge_stat(ObTableStoreStat &stat) const override;
   virtual int supply_consume();
   virtual int inner_merge_row(blocksstable::ObDatumRow &row);
   int set_rows_merger(const int64_t table_cnt);
@@ -63,6 +62,7 @@ protected:
   int64_t consumers_[common::MAX_TABLE_CNT_IN_STORAGE];
   int64_t consumer_cnt_;
 private:
+  int64_t filt_del_count_;
   const blocksstable::ObDatumRange *range_;
   blocksstable::ObDatumRange cow_range_;
 

@@ -483,10 +483,10 @@ protected:
                                 ObNewRange &part_range);
 
   int fill_storage_feedback_info();
-  void fill_sql_plan_monitor_info();
   //int extract_scan_ranges();
   void fill_table_scan_stat(const ObTableScanStatistic &statistic,
                             ObTableScanStat &scan_stat) const;
+  void init_scan_monitor_info();
   void set_cache_stat(const ObPlanStat &plan_stat);
   int inner_get_next_row_implement();
   int fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &mbr);
@@ -655,6 +655,7 @@ protected:
   ObDASMergeIter *scan_iter_;
   int64_t group_rescan_cnt_;
   int64_t group_id_;
+  ObTSCMonitorInfo tsc_monitor_info_;
  };
 
 } // end namespace sql

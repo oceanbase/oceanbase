@@ -991,15 +991,16 @@ struct EstimateCostInfo {
       }
       return ret;
     }
-    static int compute_join_path_parallel_and_server_info(const common::ObAddr &local_server_addr,
-                                                          const Path *left_path,
-                                                          const Path *right_path,
-                                                          const DistAlgo join_dist_algo,
-                                                          bool const is_slave_mapping,
-                                                          int64_t &parallel,
-                                                          int64_t &available_parallel,
-                                                          int64_t &server_cnt,
-                                                          ObIArray<common::ObAddr> &server_list);
+    static int compute_join_path_parallel_and_server_info(ObOptimizerContext *opt_ctx,
+                                                         const Path *left_path,
+                                                         const Path *right_path,
+                                                         const DistAlgo join_dist_algo,
+                                                         const JoinAlgo join_algo,
+                                                         bool const is_slave_mapping,
+                                                         int64_t &parallel,
+                                                         int64_t &available_parallel,
+                                                         int64_t &server_cnt,
+                                                         ObIArray<common::ObAddr> &server_list);
   private:
     int compute_hash_hash_sharding_info();
     int compute_join_path_ordering();
@@ -1007,6 +1008,7 @@ struct EstimateCostInfo {
     int compute_join_path_sharding();
     int compute_join_path_plan_type();
     int compute_join_path_parallel_and_server_info();
+    int re_adjust_sharding_ordering_info();
     int can_use_batch_nlj(bool &use_batch_nlj);
     int can_use_batch_nlj(ObLogPlan *plan, const AccessPath *access_path, bool &use_batch_nlj);
     int can_use_das_batch_nlj(ObLogicalOperator* root, bool &use_batch_nlj);

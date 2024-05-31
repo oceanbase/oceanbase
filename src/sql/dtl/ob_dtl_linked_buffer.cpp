@@ -35,6 +35,7 @@ OB_DEF_SERIALIZE(ObDtlOpInfo)
     MEMCPY(buf + pos, sql_id_, common::OB_MAX_SQL_ID_LENGTH + 1);
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
+  LST_DO_CODE(OB_UNIS_ENCODE, op_id_, input_rows_, input_width_);
   return ret;
 }
 
@@ -47,6 +48,7 @@ OB_DEF_DESERIALIZE(ObDtlOpInfo)
     MEMCPY(sql_id_, (char*)buf + pos, common::OB_MAX_SQL_ID_LENGTH + 1);
     pos += common::OB_MAX_SQL_ID_LENGTH + 1;
   }
+  LST_DO_CODE(OB_UNIS_DECODE, op_id_, input_rows_, input_width_);
   return ret;
 }
 
@@ -55,6 +57,7 @@ OB_DEF_SERIALIZE_SIZE(ObDtlOpInfo)
   int64_t len = 0;
   LST_DO_CODE(OB_UNIS_ADD_LEN, dop_, plan_id_, exec_id_, session_id_, database_id_);
   len += common::OB_MAX_SQL_ID_LENGTH + 1;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, op_id_, input_rows_, input_width_);
   return len;
 }
 

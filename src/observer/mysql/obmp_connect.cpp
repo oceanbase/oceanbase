@@ -142,7 +142,9 @@ ObMPConnect::ObMPConnect(const ObGlobalContext &gctx)
       client_ip_(),
       tenant_name_(),
       db_name_(),
-      deser_ret_(OB_SUCCESS)
+      deser_ret_(OB_SUCCESS),
+      allocator_(ObModIds::OB_SQL_REQUEST),
+      asr_mem_pool_(&allocator_)
 {
   client_ip_buf_[0] = '\0';
   user_name_var_[0] = '\0';
@@ -668,14 +670,103 @@ int ObMPConnect::load_privilege_info(ObSQLSessionInfo &session)
             login_info.db_ = db_name;
           }
         }
-        if (OB_SUCC(ret)) {
+        LOG_TRACE("some important information required for login verification, print it before doing login", K(ret), K(ObString(sizeof(conn->scramble_buf_), conn->scramble_buf_)), K(conn->is_proxy_), K(conn->client_type_), K(hsr_.get_auth_plugin_name()), K(hsr_.get_auth_response()));
+        if (OB_FAIL(ret)) {
+          // Do nothing
+        } else {
           login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
-          login_info.passwd_ = hsr_.get_auth_response();
+          login_info.passwd_ = hsr_.get_auth_response();// Assume client is use mysql_native_password
+          bool is_empty_passwd = false;
+          if (OB_FAIL(schema_guard.is_user_empty_passwd(login_info, is_empty_passwd))) {
+            LOG_WARN("failed to check is user account is empty && login_info.passwd_ is empty", K(ret), K(login_info.passwd_));
+          } else if (!is_empty_passwd && // user account with empty password do not need auth switch, same as MySQL 5.7 and 8.x
+                    OB_CLIENT_NON_STANDARD == conn->client_type_ && // client is not OB's C/JAVA client
+                    !hsr_.get_auth_plugin_name().empty() && // client do not use mysql_native_method
+                    hsr_.get_auth_plugin_name().compare(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD)) {
+            // Client is not use mysql_native_password method,
+            // but observer only support mysql_native_password in user account's authentication,
+            // so observer need tell client use mysql_native_password method by sending "AuthSwitchRequest"
+            LOG_TRACE("auth plugin from client is not mysql_native_password, start to auth switch request", K(ret), K(hsr_.get_auth_plugin_name()));
+            conn->set_auth_switch_phase(); // State of connection turn to auth_switch_phase
+            OMPKAuthSwitch auth_switch;
+            auth_switch.set_plugin_name(ObString(AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD));
+            // "AuthSwitchRequest" carry 20 bit random salt value(MySQL call it scramble) to client which has sent in "Initial Handshake Packet"
+            auth_switch.set_scramble(ObString(sizeof(conn->scramble_buf_), conn->scramble_buf_));
+            /*-------------------START-----------------If error occur, disconnect-------------------START-----------------*/
+            if (OB_FAIL(packet_sender_.response_packet(auth_switch, &session))) {
+              RPC_LOG(WARN, "failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
+              LOG_WARN("failed to send auth switch request packet, disconnect", K(auth_switch), K(ret));
+              packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
+              disconnect();// If send "AuthSwitchRequest" failed, observer need disconnect with client
+            } else if (OB_FAIL(packet_sender_.flush_buffer(false/*is_last*/))) { // "AuthSwitchRequest" may not have been sent yet, flush the buffer to ensure it has been sent.
+              RPC_LOG(WARN, "failed to flush socket buffer while sending auth switch request packet, disconnect", K(auth_switch), K(ret));
+              LOG_WARN("failed to flush socket buffer while sending auth switch request packet, disconnect", K(auth_switch), K(ret));
+              packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
+              disconnect();// If send "AuthSwitchRequest" failed, observer need disconnect with client
+            } else {
+              LOG_TRACE("suuc to send auth switch request", K(ret));
+              obmysql::ObMySQLPacket *asr_pkt = NULL;
+              int64_t start_wait_asr_time = ObTimeUtil::current_time();
+              int receive_asr_times = 0;
+              while (OB_SUCC(ret) && OB_ISNULL(asr_pkt)) {
+                ++receive_asr_times;
+                usleep(10 * 1000); // Sleep 10 ms at every time trying receive auth-switch-response mysql pkt
+                // TO DO:
+                // In most unix system, The max TCP Retransmission Timeout is under 240 seconds,
+                // we need to set a suitable timeout, what should this be?
+                if (ObTimeUtil::current_time() - start_wait_asr_time > 10000000) {
+                  ret = OB_WAIT_NEXT_TIMEOUT;
+                  RPC_LOG(WARN, "read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
+                  LOG_WARN("read auth switch response pkt timeout, disconnect", K(ret), K(receive_asr_times));
+                  packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
+                  disconnect(); // If receive "AuthSwitchResponse" timeout, observer need disconnect with client
+                } else if (OB_FAIL(read_packet(asr_mem_pool_, asr_pkt))) {
+                  RPC_LOG(WARN, "failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
+                  LOG_WARN("failed to read auth switch response pkt, disconnect", K(ret), K(receive_asr_times));
+                  packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
+                  disconnect(); // If receive "AuthSwitchResponse" failed, observer need disconnect with client
+                } else {
+                  LOG_WARN("succ try to read auth switch response pkt", K(ret), K(receive_asr_times), KP(asr_pkt));
+                }
+              }
+              if (OB_FAIL(ret)) {
+                // Do nothing
+              } else if (OB_ISNULL(asr_pkt)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null ptr, disconnect", K(ret));
+                packet_sender_.disable_response(); // The connection is about to be closed, do not need response ok pkt or err pkt, so disable it
+                disconnect(); // If receive "AuthSwitchResponse" failed, observer need disconnect with client
+              } else {
+              /*--------------------END------------------if error occur, disconnect--------------------END------------------*/
+                LOG_TRACE("suuc to receive auth switch response", K(ret));
+                const obmysql::ObMySQLRawPacket *asr_raw_pkt  = reinterpret_cast<const ObMySQLRawPacket*>(asr_pkt);
+                const char *auth_data = asr_raw_pkt->get_cdata();
+                const int64_t auth_data_len = asr_raw_pkt->get_clen();
+                void *auth_buf = NULL;
+                // Length of authentication response data in AuthSwitchResponse which is using mysql_native_password methon is 20 byte,
+                // the ObSMConnection::SCRAMBLE_BUF_SIZE is 20
+                if (ObSMConnection::SCRAMBLE_BUF_SIZE != auth_data_len) {
+                  ret = OB_PASSWORD_WRONG;
+                  LOG_WARN("invalid length of authentication response data", K(ret), K(auth_data_len), K(ObString(auth_data_len, auth_data)));
+                } else if (OB_ISNULL(auth_buf = asr_mem_pool_.alloc(auth_data_len))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("alloc auth data buffer for auth switch response failed", K(ret), K(auth_data_len));
+                } else {
+                  // packet_sender_.release_packet will recycle mem of auth_data, need using mem allocated by asr_mem_pool_ to save it
+                  MEMCPY(auth_buf, auth_data, auth_data_len);
+                  login_info.scramble_str_.assign_ptr(conn->scramble_buf_, sizeof(conn->scramble_buf_));
+                  login_info.passwd_.assign_ptr(static_cast<const char*>(auth_buf), auth_data_len);
+                }
+                packet_sender_.release_packet(asr_pkt);
+                asr_pkt = NULL;
+                asr_raw_pkt = NULL;
+              }
+            }
+            conn->set_auth_phase(); // State of connection turn to auth_phase
+          }
         }
-
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(schema_guard.check_user_access(login_info, session_priv, ssl_st, user_info))) {
-
           int inner_ret = OB_SUCCESS;
           bool is_unlocked = false;
           if (ORACLE_MODE == session.get_compatibility_mode()

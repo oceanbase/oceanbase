@@ -70,6 +70,7 @@ struct SubPlanInfo;
 class OptSelectivityCtx;
 class Path;
 class ObSharedExprResolver;
+class ObTableMetaInfo;
 class ObOptimizerUtil
 {
 public:
@@ -1554,6 +1555,13 @@ public:
   static int check_ancestor_node_support_skip_scan(ObLogicalOperator* op, bool &can_use_batch_nlj);
 
   static int check_is_static_false_expr(ObOptimizerContext &opt_ctx, ObRawExpr &expr, bool &is_static_false);
+
+  static int compute_nlj_spf_storage_compute_parallel_skew(ObOptimizerContext *opt_ctx,
+                                                           uint64_t ref_table_id,
+                                                           const ObTableMetaInfo *esti_table_meta_info,
+                                                           int64_t compute_parallel,
+                                                           int64_t &px_expected_work_count);
+
 private:
   //disallow construct
   ObOptimizerUtil();

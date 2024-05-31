@@ -72,7 +72,9 @@ protected:
   ObExecutingSqlStatRecord sqlstat_record_;
   int64_t bkgd_ash_stat_sess_id_;
   ObSessionStatEstGuard sess_stat_guard_;
-
+  //tsc monitor info
+  int64_t monitor_val_[4];
+  ObTSCMonitorInfo tsc_monitor_info_;
 };
 
 class ObDASSyncAccessP final : public ObDASBaseAccessP<obrpc::OB_DAS_SYNC_ACCESS> {

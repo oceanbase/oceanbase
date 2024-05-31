@@ -194,6 +194,7 @@ int ObSSTableRowScanner<PrefetchType>::open_cur_data_block(ObSSTableReadHandle &
       }
       if (OB_SUCC(ret)) {
         ++access_ctx_->table_store_stat_.micro_access_cnt_;
+        REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_scanner_->get_data_length());
         LOG_DEBUG("Success to open micro block", K(ret), K(read_handle), K(prefetcher_.cur_micro_data_fetch_idx_),
                   K(micro_info), K(micro_handle), KPC(this), K(common::lbt()));
       }

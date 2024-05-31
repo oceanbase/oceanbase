@@ -28,7 +28,7 @@ struct ObTableIterParam;
 struct ObTableAccessContext;
 struct PushdownFilterInfo;
 class ObBlockRowStore;
-class ObTableStoreStat;
+class ObTableScanStoreStat;
 }
 namespace blocksstable
 {
@@ -44,6 +44,8 @@ public:
       storage::ObTableAccessContext &context,
       const blocksstable::ObSSTable *sstable);
   OB_INLINE bool is_valid() const { return is_inited_ && nullptr != range_; }
+  OB_INLINE int64_t get_data_length() const
+  { return nullptr == reader_ ? 0 : reader_->original_data_length(); }
   virtual int switch_context(
       const storage::ObTableIterParam &param,
       storage::ObTableAccessContext &context,
@@ -58,7 +60,7 @@ public:
   virtual int get_next_rows();
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat);
+      storage::ObTableScanStoreStat &table_store_stat);
   int filter_pushdown_filter(
       sql::ObPushdownFilterExecutor *parent,
       sql::ObPushdownFilterExecutor *filter,
@@ -296,7 +298,7 @@ public:
   void reuse() override;
   virtual int apply_blockscan(
       storage::ObBlockRowStore *block_row_store,
-      storage::ObTableStoreStat &table_store_stat) override final
+      storage::ObTableScanStoreStat &table_store_stat) override final
   {
     UNUSEDx(block_row_store, table_store_stat);
     return OB_NOT_SUPPORTED;

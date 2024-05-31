@@ -3844,6 +3844,9 @@ int ObSql::code_generate(
   // set phy table location in task_exec_ctx, query_timeout in exec_context
   if (OB_SUCC(ret)) {
     ObPhyPlanHint phy_hint(logical_plan->get_optimizer_context().get_global_hint());
+    if (sql_ctx.session_info_->get_enable_sql_plan_monitor()) {
+      phy_hint.monitor_ = true;
+    }
     // set larger query_time for IS
     if (stmt->get_query_ctx()->has_is_table_) {
       int tmp_ret = OB_SUCCESS;

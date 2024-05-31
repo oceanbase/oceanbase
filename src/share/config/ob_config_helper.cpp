@@ -495,6 +495,11 @@ bool ObTTLDutyDurationChecker::check(const ObConfigItem& t) const
   return OB_SUCCESS == common::ObTTLUtil::parse(t.str(), duty_duration) && duty_duration.is_valid();
 }
 
+bool ObMySQLVersionLengthChecker::check(const ObConfigItem& t) const
+{
+  return STRLEN(t.str()) < 16; // length of MySQL version is less then 16
+}
+
 bool ObConfigPublishSchemaModeChecker::check(const ObConfigItem& t) const
 {
   return 0 == t.case_compare(PUBLISH_SCHEMA_MODE_BEST_EFFORT)

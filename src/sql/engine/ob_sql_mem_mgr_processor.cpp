@@ -27,9 +27,7 @@ int ObSqlMemMgrProcessor::init(
   int64_t cache_size,
   const ObPhyOperatorType op_type,
   const uint64_t op_id,
-  ObExecContext *exec_ctx,
-  dtl::ObDtlLinkedBuffer *buffer,
-  bool outside_op)
+  ObSqlProfileExecInfo exec_info)
 {
   int ret = OB_SUCCESS;
   bool tmp_enable_auto_mem_mgr = false;
@@ -39,29 +37,13 @@ int ObSqlMemMgrProcessor::init(
   tenant_id_ = tenant_id;
   profile_.set_operator_type(op_type);
   profile_.set_operator_id(op_id);
-  profile_.set_exec_ctx(exec_ctx);
+  profile_.set_exec_info(exec_info);
   const int64_t DEFAULT_CACHE_SIZE = 2 * 1024 * 1024;
   if (cache_size < 0) {
     LOG_WARN("unexpected cache size got", K(lbt()), K(cache_size), K(op_id), K(op_type));
     cache_size = DEFAULT_CACHE_SIZE;
   }
-  if (!outside_op) {
-    if (OB_ISNULL(exec_ctx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get exec ctx", K(ret));
-    } else if (OB_FAIL(profile_.set_exec_info(*exec_ctx))) {
-      LOG_WARN("failed to set exec info", K(ret));
-    }
-  } else {
-    if (OB_ISNULL(buffer)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get ObDtlLinkedBuffer", K(ret));
-    } else if (OB_FAIL(profile_.set_exec_info(*buffer))) {
-      LOG_WARN("failed to set exec info", K(ret), KPC(buffer));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(alloc_dir_id(dir_id_))) {
+  if (OB_FAIL(alloc_dir_id(dir_id_))) {
   } else if (OB_NOT_NULL(sql_mem_mgr)) {
     if (sql_mem_mgr->enable_auto_memory_mgr()) {
       tmp_enable_auto_mem_mgr = true;
@@ -111,7 +93,7 @@ int ObSqlMemMgrProcessor::init(
   if (OB_FAIL(ret)) {
     LOG_WARN("fail to init", K(ret), K(cache_size));
   } else if (OB_FAIL(ObSqlWorkareaUtil::get_workarea_size(
-      profile_.get_work_area_type(), tenant_id_, exec_ctx, max_mem_size))) {
+      profile_.get_work_area_type(), tenant_id_, exec_info, max_mem_size))) {
     LOG_WARN("failed to get workarea size", K(ret), K(tenant_id_), K(max_mem_size));
   }
   if (!profile_.get_auto_policy()) {
@@ -227,7 +209,7 @@ int ObSqlMemMgrProcessor::try_upgrade_auto_mgr(ObIAllocator *allocator, int64_t 
     } else if (OB_FAIL(init(allocator, tenant_id_,
                             max_area_size * (EXTEND_RATIO + 100) /100,
                             profile_.get_operator_type(),
-                            profile_.get_operator_id(), profile_.get_exec_ctx()))) {
+                            profile_.get_operator_id(), profile_.get_exec_info()))) {
       LOG_WARN("failed to upgrade sql memory manager", K(ret));
     } else if (is_auto_mgr()) {
       // 由于之前未注册，所以对内存统计不会反应到sql mem manager中，但现在注册了，则需要重新更新下内存值
@@ -333,20 +315,42 @@ int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type,
                                          int64_t &value)
 {
   int ret = OB_SUCCESS;
+  if (OB_ISNULL(exec_ctx)) {
+    if (OB_FAIL(get_workarea_size(wa_type, tenant_id, value, nullptr))) {
+      LOG_WARN("Fail to get workarea size", K(ret));
+    }
+  } else if (OB_FAIL(get_workarea_size(wa_type, tenant_id, value, exec_ctx->get_my_session()))) {
+    LOG_WARN("Fail to get workarea size", K(ret));
+  }
+  return ret;
+}
 
-  if (NULL != exec_ctx) {
-    if (OB_ISNULL(exec_ctx->get_my_session())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected exec_ctx or session", K(ret), K(wa_type), K(tenant_id), KP(exec_ctx));
+int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type,
+                                         const int64_t tenant_id,
+                                         ObSqlProfileExecInfo &exec_info,
+                                         int64_t &value)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_workarea_size(wa_type, tenant_id, value, exec_info.get_my_session()))) {
+    LOG_WARN("Fail to get workarea size", K(ret));
+  }
+  return ret;
+}
+
+int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type,
+                                         const int64_t tenant_id,
+                                         int64_t &value,
+                                         ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(session)) {
+    if (HASH_WORK_AREA == wa_type) {
+      value = session->get_tenant_hash_area_size();
+    } else if (SORT_WORK_AREA == wa_type) {
+      value = session->get_tenant_sort_area_size();
     } else {
-      if (HASH_WORK_AREA == wa_type) {
-        value = exec_ctx->get_my_session()->get_tenant_hash_area_size();
-      } else if (SORT_WORK_AREA == wa_type) {
-        value = exec_ctx->get_my_session()->get_tenant_sort_area_size();
-      } else {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
-      }
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
     }
   } else {
     ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
@@ -359,15 +363,12 @@ int ObSqlWorkareaUtil::get_workarea_size(const ObSqlWorkAreaType wa_type,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected status: workarea type", K(wa_type), K(tenant_id));
       }
-      LOG_DEBUG("debug workarea size", K(value), K(tenant_id), K(lbt()));
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to init tenant config", K(tenant_id), K(ret));
     }
   }
-
   LOG_DEBUG("debug workarea size", K(value), K(tenant_id), K(lbt()));
-
   return ret;
 }
 

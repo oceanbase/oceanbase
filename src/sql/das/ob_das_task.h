@@ -56,7 +56,8 @@ public:
       user_id_(0),
       session_id_(0),
       plan_id_(0),
-      plan_hash_(0)
+      plan_hash_(0),
+      tsc_monitor_info_(nullptr)
   {
     sql_id_[0] = '\0';
   }
@@ -90,6 +91,7 @@ public:
   uint64_t session_id_;
   uint64_t plan_id_;
   uint64_t plan_hash_;
+  ObTSCMonitorInfo *tsc_monitor_info_;
 };
 
 class ObIDASTaskOp
@@ -280,7 +282,7 @@ public:
   virtual ~ObIDASTaskResult() { }
   virtual int init(const ObIDASTaskOp &task_op, common::ObIAllocator &alloc) = 0;
   virtual int reuse() = 0;
-  virtual int link_extra_result(ObDASExtraData &extra_result)
+  virtual int link_extra_result(ObDASExtraData &extra_result, ObIDASTaskOp *task_op)
   {
     UNUSED(extra_result);
     return common::OB_NOT_IMPLEMENT;
@@ -528,12 +530,19 @@ public:
   ObChunkDatumStore &get_datum_store() { return datum_store_; }
   void set_has_more(const bool has_more) { has_more_ = has_more; }
   bool has_more() { return has_more_; }
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store));
+  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(has_more), K_(datum_store),
+               K_(io_read_bytes), K_(ssstore_read_bytes),
+               K_(ssstore_read_row_cnt), K_(memstore_read_row_cnt));
 private:
   ObChunkDatumStore datum_store_;
   uint64_t tenant_id_;
   int64_t task_id_;
   bool has_more_;
+public:
+  int64_t io_read_bytes_;
+  int64_t ssstore_read_bytes_;
+  int64_t ssstore_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
 };
 
 class ObDASDataEraseReq

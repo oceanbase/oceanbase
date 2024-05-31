@@ -4810,10 +4810,13 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     if (join_path.right_path_->is_sharding() && !join_path.right_path_->contain_fake_cte()) {
       right_exch_info.dist_method_ = ObPQDistributeMethod::LOCAL;
     }
-  } else if (DistAlgo::DIST_NONE_ALL == join_path.join_dist_algo_ ||
-             DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
+  } else if (DistAlgo::DIST_NONE_ALL == join_path.join_dist_algo_
+            || DistAlgo::DIST_ALL_NONE == join_path.join_dist_algo_) {
     // do nothing
-  } else { /*do nothing*/ }
+  } else if (DistAlgo::DIST_RANDOM_ALL == join_path.join_dist_algo_) {
+    left_exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+  } else { /*do nothing*/
+  }
 
   if (OB_SUCC(ret)) {
     // support null skew handling
@@ -9203,7 +9206,7 @@ int ObLogPlan::get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subpla
   int ret = OB_SUCCESS;
   dist_methods = DIST_BASIC_METHOD | DIST_PULL_TO_LOCAL
                  | DIST_PARTITION_WISE | DIST_PARTITION_NONE
-                 | DIST_NONE_ALL;
+                 | DIST_NONE_ALL | DIST_HASH_ALL | DIST_RANDOM_ALL;
   const ObLogicalOperator *op = NULL;
   bool contain_recursive_cte = false;
   if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(candidates_.candidate_plans_.empty()
@@ -9233,8 +9236,7 @@ int ObLogPlan::get_valid_subplan_filter_dist_method(ObIArray<ObLogPlan*> &subpla
 
     if (OB_SUCC(ret) && !ignore_hint) {
       const bool implicit_hint_allowed = (subplans.count() == get_stmt()->get_subquery_expr_size());
-      dist_methods &= get_log_plan_hint().get_valid_pq_subquery_dist_algo(sub_qb_names,
-                                                                          implicit_hint_allowed);
+      dist_methods &= get_log_plan_hint().get_valid_pq_subquery_dist_algo(sub_qb_names, implicit_hint_allowed);
     }
 
     if (OB_FAIL(ret)) {
@@ -9518,6 +9520,52 @@ int ObLogPlan::get_subplan_filter_distributed_method(ObLogicalOperator *&top,
     distributed_methods &= (DIST_BASIC_METHOD | DIST_PULL_TO_LOCAL);
   }
 
+  if (OB_SUCC(ret) && top->is_table_scan()
+      && (distributed_methods & DistAlgo::DIST_HASH_ALL ||
+          distributed_methods & DistAlgo::DIST_RANDOM_ALL)) {
+    if (OB_FAIL(check_if_match_none_all(top, subquery_ops, is_none_all))) {
+      LOG_WARN("failed to check if match repart", K(ret));
+    } else if (is_none_all && !has_onetime) {
+      // if it's hint control
+      if (distributed_methods == DistAlgo::DIST_HASH_ALL) {
+        distributed_methods = DistAlgo::DIST_HASH_ALL;
+        OPT_TRACE("SPF will use hash all method by hint");
+      } else if (distributed_methods == DistAlgo::DIST_RANDOM_ALL) {
+        distributed_methods = DistAlgo::DIST_RANDOM_ALL;
+        OPT_TRACE("SPF will use random all method by hint");
+      } else {
+        int64_t compute_parallel = top->get_parallel();
+        ObLogTableScan *log_table_scan = static_cast<ObLogTableScan *>(top);
+        int64_t px_expected_work_count = 0;
+        const ObTableMetaInfo *table_meta_info =
+          log_table_scan->get_access_path()->est_cost_info_.table_meta_info_;
+        LOG_TRACE("SPF random shuffle est table meta info", K(*table_meta_info));
+
+        if (OB_FAIL(ObOptimizerUtil::compute_nlj_spf_storage_compute_parallel_skew(
+              &get_optimizer_context(), log_table_scan->get_ref_table_id(), table_meta_info,
+              compute_parallel, px_expected_work_count))) {
+          LOG_WARN("Fail to compute none_all spf storage compute parallel skew", K(ret));
+        } else if (px_expected_work_count < compute_parallel) {
+          // we have more compute resources, so we should add a hash shuffle
+          // by default we use hash_all if we have exec_param, otherwise random_all in subplan filter only show up by hint
+          if (params.empty()) {
+            distributed_methods = DIST_RANDOM_ALL;
+            OPT_TRACE("SPF will use random all method");
+          } else {
+            distributed_methods = DIST_HASH_ALL;
+            OPT_TRACE("SPF will use hash all method");
+          }
+        } else {
+          distributed_methods &= ~DistAlgo::DIST_HASH_ALL;
+          distributed_methods &= ~DistAlgo::DIST_RANDOM_ALL;
+        }
+      }
+    } else {
+      distributed_methods &= ~DIST_HASH_ALL;
+      distributed_methods &= ~DIST_RANDOM_ALL;
+    }
+  }
+
   if (OB_SUCC(ret) && (distributed_methods & DistAlgo::DIST_NONE_ALL)) {
     if (OB_FAIL(check_if_match_none_all(top, subquery_ops, is_none_all))) {
       LOG_WARN("failed to check if match repart", K(ret));
@@ -9601,6 +9649,23 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
                                                 is_update_set))) {
       LOG_WARN("failed to allocate subplan filter as top", K(ret));
     } else { /*do nothing*/ }
+  } else if (DistAlgo::DIST_HASH_ALL == dist_algo || DistAlgo::DIST_RANDOM_ALL == dist_algo) {
+    if(OB_FAIL(compute_subplan_filter_random_shuffle_info(top, params, dist_algo, exch_info))) {
+      LOG_WARN("failed to compute subplan filter random shuffle exchange info", K(ret));
+    } else if (OB_FAIL(allocate_exchange_as_top(top, exch_info))) {
+      LOG_WARN("failed to allocate exchange as top", K(ret));
+    } else if (OB_FAIL(allocate_subplan_filter_as_top(top,
+                                                      subquery_ops,
+                                                      query_ref_exprs,
+                                                      params,
+                                                      onetime_exprs,
+                                                      initplan_idxs,
+                                                      onetime_idxs,
+                                                      filters,
+                                                      dist_algo,
+                                                      is_update_set))) {
+      LOG_WARN("failed to allocate subplan filter as top", K(ret));
+    } else { /*do nothing*/ }
   } else if (DistAlgo::DIST_PARTITION_NONE == dist_algo) {
     if (OB_FAIL(compute_subplan_filter_repartition_distribution_info(top,
                                                                       subquery_ops,
@@ -9637,7 +9702,38 @@ int ObLogPlan::create_subplan_filter_plan(ObLogicalOperator *&top,
                                                     dist_algo,
                                                     is_update_set))) {
     LOG_WARN("failed to allocate subplan filter as top", K(ret));
-  } else { /*do nothing*/ }
+  } else { /*do nothing*/
+  }
+  return ret;
+}
+
+int ObLogPlan::compute_subplan_filter_random_shuffle_info(ObLogicalOperator* top,
+                                                          const ObIArray<ObExecParamRawExpr *> &params,
+                                                          const DistAlgo dist_algo,
+                                                          ObExchangeInfo &exch_info)
+{
+  int ret = OB_SUCCESS;
+  if (dist_algo == DistAlgo::DIST_RANDOM_ALL) {
+    exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
+  } else if (dist_algo == DistAlgo::DIST_HASH_ALL) {
+    ObSEArray<ObRawExpr *, 4> exec_raw_params;
+    for (int64_t i = 0; i < params.count() && OB_SUCC(ret); i++) {
+      if (OB_FAIL(add_var_to_array_no_dup(exec_raw_params, params.at(i)->get_ref_expr()))) {
+        LOG_WARN("fail to push_back expr to exec_raw_params", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!exec_raw_params.empty()) {
+      if (OB_FAIL(get_grouping_style_exchange_info(exec_raw_params, top->get_output_equal_sets(),
+                                                   exch_info))) {
+        LOG_WARN("fail get spf hash shuffle exchange info", K(ret));
+      }
+    } else {
+      // Subplan filter must should have exec params when use hash shuffle
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Subplan filter must should have exec params when use hash shuffle!", K(ret));
+    }
+  }
   return ret;
 }
 

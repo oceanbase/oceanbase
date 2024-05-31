@@ -387,6 +387,8 @@ int ObGranuleUtil::compute_total_task_count(const ObParallelBlockRangeTaskParams
     // default value of expected_task_load_ is 128 MB
     int64_t expected_task_load = max(params.expected_task_load_, min_task_access_size);
 
+    LOG_TRACE("compute task count: ", K(total_access_size), K(expected_task_load));
+
     // lower bound size: dop*128M*13
     int64_t lower_bound_size = params.parallelism_ * expected_task_load * params.min_task_count_per_thread_;
     // hight bound size: dop*128M*100

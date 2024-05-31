@@ -36,7 +36,8 @@ public:
            const ObStoreCtx &ctx,
            const share::ObLSID &ls_id,
            const int64_t snapshot_version);
-  int init(const ObTableStoreStat &table_store_stat,
+  int init(const uint64_t table_id,
+           const uint64_t tablet_id,
            const ObStoreCtx &ctx,
            const share::ObLSID &ls_id,
            const int64_t snapshot_version);

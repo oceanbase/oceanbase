@@ -206,9 +206,9 @@ int ObPxTransmitOp::inner_open()
 
 int ObPxTransmitOp::transmit()
 {
-  int64_t cpu_begin_time = rdtsc();
+  begin_cpu_time_counting();
   int ret = do_transmit();
-  total_time_ += (rdtsc() - cpu_begin_time_);
+  end_cpu_time_counting();
   return ret;
 }
 

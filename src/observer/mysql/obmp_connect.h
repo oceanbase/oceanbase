@@ -30,6 +30,24 @@ struct ObSMConnection;
 ObString extract_user_name(const ObString &in);
 int extract_user_tenant(const ObString &in, ObString &user_name, ObString &tenant_name);
 int extract_tenant_id(const ObString &tenant_name, uint64_t &tenant_id);
+
+class AuthSwitchResonseMemPool : public obmysql::ObICSMemPool
+{
+public:
+  explicit AuthSwitchResonseMemPool(ObIAllocator *allocator)
+      : allocator_(allocator)
+  {}
+
+  virtual ~AuthSwitchResonseMemPool() {}
+
+  void *alloc(int64_t size) override
+  {
+    return allocator_->alloc(size);
+  }
+private:
+  ObIAllocator *allocator_;
+};
+
 class ObMPConnect
     : public ObMPBase
 {
@@ -140,6 +158,8 @@ private:
   char proxied_user_name_var_[OB_MAX_USER_NAME_BUF_LENGTH];
   char db_name_var_[OB_MAX_DATABASE_NAME_BUF_LENGTH];
   int deser_ret_;
+  ObArenaAllocator allocator_;
+  AuthSwitchResonseMemPool asr_mem_pool_;
 }; // end of class ObMPConnect
 
 } // end of namespace observer

@@ -18,6 +18,10 @@
 #include "rpc/obmysql/ob_mysql_util.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 
+#define DEFAULT_MYSQL_VERSION_CSTR "5.7.25"
+
+extern ObString get_display_mysql_version_cfg();
+
 namespace oceanbase
 {
 namespace obmysql
@@ -29,7 +33,6 @@ class OMPKHandshake
 public:
   static const int32_t SCRAMBLE_SIZE = 8;
   static const int64_t SCRAMBLE_TOTAL_SIZE = 20;
-
 public:
   OMPKHandshake();
 
@@ -118,7 +121,6 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(OMPKHandshake);
-  static const char *SERVER_VERSION_STR;
 
   const static char *AUTH_PLUGIN_MYSQL_NATIVE_PASSWORD; // Secure Password Authentication
   const static char *AUTH_PLUGIN_MYSQL_OLD_PASSWORD;    // Old Password Authentication

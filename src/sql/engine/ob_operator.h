@@ -324,7 +324,6 @@ private:
   int create_op_input_recursive(ObExecContext &exec_ctx) const;
   // assign spec ptr to ObOpKitStore
   int assign_spec_ptr_recursive(ObExecContext &exec_ctx) const;
-  int link_sql_plan_monitor_node_recursive(ObExecContext &exec_ctx, ObMonitorNode *&pre_node) const;
   int create_exec_feedback_node_recursive(ObExecContext &exec_ctx) const;
   // Data members are accessed in ObOperator class, exposed for convenience.
 public:
@@ -617,11 +616,17 @@ protected:
 
   inline void begin_cpu_time_counting()
   {
-    cpu_begin_time_ = rdtsc();
+    if (cpu_begin_level_ == 0) {
+      cpu_begin_time_ = rdtsc();
+    }
+    ++cpu_begin_level_;
   }
   inline void end_cpu_time_counting()
   {
-    total_time_ += (rdtsc() - cpu_begin_time_);
+    --cpu_begin_level_;
+    if (cpu_begin_level_ == 0) {
+      total_time_ += (rdtsc() - cpu_begin_time_);
+    }
   }
   inline void begin_ash_line_id_reg()
   {
@@ -642,7 +647,9 @@ protected:
   #ifdef ENABLE_DEBUG_LOG
   inline int init_dummy_mem_context(uint64_t tenant_id);
   #endif
+public:
   uint64_t cpu_begin_time_; // start of counting cpu time
+  uint64_t cpu_begin_level_; // level of counting cpu time
   uint64_t total_time_; //  total time cost on this op, including io & cpu time
 protected:
   bool batch_reach_end_;

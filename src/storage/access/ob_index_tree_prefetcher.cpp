@@ -355,16 +355,12 @@ int ObIndexTreePrefetcher::prefetch_block_data(
               micro_handle))) {
     //cache miss
     ++access_ctx_->table_store_stat_.block_cache_miss_cnt_;
-    if (!is_data) {
-      ++access_ctx_->table_store_stat_.index_block_cache_miss_cnt_;
-    }
     need_submit_io = true;
     ret = OB_SUCCESS;
   } else {
     //cache hit
     ++access_ctx_->table_store_stat_.block_cache_hit_cnt_;
     if (!is_data) {
-      ++access_ctx_->table_store_stat_.index_block_cache_hit_cnt_;
       EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
     } else {
       EVENT_INC(ObStatEventIds::DATA_BLOCK_CACHE_HIT);
@@ -374,6 +370,7 @@ int ObIndexTreePrefetcher::prefetch_block_data(
     micro_handle.micro_info_.offset_ = offset;
     micro_handle.micro_info_.size_ = index_block_info.get_block_size();
     if (need_submit_io) {
+      REALTIME_MONITOR_ADD_IO_READ_BYTES(access_ctx_, micro_handle.micro_info_.size_);
       ObMacroBlockHandle macro_handle;
       if (is_data) {
         if (OB_FAIL(data_block_cache_->prefetch(

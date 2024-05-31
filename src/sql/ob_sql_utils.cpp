@@ -74,6 +74,11 @@ using namespace oceanbase::share;
 using namespace oceanbase::share::schema;
 using namespace oceanbase::common::sqlclient;
 
+ObString get_display_mysql_version_cfg()
+{
+  return GCONF._display_mysql_version.get_value_string();;
+}
+
 ObSqlArrayExpandGuard::ObSqlArrayExpandGuard(ParamStore &params, ObIAllocator &allocator)
   : array_obj_list_(allocator),
     ret_(OB_SUCCESS)

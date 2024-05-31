@@ -52,7 +52,6 @@ ObMultipleMerge::ObMultipleMerge()
       curr_scan_index_(0),
       curr_rowkey_(),
       nop_pos_(),
-      row_stat_(),
       scan_cnt_(0),
       need_padding_(false),
       need_fill_default_(false),
@@ -134,7 +133,6 @@ int ObMultipleMerge::init(
     iters_.reuse();
     access_param_ = &param;
     access_ctx_ = &context;
-    row_stat_.reset();
     cur_row_.count_ = access_param_->iter_param_.out_cols_project_->count();
     scan_state_ = ScanState::NONE;
     read_memtable_only_ = false;
@@ -352,9 +350,6 @@ int ObMultipleMerge::get_next_row(ObDatumRow *&row)
       }
 
       if (OB_SUCC(ret)) {
-        if (nullptr != access_ctx_->table_scan_stat_) {
-          access_ctx_->table_scan_stat_->access_row_cnt_++;
-        }
         if (OB_FAIL(fill_group_idx_if_need(unprojected_row_))) {
           LOG_WARN("Failed to fill iter idx", K(ret), KPC(access_param_), K(unprojected_row_));
         } else if (OB_FAIL(process_fuse_row(not_using_static_engine, unprojected_row_, row))) {
@@ -517,9 +512,6 @@ int ObMultipleMerge::get_next_normal_rows(int64_t &count, int64_t capacity)
               LOG_WARN("fail to aggregate row", K(ret));
             }
           }
-          if (nullptr != access_ctx_->table_scan_stat_) {
-            access_ctx_->table_scan_stat_->access_row_cnt_++;
-          }
         }
       }
     }
@@ -623,9 +615,6 @@ int ObMultipleMerge::get_next_aggregate_row(ObDatumRow *&row)
               LOG_WARN("fail to aggregate row", K(ret));
             }
           }
-          if (nullptr != access_ctx_->table_scan_stat_) {
-            access_ctx_->table_scan_stat_->access_row_cnt_++;
-          }
         }
       }
     }
@@ -665,8 +654,8 @@ void ObMultipleMerge::report_tablet_stat()
     int tmp_ret = OB_SUCCESS;
     bool report_succ = false; /*placeholder*/
     storage::ObTabletStat tablet_stat;
-    tablet_stat.ls_id_ = access_ctx_->table_store_stat_.ls_id_.id();
-    tablet_stat.tablet_id_ = access_ctx_->table_store_stat_.tablet_id_.id();
+    tablet_stat.ls_id_ = access_ctx_->ls_id_.id();
+    tablet_stat.tablet_id_ = access_ctx_->tablet_id_.id();
     tablet_stat.query_cnt_ = 1;
     tablet_stat.scan_logical_row_cnt_ = access_ctx_->table_store_stat_.logical_read_cnt_;
     tablet_stat.scan_physical_row_cnt_ = access_ctx_->table_store_stat_.physical_read_cnt_;
@@ -767,7 +756,6 @@ void ObMultipleMerge::reset()
   access_ctx_ = NULL;
   tables_.reset();
   nop_pos_.reset();
-  row_stat_.reset();
   scan_cnt_ = 0;
   need_padding_ = false;
   need_fill_default_ = false;
@@ -785,7 +773,6 @@ void ObMultipleMerge::reset()
 void ObMultipleMerge::reuse()
 {
   reuse_iter_array();
-  row_stat_.reset();
   range_idx_delta_ = 0;
   unprojected_row_.row_flag_.reset();
   if (nullptr != block_row_store_) {

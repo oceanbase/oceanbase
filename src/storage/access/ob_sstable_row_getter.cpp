@@ -148,6 +148,7 @@ int ObSSTableRowGetter::fetch_row(ObSSTableReadHandle &read_handle, const ObDatu
               macro_block_reader_))) {
     LOG_WARN("Fail to get row", K(ret));
   } else {
+    REALTIME_MONITOR_ADD_SSSTORE_READ_BYTES(access_ctx_, micro_getter_->get_average_row_length());
     has_fetched_ = true;
   }
   return ret;

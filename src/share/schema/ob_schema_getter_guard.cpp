@@ -2817,6 +2817,53 @@ int ObSchemaGetterGuard::check_activate_all_role_var(const uint64_t tenant_id, b
   return ret;
 }
 
+int ObSchemaGetterGuard::is_user_empty_passwd(const ObUserLoginInfo &login_info, bool &is_empty_passwd_account) {
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  uint64_t tenant_id = OB_INVALID_ID;
+  is_empty_passwd_account = false;
+  if (OB_FAIL(get_tenant_id(login_info.tenant_name_,tenant_id))) {
+    LOG_WARN("Invalid tenant", "tenant_name", login_info.tenant_name_, KR(ret));
+  } else if (OB_FAIL(check_tenant_schema_guard(tenant_id))) {
+    LOG_WARN("fail to check tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(get_tenant_compat_mode(tenant_id, compat_mode))) {
+    LOG_WARN("fail to get tenant compat mode", K(ret));
+  } else {
+    const int64_t DEFAULT_SAME_USERNAME_COUNT = 4;
+    ObSEArray<const ObUserInfo *, DEFAULT_SAME_USERNAME_COUNT> users_info;
+    if (OB_FAIL(get_user_info(tenant_id, login_info.user_name_, users_info))) {
+      LOG_WARN("get user info failed", KR(ret), K(tenant_id), K(login_info));
+    } else if (users_info.empty()) {
+      ret = OB_PASSWORD_WRONG;
+      LOG_WARN("No tenant user", K(login_info), KR(ret));
+    } else {
+      const ObUserInfo *user_info = NULL;
+      const ObUserInfo *matched_user_info = NULL;
+      for (int64_t i = 0; i < users_info.count() && OB_SUCC(ret); ++i) {
+        user_info = users_info.at(i);
+        if (NULL == user_info) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user info is null", K(login_info), KR(ret));
+        } else if (user_info->is_role() && lib::Worker::CompatMode::ORACLE == compat_mode) {
+          ret = OB_PASSWORD_WRONG;
+          LOG_INFO("password error", "tenant_name", login_info.tenant_name_,
+              "user_name", login_info.user_name_,
+              "client_ip_", login_info.client_ip_, KR(ret));
+        } else if (!obsys::ObNetUtil::is_match(login_info.client_ip_, user_info->get_host_name_str())) {
+          LOG_TRACE("account not matched, try next", KPC(user_info), K(login_info));
+        } else {
+          matched_user_info = user_info;
+          if (0 == login_info.passwd_.length() && 0 == user_info->get_passwd_str().length()) {
+            is_empty_passwd_account = true;
+            break;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 // for privilege
 int ObSchemaGetterGuard::check_user_access(
     const ObUserLoginInfo &login_info,

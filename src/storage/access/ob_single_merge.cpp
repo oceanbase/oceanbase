@@ -147,6 +147,7 @@ int ObSingleMerge::get_table_row(const int64_t table_idx,
       if (prow->row_flag_.is_exist() && !has_uncommited_row) {
         has_uncommited_row = prow->is_have_uncommited_row() || fuse_row.snapshot_version_ == INT64_MAX;
       }
+      REALTIME_MONITOR_INC_READ_ROW_CNT(iter, access_ctx_);
       STORAGE_LOG(DEBUG, "process row fuse", KPC(prow), K(fuse_row), KPC(access_ctx_->store_ctx_));
     }
   }
@@ -386,12 +387,6 @@ int ObSingleMerge::inner_get_next_row(ObDatumRow &row)
     ret = OB_ITER_END;
   }
   return ret;
-}
-
-void ObSingleMerge::collect_merge_stat(ObTableStoreStat &stat) const
-{
-  stat.single_get_stat_.call_cnt_++;
-  stat.single_get_stat_.output_row_cnt_ += access_ctx_->table_store_stat_.output_row_cnt_;
 }
 
 } /* namespace storage */

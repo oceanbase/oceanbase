@@ -31,6 +31,9 @@ int ObDASBaseAccessP<pcode>::init()
   int ret = OB_SUCCESS;
   ObDASTaskArg &task = RpcProcessor::arg_;
   ObDASBaseAccessP<pcode>::get_das_factory() = &das_factory_;
+  memset(monitor_val_, 0, sizeof(monitor_val_));
+  tsc_monitor_info_.init(&monitor_val_[0], &monitor_val_[1], &monitor_val_[2], &monitor_val_[3]);
+  das_remote_info_.tsc_monitor_info_ = &tsc_monitor_info_;
   das_remote_info_.exec_ctx_ = &exec_ctx_;
   das_remote_info_.frame_info_ = &frame_info_;
   task.set_remote_info(&das_remote_info_);
@@ -323,7 +326,11 @@ int ObDASSyncFetchP::process()
     LOG_WARN("das is null", KR(ret), KP(das));
   } else if (OB_FAIL(das->get_task_res_mgr().iterator_task_result(task_id,
                                                                   datum_store,
-                                                                  has_more))) {
+                                                                  has_more,
+                                                                  res.io_read_bytes_,
+                                                                  res.ssstore_read_bytes_,
+                                                                  res.ssstore_read_row_cnt_,
+                                                                  res.memstore_read_row_cnt_))) {
     if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST == ret)) {
       // After server reboot, the hash map containing task results was gone.
       // We need to retry for such cases.

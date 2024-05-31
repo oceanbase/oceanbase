@@ -11960,6 +11960,8 @@ int ObDMLResolver::resolve_pq_distribute_hint(const ParseNode &hint_node,
         dist_algo = DistAlgo::DIST_NONE_ALL;
       } else if (T_DISTRIBUTE_ALL == outer && T_DISTRIBUTE_NONE == inner) {
         dist_algo = DistAlgo::DIST_ALL_NONE;
+      } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
+        dist_algo = DistAlgo::DIST_RANDOM_ALL;
       }
     }
 
@@ -12086,6 +12088,10 @@ int ObDMLResolver::resolve_pq_subquery_hint(const ParseNode &hint_node,
         dist_algo = DistAlgo::DIST_PARTITION_NONE;
       } else if (T_DISTRIBUTE_NONE == outer && T_DISTRIBUTE_ALL == inner) {
         dist_algo = DistAlgo::DIST_NONE_ALL;
+      } else if (T_DISTRIBUTE_RANDOM == outer && T_DISTRIBUTE_ALL == inner) {
+        dist_algo = DistAlgo::DIST_RANDOM_ALL;
+      } else if (T_DISTRIBUTE_HASH == outer && T_DISTRIBUTE_ALL == inner) {
+        dist_algo = DistAlgo::DIST_HASH_ALL;
       }
     }
 

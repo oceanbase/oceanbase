@@ -4737,69 +4737,82 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[334].default_value_ = "0" ;
-      ObSysVars[334].info_ = "Starts InnoDB in read-only mode. For distributing database applications or data sets on read-only media. Can also be used in data warehouses to share the same data directory between multiple instances, merely simulates MySQL 5.7" ;
-      ObSysVars[334].name_ = "innodb_read_only" ;
+      ObSysVars[334].info_ = "To set whether the SQL for the current session is logged into the SQL plan monitor." ;
+      ObSysVars[334].name_ = "enable_sql_plan_monitor" ;
       ObSysVars[334].data_type_ = ObIntType ;
-      ObSysVars[334].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[334].id_ = SYS_VAR_INNODB_READ_ONLY ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_READ_ONLY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_READ_ONLY] = 334 ;
+      ObSysVars[334].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[334].id_ = SYS_VAR_ENABLE_SQL_PLAN_MONITOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_ENABLE_SQL_PLAN_MONITOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_ENABLE_SQL_PLAN_MONITOR] = 334 ;
       ObSysVars[334].base_value_ = "0" ;
-    ObSysVars[334].alias_ = "OB_SV_INNODB_READ_ONLY" ;
+    ObSysVars[334].alias_ = "OB_SV_ENABLE_SQL_PLAN_MONITOR" ;
     }();
 
     [&] (){
       ObSysVars[335].default_value_ = "0" ;
-      ObSysVars[335].info_ = "Use this option to disable row locks when InnoDB memcached performs DML operations. By default, innodb_api_disable_rowlock is disabled, which means that memcached requests row locks for get and set operations, merely simulates MySQL 5.7" ;
-      ObSysVars[335].name_ = "innodb_api_disable_rowlock" ;
+      ObSysVars[335].info_ = "Starts InnoDB in read-only mode. For distributing database applications or data sets on read-only media. Can also be used in data warehouses to share the same data directory between multiple instances, merely simulates MySQL 5.7" ;
+      ObSysVars[335].name_ = "innodb_read_only" ;
       ObSysVars[335].data_type_ = ObIntType ;
       ObSysVars[335].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[335].id_ = SYS_VAR_INNODB_API_DISABLE_ROWLOCK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_API_DISABLE_ROWLOCK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_API_DISABLE_ROWLOCK] = 335 ;
+      ObSysVars[335].id_ = SYS_VAR_INNODB_READ_ONLY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_READ_ONLY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_READ_ONLY] = 335 ;
       ObSysVars[335].base_value_ = "0" ;
-    ObSysVars[335].alias_ = "OB_SV_INNODB_API_DISABLE_ROWLOCK" ;
+    ObSysVars[335].alias_ = "OB_SV_INNODB_READ_ONLY" ;
     }();
 
     [&] (){
-      ObSysVars[336].default_value_ = "1" ;
-      ObSysVars[336].info_ = "The lock mode to use for generating auto-increment values. Permissible values are 0, 1, or 2, for traditional, consecutive, or interleaved, respectively. The default setting is 1 (consecutive), merely simulates MySQL 5.7" ;
-      ObSysVars[336].name_ = "innodb_autoinc_lock_mode" ;
+      ObSysVars[336].default_value_ = "0" ;
+      ObSysVars[336].info_ = "Use this option to disable row locks when InnoDB memcached performs DML operations. By default, innodb_api_disable_rowlock is disabled, which means that memcached requests row locks for get and set operations, merely simulates MySQL 5.7" ;
+      ObSysVars[336].name_ = "innodb_api_disable_rowlock" ;
       ObSysVars[336].data_type_ = ObIntType ;
-      ObSysVars[336].min_val_ = "0" ;
-      ObSysVars[336].max_val_ = "2" ;
       ObSysVars[336].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[336].id_ = SYS_VAR_INNODB_AUTOINC_LOCK_MODE ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_AUTOINC_LOCK_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_AUTOINC_LOCK_MODE] = 336 ;
-      ObSysVars[336].base_value_ = "1" ;
-    ObSysVars[336].alias_ = "OB_SV_INNODB_AUTOINC_LOCK_MODE" ;
+      ObSysVars[336].id_ = SYS_VAR_INNODB_API_DISABLE_ROWLOCK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_API_DISABLE_ROWLOCK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_API_DISABLE_ROWLOCK] = 336 ;
+      ObSysVars[336].base_value_ = "0" ;
+    ObSysVars[336].alias_ = "OB_SV_INNODB_API_DISABLE_ROWLOCK" ;
     }();
 
     [&] (){
       ObSysVars[337].default_value_ = "1" ;
-      ObSysVars[337].info_ = "This is OFF if mysqld uses external locking (system locking), ON if external locking is disabled, merely simulates MySQL 5.7" ;
-      ObSysVars[337].name_ = "skip_external_locking" ;
+      ObSysVars[337].info_ = "The lock mode to use for generating auto-increment values. Permissible values are 0, 1, or 2, for traditional, consecutive, or interleaved, respectively. The default setting is 1 (consecutive), merely simulates MySQL 5.7" ;
+      ObSysVars[337].name_ = "innodb_autoinc_lock_mode" ;
       ObSysVars[337].data_type_ = ObIntType ;
+      ObSysVars[337].min_val_ = "0" ;
+      ObSysVars[337].max_val_ = "2" ;
       ObSysVars[337].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
-      ObSysVars[337].id_ = SYS_VAR_SKIP_EXTERNAL_LOCKING ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_EXTERNAL_LOCKING)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_EXTERNAL_LOCKING] = 337 ;
+      ObSysVars[337].id_ = SYS_VAR_INNODB_AUTOINC_LOCK_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_INNODB_AUTOINC_LOCK_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_INNODB_AUTOINC_LOCK_MODE] = 337 ;
       ObSysVars[337].base_value_ = "1" ;
-    ObSysVars[337].alias_ = "OB_SV_SKIP_EXTERNAL_LOCKING" ;
+    ObSysVars[337].alias_ = "OB_SV_INNODB_AUTOINC_LOCK_MODE" ;
     }();
 
     [&] (){
-      ObSysVars[338].default_value_ = "0" ;
-      ObSysVars[338].info_ = "If the read_only system variable is enabled, the server permits no client updates except from users who have the SUPER privilege. If the super_read_only system variable is also enabled, the server prohibits client updates even from users who have SUPER, merely simulates MySQL 5.7" ;
-      ObSysVars[338].name_ = "super_read_only" ;
+      ObSysVars[338].default_value_ = "1" ;
+      ObSysVars[338].info_ = "This is OFF if mysqld uses external locking (system locking), ON if external locking is disabled, merely simulates MySQL 5.7" ;
+      ObSysVars[338].name_ = "skip_external_locking" ;
       ObSysVars[338].data_type_ = ObIntType ;
-      ObSysVars[338].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
-      ObSysVars[338].id_ = SYS_VAR_SUPER_READ_ONLY ;
+      ObSysVars[338].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::READONLY ;
+      ObSysVars[338].id_ = SYS_VAR_SKIP_EXTERNAL_LOCKING ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SKIP_EXTERNAL_LOCKING)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SKIP_EXTERNAL_LOCKING] = 338 ;
+      ObSysVars[338].base_value_ = "1" ;
+    ObSysVars[338].alias_ = "OB_SV_SKIP_EXTERNAL_LOCKING" ;
+    }();
+
+    [&] (){
+      ObSysVars[339].default_value_ = "0" ;
+      ObSysVars[339].info_ = "If the read_only system variable is enabled, the server permits no client updates except from users who have the SUPER privilege. If the super_read_only system variable is also enabled, the server prohibits client updates even from users who have SUPER, merely simulates MySQL 5.7" ;
+      ObSysVars[339].name_ = "super_read_only" ;
+      ObSysVars[339].data_type_ = ObIntType ;
+      ObSysVars[339].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[339].id_ = SYS_VAR_SUPER_READ_ONLY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_SUPER_READ_ONLY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_SUPER_READ_ONLY] = 338 ;
-      ObSysVars[338].base_value_ = "0" ;
-    ObSysVars[338].alias_ = "OB_SV_SUPER_READ_ONLY" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_SUPER_READ_ONLY] = 339 ;
+      ObSysVars[339].base_value_ = "0" ;
+    ObSysVars[339].alias_ = "OB_SV_SUPER_READ_ONLY" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -4808,7 +4821,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 339;
+static int64_t var_amount = 340;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

@@ -682,7 +682,7 @@ int ObDataAccessService::process_task_resp(ObDASRef &das_ref, const ObDASTaskRes
   } else if (task_resp.has_more()
               && OB_FAIL(setup_extra_result(das_ref, task_resp, task_op, extra_result))) {
     LOG_WARN("setup extra result failed", KR(ret));
-  } else if (task_resp.has_more() && OB_FAIL(op_result->link_extra_result(*extra_result))) {
+  } else if (task_resp.has_more() && OB_FAIL(op_result->link_extra_result(*extra_result, task_op))) {
     LOG_WARN("link extra result failed", K(ret));
   }
   // even if trans result have a failure. It only take effect on the last valid op result.

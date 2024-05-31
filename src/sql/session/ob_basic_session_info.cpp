@@ -2733,6 +2733,12 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       OX (sys_vars_cache_.set_default_lob_inrow_threshold(int_val));
       break;
     }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_enable_sql_plan_monitor(int_val != 0));
+      break;
+    }
     case SYS_VAR_OB_COMPATIBILITY_CONTROL: {
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
@@ -3194,6 +3200,12 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       int64_t int_val = 0;
       OZ (val.get_int(int_val), val);
       OX (sys_vars_cache.set_base_default_lob_inrow_threshold(int_val));
+      break;
+    }
+    case SYS_VAR_ENABLE_SQL_PLAN_MONITOR: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_enable_sql_plan_monitor(int_val != 0));
       break;
     }
     default: {
@@ -4287,7 +4299,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_sql_plan_monitor_);
   return ret;
 }
 
@@ -4317,7 +4330,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_sql_plan_monitor_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4352,7 +4366,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_type_,
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
-              runtime_bloom_filter_max_size_);
+              runtime_bloom_filter_max_size_,
+              enable_sql_plan_monitor_);
   return len;
 }
 

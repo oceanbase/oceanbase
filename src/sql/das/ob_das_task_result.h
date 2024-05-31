@@ -37,7 +37,11 @@ public:
                K_(expire_ts),
                K_(packet_cnt),
                K_(is_reading),
-               K_(is_exiting));
+               K_(is_exiting),
+               K_(io_read_bytes),
+               K_(ssstore_read_bytes),
+               K_(ssstore_read_row_cnt),
+               K_(memstore_read_row_cnt));
 
   int register_reading();
   int unregister_reading();
@@ -56,6 +60,10 @@ public:
   const ObChunkDatumStore::StoredRow **stored_row_arr_;
   ObChunkDatumStore datum_store_;
   ObChunkDatumStore::Iterator result_iter_;
+  int64_t io_read_bytes_;
+  int64_t ssstore_read_bytes_;
+  int64_t ssstore_read_row_cnt_;
+  int64_t memstore_read_row_cnt_;
 private:
   common::ObSpinLock tcb_lock_; //用于控制资源资源释放的时序，保证并发访问的安全
 };
@@ -134,13 +142,17 @@ public:
                        common::ObNewRowIterator &result,
                        int64_t read_rows,
                        const ObDASScanCtDef *scan_ctdef,
-                       const ObDASScanRtDef * scan_rtdef,
+                       ObDASScanRtDef *scan_rtdef,
                        ObDASScanOp &scan_op);
   int erase_task_result(int64_t task_id);
   //从中间结果管理器中获取一个block大小的结果，默认为2M大小
   int iterator_task_result(int64_t task_id,
                            ObChunkDatumStore &datum_store,
-                           bool &has_more);
+                           bool &has_more,
+                           int64_t &io_read_bytes,
+                           int64_t &ssstore_read_bytes,
+                           int64_t &ssstore_read_row_cnt,
+                           int64_t &memstore_read_row_cnt);
   int remove_expired_results();
 private:
   DASTCBMap tcb_map_;
