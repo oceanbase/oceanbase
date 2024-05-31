@@ -195,10 +195,12 @@ protected:
       || ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason
       || ObAdaptiveMergePolicy::CRAZY_MEDIUM_FOR_TEST == merge_reason;
   }
+#ifdef ERRSIM
   int errsim_choose_medium_snapshot(
     const int64_t max_sync_medium_scn,
-    ObMediumCompactionInfo &medium_info);
-
+    ObMediumCompactionInfo &medium_info,
+    ObGetMergeTablesResult &result);
+#endif
 private:
   ObArenaAllocator allocator_;
   ObLS &ls_;

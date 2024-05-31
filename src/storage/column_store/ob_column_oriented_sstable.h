@@ -212,6 +212,7 @@ public:
       K_(base_type), K_(is_cgs_empty_co), K_(valid_for_cs_reading));
 private:
   int build_cs_meta();
+  int build_cs_meta_without_cgs();
 protected:
   ObCOSSTableMeta cs_meta_;
   ObCOSSTableBaseType base_type_;

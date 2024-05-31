@@ -46,6 +46,7 @@ using namespace share::schema;
 
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_ROW_COL_SWITCH);
 
 // keep order with ObMergeType
 ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[MERGE_TYPE_MAX]
@@ -1850,6 +1851,9 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
 
   if (OB_FAIL(decide_co_major_sstable_status(co_sstable, storage_schema, major_sstable_status))) {
     LOG_WARN("failed to decide co major sstable status");
+  } else if (OB_UNLIKELY(EN_COMPACTION_DISABLE_ROW_COL_SWITCH)) {
+    major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
+    LOG_INFO("[RowColSwitch] disable row col switch, only allow co major merge", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type));
   } else if (OB_FAIL(estimate_row_cnt_for_major_merge(tablet_id.id(), tables, storage_schema, tablet_handle, estimate_row_cnt))) {
     // if estimate row cnt failed, make major sstable match schema
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;

@@ -258,11 +258,14 @@ int ObCOSSTableV2::init(
   } else if (param.is_co_table_without_cgs_) {
     // current co sstable is empty, or the normal cg is redundant, no need to init cg sstable
     cs_meta_.column_group_cnt_ = param.column_group_cnt_; // other cs meta is zero.
+    is_cgs_empty_co_ = true;
+    if (OB_FAIL(build_cs_meta_without_cgs())) {
+      LOG_WARN("failed to build cs meta without cgs", K(ret), K(param), KPC(this));
+    }
   }
 
   if (OB_SUCC(ret)) {
     base_type_ = static_cast<ObCOSSTableBaseType>(param.co_base_type_);
-    is_cgs_empty_co_ = param.is_co_table_without_cgs_;
     valid_for_cs_reading_ = param.is_co_table_without_cgs_;
     cs_meta_.full_column_cnt_ = param.full_column_cnt_;
   } else {
@@ -289,6 +292,33 @@ int ObCOSSTableV2::fill_cg_sstables(const common::ObIArray<ObITable *> &cg_table
   } else {
     valid_for_cs_reading_ = true;
     FLOG_INFO("success to init co sstable", K(ret), K_(cs_meta), KPC(this)); // tmp debug code
+  }
+  return ret;
+}
+
+int ObCOSSTableV2::build_cs_meta_without_cgs()
+{
+  int ret = OB_SUCCESS;
+  ObSSTableMetaHandle sstable_meta_handle;
+  if (OB_UNLIKELY(!is_cgs_empty_co_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("no need to build cs meta for co table without cg sstables", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(!is_loaded())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("co table is unexpected not loaded", K(ret), KPC(this));
+  } else if (OB_FAIL(ObSSTable::get_meta(sstable_meta_handle))) {
+    LOG_WARN("failed to get meta handle", K(ret), KPC(this));
+  } else {
+    const ObSSTableBasicMeta &basic_meta = sstable_meta_handle.get_sstable_meta().get_basic_meta();
+    cs_meta_.data_macro_block_cnt_ = basic_meta.data_macro_block_count_;
+    cs_meta_.use_old_macro_block_cnt_ = basic_meta.use_old_macro_block_count_;
+    cs_meta_.data_micro_block_cnt_ = basic_meta.data_micro_block_count_;
+    cs_meta_.index_macro_block_cnt_ = basic_meta.index_macro_block_count_;
+    cs_meta_.occupy_size_ = basic_meta.occupy_size_;
+    cs_meta_.original_size_ = basic_meta.original_size_;
+    cs_meta_.data_checksum_ = basic_meta.data_checksum_;
+    // cs_meta_.column_group_cnt_ and cs_meta_.full_column_cnt_ are assigned in ObCOSSTableV2::init
+    LOG_INFO("[RowColSwitch] finish build cs meta without cg sstables", K_(cs_meta), K(basic_meta), KPC(this));
   }
   return ret;
 }
