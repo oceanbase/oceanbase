@@ -1529,7 +1529,7 @@ int ObTablet::deserialize(
   ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(tablet_buf);
   int64_t remain = buf_header.buf_len_ - sizeof(ObTablet);
   int64_t start_pos = sizeof(ObTablet);
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "deserialize"));
   ObITable **ddl_kvs_addr = nullptr;
   int64_t ddl_kv_count = 0;
   if (OB_UNLIKELY(is_inited_)) {
@@ -2867,7 +2867,7 @@ int ObTablet::insert_rows(
         FALSE_IT(get_encrypt_meta(relative_table.get_table_id(), encrypt_meta_arr, encrypt_meta))) {
 #endif
     } else {
-      ObArenaAllocator allocator("insert_acc_ctx");
+      ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "insert_acc_ctx"));
       ObTableIterParam param;
       ObTableAccessContext context;
       if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
