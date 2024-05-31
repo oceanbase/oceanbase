@@ -132,9 +132,12 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ASSERT_NE(0, node->last_active_ts_);
 
   // add mock val to node
-  ObTableApiSessNodeVal val(node, MTL_ID());
-  val.is_inited_ = true;
-  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(&val));
+  void *buf = nullptr;
+  ObMemAttr attr(MTL_ID(), "TbSessNodVal", ObCtxIds::DEFAULT_CTX_ID);
+  ASSERT_NE(nullptr, buf = node->mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr));
+  ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(node, MTL_ID());
+  val->is_inited_ = true;
+  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(val));
 
   ObTableApiSessGuard guard;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));
@@ -216,9 +219,12 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
   // add mock val to node
   ObTableApiSessNode *node;
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
-  ObTableApiSessNodeVal val(node, MTL_ID());
-  val.is_inited_ = true;
-  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(&val));
+  void *buf = nullptr;
+  ObMemAttr attr(MTL_ID(), "TbSessNodVal", ObCtxIds::DEFAULT_CTX_ID);
+  ASSERT_NE(nullptr, buf = node->mem_ctx_->allocf(sizeof(ObTableApiSessNodeVal), attr));
+  ObTableApiSessNodeVal *val = new (buf) ObTableApiSessNodeVal(node, MTL_ID());
+  val->is_inited_ = true;
+  ASSERT_EQ(true, node->sess_lists_.free_list_.add_last(val));
 
   ObTableApiSessGuard guard;
   ASSERT_EQ(OB_SUCCESS, mgr->get_sess_info(*mock_cred_, guard));

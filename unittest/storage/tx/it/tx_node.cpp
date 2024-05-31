@@ -269,6 +269,26 @@ void ObTxNode::dump_msg_queue_()
   }
 }
 
+void ObTxNode::wait_all_msg_consumed()
+{
+  while (msg_queue_.size() > 0 || !msg_consumer_.is_idle()) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait msg_queue to be empty", K(msg_queue_.size()), KPC(this));
+    }
+    usleep(5_ms);
+  }
+}
+
+void ObTxNode::wait_tx_log_synced()
+{
+  while(fake_tx_log_adapter_->get_inflight_cnt() > 0) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait tx log synced...", K(fake_tx_log_adapter_->get_inflight_cnt()), KPC(this));
+    }
+    usleep(5_ms);
+  }
+}
+
 ObTxNode::~ObTxNode() __attribute__((optnone)) {
   int ret = OB_SUCCESS;
   TRANS_LOG(INFO, "destroy TxNode", KPC(this));

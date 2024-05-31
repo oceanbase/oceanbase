@@ -184,6 +184,7 @@ int ObAlterRoutineResolver::resolve_compile_clause(
   bool need_recreate = false;
   ObExecEnv old_env;
   ObExecEnv new_env;
+  ObArenaAllocator tmp_allocator;
 
   CK (OB_LIKELY(T_SP_COMPILE_CLAUSE == alter_clause_node.type_));
   CK (OB_LIKELY(1 == alter_clause_node.num_child_));
@@ -194,11 +195,11 @@ int ObAlterRoutineResolver::resolve_compile_clause(
   OX (reuse_setting = (1==alter_clause_node.int32_values_[1]) ? true : false);
  
   if (OB_SUCC(ret)) {
-    OZ (old_env.load(*session_info_));
+    OZ (old_env.load(*session_info_, &tmp_allocator));
     if (reuse_setting) {
       OZ (new_env.init(routine_info.get_exec_env()));
     } else {
-      OZ (new_env.load(*session_info_));
+      OZ (new_env.load(*session_info_, &tmp_allocator));
     }
     if (params.count() > 0) {
       for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {

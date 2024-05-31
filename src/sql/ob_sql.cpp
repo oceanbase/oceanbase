@@ -193,6 +193,7 @@ int ObSql::stmt_prepare(const common::ObString &stmt,
                         bool is_inner_sql/*true*/)
 {
   int ret = OB_SUCCESS;
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
@@ -202,6 +203,9 @@ int ObSql::stmt_prepare(const common::ObString &stmt,
   CHECK_STMT_SUPPORTED_BY_TXN_FREE_ROUTE(result, false);
   if (OB_FAIL(ret) && OB_SUCCESS == result.get_errcode()) {
     result.set_errcode(ret);
+  }
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
   }
   return ret;
 }
@@ -220,6 +224,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
            "execution_id", result.get_session().get_current_execution_id());
 #endif
   NG_TRACE(parse_begin);
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   //1 check inited
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("Failed to do sanity check", K(ret));
@@ -248,6 +253,9 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
                context.is_sensitive_ ? ObString(OB_MASKED_STR) : trunc_stmt.string(),
                OB_ID(stmt_len), stmt.length());
 
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
+  }
   return ret;
 }
 
@@ -260,6 +268,7 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
 {
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
+  const bool trans_valid = result.get_session().get_tx_id().is_valid();
   if (OB_FAIL(sanity_check(context))) {
     LOG_WARN("failed to do sanity check", K(ret));
   } else if (OB_FAIL(init_result_set(context, result))) {
@@ -278,6 +287,9 @@ int ObSql::stmt_execute(const ObPsStmtId stmt_id,
     result.set_errcode(ret);
   }
   FLT_SET_TAG(sql_id, context.sql_id_);
+  if (OB_FAIL(ret) && !trans_valid) {
+    rollback_implicit_trans_when_fail(result, ret);
+  }
   return ret;
 }
 
@@ -773,7 +785,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           field.type_.set_collation_level(expr->get_collation_level());
         }
         // Setup Scale
-        if (ObVarcharType == field.type_.get_type() || is_ext_field) {
+        if (ObVarcharType == field.type_.get_type()) {
           field.type_.set_varchar(type_name);
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
@@ -817,6 +829,31 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
               LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
             }
           }
+        } else if ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_ext()
+          && OB_INVALID_ID != expr->get_result_type().get_udt_id()
+          && (PL_VARRAY_TYPE == expr->get_result_type().get_extend_type()
+                || PL_NESTED_TABLE_TYPE == expr->get_result_type().get_extend_type()
+                || PL_ASSOCIATIVE_ARRAY_TYPE == expr->get_result_type().get_extend_type()
+                || PL_RECORD_TYPE == expr->get_result_type().get_extend_type())) {
+          // pl udt type, need set field_name to deserialize
+          const ObUDTTypeInfo *udt_info = NULL;
+          const ObSimpleDatabaseSchema *db_schema = NULL;
+          uint64_t udt_id = expr->get_result_type().get_udt_id();
+          const uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
+          if (OB_FAIL(context->schema_guard_->get_udt_info(tenant_id, udt_id, udt_info))) {
+            LOG_WARN("fail to get udt info. ", K(tenant_id), K(udt_id), K(ret));
+          } else if (NULL == udt_info) {
+            LOG_WARN("udt is invalid. ", K(tenant_id), K(udt_id), K(udt_info), K(ret));
+          } else if (OB_FAIL(context->schema_guard_->get_database_schema(tenant_id, udt_info->get_database_id(), db_schema))) {
+            LOG_WARN("get database info fail. ", K(tenant_id), K(udt_info->get_database_id()), K(ret));
+          } else if (NULL == db_schema) {
+            LOG_WARN("database is invalid. ", K(tenant_id), K(udt_id), K(udt_info->get_database_id()), K(ret));
+          } else if (OB_FAIL(ob_write_string(alloc, udt_info->get_type_name(), field.type_name_))) {
+            LOG_WARN("fail to alloc string", K(udt_info->get_type_name()), K(ret));
+          } else if (OB_FAIL(ob_write_string(alloc, db_schema->get_database_name_str(), field.type_owner_))) {
+            LOG_WARN("fail to alloc string", K(db_schema->get_database_name_str()), K(ret));
+          }
+
         } else if (!expr->get_result_type().is_ext() && OB_FAIL(expr->get_length_for_meta_in_bytes(field.length_))) {
           LOG_WARN("get length failed", K(ret), KPC(expr));
         }
@@ -5640,9 +5677,15 @@ int ObSql::check_need_reroute(ObPlanCacheCtx &pc_ctx, ObSQLSessionInfo &session,
 
     // CHECK for `TXN_FREE_ROUTE`
     if (should_reroute && !session.is_inner() && session.is_in_transaction()) {
+      bool ac = true;
+      session.get_autocommit(ac);
       const stmt::StmtType stmt_type = plan->get_stmt_type();
       bool fixed_route = true;
-      if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
+      if (ac && !session.get_tx_desc()->is_explicit()) {
+        fixed_route = false;
+        // for autocommit txn, always allow reroute, because such
+        // transaction will not corss multiple node
+      } else if (pc_ctx.sql_ctx_.multi_stmt_item_.is_part_of_multi_stmt()) {
         // current is multi-stmt
       } else if (!STMT_SUPPORT_BY_TXN_FREE_ROUTE(stmt_type, false)) {
         // stmt is not DML
@@ -5848,6 +5891,31 @@ int ObSql::get_reconstructed_batch_stmt(ObPlanCacheCtx &pc_ctx, ObString& stmt_s
 //   }
 //   return ret;
 // }
+
+// If handel failed, rollback implicit started txn by current stmt
+// if autocommit is on.
+// this is because the txn may be started during generate plan for some
+// strange Query.
+// We have found one situation:
+// udf contains DML stmt and with deterministic property in MySQL mode
+void ObSql::rollback_implicit_trans_when_fail(ObResultSet &result, int &ret)
+{
+  bool ac = false;
+  result.get_session().get_autocommit(ac);
+  const transaction::ObTxDesc *tx = result.get_session().get_tx_desc();
+  if (ac && tx && tx->get_tx_id().is_valid() && !tx->is_explicit()) {
+    const transaction::ObTransID txid = tx->get_tx_id();
+    int tmp_ret = OB_SUCCESS;
+    bool need_disconnect = false;
+    if (OB_TMP_FAIL(ObSqlTransControl::rollback_trans(&result.get_session(), need_disconnect))) {
+      LOG_WARN("rollback transaction fail, will disconnect", K(tmp_ret), K(result.get_session()), K(txid));
+      result.get_exec_context().get_need_disconnect_for_update() = true;
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("rollback transaction started during get-plan success", K(ret), K(txid));
+    }
+  }
+}
 
 }//end of namespace sql
 }//end of namespace oceanbase

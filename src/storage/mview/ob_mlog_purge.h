@@ -29,16 +29,22 @@ namespace storage
 struct ObMLogPurgeParam
 {
 public:
-  ObMLogPurgeParam() : tenant_id_(OB_INVALID_TENANT_ID), master_table_id_(OB_INVALID_ID) {}
+  ObMLogPurgeParam()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      master_table_id_(OB_INVALID_ID),
+      purge_log_parallel_(0)
+  {
+  }
   bool is_valid() const
   {
     return tenant_id_ != OB_INVALID_TENANT_ID && master_table_id_ != OB_INVALID_ID;
   }
-  TO_STRING_KV(K_(tenant_id), K_(master_table_id));
+  TO_STRING_KV(K_(tenant_id), K_(master_table_id), K_(purge_log_parallel));
 
 public:
   uint64_t tenant_id_;
   uint64_t master_table_id_;
+  int64_t purge_log_parallel_;
 };
 
 class ObMLogPurger

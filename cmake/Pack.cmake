@@ -2,7 +2,7 @@ set(CPACK_PACKAGING_INSTALL_PREFIX /home/admin/oceanbase)
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OceanBase is a distributed relational database")
 set(CPACK_PACKAGE_VENDOR "OceanBase Inc.")
 set(CPACK_PACKAGE_DESCRIPTION "OceanBase is a distributed relational database")
-set(CPACK_COMPONENTS_ALL server libs sql-parser)
+set(CPACK_COMPONENTS_ALL server sql-parser)
 
 if (OB_BUILD_OPENSOURCE)
   set(CPACK_PACKAGE_NAME "oceanbase-ce")
@@ -353,6 +353,7 @@ endif()
 
 if(OB_BUILD_OPENSOURCE)
 ## oceanbase-libs
+list(APPEND CPACK_COMPONENTS_ALL libs)
 install(PROGRAMS
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
   deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1

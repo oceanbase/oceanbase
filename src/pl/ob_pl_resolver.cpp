@@ -16253,6 +16253,7 @@ int ObPLResolver::make_block(ObPLPackageAST &package_ast, ObPLStmtBlock *&block)
     block->get_namespace().set_package_name(package_ast.get_name());
     block->get_namespace().set_package_id(package_ast.get_id());
     block->get_namespace().set_package_version(package_ast.get_version());
+    block->get_namespace().set_compile_flag(package_ast.get_compile_flag());
   }
   return ret;
 }

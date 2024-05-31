@@ -951,8 +951,9 @@ int ObOptStatSqlService::get_column_stat_sql(const uint64_t tenant_id,
   uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id), K(data_version));
-  } else if (OB_UNLIKELY(ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
-                         stat.get_histogram().get_bucket_cnt() == 0)) {
+  } else if (OB_UNLIKELY((ObHistType::INVALID_TYPE != stat.get_histogram().get_type() &&
+                          stat.get_histogram().get_bucket_cnt() == 0) ||
+                         stat.get_num_distinct() < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(stat));
   } else if (OB_FAIL(get_valid_obj_str(stat.get_min_value(), min_meta, allocator, min_str, print_params)) ||

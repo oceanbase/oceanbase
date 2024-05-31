@@ -140,7 +140,7 @@ TEST_F(TestLogCache, test_miss)
     int64_t out_read_size = 0;
     int64_t has_read_size = 5000;
     int64_t real_read_size = lower_align(has_read_size, LOG_DIO_ALIGN_SIZE);
-    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size,lsn, in_read_size , out_read_size, &iterator_info));
+    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size,  in_read_size + CACHE_LINE_SIZE, lsn, in_read_size, out_read_size, &iterator_info));
     EXPECT_EQ(old_lsn.val_ + real_read_size, lsn.val_);
     EXPECT_EQ(MAX_LOG_BODY_SIZE - real_read_size, in_read_size);
     EXPECT_EQ(real_read_size, out_read_size);
@@ -154,9 +154,37 @@ TEST_F(TestLogCache, test_miss)
     int64_t in_read_size = MAX_LOG_BODY_SIZE;
     int64_t has_read_size = 0;
     int64_t out_read_size = 0;
-    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size, lsn, in_read_size , out_read_size, &iterator_info));
+    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size, in_read_size + CACHE_LINE_SIZE, lsn, in_read_size, out_read_size, &iterator_info));
     EXPECT_EQ(PALF_BLOCK_SIZE, lsn.val_);
     EXPECT_EQ(MAX_LOG_BODY_SIZE + (old_lsn.val_ - lsn.val_), in_read_size);
+  }
+
+  // test miss for small buf
+  {
+    iterator_info.reset();
+    LSN lsn(PALF_INITIAL_LSN_VAL);
+    int64_t in_read_size = MAX_LOG_BODY_SIZE;
+    int64_t has_read_size = 0;
+    int64_t out_read_size = 0;
+    int64_t buf_len = in_read_size;
+    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size, buf_len, lsn, in_read_size, out_read_size, &iterator_info));
+    // shouldn't read more log because of small buf size
+    EXPECT_EQ(PALF_INITIAL_LSN_VAL, lsn.val_);
+    EXPECT_EQ(MAX_LOG_BODY_SIZE, in_read_size);
+  }
+
+  // test miss for last cache line in log block
+  {
+    iterator_info.reset();
+    // read lsn is in the last cache line of the second log block
+    LSN lsn(PALF_BLOCK_SIZE * 2 - 32 * 1024);
+    int64_t in_read_size = 32 * 1024;
+    int64_t has_read_size = 0;
+    int64_t out_read_size = 0;
+    int64_t buf_len = in_read_size + CACHE_LINE_SIZE;
+    EXPECT_EQ(OB_SUCCESS, cold_cache.deal_with_miss_(true, has_read_size, buf_len, lsn, in_read_size, out_read_size, &iterator_info));
+    EXPECT_EQ(PALF_BLOCK_SIZE * 2 - 60 * 1024, lsn);
+    EXPECT_EQ(LAST_CACHE_LINE_SIZE, in_read_size);
   }
 }
 

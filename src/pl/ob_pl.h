@@ -95,7 +95,9 @@ public:
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
-                               bool set_null = true) const;
+                               bool set_null = true);
+
+  virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
 };
 
 class ObPLFunctionBase
@@ -246,6 +248,10 @@ public:
   inline jit::ObLLVMHelper &get_helper() { return helper_; }
   inline jit::ObLLVMDIHelper &get_di_helper() { return di_helper_; }
 
+  inline const sql::ObExecEnv &get_exec_env() const { return exec_env_; }
+  inline sql::ObExecEnv &get_exec_env() { return exec_env_; }
+  inline void set_exec_env(const sql::ObExecEnv &env) { exec_env_ = env; }
+
   jit::ObDIRawData get_debug_info() const { return helper_.get_debug_info(); }
 
   virtual void reset();
@@ -264,6 +270,7 @@ protected:
   jit::ObLLVMDIHelper di_helper_;
 
   bool can_cached_;
+  sql::ObExecEnv exec_env_;
 
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnit);
 };
@@ -391,7 +398,6 @@ public:
     sql_infos_(allocator_),
     in_args_(),
     out_args_(),
-    exec_env_(),
     action_(0),
     di_buf_(NULL),
     di_len_(0),
@@ -425,9 +431,6 @@ public:
   inline const common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> &get_out_args() const { return out_args_; }
   inline void set_out_args(const common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> &out_idx) { out_args_ = out_idx; }
   inline int add_out_arg(int64_t i) { return out_args_.add_member(i); }
-  inline const sql::ObExecEnv &get_exec_env() const { return exec_env_; }
-  inline sql::ObExecEnv &get_exec_env() { return exec_env_; }
-  inline void set_exec_env(const sql::ObExecEnv &env) { exec_env_ = env; }
   inline ObFuncPtr get_action() const { return action_; }
   inline void set_action(ObFuncPtr action) { action_ = action; }
 
@@ -514,7 +517,6 @@ private:
   common::ObFixedArray<ObPLSqlInfo, common::ObIAllocator> sql_infos_;
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> in_args_;
   common::ObBitSet<common::OB_DEFAULT_BITSET_SIZE> out_args_;
-  sql::ObExecEnv exec_env_;
   ObFuncPtr action_;
   char *di_buf_;
   int64_t di_len_;
@@ -645,8 +647,8 @@ struct ObPLExecCtx : public ObPLINS
   virtual int get_user_type(uint64_t type_id,
                                 const ObUserDefinedType *&user_type,
                                 ObIAllocator *allocator = NULL) const;
+  virtual int calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result);
 
-  //Note: 不实现虚函数，省得llvm解析的时候需要处理vtable麻烦
   common::ObIAllocator *allocator_;
   sql::ObExecContext *exec_ctx_;
   ParamStore *params_; // param stroe, 对应PL Function的符号表

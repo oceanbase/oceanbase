@@ -6375,6 +6375,10 @@ int ObLogPlan::classify_candidates_based_on_sharding(
           LOG_WARN("get unexpected error", K(ret));
         } else if (candidates.at(i).plan_tree_->get_parallel() != temp_candidate.at(0).plan_tree_->get_parallel()) {
           /*do nothing*/
+        } else if (candidates.at(i).plan_tree_->is_exchange_allocated() != temp_candidate.at(0).plan_tree_->is_exchange_allocated()) {
+          /*do nothing*/
+        } else if (candidates.at(i).plan_tree_->get_contains_pw_merge_op() != temp_candidate.at(0).plan_tree_->get_contains_pw_merge_op()) {
+          /*do nothing*/
         } else if (OB_FAIL(ObShardingInfo::is_sharding_equal(
                             candidates.at(i).plan_tree_->get_strong_sharding(),
                             candidates.at(i).plan_tree_->get_weak_sharding(),

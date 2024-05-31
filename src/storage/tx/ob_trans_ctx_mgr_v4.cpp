@@ -2727,13 +2727,8 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
       // b. when on_register part failure do abort allow no this ctx
       TRANS_LOG(WARN, "tx.ctx not exist when transfer on abort can skip", K(arg));
       continue;
-    } else if (move_tx_param.is_incomplete_replay_ && !is_exist) {
-      TRANS_LOG(WARN, "tx.ctx not exist may incomplete replay can skip", K(arg));
-      continue;
     } else if (!is_exist) {
-      if (!is_replay && (move_tx_param.op_type_ == NotifyType::ON_REDO || move_tx_param.op_type_ == NotifyType::ON_COMMIT)) {
-        TRANS_LOG(WARN, "tx ctx not exist", K(ls_id_), K(move_tx_param), K(arg));
-      }
+      TRANS_LOG(INFO, "tx ctx not exist need to create", K(ls_id_), K(move_tx_param), K(arg));
       ObTxCreateArg create_arg(!is_master(),
                                PartCtxSource::TRANSFER,
                                tenant_id_,

@@ -99,7 +99,8 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
 
 int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_guard,
                                                   const uint64_t tenant_id, const uint64_t mlog_id,
-                                                  const SCN &purge_scn, ObSqlString &sql_string)
+                                                  const SCN &purge_scn, const int64_t purge_log_parallel,
+                                                  ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
   sql_string.reuse();
@@ -141,7 +142,8 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
                K(table_schema->get_table_name_str()), K(is_oracle_mode));
     } else {
       if (is_oracle_mode) {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;",
+                                          static_cast<int>(purge_log_parallel),
                                           static_cast<int>(database_name.length()),
                                           database_name.ptr(),
                                           static_cast<int>(table_name.length()), table_name.ptr(),
@@ -149,7 +151,8 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
           LOG_WARN("fail to assign sql", KR(ret));
         }
       } else {
-        if (OB_FAIL(sql_string.assign_fmt("DELETE FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+        if (OB_FAIL(sql_string.assign_fmt("DELETE /*+ ENABLE_PARALLEL_DML PARALLEL(%d)*/ FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                          static_cast<int>(purge_log_parallel),
                                           static_cast<int>(database_name.length()),
                                           database_name.ptr(),
                                           static_cast<int>(table_name.length()), table_name.ptr(),

@@ -128,7 +128,7 @@ protected:
                    const ColumnsFieldIArray *fields,
                    bool is_packed,
                    sql::ObExecContext *exec_ctx = NULL,
-                   bool is_ps_protocol = false,
+                   bool is_ps_protocol = true,
                    ObSchemaGetterGuard *schema_guard = NULL);
   int process_extra_info(sql::ObSQLSessionInfo &session, const obmysql::ObMySQLRawPacket &pkt,
                                 bool &need_response_error);

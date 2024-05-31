@@ -278,6 +278,7 @@ int PalfEnvImpl::init(
     tenant_id_ = tenant_id;
     is_inited_ = true;
     is_running_ = true;
+    enable_log_cache_ = options.enable_log_cache_;
     PALF_LOG(INFO, "PalfEnvImpl init success", K(ret), K(self_), KPC(this));
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {

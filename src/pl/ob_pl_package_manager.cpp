@@ -971,6 +971,9 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
                               package_spec_id,
                               package_spec_info.get_schema_version(),
                               NULL));
+    if (package_spec_info.is_invoker_right()) {
+      OX (package_spec_ast.get_compile_flag().add_invoker_right());
+    }
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
     {
@@ -1280,43 +1283,53 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       new (package_state)
         ObPLPackageState(package_id, state_version, package.get_serially_reusable());
       ExecCtxBak exec_ctx_bak;
+      sql::ObExecEnv exec_env_bak;
+      ObArenaAllocator tmp_allocator;
       OX (exec_ctx_bak.backup(exec_ctx));
-      sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
-      OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
-      if (OB_SUCC(ret) && package.get_expr_op_size() > 0)  {
-        OZ (exec_ctx.init_expr_op(package.get_expr_op_size()));
-      }
-      // 要先加到SESSION上然后在初始化, 反之会造成死循环
-      OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
+      OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
       if (OB_SUCC(ret)) {
-        // TODO bin.lb: how about the memory?
-        //
-        OZ(package.get_frame_info().pre_alloc_exec_memory(exec_ctx));
-      }
-      if (OB_SUCC(ret)
-          && OB_FAIL(package.instantiate_package_state(resolve_ctx, exec_ctx, *package_state))) {
+        OZ (package.get_exec_env().store(resolve_ctx.session_info_));
+        sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
+        OX (exec_ctx.set_physical_plan_ctx(&phy_plan_ctx));
+        if (OB_SUCC(ret) && package.get_expr_op_size() > 0)  {
+          OZ (exec_ctx.init_expr_op(package.get_expr_op_size()));
+        }
+        // 要先加到SESSION上然后在初始化, 反之会造成死循环
+        OZ (resolve_ctx.session_info_.add_package_state(package_id, package_state));
+        if (OB_SUCC(ret)) {
+          // TODO bin.lb: how about the memory?
+          //
+          OZ(package.get_frame_info().pre_alloc_exec_memory(exec_ctx));
+        }
         int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = resolve_ctx.session_info_.del_package_state(package_id))) {
-          // 删除失败, 为了避免一个未知的状态, 重新初始化这段内存, 使之是无效状态
-          new (package_state)
-            ObPLPackageState(package_id, state_version, package.get_serially_reusable());
-          LOG_WARN("failed to del package state", K(ret), K(package_id), K(tmp_ret));
-        } else {
-          // 删除成功将内存释放
-          package_state->reset(&(resolve_ctx.session_info_));
-          package_state->~ObPLPackageState();
-          session_allocator.free(package_state);
-          package_state = NULL;
-          LOG_WARN("failed to call instantiate_package_state", K(ret), K(package_id));
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(package.instantiate_package_state(resolve_ctx, exec_ctx, *package_state))) {
+          if (OB_SUCCESS != (tmp_ret = resolve_ctx.session_info_.del_package_state(package_id))) {
+            // 删除失败, 为了避免一个未知的状态, 重新初始化这段内存, 使之是无效状态
+            new (package_state)
+              ObPLPackageState(package_id, state_version, package.get_serially_reusable());
+            LOG_WARN("failed to del package state", K(ret), K(package_id), K(tmp_ret));
+          } else {
+            // 删除成功将内存释放
+            package_state->reset(&(resolve_ctx.session_info_));
+            package_state->~ObPLPackageState();
+            session_allocator.free(package_state);
+            package_state = NULL;
+            LOG_WARN("failed to call instantiate_package_state", K(ret), K(package_id));
+          }
+        }
+        if (package.get_expr_op_size() > 0) {
+          //Memory leak
+          //Must be reset before free expr_op_ctx!
+          exec_ctx.reset_expr_op();
+          exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());
+        }
+        exec_ctx_bak.restore(exec_ctx);
+        if (OB_SUCCESS != (tmp_ret = exec_env_bak.store(resolve_ctx.session_info_))) {
+          LOG_WARN("failed to restore package exec env", K(ret), K(tmp_ret));
+          ret = OB_SUCCESS == ret ? tmp_ret : ret;
         }
       }
-      if (package.get_expr_op_size() > 0) {
-        //Memory leak
-        //Must be reset before free expr_op_ctx!
-        exec_ctx.reset_expr_op();
-        exec_ctx.get_allocator().free(exec_ctx.get_expr_op_ctx_store());
-      }
-      exec_ctx_bak.restore(exec_ctx);
     }
   }
   return ret;

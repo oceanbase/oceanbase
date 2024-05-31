@@ -1109,6 +1109,38 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMigrationUtils::get_dag_priority(
+    const ObMigrationOpType::TYPE &type,
+    ObDagPrio::ObDagPrioEnum &prio)
+{
+  int ret = OB_SUCCESS;
+  if (!ObMigrationOpType::is_valid(type)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), K(type));
+  } else {
+    switch (type) {
+      case ObMigrationOpType::TYPE::ADD_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_HIGH;
+        break;
+      }
+      case ObMigrationOpType::TYPE::MIGRATE_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_MID;
+        break;
+      }
+      case ObMigrationOpType::TYPE::REBUILD_LS_OP: {
+        prio = ObDagPrio::DAG_PRIO_HA_HIGH;
+        break;
+      }
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("migration op type not expected", K(ret), K(type));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 /******************ObCopyTableKeyInfo*********************/
 ObCopyTableKeyInfo::ObCopyTableKeyInfo()
   : src_table_key_(),

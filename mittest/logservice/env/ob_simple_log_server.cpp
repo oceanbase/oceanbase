@@ -396,6 +396,7 @@ int ObSimpleLogServer::init_log_service_()
   palf::PalfOptions opts;
   if (disk_opts_.is_valid()) {
     opts.disk_options_ = disk_opts_;
+    opts.enable_log_cache_ = true;
   } else {
     opts.disk_options_.log_disk_usage_limit_size_ = 2 * 1024 * 1024 * 1024ul;
     opts.disk_options_.log_disk_utilization_threshold_ = 80;
@@ -405,6 +406,7 @@ int ObSimpleLogServer::init_log_service_()
     opts.disk_options_.log_writer_parallelism_ = 2;
     disk_opts_ = opts.disk_options_;
     inner_table_disk_opts_ = disk_opts_;
+    opts.enable_log_cache_ = true;
   }
   std::string clog_dir = clog_dir_ + "/tenant_1";
   allocator_ = OB_NEW(ObTenantMutilAllocator, "TestBase", node_id_);
@@ -413,6 +415,7 @@ int ObSimpleLogServer::init_log_service_()
   net_keepalive_ = MTL_NEW(MockNetKeepAliveAdapter, "SimpleLog");
 
   if (OB_FAIL(net_keepalive_->init(&deliver_))) {
+  } else if (OB_FAIL(init_log_kv_cache_())) {
   } else if (OB_FAIL(log_service_.init(opts, clog_dir.c_str(), addr_, allocator_, transport_, &batch_rpc_, &ls_service_,
       &location_service_, &reporter_, &log_block_pool_, &sql_proxy_, net_keepalive_, &mock_locality_manager_))) {
     SERVER_LOG(ERROR, "init_log_service_ fail", K(ret));
@@ -458,6 +461,10 @@ int ObSimpleLogServer::simple_close(const bool is_shutdown = false)
 
   log_block_pool_.destroy();
   guard.click("destroy_palf_env");
+  if (OB_LOG_KV_CACHE.inited_) {
+    OB_LOG_KV_CACHE.destroy();
+  }
+
 
   if (is_shutdown) {
     TG_STOP(batch_rpc_tg_id_);
@@ -492,6 +499,19 @@ int ObSimpleLogServer::simple_restart(const std::string &cluster_name, const int
   } else {
     guard.click("simple_start");
     SERVER_LOG(INFO, "simple_restart success", K(ret), K(guard));
+  }
+  return ret;
+}
+
+int ObSimpleLogServer::init_log_kv_cache_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1))) {
+    if (OB_INIT_TWICE == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      PALF_LOG(WARN, "OB_LOG_KV_CACHE init failed", KR(ret));
+    }
   }
   return ret;
 }
@@ -724,6 +744,7 @@ void ObLogDeliver::handle(void *task)
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN, "ObLogDeliver not init", K(ret));
   } else if (OB_ISNULL(task)) {
+    ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "invalid argument", KP(task));
   } else {
     rpc::ObRequest *req = static_cast<rpc::ObRequest *>(task);

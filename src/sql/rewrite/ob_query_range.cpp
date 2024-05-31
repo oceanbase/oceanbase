@@ -7625,12 +7625,16 @@ if (OB_SUCC(ret) ) { \
   if (!start.is_min_value() && !start.is_max_value() && !start.is_unknown() \
     && (!ObSQLUtils::is_same_type_for_compare(start.get_meta(), column_type.get_obj_meta()) || start.is_decimal_int())) { \
     ObCastMode cm = CM_WARN_ON_FAIL;\
-    if (ObDecimalIntType == expect_type.get_type() && start.is_decimal_int()) {\
-      int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
-      ObScale in_scale = column_type.get_accuracy().get_scale();\
-      int32_t out_bytes = start.get_int_bytes();\
-      ObScale out_scale = start.get_scale();\
-      if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+    if (ObDecimalIntType == expect_type.get_type()) {\
+      if (start.is_decimal_int()) {\
+        int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
+        ObScale in_scale = column_type.get_accuracy().get_scale();\
+        int32_t out_bytes = start.get_int_bytes();\
+        ObScale out_scale = start.get_scale();\
+        if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+          cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_GE, true);\
+        }\
+      } else {\
         cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_GE, true);\
       }\
     }\
@@ -7669,12 +7673,16 @@ if (OB_SUCC(ret) ) { \
     if (!end.is_min_value() && !end.is_max_value() && !end.is_unknown() \
       && (!ObSQLUtils::is_same_type_for_compare(end.get_meta(), column_type.get_obj_meta()) || end.is_decimal_int())) { \
       ObCastMode cm = CM_WARN_ON_FAIL;\
-      if (ObDecimalIntType == expect_type.get_type() && end.is_decimal_int()) {\
-        int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
-        ObScale in_scale = column_type.get_accuracy().get_scale();\
-        int32_t out_bytes = start.get_int_bytes();\
-        ObScale out_scale = start.get_scale();\
-        if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+      if (ObDecimalIntType == expect_type.get_type()) {\
+        if (end.is_decimal_int()) {\
+          int32_t in_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(column_type.get_accuracy().get_precision());\
+          ObScale in_scale = column_type.get_accuracy().get_scale();\
+          int32_t out_bytes = start.get_int_bytes();\
+          ObScale out_scale = start.get_scale();\
+          if (ObDatumCast::need_scale_decimalint(in_scale, in_bytes, out_scale, out_bytes)) {\
+            cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_LE, true);\
+          }\
+        } else {\
           cm |= ObRelationalExprOperator::get_const_cast_mode(T_OP_LE, true);\
         }\
       }\

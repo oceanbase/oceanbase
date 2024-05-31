@@ -794,6 +794,10 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else if (OB_FAIL(check_arg())) {
     LOG_WARN("check arg failed", K(ret));
+  } else if (OB_UNLIKELY(!is_kv_feature_enable())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("obkv feature is not enable", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBKV feature");
   } else if (OB_FAIL(check_user_access(credential))) {
     LOG_WARN("check user access failed", K(ret));
   } else {

@@ -661,7 +661,10 @@ int ObDbmsStatsUtils::merge_col_stats(const ObTableStatParam &param,
       LOG_WARN("get unexpected null pointer", K(ret));
     } else if (is_part_id_valid(param, col_stat->get_partition_id())) {
       col_stat->set_num_distinct(ObGlobalNdvEval::get_ndv_from_llc(col_stat->get_llc_bitmap()));
-      if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
+      if (OB_UNLIKELY(col_stat->get_num_distinct() < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", KPC(col_stat), K(old_col_stats), K(ret));
+      } else if (OB_FAIL(dst_col_stats.push_back(col_stat))) {
         LOG_WARN("fail to push back table stats", K(ret));
       }
     }
