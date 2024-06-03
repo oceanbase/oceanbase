@@ -105,6 +105,7 @@ int ObExprSoundex::calc_result_type1(
       res_type = ObVarcharType;
       res_length = OB_MAX_BINARY_LENGTH;
       res_cs_type = type_ctx.get_coll_type();
+      raw_expr->set_extra(static_cast<uint64_t>(res_cs_type));
     }
   }
   if (OB_SUCC(ret)) {
