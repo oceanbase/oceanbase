@@ -10,18 +10,18 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#ifndef OCEANBASE_STORAGE_OB_TRANS_HASHMAP_
-#define OCEANBASE_STORAGE_OB_TRANS_HASHMAP_
+#ifndef OCEANBASE_STORAGE_OB_LIGHT_HASHMAP_
+#define OCEANBASE_STORAGE_OB_LIGHT_HASHMAP_
 
 #include "lib/ob_define.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/container/ob_se_array.h"
 /*
  * For Example
- * 
+ *
  * 1. Define the hash value class
  *
- *   class ObTransCtx : public ObTransHashLink<ObTransCtx>
+ *   class ObTransCtx : public ObLightHashLink<ObTransCtx>
  *   {
  *   public:
  *     // hash key compare method
@@ -49,12 +49,12 @@
  *   };
  *
  * 3. define the HashMap
- *   ObTransHashMap <ObTransID, ObTransCtx, ObTransCtxAlloc> CtxMap;
+ *   ObLightHashMap <ObTransID, ObTransCtx, ObTransCtxAlloc> CtxMap;
  *
- * 4. Ref 
+ * 4. Ref
  *   insert_and_get // create the hash value , ref = ref + 2;
  *   get()          // ref++
- *   revert         // ref --; 
+ *   revert         // ref --;
  *
  * 5. More Attentions are as followed:
  *
@@ -64,16 +64,13 @@
  *
  */
 
-namespace oceanbase
-{
-namespace transaction
-{
-template<typename Value>
-class ObTransHashLink
-{
+namespace oceanbase {
+namespace share {
+template <typename Value>
+class ObLightHashLink {
 public:
-  ObTransHashLink() : ref_(0), prev_(NULL), next_(NULL) {}
-  ~ObTransHashLink()
+  ObLightHashLink() : ref_(0), prev_(NULL), next_(NULL) {}
+  ~ObLightHashLink()
   {
     ref_ = 0;
     prev_ = NULL;
@@ -82,7 +79,7 @@ public:
   inline int inc_ref(int32_t x)
   {
     if (ref_ < 0) {
-      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref when inc ref", K(ref_));
+      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected ref when inc ref", K(ref_));
     }
     return ATOMIC_FAA(&ref_, x);
   }
@@ -90,7 +87,7 @@ public:
   {
     int32_t ref = ATOMIC_SAF(&ref_, x);
     if (ref < 0) {
-      TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected error", K(ref_));
+      SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected error", K(ref_));
     }
     return ref;
   }
@@ -101,15 +98,12 @@ public:
 };
 
 template<typename Key, typename Value, typename AllocHandle, typename LockType, int64_t BUCKETS_CNT = 64, int64_t LOCKS_CNT = BUCKETS_CNT>
-class ObTransHashMap
+class ObLightHashMap
 {
  typedef common::ObSEArray<Value *, 32> ValueArray;
 public:
-  ObTransHashMap() : is_inited_(false), total_cnt_(0)
-  {
-    OB_ASSERT(BUCKETS_CNT > 0);
-  }
-  ~ObTransHashMap() { destroy(); }
+  ObLightHashMap() : is_inited_(false), total_cnt_(0) { OB_ASSERT(BUCKETS_CNT > 0); }
+  ~ObLightHashMap() { destroy(); }
   int64_t count() const { return ATOMIC_LOAD(&total_cnt_); }
   int64_t alloc_cnt() const { return alloc_handle_.get_alloc_cnt(); }
   void reset()
@@ -150,12 +144,12 @@ public:
 
     if (OB_UNLIKELY(is_inited_)) {
       ret = OB_INIT_TWICE;
-      TRANS_LOG(WARN, "ObTransHashMap init twice", K(ret));
+      SHARE_LOG(WARN, "ObLightHashMap init twice", K(ret));
     } else {
       // init lock
       for (int64_t i = 0 ; OB_SUCC(ret) && i < LOCKS_CNT; ++i) {
         if (OB_FAIL(locks_[i].init(mem_attr))) {
-          TRANS_LOG(WARN, "ObTransHashMap locks init fail", K(ret));
+          TRANS_LOG(WARN, "ObLightHashMap locks init fail", K(ret));
           for (int64_t j = 0 ; j <= i; ++j) {
             locks_[j].destroy();
           }
@@ -168,20 +162,18 @@ public:
     return ret;
   }
 
-  int insert_and_get(const Key &key, Value *value, Value **old_value)
-  { return insert__(key, value, 2, old_value); }
-  int insert(const Key &key, Value *value)
-  { return insert__(key, value, 1, 0); }
+  int insert_and_get(const Key &key, Value *value, Value **old_value) { return insert__(key, value, 2, old_value); }
+  int insert(const Key &key, Value *value) { return insert__(key, value, 1, 0); }
   int insert__(const Key &key, Value *value, int ref, Value **old_value)
   {
     int ret = OB_SUCCESS;
 
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "ObTransHashMap not init", K(ret), KP(value));
+      SHARE_LOG(WARN, "ObLightHashMap not init", K(ret), KP(value));
     } else if (!key.is_valid() || OB_ISNULL(value)) {
       ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(WARN, "invalid argument", K(key), KP(value));
+      SHARE_LOG(WARN, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
       BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
@@ -221,10 +213,10 @@ public:
 
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "ObTransHashMap not init", K(ret), KP(value));
+      SHARE_LOG(WARN, "ObLightHashMap not init", K(ret), KP(value));
     } else if (!key.is_valid() || OB_ISNULL(value)) {
       ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(ERROR, "invalid argument", K(key), KP(value));
+      SHARE_LOG(ERROR, "invalid argument", K(key), KP(value));
     } else {
       int64_t pos = key.hash() % BUCKETS_CNT;
       BucketWLockGuard guard(locks_[pos % LOCKS_CNT], get_itid());
@@ -265,10 +257,10 @@ public:
 
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
-      TRANS_LOG(WARN, "ObTransHashMap not init", K(ret), K(key));
+      SHARE_LOG(WARN, "ObLightHashMap not init", K(ret), K(key));
     } else if (!key.is_valid()) {
       ret = OB_INVALID_ARGUMENT;
-      TRANS_LOG(WARN, "invalid argument", K(key));
+      SHARE_LOG(WARN, "invalid argument", K(key));
     } else {
       Value *tmp_value = NULL;
       int64_t pos = key.hash() % BUCKETS_CNT;
@@ -304,16 +296,18 @@ public:
     }
   }
 
-  template <typename Function> int for_each(Function &fn)
+  template <typename Function>
+  int for_each(Function &fn)
   {
     int ret = common::OB_SUCCESS;
-    for (int64_t pos = 0 ; OB_SUCC(ret) && pos < BUCKETS_CNT; ++pos) {
+    for (int64_t pos = 0; OB_SUCC(ret) && pos < BUCKETS_CNT; ++pos) {
       ret = for_each_in_one_bucket(fn, pos);
     }
     return ret;
   }
 
-  template <typename Function> int for_each_in_one_bucket(Function& fn, int64_t bucket_pos)
+  template <typename Function>
+  int for_each_in_one_bucket(Function &fn, int64_t bucket_pos)
   {
     int ret = common::OB_SUCCESS;
     if (bucket_pos < 0 || bucket_pos >= BUCKETS_CNT) {
@@ -321,7 +315,7 @@ public:
     } else {
       ValueArray array;
       if (OB_FAIL(generate_value_arr_(bucket_pos, array))) {
-        TRANS_LOG(WARN, "generate value array error", K(ret));
+        SHARE_LOG(WARN, "generate value array error", K(ret));
       } else {
         const int64_t cnt = array.count();
         for (int64_t i = 0; i < cnt; ++i) {
@@ -331,22 +325,22 @@ public:
           if (0 == array.at(i)->dec_ref(1)) {
             alloc_handle_.free_value(array.at(i));
           }
-
         }
       }
     }
     return ret;
   }
 
-  template <typename Function> int remove_if(Function &fn)
+  template <typename Function>
+  int remove_if(Function &fn)
   {
     int ret = common::OB_SUCCESS;
 
     ValueArray array;
-    for (int64_t pos = 0 ; pos < BUCKETS_CNT; ++pos) {
+    for (int64_t pos = 0; pos < BUCKETS_CNT; ++pos) {
       array.reset();
       if (OB_FAIL(generate_value_arr_(pos, array))) {
-        TRANS_LOG(WARN, "generate value array error", K(ret));
+        SHARE_LOG(WARN, "generate value array error", K(ret));
       } else {
         const int64_t cnt = array.count();
         for (int64_t i = 0; i < cnt; ++i) {
@@ -383,7 +377,7 @@ public:
     while (OB_SUCC(ret) && OB_NOT_NULL(val)) {
       val->inc_ref(1);
       if (OB_FAIL(arr.push_back(val))) {
-        TRANS_LOG(WARN, "value array push back error", K(ret));
+        SHARE_LOG(WARN, "value array push back error", K(ret));
         val->dec_ref(1);
       }
       val = val->next_;
@@ -414,46 +408,38 @@ public:
     }
   }
 
-  int64_t get_total_cnt() {
-    return ATOMIC_LOAD(&total_cnt_);
-  }
+  int64_t get_total_cnt() { return ATOMIC_LOAD(&total_cnt_); }
 
-  static int64_t get_buckets_cnt() {
-    return BUCKETS_CNT;
-  }
+  static int64_t get_buckets_cnt() { return BUCKETS_CNT; }
+
 private:
-  struct ObTransHashHeader
-  {
+  struct ObLightHashHeader {
     Value *next_;
     Value *hot_cache_val_;
 
-    ObTransHashHeader() : next_(NULL), hot_cache_val_(NULL) {}
-    ~ObTransHashHeader() { destroy(); }
+    ObLightHashHeader() : next_(NULL), hot_cache_val_(NULL) {}
+    ~ObLightHashHeader() { destroy(); }
     void reset()
     {
       next_ = NULL;
       hot_cache_val_ = NULL;
     }
-    void destroy()
-    {
-      reset();
-    }
+    void destroy() { reset(); }
   };
 
   // thread local node
-  class Node
-  {
+  class Node {
   public:
     Node() : thread_id_(-1) {}
     void reset() { thread_id_ = -1; }
     void set_thread_id(const int64_t thread_id) { thread_id_ = thread_id; }
     uint64_t get_thread_id() const { return thread_id_; }
+
   private:
     uint64_t thread_id_;
   };
 
-  class BucketRLockGuard
-  {
+  class BucketRLockGuard {
   public:
     explicit BucketRLockGuard(const LockType &lock, const uint64_t thread_id)
         : lock_(const_cast<LockType &>(lock)), ret_(OB_SUCCESS)
@@ -461,26 +447,27 @@ private:
       if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.rdlock()))) {
         COMMON_LOG_RET(WARN, ret_, "Fail to read lock, ", K_(ret));
       } else {
-        ObTransHashMap::get_thread_node().set_thread_id(thread_id);
+        ObLightHashMap::get_thread_node().set_thread_id(thread_id);
       }
     }
     ~BucketRLockGuard()
     {
       if (OB_LIKELY(OB_SUCCESS == ret_)) {
         lock_.rdunlock();
-        ObTransHashMap::get_thread_node().reset();
+        ObLightHashMap::get_thread_node().reset();
       }
     }
     inline int get_ret() const { return ret_; }
+
   private:
     LockType &lock_;
     int ret_;
+
   private:
     DISALLOW_COPY_AND_ASSIGN(BucketRLockGuard);
   };
 
-  class BucketWLockGuard
-  {
+  class BucketWLockGuard {
   public:
     explicit BucketWLockGuard(const LockType &lock, const uint64_t thread_id)
         : lock_(const_cast<LockType &>(lock)), ret_(OB_SUCCESS), locked_(false)
@@ -488,13 +475,13 @@ private:
       // no need to lock
       if (get_itid() == get_thread_node().get_thread_id()) {
         locked_ = false;
-        TRANS_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected thread status", K(thread_id));
+        SHARE_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "unexpected thread status", K(thread_id));
       } else {
         if (OB_UNLIKELY(OB_SUCCESS != (ret_ = lock_.wrlock()))) {
           COMMON_LOG_RET(WARN, ret_, "Fail to write lock, ", K_(ret));
         } else {
           locked_ = true;
-          ObTransHashMap::get_thread_node().set_thread_id(thread_id);
+          ObLightHashMap::get_thread_node().set_thread_id(thread_id);
         }
       }
     }
@@ -502,14 +489,16 @@ private:
     {
       if (locked_ && OB_LIKELY(OB_SUCCESS == ret_)) {
         lock_.wrunlock();
-        ObTransHashMap::get_thread_node().reset();
+        ObLightHashMap::get_thread_node().reset();
       }
     }
     inline int get_ret() const { return ret_; }
+
   private:
     LockType &lock_;
     int ret_;
     bool locked_;
+
   private:
     DISALLOW_COPY_AND_ASSIGN(BucketWLockGuard);
   };
@@ -521,11 +510,11 @@ private:
   }
 
 private:
-  // sizeof(ObTransHashMap) = BUCKETS_CNT * sizeof(LockType);
+  // sizeof(ObLightHashMap) = BUCKETS_CNT * sizeof(LockType);
   // sizeof(SpinRWLock) = 20B;
   // sizeof(QsyncLock) = 4K;
   bool is_inited_;
-  ObTransHashHeader buckets_[BUCKETS_CNT];
+  ObLightHashHeader buckets_[BUCKETS_CNT];
   LockType locks_[LOCKS_CNT];
   int64_t total_cnt_;
 #ifndef NDEBUG
@@ -534,6 +523,6 @@ public:
   AllocHandle alloc_handle_;
 };
 
-}
-}
-#endif // OCEANBASE_STORAGE_OB_TRANS_HASHMAP_
+}  // namespace share
+}  // namespace oceanbase
+#endif  // OCEANBASE_STORAGE_OB_LIGHT_HASHMAP_

@@ -22,7 +22,7 @@
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "share/ob_ls_id.h"
 #include "share/ob_occam_timer.h"
-// #include "storage/tx/ob_trans_define.h"
+#include "share/allocator/ob_mds_allocator.h"
 #include "storage/tx_storage/ob_ls_handle.h"
 #include "lib/hash/ob_linear_hash_map.h"
 
@@ -95,34 +95,6 @@ struct ObMdsMemoryLeakDebugInfo
   int64_t tid_;
 };
 
-class ObTenantMdsAllocator : public ObIAllocator
-{
-  friend class ObTenantMdsService;
-private:
-  static const int64_t MDS_ALLOC_CONCURRENCY = 32;
-public:
-  ObTenantMdsAllocator() = default;
-  int init();
-  void destroy() {}
-  virtual void *alloc(const int64_t size) override;
-  virtual void *alloc(const int64_t size, const ObMemAttr &attr) override;
-  virtual void free(void *ptr) override;
-  virtual void set_attr(const ObMemAttr &attr) override;
-  int64_t hold() { return allocator_.hold(); }
-  TO_STRING_KV(KP(this));
-private:
-  common::ObBlockAllocMgr block_alloc_;
-  common::ObVSliceAlloc allocator_;
-};
-
-struct ObTenantBufferCtxAllocator : public ObIAllocator// for now, it is just a wrapper of mtl_malloc
-{
-  virtual void *alloc(const int64_t size) override;
-  virtual void *alloc(const int64_t size, const ObMemAttr &attr) override;
-  virtual void free(void *ptr) override;
-  virtual void set_attr(const ObMemAttr &) override {}
-};
-
 struct ObTenantMdsTimer
 {
   ObTenantMdsTimer() = default;
@@ -161,9 +133,8 @@ public:
   static int for_each_ls_in_tenant(const ObFunction<int(ObLS &)> &op);
   static int for_each_tablet_in_ls(ObLS &ls, const ObFunction<int(ObTablet &)> &op);
   static int for_each_mds_table_in_ls(ObLS &ls, const ObFunction<int(ObTablet &)> &op);
-  ObTenantMdsAllocator &get_allocator() { return mds_allocator_; }
-  ObTenantBufferCtxAllocator &get_buffer_ctx_allocator() { return buffer_ctx_allocator_; }
-  TO_STRING_KV(KP(this), K_(is_inited), K_(mds_allocator), K_(mds_timer))
+  share::ObTenantBufferCtxAllocator &get_buffer_ctx_allocator() { return buffer_ctx_allocator_; }
+  TO_STRING_KV(KP(this), K_(is_inited), K_(mds_timer))
 public:
   /*******************debug for memoy leak************************/
   template <typename OP>
@@ -189,8 +160,7 @@ public:
   /***************************************************************/
 private:
   bool is_inited_;
-  ObTenantMdsAllocator mds_allocator_;
-  ObTenantBufferCtxAllocator buffer_ctx_allocator_;
+  share::ObTenantBufferCtxAllocator buffer_ctx_allocator_;
   ObTenantMdsTimer mds_timer_;
   /*******************debug for memoy leak************************/
   ObLinearHashMap<ObIntWarp, ObMdsMemoryLeakDebugInfo> memory_leak_debug_map_;

@@ -13,12 +13,12 @@
 #ifndef OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 #define OCEANBASE_STORAGE_OB_TX_DATA_TABLE
 
-#include "storage/meta_mem/ob_tablet_handle.h"
-#include "lib/future/ob_future.h"
 #include "share/scn.h"
+#include "share/ob_occam_timer.h"
+#include "share/allocator/ob_tx_data_allocator.h"
+#include "storage/meta_mem/ob_tablet_handle.h"
 #include "storage/tx_table/ob_tx_data_memtable_mgr.h"
 #include "storage/tx_table/ob_tx_table_define.h"
-#include "share/ob_occam_timer.h"
 
 namespace oceanbase
 {
@@ -81,19 +81,7 @@ public:
   };
 
 
-  using SliceAllocator = ObSliceAlloc;
-
-  static const int64_t TX_DATA_MAX_CONCURRENCY = 32;
-  // A tx data is 128 bytes, 128 * 262144 = 32MB
-  static const int64_t SSTABLE_CACHE_MAX_RETAIN_CNT = 262144;
-  // The max tps is 150w which means the cache can be inserted 15w tx data during 100ms. So once
-  // cache cleaning task will delete at least 11w tx data.
-  static const int64_t DEFAULT_CACHE_RETAINED_TIME = 100_ms; // 100ms
-
-  // The tx data memtable will trigger a freeze if its memory use is more than 2%
-  static constexpr double TX_DATA_FREEZE_TRIGGER_PERCENTAGE = 2;
-  // TODO : @gengli.wzy The active & frozen tx data memtable can not use memory more than 10%
-  static constexpr double TX_DATA_MEM_LIMIT_PERCENTAGE = 10;
+  static int64_t UPDATE_CALC_UPPER_INFO_INTERVAL;
 
   enum COLUMN_ID_LIST
   {
@@ -110,8 +98,8 @@ public:  // ObTxDataTable
       is_started_(false),
       ls_id_(),
       tablet_id_(0),
-      slice_allocator_(),
       arena_allocator_(),
+      tx_data_allocator_(nullptr),
       ls_(nullptr),
       ls_tablet_svr_(nullptr),
       memtable_mgr_(nullptr),
@@ -129,11 +117,11 @@ public:  // ObTxDataTable
   int offline();
 
   /**
-   * @brief Allocate tx data with slice allocator
-   *
-   * @param[out] tx_data the tx data allocated by slice allocator
+   * @brief the same as ObTxTable::alloc_tx_data
    */
-  virtual int alloc_tx_data(ObTxDataGuard &tx_data);
+  virtual int alloc_tx_data(ObTxDataGuard &tx_data,
+                            const bool enable_throttle = true,
+                            const int64_t abs_expire_time = 0);
 
   /**
    * @brief allocate memory and deep copy tx data
@@ -219,10 +207,11 @@ public:  // ObTxDataTable
                KP_(ls),
                KP_(ls_tablet_svr),
                KP_(memtable_mgr),
-               KP_(tx_ctx_table));
+               KP_(tx_ctx_table),
+               KP_(&tx_data_allocator));
 
 public: // getter and setter
-  SliceAllocator *get_slice_allocator() { return &slice_allocator_; }
+  share::ObTenantTxDataAllocator *get_tx_data_allocator() { return tx_data_allocator_; }
   TxDataReadSchema &get_read_schema() { return read_schema_; };
 
   share::ObLSID get_ls_id();
@@ -313,8 +302,8 @@ private:
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   // Allocator to allocate ObTxData and ObUndoStatus
-  SliceAllocator slice_allocator_;
   ObArenaAllocator arena_allocator_;
+  share::ObTenantTxDataAllocator *tx_data_allocator_;
   ObLS *ls_;
   // Pointer to tablet service, used for get tx data memtable mgr
   ObLSTabletService *ls_tablet_svr_;
@@ -325,19 +314,6 @@ private:
   CalcUpperTransSCNCache calc_upper_trans_version_cache_;
   MemtableHandlesCache memtables_cache_;
 };  // tx_table
-
-
-class CleanTxDataSSTableCacheFunctor
-{
-public:
-  CleanTxDataSSTableCacheFunctor(TxDataMap &sstable_cache, int64_t clean_ts) : sstable_cache_(sstable_cache), clean_ts_(clean_ts) {}
-
-  bool operator()(const transaction::ObTransID &key, ObTxData *tx_data);
-
-private:
-  TxDataMap &sstable_cache_;
-  int64_t clean_ts_;
-};
 
 }  // namespace storage
 

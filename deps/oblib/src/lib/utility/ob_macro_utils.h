@@ -379,6 +379,22 @@
 // LST_DO_CODE(CHECK, arg1, arg2) => CHECK(arg1); CHECK(arg2)
 #define LST_DO_CODE(M, ...) LST_DO(M, (;), ## __VA_ARGS__)
 
+#define LST_DEFINE_0(...)
+#define LST_DEFINE_1(A, ...) class A;
+#define LST_DEFINE_2(A, ...) class A; LST_DEFINE_1(__VA_ARGS__)
+#define LST_DEFINE_3(A, ...) class A; LST_DEFINE_2(__VA_ARGS__)
+#define LST_DEFINE_4(A, ...) class A; LST_DEFINE_3(__VA_ARGS__)
+#define LST_DEFINE_5(A, ...) class A; LST_DEFINE_4(__VA_ARGS__)
+#define LST_DEFINE_6(A, ...) class A; LST_DEFINE_5(__VA_ARGS__)
+#define LST_DEFINE_7(A, ...) class A; LST_DEFINE_6(__VA_ARGS__)
+#define LST_DEFINE_8(A, ...) class A; LST_DEFINE_7(__VA_ARGS__)
+#define LST_DEFINE_9(A, ...) class A; LST_DEFINE_8(__VA_ARGS__)
+#define LST_DEFINE_10(A, ...) class A; LST_DEFINE_9(__VA_ARGS__)
+
+#define LST_DEFINE__(N, ...) LST_DEFINE_ ## N(__VA_ARGS__)
+#define LST_DEFINE_(...) LST_DEFINE__(__VA_ARGS__)
+#define LST_DEFINE(...) LST_DEFINE_(ARGS_NUM(__VA_ARGS__), __VA_ARGS__)
+
 #define ONE_TO_HUNDRED \
     1, 2, 3, 4, 5, 6, 7, 8, 9,                 \
     10, 11, 12, 13, 14, 15, 16, 17, 18, 19,    \
@@ -739,8 +755,8 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 #define REACH_TENANT_TIME_INTERVAL(i) \
   ({ \
     bool bret = false; \
-    RLOCAL_STATIC(int64_t, last_time) = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
-    int64_t cur_time = ::oceanbase::common::ObTimeUtility::fast_current_time(); \
+    RLOCAL_STATIC(int64_t, last_time) = ObClockGenerator::getClock(); \
+    int64_t cur_time = ObClockGenerator::getClock(); \
     int64_t old_time = last_time; \
     if (OB_UNLIKELY((i + last_time) < cur_time) \
         && old_time == ATOMIC_CAS(&last_time, old_time, cur_time)) \

@@ -408,7 +408,6 @@ DEF_INT(_memstore_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 100)",
 DEF_INT(freeze_trigger_percentage, OB_TENANT_PARAMETER, "20", "(0, 100)",
         "the threshold of the size of the mem store when freeze will be triggered. Rang:(0,100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_INT(writing_throttling_trigger_percentage, OB_TENANT_PARAMETER, "60", "(0, 100]",
           "the threshold of the size of the mem store when writing_limit will be triggered. Rang:(0,100]. setting 100 means turn off writing limit",
           ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -417,6 +416,22 @@ DEF_INT(data_disk_write_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "When the user data disk reaches this watermark, SQL requests will report that the disk is full. "
         "The configuration should be greater than data_disk_usage_limit_percentage, "
         "with the recommended setting being: (1 - memstore_limit_size / data_disk_size) * 100%",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_tx_share_memory_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 100)",
+        "Used to control the percentage of tenant memory limit that multiple modules in the transaction layer can collectively use. "
+        "This primarily includes user data (MemTable), transaction data (TxData), etc. "
+        "When it is set to the default value of 0, it represents dynamic adaptive behavior, "
+        "which will be adjusted dynamically based on memstore_limit_percentage. The adjustment rule is: "
+        " _tx_share_memory_limit_percentage = memstore_limit_percentage + 10. "
+        "Range: [0, 100)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_tx_data_memory_limit_percentage, OB_TENANT_PARAMETER, "20", "(0, 100)",
+        "used to control the upper limit percentage of memory resources that the TxData module can use. "
+        "Range:(0, 100)",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_mds_memory_limit_percentage, OB_TENANT_PARAMETER, "10", "(0, 100)",
+        "Used to control the upper limit percentage of memory resources that the Mds module can use. "
+        "Range:(0, 100)",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3d]",
           "maximum duration of writting throttling(in minutes), max value is 3 days",

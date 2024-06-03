@@ -82,7 +82,7 @@ typedef common::ObSimpleIterator<ObLSTxCtxMgrStat,
 typedef common::ObSimpleIterator<ObTxLockStat,
         ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxLockStatIterator;
 
-typedef ObTransHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock, 1 << 14 /*bucket_num*/> ObLSTxCtxMap;
+typedef share::ObLightHashMap<ObTransID, ObTransCtx, TransCtxAlloc, common::SpinRWLock, 1 << 14 /*bucket_num*/> ObLSTxCtxMap;
 
 typedef common::LinkHashNode<share::ObLSID> ObLSTxCtxMgrHashNode;
 typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
@@ -140,7 +140,7 @@ const static char OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID[] = "ObTxCtxMgr";
 typedef common::ObSimpleIterator<ObTransID, OB_SIMPLE_ITERATOR_LABEL_FOR_TX_ID, 16> ObTxIDIterator;
 
 // LogStream Transaction Context Manager
-class ObLSTxCtxMgr: public ObTransHashLink<ObLSTxCtxMgr>
+class ObLSTxCtxMgr: public share::ObLightHashLink<ObLSTxCtxMgr>
 {
 // ut
   friend class unittest::TestTxCtxTable;
@@ -915,7 +915,7 @@ public:
   }
 };
 
-typedef transaction::ObTransHashMap<share::ObLSID, ObLSTxCtxMgr,
+typedef share::ObLightHashMap<share::ObLSID, ObLSTxCtxMgr,
         ObLSTxCtxMgrAlloc, common::ObQSyncLock> ObLSTxCtxMgrMap;
 
 class ObTxCtxMgr

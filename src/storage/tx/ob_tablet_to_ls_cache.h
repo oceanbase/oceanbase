@@ -20,7 +20,7 @@ namespace oceanbase
 namespace transaction
 {
 
-class ObTabletLSNode: public ObTransHashLink<ObTabletLSNode>
+class ObTabletLSNode: public share::ObLightHashLink<ObTabletLSNode>
 {
 public:
   ObTabletLSNode() : ls_tx_ctx_mgr_(NULL), tx_ctx_mgr_(NULL) {}
@@ -83,7 +83,7 @@ public:
   }
 };
 
-typedef ObTransHashMap<ObTabletID, ObTabletLSNode, ObTabletLSNodeAlloc, common::ObQSyncLock, 16 * 1024, 256> TabletToLSMap;
+typedef share::ObLightHashMap<ObTabletID, ObTabletLSNode, ObTabletLSNodeAlloc, common::ObQSyncLock, 16 * 1024, 256> TabletToLSMap;
 
 class RemoveLSTabletFunctor
 {

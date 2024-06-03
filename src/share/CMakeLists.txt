@@ -13,11 +13,13 @@ ob_set_subtarget(ob_share SCHEMA_CPPS
 
 ob_set_subtarget(ob_share allocator
   allocator/ob_fifo_arena.cpp
-  allocator/ob_gmemstore_allocator.cpp
+  allocator/ob_memstore_allocator.cpp
   allocator/ob_handle_list.cpp
-  allocator/ob_memstore_allocator_mgr.cpp
+  allocator/ob_mds_allocator.cpp
+  allocator/ob_shared_memory_allocator_mgr.cpp
   allocator/ob_tenant_mutil_allocator.cpp
   allocator/ob_tenant_mutil_allocator_mgr.cpp
+  allocator/ob_tx_data_allocator.cpp
 )
 
 ob_set_subtarget(ob_share backup
@@ -513,6 +515,11 @@ if (OB_ERRSIM)
    errsim_module/ob_errsim_module_interface_imp.cpp
  )
 endif()
+
+ob_set_subtarget(ob_share throttle
+  throttle/ob_share_throttle_define.cpp
+  throttle/ob_throttle_common.cpp
+)
 
 ob_set_subtarget(ob_share wr
   wr/ob_wr_service.cpp

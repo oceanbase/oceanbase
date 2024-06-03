@@ -11,6 +11,7 @@
  */
 
 #include "observer/omt/ob_tenant_config_mgr.h"
+#include "share/throttle/ob_throttle_unit.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_ls_tx_service.h"
 #include "storage/memtable/ob_memtable.h"
@@ -287,6 +288,9 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
                         scheduler,
                         INT64_MAX,         /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
+      ObTxDataThrottleGuard tx_data_throttle_guard(
+          true /* for_replay_ */,
+          ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
         TRANS_LOG(WARN, "get_tx_ctx error", K(ret), K(tx_id), KP(ctx_));
       } else {
@@ -400,6 +404,9 @@ int ObTxReplayExecutor::replay_rollback_to_()
   int ret = OB_SUCCESS;
   const bool tx_queue = is_tx_log_replay_queue();
   ObTxRollbackToLog log;
+  ObTxDataThrottleGuard tx_data_throttle_guard(
+      true /* for_replay_ */,
+      ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
   const bool pre_barrier = base_header_.need_pre_replay_barrier();
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", KR(ret), "log_type", "RollbackTo",
@@ -446,6 +453,11 @@ int ObTxReplayExecutor::replay_multi_source_data_()
 {
   int ret = OB_SUCCESS;
   ObTxMultiDataSourceLog log;
+
+  ObMdsThrottleGuard mds_throttle_guard(true /* for_replay */,
+                                        ObClockGenerator::getClock() +
+                                            share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME);
+
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
     TRANS_LOG(WARN, "[Replay Tx] deserialize log body error", KR(ret), K(lsn_), K(log_ts_ns_));
   } else if (OB_FAIL(ctx_->replay_multi_data_source(log, lsn_, log_ts_ns_, tx_part_log_no_))) {

@@ -103,6 +103,38 @@ private:
   static int64_t get_write_throttle_trigger_percentage_(const uint64_t tenant_id);
   DISALLOW_COPY_AND_ASSIGN(ObConfigFreezeTriggerIntChecker);
 };
+class ObConfigTxShareMemoryLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTxShareMemoryLimitChecker);
+};
+class ObConfigMemstoreLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMemstoreLimitChecker);
+};
+class ObConfigTxDataLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigTxDataLimitChecker);
+};
+class ObConfigMdsLimitChecker
+{
+public:
+  static bool check(const uint64_t tenant_id, const obrpc::ObAdminSetConfigItem &t);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigMdsLimitChecker);
+};
 
 class ObConfigWriteThrottleTriggerIntChecker
 {

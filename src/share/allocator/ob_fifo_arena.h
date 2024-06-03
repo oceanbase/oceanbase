@@ -25,10 +25,10 @@ namespace oceanbase
 {
 namespace common
 {
-class ObMemstoreAllocatorMgr;
-class ObActiveList;
+
 class ObFifoArena
 {
+
 public:
   static int64_t total_hold_;
   struct Page;
@@ -146,13 +146,26 @@ public:
   };
 
 public:
-  enum { MAX_CACHED_GROUP_COUNT = 16, MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY, PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE + sizeof(Page) + sizeof(Ref)};
-  ObFifoArena(): allocator_(NULL), nway_(0), allocated_(0), reclaimed_(0), hold_(0), retired_(0), max_seq_(0), clock_(0), last_update_ts_(0),
-  last_reclaimed_(0), lastest_memstore_threshold_(0)
-    { memset(cur_pages_, 0, sizeof(cur_pages_)); }
+  enum {
+    MAX_CACHED_GROUP_COUNT = 16,
+    MAX_CACHED_PAGE_COUNT = MAX_CACHED_GROUP_COUNT * Handle::MAX_NWAY,
+    PAGE_SIZE = OB_MALLOC_BIG_BLOCK_SIZE + sizeof(Page) + sizeof(Ref)
+  };
+  ObFifoArena()
+      : allocator_(NULL),
+        nway_(0),
+        allocated_(0),
+        reclaimed_(0),
+        hold_(0),
+        retired_(0),
+        last_reclaimed_(0),
+        lastest_memstore_threshold_(0)
+  {
+    memset(cur_pages_, 0, sizeof(cur_pages_));
+  }
   ~ObFifoArena() { reset(); }
 public:
-  int init(uint64_t tenant_id);
+  int init();
   void reset();
   void update_nway_per_group(int64_t nway);
   void* alloc(int64_t idx, Handle& handle, int64_t size);
@@ -160,23 +173,17 @@ public:
   int64_t allocated() const { return ATOMIC_LOAD(&allocated_); }
   int64_t retired() const { return ATOMIC_LOAD(&retired_); }
   int64_t reclaimed() const { return ATOMIC_LOAD(&reclaimed_); }
-  int64_t hold() const {
-    int64_t rsize = ATOMIC_LOAD(&reclaimed_);
-    int64_t asize = ATOMIC_LOAD(&allocated_);
-    return asize - rsize;
-  }
-  uint64_t get_tenant_id() const { return attr_.tenant_id_; }
 
   void set_memstore_threshold(int64_t memstore_threshold);
-  bool need_do_writing_throttle() const;
-  bool check_clock_over_seq(const int64_t seq);
-  int64_t get_clock();
-  int64_t expected_wait_time(const int64_t seq) const;
-  void skip_clock(const int64_t skip_size);
+  int64_t hold() const {
+    return hold_;
+  }
+  uint64_t get_tenant_id() const { return attr_.tenant_id_; }
   int64_t get_max_cached_memstore_size() const
   {
     return MAX_CACHED_GROUP_COUNT * ATOMIC_LOAD(&nway_) * (PAGE_SIZE + ACHUNK_PRESERVE_SIZE);
   }
+
 private:
   ObQSync& get_qs() {
     static ObQSync s_qs;
@@ -185,36 +192,6 @@ private:
   int64_t get_way_id() { return icpu_id() % ATOMIC_LOAD(&nway_); }
   int64_t get_idx(int64_t grp_id, int64_t way_id) { return (grp_id % MAX_CACHED_GROUP_COUNT) * Handle::MAX_NWAY + way_id; }
 
-  struct ObWriteThrottleInfo {
-  public:
-    ObWriteThrottleInfo(){ reset();}
-    ~ObWriteThrottleInfo(){}
-    void reset();
-    void reset_period_stat_info();
-    void record_limit_event(int64_t interval);
-    int check_and_calc_decay_factor(int64_t memstore_threshold,
-                                    int64_t trigger_percentage,
-                                    int64_t alloc_duration);
-    TO_STRING_KV(K(decay_factor_),
-                 K(alloc_duration_),
-                 K(trigger_percentage_),
-                 K(memstore_threshold_),
-                 K(period_throttled_count_),
-                 K(period_throttled_time_),
-                 K(total_throttled_count_),
-                 K(total_throttled_time_));
-  public:
-    //control info
-    double decay_factor_;
-    int64_t alloc_duration_;
-    int64_t trigger_percentage_;
-    int64_t memstore_threshold_;
-    //stat info
-    int64_t period_throttled_count_;
-    int64_t period_throttled_time_;
-    int64_t total_throttled_count_;
-    int64_t total_throttled_time_;
-  };
 private:
   void release_ref(Ref* ref);
   Page* alloc_page(int64_t size);
@@ -222,24 +199,11 @@ private:
   void retire_page(int64_t way_id, Handle& handle, Page* ptr);
   void destroy_page(Page* page);
   void shrink_cached_page(int64_t nway);
-  void speed_limit(const int64_t cur_mem_hold, const int64_t alloc_size);
-  int64_t get_throttling_interval(const int64_t cur_mem_hold,
-                                  const int64_t alloc_size,
-                                  const int64_t trigger_mem_limit);
-  void advance_clock();
-  int64_t calc_mem_limit(const int64_t cur_mem_hold, const int64_t trigger_mem_limit, const int64_t dt) const;
-  int64_t get_actual_hold_size(Page* page);
-  int64_t get_writing_throttling_trigger_percentage_() const;
-  int64_t get_writing_throttling_maximum_duration_() const;
+
 private:
-  static const int64_t MAX_WAIT_INTERVAL = 20 * 1000 * 1000;//20s
-  static const int64_t ADVANCE_CLOCK_INTERVAL = 50;// 50us
-  static const int64_t MEM_SLICE_SIZE = 2 * 1024 * 1024; //Bytes per usecond
-  static const int64_t MIN_INTERVAL = 20000;
-  static const int64_t DEFAULT_TRIGGER_PERCENTAGE = 100;
-  static const int64_t DEFAULT_DURATION = 60 * 60 * 1000 * 1000L;//us
   lib::ObMemAttr attr_;
   lib::ObIAllocator *allocator_;
+
   int64_t nway_;
   int64_t allocated_; // record all the memory hold by pages in history.
                       // increase while a page created and decrease only if a failed page destroyed.
@@ -250,13 +214,8 @@ private:
                       // (may be: hold_ = allocated_ - reclaimed_)
   int64_t retired_;   // record all the memory hold by not active pages in history.
 
-  int64_t max_seq_;
-  int64_t clock_;
-  int64_t last_update_ts_;
-
   int64_t last_reclaimed_;
   Page* cur_pages_[MAX_CACHED_PAGE_COUNT];
-  ObWriteThrottleInfo throttle_info_;
   int64_t lastest_memstore_threshold_;//Save the latest memstore_threshold
   DISALLOW_COPY_AND_ASSIGN(ObFifoArena);
 };

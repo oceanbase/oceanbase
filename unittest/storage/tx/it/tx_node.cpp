@@ -28,7 +28,10 @@ int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t
   data_version = DATA_CURRENT_VERSION;
   return OB_SUCCESS;
 }
-void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
+}  // namespace common
+
+namespace share {
+void *ObMemstoreAllocator::alloc(AllocHandle &handle, int64_t size, const int64_t expire_ts)
 {
   int ret = OB_SUCCESS;
   int64_t align_size = upper_align(size, sizeof(int64_t));
@@ -44,7 +47,7 @@ void* ObGMemstoreAllocator::alloc(AllocHandle& handle, int64_t size)
   }
   return arena_.alloc(handle.id_, handle.arena_handle_, align_size);
 }
-}
+}  // namespace share
 
 namespace storage {
 
@@ -769,4 +772,4 @@ int ObTxNode::replay(const void *buffer,
   return ret;
 }
 } // transaction
-} // oceanbase
+}  // namespace oceanbase

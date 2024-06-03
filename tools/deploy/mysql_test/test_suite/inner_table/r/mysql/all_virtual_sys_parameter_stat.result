@@ -371,6 +371,7 @@ _max_malloc_sample_interval
 _max_rpc_packet_size
 _max_schema_slot_num
 _max_tablet_cnt_per_gb
+_mds_memory_limit_percentage
 _memstore_limit_percentage
 _migrate_block_verify_level
 _minor_compaction_amplification_factor
@@ -456,7 +457,9 @@ _transfer_start_rpc_timeout
 _transfer_start_trans_timeout
 _transfer_task_retry_interval
 _transfer_task_tablet_count_threshold
+_tx_data_memory_limit_percentage
 _tx_result_retention
+_tx_share_memory_limit_percentage
 _upgrade_stage
 _wait_interval_after_parallel_ddl
 _with_subquery

@@ -925,6 +925,13 @@ private:
   int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
   int check_data_disk_write_limit_(obrpc::ObAdminSetConfigItem &item);
   int check_data_disk_usage_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tenant_memstore_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_tx_data_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_mds_memory_limit_(obrpc::ObAdminSetConfigItem &item);
+  int check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item);
+  int check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

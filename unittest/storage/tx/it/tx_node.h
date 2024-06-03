@@ -34,12 +34,14 @@
 #include "../mock_utils/basic_fake_define.h"
 #include "../mock_utils/ob_fake_tx_rpc.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 
 namespace oceanbase {
 using namespace transaction;
 using namespace share;
 using namespace common;
+
 
 namespace transaction {
 template<class T>

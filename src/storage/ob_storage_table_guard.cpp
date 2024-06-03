@@ -13,8 +13,9 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/ob_storage_table_guard.h"
-#include "share/allocator/ob_memstore_allocator_mgr.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/throttle/ob_throttle_common.h"
+#include "share/throttle/ob_share_throttle_define.h"
 #include "storage/memtable/ob_memtable.h"
 #include "storage/ob_i_table.h"
 #include "storage/ob_relative_table.h"
@@ -47,115 +48,48 @@ ObStorageTableGuard::ObStorageTableGuard(
     for_multi_source_data_(for_multi_source_data)
 {
   init_ts_ = ObClockGenerator::getClock();
-  get_thread_alloc_stat() = 0;
+  share::memstore_throttled_alloc() = 0;
 }
 
 ObStorageTableGuard::~ObStorageTableGuard()
 {
-  bool &need_speed_limit = tl_need_speed_limit();
-  ObThrottleStat &stat = get_throttle_stat();
-  int64_t total_expected_wait_us = 0;
-  int64_t user_timeout_skip_us = 0;
-  int64_t frozen_memtable_skip_us = 0;
-  int64_t replay_frozen_skip_us = 0;
-  int64_t from_user_skip_us = 0;  // does not used now
-  if (need_control_mem_ && need_speed_limit) {
-    bool need_sleep = true;
-    int64_t left_interval = INT64_MAX;
-    if (!for_replay_) {
-      left_interval = min(left_interval, store_ctx_.timeout_ - ObClockGenerator::getClock());
-      if (left_interval < 0) {
-        left_interval = 0;
-      }
-    }
-    if (NULL != memtable_) {
-      need_sleep = memtable_->is_active_memtable();
-    }
-    uint64_t timeout = 10000;//10s
-    common::ObBaseWaitEventGuard<common::ObWaitEventIds::MEMSTORE_MEM_PAGE_ALLOC_WAIT> wait_guard(timeout, 0, 0, left_interval);
-
-    reset();
-    int ret = OB_SUCCESS;
-    int tmp_ret = OB_SUCCESS;
-    bool has_sleep = false;
-    int64_t sleep_time = 0;
-    int time = 0;
-    const int64_t &seq = get_seq();
-    int64_t clock = 0;
-    ObGMemstoreAllocator* memstore_allocator = NULL;
-    if (OB_SUCCESS != (tmp_ret = ObMemstoreAllocatorMgr::get_instance().get_tenant_memstore_allocator(
-        MTL_ID(), memstore_allocator))) {
-    } else if (OB_ISNULL(memstore_allocator)) {
-      LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "get_tenant_mutil_allocator failed", K(store_ctx_.tablet_id_), K(tmp_ret));
-    } else {
-      clock = memstore_allocator->get_clock();
-      total_expected_wait_us = memstore_allocator->expected_wait_time(seq);
-      user_timeout_skip_us = max(0, total_expected_wait_us - left_interval);
-      frozen_memtable_skip_us = need_sleep ? 0 : max(0, total_expected_wait_us - user_timeout_skip_us);
-      while (need_sleep &&
-             !memstore_allocator->check_clock_over_seq(seq) &&
-             (left_interval > 0)) {
-        if (for_replay_) {
-          if(MTL(ObTenantFreezer *)->exist_ls_freezing()) {
-            replay_frozen_skip_us = max(0, total_expected_wait_us - user_timeout_skip_us - sleep_time);
-            break;
-          }
-        }
-        int64_t expected_wait_time = memstore_allocator->expected_wait_time(seq);
-        if (expected_wait_time < 0) {
-          LOG_ERROR("expected wait time should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-        }
-        if (expected_wait_time <= 0) {
-          break;
-        }
-        int64_t sleep_interval = min(min(left_interval, SLEEP_INTERVAL_PER_TIME), expected_wait_time);
-        if (sleep_interval < 0) {
-          LOG_ERROR("sleep interval should not smaller than 0", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-        }
-        if (sleep_interval > 10 * 60 * 1000 * 1000L) {
-          LOG_WARN("sleep interval greater than 10 minutes, pay attention", K(expected_wait_time), K(seq), K(clock), K(left_interval));
-        }
-        if (sleep_interval <= 0) {
-          break;
-        }
-        ob_usleep<ObWaitEventIds::STORAGE_WRITING_THROTTLE_SLEEP>(sleep_interval, sleep_interval, sleep_time, 0);
-        sleep_time += sleep_interval;
-        time++;
-        left_interval -= sleep_interval;
-        has_sleep = true;
-        need_sleep = memstore_allocator->need_do_writing_throttle();
-      }
-      const int64_t finish_clock = memstore_allocator->get_clock();
-      if (finish_clock < seq) { // we has skip some time, need make the clock skip too.
-        const int64_t skip_clock = MIN(seq - finish_clock, get_thread_alloc_stat());
-        memstore_allocator->skip_clock(skip_clock);
-      }
-      EVENT_ADD(ObStatEventIds::STORAGE_WRITING_THROTTLE_TIME, sleep_time);
-    }
-
-    if (REACH_TIME_INTERVAL(100 * 1000L) &&
-        sleep_time > 0) {
-      int64_t cost_time = ObClockGenerator::getClock() - init_ts_;
-      LOG_INFO("throttle situation", K(sleep_time), K(clock), K(time), K(seq), K(for_replay_), K(cost_time));
-    }
-
-    if (for_replay_ && has_sleep) {
-      // avoid print replay_timeout
-      get_replay_is_writing_throttling() = true;
-    }
-  }
+  (void)throttle_if_needed_();
   reset();
-  stat.update(total_expected_wait_us,
-              from_user_skip_us,
-              user_timeout_skip_us,
-              frozen_memtable_skip_us,
-              replay_frozen_skip_us);
-  const bool last_throttle_status = stat.last_throttle_status;
-  const int64_t last_print_log_time = stat.last_log_timestamp;
-  if (stat.need_log(need_speed_limit)) {
-    LOG_INFO("throttle statics", K(need_speed_limit), K(last_throttle_status), K(last_print_log_time), K(stat));
-    if (!need_speed_limit && last_throttle_status) {
-      stat.reset();
+  share::memstore_throttled_alloc() = 0;
+}
+
+void ObStorageTableGuard::throttle_if_needed_()
+{
+  int ret = OB_SUCCESS;
+  if (!need_control_mem_) {
+    // skip throttle
+  } else {
+    TxShareThrottleTool &throttle_tool = MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool();
+    ObThrottleInfoGuard share_ti_guard;
+    ObThrottleInfoGuard module_ti_guard;
+    if (throttle_tool.is_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard)) {
+
+      // only do throttle on active memtable
+      if (OB_NOT_NULL(memtable_) && memtable_->is_active_memtable()) {
+        reset();
+        (void)TxShareMemThrottleUtil::do_throttle<ObMemstoreAllocator>(for_replay_,
+                                                                       store_ctx_.timeout_,
+                                                                       share::memstore_throttled_alloc(),
+                                                                       throttle_tool,
+                                                                       share_ti_guard,
+                                                                       module_ti_guard);
+      }
+
+      // if throttle is skipped due to some reasons, advance clock by call skip_throttle() and clean throttle status
+      // record in throttle info
+      if (throttle_tool.still_throttling<ObMemstoreAllocator>(share_ti_guard, module_ti_guard)){
+        int64_t skip_size = share::memstore_throttled_alloc();
+        (void)throttle_tool.skip_throttle<ObMemstoreAllocator>(skip_size, share_ti_guard, module_ti_guard);
+
+        if (OB_NOT_NULL(module_ti_guard.throttle_info())) {
+          module_ti_guard.throttle_info()->reset();
+        }
+      }
     }
   }
 }

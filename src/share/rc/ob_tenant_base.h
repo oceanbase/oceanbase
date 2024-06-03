@@ -202,6 +202,7 @@ class ObDagWarningHistoryManager;
 class ObTenantErrsimModuleMgr;
 class ObTenantErrsimEventMgr;
 class ObIndexUsageInfoMgr;
+class ObSharedMemAllocMgr;
 class ObResourceLimitCalculator;
 namespace schema
 {
@@ -250,6 +251,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \
+      share::ObSharedMemAllocMgr*,                   \
       transaction::ObTransService*,                  \
       logservice::coordinator::ObLeaderCoordinator*, \
       logservice::coordinator::ObFailureDetector*,   \

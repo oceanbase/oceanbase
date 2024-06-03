@@ -9950,26 +9950,20 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
     if (item->name_.is_empty()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("empty config name", "item", *item, K(ret));
+    } else if (0 == STRCMP(item->name_.ptr(), _TX_SHARE_MEMORY_LIMIT_PERCENTAGE)) {
+      ret = check_tx_share_memory_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), MEMSTORE_LIMIT_PERCENTAGE)) {
+      ret = check_memstore_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), TENANT_MEMSTORE_LIMIT_PERCENTAGE)) {
+      ret = check_tenant_memstore_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), _TX_DATA_MEMORY_LIMIT_PERCENTAGE)) {
+      ret = check_tx_data_memory_limit_(*item);
+    } else if (0 == STRCMP(item->name_.ptr(), _MDS_MEMORY_LIMIT_PERCENTAGE)) {
+      ret = check_mds_memory_limit_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), FREEZE_TRIGGER_PERCENTAGE)) {
-      // check write throttle percentage
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        valid = valid && ObConfigFreezeTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant freeze_trigger_percentage which should smaller than writing_throttling_trigger_percentage");
-          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
-        }
-      }
+      ret = check_freeze_trigger_percentage_(*item);
     } else if (0 == STRCMP(item->name_.ptr(), WRITING_THROTTLEIUNG_TRIGGER_PERCENTAGE)) {
-      // check freeze trigger
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        valid = valid && ObConfigWriteThrottleTriggerIntChecker::check(item->tenant_ids_.at(i), *item);
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tenant writing_throttling_trigger_percentage which should greater than freeze_trigger_percentage");
-          LOG_WARN("config invalid", "item", *item, K(ret), K(i), K(item->tenant_ids_.at(i)));
-        }
-      }
+      ret = check_write_throttle_trigger_percentage(*item);
     } else if (0 == STRCMP(item->name_.ptr(), WEAK_READ_VERSION_REFRESH_INTERVAL)) {
       int64_t refresh_interval = ObConfigTimeParser::get(item->value_.ptr(), valid);
       if (valid && OB_FAIL(check_weak_read_version_refresh_interval(refresh_interval, valid))) {
@@ -10053,6 +10047,112 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
   }
   return ret;
 }
+
+#define CHECK_TENANTS_CONFIG_WITH_FUNC(FUNCTOR, LOG_INFO)                                  \
+  do {                                                                                     \
+    bool valid = true;                                                                     \
+    for (int i = 0; i < item.tenant_ids_.count() && valid; i++) {                          \
+      valid = valid && FUNCTOR::check(item.tenant_ids_.at(i), item);                       \
+      if (!valid) {                                                                        \
+        ret = OB_INVALID_ARGUMENT;                                                         \
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, LOG_INFO);                                     \
+        LOG_WARN("config invalid", "item", item, K(ret), K(i), K(item.tenant_ids_.at(i))); \
+      }                                                                                    \
+    }                                                                                      \
+  } while (0)
+
+#define CHECK_CLUSTER_CONFIG_WITH_FUNC(FUNCTOR, LOG_INFO)                                  \
+  do {                                                                                     \
+    bool valid = true;                                                                     \
+    for (int i = 0; i < tenant_ids.count() && valid; i++) {                                \
+      valid = valid && FUNCTOR::check(tenant_ids.at(i), item);                             \
+      if (!valid) {                                                                        \
+        ret = OB_INVALID_ARGUMENT;                                                         \
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, LOG_INFO);                                     \
+        LOG_WARN("config invalid", "item", item, K(ret), K(i), K(tenant_ids.at(i)));       \
+      }                                                                                    \
+    }                                                                                      \
+  } while (0)
+
+int ObRootService::check_tx_share_memory_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  // There is a prefix "Incorrect arguments to " before user log so the warn log looked kinds of wired
+  const char *warn_log = "tenant config _tx_share_memory_limit_percentage. "
+                         "It should larger than or equal with any single module in it(Memstore, TxData, Mds)";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigTxShareMemoryLimitChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_memstore_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "cluster config memstore_limit_percentage. "
+                         "It should less than or equal with all tenant's _tx_share_memory_limit_percentage";
+  ObArray<uint64_t> tenant_ids;
+  ObSchemaGetterGuard schema_guard;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", KR(ret));
+  } else if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
+    LOG_WARN("get schema guard failed", KR(ret));
+  } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
+    LOG_WARN("failed to get all tenant ids", KR(ret), K(tenant_ids));
+  } else {
+    CHECK_CLUSTER_CONFIG_WITH_FUNC(ObConfigMemstoreLimitChecker, warn_log);
+  }
+  return ret;
+}
+
+int ObRootService::check_tenant_memstore_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant config _memstore_limit_percentage. "
+    "It should less than or equal with _tx_share_memory_limit_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigMemstoreLimitChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_tx_data_memory_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant config _tx_data_memory_limit_percentage. "
+                         "It should less than or equal with _tx_share_memory_limit_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigTxDataLimitChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_mds_memory_limit_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant config _mds_memory_limit_percentage. "
+                         "It should less than or equal with _tx_share_memory_limit_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigMdsLimitChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_freeze_trigger_percentage_(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant freeze_trigger_percentage "
+                         "which should smaller than writing_throttling_trigger_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigFreezeTriggerIntChecker, warn_log);
+  return ret;
+}
+
+int ObRootService::check_write_throttle_trigger_percentage(obrpc::ObAdminSetConfigItem &item)
+{
+  int ret = OB_SUCCESS;
+  const char *warn_log = "tenant writing_throttling_trigger_percentage "
+                         "which should greater than freeze_trigger_percentage";
+  CHECK_TENANTS_CONFIG_WITH_FUNC(ObConfigWriteThrottleTriggerIntChecker, warn_log);
+  return ret;
+}
+
+#undef CHECK_TENANTS_CONFIG_WITH_FUNC
 
 int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg &arg)
 {
