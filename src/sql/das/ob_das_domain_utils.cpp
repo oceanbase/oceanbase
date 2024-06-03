@@ -338,18 +338,19 @@ int ObDASDomainUtils::generate_multivalue_index_rows(ObIAllocator &allocator,
   int64_t data_len = 0;
   uint32_t record_num = 0;
 
+  bool is_none_unique_done = false;
+  uint64_t column_num = das_ctdef.column_ids_.count();
+  // -1 : doc id column
+  uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
+  uint64_t rowkey_column_end = column_num - 1;
+
   if (OB_FAIL(get_pure_mutivalue_data(json_str, data, data_len, record_num))) {
     LOG_WARN("failed to parse binary.", K(ret), K(json_str));
-  } else if (record_num == 0 && is_unique_index) {
+  } else if (record_num == 0 && (is_unique_index && rowkey_column_start == 1)) {
   } else if (OB_FAIL(calc_save_rowkey_policy(allocator, das_ctdef, row_projector,
     dml_row, record_num, is_save_rowkey))) {
     LOG_WARN("failed to calc store policy.", K(ret), K(data_table_rowkey_cnt));
   } else {
-    bool is_none_unique_done = false;
-    uint64_t column_num = das_ctdef.column_ids_.count();
-    // -1 : doc id column
-    uint64_t rowkey_column_start = column_num - 1 - data_table_rowkey_cnt;
-    uint64_t rowkey_column_end = column_num - 1;
 
     ObObj *obj_arr = nullptr;
     int64_t pos = sizeof(uint32_t);

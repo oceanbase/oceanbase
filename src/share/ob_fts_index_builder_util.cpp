@@ -2392,6 +2392,9 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     common::ObOrderType order_type;
     const ObColumnSchemaV2 *mvi_array_column = nullptr;
     int32_t multi_column_cnt = 0;
+    // 2 means : multivalue column, multivalue array column
+    bool is_complex_index = arg.index_columns_.count() > 2;
+    bool is_real_unique = index_schema.is_unique_index() && !is_complex_index;
     for (int64_t i = 0; OB_SUCC(ret) && i < arg.index_columns_.count(); ++i) {
       const ObColumnSchemaV2 *mvi_column = nullptr;
       const ObColumnSortItem &mvi_col_item = arg.index_columns_.at(i);
@@ -2432,13 +2435,13 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
     } else if (OB_ISNULL(mvi_array_column)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get multivalue array column", K(ret));
-    } else if (index_schema.is_unique_index()) {
+    } else if (is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num());
       index_schema.set_index_column_num(row_desc.get_column_num());
     }
 
-    bool is_rowkey = !index_schema.is_unique_index();
+    bool is_rowkey = !is_real_unique;
     bool is_index_column = is_rowkey;
 
     const ObColumnSchemaV2 *rowkey_column = nullptr;
@@ -2490,7 +2493,7 @@ int ObMulValueIndexBuilderUtil::set_multivalue_index_table_columns(
       LOG_WARN("add column failed", "mvi_array_column", *mvi_array_column, K(row_desc), K(ret));
     }
 
-    if (OB_SUCC(ret) && !index_schema.is_unique_index()) {
+    if (OB_SUCC(ret) && !is_real_unique) {
       // json-array column is not index coumn, not rowkey column
       index_schema.set_rowkey_column_num(row_desc.get_column_num() - 1);
       index_schema.set_index_column_num(row_desc.get_column_num() - 1);

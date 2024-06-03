@@ -852,7 +852,9 @@ int ObExprJsonQuery::doc_do_seek(ObIJsonBase* j_base,
         is_null_result = true;
       }
     } else {
-      if (OB_FAIL(get_single_obj_wrapper(json_param->wrapper_, use_wrapper, hits[0]->json_type(), json_param->scalars_type_))) {
+      if (json_param->is_multivalue_ && json_param->json_path_->can_match_many()) {
+        use_wrapper = 1;
+      } else if (OB_FAIL(get_single_obj_wrapper(json_param->wrapper_, use_wrapper, hits[0]->json_type(), json_param->scalars_type_))) {
         is_cover_by_error = true;
         LOG_WARN("error occur in wrapper type");
       } else if (use_wrapper == 1) { // do nothing

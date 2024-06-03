@@ -4262,11 +4262,12 @@ int ObQueryRange::get_simple_domain_keyparts(const common::ObObj &const_param, c
       }
 
       if (OB_FAIL(ret)) {
+      } else if (const_param.is_unknown()) {
+        if (OB_FAIL(set_normal_key_true_or_false(out_key_part, true))) {
+          LOG_WARN("failed set normal key", K(ret));
+        }
       } else if (OB_FAIL(get_member_of_keyparts(cast_obj, out_key_part, dtc_params))) {
         LOG_WARN("fail to get member of keyparts.", K(op_type), K(ret));
-      } else if (OB_NOT_NULL(query_range_ctx_) &&
-          !(out_key_part->is_always_false() || out_key_part->is_always_true())) {
-        query_range_ctx_->cur_expr_is_precise_ = true;
       }
       break;
     }
