@@ -195,7 +195,7 @@ inline bool is_paxos_member_list_change(const LogConfigChangeType type)
   return (ADD_MEMBER == type || REMOVE_MEMBER == type
       || ADD_MEMBER_AND_NUM == type || REMOVE_MEMBER_AND_NUM == type
       || SWITCH_LEARNER_TO_ACCEPTOR == type || SWITCH_ACCEPTOR_TO_LEARNER == type
-      || CHANGE_REPLICA_NUM == type);
+      || CHANGE_REPLICA_NUM == type || SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM == type);
 }
 
 inline bool is_try_lock_config_change(const LogConfigChangeType type)
