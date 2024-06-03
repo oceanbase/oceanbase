@@ -27,6 +27,7 @@ namespace oceanbase
 namespace observer
 {
 using namespace common;
+using namespace share::schema;
 using namespace table;
 
 ObTableLoadClientTask::ObTableLoadClientTask()
@@ -194,23 +195,54 @@ int ObTableLoadClientTask::init_column_names_and_idxs()
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
+  ObArray<int64_t> column_ids; // in user define order
+  ObArray<ObColDesc> column_descs; // in storage order
+  bool found_column = true;
   if (OB_FAIL(
         ObTableLoadSchema::get_table_schema(tenant_id_, table_id_, schema_guard, table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K_(tenant_id), K_(table_id));
   } else if (OB_FAIL(
-               ObTableLoadSchema::get_column_names(table_schema, allocator_, column_names_))) {
-    LOG_WARN("fail to get all column name", KR(ret));
+               ObTableLoadSchema::get_user_column_names(table_schema, allocator_, column_names_))) {
+    LOG_WARN("fail to get user column names", KR(ret));
   } else if (OB_UNLIKELY(column_names_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty column names", KR(ret));
-  } else if (OB_FAIL(ObTableLoadSchema::get_column_idxs(table_schema, column_idxs_))) {
+  } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, column_ids))) {
     LOG_WARN("failed to get all column idx", K(ret));
-  } else if (OB_UNLIKELY(column_idxs_.empty())) {
+  } else if (OB_UNLIKELY(column_ids.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected empty column idxs", KR(ret));
-  } else if (OB_UNLIKELY(column_names_.count() != column_idxs_.count())) {
+  } else if (OB_UNLIKELY(column_names_.count() != column_ids.count())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column names and idxs", KR(ret), K(column_names_), K(column_idxs_));
+    LOG_WARN("unexpected column names and idxs", KR(ret), K(column_names_), K(column_ids));
+  } else if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+    LOG_WARN("fail to get column descs", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
+    const ObColDesc &col_desc = column_descs.at(i);
+    const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(col_desc.col_id_);
+    if (OB_ISNULL(col_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
+    } else {
+      found_column = col_schema->is_hidden();
+    }
+    // 在用户定义的列数组中找到对应的列
+    for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
+      const int64_t column_id = column_ids.at(j);
+      if (col_desc.col_id_ == column_id) {
+        found_column = true;
+        if (OB_FAIL(column_idxs_.push_back(j))) {
+          LOG_WARN("fail to push back column desc", KR(ret), K(column_idxs_), K(i), K(col_desc),
+                   K(j), K(column_ids));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected column not found", KR(ret), K(column_ids), K(column_descs),
+             K(column_idxs_));
   }
   return ret;
 }
