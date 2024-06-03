@@ -226,7 +226,7 @@ public:
   explicit ObDASRef(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx);
   ~ObDASRef() { reset(); }
 
-
+  bool check_tasks_same_ls_and_is_local(share::ObLSID &ls_id);
   DASOpResultIter begin_result_iter();
   DASTaskIter begin_task_iter() { return batched_tasks_.begin(); }
   ObDASTaskFactory &get_das_factory() { return das_factory_; }
@@ -263,6 +263,8 @@ public:
   bool is_all_local_task() const;
   void set_execute_directly(bool v) { execute_directly_ = v; }
   bool is_execute_directly() const { return execute_directly_; }
+  bool is_do_gts_opt() { return do_gts_opt_; }
+  void set_do_gts_opt(bool v) { do_gts_opt_ = v; }
   common::ObIAllocator &get_das_alloc() { return das_alloc_; }
   int64_t get_das_mem_used() const { return das_alloc_.used() - init_mem_used_; }
 
@@ -316,14 +318,14 @@ private:
   DasAsyncCbList async_cb_list_;
   DASRefCountContext das_ref_count_ctx_;
   DASParallelContext das_parallel_ctx_;
-
 public:
   //all flags
   union {
     uint64_t flags_;
     struct {
       uint64_t execute_directly_                : 1;
-      uint64_t reserved_                        : 63;
+      uint64_t do_gts_opt_                      : 1;
+      uint64_t reserved_                        : 62;
     };
   };
 };

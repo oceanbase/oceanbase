@@ -110,6 +110,9 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
+
+  int is_plain_insert(bool &is_plain_insert);
+  int is_insertup_or_replace_values(bool &is);
 protected:
   int get_constraint_info_exprs(ObIArray<ObRawExpr*> &all_exprs);
   virtual int generate_rowid_expr_for_trigger() override;

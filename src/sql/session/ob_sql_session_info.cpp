@@ -3013,6 +3013,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&hash_area_size_, tenant_config->_hash_area_size);
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
+      ATOMIC_STORE(&enable_insertup_replace_gts_opt_, tenant_config->_enable_insertup_replace_gts_opt);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       ATOMIC_STORE(&_ob_sqlstat_enable_, tenant_config->_ob_sqlstat_enable);

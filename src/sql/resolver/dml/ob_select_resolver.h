@@ -178,7 +178,7 @@ protected:
                                  bool &has_explicit_dir);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
-  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us);
+  int set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked);
   int set_for_update_oracle(ObSelectStmt &stmt,
                             const int64_t wait_us,
                             bool skip_locked,

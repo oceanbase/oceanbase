@@ -819,6 +819,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"sql_tsi_year", SQL_TSI_YEAR},
   {"srid", SRID},
   {"ssl", SSL},
+  {"skip", SKIP},
   {"stacked", STACKED},
   {"standby", STANDBY},
   {"start", START},

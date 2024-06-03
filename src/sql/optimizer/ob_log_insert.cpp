@@ -565,3 +565,41 @@ int ObLogInsert::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   }
   return ret;
 }
+
+// set plain insert flag : insert into values(..); // value num is n (n >= 1);
+int ObLogInsert::is_plain_insert(bool &is_plain_insert)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertStmt *insert_stmt = nullptr;
+  is_plain_insert = false;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(insert_stmt = static_cast<const ObInsertStmt *>(get_stmt()))) {
+
+  } else {
+    is_plain_insert = (!insert_stmt->value_from_select()
+                        && !insert_stmt->is_insert_up()
+                        && insert_stmt->get_subquery_exprs().empty()
+                        && !insert_stmt->is_replace());
+  }
+
+  return ret;
+}
+
+int ObLogInsert::is_insertup_or_replace_values(bool &is)
+{
+  int ret = OB_SUCCESS;
+  const ObInsertStmt *insert_stmt = nullptr;
+  is = false;
+  if (OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_insert_stmt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (FALSE_IT(insert_stmt = static_cast<const ObInsertStmt *>(get_stmt()))) {
+
+  } else if (insert_stmt->is_insert_up() || insert_stmt->is_replace()) {
+    is = (!insert_stmt->value_from_select() && insert_stmt->get_subquery_exprs().empty());
+  }
+
+  return ret;
+}

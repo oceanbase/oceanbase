@@ -1394,10 +1394,11 @@ int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
   int ret = OB_SUCCESS;
   ObSelectStmt *select_stmt = NULL;
   int64_t wait_us = -1;
+  bool skip_locked = false;
   if (OB_ISNULL(select_stmt = get_select_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get select stmt", K(ret));
-  } else if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_) {
+  } else if (T_SFU_INT != node.type_ && T_SFU_DECIMAL != node.type_ && T_SKIP_LOCKED != node.type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("for update wait info is wrong", K(ret));
   } else if (T_SFU_INT == node.type_) {
@@ -1408,14 +1409,18 @@ int ObSelectResolver::resolve_for_update_clause_mysql(const ParseNode &node)
                   time_str, wait_us, ObTimeUtility2::DIGTS_SENSITIVE))) {
       LOG_WARN("str to time failed", K(ret));
     }
+  } else if (T_SKIP_LOCKED == node.type_) {
+    // skip locked
+    skip_locked = true;
+    wait_us = 0;
   }
-  if (OB_SUCC(ret) && OB_FAIL(set_for_update_mysql(*select_stmt, wait_us))) {
+  if (OB_SUCC(ret) && OB_FAIL(set_for_update_mysql(*select_stmt, wait_us, skip_locked))) {
     LOG_WARN("failed to set for update", K(ret));
   }
   return ret;
 }
 
-int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us)
+int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wait_us, bool skip_locked)
 {
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
@@ -1426,6 +1431,7 @@ int ObSelectResolver::set_for_update_mysql(ObSelectStmt &stmt, const int64_t wai
     } else if (table_item->is_basic_table()) {
       table_item->for_update_ = true;
       table_item->for_update_wait_us_ = wait_us;
+      table_item->skip_locked_ = skip_locked;
     } else if (table_item->is_link_table()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink not support select for update", K(ret));

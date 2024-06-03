@@ -76,6 +76,7 @@ public:
       group_params_(nullptr),
       skip_scan_group_id_(-1),
       group_rescan_cnt_(-1),
+      use_gts_opt_(false),
       flags_(0)
   {
     is_fk_cascading_ = 0;
@@ -157,6 +158,8 @@ public:
   const ObAddr &same_tablet_addr() const { return same_tablet_addr_; }
   int64_t get_real_das_dop() { return real_das_dop_; }
   void set_real_das_dop(int64_t v) { real_das_dop_ = v; }
+  void set_use_gts_opt(bool v) { use_gts_opt_ = v; }
+  bool get_use_gts_opt() { return use_gts_opt_; }
 
   int find_group_param_by_param_idx(int64_t param_idx,
                                     bool &exist, uint64_t &array_idx);
@@ -190,6 +193,7 @@ private:
   const GroupParamArray *group_params_; //only allowed to be modified by GroupParamBackupGuard
   int64_t skip_scan_group_id_; //only allowed to be modified by GroupParamBackupGuard
   int64_t group_rescan_cnt_; //only allowed to be modified by GroupParamBackupGuard
+  bool use_gts_opt_; // without get gts
 public:
   union {
     uint64_t flags_;

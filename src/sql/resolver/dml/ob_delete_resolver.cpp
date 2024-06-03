@@ -81,6 +81,12 @@ int ObDeleteResolver::resolve(const ParseNode &parse_tree)
     LOG_WARN("failed to check feature enable", K(ret));
   } else {
     stmt_ = delete_stmt;
+    // Only support the syntax of delete ignore, and there is no semantic support.
+//   delete_stmt->set_ignore(false);
+//    if (NULL != parse_tree.children_[IGNORE]) {
+//      delete_stmt->set_ignore(true);
+//      session_info_->set_ignore_stmt(true);
+//    }
     if (OB_FAIL(resolve_outline_data_hints())) {
       LOG_WARN("resolve outline data hints failed", K(ret));
     } else if (is_mysql_mode() && OB_FAIL(resolve_with_clause(parse_tree.children_[WITH_MYSQL]))) {

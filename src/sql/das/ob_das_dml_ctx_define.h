@@ -392,6 +392,13 @@ public:
     return buffer_list_.header_.next_ != nullptr ? buffer_list_.header_.next_->cnt_ : 0;
   }
   inline uint64_t get_tenant_id() const { return mem_attr_.tenant_id_; }
+
+  int add_row(const common::ObIArray<ObExpr*> &exprs,
+              ObEvalCtx *ctx,
+              DmlRow *&stored_row,
+              bool strip_lob_locator);
+  int add_row(const DmlShadowRow &sr, DmlRow **stored_row = nullptr);
+
   int try_add_row(const common::ObIArray<ObExpr*> &exprs,
                   ObEvalCtx *ctx,
                   const int64_t memory_limit,
@@ -425,6 +432,10 @@ private:
                        const int64_t memory_limit,
                        bool &row_added,
                        ObChunkDatumStore::StoredRow **stored_sr);
+
+  int add_row_to_store(const ObChunkDatumStore::ShadowStoredRow &sr,
+                         ObChunkDatumStore::StoredRow **stored_sr);
+
   static DmlRow *get_next_dml_row(DmlRow *cur_row);
   int serialize_buffer_list(char *buf, const int64_t buf_len, int64_t &pos) const;
   int64_t get_buffer_list_serialize_size() const;

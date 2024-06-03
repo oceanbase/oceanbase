@@ -562,7 +562,7 @@ int ObSqlTransControl::start_stmt(ObExecContext &exec_ctx)
     OZ (stmt_setup_savepoint_(session, das_ctx, plan_ctx, txs, nested_level), session_id, *tx_desc);
   }
 
-  OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs), session_id, *tx_desc);
+  OZ (stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs, exec_ctx), session_id, *tx_desc);
   // add tx id to AuditRecord
   OX (session->get_raw_audit_record().trans_id_ = session->get_tx_id());
 
@@ -770,15 +770,99 @@ int ObSqlTransControl::stmt_sanity_check_(ObSQLSessionInfo *session,
   return ret;
 }
 
+int ObSqlTransControl::can_do_plain_insert(ObSQLSessionInfo *session,
+                                            const ObPhysicalPlan *plan,
+                                            ObExecContext &exec_ctx,
+                                            bool &can_plain_insert)
+{
+  int ret = OB_SUCCESS;
+  can_plain_insert = false;
+  int last_query_retry_err = session->get_retry_info().get_last_query_retry_err();
+  if (OB_ISNULL(session) || OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret), KPC(session), KPC(plan));
+  } else if (plan->get_need_serial_exec()
+      || ObSQLUtils::is_nested_sql(&exec_ctx)
+      || last_query_retry_err == OB_TRANSACTION_SET_VIOLATION
+      || session->get_tx_isolation() == ObTxIsolationLevel::SERIAL
+      || session->get_tx_isolation() == ObTxIsolationLevel::RR) {
+    LOG_TRACE("can't support plain insert", K(plan->get_need_serial_exec()), K(last_query_retry_err),
+        K(ObSQLUtils::is_nested_sql(&exec_ctx)), K(session->get_tx_isolation()));
+  } else if (plan->is_plain_insert()) {
+    can_plain_insert = true;
+  } else if (session->enable_insertup_replace_gts_opt() && plan->get_insertup_can_do_gts_opt()) {
+    if ((GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_4_0)
+        && session->is_user_session()) {
+      can_plain_insert = true;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (plan->get_insertup_can_do_gts_opt()) {
+      LOG_TRACE("whether can do_batch_insert", K(can_plain_insert), K(plan->is_plain_insert()),
+          K(last_query_retry_err), K(plan->get_insertup_can_do_gts_opt()),
+          K(plan->get_need_serial_exec()), K(session->is_user_session()),
+          K(session->get_tx_isolation()), K(ObSQLUtils::is_nested_sql(&exec_ctx)),
+          K(session->enable_insertup_replace_gts_opt()));
+    }
+  }
+  return ret;
+}
+
+int ObSqlTransControl::get_read_snapshot(ObSQLSessionInfo *session,
+                                         ObPhysicalPlanCtx *plan_ctx,
+                                         transaction::ObTxReadSnapshot &snapshot)
+{
+  int ret = OB_SUCCESS;
+  ObTxIsolationLevel isolation = session->get_tx_isolation();
+  const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
+  int64_t expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+  transaction::ObTransService *txs = NULL;
+  transaction::ObTxDesc &tx_desc = *session->get_tx_desc();
+  if (OB_FAIL(get_tx_service(session, txs))) {
+    LOG_WARN("failed to get transaction service", K(ret));
+  } else if (OB_FAIL(txs->get_read_snapshot(tx_desc, isolation, expire_ts, snapshot))) {
+    LOG_WARN("failed to set snapshot", K(ret));
+  } else if (!snapshot.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid snapshot", K(ret), K(tx_desc), K(isolation));
+  }
+  return ret;
+}
+
+int ObSqlTransControl::get_ls_read_snapshot(ObSQLSessionInfo *session,
+                                            ObPhysicalPlanCtx *plan_ctx,
+                                            const share::ObLSID &local_ls_id,
+                                            transaction::ObTxReadSnapshot &snapshot)
+{
+  int ret = OB_SUCCESS;
+  ObTxIsolationLevel isolation = session->get_tx_isolation();
+  const ObPhysicalPlan *plan = plan_ctx->get_phy_plan();
+  int64_t expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+  transaction::ObTransService *txs = NULL;
+  transaction::ObTxDesc &tx_desc = *session->get_tx_desc();
+  if (OB_FAIL(get_tx_service(session, txs))) {
+    LOG_WARN("failed to get transaction service", K(ret));
+  } else if (OB_FAIL(txs->get_ls_read_snapshot(tx_desc, isolation, local_ls_id, expire_ts, snapshot))) {
+    LOG_WARN("failed to set snapshot", K(ret));
+  } else if (!snapshot.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid snapshot", K(ret), K(tx_desc), K(isolation), K(local_ls_id));
+  }
+  return ret;
+}
+
 int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                             ObDASCtx &das_ctx,
                                             const ObPhysicalPlan *plan,
                                             const ObPhysicalPlanCtx *plan_ctx,
-                                            transaction::ObTransService *txs)
+                                            transaction::ObTransService *txs,
+                                            ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
   auto cl = plan_ctx->get_consistency_level();
   auto &snapshot = das_ctx.get_snapshot();
+  bool can_plain_insert = false;
   if (cl == ObConsistencyLevel::WEAK || cl == ObConsistencyLevel::FROZEN) {
     SCN snapshot_version = SCN::min_scn();
     const bool local_single_ls = plan->is_local_plan() &&
@@ -798,10 +882,11 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
     }
     // 1) acquire snapshot version when insert operator is executed
     // 2) don't resolve RR and SERIALIZABLE isolation scenario temporarily, because of remote stmt plan
-  } else if (plan->is_plain_insert()
-          && session->get_tx_isolation() != ObTxIsolationLevel::SERIAL
-          && session->get_tx_isolation() != ObTxIsolationLevel::RR) {
+  } else if (OB_FAIL(can_do_plain_insert(session, plan, exec_ctx, can_plain_insert))) {
+    TRANS_LOG(WARN, "check can do plain insert failed", KPC(txs));
+  } else if (can_plain_insert) {
     auto &tx_desc = *session->get_tx_desc();
+    das_ctx.set_use_gts_opt(true);
     snapshot.init_none_read();
     snapshot.core_.tx_id_ = tx_desc.get_tx_id();
     snapshot.core_.scn_ = tx_desc.get_tx_seq();
@@ -853,7 +938,7 @@ int ObSqlTransControl::stmt_refresh_snapshot(ObExecContext &exec_ctx) {
     //NOTE: oracle insert and insert all stmt can't see the evaluated results of before stmt trigger, no need to refresh snapshot
   } else if (OB_FAIL(get_tx_service(session, txs))) {
     LOG_WARN("failed to get transaction service", K(ret));
-  } else if (OB_FAIL(stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs))) {
+  } else if (OB_FAIL(stmt_setup_snapshot_(session, das_ctx, plan, plan_ctx, txs, exec_ctx))) {
     LOG_WARN("failed to set snapshot", K(ret));
   }
   return ret;

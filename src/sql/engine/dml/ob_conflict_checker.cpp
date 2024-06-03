@@ -112,6 +112,11 @@ OB_DEF_SERIALIZE_SIZE(ObConflictCheckerCtdef)
   return len;
 }
 
+bool ObTabletSnapshotMaping::operator==(const ObTabletSnapshotMaping &other) const
+{
+  return ls_id_ == other.ls_id_ && tablet_id_ == other.tablet_id_;
+}
+
 bool ObConflictValue::operator==(const ObConflictValue &other) const
 {
   return current_datum_row_ == other.current_datum_row_;
@@ -175,6 +180,7 @@ ObConflictChecker::ObConflictChecker(common::ObIAllocator &allocator,
     local_tablet_loc_(nullptr),
     table_loc_(nullptr),
     tmp_mem_ctx_(),
+    snapshot_maping_(),
     se_rowkey_dist_ctx_(nullptr)
 {
 }
@@ -224,7 +230,8 @@ int ObConflictChecker::create_conflict_map(int64_t replace_row_cnt)
 
 //初始化map array， map创建hash_bucket将会在延后
 int ObConflictChecker::init_conflict_checker(const ObExprFrameInfo *expr_frame_info,
-                                             ObDASTableLoc *table_loc)
+                                             ObDASTableLoc *table_loc,
+                                             bool use_partition_gts_opt)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = eval_ctx_.exec_ctx_.get_my_session();
@@ -239,6 +246,7 @@ int ObConflictChecker::init_conflict_checker(const ObExprFrameInfo *expr_frame_i
     // 这里需要注意
     das_ref_.set_execute_directly(!checker_ctdef_.use_dist_das_);
     das_ref_.set_mem_attr(mem_attr);
+    das_ref_.set_do_gts_opt(use_partition_gts_opt);
   }
   OZ(init_das_scan_rtdef());
   return ret;
@@ -689,6 +697,7 @@ int ObConflictChecker::reuse()
   if (tmp_mem_ctx_ != nullptr) {
     tmp_mem_ctx_->reset_remain_one_page();
   }
+  snapshot_maping_.reuse();
   if (se_rowkey_dist_ctx_ != nullptr) {
     se_rowkey_dist_ctx_->reuse();
   }
@@ -710,6 +719,7 @@ int ObConflictChecker::destroy()
     DESTROY_CONTEXT(tmp_mem_ctx_);
     tmp_mem_ctx_ = nullptr;
   }
+  snapshot_maping_.reset();
   if (se_rowkey_dist_ctx_ != nullptr) {
     se_rowkey_dist_ctx_->destroy();
     se_rowkey_dist_ctx_ = nullptr;
@@ -878,8 +888,9 @@ int ObConflictChecker::build_data_table_range(ObNewRange &lookup_range)
 int ObConflictChecker::do_lookup_and_build_base_map(int64_t replace_row_cnt)
 {
   int ret = OB_SUCCESS;
+  NG_TRACE_TIMES(2, start_fetch_conflict_row);
   const ExprFixedArray &storage_output = checker_ctdef_.das_scan_ctdef_.pd_expr_spec_.access_exprs_;
-  if (OB_FAIL(das_ref_.execute_all_task())) {
+  if (OB_FAIL(post_all_das_scan_tasks())) {
     LOG_WARN("execute all delete das task failed", K(ret));
   } else {
     DASOpResultIter result_iter = das_ref_.begin_result_iter();
@@ -1027,6 +1038,98 @@ int ObConflictChecker::init_das_scan_rtdef()
   if (OB_FAIL(das_scan_rtdef_.init_pd_op(eval_ctx_.exec_ctx_, checker_ctdef_.das_scan_ctdef_))) {
     LOG_WARN("init pushdown storage filter failed", K(ret));
   }
+  return ret;
+}
+
+int ObConflictChecker::collect_all_snapshot(transaction::ObTxReadSnapshot &snapshot, const ObDASTabletLoc *tablet_loc)
+{
+  int ret = OB_SUCCESS;
+  ObTabletSnapshotMaping tablet_snapshot_maping;
+  tablet_snapshot_maping.tablet_id_ = tablet_loc->tablet_id_;
+  tablet_snapshot_maping.ls_id_ = tablet_loc->ls_id_;
+  if (OB_ISNULL(tablet_loc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(tablet_snapshot_maping.tablet_id_ = tablet_loc->tablet_id_)) {
+    // do nothing
+  } else if (FALSE_IT(tablet_snapshot_maping.ls_id_ = tablet_loc->ls_id_)) {
+    // do nothing
+  } else if (OB_FAIL(tablet_snapshot_maping.snapshot_.assign(snapshot))) {
+    LOG_WARN("fail to assign snapshot", K(ret), K(snapshot));
+  } else if (OB_FAIL(has_exist_in_array(snapshot_maping_, tablet_snapshot_maping))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected duplicate snapshot_version", K(ret), K(tablet_snapshot_maping), K(snapshot_maping_));
+  } else if (OB_FAIL(snapshot_maping_.push_back(tablet_snapshot_maping))) {
+    LOG_WARN("fail to push back snapshot", K(ret), K(tablet_snapshot_maping));
+  } else {
+    LOG_TRACE("collect snaoshot after try_insert", K(tablet_snapshot_maping));
+  }
+  return ret;
+}
+
+int ObConflictChecker::get_snapshot_by_ids(ObTabletID tablet_id, share::ObLSID ls_id, bool &founded, transaction::ObTxReadSnapshot &snapshot)
+{
+  int ret = OB_SUCCESS;
+  founded = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !founded && i < snapshot_maping_.count(); i++) {
+    ObTabletSnapshotMaping &snapshot_maping = snapshot_maping_.at(i);
+    if (snapshot_maping.tablet_id_ == tablet_id && snapshot_maping.ls_id_ == ls_id) {
+      if (OB_FAIL(snapshot.assign(snapshot_maping.snapshot_))) {
+        LOG_WARN("fail to assign snapshot", K(ret));
+      } else {
+        founded = true;
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObConflictChecker::post_all_das_scan_tasks()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(set_partition_snapshot_for_das_task(das_ref_))) {
+    LOG_WARN("fail to set partition snapshot", K(ret));
+  } else if (OB_FAIL(das_ref_.execute_all_task())) {
+    LOG_WARN("execute all delete das task failed", K(ret));
+  }
+  return ret;
+}
+
+int ObConflictChecker::set_partition_snapshot_for_das_task(ObDASRef &das_ref)
+{
+  int ret = OB_SUCCESS;
+  if (!das_ref.is_do_gts_opt()) {
+    // do nothing
+  } else {
+    DASTaskIter task_iter = das_ref.begin_task_iter();
+    while (OB_SUCC(ret) && !task_iter.is_end()) {
+      bool founded = false;
+      transaction::ObTxReadSnapshot *snapshot = nullptr;;
+      ObIDASTaskOp *das_op = *task_iter;
+      if (OB_ISNULL(das_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_ISNULL(snapshot = das_op->get_das_gts_opt_info().get_specify_snapshot())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KPC(snapshot));
+      } else if (OB_FAIL(get_snapshot_by_ids(das_op->get_tablet_id(), das_op->get_ls_id(), founded, *snapshot))) {
+        LOG_WARN("fail to get snapshot by ids", K(das_op->get_tablet_id()), K(das_op->get_ls_id()), K(snapshot_maping_));
+      } else if (!founded) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to found snapshot", K(ret), K(das_op->get_tablet_id()), K(das_op->get_type()), K(das_op->get_ls_id()));
+      } else if (!snapshot->is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("snapshot is invalid", K(ret), K(das_op->get_tablet_id()), K(das_op->get_type()));
+      } else {
+        LOG_TRACE("set specify snapshot for current das_task", KPC(snapshot),
+            K(das_op->get_tablet_id()), K(das_op->get_ls_id()), K(das_op->get_type()));
+      }
+      ++task_iter;
+    }
+  }
+
+
   return ret;
 }
 

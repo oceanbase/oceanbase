@@ -1755,6 +1755,7 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
 {
   int ret = OB_SUCCESS;
   bool need_retry = false;
+  bool reach_agg_mem_limit = false;
   bool is_strict_defensive_check = trans_info_expr == nullptr ? false : true;
   typedef typename das_reg::ObDASOpTypeTraits<N>::DASCtDef CtDefType;
   typedef typename das_reg::ObDASOpTypeTraits<N>::DASRtDef RtDefType;
@@ -1762,77 +1763,58 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   OB_ASSERT(typeid(ctdef) == typeid(CtDefType));
   OB_ASSERT(typeid(rtdef) == typeid(RtDefType));
   int64_t extend_size = is_strict_defensive_check ?
-      ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE :
-        ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE;
-  do {
-    bool buffer_full = false;
-    need_retry = false;
-    //1. find das dml op
-    OpType *dml_op = nullptr;
-    if (OB_UNLIKELY(!dml_rtctx.das_ref_.has_das_op(tablet_loc, dml_op))) {
-      if (OB_FAIL(dml_rtctx.das_ref_.prepare_das_task(tablet_loc, dml_op))) {
-        LOG_WARN("prepare das task failed", K(ret), K(N));
-      } else if (OB_FAIL(dml_op->init_task_info(extend_size))) {
-        LOG_WARN("fail to init das write buff", K(ret), K(extend_size));
-      } else {
-        dml_op->set_das_ctdef(static_cast<const CtDefType*>(&ctdef));
-        dml_op->set_das_rtdef(static_cast<RtDefType*>(&rtdef));
-        rtdef.table_loc_->is_writing_ = true;
-      }
-      if (OB_SUCC(ret) &&
-          rtdef.related_ctdefs_ != nullptr && !rtdef.related_ctdefs_->empty()) {
-        if (OB_FAIL(add_related_index_info(*tablet_loc,
-                                           *rtdef.related_ctdefs_,
-                                           *rtdef.related_rtdefs_,
-                                           *dml_op))) {
-          LOG_WARN("add related index info failed", K(ret));
-        }
+      ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE : ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE;
+
+  // 1. find das dml op
+  OpType *dml_op = nullptr;
+  if (OB_UNLIKELY(!dml_rtctx.das_ref_.has_das_op(tablet_loc, dml_op))) {
+    if (OB_FAIL(dml_rtctx.das_ref_.prepare_das_task(tablet_loc, dml_op))) {
+      LOG_WARN("prepare das task failed", K(ret), K(N));
+    } else if (OB_FAIL(dml_op->init_task_info(extend_size))) {
+      LOG_WARN("fail to init das write buff", K(ret), K(extend_size));
+    } else {
+      dml_op->set_das_ctdef(static_cast<const CtDefType*>(&ctdef));
+      dml_op->set_das_rtdef(static_cast<RtDefType*>(&rtdef));
+      rtdef.table_loc_->is_writing_ = true;
+    }
+    if (OB_SUCC(ret) &&
+        rtdef.related_ctdefs_ != nullptr && !rtdef.related_ctdefs_->empty()) {
+      if (OB_FAIL(add_related_index_info(*tablet_loc,
+                                         *rtdef.related_ctdefs_,
+                                         *rtdef.related_rtdefs_,
+                                         *dml_op))) {
+        LOG_WARN("add related index info failed", K(ret));
       }
     }
-    //2. try add row to das dml buffer
-    if (OB_FAIL(ret)) {
-      // do nothing
-    } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row, buffer_full))) {
-      LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
-    } else if (!buffer_full) {
-      bool reach_agg_mem_limit = false;
-      dml_rtctx.add_das_task_memory_size(stored_row->row_size_);
-      if (OB_ISNULL(stored_row)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null ptr", K(ret));
-      } else if (OB_NOT_NULL(trans_info_expr) &&
-          OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
-        LOG_WARN("fail to add trans info datum", K(ret));
-      } else if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
-        if (OB_FAIL(check_agg_task_state(dml_rtctx, dml_op, stored_row->row_size_, reach_agg_mem_limit))) {
-          LOG_WARN("fail to check agg_task state", K(ret), K(stored_row->row_size_));
-        } else if (!reach_agg_mem_limit) {
-          LOG_TRACE("not reach agg_task memory limit");
-        } else if (OB_FAIL(parallel_submit_das_task(dml_rtctx, dml_op->get_agg_task()))) {
-          // 并发提交该任务
-          LOG_WARN("fail to parallel submit this agg_task", K(ret));
-        } else {
-          dml_rtctx.das_ref_.clear_task_map();
-        }
-      } else {
-        // serialize submit
-      }
-    } else if (buffer_full) {
-      // make this task can't write
-      need_retry = true;
-      dml_op->set_write_buff_full(true);
+  }
+
+  // 2. add row to das dml buffer
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(dml_op->write_row(row, dml_rtctx.get_eval_ctx(), stored_row))) {
+    LOG_WARN("insert row to das dml op buffer failed", K(ret), K(ctdef), K(rtdef));
+  } else if (OB_ISNULL(stored_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ptr", K(ret));
+  } else if (FALSE_IT(dml_rtctx.add_das_task_memory_size(stored_row->row_size_))) {
+    // do nothing
+  } else if (OB_NOT_NULL(trans_info_expr) &&
+      OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
+    LOG_WARN("fail to add trans info datum", K(ret));
+  } else if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
+    // parallel submit
+    if (OB_FAIL(check_agg_task_state(dml_rtctx, dml_op, stored_row->row_size_, reach_agg_mem_limit))) {
+      LOG_WARN("fail to check agg_task state", K(ret), K(stored_row->row_size_));
+    } else if (!reach_agg_mem_limit) {
+      LOG_TRACE("not reach agg_task memory limit");
+    } else if (OB_FAIL(parallel_submit_das_task(dml_rtctx, dml_op->get_agg_task()))) {
+      LOG_WARN("fail to parallel submit this agg_task", K(ret));
+    } else {
       dml_rtctx.das_ref_.clear_task_map();
-      if (dml_rtctx.das_ref_.get_parallel_type() != DAS_SERIALIZATION) {
-        dml_op->get_agg_task()->start_status_ = DAS_AGG_TASK_REACH_MEM_LIMIT;
-        if (OB_FAIL(parallel_submit_das_task(dml_rtctx, dml_op->get_agg_task()))) {
-          LOG_WARN("fail to parallel submit this agg_task", K(ret));
-        }
-      }
-      if (REACH_COUNT_INTERVAL(10)) { // print log per 10 times.
-        LOG_INFO("DAS write buffer full, ", K(dml_op->get_row_cnt()), K(dml_rtctx.get_das_task_memory_size()));
-      }
     }
-  } while (OB_SUCC(ret) && need_retry);
+  } else {
+    // serialize submit
+  }
   return ret;
 }
 

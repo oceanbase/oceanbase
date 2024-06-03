@@ -44,6 +44,7 @@ public:
       insert_up_ctdefs_(),
       conflict_checker_ctdef_(alloc),
       all_saved_exprs_(alloc),
+      has_global_unique_index_(false),
       alloc_(alloc)
   {
   }
@@ -66,6 +67,7 @@ public:
   ObConflictCheckerCtdef conflict_checker_ctdef_;
   // insert_row + child_->output_
   ExprFixedArray all_saved_exprs_;
+  bool has_global_unique_index_;
 protected:
   common::ObIAllocator &alloc_;
 };
@@ -83,8 +85,8 @@ public:
                         eval_ctx_,
                         MY_SPEC.conflict_checker_ctdef_),
       insert_up_row_store_("InsertUpRow"),
-      is_ignore_(false)
-
+      is_ignore_(false),
+      gts_state_(WITHOUT_GTS_OPT_STATE)
   {
   }
 
@@ -122,6 +124,8 @@ protected:
   int get_next_row_from_child();
 
   int do_insert_up();
+
+  int rollback_savepoint(const transaction::ObTxSEQ &savepoint_no);
 
   // 检查是否有duplicated key 错误发生
   bool check_is_duplicated();
@@ -195,7 +199,8 @@ protected:
   int do_update_with_ignore();
 
   // 提交当前所有的 das task;
-  int post_all_dml_das_task(ObDMLRtCtx &das_ctx, bool del_task_ahead);
+  int post_all_dml_das_task(ObDMLRtCtx &das_ctx);
+  int post_all_try_insert_das_task(ObDMLRtCtx &dml_rtctx);
 
   // batch的执行插入 process_row and then write to das,
   int try_insert_row();
@@ -238,6 +243,7 @@ protected:
   common::ObArrayWrap<ObInsertUpRtDef> insert_up_rtdefs_;
   ObChunkDatumStore insert_up_row_store_; //所有的insert_up的行的集合
   bool is_ignore_; // 暂时记录一下是否是ignore的insert_up SQL语句
+  ObDmlGTSOptState gts_state_;
 };
 } // end namespace sql
 } // end namespace oceanbase

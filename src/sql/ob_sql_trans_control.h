@@ -190,6 +190,13 @@ public:
                            const int64_t expire_ts,
                            ObEndTransAsyncCallback *callback);
   static int start_stmt(ObExecContext &ctx);
+  static int get_ls_read_snapshot(ObSQLSessionInfo *session,
+                                  ObPhysicalPlanCtx *plan_ctx,
+                                  const share::ObLSID &local_ls_id,
+                                  transaction::ObTxReadSnapshot &snapshot);
+  static int get_read_snapshot(ObSQLSessionInfo *session,
+                               ObPhysicalPlanCtx *plan_ctx,
+                               transaction::ObTxReadSnapshot &snapshot);
   static int dblink_xa_prepare(ObExecContext &exec_ctx);
   static int stmt_sanity_check_(ObSQLSessionInfo *session,
                                 const ObPhysicalPlan *plan,
@@ -198,7 +205,12 @@ public:
                                   ObDASCtx &das_ctx,
                                   const ObPhysicalPlan *plan,
                                   const ObPhysicalPlanCtx *plan_ctx,
-                                  transaction::ObTransService *txs);
+                                  transaction::ObTransService *txs,
+                                  ObExecContext &exec_ctx);
+  static int can_do_plain_insert(ObSQLSessionInfo *session,
+                                 const ObPhysicalPlan *plan,
+                                 ObExecContext &exec_ctx,
+                                 bool &can_plain_insert);
   static int stmt_refresh_snapshot(ObExecContext &ctx);
   static int set_fk_check_snapshot(ObExecContext &exec_ctx);
   static int stmt_setup_savepoint_(ObSQLSessionInfo *session,

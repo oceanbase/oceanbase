@@ -190,10 +190,11 @@ ObDASScanOp::~ObDASScanOp()
 int ObDASScanOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
 {
   int ret = OB_SUCCESS;
-  if (remote_info != nullptr) {
+  if (OB_FAIL(ObIDASTaskOp::swizzling_remote_task(remote_info))) {
+    LOG_WARN("fail to swizzling remote task", K(ret));
+  } else if (remote_info != nullptr) {
     //DAS scan is executed remotely
     trans_desc_ = remote_info->trans_desc_;
-    snapshot_ = &remote_info->snapshot_;
     scan_rtdef_->stmt_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
     scan_rtdef_->scan_allocator_.set_alloc(&CURRENT_CONTEXT->get_arena_allocator());
     scan_rtdef_->tsc_monitor_info_ = remote_info->tsc_monitor_info_;

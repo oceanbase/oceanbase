@@ -154,29 +154,25 @@ int ObDASLockOp::init_task_info(uint32_t row_extend_size)
 int ObDASLockOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
 {
   int ret = OB_SUCCESS;
-  if (remote_info != nullptr) {
-      //DAS lock is executed remotely
-      trans_desc_ = remote_info->trans_desc_;
-      snapshot_ = &remote_info->snapshot_;
-    }
+  if (OB_FAIL(ObIDASTaskOp::swizzling_remote_task(remote_info))) {
+    LOG_WARN("fail to swizzling remote task", K(ret));
+  } else if (remote_info != nullptr) {
+    //DAS lock is executed remotely
+    trans_desc_ = remote_info->trans_desc_;
+  }
   return ret;
 }
 
 int ObDASLockOp::write_row(const ExprFixedArray &row,
                            ObEvalCtx &eval_ctx,
-                           ObChunkDatumStore::StoredRow *&stored_row,
-                           bool &buffer_full)
+                           ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  bool added = false;
-  buffer_full = false;
   if (!lock_buffer_.is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer not inited", K(ret));
-  } else if (OB_FAIL(lock_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
-    LOG_WARN("try add row to lock buffer failed", K(ret), K(row), K(lock_buffer_));
-  } else if (!added) {
-    buffer_full = true;
+  } else if (OB_FAIL(lock_buffer_.add_row(row, &eval_ctx, stored_row, true))) {
+    LOG_WARN("add row to lock buffer failed", K(ret), K(row), K(lock_buffer_));
   }
   return ret;
 }

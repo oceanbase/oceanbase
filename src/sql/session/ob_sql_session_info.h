@@ -782,6 +782,7 @@ public:
                                  hash_area_size_(128*1024*1024),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
+                                 enable_insertup_replace_gts_opt_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
                                  _query_record_size_limit_(65536),
                                  _ob_sqlstat_enable_(true),
@@ -803,6 +804,7 @@ public:
     int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
+    bool enable_insertup_replace_gts_opt() const { return ATOMIC_LOAD(&enable_insertup_replace_gts_opt_); }
     int64_t get_print_sample_ppm() const { return ATOMIC_LOAD(&print_sample_ppm_); }
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
@@ -825,6 +827,7 @@ public:
     int64_t hash_area_size_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
+    bool enable_insertup_replace_gts_opt_;
     int64_t range_optimizer_max_mem_size_;
     int64_t _query_record_size_limit_;
     bool _ob_sqlstat_enable_;
@@ -1440,6 +1443,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_udr();
+  }
+  bool enable_insertup_replace_gts_opt()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
   }
   int64_t get_range_optimizer_max_mem_size()
   {

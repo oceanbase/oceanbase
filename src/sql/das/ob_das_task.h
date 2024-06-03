@@ -41,6 +41,51 @@ class ObDasAggregatedTask;
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
 
+// ObDASGTSOptInfo only for GTS optimization
+struct ObDASGTSOptInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObDASGTSOptInfo(common::ObIAllocator &alloc)
+    : alloc_(alloc),
+      use_specify_snapshot_(false),
+      isolation_level_(),
+      specify_snapshot_(nullptr),
+      response_snapshot_(nullptr)
+  {
+  }
+
+  ~ObDASGTSOptInfo()
+  {
+    if (specify_snapshot_ != nullptr) {
+      specify_snapshot_->~ObTxReadSnapshot();
+    }
+    if (response_snapshot_ != nullptr) {
+      response_snapshot_->~ObTxReadSnapshot();
+    }
+  }
+
+  int init(transaction::ObTxIsolationLevel isolation_level);
+  void set_use_specify_snapshot(bool v)
+  {
+    use_specify_snapshot_ = v;
+  }
+  bool get_use_specify_snapshot() { return use_specify_snapshot_; }
+  transaction::ObTxReadSnapshot *get_specify_snapshot() { return specify_snapshot_; }
+  transaction::ObTxReadSnapshot *get_response_snapshot() { return response_snapshot_; }
+
+  TO_STRING_KV(K_(use_specify_snapshot),
+               K_(isolation_level),
+               KPC_(specify_snapshot),
+               KPC_(response_snapshot));
+  common::ObIAllocator &alloc_; // inited by op_alloc_ in das_op
+  bool use_specify_snapshot_;
+  transaction::ObTxIsolationLevel isolation_level_;
+  transaction::ObTxReadSnapshot *specify_snapshot_; // 给task指定snapshot_version
+  transaction::ObTxReadSnapshot *response_snapshot_; // 远端或者本地获取到的snapshot信息
+};
+
+
 struct ObDASRemoteInfo
 {
   OB_UNIS_VERSION(1);
@@ -122,7 +167,10 @@ public:
       das_task_node_(),
       agg_task_(nullptr),
       cur_agg_list_(nullptr),
-      op_result_(nullptr)
+      op_result_(nullptr),
+      attach_ctdef_(nullptr),
+      attach_rtdef_(nullptr),
+      das_gts_opt_info_(op_alloc)
   {
     das_task_node_.get_data() = this;
   }
@@ -158,7 +206,7 @@ public:
     return common::OB_NOT_IMPLEMENT;
   }
   virtual int init_task_info(uint32_t row_extend_size) = 0;
-  virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info) = 0;
+  virtual int swizzling_remote_task(ObDASRemoteInfo *remote_info);
   virtual const ObDASBaseCtDef *get_ctdef() const { return nullptr; }
   virtual ObDASBaseRtDef *get_rtdef() { return nullptr; }
   virtual void reset_access_datums_ptr() { }
@@ -224,6 +272,8 @@ public:
   void set_inner_rescan(bool flag) { inner_rescan_ = flag; }
   void set_write_buff_full(bool v) { write_buff_full_ = v; }
   bool is_write_buff_full() { return write_buff_full_; }
+  ObDASGTSOptInfo &get_das_gts_opt_info() { return das_gts_opt_info_; }
+  int init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level);
 
   int errcode_; //don't need serialize it
   transaction::ObTxDesc *trans_desc_; //trans desc，事务是全局信息，由RPC框架管理，这里不维护其内存
@@ -242,16 +292,16 @@ protected:
     struct
     {
       /*the first 16 bits are static flags*/
-      uint16_t can_part_retry_   : 1;
-      uint16_t flag_reserved_    : 15;
+      uint16_t can_part_retry_    : 1;
+      uint16_t flag_reserved_     : 15;
       /*the last 16 bits are status masks*/
-      uint16_t task_started_     : 1;
-      uint16_t in_part_retry_    : 1;
-      uint16_t in_stmt_retry_    : 1;
+      uint16_t task_started_      : 1;
+      uint16_t in_part_retry_     : 1;
+      uint16_t in_stmt_retry_     : 1;
       uint16_t need_switch_param_ : 1; //need to switch param in gi table rescan, this parameter has been deprecated
-      uint16_t inner_rescan_ : 1; //disable das retry for inner_rescan
-      uint16_t write_buff_full_  : 1;
-      uint16_t status_reserved_  : 10;
+      uint16_t inner_rescan_      : 1; //disable das retry for inner_rescan
+      uint16_t write_buff_full_   : 1;
+      uint16_t status_reserved_   : 10;
     };
   };
   common::ObTabletID tablet_id_;
@@ -270,6 +320,9 @@ protected:
   ObDasAggregatedTask *agg_task_;  // task's agg task, do not serialize
   DasTaskLinkedList *cur_agg_list_;  // task's agg_list, do not serialize
   ObIDASTaskResult *op_result_;
+  const ObDASBaseCtDef *attach_ctdef_;
+  ObDASBaseRtDef *attach_rtdef_;
+  ObDASGTSOptInfo das_gts_opt_info_;
 };
 typedef common::ObObjStore<ObIDASTaskOp*, common::ObIAllocator&> DasTaskList;
 typedef DasTaskList::Iterator DASTaskIter;
@@ -413,17 +466,22 @@ struct DASCtEncoder
   static int encode(char *buf, const int64_t buf_len, int64_t &pos, const T *val)
   {
     int ret = common::OB_SUCCESS;
-    int64_t idx = 0;
+    int64_t idx = common::OB_INVALID_INDEX;
     const ObDASBaseCtDef *ctdef = val;
     ObDASRemoteInfo *remote_info = ObDASRemoteInfo::get_remote_info();
-    if (OB_ISNULL(val) || OB_ISNULL(remote_info)) {
+    if (OB_ISNULL(remote_info)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "val is nullptr", K(ret), K(val), K(remote_info));
+    } else if (OB_ISNULL(val)) {
+      idx = common::OB_INVALID_INDEX;
     } else if (!common::has_exist_in_array(remote_info->ctdefs_, ctdef, &idx)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "val not found in ctdefs", K(ret), K(val), KPC(val));
-    } else if (OB_FAIL(common::serialization::encode_i32(buf, buf_len, pos, static_cast<int32_t>(idx)))) {
-      SQL_DAS_LOG(WARN, "encode idx failed", K(ret), K(idx));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(common::serialization::encode_i32(buf, buf_len, pos, static_cast<int32_t>(idx)))) {
+        SQL_DAS_LOG(WARN, "encode idx failed", K(ret), K(idx));
+      }
     }
     return ret;
   }
@@ -431,13 +489,15 @@ struct DASCtEncoder
   static int decode(const char *buf, const int64_t data_len, int64_t &pos, const T *&val)
   {
     int ret = common::OB_SUCCESS;
-    int32_t idx = 0;
+    int32_t idx = common::OB_INVALID_INDEX;
     ObDASRemoteInfo *remote_info = ObDASRemoteInfo::get_remote_info();
     if (OB_ISNULL(remote_info)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "remote_info is nullptr", K(ret), K(remote_info));
     } else if (OB_FAIL(common::serialization::decode_i32(buf, data_len, pos, &idx))) {
       SQL_DAS_LOG(WARN, "decode idx failed", K(ret), K(idx));
+    } else if (OB_UNLIKELY(common::OB_INVALID_INDEX == idx)) {
+      val = nullptr;
     } else if (OB_UNLIKELY(idx < 0) || OB_UNLIKELY(idx >= remote_info->ctdefs_.count())) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "idx is invalid", K(ret), K(idx), K(remote_info->ctdefs_.count()));
@@ -450,7 +510,7 @@ struct DASCtEncoder
   static int64_t encoded_length(const T *val)
   {
     UNUSED(val);
-    int32_t idx = 0;
+    int32_t idx = common::OB_INVALID_INDEX;
     return common::serialization::encoded_length_i32(idx);
   }
 };
@@ -461,17 +521,22 @@ struct DASRtEncoder
   static int encode(char *buf, const int64_t buf_len, int64_t &pos, const T *val)
   {
     int ret = common::OB_SUCCESS;
-    int64_t idx = 0;
+    int64_t idx = common::OB_INVALID_INDEX;
     ObDASBaseRtDef *rtdef = const_cast<T*>(val);
     ObDASRemoteInfo *remote_info = ObDASRemoteInfo::get_remote_info();
-    if (OB_ISNULL(val) || OB_ISNULL(remote_info)) {
+    if (OB_ISNULL(remote_info)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "val is nullptr", K(ret), K(val), K(remote_info));
+    } else if (OB_ISNULL(val)) {
+      idx = common::OB_INVALID_INDEX;
     } else if (!common::has_exist_in_array(remote_info->rtdefs_, rtdef, &idx)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "val not found in rtdefs", K(ret), K(val), KPC(val));
-    } else if (OB_FAIL(common::serialization::encode_i32(buf, buf_len, pos, static_cast<int32_t>(idx)))) {
-      SQL_DAS_LOG(WARN, "encode idx failed", K(ret), K(idx));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(common::serialization::encode_i32(buf, buf_len, pos, static_cast<int32_t>(idx)))) {
+        SQL_DAS_LOG(WARN, "encode idx failed", K(ret), K(idx));
+      }
     }
     return ret;
   }
@@ -479,13 +544,15 @@ struct DASRtEncoder
   static int decode(const char *buf, const int64_t data_len, int64_t &pos, T *&val)
   {
     int ret = common::OB_SUCCESS;
-    int32_t idx = 0;
+    int32_t idx = common::OB_INVALID_INDEX;
     ObDASRemoteInfo *remote_info = ObDASRemoteInfo::get_remote_info();
     if (OB_ISNULL(remote_info)) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "remote_info is nullptr", K(ret), K(remote_info));
     } else if (OB_FAIL(common::serialization::decode_i32(buf, data_len, pos, &idx))) {
       SQL_DAS_LOG(WARN, "decode idx failed", K(ret), K(idx));
+    } else if (OB_UNLIKELY(common::OB_INVALID_INDEX == idx)) {
+      val = nullptr;
     } else if (OB_UNLIKELY(idx < 0) || OB_UNLIKELY(idx >= remote_info->rtdefs_.count())) {
       ret = common::OB_ERR_UNEXPECTED;
       SQL_DAS_LOG(WARN, "idx is invalid", K(ret), K(idx), K(remote_info->rtdefs_.count()));
@@ -498,7 +565,7 @@ struct DASRtEncoder
   static int64_t encoded_length(const T *val)
   {
     UNUSED(val);
-    int32_t idx = 0;
+    int32_t idx = common::OB_INVALID_INDEX;
     return common::serialization::encoded_length_i32(idx);
   }
 };

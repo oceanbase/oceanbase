@@ -1383,6 +1383,9 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
              (SYS_VAR_INNODB_READ_ONLY <= var_id && SYS_VAR_SUPER_READ_ONLY >= var_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
+  } else if (SYS_VAR_LOW_PRIORITY_UPDATES <= var_id && SYS_VAR_MAX_INSERT_DELAYED_THREADS >= var_id) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   }
   return ret;
 }

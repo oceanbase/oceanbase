@@ -31,6 +31,7 @@ public:
       replace_ctdefs_(),
       only_one_unique_key_(false),
       conflict_checker_ctdef_(alloc),
+      has_global_unique_index_(false),
       alloc_(alloc)
   {
   }
@@ -52,6 +53,7 @@ public:
   ReplaceCtDefArray replace_ctdefs_;
   bool only_one_unique_key_;
   ObConflictCheckerCtdef conflict_checker_ctdef_;
+  bool has_global_unique_index_;
 protected:
   common::ObIAllocator &alloc_;
 private:
@@ -69,7 +71,8 @@ public:
                         eval_ctx_,
                         MY_SPEC.conflict_checker_ctdef_),
       replace_row_store_("ReplaceRow"),
-      replace_rtctx_(eval_ctx_, ctx, *this)
+      replace_rtctx_(eval_ctx_, ctx, *this),
+      gts_state_(WITHOUT_GTS_OPT_STATE)
   {}
   virtual ~ObTableReplaceOp() {}
 
@@ -99,6 +102,8 @@ protected:
 
   int do_replace_into();
 
+  int rollback_savepoint(const transaction::ObTxSEQ &savepoint_no);
+
   // 检查是否有duplicated key 错误发生
   bool check_is_duplicated();
 
@@ -113,6 +118,8 @@ protected:
 
   int do_insert(ObConflictRowMap *primary_map);
 
+  // 提交所有的 try_insert 的 das task;
+  int post_all_try_insert_das_task(ObDMLRtCtx &dml_rtctx);
   // 提交所有的 insert 和delete das task;
   int post_all_dml_das_task(ObDMLRtCtx &dml_rtctx);
 
@@ -163,6 +170,7 @@ protected:
   common::ObArrayWrap<ObReplaceRtDef> replace_rtdefs_;
   ObChunkDatumStore replace_row_store_; //所有的replace的行的集合
   ObDMLRtCtx replace_rtctx_;
+  ObDmlGTSOptState gts_state_;
 };
 
 class ObTableReplaceOpInput : public ObTableModifyOpInput

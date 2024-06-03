@@ -434,6 +434,8 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
+  inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
@@ -679,6 +681,7 @@ public:
   ObSubSchemaCtx subschema_ctx_;
   int64_t das_dop_;
   bool disable_auto_memory_mgr_;
+  bool insertup_can_do_gts_opt_;
 
 private:
   common::ObFixedArray<ObLocalSessionVar, common::ObIAllocator> all_local_session_vars_;

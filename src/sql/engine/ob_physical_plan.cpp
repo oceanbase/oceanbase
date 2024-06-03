@@ -136,6 +136,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     subschema_ctx_(allocator_),
     das_dop_(0),
     disable_auto_memory_mgr_(false),
+    insertup_can_do_gts_opt_(false),
     all_local_session_vars_(&allocator_),
     udf_has_dml_stmt_(false)
 {
@@ -235,6 +236,7 @@ void ObPhysicalPlan::reset()
   sql_stat_record_value_.reset();
   use_rich_format_ = false;
   udf_has_dml_stmt_ = false;
+  insertup_can_do_gts_opt_ = false;
   disable_auto_memory_mgr_ = false;
 }
 void ObPhysicalPlan::destroy()

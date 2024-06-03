@@ -1537,6 +1537,9 @@ ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE)
 DEF_BOOL(_enable_parallel_das_dml, OB_TENANT_PARAMETER, "False",
         "By default, the das service is allowed to use multiple threads to submit das tasks",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_insertup_replace_gts_opt, OB_TENANT_PARAMETER, "True",
+        "By default, insert/replace ... values statement can use gts optimization",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // Add a config to enable use das if the sql statement has variable assignment
 DEF_BOOL(_enable_var_assign_use_das, OB_TENANT_PARAMETER, "False",
          "enable use das if the sql statement has variable assignment",

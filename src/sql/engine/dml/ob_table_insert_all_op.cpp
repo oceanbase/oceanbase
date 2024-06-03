@@ -136,7 +136,6 @@ int ObTableInsertAllOp::write_row_to_das_buffer()
 {
   int ret = OB_SUCCESS;
   //int64_t savepoint_no = 0;
-  NG_TRACE(insert_start);
   // first get next row from child operator
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   // erro logging not support, fix it later
@@ -213,7 +212,6 @@ int ObTableInsertAllOp::write_row_to_das_buffer()
   if (OB_ERR_PRIMARY_KEY_DUPLICATE == ret) {
     plan_ctx->set_last_insert_id_cur_stmt(0);
   }
-  NG_TRACE(insert_end);
   return ret;
 }
 

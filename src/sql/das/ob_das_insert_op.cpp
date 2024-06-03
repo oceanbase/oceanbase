@@ -96,7 +96,7 @@ int ObDASInsertOp::open_op()
 {
   int ret = OB_SUCCESS;
   if (ins_rtdef_->need_fetch_conflict_ && OB_FAIL(insert_row_with_fetch())) {
-    LOG_WARN("fail to do insert with conflict fetch", K(ret));
+    LOG_WARN("fail to do insert with conflict fetch", K(ret), K(das_gts_opt_info_));
   } else if (!ins_rtdef_->need_fetch_conflict_ && OB_FAIL(insert_rows())) {
     LOG_WARN("fail to do insert", K(ret));
   }
@@ -136,7 +136,8 @@ int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
                                            ObDASInsRtDef *ins_rtdef,
                                            storage::ObStoreCtxGuard &store_ctx_guard,
                                            const UIntFixedArray *duplicated_column_ids,
-                                           common::ObTabletID tablet_id)
+                                           common::ObTabletID tablet_id,
+                                           transaction::ObTxReadSnapshot *snapshot)
 {
   int ret = OB_SUCCESS;
   ObNewRow *insert_row = NULL;
@@ -144,7 +145,7 @@ int ObDASInsertOp::insert_index_with_fetch(ObAccessService *as,
   ObDMLBaseParam dml_param;
   if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef,
                                            *ins_rtdef,
-                                           *snapshot_,
+                                           *snapshot,
                                            op_alloc_,
                                            store_ctx_guard,
                                            dml_param))) {
@@ -205,13 +206,37 @@ int ObDASInsertOp::insert_row_with_fetch()
   ObDASDMLIterator dml_iter(ins_ctdef_, insert_buffer_, op_alloc_);
   storage::ObStoreCtxGuard store_ctx_guard;
 
-  if (ins_ctdef_->table_rowkey_types_.empty()) {
+  transaction::ObTxReadSnapshot *snapshot = snapshot_;
+  if (das_gts_opt_info_.get_specify_snapshot()) {
+    transaction::ObTransService *txs = nullptr;
+    if (!(das_gts_opt_info_.isolation_level_ == transaction::ObTxIsolationLevel::RR
+        || das_gts_opt_info_.isolation_level_ == transaction::ObTxIsolationLevel::RC)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected isolation_level", K(ret), K(das_gts_opt_info_));
+    } else if (OB_ISNULL(txs = MTL_WITH_CHECK_TENANT(transaction::ObTransService*, MTL_ID()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("get_tx_service", K(ret), K(MTL_ID()));
+    } else if (OB_FAIL(txs->get_ls_read_snapshot(*trans_desc_,
+                                                 das_gts_opt_info_.isolation_level_,
+                                                 ls_id_,
+                                                 THIS_WORKER.get_timeout_ts(),
+                                                 *das_gts_opt_info_.get_response_snapshot()))) {
+      LOG_WARN("fail to get ls read_snapshot", K(ret), K(ls_id_), K(THIS_WORKER.get_timeout_ts()));
+    } else {
+      snapshot = das_gts_opt_info_.get_response_snapshot();
+      LOG_TRACE("succ get ls snaoshot", K(ls_id_), K(tablet_id_), KPC(snapshot));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (ins_ctdef_->table_rowkey_types_.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_rowkey_types is invalid", K(ret));
   } else if (OB_FAIL(as->get_write_store_ctx_guard(ls_id_,
                                                    ins_rtdef_->timeout_ts_,
                                                    *trans_desc_,
-                                                   *snapshot_,
+                                                   *snapshot,
                                                    store_ctx_guard))) {
     LOG_WARN("fail to get_write_store_ctx_guard", K(ret), K(ls_id_));
   } else if (OB_ISNULL(buf = op_alloc_.alloc(sizeof(ObDASConflictIterator)))) {
@@ -233,7 +258,8 @@ int ObDASInsertOp::insert_row_with_fetch()
                                             ins_rtdef_,
                                             store_ctx_guard,
                                             &ins_ctdef_->table_rowkey_cids_,
-                                            tablet_id_))) {
+                                            tablet_id_,
+                                            snapshot))) {
     LOG_WARN("fail to insert primary table", K(ret));
   }
 
@@ -254,7 +280,8 @@ int ObDASInsertOp::insert_row_with_fetch()
                                                index_ins_rtdef,
                                                store_ctx_guard,
                                                &ins_ctdef_->table_rowkey_cids_,
-                                               index_tablet_id))) {
+                                               index_tablet_id,
+                                               snapshot))) {
       LOG_WARN("fail to insert local unique index", K(ret), K(index_ins_ctdef->table_param_.get_data_table()));
     }
   }
@@ -278,7 +305,8 @@ int ObDASInsertOp::insert_row_with_fetch()
                                                index_ins_rtdef,
                                                store_ctx_guard,
                                                &(index_ins_ctdef->column_ids_),
-                                               index_tablet_id))) {
+                                               index_tablet_id,
+                                               snapshot))) {
       // For non-unique local index,
       // We check for duplications on all columns because the partition key is not stored in storage level
       LOG_WARN("fail to insert non_unique index", K(ret), K(index_ins_ctdef->table_param_.get_data_table()));
@@ -371,6 +399,11 @@ int ObDASInsertOp::decode_task_result(ObIDASTaskResult *task_result)
         result_ = insert_result;
         affected_rows_ = insert_result->get_affected_rows();
         is_duplicated_ = insert_result->is_duplicated();
+        if (das_gts_opt_info_.get_specify_snapshot()) {
+          if (OB_FAIL(das_gts_opt_info_.get_response_snapshot()->assign(insert_result->get_response_snapshot()))) {
+            LOG_WARN("fail to assign snapshot", K(ret));
+          }
+        }
       }
     } else {
       result_ = insert_result;
@@ -399,6 +432,11 @@ int ObDASInsertOp::fill_task_result(ObIDASTaskResult &task_result, bool &has_mor
         ins_result.set_is_duplicated(is_duplicated_);
         has_more = false;
         memory_limit -= ins_result.get_result_buffer().get_mem_used();
+        if (das_gts_opt_info_.get_specify_snapshot()) {
+          if (OB_FAIL(ins_result.get_response_snapshot().assign(*das_gts_opt_info_.get_response_snapshot()))) {
+            LOG_WARN("fail to assign snapshot", K(ret));
+          }
+        }
       }
     } else {
       ins_result.set_affected_rows(affected_rows_);
@@ -422,29 +460,25 @@ int ObDASInsertOp::init_task_info(uint32_t row_extend_size)
 int ObDASInsertOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
 {
   int ret = OB_SUCCESS;
-  if (remote_info != nullptr) {
+  if (OB_FAIL(ObIDASTaskOp::swizzling_remote_task(remote_info))) {
+    LOG_WARN("fail to swizzling remote task", K(ret));
+  } else if (remote_info != nullptr) {
     //DAS insert is executed remotely
     trans_desc_ = remote_info->trans_desc_;
-    snapshot_ = &remote_info->snapshot_;
   }
   return ret;
 }
 
 int ObDASInsertOp::write_row(const ExprFixedArray &row,
                              ObEvalCtx &eval_ctx,
-                             ObChunkDatumStore::StoredRow *&stored_row,
-                             bool &buffer_full)
+                             ObChunkDatumStore::StoredRow *&stored_row)
 {
   int ret = OB_SUCCESS;
-  bool added = false;
-  buffer_full = false;
   if (!insert_buffer_.is_inited()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("buffer not inited", K(ret));
-  } else if (OB_FAIL(insert_buffer_.try_add_row(row, &eval_ctx, das::OB_DAS_MAX_PACKET_SIZE, stored_row, added, true))) {
-    LOG_WARN("try add row to insert buffer failed", K(ret), K(row), K(insert_buffer_));
-  } else if (!added) {
-    buffer_full = true;
+  } else if (OB_FAIL(insert_buffer_.add_row(row, &eval_ctx, stored_row, true))) {
+    LOG_WARN("add row to insert buffer failed", K(ret), K(row), K(insert_buffer_));
   }
   return ret;
 }
@@ -460,7 +494,8 @@ ObDASInsertResult::ObDASInsertResult()
     result_buffer_(),
     result_newrow_iter_(),
     output_types_(nullptr),
-    is_duplicated_(false)
+    is_duplicated_(false),
+    response_snapshot_()
 {
 }
 
@@ -551,7 +586,8 @@ int ObDASInsertResult::reuse()
 OB_SERIALIZE_MEMBER((ObDASInsertResult, ObIDASTaskResult),
                     affected_rows_,
                     result_buffer_,
-                    is_duplicated_);
+                    is_duplicated_,
+                    response_snapshot_);
 
 
 void ObDASConflictIterator::reset()

@@ -24,6 +24,23 @@ class ObTableModifyOp;
 struct ObDASScanCtDef;
 struct ObDASScanRtDef;
 
+class ObTabletSnapshotMaping
+{
+public:
+  ObTabletSnapshotMaping()
+    : snapshot_(),
+      tablet_id_(),
+      ls_id_()
+  {}
+  ~ObTabletSnapshotMaping() = default;
+  bool operator==(const ObTabletSnapshotMaping &other) const;
+  TO_STRING_KV(K_(snapshot), K_(tablet_id), K_(ls_id));
+  transaction::ObTxReadSnapshot snapshot_;
+  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
+};
+
+
 struct ObRowkeyCstCtdef
 {
   OB_UNIS_VERSION_V(1);
@@ -146,7 +163,8 @@ public:
 
   //初始conflict_checker
   int init_conflict_checker(const ObExprFrameInfo *expr_frame_info,
-                            ObDASTableLoc *table_loc);
+                            ObDASTableLoc *table_loc,
+                            bool use_partition_gts_opt);
   void set_local_tablet_loc(ObDASTabletLoc *tablet_loc) { local_tablet_loc_ = tablet_loc; }
 
   //初始conflict_map
@@ -191,6 +209,8 @@ public:
   // 向主表做回表，根据冲突行的主键，查询出所有对应主表的冲突行, 构建冲突map
   int do_lookup_and_build_base_map(int64_t replace_row_cnt);
 
+  int post_all_das_scan_tasks();
+
   // todo @kaizhan.dkz 构建回表的das scan task
   int build_primary_table_lookup_das_task();
 
@@ -203,6 +223,10 @@ public:
 
   int destroy();
 
+  int collect_all_snapshot(transaction::ObTxReadSnapshot &snapshot, const ObDASTabletLoc *tablet_loc);
+  int get_snapshot_by_ids(ObTabletID tablet_id, share::ObLSID ls_id, bool &founded, transaction::ObTxReadSnapshot &snapshot);
+
+  int set_partition_snapshot_for_das_task(ObDASRef &das_ref);
 private:
   int to_expr(const ObChunkDatumStore::StoredRow *replace_row);
   int calc_lookup_tablet_loc(ObDASTabletLoc *&tablet_loc);
@@ -226,6 +250,7 @@ private:
   int init_das_scan_rtdef();
 
   int get_tmp_string_buffer(common::ObIAllocator *&allocator);
+
 public:
   static const int64_t MAX_ROWKEY_CHECKER_DISTINCT_BUCKET_NUM = 1 * 128 * 1024;
 
@@ -242,6 +267,7 @@ public:
   ObDASTabletLoc *local_tablet_loc_;
   ObDASTableLoc *table_loc_;
   lib::MemoryContext tmp_mem_ctx_;
+  ObSEArray<ObTabletSnapshotMaping, 16> snapshot_maping_;
   SeRowkeyDistCtx *se_rowkey_dist_ctx_;
 };
 }  // namespace sql

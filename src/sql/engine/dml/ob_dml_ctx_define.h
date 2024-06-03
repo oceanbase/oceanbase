@@ -952,6 +952,7 @@ public:
                K_(del_rtdef))
   ObInsRtDef ins_rtdef_;
   ObDelRtDef del_rtdef_;
+
 };
 
 struct ObInsertUpCtDef

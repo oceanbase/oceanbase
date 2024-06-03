@@ -321,6 +321,7 @@ int ObDASRef::parallel_submit_agg_task(ObDasAggregatedTask *agg_task)
 int ObDASRef::execute_all_task()
 {
   int ret = OB_SUCCESS;
+  NG_TRACE(start_execute_das_task);
   if (OB_FAIL(execute_all_task(del_aggregated_tasks_))) {
     LOG_WARN("fail to execute all delete agg_tasks", K(ret));
   } else if (OB_FAIL(execute_all_task(aggregated_tasks_))) {
@@ -340,7 +341,7 @@ int ObDASRef::execute_all_task()
       }
     }
   }
-
+  NG_TRACE(end_execute_das_task);
   return ret;
 }
 
@@ -636,7 +637,7 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
   ObSQLSessionInfo *session = get_exec_ctx().get_my_session();
   int64_t task_id;
   if (OB_FAIL(MTL(ObDataAccessService*)->get_das_task_id(task_id))) {
-    LOG_WARN("get das task id failed", KR(ret));
+    LOG_WARN("get das task id failed", K(ret));
   } else if (OB_FAIL(das_factory.create_das_task_op(op_type, task_op))) {
     LOG_WARN("create das task op failed", K(ret), KPC(task_op));
   } else {
@@ -648,8 +649,10 @@ int ObDASRef::create_das_task(const ObDASTabletLoc *tablet_loc,
     task_op->set_tablet_id(tablet_loc->tablet_id_);
     task_op->set_ls_id(tablet_loc->ls_id_);
     task_op->set_tablet_loc(tablet_loc);
-    if (OB_FAIL(add_aggregated_task(task_op, op_type))) {
-      LOG_WARN("failed to add aggregated task", KR(ret));
+    if (is_do_gts_opt() && OB_FAIL(task_op->init_das_gts_opt_info(session->get_tx_isolation()))) {
+      LOG_WARN("fail to init gts opt info", K(ret), K(session->get_tx_isolation()));
+    } else if (OB_FAIL(add_aggregated_task(task_op, op_type))) {
+      LOG_WARN("failed to add aggregated task", K(ret));
     }
   }
   return ret;
@@ -726,7 +729,7 @@ int ObDASRef::add_aggregated_task(ObIDASTaskOp *das_task, ObDASOpType op_type)
   }
 
   if (OB_SUCC(ret) && OB_FAIL(add_batched_task(das_task))) {
-    LOG_WARN("add batched task failed", KR(ret), KPC(das_task));
+    LOG_WARN("add batched task failed", K(ret), KPC(das_task));
   }
   return ret;
 }
@@ -775,6 +778,37 @@ void ObDASRef::reuse()
     das_alloc_.set_alloc(reuse_alloc_);
   }
 }
+
+bool ObDASRef::check_tasks_same_ls_and_is_local(share::ObLSID &ls_id)
+{
+  ObIDASTaskOp *first_das_op = nullptr;
+  bool is_all_same = true;
+  DASTaskIter task_iter = begin_task_iter();
+  const common::ObAddr &ctrl_addr = MTL(ObDataAccessService *)->get_ctrl_addr();
+  if (!has_task()) {
+    is_all_same = false;
+  }
+  while (is_all_same && !task_iter.is_end()) {
+    ObIDASTaskOp *das_op = *task_iter;
+    if (OB_ISNULL(first_das_op)) {
+      first_das_op = das_op;
+      if (first_das_op->get_tablet_loc()->server_ != ctrl_addr) {
+        is_all_same = false;
+      }
+    } else if (first_das_op->get_ls_id() != das_op->get_ls_id() ||
+        first_das_op->get_tablet_loc()->server_ != das_op->get_tablet_loc()->server_) {
+      is_all_same = false;
+    }
+    ++task_iter;
+  }
+
+  if (is_all_same) {
+    ls_id = first_das_op->get_ls_id();
+  }
+  return is_all_same;
+}
+
+
 
 void ObDasAggregatedTask::reset()
 {

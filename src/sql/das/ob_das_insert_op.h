@@ -70,8 +70,7 @@ public:
   virtual ObDASBaseRtDef *get_rtdef() override { return ins_rtdef_; }
   int write_row(const ExprFixedArray &row,
                 ObEvalCtx &eval_ctx,
-                ObChunkDatumStore::StoredRow *&stored_row,
-                bool &buffer_full);
+                ObChunkDatumStore::StoredRow *&stored_row);
   int64_t get_row_cnt() const { return insert_buffer_.get_row_cnt(); }
   void set_das_ctdef(const ObDASInsCtDef *ins_ctdef) { ins_ctdef_ = ins_ctdef; }
   void set_das_rtdef(ObDASInsRtDef *ins_rtdef) { ins_rtdef_ = ins_rtdef; }
@@ -103,7 +102,8 @@ private:
                               ObDASInsRtDef *ins_rtdef,
                               storage::ObStoreCtxGuard &store_ctx_guard,
                               const UIntFixedArray *duplicated_column_ids,
-                              common::ObTabletID tablet_id);
+                              common::ObTabletID tablet_id,
+                              transaction::ObTxReadSnapshot *snapshot);
 
 private:
   const ObDASInsCtDef *ins_ctdef_;
@@ -133,15 +133,19 @@ public:
 
   bool is_duplicated() { return is_duplicated_; }
   void set_is_duplicated(bool is_duplicated) { is_duplicated_ = is_duplicated; }
+  transaction::ObTxReadSnapshot &get_response_snapshot() { return response_snapshot_; }
 
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
-                        K_(affected_rows));
+                        K_(affected_rows),
+                        K_(is_duplicated),
+                        K_(response_snapshot));
 private:
   int64_t affected_rows_;
   ObDASWriteBuffer result_buffer_;
   ObDASWriteBuffer::NewRowIterator result_newrow_iter_;
   const ObjMetaFixedArray *output_types_;
   bool is_duplicated_;
+  transaction::ObTxReadSnapshot response_snapshot_; // 做GTS优化时，远端的返回的snapshot_
 };
 }  // namespace sql
 }  // namespace oceanbase

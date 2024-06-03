@@ -233,7 +233,6 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
 {
   int ret = OB_SUCCESS;
   transaction::ObTxSEQ savepoint_no;
-  NG_TRACE(insert_start);
   // first get next row from child operator
   ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
   bool is_skipped = false;
@@ -305,7 +304,6 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
   if (OB_SUCC(ret)) {
     plan_ctx->record_last_insert_id_cur_stmt();
   }
-  NG_TRACE(insert_end);
   return ret;
 }
 

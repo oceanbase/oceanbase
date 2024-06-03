@@ -37,6 +37,7 @@ struct EnumEncoder<false, sql::ObDASBaseRtDef*> : sql::DASRtEncoder<sql::ObDASBa
 } // end namespace common
 
 using namespace common;
+using namespace transaction;
 namespace sql
 {
 OB_DEF_SERIALIZE(ObDASRemoteInfo)
@@ -220,6 +221,23 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
   return len;
 }
 
+int ObIDASTaskOp::swizzling_remote_task(ObDASRemoteInfo *remote_info)
+{
+  int ret = OB_SUCCESS;
+  if (remote_info != nullptr) {
+    snapshot_ = &remote_info->snapshot_;
+    if (das_gts_opt_info_.use_specify_snapshot_) {
+      if (OB_ISNULL(das_gts_opt_info_.get_specify_snapshot())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr of specify_snapshot", K(ret));
+      } else {
+        snapshot_ = das_gts_opt_info_.get_specify_snapshot();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObIDASTaskOp::start_das_task()
 {
   int &ret = errcode_;
@@ -270,6 +288,17 @@ int ObIDASTaskOp::end_das_task()
   return ret;
 }
 
+int ObIDASTaskOp::init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_das_gts_opt_info().init(isolation_level))) {
+    LOG_WARN("fail to init das gts opt", K(ret), K(isolation_level));
+  } else {
+    snapshot_ = get_das_gts_opt_info().get_specify_snapshot();
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     tenant_id_,
                     task_id_,
@@ -278,7 +307,56 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     ls_id_,
                     related_ctdefs_,
                     related_rtdefs_,
-                    related_tablet_ids_);
+                    related_tablet_ids_,
+                    attach_ctdef_,
+                    attach_rtdef_,
+                    das_gts_opt_info_);
+
+OB_DEF_SERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ENCODE(*specify_snapshot_);
+  }
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObDASGTSOptInfo)
+{
+  int ret = OB_SUCCESS;
+  bool serialize_specify_snapshot = false;
+  LST_DO_CODE(OB_UNIS_DECODE,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    if (OB_FAIL(init(isolation_level_))) {
+      LOG_WARN("fail to init gts_opt_info", K(ret));
+    } else {
+      OB_UNIS_DECODE(*specify_snapshot_);
+    }
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObDASGTSOptInfo)
+{
+  int64_t len = 0;
+  bool serialize_specify_snapshot = specify_snapshot_ == nullptr ? false : true;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              use_specify_snapshot_,
+              isolation_level_,
+              serialize_specify_snapshot);
+  if (serialize_specify_snapshot) {
+    OB_UNIS_ADD_LEN(*specify_snapshot_);
+  }
+  return len;
+}
 
 ObDASTaskArg::ObDASTaskArg()
   : timeout_ts_(0),
@@ -698,6 +776,26 @@ int DASOpResultIter::reset_wild_datums_ptr()
     if (wild_datum_info_->lookup_iter_ != nullptr) {
       wild_datum_info_->lookup_iter_->reset_wild_datums_ptr();
     }
+  }
+  return ret;
+}
+
+int ObDASGTSOptInfo::init(transaction::ObTxIsolationLevel isolation_level)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  void *buf2 = nullptr;
+  if (OB_ISNULL(buf = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else if (OB_ISNULL(buf2 = alloc_.alloc(sizeof(ObTxReadSnapshot)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for ObTxReadSnapshot", K(ret), K(sizeof(ObTxReadSnapshot)));
+  } else {
+    use_specify_snapshot_ = true;
+    isolation_level_ = isolation_level;
+    specify_snapshot_ = new(buf) ObTxReadSnapshot();
+    response_snapshot_ = new(buf2) ObTxReadSnapshot();
   }
   return ret;
 }
