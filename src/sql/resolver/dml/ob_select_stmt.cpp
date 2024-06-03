@@ -191,8 +191,6 @@ int ObSelectStmt::assign(const ObSelectStmt &other)
     LOG_WARN("assign other rollup directions.", K(ret));
   } else if (OB_FAIL(search_by_items_.assign(other.search_by_items_))) {
     LOG_WARN("assign search by items failed", K(ret));
-  } else if (OB_FAIL(sample_infos_.assign(other.sample_infos_))) {
-    LOG_WARN("assign sample scan infos failed", K(ret));
   } else if (OB_FAIL(set_query_.assign(other.set_query_))) {
     LOG_WARN("assign set query failed", K(ret));
   } else if (OB_FAIL(for_update_dml_info_.assign(other.for_update_dml_info_))) {
@@ -273,8 +271,6 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
                                                        other.order_items_,
                                                        order_items_))) {
     LOG_WARN("deep copy order items failed", K(ret));
-  } else if (OB_FAIL(sample_infos_.assign(other.sample_infos_))) {
-    LOG_WARN("failed to assign sample infos", K(ret));
   } else if (OB_FAIL(deep_copy_stmt_objects<ObGroupingSetsItem>(expr_copier,
                                                                 other.grouping_sets_items_,
                                                                 grouping_sets_items_))) {
@@ -871,32 +867,6 @@ int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
     }
   }
   return ret;
-}
-
-const SampleInfo *ObSelectStmt::get_sample_info_by_table_id(uint64_t table_id) const
-{
-  const SampleInfo *sample_info = nullptr;
-  int64_t num = sample_infos_.count();
-  for (int64_t i = 0; i < num; ++i) {
-    if (sample_infos_.at(i).table_id_ == table_id) {
-      sample_info = &sample_infos_.at(i);
-      break;
-    }
-  }
-  return sample_info;
-}
-
-SampleInfo *ObSelectStmt::get_sample_info_by_table_id(uint64_t table_id)
-{
-  SampleInfo *sample_info = nullptr;
-  int64_t num = sample_infos_.count();
-  for (int64_t i = 0; i < num; ++i) {
-    if (sample_infos_.at(i).table_id_ == table_id) {
-      sample_info = &sample_infos_.at(i);
-      break;
-    }
-  }
-  return sample_info;
 }
 
 bool ObSelectStmt::is_spj() const

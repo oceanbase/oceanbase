@@ -99,6 +99,13 @@ struct ObColumnResolveStat
   bool is_set_orig_default_value_;
 };
 
+struct ObDefaultValueRes
+{
+  ObDefaultValueRes(common::ObObjParam &value): is_literal_(true), value_(value) {}
+  bool is_literal_;
+  common::ObObjParam &value_;
+};
+
 class ObDDLResolver : public ObStmtResolver
 {
 public:
@@ -179,7 +186,7 @@ public:
       const share::schema::ObColumnSchemaV2 &column_schema);
   int resolve_default_value(
       ParseNode *def_node,
-      common::ObObjParam &default_value);
+      ObDefaultValueRes &resolve_res);
   static int check_and_fill_column_charset_info(
       share::schema::ObColumnSchemaV2 &column,
       const common::ObCharsetType table_charset_type,

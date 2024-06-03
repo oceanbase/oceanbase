@@ -2196,7 +2196,8 @@ int ObPL::execute(ObExecContext &ctx,
           db_name = db_schema->get_database_name_str();
         }
       }
-      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id) && !is_valid_id(dblink_id)) {
+      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id) && !is_valid_id(dblink_id)
+         && !ObTriggerInfo::is_trigger_package_id(package_id)) {
         OZ (check_exec_priv(ctx, db_name, routine));
       }
     }
@@ -3810,6 +3811,7 @@ int ObPL::check_exec_priv(
   uint64_t func_id = OB_INVALID_ID;
   uint64_t db_id = OB_INVALID_ID;
   uint64_t tenant_id = OB_INVALID_ID;
+  bool need_check = false;
 
   CK (OB_NOT_NULL(routine));
   OX (pkg_id = routine->get_package_id());
@@ -3877,6 +3879,38 @@ int ObPL::check_exec_priv(
         OX (need_priv.obj_type_ = routine_info->is_procedure() ? ObObjectType::PROCEDURE : ObObjectType::FUNCTION);
         OZ (guard->check_routine_priv(session_priv, need_priv));
       }
+    }
+  }
+  // add check trigger priv
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && ObTriggerInfo::is_trigger_package_id(pkg_id) &&
+      OB_FAIL(exec_ctx.get_my_session()->check_feature_enable(
+      ObCompatFeatureType::MYSQL_TRIGGER_PRIV_CHECK, need_check))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (OB_SUCC(ret) && need_check) {
+    share::schema::ObSessionPrivInfo session_priv;
+    const ObTableSchema *table = NULL;
+    if (OB_FAIL(guard->get_session_priv_info(
+                                    exec_ctx.get_my_session()->get_priv_tenant_id(),
+                                    exec_ctx.get_my_session()->get_priv_user_id(),
+                                    exec_ctx.get_my_session()->get_database_name(),
+                                    session_priv))) {
+      LOG_WARN("fail to get_session_priv_info", K(ret));
+    } else if (OB_UNLIKELY(!session_priv.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
+              "user_id", session_priv.user_id_, K(ret));
+    } else {
+      ObNeedPriv need_priv;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      need_priv.db_ = database_name;
+      need_priv.priv_set_ = OB_PRIV_TRIGGER;
+      const ObTriggerInfo *trigger_info = NULL;
+      OZ (guard->get_trigger_info(tenant_id, ObTriggerInfo::get_package_trigger_id(pkg_id), trigger_info));
+      CK (OB_NOT_NULL(trigger_info));
+      OZ (guard->get_table_schema(tenant_id, trigger_info->get_base_object_id(), table));
+      CK (OB_NOT_NULL(table));
+      OX (need_priv.table_ = table->get_table_name());
+      OZ (guard->check_single_table_priv(session_priv, need_priv));
     }
   }
   return ret;

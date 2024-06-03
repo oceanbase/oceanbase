@@ -130,14 +130,12 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
     int64_t cond_type_count = param_num / 2;
     int64_t val_type_count = param_num / 2;
     ObExprResType tmp_res_type;
-    const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
     if (OB_FAIL(aggregate_result_type_for_case(
                   tmp_res_type,
                   types_stack,
                   cond_type_count,
-                  type_ctx.get_coll_type(),
                   lib::is_oracle_mode(),
-                  default_length_semantics,
+                  type_ctx,
                   FALSE, FALSE,
                   is_called_in_sql_))) {
       LOG_WARN("failed to get result type for cmp", K(ret));
@@ -145,9 +143,8 @@ int ObExprArgCase::calc_result_typeN(ObExprResType &type,
                          type,
                          types_stack + cond_type_count,
                          val_type_count,
-                         type_ctx.get_coll_type(),
                          lib::is_oracle_mode(),
-                         default_length_semantics,
+                         type_ctx,
                          true, false,
                          is_called_in_sql_))) {
       LOG_WARN("failed to get result type", K(ret));

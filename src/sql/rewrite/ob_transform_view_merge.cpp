@@ -325,10 +325,6 @@ int ObTransformViewMerge::do_view_merge_for_semi_right_table(ObDMLStmt *parent_s
   } else if (OB_FAIL(append(parent_stmt->get_check_constraint_items(),
                             child_stmt->get_check_constraint_items()))) {
     LOG_WARN("failed to append check constraint items", K(ret));
-  } else if (parent_stmt->is_select_stmt() &&
-              OB_FAIL(append(static_cast<ObSelectStmt *>(parent_stmt)->get_sample_infos(),
-                             child_stmt->get_sample_infos()))) {
-    LOG_WARN("failed to append exprs", K(ret));
   } else if (OB_FAIL(ObTransformUtils::adjust_pseudo_column_like_exprs(*parent_stmt))) {
     LOG_WARN("failed to adjust pseudo column like exprs", K(ret));
   } else if (OB_FAIL(parent_stmt->rebuild_tables_hash())) {
@@ -1139,10 +1135,6 @@ int ObTransformViewMerge::do_view_merge(ObDMLStmt *parent_stmt,
     } else if (OB_FAIL(append(parent_stmt->get_check_constraint_items(),
                               child_stmt->get_check_constraint_items()))) {
       LOG_WARN("failed to append check constraint items", K(ret));
-    } else if (parent_stmt->is_select_stmt() &&
-              OB_FAIL(append(static_cast<ObSelectStmt *>(parent_stmt)->get_sample_infos(),
-                             child_stmt->get_sample_infos()))) {
-      LOG_WARN("failed to append exprs", K(ret));
     } else if (OB_FAIL(ObTransformUtils::pull_up_subquery(parent_stmt, child_stmt))) {
       LOG_WARN("failed to pull up subquery", K(ret));
     } else if (OB_FAIL(parent_stmt->remove_from_item(table_item->table_id_))) {

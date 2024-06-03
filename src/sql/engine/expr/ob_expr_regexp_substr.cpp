@@ -98,7 +98,7 @@ int ObExprRegexpSubstr::calc_result_typeN(ObExprResType &type,
         if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 2))) {
           LOG_WARN("types are not compatible with binary.", K(ret));
         } else {
-          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx.get_coll_type());
+          ret = aggregate_charsets_for_string_result(type, real_types, 2, type_ctx);
           is_case_sensitive = ObCharset::is_bin_sort(type.get_collation_type());
         }
       }

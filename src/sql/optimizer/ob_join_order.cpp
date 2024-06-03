@@ -1767,8 +1767,9 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
       // sample scan doesn't support DML other than SELECT.
     } else {
       const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
-      const SampleInfo *sample_info = stmt->get_sample_info_by_table_id(table_id);
-      if (sample_info != NULL) {
+      const SampleInfo *sample_info = table_item->sample_info_;
+
+      if (OB_NOT_NULL(sample_info)) {
         ap->sample_info_ = *sample_info;
         ap->sample_info_.table_id_ = ap->get_index_table_id();
         ap->est_cost_info_.sample_info_ = ap->sample_info_;

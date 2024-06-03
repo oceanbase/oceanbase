@@ -1325,6 +1325,156 @@ int ObInnerTableSchema::innodb_metrics_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::role_table_grants_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_ROLE_TABLE_GRANTS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ROLE_TABLE_GRANTS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)   as (       select user_name, host, cast('' as char(128)), cast('' as char(128)), false       from oceanbase.__all_user       where tenant_id=0 and concat(user_name, '@', host)=current_user()       union       select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,              if ((role_graph.is_enabled                   or is_enabled_role(role_edges.from_user, role_edges.from_host)),                   true,                   false)       from mysql.role_edges role_edges join role_graph       on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host   )   select distinct     cast(tp.grantor as char(97)) as GRANTOR,     cast(tp.grantor_host as char(256)) as GRANTOR_HOST,     cast(u.user_name as char(32)) as GRANTEE,     cast(u.host as char(255)) as GRANTEE_HOST,     cast('def' as char(3)) as TABLE_CATALOG,     cast(tp.database_name as char(64)) as TABLE_SCHEMA,     cast(tp.table_name as char(64)) as TABLE_NAME,     substr(concat(case when tp.priv_alter > 0 then ',Alter' else '' end,             case when tp.priv_create > 0 then ',Create' else '' end,             case when tp.priv_delete > 0 then ',Delete' else '' end,             case when tp.priv_drop > 0 then ',Drop' else '' end,             case when tp.priv_grant_option > 0 then ',Grant' else '' end,             case when tp.priv_insert > 0 then ',Insert' else '' end,             case when tp.priv_update > 0 then ',Update' else '' end,             case when tp.priv_select > 0 then ',Select' else '' end,             case when tp.priv_index > 0 then ',Index' else '' end,             case when tp.priv_create_view > 0 then ',Create View' else '' end,             case when tp.priv_show_view > 0 then ',Show View' else '' end,             case when (tp.priv_others & 64) > 0 then ',References' else '' end),2) as PRIVILEGE_TYPE,     cast(if (tp.priv_grant_option > 0,'YES','NO') as char(3)) AS IS_GRANTABLE   from role_graph rg join oceanbase.__all_table_privilege tp join oceanbase.__all_user u   on tp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host   where rg.is_enabled and rg.to_user <> '' and tp.tenant_id = 0 and u.tenant_id = 0   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::role_column_grants_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_ROLE_COLUMN_GRANTS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ROLE_COLUMN_GRANTS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)   as (       select user_name, host, cast('' as char(128)), cast('' as char(128)), false       from oceanbase.__all_user       where tenant_id=0 and concat(user_name, '@', host)=current_user()       union       select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,             if ((role_graph.is_enabled or is_enabled_role(role_edges.from_user, role_edges.from_host)), true, false)       from mysql.role_edges role_edges join role_graph       on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host   )   select distinct     NULL as GRANTOR,     NULL as GRANTOR_HOST,     cast(u.user_name as char(32)) as GRANTEE,     cast(u.host as char(255)) as GRANTEE_HOST,     cast('def' as char(3)) as TABLE_CATALOG,     cast(cp.database_name as char(64)) as TABLE_SCHEMA,     cast(cp.table_name as char(64)) as TABLE_NAME,     cast(cp.column_name as char(64)) as COLUMN_NAME,     substr(concat(case when (cp.all_priv & 1) > 0 then ',Select' else '' end,                   case when (cp.all_priv & 2) > 0 then ',Insert' else '' end,                   case when (cp.all_priv & 4) > 0 then ',Update' else '' end,                   case when (cp.all_priv & 8) > 0 then ',References' else '' end), 2) as PRIVILEGE_TYPE,     cast(if (tp.priv_grant_option > 0,'YES','NO') as char(3)) AS IS_GRANTABLE   from  (role_graph rg join oceanbase.__all_user u join oceanbase.__all_column_privilege cp         on cp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host             and rg.is_enabled and rg.to_user <> '' and cp.tenant_id = 0 and u.tenant_id = 0)         left join         oceanbase.__all_table_privilege tp         on cp.database_name = tp.database_name and cp.table_name = tp.table_name             and cp.user_id = tp.user_id and tp.tenant_id = 0   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::role_routine_grants_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_ROLE_ROUTINE_GRANTS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_ROLE_ROUTINE_GRANTS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)   as (     select user_name, host, cast('' as char(128)), cast('' as char(128)), false     from oceanbase.__all_user     where tenant_id=0 and concat(user_name, '@', host)=current_user()     union     select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,           if ((role_graph.is_enabled or is_enabled_role(role_edges.from_user, role_edges.from_host)), true, false)     from mysql.role_edges role_edges join role_graph     on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host   )   select distinct     cast(rp.grantor as char(97)) as GRANTOR,     cast(rp.grantor_host as char(256)) as GRANTOR_HOST,     cast(u.user_name as char(32)) as GRANTEE,     cast(u.host as char(255)) as GRANTEE_HOST,     cast('def' as char(3)) AS SPECIFIC_CATALOG,     cast(rp.database_name as char(64)) AS SPECIFIC_SCHEMA,     cast(rp.routine_name as char(64)) AS SPECIFIC_NAME,     cast('def' as char(3))  AS ROUTINE_CATALOG,     cast(rp.database_name as char(64)) AS ROUTINE_SCHEMA,     cast(rp.routine_name as char(64)) AS ROUTINE_NAME,     substr(concat(case when (rp.all_priv & 1) > 0 then ',Execute' else '' end,                   case when (rp.all_priv & 2) > 0 then ',Alter Routine' else '' end,                   case when (rp.all_priv & 4) > 0 then ',Grant' else '' end), 2) AS PRIVILEGE_TYPE,     cast(if ((rp.all_priv & 4) > 0,'YES','NO') as char(3)) AS `IS_GRANTABLE`   from   role_graph rg join oceanbase.__all_routine_privilege rp join oceanbase.__all_user u   on     rp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host   where  rg.to_user <> '' and rg.is_enabled and u.tenant_id = 0 and rp.tenant_id = 0   )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::dba_scheduler_job_run_details_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

@@ -1614,7 +1614,7 @@ struct ObResolveContext
     is_variable_allowed_(true),
     is_need_print_(false),
     is_from_show_resolver_(false),
-    is_in_system_view_(false)
+    is_in_sys_view_(false)
   {
   }
 
@@ -1663,7 +1663,7 @@ struct ObResolveContext
   bool is_variable_allowed_;
   bool is_need_print_;
   bool is_from_show_resolver_;
-  bool is_in_system_view_;
+  bool is_in_sys_view_;
 };
 
 typedef ObResolveContext<ObRawExprFactory> ObExprResolveContext;

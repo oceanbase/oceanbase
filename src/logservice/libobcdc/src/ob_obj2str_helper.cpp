@@ -91,6 +91,9 @@ int ObObj2strHelper::init_ob_charset_utils()
     OBLOG_LOG(ERROR, "failed to init ObNumberConstValue", KR(ret));
   } else if (OB_FAIL(sql::ARITH_RESULT_TYPE_ORACLE.init())) {
     OBLOG_LOG(ERROR, "failed to init ORACLE_ARITH_RESULT_TYPE", KR(ret));
+  } else if (OB_FAIL(ObCharset::init_charset())) {
+    SQL_LOG(ERROR, "fail to init charset", K(ret));
+  //pre-generate charset const str tab should be done after init_charset
   } else if (OB_FAIL(ObCharsetUtils::init(*allocator))) {
     OBLOG_LOG(ERROR, "fail to init ObCharsetUtils", KR(ret));
   }

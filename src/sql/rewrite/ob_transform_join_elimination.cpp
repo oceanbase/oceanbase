@@ -1536,6 +1536,9 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                         foreign_key_info,
                                                         all_primary_key))) {
       LOG_WARN("failed to check all column primary key", K(ret));
+    } else if (source_table->is_has_sample_info()) {
+      // do nothing
+      OPT_TRACE("table has sample info", K(source_table->table_id_));
     } else if (all_primary_key) {
       can_be_eliminated = true;
     } else {
@@ -3213,6 +3216,8 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
   } else if (OB_FAIL(check_all_column_primary_key(target_stmt, target_table->table_id_,
                                                   foreign_key_info, all_primary_key))) {
     LOG_WARN("failed to check all column primary key", K(ret));
+  } else if (source_table->is_has_sample_info()) {
+    OPT_TRACE("table has sample info", K(source_table->table_id_));
   } else if (all_primary_key) {
     can_be_eliminated = true;
   } else {

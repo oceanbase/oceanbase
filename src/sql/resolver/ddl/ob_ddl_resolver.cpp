@@ -43,6 +43,7 @@
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/table/ob_ttl_util.h"
+#include "common/ob_smart_call.h"
 namespace oceanbase
 {
 using namespace common;
@@ -280,7 +281,7 @@ int update_datetime_default_value(ObObjParam &default_value, ParseNode &def_val,
 
 int ObDDLResolver::resolve_default_value(ParseNode *def_node,
                                         //  const ObObjType column_data_type,
-                                         ObObjParam &default_value)
+                                         ObDefaultValueRes &resolve_res)
 {
   int ret = OB_SUCCESS;
   ObString tmp_str;
@@ -289,6 +290,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
   int16_t scale = -1;
   ObIAllocator *name_pool = NULL;
   ParseNode *def_val = NULL;
+  ObObjParam &default_value = resolve_res.value_;
+  resolve_res.is_literal_ = true;
   if (NULL != def_node) {
     def_val = def_node;
     if (def_node->type_ == T_CONSTR_DEFAULT
@@ -507,14 +510,21 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         ret = update_datetime_default_value(default_value, *def_val, ObTimestampType, ObActionFlag::OP_DEFAULT_NOW_FLAG);
         break;
       }
+      case T_DEFAULT_INT: {
+        default_value.set_int(def_val->value_);
+        default_value.set_param_meta();
+        break;
+      }
       case T_OP_POS:
-        ret = resolve_default_value(def_val->children_[0], default_value);
+        ret = SMART_CALL(resolve_default_value(def_val->children_[0], resolve_res));
         break;
       case T_OP_NEG: {
         ObObjParam old_obj;
-        ret = resolve_default_value(def_val->children_[0], old_obj);
+        ret = SMART_CALL(resolve_default_value(def_val->children_[0], resolve_res));
         if (OB_FAIL(ret)) {
           SQL_RESV_LOG(WARN, "Resolve default const value failed", K(ret));
+        } else if (!resolve_res.is_literal_) {
+          // do nothing
         } else if (ObIntType == old_obj.get_type()) {
           int64_t value = 0;
           old_obj.get_int(value);
@@ -561,6 +571,146 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         //oracle 模式default值直接把用户输入当做string存储，因此不会走到这个路径
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify default value for interval_ym/interval_ds/urowid");
+        break;
+      }
+      case T_OP_ADD:
+      case T_OP_MINUS:
+      case T_OP_MUL:
+      case T_OP_DIV:
+      case T_OP_MOD:
+      case T_OP_EQ:
+      case T_OP_NSEQ:
+      case T_OP_LE:
+      case T_OP_LT:
+      case T_OP_GE:
+      case T_OP_GT:
+      case T_OP_NE:
+      case T_FUN_SYS_INTERVAL:
+      case T_OP_IN:
+      case T_OP_NOT_IN:
+      case T_OP_CNN:
+      case T_WHEN:
+      case T_FUN_SYS_IF:
+      case T_FUN_SYS_ISNULL: {
+        resolve_res.is_literal_ = false;
+        ObObjParam first;
+        ObDefaultValueRes first_res(first);
+        ObObjParam second;
+        ObDefaultValueRes second_res(second);
+        if (def_val->num_child_ != 2) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[0], first_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[1], second_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        }
+        break;
+      }
+      case T_OP_BTW:
+      case T_OP_NOT_BTW:
+      case T_CASE: {
+        resolve_res.is_literal_ = false;
+        ObObjParam first;
+        ObDefaultValueRes first_res(first);
+        ObObjParam second;
+        ObDefaultValueRes second_res(second);
+        ObObjParam third;
+        ObDefaultValueRes third_res(third);
+        if (def_val->num_child_ != 3) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[0], first_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[1], second_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[2], third_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        }
+        break;
+      }
+      case T_OP_NOT:
+      case T_OP_BIT_NEG:
+      case T_FUN_SYS_UTC_TIMESTAMP:
+      case T_FUN_SYS_UTC_TIME:
+      case T_FUN_SYS_SYSDATE: {
+        resolve_res.is_literal_ = false;
+        ObObjParam first;
+        ObDefaultValueRes first_res(first);
+        if (def_val->num_child_ != 1) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[0], first_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        }
+        break;
+      }
+      case T_FUN_SYS: {
+        resolve_res.is_literal_ = false;
+        ObObjParam func_ident;
+        ObDefaultValueRes func_res(func_ident);
+        if (def_val->num_child_ < 1) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[0], func_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        } else if (def_val->num_child_ == 2) {
+          ObObjParam argument;
+          ObDefaultValueRes argument_res(argument);
+          if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[1], argument_res)))) {
+            SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+          }
+        }
+        break;
+      }
+      case T_OP_LIKE: {
+        resolve_res.is_literal_ = false;
+        int child_num = def_val->num_child_;
+        ObObjParam value;
+        ObDefaultValueRes value_res(value);
+        ObObjParam pattern;
+        ObDefaultValueRes pattern_res(pattern);
+        if (def_val->num_child_ < 2) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[0], value_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[1], pattern_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        }
+        if (child_num == 3) {
+          ObObjParam escape;
+          ObDefaultValueRes escape_res(escape);
+          if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[2], escape_res)))) {
+            SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+          }
+        }
+        break;
+      }
+      case T_EXPR_LIST:
+      case T_LINK_NODE:
+      case T_WHEN_LIST: {
+        resolve_res.is_literal_ = false;
+        int num_child = def_val->num_child_;
+        for (int i = 0; OB_SUCC(ret) && i<num_child; ++i) {
+          ObObjParam expr;
+          ObDefaultValueRes expr_res(expr);
+          if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[i], expr_res)))) {
+            SQL_RESV_LOG(WARN, "Resolve expression list failed", K(ret));
+          }
+        }
+        break;
+      }
+      case T_FUN_SYS_UTC_DATE:
+      case T_FUN_SYS_CUR_DATE:
+      case T_IDENT: {
+        resolve_res.is_literal_ = false;
+        break;
+      }
+      case T_COLUMN_REF: {
+        resolve_res.is_literal_ = false;
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Column reference in default value expression");
         break;
       }
       default:
@@ -2965,6 +3115,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             } else {
               default_value.set_varchar(expr_str);
               default_value.set_collation_type(ObCharset::get_system_collation());
+              default_value.set_collation_level(CS_LEVEL_COERCIBLE);
               if (OB_FAIL(column.set_cur_default_value(default_value))) {
                 LOG_WARN("set current default value failed", K(ret));
               } else if ((node->children_[4] != NULL && node->children_[4]->type_ == T_STORED_COLUMN)
@@ -2997,6 +3148,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
       } else {
         default_value.set_varchar(mock_gen_column_str);
         default_value.set_collation_type(ObCharset::get_system_collation());
+        default_value.set_collation_level(CS_LEVEL_COERCIBLE);
         if (OB_FAIL(column.set_cur_default_value(default_value))) {
           LOG_WARN("set current default value failed", K(ret));
         } else {
@@ -3206,6 +3358,7 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
     } else {
       default_value.set_varchar(expr_str);
       default_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      default_value.set_collation_level(CS_LEVEL_COERCIBLE);
       default_value.set_param_meta();
       if (T_CONSTR_ORIG_DEFAULT == attr_node->type_) {
         ret = OB_NOT_SUPPORTED;
@@ -3219,11 +3372,35 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
       }
     }
   } else {
+    ObDefaultValueRes resolve_res(default_value);
     if (1 != attr_node->num_child_ || NULL == attr_node->children_[0]) {
       ret = OB_ERR_UNEXPECTED;
       SQL_RESV_LOG(WARN, "resolve default value failed", K(ret));
-    } else if (OB_FAIL(resolve_default_value(attr_node, default_value))) {
+    } else if (OB_FAIL(resolve_default_value(attr_node, resolve_res))) {
       SQL_RESV_LOG(WARN, "resolve default value failed", K(ret));
+    } else if (!resolve_res.is_literal_) {
+      // default value expression is not literal
+      uint64_t data_version = 0;
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is NULL", KR(ret));
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+        LOG_WARN("fail to get tenant data version", KR(ret), K(session_info_->get_effective_tenant_id()), K(data_version));
+      } else if (data_version >= DATA_VERSION_4_2_4_0) {
+        ObString expr_str(attr_node->str_len_, attr_node->str_value_);
+        if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                              *allocator_, session_info_->get_dtc_params(), expr_str))) {
+          LOG_WARN("fail to copy and convert string charset", K(ret));
+        } else {
+          default_value.set_varchar(expr_str);
+          default_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+          default_value.set_param_meta();
+          column.add_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
+        }
+      } else {
+        ret = OB_ERR_ILLEGAL_TYPE;
+        SQL_RESV_LOG(WARN, "Illegal type of default value",K(ret));
+      }
     } else if (IS_DEFAULT_NOW_OBJ(default_value)) {
       if ((ObDateTimeTC != column.get_data_type_class() && ObOTimestampTC != column.get_data_type_class())
           || default_value.get_scale() != column.get_accuracy().get_scale()) {
@@ -4931,7 +5108,7 @@ int ObDDLResolver::check_and_fill_column_charset_info(ObColumnSchemaV2 &column,
                                                       const ObCollationType table_collation_type) {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
-  ObCollationType collation_type = CS_TYPE_INVALID;;
+  ObCollationType collation_type = CS_TYPE_INVALID;
   if (CHARSET_INVALID == table_charset_type || CS_TYPE_INVALID == table_collation_type) {
     ret = OB_ERR_UNEXPECTED;
     SQL_RESV_LOG(WARN, "invalid column charset info!", K(ret));
@@ -5600,6 +5777,7 @@ int ObDDLResolver::print_expr_to_default_value(ObRawExpr &expr,
     } else if (FALSE_IT(expr_def.assign_ptr(expr_str_buf, static_cast<int32_t>(pos)))) {
     } else if (FALSE_IT(default_value.set_varchar(expr_def))) {
     } else if (FALSE_IT(default_value.set_collation_type(ObCharset::get_system_collation()))) {
+    } else if (FALSE_IT(default_value.set_collation_level(CS_LEVEL_COERCIBLE))) {
     } else if (OB_FAIL(column.set_cur_default_value(default_value))) {
       LOG_WARN("set orig default value failed", K(ret));
     } else {
@@ -5858,8 +6036,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     common::ObObj tmp_dest_obj;
     const ObObj *tmp_res_obj = NULL;
     common::ObObj tmp_dest_obj_null;
-    const bool is_strict = true;//oracle mode
-
+    const bool is_strict = true;
     ObObjType data_type = column.get_data_type();
     const ObAccuracy &accuracy = column.get_accuracy();
     ObCollationType collation_type = column.get_collation_type();

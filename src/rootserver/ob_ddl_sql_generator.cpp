@@ -115,6 +115,12 @@ int ObDDLSqlGenerator::get_priv_name(const int64_t priv, const char *&name)
       name = "SHUTDOWN"; break;
     case OB_PRIV_RELOAD:
       name = "RELOAD"; break;
+    case OB_PRIV_CREATE_ROLE:
+      name = "CREATE ROLE"; break;
+    case OB_PRIV_DROP_ROLE:
+      name = "DROP ROLE"; break;
+    case OB_PRIV_TRIGGER:
+      name = "TRIGGER"; break;
     default: {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid priv", K(ret), K(priv));

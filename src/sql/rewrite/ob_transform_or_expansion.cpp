@@ -3387,6 +3387,8 @@ int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool
       LOG_WARN("unexpected null", K(ret));
     } else if (table_item->is_fake_cte_table()) {
       is_stmt_valid = false;
+    } else if (table_item->is_has_sample_info()) {
+      is_stmt_valid = false;
     }
   }
   return ret;

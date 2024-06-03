@@ -4032,7 +4032,7 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
                                           session, false, cm_zf, local_vars, local_var_id));
       CK(OB_NOT_NULL(new_expr = dynamic_cast<ObRawExpr*>(cast_expr)));
     }
-    LOG_DEBUG("in try_add_cast", K(ret), K(dst_type), K(cm));
+    LOG_DEBUG("in try_add_cast", K(ret), K(dst_type), K(src_type) ,K(cm));
   }
   return ret;
 }
@@ -4209,10 +4209,18 @@ int ObRawExprUtils::create_cast_expr(ObRawExprFactory &expr_factory,
     } else {
       OZ(create_real_cast_expr(expr_factory, src_expr, dst_type, func_expr, session));
     }
+    if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+      if (dst_type.get_collation_level() == CS_LEVEL_INVALID) {
+        LOG_WARN("aggregation level is CS_TYPE_INVALID", K(dst_type));
+      } else if (OB_FAIL(ObSQLUtils::set_cs_level_cast_mode(dst_type.get_collation_level(), cm))) {
+        LOG_WARN("failed to set cs level cast mode", K(ret));
+      }
+    }
     if (NULL != extra_cast) {
       OX(extra_cast->set_extra(cm));
       OZ(extra_cast->add_flag(IS_INNER_ADDED_EXPR));
     }
+
     CK(OB_NOT_NULL(func_expr));
     OX(func_expr->set_extra(cm));
     OZ(func_expr->add_flag(IS_INNER_ADDED_EXPR));
@@ -4262,6 +4270,7 @@ int ObRawExprUtils::setup_extra_cast_utf8_type(const ObExprResType &type,
   } else {
     utf8_type = type;
     utf8_type.set_collation_type(ObCharset::get_system_collation());
+    utf8_type.set_collation_level(type.get_collation_level());
     if (ObNVarchar2Type == type.get_type()) {
       utf8_type.set_type(ObVarcharType);
     } else if (ObNCharType == type.get_type()) {
@@ -4590,6 +4599,7 @@ int ObRawExprUtils::create_type_to_str_expr(ObRawExprFactory &expr_factory,
         LOG_WARN("col_accuracy_expr is NULL", K(ret));
       } else {
         col_accuracy_expr->set_collation_type(src_expr->get_collation_type());
+        col_accuracy_expr->set_collation_level(src_expr->get_collation_level());
         col_accuracy_expr->set_accuracy(src_expr->get_accuracy());
       }
     }

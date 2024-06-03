@@ -409,7 +409,20 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
-      case T_FLUSH_PRIVILEGES: {
+      case T_FLUSH_PRIVILEGES:
+      case T_INSTALL_PLUGIN:
+      case T_UNINSTALL_PLUGIN:
+      case T_FLUSH_MOCK:
+      case T_HANDLER_MOCK:
+      case T_FLUSH_MOCK_LIST:
+      case T_SHOW_PLUGINS:
+      case T_CREATE_SERVER:
+      case T_ALTER_SERVER:
+      case T_DROP_SERVER:
+      case T_CREATE_LOGFILE_GROUP:
+      case T_ALTER_LOGFILE_GROUP:
+      case T_DROP_LOGFILE_GROUP:
+      {
         REGISTER_STMT_RESOLVER(Mock);
         break;
       }
@@ -735,7 +748,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CREATE_TRIGGER:
       case T_SHOW_ENGINE:
       case T_SHOW_OPEN_TABLES:
-      case T_SHOW_SEQUENCES: {
+      case T_SHOW_SEQUENCES:
+      case T_SHOW_CREATE_USER:
+      case T_SHOW_CHECK_TABLE: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }

@@ -335,6 +335,11 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                     SHARE_SCHEMA_LOG(WARN, "fail to print DEFAULT now()", K(ret));
                   }
                 }
+              } else if (col->is_default_expr_v2_column()) {
+                ObString default_value = col->get_cur_default_value().get_string();
+                if (OB_FAIL(databuff_printf(buf, buf_len, pos, " DEFAULT %.*s", default_value.length(), default_value.ptr()))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", K(default_value), K(ret));
+                }
               } else {
                 if (OB_FAIL(databuff_printf(buf, buf_len, pos, " DEFAULT "))) {
                   SHARE_SCHEMA_LOG(WARN, "fail to print DEFAULT", K(ret));
@@ -4966,7 +4971,8 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
                                           char *buf,
                                           const int64_t &buf_len,
                                           int64_t &pos,
-                                          bool is_role)
+                                          bool is_role,
+                                          bool print_password_secret /* default = false */)
 {
   int ret = OB_SUCCESS;
   common::ObArray<const ObUserInfo *> user_schemas;
@@ -4982,23 +4988,29 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
     SHARE_SCHEMA_LOG(WARN, "fail to print user name", K(user_name), K(ret));
   } else if (OB_FAIL(print_identifier(buf, buf_len, pos, user_name, is_oracle_mode))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print user name", K(user_name), K(ret));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to print user name", K(user_name), K(ret));
-  } else if (host_name.compare(OB_DEFAULT_HOST_NAME) != 0) {
+  } else if (!is_oracle_mode) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "@"))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print host name", K(host_name), K(ret));
     } else if (OB_FAIL(print_identifier(buf, buf_len, pos, host_name, is_oracle_mode))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print host name", K(host_name), K(ret));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print host name", K(host_name), K(ret));
     }
   }
 
   if (OB_SUCC(ret) && user_passwd.length() > 0) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,
-        is_oracle_mode ? "IDENTIFIED BY VALUES \"%.*s\" " : "IDENTIFIED BY PASSWORD '%.*s' ",
-        user_passwd.length(), user_passwd.ptr()))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print user passwd", K(user_name), K(user_passwd), K(ret));
+    if (is_oracle_mode) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " IDENTIFIED BY VALUES \"%.*s\"",
+                                  user_passwd.length(), user_passwd.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print user passwd", K(user_name), K(user_passwd), K(ret));
+      }
+    } else {
+      if (print_password_secret &&
+          OB_FAIL(databuff_printf(buf, buf_len, pos, " IDENTIFIED BY PASSWORD '<secret>'"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print user passwd", K(user_name), K(user_passwd), K(ret));
+      } else if (!print_password_secret &&
+                 OB_FAIL(databuff_printf(buf, buf_len, pos, " IDENTIFIED BY PASSWORD '%.*s'",
+                         user_passwd.length(), user_passwd.ptr()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print user passwd", K(user_name), K(user_passwd), K(ret));
+      }
     }
   }
 
@@ -5013,13 +5025,11 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
         SHARE_SCHEMA_LOG(WARN, "get profile schena failed", K(ret));
       }
     } else {
-      if (OB_FAIL(databuff_printf(buf, buf_len, pos, "PROFILE "))) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " PROFILE "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print profile", K(ret));
       } else if (OB_FAIL(print_identifier(buf, buf_len, pos,
                                           profile_schema->get_profile_name_str(),
                                           is_oracle_mode))) {
-        SHARE_SCHEMA_LOG(WARN, "fail to print profile", K(ret));
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print profile", K(ret));
       }
     }
@@ -5031,36 +5041,36 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
         break;
       }
       case ObSSLType::SSL_TYPE_NONE: {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE NONE "))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE NONE"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         }
         break;
       }
       case ObSSLType::SSL_TYPE_ANY: {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE SSL "))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE SSL"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         }
         break;
       }
       case ObSSLType::SSL_TYPE_X509: {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE X509 "))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE X509"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         }
         break;
       }
       case ObSSLType::SSL_TYPE_SPECIFIED: {
-        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE "))) {
+        if (OB_FAIL(databuff_printf(buf, buf_len, pos, " REQUIRE"))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         } else if (!user_info.get_ssl_cipher_str().empty()
-                  && OB_FAIL(databuff_printf(buf, buf_len, pos, "CIPHER '%s' ",
+                  && OB_FAIL(databuff_printf(buf, buf_len, pos, " CIPHER '%s'",
                                             user_info.get_ssl_cipher()))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         } else if (!user_info.get_x509_issuer_str().empty()
-                  && OB_FAIL(databuff_printf(buf, buf_len, pos, "ISSUER '%s' ",
+                  && OB_FAIL(databuff_printf(buf, buf_len, pos, " ISSUER '%s'",
                                             user_info.get_x509_issuer()))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         } else if (!user_info.get_x509_subject_str().empty()
-                  && OB_FAIL(databuff_printf(buf, buf_len, pos, "SUBJECT '%s' ",
+                  && OB_FAIL(databuff_printf(buf, buf_len, pos, " SUBJECT '%s'",
                                             user_info.get_x509_subject()))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print ssl info", K(user_name), K(ret));
         }
@@ -5069,6 +5079,24 @@ int ObSchemaPrinter::print_user_definition(uint64_t tenant_id,
       default: {
         ret = OB_ERR_UNEXPECTED;
         SHARE_SCHEMA_LOG(WARN, "unknown ssl type", K(user_info.get_ssl_type()), K(ret));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (0 != user_info.get_max_connections() || 0 != user_info.get_max_user_connections()) {
+      if (OB_FAIL(databuff_printf(buf, buf_len, pos, " WITH"))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print with info", K(ret));
+      } else if (0 != user_info.get_max_connections() &&
+                 OB_FAIL(databuff_printf(buf, buf_len, pos, " MAX_CONNECTIONS_PER_HOUR %lu",
+                                         user_info.get_max_connections()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print get max_connections",
+                         K(user_info.get_max_connections()), K(ret));
+      } else if (0 != user_info.get_max_user_connections() &&
+                 OB_FAIL(databuff_printf(buf, buf_len, pos, " MAX_USER_CONNECTIONS %lu",
+                                         user_info.get_max_user_connections()))) {
+        SHARE_SCHEMA_LOG(WARN, "fail to print get_max_user_connections",
+                         K(user_info.get_max_user_connections()), K(ret));
       }
     }
   }

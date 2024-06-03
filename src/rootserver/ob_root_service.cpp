@@ -6128,7 +6128,7 @@ int ObRootService::revoke_routine(const ObRevokeRoutineArg &arg)
                             (arg.obj_type_ == (int64_t)ObObjectType::PROCEDURE) ? ObRoutineType::ROUTINE_PROCEDURE_TYPE
                            : (arg.obj_type_ == (int64_t)ObObjectType::FUNCTION) ? ObRoutineType::ROUTINE_FUNCTION_TYPE
                            : ObRoutineType::INVALID_ROUTINE_TYPE);
-    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_));
+    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_, arg.grantor_, arg.grantor_host_));
   }
   return ret;
 }

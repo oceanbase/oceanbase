@@ -333,6 +333,11 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     LOG_WARN("invalid row_dimension_", K(row_dimension_), K(ret));
   } else if (OB_FAIL(get_cast_type(type2, cast_raw_expr->get_extra(), dst_type))) {
     LOG_WARN("get cast dest type failed", K(ret));
+  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
+                                                             type1.get_collation_level(),
+                                                             cs_level))) {
+    LOG_WARN("failed to get collation level", K(ret));
+  } else if (FALSE_IT(dst_type.set_collation_level(cs_level))) {
   } else if (OB_FAIL(adjust_udt_cast_type(type1, dst_type, type_ctx))) {
      LOG_WARN("adjust udt cast sub type failed", K(ret));
   } else if (OB_UNLIKELY(!cast_supported(type1.get_type(), type1.get_collation_type(),
@@ -353,10 +358,6 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
     }
   } else if (FALSE_IT(is_explicit_cast = CM_IS_EXPLICIT_CAST(cast_raw_expr->get_extra()))) {
   // check cast supported in cast_map but not support here.
-  } else if (OB_FAIL(ObSQLUtils::get_cs_level_from_cast_mode(cast_raw_expr->get_extra(),
-                                                             type1.get_collation_level(),
-                                                             cs_level))) {
-    LOG_WARN("failed to get collation level", K(ret));
   } else if (!check_cast_allowed(type1.get_type(), type1.get_collation_type(),
                                  dst_type.get_type(), dst_type.get_collation_type(),
                                  is_explicit_cast)) {
@@ -423,7 +424,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       int32_t length = 0;
       if (ob_is_string_or_lob_type(dst_type.get_type()) || ob_is_raw(dst_type.get_type()) || ob_is_json(dst_type.get_type())
           || ob_is_geometry(dst_type.get_type())) {
-        type.set_collation_level(cs_level);
+        type.set_collation_level(dst_type.get_collation_level());
         int32_t len = dst_type.get_length();
         int16_t length_semantics = ((dst_type.is_string_or_lob_locator_type() || dst_type.is_json())
             ? dst_type.get_length_semantics()
@@ -578,6 +579,7 @@ int ObExprCast::calc_result_type2(ObExprResType &type,
       // to add enum_to_str(), so we still set the calc type but skip add implicit cast in decuding.
       type1.set_calc_type(type.get_type());
       type1.set_calc_collation_type(type.get_collation_type());
+      type1.set_calc_collation_level(type.get_collation_level());
       type1.set_calc_accuracy(type.get_accuracy());
     }
   }

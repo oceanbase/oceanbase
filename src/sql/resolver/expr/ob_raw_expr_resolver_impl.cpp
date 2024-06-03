@@ -264,6 +264,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, c_expr))) {
           LOG_WARN("fail to create raw expr", K(ret));
         } else {
+          ObObj val;
+          val.set_null();
+          c_expr->set_value(val);
+          c_expr->set_param(val);
           expr = c_expr;
         }
         break;
@@ -426,7 +430,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                 } else {
                   coll_type = ObCharset::get_default_collation(charset_type);
                 }
-              } else if (ctx_.is_in_system_view_) {
+              } else if (ctx_.is_in_sys_view_) {
                 //for mysql system view, cast char type always has default collation
                 coll_type = ObCharset::get_system_collation();
               } else {
@@ -8413,7 +8417,7 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool is_internal = false;
   if (OB_FAIL(ret)) {
   } else if (ctx_.session_info_->is_inner()
-            || is_sys_view(ctx_.view_ref_id_)
+            || ctx_.is_in_sys_view_
             || ctx_.is_from_show_resolver_) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {

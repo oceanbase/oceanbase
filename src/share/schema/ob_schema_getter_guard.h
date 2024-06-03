@@ -1107,7 +1107,8 @@ private:
                     const common::ObString &db,
                     const ObPrivSet need_priv_set);
   int check_user_priv(const ObSessionPrivInfo &session_priv,
-                      const ObPrivSet priv_set);
+                      const ObPrivSet priv_set,
+                      bool check_all = true);
   int verify_db_read_only(const uint64_t tenant_id,
                           const ObNeedPriv &need_priv);
   int verify_table_read_only(const uint64_t tenant_id,

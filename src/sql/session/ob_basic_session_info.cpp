@@ -3618,6 +3618,18 @@ int ObBasicSessionInfo::is_serial_set_order_forced(bool &force_set_order, bool i
   return ret;
 }
 
+int ObBasicSessionInfo::is_old_charset_aggregation_enabled(bool &is_enable) const
+{
+  int ret = OB_SUCCESS;
+  is_enable = false;
+  if (lib::is_oracle_mode()) {
+    //do nothing
+  } else {
+    ret = get_bool_sys_var(SYS_VAR__ENABLE_OLD_CHARSET_AGGREGATION, is_enable);
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_storage_estimation_enabled(bool &storage_estimation_enabled) const
 {
   int ret = OB_SUCCESS;
@@ -5432,6 +5444,11 @@ int ObBasicSessionInfo::get_collation_database(ObCollationType &collation_databa
 int ObBasicSessionInfo::get_collation_server(ObCollationType &collation_server) const
 {
   return get_collation_sys_var(SYS_VAR_COLLATION_SERVER, collation_server);
+}
+
+int ObBasicSessionInfo::get_default_collation_for_utf8mb4(ObCollationType &collation_server) const
+{
+  return get_collation_sys_var(SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4, collation_server);
 }
 
 int ObBasicSessionInfo::get_capture_plan_baseline(bool &v)  const

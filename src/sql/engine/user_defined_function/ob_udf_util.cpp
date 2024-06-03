@@ -201,11 +201,11 @@ int ObUdfUtil::calc_udf_result_type(common::ObIAllocator &allocator,
         case STRING_RESULT: {
           ObExprResType calc_type;
           calc_type.set_varchar();
-          OZ(ObExprOperator::aggregate_charsets_for_string_result(
-                  calc_type, param_types + i, 1, type_ctx.get_coll_type()));
+          OZ(ObExprOperator::aggregate_charsets_for_string_result(calc_type, param_types + i, 1, type_ctx));
           if (OB_SUCC(ret)) {
             param_types[i].set_calc_type(ObVarcharType);
             param_types[i].set_calc_collation_type(calc_type.get_collation_type());
+            param_types[i].set_calc_collation_level(calc_type.get_collation_level());
           }
           break;
         }

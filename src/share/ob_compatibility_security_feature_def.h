@@ -20,4 +20,8 @@ DEF_COMPAT_CONTROL_FEATURE(MYSQL_SET_VAR_PRIV_ENHANCE, "check privilege for set 
     CLUSTER_VERSION_4_2_4_0)
 DEF_COMPAT_CONTROL_FEATURE(MYSQL_USER_REVOKE_ALL_ENHANCE, "use create_user to check privilege for revoke all from user",
     CLUSTER_VERSION_4_2_4_0)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_PRIV_ENHANCE_4_2_4_0, "add privilege check to some command",
+    CLUSTER_VERSION_4_2_4_0)
+DEF_COMPAT_CONTROL_FEATURE(MYSQL_TRIGGER_PRIV_CHECK, "add trigger privilege check",
+    CLUSTER_VERSION_4_2_4_0)
 #endif

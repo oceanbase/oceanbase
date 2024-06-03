@@ -50,47 +50,47 @@ ln -sf ../../../close_modules/oracle_parser/sql/parser/sql_parser_oracle_mode.l 
 
 # generate oracle latin1 sql_parser(do not support multi_byte_space、multi_byte_comma、multi_byte_left_parenthesis、multi_byte_right_parenthesis)
 ##1.copy lex and yacc files
-cat ../../../src/sql/parser/sql_parser_oracle_mode.y > ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-cat ../../../src/sql/parser/sql_parser_oracle_mode.l > ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
+cat ../../../src/sql/parser/sql_parser_oracle_mode.y > ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+cat ../../../src/sql/parser/sql_parser_oracle_mode.l > ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
 ##2.replace name
-sed  "s/obsql_oracle_yy/obsql_oracle_latin1_yy/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-sed  "s/obsql_oracle_yy/obsql_oracle_latin1_yy/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/sql_parser_oracle_mode/sql_parser_oracle_latin1_mode/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-sed  "s/sql_parser_oracle_mode/sql_parser_oracle_latin1_mode/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/obsql_oracle_parser_fatal_error/obsql_oracle_latin1_parser_fatal_error/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-sed  "s/obsql_oracle_parser_fatal_error/obsql_oracle_latin1_parser_fatal_error/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/obsql_oracle_fast_parse/obsql_oracle_latin1_fast_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-sed  "s/obsql_oracle_multi_fast_parse/obsql_oracle_latin1_multi_fast_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
-sed  "s/obsql_oracle_multi_values_parse/obsql_oracle_latin1_multi_values_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
+sed  "s/obsql_oracle_yy/obsql_oracle_single_byte_yy/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+sed  "s/obsql_oracle_yy/obsql_oracle_single_byte_yy/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/sql_parser_oracle_mode/sql_parser_oracle_single_byte_mode/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+sed  "s/sql_parser_oracle_mode/sql_parser_oracle_single_byte_mode/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/obsql_oracle_parser_fatal_error/obsql_oracle_single_byte_parser_fatal_error/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+sed  "s/obsql_oracle_parser_fatal_error/obsql_oracle_single_byte_parser_fatal_error/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/obsql_oracle_fast_parse/obsql_oracle_single_byte_fast_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+sed  "s/obsql_oracle_multi_fast_parse/obsql_oracle_single_byte_multi_fast_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
+sed  "s/obsql_oracle_multi_values_parse/obsql_oracle_single_byte_multi_values_parse/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
 ##3.do not need to replace multi_byte_space、multi_byte_comma、multi_byte_left_parenthesis、multi_byte_right_parenthesis code
-sed  "s/multi_byte_space              \[\\\u3000\]/multi_byte_space              \[\\\x20]/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/multi_byte_comma              \[\\\uff0c\]/multi_byte_comma              \[\\\x2c]/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/multi_byte_left_parenthesis   \[\\\uff08\]/multi_byte_left_parenthesis   \[\\\x28]/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed  "s/multi_byte_right_parenthesis  \[\\\uff09\]/multi_byte_right_parenthesis  \[\\\x29]/g" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
+sed  "s/multi_byte_space              \[\\\u3000\]/multi_byte_space              \[\\\x20]/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/multi_byte_comma              \[\\\uff0c\]/multi_byte_comma              \[\\\x2c]/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/multi_byte_left_parenthesis   \[\\\uff08\]/multi_byte_left_parenthesis   \[\\\x28]/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed  "s/multi_byte_right_parenthesis  \[\\\uff09\]/multi_byte_right_parenthesis  \[\\\x29]/g" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
 echo "LATIN1_CHAR [\x80-\xFF]" > ../../../src/sql/parser/latin1.txt
-sed '/following character status will be rewrite by gen_parse.sh according to connection character/d' -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed '/multi_byte_connect_char       \/\*According to connection character to set by gen_parse.sh\*\//r ../../../src/sql/parser/latin1.txt' -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed '/multi_byte_connect_char       \/\*According to connection character to set by gen_parse.sh\*\//d' -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed 's/multi_byte_connect_char/LATIN1_CHAR/g' -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-sed -i '/<hint>{multi_byte_space}/,+5d' sql_parser_oracle_latin1_mode.l
-sed -i '/<hint>{multi_byte_comma}/,+35d' sql_parser_oracle_latin1_mode.l
-sed -i '/{multi_byte_comma}/,+23d' sql_parser_oracle_latin1_mode.l
-sed -i '/{multi_byte_space}/,+4d' sql_parser_oracle_latin1_mode.l
+sed '/following character status will be rewrite by gen_parse.sh according to connection character/d' -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed '/multi_byte_connect_char       \/\*According to connection character to set by gen_parse.sh\*\//r ../../../src/sql/parser/latin1.txt' -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed '/multi_byte_connect_char       \/\*According to connection character to set by gen_parse.sh\*\//d' -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed 's/multi_byte_connect_char/LATIN1_CHAR/g' -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+sed -i '/<hint>{multi_byte_space}/,+5d' sql_parser_oracle_single_byte_mode.l
+sed -i '/<hint>{multi_byte_comma}/,+35d' sql_parser_oracle_single_byte_mode.l
+sed -i '/{multi_byte_comma}/,+23d' sql_parser_oracle_single_byte_mode.l
+sed -i '/{multi_byte_space}/,+4d' sql_parser_oracle_single_byte_mode.l
 ##4.generate oracle latin1 parser files
-bison_parser ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y ../../../src/sql/parser/sql_parser_oracle_latin1_mode_tab.c
-flex -o ../../../src/sql/parser/sql_parser_oracle_latin1_mode_lex.c ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l ../../../src/sql/parser/sql_parser_oracle_latin1_mode_tab.h
+bison_parser ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_tab.c
+flex -o ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_tab.h
 ##5.replace other info
-sed "/Setup the input buffer state to scan the given bytes/,/}/{/int i/d}" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode_lex.c
-sed "/Setup the input buffer state to scan the given bytes/,/}/{/for ( i = 0; i < _yybytes_len; ++i )/d}" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode_lex.c
-sed "/Setup the input buffer state to scan the given bytes/,/}/{s/\tbuf\[i\] = yybytes\[i\]/memcpy(buf, yybytes, _yybytes_len)/g}" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode_lex.c
-sed "/obsql_oracle_latin1_yylex_init is special because it creates the scanner itself/,/Initialization is the same as for the non-reentrant scanner/{s/return 1/return errno/g}" -i ../../../src/sql/parser/sql_parser_oracle_latin1_mode_lex.c
-cat ../../../src/sql/parser/non_reserved_keywords_oracle_mode.c > ../../../src/sql/parser/non_reserved_keywords_oracle_latin1_mode.c
-sed '/#include "ob_non_reserved_keywords.h"/a\#include "sql/parser/sql_parser_oracle_latin1_mode_tab.h\"'  -i ../../../src/sql/parser/non_reserved_keywords_oracle_latin1_mode.c
-sed  "s/non_reserved_keywords_oracle_mode.c is for …/non_reserved_keywords_oracle_latin1_mode.c is auto generated by gen_parser.sh/g" -i ../../../src/sql/parser/non_reserved_keywords_oracle_latin1_mode.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{/int i/d}" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{/for ( i = 0; i < _yybytes_len; ++i )/d}" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c
+sed "/Setup the input buffer state to scan the given bytes/,/}/{s/\tbuf\[i\] = yybytes\[i\]/memcpy(buf, yybytes, _yybytes_len)/g}" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c
+sed "/obsql_oracle_single_byte_yylex_init is special because it creates the scanner itself/,/Initialization is the same as for the non-reentrant scanner/{s/return 1/return errno/g}" -i ../../../src/sql/parser/sql_parser_oracle_single_byte_mode_lex.c
+cat ../../../src/sql/parser/non_reserved_keywords_oracle_mode.c > ../../../src/sql/parser/non_reserved_keywords_oracle_single_byte_mode.c
+sed '/#include "ob_non_reserved_keywords.h"/a\#include "sql/parser/sql_parser_oracle_single_byte_mode_tab.h\"'  -i ../../../src/sql/parser/non_reserved_keywords_oracle_single_byte_mode.c
+sed  "s/non_reserved_keywords_oracle_mode.c is for …/non_reserved_keywords_oracle_single_byte_mode.c is auto generated by gen_parser.sh/g" -i ../../../src/sql/parser/non_reserved_keywords_oracle_single_byte_mode.c
 ##6.clean useless files
 rm -f ../../../src/sql/parser/latin1.txt
-rm -f ../../../src/sql/parser/sql_parser_oracle_latin1_mode.l
-rm -f ../../../src/sql/parser/sql_parser_oracle_latin1_mode.y
+rm -f ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.l
+rm -f ../../../src/sql/parser/sql_parser_oracle_single_byte_mode.y
 
 # generate oracle utf8 sql_parser(support multi_byte_space、multi_byte_comma、multi_byte_left_parenthesis、multi_byte_right_parenthesis)
 ##1.copy lex and yacc files

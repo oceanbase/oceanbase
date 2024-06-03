@@ -6626,7 +6626,8 @@ int ObDDLOperator::drop_db_table_privs(
         } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
-            routine_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans, 0, false))) {
+            routine_priv->get_sort_key(), empty_priv, new_schema_version, &dcl_stmt, trans,
+            0, false, "", ""))) {
           LOG_WARN("Delete table privilege failed", K(routine_priv), K(ret));
         }
       }
@@ -7350,7 +7351,9 @@ int ObDDLOperator::grant_table(
     common::ObMySQLTransaction &trans,
     const share::ObRawObjPrivArray &obj_priv_array,
     const uint64_t option,
-    const share::schema::ObObjPrivSortKey &obj_priv_key)
+    const share::schema::ObObjPrivSortKey &obj_priv_key,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   ObRawObjPrivArray new_obj_priv_array;
@@ -7397,8 +7400,8 @@ int ObDDLOperator::grant_table(
         }
         OZ (schema_sql_service->get_priv_sql_service().grant_table(
             table_priv_key, new_priv, new_schema_version, ddl_stmt_str, trans,
-            new_obj_priv_array, option, obj_priv_key, new_schema_version_ora, true, false),
-            table_priv_key, ret, false);
+            new_obj_priv_array, option, obj_priv_key, new_schema_version_ora, true, false,
+            grantor, grantor_host), table_priv_key, ret, false);
       } else if (obj_priv_array.count() > 0) {
         OZ (set_need_flush_ora(schema_guard, obj_priv_key, option, obj_priv_array,
           new_obj_priv_array));
@@ -7421,7 +7424,9 @@ int ObDDLOperator::grant_routine(
     const ObPrivSet priv_set,
     common::ObMySQLTransaction &trans,
     const uint64_t option,
-    const bool gen_ddl_stmt)
+    const bool gen_ddl_stmt,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   ObRawObjPrivArray new_obj_priv_array;
@@ -7475,7 +7480,8 @@ int ObDDLOperator::grant_routine(
           if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
             LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
           } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().grant_routine(
-                routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, option, true))) {
+                routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, option, true,
+                grantor, grantor_host))) {
             LOG_WARN("priv sql service grant routine failed", K(ret));
           }
         }
@@ -7830,12 +7836,15 @@ int ObDDLOperator::revoke_table(
     common::ObMySQLTransaction &trans,
     const ObObjPrivSortKey &obj_priv_key,
     const share::ObRawObjPrivArray &obj_priv_array,
-    const bool revoke_all_ora)
+    const bool revoke_all_ora,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_priv_key.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   ObSchemaService *schema_sql_service = schema_service_.get_schema_service();
+  uint64_t compat_version = 0;
   bool is_oracle_mode = false;
   if (OB_ISNULL(schema_sql_service)) {
     ret = OB_ERR_SYS;
@@ -7848,7 +7857,14 @@ int ObDDLOperator::revoke_table(
   } else if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
   } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_oracle_mode))) {
-    LOG_WARN("fail to get compat mode", K(ret));
+    LOG_WARN("fail to check is oracle mode", K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_4_0 && !is_oracle_mode
+             && 0 != (priv_set & OB_PRIV_REFERENCES)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("revoke references not supported below DATA_VERSION_4_2_4_0", K(ret), K(priv_set));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references");
   } else {
     ObPrivSet table_priv_set = OB_PRIV_SET_EMPTY;
     if (OB_FAIL(schema_guard.get_table_priv_set(table_priv_key, table_priv_set))) {
@@ -7919,7 +7935,8 @@ int ObDDLOperator::revoke_table(
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_table(
             table_priv_key, new_priv, new_schema_version, &ddl_sql, trans,
-            new_schema_version_ora, obj_priv_key, obj_priv_array, is_all))) {
+            new_schema_version_ora, obj_priv_key, obj_priv_array, is_all,
+            grantor, grantor_host))) {
           LOG_WARN("Failed to revoke table", K(table_priv_key), K(ret));
         } else {
           OZ (revoke_obj_cascade(schema_guard, obj_priv_key.grantee_id_,
@@ -7991,7 +8008,9 @@ int ObDDLOperator::revoke_routine(
     const ObPrivSet priv_set,
     common::ObMySQLTransaction &trans,
     bool report_error,
-    const bool gen_ddl_stmt)
+    const bool gen_ddl_stmt,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = routine_priv_key.tenant_id_;
@@ -8054,7 +8073,7 @@ int ObDDLOperator::revoke_routine(
                            new_schema_version))) {
           LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
         } else if (OB_FAIL(schema_sql_service->get_priv_sql_service().revoke_routine(
-            routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans))) {
+            routine_priv_key, new_priv, new_schema_version, &ddl_sql, trans, grantor, grantor_host))) {
           LOG_WARN("Failed to revoke routine", K(routine_priv_key), K(ret));
         }
       }

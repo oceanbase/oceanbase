@@ -677,16 +677,31 @@ int ObExprOperator::aggregate_collations(ObObjMeta &type,
   } else {
     ObCollationType coll_type = types[0].get_collation_type();
     ObCollationLevel coll_level = types[0].get_collation_level();
+    bool unknown_cs = false;
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
-      ret = ObCharset::aggregate_collation(coll_level, coll_type,
-                                           types[i].get_collation_level(),
-                                           types[i].get_collation_type(),
-                                           coll_level, coll_type);
+      ret = aggregate_two_collation(coll_level, coll_type,
+                                      types[i].get_collation_level(),
+                                      types[i].get_collation_type(),
+                                      coll_level, coll_type, flags);
+      if (OB_SUCC(ret) &&
+          coll_type == CS_TYPE_BINARY &&
+          coll_level == CS_LEVEL_NONE) {
+        unknown_cs = true;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if ((flags & OB_COLL_ALLOW_NEW_CONV) &&
+          unknown_cs &&
+          coll_level != CS_LEVEL_EXPLICIT) {
+        ret = OB_CANT_AGGREGATE_2COLLATIONS;
+        LOG_WARN("Illegal mix of collations",K(ret), K(unknown_cs));
+      }
     }
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY((flags & OB_COLL_DISALLOW_NONE) && CS_LEVEL_NONE == coll_level)) {
         // @todo (zhuweng.yzf) correct error code is OB_CANT_AGGREGATE_NCOLLATIONS
         ret = OB_CANT_AGGREGATE_2COLLATIONS;
+        LOG_WARN("Illegal mix of collations",K(ret), K(flags),K(coll_type), K(coll_level));
       }
     }
     if (OB_SUCC(ret)) {
@@ -696,55 +711,155 @@ int ObExprOperator::aggregate_collations(ObObjMeta &type,
         coll_level = CS_LEVEL_COERCIBLE;
         // MySQL need charset converter here. We consider only two charset(binary
         // and utf8mb4), so no conversion is actually needed
-      } else {}
+      }
       if (OB_SUCC(ret)) {
         type.set_collation_type(coll_type);
         type.set_collation_level(coll_level);
-      } else {}
-    } else {}
+      }
+    }
     if (OB_CANT_AGGREGATE_2COLLATIONS == ret) {
       if (3 == param_num) {
         ret = OB_CANT_AGGREGATE_3COLLATIONS;
+        const char* coll_type0 = ObCharset::collation_name(types[0].get_collation_type());
+        const char* coll_level0 = ObCharset::collation_level(types[0].get_collation_level());
+        const char* coll_type1 = ObCharset::collation_name(types[1].get_collation_type());
+        const char* coll_level1 = ObCharset::collation_level(types[1].get_collation_level());
+        const char* coll_type2 = ObCharset::collation_name(types[2].get_collation_type());
+        const char* coll_level2 = ObCharset::collation_level(types[2].get_collation_level());
+        LOG_USER_ERROR(OB_CANT_AGGREGATE_3COLLATIONS, coll_type0,
+                                                      coll_level0,
+                                                      coll_type1,
+                                                      coll_level1,
+                                                      coll_type2,
+                                                      coll_level2);
       } else if (3 < param_num) {
         ret = OB_CANT_AGGREGATE_NCOLLATIONS;
+      } else {
+        const char* coll_type0 = ObCharset::collation_name(types[0].get_collation_type());
+        const char* coll_level0 = ObCharset::collation_level(types[0].get_collation_level());
+        const char* coll_type1 = ObCharset::collation_name(types[1].get_collation_type());
+        const char* coll_level1 = ObCharset::collation_level(types[1].get_collation_level());
+        LOG_USER_ERROR(OB_CANT_AGGREGATE_2COLLATIONS, coll_type0,
+                                                      coll_level0,
+                                                      coll_type1,
+                                                      coll_level1);
+      }
+      LOG_WARN("Illegal mix of collations",K(ret),K(param_num), K(coll_type), K(coll_level));
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_num; ++i) {
+        LOG_WARN("Illegal mix of collations", K(ret),K(i),
+        "type", ObCharset::collation_name(types[i].get_collation_type()),
+        "level", ObCharset::collation_level(types[i].get_collation_level()) );
       }
     }
   }
   return ret;
 }
 
+int ObExprOperator::aggregate_two_collation(const ObCollationLevel level1,
+                                            const ObCollationType type1,
+                                            const ObCollationLevel level2,
+                                            const ObCollationType type2,
+                                            ObCollationLevel &res_level,
+                                            ObCollationType &res_type,
+                                            uint32_t flags)
+{
+  int ret = OB_SUCCESS;
+  if (flags & OB_COLL_ALLOW_NEW_CONV) {
+    ret = ObCharset::aggregate_collation_new(level1, type1,
+                                              level2, type2,
+                                              res_level, res_type,
+                                              flags);
+  } else {
+    ret = ObCharset::aggregate_collation_old(level1, type1,
+                                              level2, type2,
+                                              res_level, res_type);
+  }
+  if (OB_CANT_AGGREGATE_2COLLATIONS == ret) {
+    const char* coll_type1 = ObCharset::collation_name(type1);
+    const char* coll_level1 = ObCharset::collation_level(level1);
+    const char* coll_type2 = ObCharset::collation_name(type2);
+    const char* coll_level2 = ObCharset::collation_level(level2);
+    LOG_USER_ERROR(OB_CANT_AGGREGATE_2COLLATIONS, coll_type1,
+                                                  coll_level1,
+                                                  coll_type2,
+                                                  coll_level2);
+  }
+  LOG_TRACE("aggregate_two_collation debug",K(ret), K(flags), K(res_type), K(res_level),
+                                            K(type1), K(level1), K(type2), K(level2));
+  return ret;
+}
 
-// We consider only two charset: binary and utf8mb4, so no conversion is actually needed
-
+int ObExprOperator::enable_old_charset_aggregation(const ObBasicSessionInfo *session, uint32_t &flags)
+{
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  bool version_not_allow = (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_4_0);
+  if (version_not_allow) {
+    flags &= ~OB_COLL_ALLOW_NEW_CONV;
+    LOG_TRACE("old charset aggregation rule is enabled because version is less then 424", K(version_not_allow));
+  } else if (OB_ISNULL(session)) {
+    LOG_TRACE("use new charset aggregation rule");
+  } else if (OB_FAIL(session->is_old_charset_aggregation_enabled(enable_old_rule))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else if (enable_old_rule) {
+    flags &= ~OB_COLL_ALLOW_NEW_CONV;
+    LOG_TRACE("old charset aggregation rule is enabled because variables control", K(enable_old_rule));
+  }
+  return ret;
+}
 
 int ObExprOperator::aggregate_charsets_for_string_result(
   ObObjMeta &type,
   const ObObjMeta *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_ALLOW_NUMERIC_CONV;
-  return aggregate_charsets(type, types, param_num, flags, conn_coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 int ObExprOperator::aggregate_charsets_for_string_result(
   ObExprResType &type,
   const ObExprResType *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_ALLOW_NUMERIC_CONV;
-  return aggregate_charsets(type, types, param_num, flags, conn_coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 int ObExprOperator::aggregate_charsets_for_comparison(
   ObObjMeta &type,
   const ObObjMeta *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_DISALLOW_NONE;
-  return aggregate_charsets(type, types, param_num, flags, conn_coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_DISALLOW_NONE | OB_COLL_ALLOW_NEW_CONV;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 
@@ -752,30 +867,56 @@ int ObExprOperator::aggregate_charsets_for_comparison(
   ObExprResType &type,
   const ObExprResType *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_DISALLOW_NONE;
-  return aggregate_charsets(type.get_calc_meta(), types, param_num, flags, conn_coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_DISALLOW_NONE | OB_COLL_ALLOW_NEW_CONV;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type.get_calc_meta(), types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   ObObjMeta &type,
   const ObObjMeta *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_DISALLOW_NONE | OB_COLL_ALLOW_NUMERIC_CONV;
-  return aggregate_charsets(type, types, param_num, flags, conn_coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV |
+                   OB_COLL_DISALLOW_NONE;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 int ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
   ObObjMeta &type,
   const ObExprResType *types,
   int64_t param_num,
-  const ObCollationType coll_type)
+  common::ObExprTypeCtx &type_ctx)
 {
-  uint32_t flags = OB_COLL_DISALLOW_NONE | OB_COLL_ALLOW_NUMERIC_CONV;
-  return aggregate_charsets(type, types, param_num, flags, coll_type);
+  int ret = OB_SUCCESS;
+  bool enable_old_rule = false;
+  uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                   OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV |
+                   OB_COLL_DISALLOW_NONE;
+  if (OB_FAIL(enable_old_charset_aggregation(type_ctx.get_session(), flags))) {
+    LOG_WARN("failed to check is_old_charset_aggregation_enabled", K(ret));
+  } else {
+    ret = aggregate_charsets(type, types, param_num, flags, type_ctx.get_coll_type());
+  }
+  return ret;
 }
 
 int ObExprOperator::aggregate_charsets(
@@ -1038,9 +1179,8 @@ int ObExprOperator::aggregate_result_type_for_case(
   ObExprResType &type,
   const ObExprResType *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type,
   bool is_oracle_mode,
-  const ObLengthSemantics default_length_semantics,
+  common::ObExprTypeCtx &type_ctx,
   bool need_merge_type,
   bool skip_null,
   bool is_called_in_sql)
@@ -1087,8 +1227,8 @@ int ObExprOperator::aggregate_result_type_for_case(
       if (OB_FAIL(aggregate_numeric_accuracy_for_merge(type, types, param_num, is_oracle_mode))) {
         LOG_WARN("fail to aggregate numeric accuracy", K(ret));
       }
-    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num, conn_coll_type,
-        is_oracle_mode, default_length_semantics, need_merge_type, skip_null,
+    } else if (OB_FAIL(aggregate_result_type_for_merge(type, types, param_num,
+        is_oracle_mode, type_ctx, need_merge_type, skip_null,
         is_called_in_sql))) {
       LOG_WARN("fail to aggregate result type", K(ret));
     } else if (ObFloatType == type.get_type() && !is_oracle_mode) {
@@ -1102,9 +1242,8 @@ int ObExprOperator::aggregate_result_type_for_merge(
   ObExprResType &type,
   const ObExprResType *types,
   int64_t param_num,
-  const ObCollationType conn_coll_type,
   bool is_oracle_mode,
-  const ObLengthSemantics default_length_semantics,
+  common::ObExprTypeCtx &type_ctx,
   bool need_merge_type,
   bool skip_null,
   bool is_called_in_sql)
@@ -1117,9 +1256,12 @@ int ObExprOperator::aggregate_result_type_for_merge(
     //this is for case when clause like case  when 1 then c1 end;
     type.set_type(ObVarcharType);
     type.set_collation_level(common::CS_LEVEL_IMPLICIT);
-    type.set_collation_type(conn_coll_type);
+    type.set_collation_type(type_ctx.get_coll_type());
   } else {
     ObObjType res_type = types[0].get_type();
+    const ObLengthSemantics default_length_semantics = ((OB_NOT_NULL(type_ctx.get_session())) ?
+                                                       type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
+
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; ++i) {
       if (OB_FAIL(ObExprResultTypeUtil::get_merge_result_type(res_type,
                                                               res_type,
@@ -1138,7 +1280,7 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_temporal_type(res_type) || ob_is_otimestamp_type(res_type)) {
         ret = aggregate_temporal_accuracy_for_merge(type, types, param_num);
       } else if (ob_is_string_or_lob_type(res_type)) {
-        if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, conn_coll_type))) {
+        if (OB_FAIL(aggregate_charsets_for_string_result(type, types, param_num, type_ctx))) {
         } else if (OB_FAIL(aggregate_max_length_for_string_result(type, types, param_num,
             is_oracle_mode, default_length_semantics, need_merge_type, skip_null,
             is_called_in_sql))) {
@@ -1969,13 +2111,14 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
 {
   int ret = OB_SUCCESS;
   ObObjType type = ObMaxType;
+  ObExprTypeCtx type_ctx;
   if (OB_FAIL(ObExprResultTypeUtil::get_relational_equal_type(type,
                                                               meta1.get_type(),
                                                               meta2.get_type()))) {
     LOG_WARN("get equal type failed", K(ret), K(meta1), K(meta2));
   } else if (ob_is_string_or_lob_type(type)) {
     ObObjMeta coll_types[2] = {meta1, meta2};
-    ret = aggregate_charsets_for_comparison(meta, coll_types, 2, CS_TYPE_INVALID);
+    ret = aggregate_charsets_for_comparison(meta, coll_types, 2, type_ctx);
   }
   if (OB_SUCC(ret)) {
     meta.set_type(type);
@@ -1988,7 +2131,7 @@ int ObRelationalExprOperator::get_equal_meta(ObObjMeta &meta,
 int ObExprOperator::calc_cmp_type2(ObExprResType &type,
                                    const ObExprResType &type1,
                                    const ObExprResType &type2,
-                                   const ObCollationType coll_type) const
+                                   common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   ObObjType cmp_type = ObMaxType;
@@ -2064,7 +2207,7 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
       ObObjMeta coll_types[2];
       coll_types[0].set_collation(type1);
       coll_types[1].set_collation(type2);
-      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), coll_types, 2, coll_type);
+      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), coll_types, 2, type_ctx);
       if (OB_FAIL(ret)) {
         LOG_WARN("aggregate charset failed", K(type1), K(type2), K(type.get_calc_meta()));
       }
@@ -2080,7 +2223,7 @@ int ObExprOperator::calc_cmp_type3(ObExprResType &type,
                                    const ObExprResType &type1,
                                    const ObExprResType &type2,
                                    const ObExprResType &type3,
-                                   const ObCollationType coll_type) const
+                                   common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   // cmp type
@@ -2110,7 +2253,7 @@ int ObExprOperator::calc_cmp_type3(ObExprResType &type,
       coll_types[0].set_collation(type1);
       coll_types[1].set_collation(type2);
       coll_types[2].set_collation(type3);
-      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), coll_types, 3, coll_type);
+      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), coll_types, 3, type_ctx);
     } else if (ObRawType == cmp_type) {
       type.get_calc_meta().set_collation_type(CS_TYPE_BINARY);
     }
@@ -2303,7 +2446,7 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
   ObExprResType cmp_type;
   CK(NULL != type_ctx.get_session());
   if (OB_FAIL(ret)) {
-  } else if (OB_SUCC(expr.calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  } else if (OB_SUCC(expr.calc_cmp_type2(cmp_type, type1, type2, type_ctx))) {
     type.set_int32(); // not tinyint, compatible with MySQL
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
@@ -2315,8 +2458,8 @@ int ObRelationalExprOperator::deduce_cmp_type(const ObExprOperator &expr,
     type1.set_calc_type(need_no_cast ? type1.get_type() : cmp_type.get_calc_type());
     type2.set_calc_type(need_no_cast ? type2.get_type() : cmp_type.get_calc_type());
     if (ob_is_string_or_lob_type(cmp_type.get_calc_type())) {
-      type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
-      type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
+      type1.set_calc_collation(cmp_type);
+      type2.set_calc_collation(cmp_type);
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
@@ -2348,7 +2491,7 @@ int ObRelationalExprOperator::calc_result_type3(ObExprResType &type,
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
 
-  if (OB_SUCC(calc_cmp_type3(cmp_type, type1, type2, type3, type_ctx.get_coll_type()))) {
+  if (OB_SUCC(calc_cmp_type3(cmp_type, type1, type2, type3, type_ctx))) {
     type.set_int32();
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
@@ -2359,9 +2502,9 @@ int ObRelationalExprOperator::calc_result_type3(ObExprResType &type,
       LOG_WARN("set calc type failed", K(type1), K(type2), K(type3), K(cmp_type), K(ret));
     }
     if (ob_is_string_or_lob_type(cmp_type.get_calc_type())) {
-      type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
-      type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
-      type3.set_calc_collation_type(cmp_type.get_calc_collation_type());
+      type1.set_calc_collation(cmp_type);
+      type2.set_calc_collation(cmp_type);
+      type3.set_calc_collation(cmp_type);
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
       type2.set_calc_collation_type(CS_TYPE_BINARY);
@@ -2402,8 +2545,8 @@ int ObRelationalExprOperator::calc_result_typeN(ObExprResType &type,
         LOG_WARN("failed to push back cmp type", K(ret));
       } else {
         if (ob_is_string_or_lob_type(tmp_res_type.get_calc_type())) {
-          types[i].set_calc_collation_type(tmp_res_type.get_calc_collation_type());
-          types[i + row_dimension_].set_calc_collation_type(tmp_res_type.get_calc_collation_type());
+          types[i].set_calc_collation(tmp_res_type);
+          types[i + row_dimension_].set_calc_collation(tmp_res_type);
         } else if (ObRawType == tmp_res_type.get_calc_type()) {
           types[i].set_calc_collation_type(CS_TYPE_BINARY);
           types[i + row_dimension_].set_calc_collation_type(CS_TYPE_BINARY);
@@ -2434,9 +2577,9 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
   bool need_no_cast = false;
   CK(NULL != type_ctx.get_session());
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(calc_cmp_type2(cmp_type21, type2, type1, type_ctx.get_coll_type()))) {
+  } else if (OB_FAIL(calc_cmp_type2(cmp_type21, type2, type1, type_ctx))) {
     LOG_WARN("get cmp failed", K(ret), K(type2), K(type1));
-  } else if (OB_FAIL(calc_cmp_type2(cmp_type13, type1, type3, type_ctx.get_coll_type()))) {
+  } else if (OB_FAIL(calc_cmp_type2(cmp_type13, type1, type3, type_ctx))) {
     LOG_WARN("get cmp failed", K(ret), K(type1), K(type3));
   } else {
     ObObjType type21 = cmp_type21.get_calc_type();
@@ -2465,10 +2608,11 @@ int ObRelationalExprOperator::calc_calc_type3(ObExprResType &type1,
 }
 
 int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &need_no_cast,
-    const ObExprResType *types, const int64_t param_num, const sql::ObSQLSessionInfo &my_session)
+    const ObExprResType *types, const int64_t param_num, common::ObExprTypeCtx &type_ctx)
 {
   int ret = OB_SUCCESS;
   need_no_cast = false;
+  CK (OB_NOT_NULL(type_ctx.get_session()));
   if (OB_ISNULL(types) || OB_UNLIKELY(param_num < 1) || OB_UNLIKELY(param_num > 3)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("types is null or param_num is wrong", K(types), K(param_num), K(ret));
@@ -2477,13 +2621,10 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
     type = types[0];
     need_no_cast = true;
   } else {
-    ObCollationType coll_type = CS_TYPE_INVALID;
-    if (OB_FAIL(my_session.get_collation_connection(coll_type))) {
-      LOG_WARN("fail to get_collation_connection", K(ret));
-    } else if (2 == param_num) {
-      need_no_cast = can_cmp_without_cast(types[1], types[0], CO_CMP, my_session);
+    if (2 == param_num) {
+      need_no_cast = can_cmp_without_cast(types[1], types[0], CO_CMP, *type_ctx.get_session());
       if (!need_no_cast) {
-        ret = calc_cmp_type2(type, types[0], types[1], coll_type);
+        ret = calc_cmp_type2(type, types[0], types[1], type_ctx);
       }
     } else {
       const ObExprResType &type1 = types[0];
@@ -2492,17 +2633,17 @@ int ObRelationalExprOperator::get_cmp_result_type3(ObExprResType &type, bool &ne
       //a(type1) between b(type2) and c(type3) <==> b<=a && a <=c
       ObExprResType cmp_type21; // b <= a
       ObExprResType cmp_type13; // a <= c
-      if (OB_FAIL(calc_cmp_type3(type, type1, type2, type3, coll_type))) {
+      if (OB_FAIL(calc_cmp_type3(type, type1, type2, type3, type_ctx))) {
         LOG_WARN("fail to calc_cmp_type3", K(ret));
-      } else if (OB_FAIL(calc_cmp_type2(cmp_type21, type2, type1, coll_type))) {
+      } else if (OB_FAIL(calc_cmp_type2(cmp_type21, type2, type1, type_ctx))) {
         LOG_WARN("get cmp failed", K(ret), K(type2), K(type1));
-      } else if (OB_FAIL(calc_cmp_type2(cmp_type13, type1, type3, coll_type))) {
+      } else if (OB_FAIL(calc_cmp_type2(cmp_type13, type1, type3, type_ctx))) {
         LOG_WARN("get cmp failed", K(ret), K(type1), K(type3));
       } else if (cmp_type21.get_calc_type() == cmp_type13.get_calc_type()
                  && cmp_type13.get_calc_type() == type.get_calc_type()) {
         //type21 == type13 == cmp_type
-        bool need_no_cast_21 = can_cmp_without_cast(type2, type1, CO_CMP, my_session);
-        bool need_no_cast_13 = can_cmp_without_cast(type1, type3, CO_CMP, my_session);
+        bool need_no_cast_21 = can_cmp_without_cast(type2, type1, CO_CMP, *type_ctx.get_session());
+        bool need_no_cast_13 = can_cmp_without_cast(type1, type3, CO_CMP, *type_ctx.get_session());
         need_no_cast = need_no_cast_21 && need_no_cast_13;
       }
     }
@@ -2930,8 +3071,8 @@ int ObSubQueryRelationalExpr::calc_result_typeN(ObExprResType &type,
       OZ(type.get_row_calc_cmp_types().push_back(tmp_res_type.get_calc_meta()));
       if (OB_SUCC(ret)) {
         if (ob_is_string_type(tmp_res_type.get_calc_type())) {
-          types[i].set_calc_collation_type(tmp_res_type.get_calc_collation_type());
-          types[i + row_dimension_].set_calc_collation_type(tmp_res_type.get_calc_collation_type());
+          types[i].set_calc_collation(tmp_res_type);
+          types[i + row_dimension_].set_calc_collation(tmp_res_type);
         } else if (ObRawType == tmp_res_type.get_calc_type()) {
           types[i].set_calc_collation_type(CS_TYPE_BINARY);
           types[i + row_dimension_].set_calc_collation_type(CS_TYPE_BINARY);
@@ -3873,7 +4014,7 @@ int ObSubQueryRelationalExpr::calc_result_type2_(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObExprResType cmp_type;
-  if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx))) {
     type.set_tinyint();
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
@@ -4077,7 +4218,7 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
   } else if (lib::is_oracle_mode() && (type1.is_json() || type2.is_json())) {
     ret = OB_ERR_INVALID_CMP_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_CMP_OP);
-  } else if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()))) {
+  } else if (OB_SUCC(calc_cmp_type2(cmp_type, type1, type2, type_ctx))) {
     type.set_int(); // not tinyint, compatiable with MySQL
     type.set_calc_collation(cmp_type);
     type.set_calc_type(cmp_type.get_calc_type());
@@ -4107,12 +4248,14 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
           LOG_WARN("unexpected failed", K(ret));
         }
       } else {
-        type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
-        type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
+        type1.set_calc_collation(cmp_type);
+        type2.set_calc_collation(cmp_type);
       }
     } else if (ObRawType == cmp_type.get_calc_type()) {
       type1.set_calc_collation_type(CS_TYPE_BINARY);
+      type1.set_calc_collation_level(cmp_type.get_calc_collation_level());
       type2.set_calc_collation_type(CS_TYPE_BINARY);
+      type2.set_calc_collation_level(cmp_type.get_calc_collation_level());
     } else if (is_mysql_mode() && ob_is_double_tc(cmp_type.get_calc_type())) {
       if (ob_is_numeric_tc(type1.get_type_class()) && ob_is_numeric_tc(type2.get_type_class()) &&
             SCALE_UNKNOWN_YET != type1.get_scale() && SCALE_UNKNOWN_YET != type2.get_scale()) {
@@ -4121,10 +4264,14 @@ int ObVectorExprOperator::calc_result_type2_(ObExprResType &type,
         ObAccuracy calc_acc(precision, scale);
         type1.set_calc_accuracy(calc_acc);
         type2.set_calc_accuracy(calc_acc);
+        type1.set_calc_collation(cmp_type);
+        type2.set_calc_collation(cmp_type);
       } else {
         ObAccuracy calc_acc(PRECISION_UNKNOWN_YET, SCALE_UNKNOWN_YET);
         type1.set_calc_accuracy(calc_acc);
         type2.set_calc_accuracy(calc_acc);
+        type1.set_calc_collation(cmp_type);
+        type2.set_calc_collation(cmp_type);
       }
     }
   }
@@ -4960,10 +5107,8 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
   ObExprResType &type,
   ObExprResType *types_stack,
   int64_t param_num,
-  const ObCollationType coll_type,
-  const ObLengthSemantics default_length_semantics) const
+  common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(default_length_semantics);
   int ret = OB_SUCCESS;
   int64_t i = 0;
   //bool all_string = true;
@@ -4989,12 +5134,12 @@ int ObMinMaxExprOperator::calc_result_meta_for_comparison(
                       || ob_is_text_tc(type.get_calc_type());
   // compare collation
   if (OB_SUCC(ret) && string_cmp) {
-    ret = aggregate_charsets_for_comparison(type, types_stack, param_num, coll_type);
+    ret = aggregate_charsets_for_comparison(type, types_stack, param_num, type_ctx);
   }
 
   // result collation
   if (OB_SUCC(ret) && string_result) {
-    ret = aggregate_charsets_for_string_result(type, types_stack, param_num, coll_type);
+    ret = aggregate_charsets_for_string_result(type, types_stack, param_num, type_ctx);
   }
 
   if (OB_SUCC(ret)) {
@@ -5340,9 +5485,11 @@ int ObLocationExprOperator::calc_result_type2(ObExprResType &type,
   type2.set_calc_type(ObVarcharType);
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   ObObjMeta types[2] = {type1, type2};
-  OZ(aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx.get_coll_type()));
+  OZ(aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx));
   OX(type1.set_calc_collation_type(type.get_calc_collation_type()));
+  OX(type1.set_calc_collation_level(type.get_calc_collation_level()));
   OX(type2.set_calc_collation_type(type.get_calc_collation_type()));
+  OX(type2.set_calc_collation_level(type.get_calc_collation_level()));
   return ret;
 }
 

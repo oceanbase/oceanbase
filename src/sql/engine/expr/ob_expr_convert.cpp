@@ -60,7 +60,7 @@ int ObExprConvert::calc_result_type2(ObExprResType &type,
       ret = OB_ERR_UNKNOWN_CHARSET;
       LOG_WARN("unknown charset", K(ret), K(cs_name));
     } else {
-      type.set_collation_level(CS_LEVEL_EXPLICIT);
+      type.set_collation_level(CS_LEVEL_IMPLICIT);
       type.set_collation_type(ObCharset::get_default_collation(charset_type));
       //set calc type
       //only set type2 here.

@@ -80,7 +80,9 @@ int ObExprDateAdjust::calc_result_type3(ObExprResType &type,
       date.set_calc_type(ObVarcharType);
       type.set_varchar();
       type.set_length(DATETIME_MAX_LENGTH);
-      ret = aggregate_charsets_for_string_result(type, &date, 1, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_string_result(type, &date, 1, type_ctx);
+      date.set_calc_collation_type(type.get_collation_type());
+      date.set_calc_collation_level(type.get_collation_level());
     }
     interval.set_calc_type(ObVarcharType);
     if (OB_SUCC(ret)) {

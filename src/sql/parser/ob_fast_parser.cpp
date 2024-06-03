@@ -466,8 +466,8 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
-  } else if (CHARSET_LATIN1 == charset_type_) {
-    idf_pos = is_latin1_char(pos);
+  } else if (charset_info_->mbmaxlen == 1) {
+    idf_pos = is_single_byte_char(pos);
   }
   return idf_pos;
 }
@@ -939,18 +939,18 @@ int ObFastParserBase::get_one_insert_row_str(ObRawSql &raw_sql,
 inline int64_t ObFastParserBase::notascii_gb_char(const int64_t pos)
 {
   int64_t idf_pos = -1;
-  if (notascii(raw_sql_.char_at(pos))) {
+  if ((idf_pos = is_gbk_char(pos)) != -1) {
+    //do nothing
+  } else if (notascii(raw_sql_.char_at(pos))) {
     idf_pos = pos + 1;
-  } else {
-    idf_pos = is_gbk_char(pos);
   }
   return idf_pos;
 }
 
-inline int64_t ObFastParserBase::is_latin1_char(const int64_t pos)
+inline int64_t ObFastParserBase::is_single_byte_char(const int64_t pos)
 {
   int64_t idf_pos = -1;
-  if (is_latin1(raw_sql_.char_at(pos))) {
+  if (is_single_byte(raw_sql_.char_at(pos))) {
     idf_pos = pos + 1;
   }
   return idf_pos;
@@ -1631,8 +1631,8 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     idf_pos = is_utf8_char(pos);
   } else if (ObCharset::is_gb_charset(charset_type_)) {
     idf_pos = is_gbk_char(pos);
-  } else if (CHARSET_LATIN1 == charset_type_) {
-    idf_pos = is_latin1_char(pos);
+  } else if (charset_info_->mbmaxlen == 1) {
+    idf_pos = is_single_byte_char(pos);
   }
   return idf_pos;
 }

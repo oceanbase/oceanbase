@@ -269,8 +269,7 @@ int ObExprBaseLRpad::calc_type(ObExprResType &type,
       ObSEArray<ObExprResType, 2> types;
       OZ(types.push_back(text));
       OZ(types.push_back(*pad_text));
-      OZ(aggregate_charsets_for_string_result(type, &types.at(0), 2,
-                                              type_ctx.get_coll_type()));
+      OZ(aggregate_charsets_for_string_result(type, &types.at(0), 2, type_ctx));
       OX(text.set_calc_collation_type(type.get_collation_type()));
       OX(pad_text->set_calc_collation_type(type.get_collation_type()));
       if (OB_SUCC(ret)) {

@@ -31,7 +31,8 @@ public:
                           ObExpr &rt_expr) const;
   static int number2varchar(common::ObString &str_result,
                             const double text,
-                            common::ObIAllocator &alloc);
+                            common::ObIAllocator &alloc,
+                            bool is_single_byte);
   static int calc_chr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprChr);

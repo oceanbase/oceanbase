@@ -447,7 +447,8 @@ public:
                             char *buf,
                             const int64_t &buf_len,
                             int64_t &pos,
-                            bool is_role);
+                            bool is_role,
+                            bool print_password_secret = false);
   int print_synonym_definition(const ObSynonymInfo &synonym_info,
                                 char *buf,
                                 const int64_t &buf_len,

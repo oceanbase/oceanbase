@@ -72,6 +72,12 @@ ObInfoSchemaUserPrivilegesTable::StaticInit::StaticInit()
                                                    "SHUTDOWN";
   ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_RELOAD_SHIFT] =
                                                    "RELOAD";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_REFERENCES_SHIFT] =
+                                                   "REFERENCES";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_CREATE_ROLE_SHIFT] =
+                                                   "CREATE ROLE";
+  ObInfoSchemaUserPrivilegesTable::priv_type_strs[OB_PRIV_DROP_ROLE_SHIFT] =
+                                                   "DROP ROLE";
 }
 
 ObInfoSchemaUserPrivilegesTable::ObInfoSchemaUserPrivilegesTable()

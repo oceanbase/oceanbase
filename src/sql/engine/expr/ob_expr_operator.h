@@ -431,29 +431,36 @@ public:
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_comparison(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
 
   /*
     Aggregate arguments for string result, e.g: CONCAT(a,b)
     - convert to @@character_set_connection if all arguments are numbers
     - allow DERIVATION_NONE
   */
+  static int enable_old_charset_aggregation(const ObBasicSessionInfo *session, uint32_t &flags);
   static int aggregate_charsets_for_string_result(
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_string_result(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
-
+    common::ObExprTypeCtx &type_ctx);
+  static int aggregate_two_collation(const ObCollationLevel level1,
+                                    const ObCollationType type1,
+                                    const ObCollationLevel level2,
+                                    const ObCollationType type2,
+                                    ObCollationLevel &res_level,
+                                    ObCollationType &res_type,
+                                    uint32_t flags);
   static int aggregate_max_length_for_string_result(ObExprResType &type,
                                              const ObExprResType *types,
                                              int64_t param_num,
@@ -474,20 +481,19 @@ public:
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_string_result_with_comparison(
     common::ObObjMeta &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   //skip_null for expr COALESCE
   static int aggregate_result_type_for_merge(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
-    const common::ObLengthSemantics default_length_semantics,
+    common::ObExprTypeCtx &type_ctx,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -495,9 +501,8 @@ public:
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
-    const common::ObLengthSemantics default_length_semantics,
+    common::ObExprTypeCtx &type_ctx,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -572,13 +577,13 @@ public:
   int calc_cmp_type2(ObExprResType &type,
                     const ObExprResType &type1,
                     const ObExprResType &type2,
-                    const common::ObCollationType coll_type) const;
+                    common::ObExprTypeCtx &type_ctx) const;
 
   int calc_cmp_type3(ObExprResType &type,
                      const ObExprResType &type1,
                      const ObExprResType &type2,
                      const ObExprResType &type3,
-                     const common::ObCollationType coll_type) const;
+                     common::ObExprTypeCtx &type_ctx) const;
   int calc_trig_function_result_type1(ObExprResType &type,
                                       ObExprResType &type1,
                                       common::ObExprTypeCtx &type_ctx) const;
@@ -629,9 +634,6 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprOperator);
   // types and constants
-
-  static const uint32_t OB_COLL_DISALLOW_NONE = 1;
-  static const uint32_t OB_COLL_ALLOW_NUMERIC_CONV = 2;
 
 protected:
   static int aggregate_collations(
@@ -1139,7 +1141,7 @@ public:
                            bool &need_no_cast,
                            const ObExprResType *types,
                            const int64_t param_num,
-                           const sql::ObSQLSessionInfo &my_session);
+                           common::ObExprTypeCtx &type_ctx);
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)
   virtual int calc_result_typeN(ObExprResType &type,
@@ -1946,8 +1948,7 @@ protected:
   int calc_result_meta_for_comparison(ObExprResType &type,
                                       ObExprResType *types,
                                       int64_t param_num,
-                                      const common::ObCollationType coll_type,
-                                      const common::ObLengthSemantics default_length_semantics) const;
+                                      common::ObExprTypeCtx &type_ctx) const;
 
 protected:
   // least should set cmp_op to CO_LT.

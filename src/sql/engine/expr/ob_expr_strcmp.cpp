@@ -35,28 +35,26 @@ int ObExprStrcmp::calc_result_type2(ObExprResType &type,
                                     ObExprResType &type2,
                                     ObExprTypeCtx &type_ctx) const
 {
-  UNUSED(type2);
-  UNUSED(type_ctx);
   int ret = OB_SUCCESS;
   type.set_int();
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
   type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
   ObCollationType coll_type = CS_TYPE_INVALID;
   ObCollationLevel coll_level = CS_LEVEL_EXPLICIT;
-  ret = ObCharset::aggregate_collation(type1.get_collation_level(),
-                                       type1.get_collation_type(),
-                                       type2.get_collation_level(),
-                                       type2.get_collation_type(),
-                                       coll_level,
-                                       coll_type);
-  type.set_calc_type(ObVarcharType);
-  type.set_calc_collation_type(coll_type);
-  type.set_calc_collation_level(coll_level);
-  type1.set_calc_type(ObVarcharType);
-  type2.set_calc_type(ObVarcharType);
-  type1.set_calc_collation_type(coll_type);
-  type2.set_calc_collation_type(coll_type);
-
+  ObExprResTypes res_types;
+  if (OB_FAIL(res_types.push_back(type1))) {
+    LOG_WARN("fail to push back res type", K(ret));
+  } else if (OB_FAIL(res_types.push_back(type2))) {
+    LOG_WARN("fail to push back res type", K(ret));
+  } else if (OB_FAIL(aggregate_charsets_for_comparison(type, &res_types.at(0), 2, type_ctx))) {
+    LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
+  } else {
+    type.set_calc_type(ObVarcharType);
+    type1.set_calc_type(ObVarcharType);
+    type2.set_calc_type(ObVarcharType);
+    type1.set_calc_collation(type);
+    type2.set_calc_collation(type);
+  }
   return ret;
 }
 

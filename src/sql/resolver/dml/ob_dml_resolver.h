@@ -414,7 +414,7 @@ protected:
                          const share::schema::ObTableSchema &table_schema,
                          TableItem &table_item);
   int resolve_sample_clause(const ParseNode *part_node,
-                            const uint64_t table_id);
+                            TableItem &table_item);
 
   int check_pivot_aggr_expr(ObRawExpr *expr) const;
   int resolve_transpose_table(const ParseNode *transpose_node, TableItem *&table_item);

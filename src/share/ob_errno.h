@@ -755,7 +755,6 @@ constexpr int OB_ERR_INVALID_TYPE_FOR_ARGUMENT = -5351;
 constexpr int OB_ERR_ADD_PART_BOUN_NOT_INC = -5353;
 constexpr int OB_ERR_DATA_TOO_LONG_IN_PART_CHECK = -5354;
 constexpr int OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR = -5355;
-constexpr int OB_CANT_AGGREGATE_3COLLATIONS = -5356;
 constexpr int OB_CANT_AGGREGATE_NCOLLATIONS = -5357;
 constexpr int OB_ERR_DUPLICATED_UNIQUE_KEY = -5358;
 constexpr int OB_DOUBLE_OVERFLOW = -5359;
@@ -2570,7 +2569,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_TABLE_USED__USER_ERROR_MSG "You can\'t specify target table \'%s\' for update in FROM clause"
 #define OB_ERR_COULUMN_VALUE_NOT_MATCH__USER_ERROR_MSG "Column count doesn\'t match value count at row %ld"
 #define OB_ERR_INVALID_GROUP_FUNC_USE__USER_ERROR_MSG "Invalid use of group function"
-#define OB_CANT_AGGREGATE_2COLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
+#define OB_CANT_AGGREGATE_2COLLATIONS__USER_ERROR_MSG "Illegal mix of collations (%s,%s), (%s,%s)"
 #define OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD__USER_ERROR_MSG "Field \'%.*s\' is of a not allowed type for this type of partitioning"
 #define OB_ERR_TOO_LONG_IDENT__USER_ERROR_MSG "Identifier name \'%.*s\' is too long"
 #define OB_ERR_WRONG_TYPE_FOR_VAR__USER_ERROR_MSG "Incorrect argument type to variable '%.*s'"
@@ -2747,7 +2746,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ADD_PART_BOUN_NOT_INC__USER_ERROR_MSG "VALUES LESS THAN value must be strictly increasing for each partition"
 #define OB_ERR_DATA_TOO_LONG_IN_PART_CHECK__USER_ERROR_MSG "Data too long for column"
 #define OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR__USER_ERROR_MSG "Partition column values of incorrect type"
-#define OB_CANT_AGGREGATE_3COLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
+#define OB_CANT_AGGREGATE_3COLLATIONS__USER_ERROR_MSG "Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
 #define OB_CANT_AGGREGATE_NCOLLATIONS__USER_ERROR_MSG "Illegal mix of collations"
 #define OB_ERR_DUPLICATED_UNIQUE_KEY__USER_ERROR_MSG "Duplicate entry \'%s\' for key \'%.*s\'"
 #define OB_DOUBLE_OVERFLOW__USER_ERROR_MSG "result Double value is out of range"
@@ -4793,7 +4792,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_UPDATE_TABLE_USED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5174, You can\'t specify target table \'%s\' for update in FROM clause"
 #define OB_ERR_COULUMN_VALUE_NOT_MATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5175, Column count doesn\'t match value count at row %ld"
 #define OB_ERR_INVALID_GROUP_FUNC_USE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5176, Invalid use of group function"
-#define OB_CANT_AGGREGATE_2COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations"
+#define OB_CANT_AGGREGATE_2COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations (%s,%s), (%s,%s)"
 #define OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5178, Field \'%.*s\' is of a not allowed type for this type of partitioning"
 #define OB_ERR_TOO_LONG_IDENT__ORA_USER_ERROR_MSG "ORA-00972: identifier \'%.*s\' is too long"
 #define OB_ERR_WRONG_TYPE_FOR_VAR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5180, Incorrect argument type to variable '%.*s'"
@@ -4970,7 +4969,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_ADD_PART_BOUN_NOT_INC__ORA_USER_ERROR_MSG "ORA-14074: partition bound must collate higher than that of the last partition"
 #define OB_ERR_DATA_TOO_LONG_IN_PART_CHECK__ORA_USER_ERROR_MSG "ORA-14036: partition bound value too large for column"
 #define OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR__ORA_USER_ERROR_MSG "ORA-14308: partition bound element must be one of: string, datetime or interval literal, number, or NULL"
-#define OB_CANT_AGGREGATE_3COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations"
+#define OB_CANT_AGGREGATE_3COLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
 #define OB_CANT_AGGREGATE_NCOLLATIONS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5357, Illegal mix of collations"
 #define OB_ERR_DUPLICATED_UNIQUE_KEY__ORA_USER_ERROR_MSG "ORA-01452: cannot CREATE UNIQUE INDEX; duplicate keys found"
 #define OB_DOUBLE_OVERFLOW__ORA_USER_ERROR_MSG "ORA-01426: Double value overflow"

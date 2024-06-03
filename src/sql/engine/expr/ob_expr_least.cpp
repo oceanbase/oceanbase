@@ -242,10 +242,7 @@ int ObExprLeastGreatest::calc_result_typeN_mysql(ObExprResType &type,
         all_integer = false;
       }
     }
-    const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
-                      ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
-    if (OB_FAIL(calc_result_meta_for_comparison(type, types, param_num, type_ctx.get_coll_type(),
-                                                default_length_semantics))) {
+    if (OB_FAIL(calc_result_meta_for_comparison(type, types, param_num, type_ctx))) {
       LOG_WARN("calc result meta for comparison failed");
     }
     // can't cast origin parameters.

@@ -605,6 +605,11 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
     ret = OB_NOT_SUPPORTED;
     SQL_LOG(WARN, "GB18030_2022 not supported when data_version < 4_2_0_0", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2, charset GB18030_2022 is");
+  } else if ((CHARSET_ASCII == charset_type && data_version < DATA_VERSION_4_2_4_0) ||
+             (CHARSET_TIS620 == charset_type && data_version < DATA_VERSION_4_2_4_0)) {
+    ret = OB_NOT_SUPPORTED;
+    SQL_LOG(WARN, "charset not supported when data_version < 4_2_4_0",K(charset_type), K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4, charset is");
   }
   return ret;
 }
@@ -612,18 +617,32 @@ int ObSQLUtils::is_charset_data_version_valid(ObCharsetType charset_type, const 
 int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, const int64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_CLOSE_MODULES
    uint64_t data_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
     SQL_LOG(WARN, "failed to GET_MIN_DATA_VERSION", K(ret));
-  } else if (data_version < DATA_VERSION_4_2_2_0 &&
-             (CS_TYPE_UTF16_UNICODE_CI == collation_type ||
-              CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)) {
-    ret = OB_NOT_SUPPORTED;
-    SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
+  }
+#ifndef OB_BUILD_CLOSE_MODULES
+  if (OB_SUCC(ret)) {
+    if (data_version < DATA_VERSION_4_2_2_0 &&
+              (CS_TYPE_UTF16_UNICODE_CI == collation_type ||
+                CS_TYPE_UTF8MB4_UNICODE_CI == collation_type)) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_2_0", K(collation_type), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.2, unicode collation is");
+    }
   }
 #endif
+  if (OB_SUCC(ret)) {
+    if (data_version < DATA_VERSION_4_2_4_0
+              && (CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
+                  || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
+                  || CS_TYPE_UTF8MB4_CZECH_CI == collation_type
+                  || CS_TYPE_UTF8MB4_0900_AI_CI == collation_type)) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0", K(collation_type), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4, collation is");
+    }
+  }
   return ret;
 }
 
@@ -1624,7 +1643,8 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_SHOW_SEQUENCES == type
                || T_SHOW_ENGINE == type
                || T_SHOW_OPEN_TABLES == type
-               || (T_SET_ROLE == type && lib::is_mysql_mode())) {
+               || (T_SET_ROLE == type && lib::is_mysql_mode())
+               || T_SHOW_CREATE_USER == type) {
       ret = true;
     }
   }
@@ -1900,6 +1920,7 @@ int ObSQLUtils::get_cs_level_from_cast_mode(const ObCastMode cast_mode,
     } else {
       cs_level = tmp_cs_level;
     }
+    LOG_TRACE(" get_cs_level_from_cast_mode debug",K(default_level),K(cs_level));
   }
   return ret;
 }

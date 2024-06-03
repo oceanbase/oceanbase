@@ -43,9 +43,10 @@ int ObExprRight::calc_result_type2(ObExprResType &type, ObExprResType &type1,
   type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   type.set_varchar();
   type.set_length(type1.get_length());
-  OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
+  OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
   OX(type1.set_calc_type(ObVarcharType));
   OX(type1.set_calc_collation_type(type.get_collation_type()));
+  OX(type1.set_calc_collation_level(type.get_collation_level()));
   return ret;
 }
 

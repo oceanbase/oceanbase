@@ -62,7 +62,7 @@ int ObExprRegexpLike::calc_result_typeN(ObExprResType &type,
       ObExprResType cmp_type;
       if (OB_FAIL(ObExprRegexContext::check_binary_compatible(types, 2))) {
         LOG_WARN("types are not compatible with binary.", K(ret));
-      } else if (OB_FAIL(aggregate_charsets_for_comparison(cmp_type, types, 2, type_ctx.get_coll_type()))) {
+      } else if (OB_FAIL(aggregate_charsets_for_comparison(cmp_type, types, 2, type_ctx))) {
         LOG_WARN("fail to aggregate charsets for comparison");
       } else {
         is_case_sensitive = ObCharset::is_bin_sort(cmp_type.get_calc_collation_type());

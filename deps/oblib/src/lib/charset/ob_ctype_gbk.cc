@@ -368,6 +368,7 @@ static ObCollationHandler ob_collation_gbk_ci_handler =
 
 static ObCharsetHandler ob_charset_gbk_handler=
 {
+  NULL,
   ismbchar_gbk,
   mbcharlen_gbk,
   ob_numchars_mb,
@@ -408,6 +409,8 @@ ObCharsetInfo ob_charset_gbk_chinese_ci=
     to_upper_gbk,
     sort_order_gbk,
     NULL,
+    NULL,
+    NULL,
     &ob_caseinfo_gbk,
     NULL,
     NULL,
@@ -438,6 +441,8 @@ ObCharsetInfo ob_charset_gbk_bin=
     ctype_gbk,
     to_lower_gbk,
     to_upper_gbk,
+    NULL,
+    NULL,
     NULL,
     NULL,
     &ob_caseinfo_gbk,

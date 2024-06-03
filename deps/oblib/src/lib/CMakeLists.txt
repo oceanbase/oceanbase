@@ -18,6 +18,8 @@ ob_set_subtarget(oblib_lib charset
   charset/ob_ctype_gb18030.cc
   charset/ob_ctype_gbk.cc
   charset/ob_ctype_latin1.cc
+  charset/ob_ctype_ascii.cc
+  charset/ob_ctype_tis620.cc
   charset/ob_ctype_mb.cc
   charset/ob_ctype_simple.cc
   charset/ob_ctype_uca.cc

@@ -269,6 +269,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   ddl_schema_version_ = other.ddl_schema_version_;
   ddl_table_id_ = other.ddl_table_id_;
   ref_query_ = other.ref_query_;
+  SampleInfo *buf = NULL;
   if (is_json_table()
       && OB_FAIL(deep_copy_json_table_def(*other.json_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy json table define", K(ret));
@@ -283,7 +284,26 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
   } else if (is_values_table() &&
             OB_FAIL(deep_copy_values_table_def(*other.values_table_def_, expr_copier, allocator))) {
     LOG_WARN("failed to deep copy values table def", K(ret));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(other.sample_info_)) {
+      // do nothing
+    } else {
+      if (OB_ISNULL(sample_info_)) {
+        buf = static_cast<SampleInfo*>(allocator->alloc(sizeof(SampleInfo)));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for sample info", K(ret));
+        } else {
+          sample_info_ = new(buf) SampleInfo();
+        }
+      }
+      if (OB_SUCC(ret)) {
+        *sample_info_ = *other.sample_info_;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     exec_params_.reuse();
     for (int64_t i = 0; OB_SUCC(ret) && i < other.exec_params_.count(); ++i) {
       ObRawExpr *exec_param = other.exec_params_.at(i);
@@ -291,7 +311,7 @@ int TableItem::deep_copy(ObIRawExprCopier &expr_copier,
       if (OB_FAIL(expr_copier.do_copy_expr(exec_param, new_expr))) {
         LOG_WARN("failed to copy exec param", K(ret));
       } else if (OB_ISNULL(new_expr) ||
-                 OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
+                OB_UNLIKELY(!new_expr->is_exec_param_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("exec param is invalid", K(ret), K(new_expr));
       } else if (OB_FAIL(expr_copier.copy(static_cast<ObExecParamRawExpr *>(new_expr)->get_ref_expr()))) {

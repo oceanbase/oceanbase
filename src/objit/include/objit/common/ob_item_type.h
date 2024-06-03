@@ -499,6 +499,8 @@ typedef enum ObItemType
   T_FUN_SYS_AUDIT_LOG_SET_USER = 771,
   T_FUN_SYS_AUDIT_LOG_REMOVE_USER = 772,
   T_FUN_SYS_PASSWORD = 773,
+  T_FUN_SYS_IS_ENABLED_ROLE = 774,
+  T_FUN_SYS_CAN_ACCESS_TRIGGER = 775,
   ///< @note add new mysql only function type before this line
 
 
@@ -2447,6 +2449,17 @@ typedef enum ObItemType
   T_SHOW_OPEN_TABLES,
   T_REPAIR_TABLE,
   T_CHECKSUM_TABLE,
+  T_SERVICE_NAME,
+  T_MAX_NET_BANDWIDTH,
+  T_NET_BANDWIDTH_WEIGHT,
+  T_CREATE_SERVER,
+  T_ALTER_SERVER,
+  T_DROP_SERVER,
+  T_CREATE_LOGFILE_GROUP,
+  T_ALTER_LOGFILE_GROUP,
+  T_DROP_LOGFILE_GROUP,
+  T_SET_UNION_ALL,
+  T_SHOW_CHECK_TABLE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
@@ -2582,7 +2595,7 @@ typedef enum ObOutlineType
 
 #define IS_DML_STMT(op)  \
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
-#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS)
+#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS || (op) == T_SHOW_CREATE_USER)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

@@ -6258,9 +6258,10 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
     LOG_WARN("failed to get collation connection", K(ret));
   } else {
     ObExprVersion dummy_op(*allocator);
-    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
     ObSEArray<ObExprResType, 2> types;
     ObExprResType res_type;
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info, type_ctx);
     const int64_t child_num = child_querys.count();
     const int64_t select_num = select_stmt->get_select_item_size();
     ObSelectStmt *cur_stmt = NULL;
@@ -6305,8 +6306,8 @@ int ObOptimizerUtil::get_set_res_types(ObIAllocator *allocator,
       } else if (1 == types.count()) {
         ret = res_types.push_back(types.at(0));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0),
-                                                    types.count(), coll_type, is_oracle_mode(),
-                                                    length_semantics))) {
+                                                    types.count(), is_oracle_mode(),
+                                                    type_ctx))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else if (OB_FAIL(res_types.push_back(res_type))) {
         LOG_WARN("failed to pushback res type", K(ret));
@@ -6452,10 +6453,11 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
     if (NULL != res_types) {
       res_types->reuse();
     }
-    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
     const bool is_ps_prepare_stage = session_info->is_varparams_sql_prepare();
     const int64_t num = left_types.count();
     const bool is_oracle_mode = lib::is_oracle_mode();
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info, type_ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < num; i++) {
       res_type.reset();
       ObExprResType &left_type = left_types.at(i);
@@ -6476,8 +6478,7 @@ int ObOptimizerUtil::try_add_cast_to_set_child_list(ObIAllocator *allocator,
           res_type = left_type;
         } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
           LOG_WARN("failed to push back", K(ret));
-        } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2,
-                                                    coll_type, is_oracle_mode, length_semantics))) {
+        } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type, &types.at(0), 2, is_oracle_mode, type_ctx))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         }
         if (OB_FAIL(ret) || skip_add_cast) {
@@ -6664,10 +6665,11 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
     if (NULL != res_types) {
       res_types->reuse();
     }
-    const ObLengthSemantics length_semantics = session_info->get_actual_nls_length_semantics();
     const bool is_ps_prepare_stage = session_info->is_varparams_sql_prepare();
     const bool is_oracle_mode = lib::is_oracle_mode();
     const int64_t row_cnt = select_exprs.count() / column_cnt;
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info, type_ctx);
     ObRawExpr *expr = NULL;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
       ObExprResType result_type;
@@ -6696,8 +6698,7 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
               /* left_type is res_type */
             } else if (OB_FAIL(types.push_back(left_type)) || OB_FAIL(types.push_back(right_type))) {
               LOG_WARN("failed to push back", K(ret));
-            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(result_type, &types.at(0), 2,
-                               coll_type, is_oracle_mode, length_semantics))) {
+            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(result_type, &types.at(0), 2, is_oracle_mode, type_ctx))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             } else if (OB_UNLIKELY(ObMaxType == result_type.get_type())) {
               ret = OB_ERR_INVALID_TYPE_FOR_OP;

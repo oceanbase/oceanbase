@@ -102,7 +102,7 @@ int ObExprRepeat::calc_result_type2(ObExprResType &type,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_string_result(type, &text, 1, type_ctx))) {
       LOG_WARN("failed to aggregate charsets for string result", K(ret));
     } else {
       text.set_calc_collation_level(type.get_collation_level());

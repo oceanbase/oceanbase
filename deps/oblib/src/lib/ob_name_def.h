@@ -755,6 +755,7 @@
 #define N_CURRENT_USER "current_user"
 #define N_CURRENT_USER_PRIV "current_user_priv"
 #define N_CURRENT_ROLE "current_role"
+#define N_IS_ENABLED_ROLE "is_enabled_role"
 #define N_USER "user"
 #define N_HOST_IP "host_ip"
 #define N_RPC_PORT "rpc_port"
@@ -1118,4 +1119,5 @@
 #define N_AUDIT_LOG_FILTER_REMOVE_FILTER    "audit_log_filter_remove_filter"
 #define N_AUDIT_LOG_FILTER_SET_USER         "audit_log_filter_set_user"
 #define N_AUDIT_LOG_FILTER_REMOVE_USER      "audit_log_filter_remove_user"
+#define N_CAN_ACCESS_TRIGGER                "can_access_trigger"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

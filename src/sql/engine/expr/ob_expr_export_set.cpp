@@ -70,7 +70,7 @@ int ObExprExportSet::calc_result_typeN(ObExprResType& type, ObExprResType* types
     type.set_varchar();
     // set collation_type for string type
     OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
-        type, &types_array[1], str_num, type_ctx.get_coll_type()));
+        type, &types_array[1], str_num, type_ctx));
     for (int64_t i = 1; OB_SUCC(ret) && i <= str_num; ++i) {
       types_array[i].set_calc_meta(type);
     }

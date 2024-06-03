@@ -865,7 +865,7 @@ DEFINE_ERROR_EXT(OB_INVALID_DEFAULT, -5173, ER_INVALID_DEFAULT, "42000", "Invali
 DEFINE_ERROR_EXT(OB_ERR_UPDATE_TABLE_USED, -5174, ER_UPDATE_TABLE_USED, "HY000", "Update table used", "You can\'t specify target table \'%s\' for update in FROM clause");
 DEFINE_ERROR_EXT(OB_ERR_COULUMN_VALUE_NOT_MATCH, -5175, ER_WRONG_VALUE_COUNT_ON_ROW, "21S01", "Column count doesn\'t match value count", "Column count doesn\'t match value count at row %ld");
 DEFINE_ERROR(OB_ERR_INVALID_GROUP_FUNC_USE, -5176, ER_INVALID_GROUP_FUNC_USE, "HY000", "Invalid use of group function");
-DEFINE_ERROR_DEP(OB_CANT_AGGREGATE_2COLLATIONS, -5177, ER_CANT_AGGREGATE_2COLLATIONS, "HY000", "Illegal mix of collations");
+DEFINE_ERROR_EXT_DEP(OB_CANT_AGGREGATE_2COLLATIONS, -5177, ER_CANT_AGGREGATE_2COLLATIONS, "HY000", "Illegal mix of collations","Illegal mix of collations (%s,%s), (%s,%s)");
 DEFINE_ERROR_EXT(OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD, -5178, ER_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD, "HY000", "Field is of a not allowed type for this type of partitioning", "Field \'%.*s\' is of a not allowed type for this type of partitioning");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_TOO_LONG_IDENT, -5179, ER_TOO_LONG_IDENT, "42000", "Identifier name is too long", "Identifier name \'%.*s\' is too long", 972, "identifier is too long", "identifier \'%.*s\' is too long");
 DEFINE_ERROR_EXT(OB_ERR_WRONG_TYPE_FOR_VAR, -5180, ER_WRONG_TYPE_FOR_VAR, "42000", "Incorrect argument type to variable", "Incorrect argument type to variable '%.*s'");
@@ -1042,7 +1042,7 @@ DEFINE_ORACLE_ERROR_DEP(OB_ERR_FIELD_NOT_FOUND_IN_DATETIME_OR_INTERVAL, -5352, -
 DEFINE_ORACLE_ERROR(OB_ERR_ADD_PART_BOUN_NOT_INC, -5353, ER_RANGE_NOT_INCREASING_ERROR, "HY000", "VALUES LESS THAN value must be strictly increasing for each partition", 14074, "partition bound must collate higher than that of the last partition");
 DEFINE_ORACLE_ERROR(OB_ERR_DATA_TOO_LONG_IN_PART_CHECK,-5354, ER_DATA_TOO_LONG, "22001", "Data too long for column", 14036, "partition bound value too large for column");
 DEFINE_ORACLE_ERROR(OB_ERR_WRONG_TYPE_COLUMN_VALUE_V2_ERROR, -5355, ER_WRONG_TYPE_COLUMN_VALUE_ERROR, "HY000", "Partition column values of incorrect type", 14308, "partition bound element must be one of: string, datetime or interval literal, number, or NULL");
-DEFINE_ERROR(OB_CANT_AGGREGATE_3COLLATIONS, -5356, ER_CANT_AGGREGATE_3COLLATIONS, "HY000", "Illegal mix of collations");
+DEFINE_ERROR_EXT_DEP(OB_CANT_AGGREGATE_3COLLATIONS, -5356, ER_CANT_AGGREGATE_3COLLATIONS, "HY000", "Illegal mix of collations","Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)");
 DEFINE_ERROR(OB_CANT_AGGREGATE_NCOLLATIONS, -5357, ER_CANT_AGGREGATE_NCOLLATIONS, "HY000", "Illegal mix of collations");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_DUPLICATED_UNIQUE_KEY, -5358, ER_DUP_ENTRY, "23000", "Duplicated primary key", "Duplicate entry \'%s\' for key \'%.*s\'", 1452, "cannot CREATE UNIQUE INDEX; duplicate keys found", "cannot CREATE UNIQUE INDEX; duplicate keys found");
 DEFINE_ORACLE_ERROR(OB_DOUBLE_OVERFLOW, -5359, ER_WARN_DATA_OUT_OF_RANGE, "22003", "result Double value is out of range", 1426, "Double value overflow");

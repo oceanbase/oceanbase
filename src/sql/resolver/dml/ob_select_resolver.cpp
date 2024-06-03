@@ -3751,11 +3751,11 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
       } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
         LOG_WARN("fail to get_collation_connection", K(ret));
       } else {
-        const ObLengthSemantics default_ls = session_info_->get_actual_nls_length_semantics();
         ObSEArray<ObExprResType, 16> types;
         ObExprResType res_type;
         ObExprVersion dummy_op(*allocator_);
-
+        ObExprTypeCtx type_ctx;
+        ObSQLUtils::init_type_ctx(session_info_, type_ctx);
         for (int64_t colum_idx = 0; OB_SUCC(ret) && colum_idx < new_column_count; colum_idx++) {
           res_type.reset();
           types.reset();
@@ -3806,9 +3806,8 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
             } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type,
                                                                         &types.at(0),
                                                                         types.count(),
-                                                                        coll_type,
                                                                         true,
-                                                                        default_ls))) {
+                                                                        type_ctx))) {
               LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
             }
           }

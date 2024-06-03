@@ -895,6 +895,15 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" RELOAD,");
         }
+        if ((priv_set & OB_PRIV_CREATE_ROLE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE ROLE,");
+        }
+        if ((priv_set & OB_PRIV_DROP_ROLE) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" DROP ROLE,");
+        }
+        if ((priv_set & OB_PRIV_TRIGGER) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" TRIGGER,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }

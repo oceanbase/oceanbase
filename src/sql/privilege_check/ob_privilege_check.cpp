@@ -63,6 +63,7 @@
 #include "sql/resolver/ddl/ob_create_routine_stmt.h"
 #include "sql/resolver/ddl/ob_alter_routine_stmt.h"
 #include "sql/resolver/ddl/ob_drop_routine_stmt.h"
+#include "sql/resolver/ddl/ob_trigger_stmt.h"
 #include "rootserver/ob_ddl_service.h"
 #include "sql/resolver/dml/ob_merge_stmt.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
@@ -1228,6 +1229,7 @@ int get_alter_table_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool need_check = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
@@ -1238,6 +1240,7 @@ int get_alter_table_stmt_need_privs(
   } else {
     ObNeedPriv need_priv;
     const ObAlterTableStmt *stmt = static_cast<const ObAlterTableStmt*>(basic_stmt);
+    const ObSArray<obrpc::ObCreateForeignKeyArg> &foreign_keys = stmt->get_read_only_foreign_key_arg_list();
     if (OB_FAIL(ObPrivilegeCheck::can_do_operation_on_db(session_priv, stmt->get_org_database_name()))) {
       LOG_WARN("Can not alter table in the database", K(session_priv), K(ret),
                "database_name", stmt->get_org_database_name());
@@ -1277,6 +1280,22 @@ int get_alter_table_stmt_need_privs(
           && session_priv.tenant_id_ != OB_SYS_TENANT_ID) {
         ret = OB_ERR_NO_PRIVILEGE;
         LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "SUPER");
+      }
+    }
+    // check references privilege
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                                                        ObCompatFeatureType::MYSQL_PRIV_ENHANCE_4_2_4_0,
+                                                        need_check))) {
+        LOG_WARN("failed to get priv need check", K(ret));
+      } else if (lib::is_mysql_mode() && need_check) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < foreign_keys.count(); i++) {
+          need_priv.db_ = foreign_keys.at(i).parent_database_;
+          need_priv.table_ = foreign_keys.at(i).parent_table_;
+          need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+          need_priv.priv_set_ = OB_PRIV_REFERENCES;
+          ADD_NEED_PRIV(need_priv);
+        }
       }
     }
   }
@@ -1380,6 +1399,7 @@ int get_create_table_stmt_need_privs(
     ObIArray<ObNeedPriv> &need_privs)
 {
   int ret = OB_SUCCESS;
+  bool need_check = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Basic stmt should be not be NULL", K(ret));
@@ -1401,6 +1421,7 @@ int get_create_table_stmt_need_privs(
       }
     } else {
       const ObSelectStmt *select_stmt = stmt->get_sub_select();
+      const ObSArray<obrpc::ObCreateForeignKeyArg> &foreign_keys = stmt->get_read_only_foreign_key_arg_list();
       if (NULL != select_stmt) {
         need_priv.priv_set_ = OB_PRIV_CREATE | OB_PRIV_INSERT;
       } else {
@@ -1412,6 +1433,22 @@ int get_create_table_stmt_need_privs(
       ADD_NEED_PRIV(need_priv);
       if (OB_SUCC(ret) && NULL != select_stmt) {
         OZ (ObPrivilegeCheck::get_stmt_need_privs(session_priv, select_stmt, need_privs));
+      }
+      // check references privilege
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                                                          ObCompatFeatureType::MYSQL_PRIV_ENHANCE_4_2_4_0,
+                                                          need_check))) {
+          LOG_WARN("failed to get priv need check", K(ret));
+        } else if (lib::is_mysql_mode() && need_check) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < foreign_keys.count(); i++) {
+            need_priv.db_ = foreign_keys.at(i).parent_database_;
+            need_priv.table_ = foreign_keys.at(i).parent_table_;
+            need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+            need_priv.priv_set_ = OB_PRIV_REFERENCES;
+            ADD_NEED_PRIV(need_priv);
+          }
+        }
       }
     }
   }
@@ -2082,14 +2119,16 @@ int get_role_privs(
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
     switch (stmt_type) {
       case stmt::T_CREATE_ROLE: {
-        need_priv.priv_set_ = OB_PRIV_CREATE_USER; //[TODO ROLE]
+        need_priv.priv_set_ = OB_PRIV_CREATE_USER | OB_PRIV_CREATE_ROLE;
         need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        need_priv.priv_check_type_ = OB_PRIV_CHECK_ANY;
         ADD_NEED_PRIV(need_priv);
         break;
       }
       case stmt::T_DROP_ROLE: {
-        need_priv.priv_set_ = OB_PRIV_CREATE_USER;
+        need_priv.priv_set_ = OB_PRIV_CREATE_USER | OB_PRIV_DROP_ROLE;
         need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+        need_priv.priv_check_type_ = OB_PRIV_CHECK_ANY;
         ADD_NEED_PRIV(need_priv);
         break;
       }
@@ -2264,6 +2303,48 @@ int get_routine_stmt_need_privs(
       need_priv.priv_level_ = OB_PRIV_ROUTINE_LEVEL;
       need_priv.priv_set_ = OB_PRIV_ALTER_ROUTINE;
       ADD_NEED_PRIV(need_priv);
+    }
+  }
+  return ret;
+}
+
+int get_trigger_stmt_need_privs(
+    const ObSessionPrivInfo &session_priv,
+    const ObStmt *basic_stmt,
+    ObIArray<ObNeedPriv> &need_privs)
+{
+  int ret = OB_SUCCESS;
+  bool need_check = false;
+  if (OB_ISNULL(basic_stmt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Basic stmt should be not be NULL", K(ret));
+  } else if (OB_UNLIKELY(stmt::T_CREATE_TRIGGER != basic_stmt->get_stmt_type()
+                        && stmt::T_DROP_TRIGGER != basic_stmt->get_stmt_type())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Stmt type should be trigger stmt",
+             K(ret), "stmt type", basic_stmt->get_stmt_type());
+  } else if (OB_FAIL(ObPrivilegeCheck::get_priv_need_check(session_priv,
+                     ObCompatFeatureType::MYSQL_TRIGGER_PRIV_CHECK, need_check))) {
+    LOG_WARN("failed to get priv need check", K(ret));
+  } else if (lib::is_mysql_mode() && need_check) {
+    if (stmt::T_CREATE_TRIGGER == basic_stmt->get_stmt_type()) {
+      const ObCreateTriggerStmt *stmt = static_cast<const ObCreateTriggerStmt*>(basic_stmt);
+      ObNeedPriv need_priv;
+      need_priv.table_ = stmt->get_trigger_arg().base_object_name_;
+      need_priv.db_ = stmt->get_trigger_arg().base_object_database_;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      need_priv.priv_set_ = OB_PRIV_TRIGGER;
+      ADD_NEED_PRIV(need_priv);
+    } else if (stmt::T_DROP_TRIGGER == basic_stmt->get_stmt_type()) {
+      const ObDropTriggerStmt *stmt = static_cast<const ObDropTriggerStmt*>(basic_stmt);
+      if(stmt->is_exist) {
+        ObNeedPriv need_priv;
+        need_priv.table_ = stmt->trigger_table_name_;
+        need_priv.db_ = stmt->get_trigger_arg().trigger_database_;
+        need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+        need_priv.priv_set_ = OB_PRIV_TRIGGER;
+        ADD_NEED_PRIV(need_priv);
+      }
     }
   }
   return ret;

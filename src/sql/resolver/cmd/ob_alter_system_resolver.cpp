@@ -1970,12 +1970,17 @@ int ObSetConfigResolver::resolve(const ParseNode &parse_tree)
 
                 // config value
                 ObObjParam val;
+                ObDefaultValueRes resolve_res(val);
                 if (OB_UNLIKELY(NULL == action_node->children_[1])) {
                   ret = OB_ERR_UNEXPECTED;
                   LOG_WARN("children[1] should not be null");
                   break;
-                } else if (OB_FAIL(ddl_resolver.resolve_default_value(action_node->children_[1], val))) {
+                } else if (OB_FAIL(ddl_resolver.resolve_default_value(action_node->children_[1], resolve_res))) {
                   LOG_WARN("resolve config value failed", K(ret));
+                  break;
+                } else if (!resolve_res.is_literal_) {
+                  ret = OB_ERR_ILLEGAL_TYPE;
+                  LOG_WARN("resolve config value failed", K(ret), K(resolve_res.is_literal_));
                   break;
                 }
                 ObString str_val;
@@ -4516,8 +4521,13 @@ int ObAlterSystemSetResolver::resolve(const ParseNode &parse_tree)
                   LOG_WARN("value node is NULL", K(ret));
                 } else {
                   ObObjParam val;
-                  if (OB_FAIL(ddl_resolver.resolve_default_value(value_node, val))) {
+                  ObDefaultValueRes resolve_res(val);
+                  if (OB_FAIL(ddl_resolver.resolve_default_value(value_node, resolve_res))) {
                     LOG_WARN("resolve config value failed", K(ret));
+                    break;
+                  } else if (!resolve_res.is_literal_) {
+                    ret = OB_ERR_ILLEGAL_TYPE;
+                    LOG_WARN("resolve config value failed", K(ret), K(resolve_res.is_literal_));
                     break;
                   }
                   ObString str_val;

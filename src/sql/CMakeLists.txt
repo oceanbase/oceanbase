@@ -652,6 +652,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_contains.cpp
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
+  engine/expr/ob_expr_can_access_trigger.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp

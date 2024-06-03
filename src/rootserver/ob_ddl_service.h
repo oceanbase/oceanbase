@@ -805,7 +805,9 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                  const uint64_t option,
                                  const bool is_from_inner_sql,
                                  share::schema::ObObjPrivSortKey &obj_priv_key,
-                                 share::schema::ObSchemaGetterGuard &schema_guard);
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 const common::ObString &grantor = "",
+                                 const common::ObString &grantor_host = "");
   virtual int grant_table_and_col_privs_to_user(
       const obrpc::ObGrantArg &arg,
       uint64_t grantee_id,
@@ -835,11 +837,11 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                                         const bool is_grant);
 
   int grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
-                                         uint64_t user_id,
-                                         const ObString &user_name,
-                                         const ObString &host_name,
-                                         const ObNeedPriv &need_priv,
-                                         share::schema::ObSchemaGetterGuard &schema_guard);
+                                   uint64_t user_id,
+                                   const ObString &user_name,
+                                   const ObString &host_name,
+                                   const ObNeedPriv &need_priv,
+                                   share::schema::ObSchemaGetterGuard &schema_guard);
   int lock_user(const obrpc::ObLockUserArg &arg, common::ObIArray<int64_t> &failed_index);
   int standby_grant(const obrpc::ObStandbyGrantArg &arg);
 
@@ -878,18 +880,24 @@ int check_table_udt_id_is_exist(share::schema::ObSchemaGetterGuard &schema_guard
                           const share::ObRawObjPrivArray &obj_priv_array,
                           const uint64_t option,
                           const share::schema::ObObjPrivSortKey &obj_key,
-                          share::schema::ObSchemaGetterGuard &schema_guard);
+                          share::schema::ObSchemaGetterGuard &schema_guard,
+                          const common::ObString &grantor = "",
+                          const common::ObString &grantor_host = "");
 
   virtual int grant_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
     const ObPrivSet priv_set,
     const ObString *ddl_stmt_str,
     const uint64_t option,
-    share::schema::ObSchemaGetterGuard &schema_guard);
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &grantor = "",
+    const common::ObString &grantor_host = "");
 
   virtual int revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
-    const ObPrivSet priv_set);
+    const ObPrivSet priv_set,
+    const common::ObString &grantor = "",
+    const common::ObString &grantor_host = "");
   virtual int revoke_table(const obrpc::ObRevokeTableArg &arg,
                            const share::schema::ObTablePrivSortKey &table_key,
                            const ObPrivSet priv_set,

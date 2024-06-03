@@ -47,7 +47,7 @@ int ObExprSha::calc_result_type1(ObExprResType &type,
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
 
@@ -113,7 +113,7 @@ int ObExprSha2::calc_result_type2(ObExprResType &type,
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
   OX (type2.set_calc_type(ObIntType));

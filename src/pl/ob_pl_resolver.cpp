@@ -5721,7 +5721,8 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
     case stmt::T_SHOW_CREATE_TABLEGROUP:
     case stmt::T_SHOW_CREATE_TRIGGER:
     case stmt::T_SHOW_QUERY_RESPONSE_TIME:
-    case stmt::T_SHOW_TRIGGERS: {
+    case stmt::T_SHOW_TRIGGERS:
+    case stmt::T_SHOW_CREATE_USER: {
       if (0 == prepare_result.into_exprs_.count()) {
         if (func.is_function() || in_tg) {
           ret = OB_ER_SP_NO_RETSET;

@@ -99,7 +99,8 @@ public:
   int check_trigger_show(const share::schema::ObSessionPrivInfo &s_priv,
                          const common::ObString &db,
                          const common::ObString &trigger,
-                         bool &allow_show) const;
+                         bool &allow_show,
+                         const ObString &table) const;
   int check_column_exists(const uint64_t tenant_id, const uint64_t table_id,
                           const common::ObString &column_name,
                           bool &is_exist,

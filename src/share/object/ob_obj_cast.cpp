@@ -13996,12 +13996,15 @@ int ObObjCaster::is_order_consistent(const ObObjMeta &from,
     ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
     ObCollationType from_cs_type = from.get_collation_type();
     ObCollationType to_cs_type = to.get_collation_type();
-    if (OB_FAIL(ObCharset::aggregate_collation(from.get_collation_level(),
-                                               from_cs_type,
-                                               to.get_collation_level(),
-                                               to_cs_type,
-                                               res_cs_level,
-                                               res_cs_type))) {
+    uint32_t flags = OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV |
+                     OB_COLL_ALLOW_NUMERIC_CONV | OB_COLL_ALLOW_NEW_CONV;
+    if (OB_FAIL(ObExprOperator::aggregate_two_collation(from.get_collation_level(),
+                                                        from_cs_type,
+                                                        to.get_collation_level(),
+                                                        to_cs_type,
+                                                        res_cs_level,
+                                                        res_cs_type,
+                                                        flags))) {
       LOG_WARN("fail to aggregate collation", K(ret), K(from), K(to));
     } else {
       int64_t idx_from = get_idx_of_collate(from_cs_type);

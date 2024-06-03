@@ -70,8 +70,7 @@ inline int ObExprSubstringIndex::calc_result_type3(ObExprResType &type,
     ObExprResType types[2] = {alloc, alloc};
     types[0] = str;
     types[1] = delim;
-    if (OB_FAIL(aggregate_charsets_for_string_result_with_comparison(
-                type, types, 2, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_string_result_with_comparison(type, types, 2, type_ctx))) {
       LOG_WARN("aggregate_charsets_for_string_result_with_comparison failed", K(ret));
 
     } else {

@@ -2329,6 +2329,7 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_SHOW_OPEN_TABLES);
       SET_STMT_TYPE(T_REPAIR_TABLE);
       SET_STMT_TYPE(T_CHECKSUM_TABLE);
+      SET_STMT_TYPE(T_SHOW_CREATE_USER);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {
@@ -2566,7 +2567,6 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
          Otherwise, the character set and collation given by the character_set_connection and
          collation_connection system variables are used.
          */
-        val.set_collation_level(CS_LEVEL_COERCIBLE);
         //TODO::@yanhua  raw
 //        if (lib::is_oracle_mode()) {
 //          val.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
@@ -2606,6 +2606,7 @@ int ObResolverUtils::resolve_const(const ParseNode *node,
             }
           }
         }
+        val.set_collation_level(CS_LEVEL_COERCIBLE);
         ObLengthSemantics length_semantics = LS_DEFAULT;
         if (OB_SUCC(ret)) {
           if (lib::is_oracle_mode() && (T_NVARCHAR2 == node->type_ || T_NCHAR == node->type_)) {
@@ -3335,7 +3336,7 @@ int ObResolverUtils::resolve_const_expr(ObResolverParams &params,
       }
       if (OB_SUCC(ret)) {
         if (var_infos != NULL) {
-          if (ObRawExprUtils::merge_variables(sys_vars, *var_infos)) {
+          if (OB_FAIL(ObRawExprUtils::merge_variables(sys_vars, *var_infos))) {
             LOG_WARN("merge variables failed", K(ret));
           }
         } else {
@@ -5057,6 +5058,7 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
       ObExprResType cast_dst_type;
       cast_dst_type.set_meta(generated_column.get_meta_type());
       cast_dst_type.set_accuracy(generated_column.get_accuracy());
+      cast_dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
       ObRawExpr *expr_with_implicit_cast = NULL;
       //only formalize once
       if (OB_FAIL(ObRawExprUtils::erase_operand_implicit_cast(expr, expr))) {
@@ -5364,11 +5366,26 @@ int ObResolverUtils::resolve_default_expr_v2_column_expr(ObResolverParams &param
                 KPC(expr), K(ret));
     }
   } else if (OB_UNLIKELY(!columns.empty())) {
-    ret = OB_ERR_BAD_FIELD_ERROR;
     const ObQualifiedName &q_name = columns.at(0);
-    ObString scope_name = default_expr_v2_column.get_column_name_str();
-    ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
-    LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
+    bool contain_udf = false;
+    int64_t udf_idx = -1;
+    for (int64_t i = 0; i<q_name.access_idents_.count(); ++i) {
+      if (q_name.access_idents_.at(i).is_pl_udf()) {
+        contain_udf = true;
+        udf_idx = i;
+        break;
+      }
+    }
+    if (contain_udf) {
+      ret = OB_ERR_FUNCTION_UNKNOWN;
+      ObString udf_name = q_name.access_idents_.at(udf_idx).access_name_;
+      LOG_USER_ERROR(OB_ERR_FUNCTION_UNKNOWN, "FUNCTION", udf_name.length(), udf_name.ptr());
+    } else {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      ObString scope_name = default_expr_v2_column.get_column_name_str();
+      ObString col_name = concat_qualified_name(q_name.database_name_, q_name.tbl_name_, q_name.col_name_);
+      LOG_USER_ERROR(OB_ERR_BAD_FIELD_ERROR, col_name.length(), col_name.ptr(), scope_name.length(), scope_name.ptr());
+    }
   } else if (OB_FAIL(expr->formalize(session_info))) {
     LOG_WARN("formalize expr failed", K(ret));
   } else if (OB_UNLIKELY(expr->has_flag(CNT_ROWNUM))) {
@@ -8631,6 +8648,7 @@ int ObResolverUtils::resolve_file_format_string_value(const ParseNode *node,
     cast_dst_type.set_length(max_len);
     cast_dst_type.set_calc_meta(ObObjMeta());
     cast_dst_type.set_collation_type(result_collation_type);
+    cast_dst_type.set_collation_level(expr->get_collation_level());
     if (!(expr_output_type.is_varchar() ||
           expr_output_type.is_nvarchar2() ||
           expr_output_type.is_char() ||

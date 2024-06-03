@@ -639,12 +639,6 @@ int ObMPBase::update_charset_sys_vars(ObSMConnection &conn, ObSQLSessionInfo &se
 {
   int ret = OB_SUCCESS;
   int64_t cs_type = conn.client_cs_type_;
-  const int64_t LATIN1_CS = 8;
-  //background: mysqltest give a default connect_charset=latin1
-  //            but for history reason, oceanbase use utf8 as
-  //            default charset for mysqltest
-  //TODO: after obclient&mysqltest support default charset = utf8
-  //      login for cs_type != LATIN1_CS would be deleted
   if (ObCharset::is_valid_collation(cs_type)) {
     if (OB_FAIL(sess_info.update_sys_variable(SYS_VAR_CHARACTER_SET_CLIENT, cs_type))) {
       SQL_ENG_LOG(WARN, "failed to update sys var", K(ret));

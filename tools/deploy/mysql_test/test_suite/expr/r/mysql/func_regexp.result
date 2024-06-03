@@ -6348,9 +6348,9 @@ select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci;
 'a' collate gbk_chinese_ci regexp 'A' collate gbk_chinese_ci
 1
 select 'a' collate gbk_bin regexp 'A' collate gbk_chinese_ci;
-ERROR HY000: Illegal mix of collations
+ERROR HY000: Illegal mix of collations (gbk_bin,EXPLICIT), (gbk_chinese_ci,EXPLICIT)
 select 'a' collate gbk_chinese_ci regexp 'A' collate gbk_bin;
-ERROR HY000: Illegal mix of collations
+ERROR HY000: Illegal mix of collations (gbk_chinese_ci,EXPLICIT), (gbk_bin,EXPLICIT)
 set names latin1;
 select 'a' collate latin1_bin regexp 'A';
 'a' collate latin1_bin regexp 'A'
@@ -6371,9 +6371,9 @@ select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci;
 'a' collate latin1_swedish_ci regexp 'A' collate latin1_swedish_ci
 1
 select 'a' collate latin1_bin regexp 'A' collate latin1_swedish_ci;
-ERROR HY000: Illegal mix of collations
+ERROR HY000: Illegal mix of collations (latin1_bin,EXPLICIT), (latin1_swedish_ci,EXPLICIT)
 select 'a' collate latin1_swedish_ci regexp 'A' collate latin1_bin;
-ERROR HY000: Illegal mix of collations
+ERROR HY000: Illegal mix of collations (latin1_swedish_ci,EXPLICIT), (latin1_bin,EXPLICIT)
 drop database ly;
 create database ly character set GB18030;
 use ly;

@@ -5048,6 +5048,7 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         SQL_RESV_LOG(WARN, "invalid parse tree", K(ret));
       } else {
         ObObjParam default_value;
+        ObDefaultValueRes resolve_res(default_value);
         if (T_CONSTR_NULL == default_node->type_) {
           default_value.set_null();
           alter_column_schema.is_drop_default_ = true;
@@ -5060,7 +5061,7 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (!lib::is_oracle_mode() && ob_is_geometry_tc(alter_column_schema.get_data_type())) {
           ret = OB_ERR_BLOB_CANT_HAVE_DEFAULT;
           SQL_RESV_LOG(WARN, "GEOMETRY can't set default value!", K(ret));
-        } else if (OB_FAIL(resolve_default_value(default_node, default_value))) {
+        } else if (OB_FAIL(resolve_default_value(default_node, resolve_res))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
         if (OB_SUCCESS == ret &&

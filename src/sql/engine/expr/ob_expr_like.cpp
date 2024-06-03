@@ -293,10 +293,12 @@ int ObExprLike::calc_result_type3(ObExprResType &type,
         type.set_calc_collation_type(type_ctx.get_session()->get_nls_collation());
       }
     } else {
-      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_comparison(type.get_calc_meta(), types, 2, type_ctx);
     }
     type1.set_calc_collation_type(type.get_calc_collation_type());
     type2.set_calc_collation_type(type.get_calc_collation_type());
+    type1.set_calc_collation_level(type.get_calc_collation_level());
+    type2.set_calc_collation_level(type.get_calc_collation_level());
     ObExprOperator::calc_result_flag2(type, type1, type2); // ESCAPE is ignored
   }
   return ret;

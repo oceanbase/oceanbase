@@ -7076,6 +7076,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
         ObExprResType dst_type;
         dst_type.set_meta(generated_column.get_meta_type());
         dst_type.set_accuracy(generated_column.get_accuracy());
+        dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
         ObSQLMode sql_mode = default_session.get_sql_mode();
         if (NULL != local_session_var) {
           share::schema::ObSessionSysVar *sys_var = NULL;
@@ -29619,19 +29620,26 @@ int ObDDLService::grant(const ObGrantArg &arg)
                                               arg.grantor_id_,
                                               user_id);
                 if (OB_FAIL(grant_priv_to_user(arg.tenant_id_,
-                                              user_id,
-                                              user_name,
-                                              host_name,
-                                              need_priv,
-                                              arg.obj_priv_array_,
-                                              arg.option_,
-                                              arg.is_inner_,
-                                              obj_priv_key,
-                                              schema_guard))) {
+                                               user_id,
+                                               user_name,
+                                               host_name,
+                                               need_priv,
+                                               arg.obj_priv_array_,
+                                               arg.option_,
+                                               arg.is_inner_,
+                                               obj_priv_key,
+                                               schema_guard,
+                                               arg.grantor_,
+                                               arg.grantor_host_))) {
                   LOG_WARN("Grant priv to user failed", K(ret));
                 }
               } else if (lib::Worker::CompatMode::MYSQL == compat_mode) {
-                OZ (grant_table_and_column_mysql(arg, user_id, user_name, host_name, need_priv, schema_guard));
+                OZ (grant_table_and_column_mysql(arg,
+                                                 user_id,
+                                                 user_name,
+                                                 host_name,
+                                                 need_priv,
+                                                 schema_guard));
               } else {
                 OZ (grant_table_and_col_privs_to_user(arg, user_id, user_name,
                     host_name, need_priv, schema_guard));
@@ -29771,7 +29779,9 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                      const uint64_t option,
                                      const bool is_from_inner_sql,
                                      ObObjPrivSortKey &obj_priv_key,
-                                     share::schema::ObSchemaGetterGuard &schema_guard)
+                                     share::schema::ObSchemaGetterGuard &schema_guard,
+                                     const common::ObString &grantor,
+                                     const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == user_id) {
@@ -29816,7 +29826,9 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                        obj_priv_array,
                                        option,
                                        obj_priv_key,
-                                       schema_guard))) {
+                                       schema_guard,
+                                       grantor,
+                                       grantor_host))) {
           LOG_WARN("Grant table error", K(ret));
         }
         break;
@@ -29833,7 +29845,9 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
                                        need_priv.priv_set_,
                                        &ddl_sql,
                                        option,
-                                       schema_guard))) {
+                                       schema_guard,
+                                       grantor,
+                                       grantor_host))) {
           LOG_WARN("Grant table error", K(ret));
         }
         break;
@@ -29848,11 +29862,11 @@ int ObDDLService::grant_priv_to_user(const uint64_t tenant_id,
 }
 
 int ObDDLService::grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
-                                         uint64_t user_id,
-                                         const ObString &user_name,
-                                         const ObString &host_name,
-                                         const ObNeedPriv &need_priv,
-                                         share::schema::ObSchemaGetterGuard &schema_guard)
+                                               uint64_t user_id,
+                                               const ObString &user_name,
+                                               const ObString &host_name,
+                                               const ObNeedPriv &need_priv,
+                                               share::schema::ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = arg.tenant_id_;
@@ -29886,12 +29900,14 @@ int ObDDLService::grant_table_and_column_mysql(const obrpc::ObGrantArg &arg,
           LOG_WARN("gen_table_priv sql failed", K(need_priv), K(ret));
       } else if (OB_FALSE_IT(ddl_stmt = ddl_stmt_str.string())) {
       } else if (OB_FAIL(ddl_operator.grant_table(table_key,
-                                           arg.priv_set_,
-                                           &ddl_stmt,
-                                           trans,
-                                           obj_priv_array,
-                                           option,
-                                           obj_key))) {
+                                                  arg.priv_set_,
+                                                  &ddl_stmt,
+                                                  trans,
+                                                  obj_priv_array,
+                                                  option,
+                                                  obj_key,
+                                                  arg.grantor_,
+                                                  arg.grantor_host_))) {
         LOG_WARN("fail to grant table", K(ret));
       } else if (OB_FAIL(grant_or_revoke_column_priv_mysql(tenant_id, arg.object_id_, user_id,
                                                             user_name, host_name, need_priv.db_,
@@ -30052,7 +30068,7 @@ int ObDDLService::grant_revoke_user(
   } else if (OB_INVALID_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Tenant id is invalid", K(ret));
-  } else if (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode)) {
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
@@ -30076,6 +30092,14 @@ int ObDDLService::grant_revoke_user(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_3_0", K(ret), K(priv_set));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke create tablespace/shutdown/reload privilege");
+    } else if (compat_version < DATA_VERSION_4_2_4_0 && !is_ora_mode
+              && (0 != (priv_set & OB_PRIV_REFERENCES) ||
+                  0 != (priv_set & OB_PRIV_CREATE_ROLE) ||
+                  0 != (priv_set & OB_PRIV_DROP_ROLE) ||
+                  0 != (priv_set & OB_PRIV_TRIGGER))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret), K(priv_set));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "grant or revoke references/create role/drop role/trigger");
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
@@ -30556,7 +30580,7 @@ int ObDDLService::revoke_database(
   } else if (!db_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db_key is invalid", K(db_key), K(ret));
-  } else if (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode)) {
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", K(ret), K(tenant_id));
@@ -30564,8 +30588,15 @@ int ObDDLService::revoke_database(
             && (0 != (priv_set & OB_PRIV_EXECUTE) ||
                 0 != (priv_set & OB_PRIV_ALTER_ROUTINE) ||
                 0 != (priv_set & OB_PRIV_CREATE_ROUTINE))) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_2_0", K(ret), K(priv_set));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke execute/alter routine/create routine privilege");
+  } else if (compat_version < DATA_VERSION_4_2_4_0 && !is_ora_mode
+             && (0 != (priv_set & OB_PRIV_REFERENCES) ||
+                 0 != (priv_set & OB_PRIV_TRIGGER))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret), K(priv_set));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke references/trigger");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {
@@ -30820,7 +30851,9 @@ int ObDDLService::grant_table(
     const share::ObRawObjPrivArray &obj_priv_array,
     const uint64_t option,
     const share::schema::ObObjPrivSortKey &obj_key,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_key.tenant_id_;
@@ -30850,7 +30883,9 @@ int ObDDLService::grant_table(
                                            trans,
                                            obj_priv_array,
                                            option,
-                                           obj_key))) {
+                                           obj_key,
+                                           grantor,
+                                           grantor_host))) {
         LOG_WARN("fail to grant table", K(ret), K(table_key), K(priv_set));
       }
       if (trans.is_started()) {
@@ -30878,11 +30913,19 @@ int ObDDLService::revoke_table_and_column_mysql(const obrpc::ObRevokeTableArg& a
   const uint64_t tenant_id = arg.tenant_id_;
   ObSchemaGetterGuard schema_guard;
   int64_t refreshed_schema_version = 0;
+  uint64_t compat_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("arg is invalid", K(arg), K(ret));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", K(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_2_4_0 &&
+            (0 != (arg.priv_set_ & OB_PRIV_TRIGGER))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("some column of user info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_4_0", K(ret), K(arg.priv_set_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "revoke table level trigger privilege");
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
   } else {
@@ -30903,7 +30946,8 @@ int ObDDLService::revoke_table_and_column_mysql(const obrpc::ObRevokeTableArg& a
                                     arg.user_id_);
       share::ObRawObjPrivArray obj_priv_array; //useless
       if (priv_set != 0 && OB_FAIL(ddl_operator.revoke_table(table_priv_key, priv_set, trans,
-                                            obj_priv_key, obj_priv_array, false))) {
+                                                             obj_priv_key, obj_priv_array, false,
+                                                             arg.grantor_, arg.grantor_host_))) {
         LOG_WARN("fail to revoke table", K(ret), K(table_priv_key), K(priv_set));
       } else {
         ObSEArray<std::pair<ObString, ObPrivType>, 4> column_names_priv;
@@ -31000,7 +31044,6 @@ int ObDDLService::revoke_table(
   const uint64_t tenant_id = table_key.tenant_id_;
   int64_t refreshed_schema_version = 0;
   ObSchemaGetterGuard schema_guard;
-
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
   } else if (!table_key.is_valid()) {
@@ -31048,7 +31091,9 @@ int ObDDLService::revoke_table(
 
 int ObDDLService::revoke_routine(
     const share::schema::ObRoutinePrivSortKey &routine_key,
-    const ObPrivSet priv_set)
+    const ObPrivSet priv_set,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = routine_key.tenant_id_;
@@ -31080,7 +31125,7 @@ int ObDDLService::revoke_routine(
       LOG_WARN("Start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ddl_operator.revoke_routine(routine_key, priv_set, trans))) {
+      if (OB_FAIL(ddl_operator.revoke_routine(routine_key, priv_set, trans, true, true, grantor, grantor_host))) {
         LOG_WARN("fail to revoke routine", K(ret), K(routine_key), K(priv_set));
       }
       if (trans.is_started()) {
@@ -31109,7 +31154,9 @@ int ObDDLService::grant_routine(
     const ObPrivSet priv_set,
     const ObString *ddl_stmt_str,
     const uint64_t option,
-    share::schema::ObSchemaGetterGuard &schema_guard)
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const common::ObString &grantor,
+    const common::ObString &grantor_host)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = routine_key.tenant_id_;
@@ -31141,7 +31188,10 @@ int ObDDLService::grant_routine(
       if (OB_FAIL(ddl_operator.grant_routine(routine_key,
                                            priv_set,
                                            trans,
-                                           option))) {
+                                           option,
+                                           true,
+                                           grantor,
+                                           grantor_host))) {
         LOG_WARN("fail to grant routine", K(ret), K(routine_key), K(priv_set));
       }
       if (trans.is_started()) {
@@ -31614,11 +31664,21 @@ int ObDDLService::create_routine(ObRoutineInfo &routine_info,
             ObPrivSet priv_set = (OB_PRIV_EXECUTE | OB_PRIV_ALTER_ROUTINE);
             int64_t option = 0;
             const bool gen_ddl_stmt = false;
-            if (OB_FAIL(ddl_operator.grant_routine(routine_key,
-                                                priv_set,
-                                                trans,
-                                                option,
-                                                gen_ddl_stmt))) {
+            const ObUserInfo *user_info = NULL;
+            if (OB_FAIL(schema_guard.get_user_info(tenant_id,
+                                                   routine_info.get_owner_id(),
+                                                   user_info))) {
+              LOG_WARN("failed to get user info", K(ret));
+            } else if (OB_ISNULL(user_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("user info is unexpeced null", K(ret));
+            } else if (OB_FAIL(ddl_operator.grant_routine(routine_key,
+                                                          priv_set,
+                                                          trans,
+                                                          option,
+                                                          gen_ddl_stmt,
+                                                          user_info->get_user_name_str(),
+                                                          user_info->get_host_name_str()))) {
               LOG_WARN("fail to grant routine", K(ret), K(routine_key), K(priv_set));
             }
           }
@@ -32502,7 +32562,7 @@ int ObDDLService::drop_trigger(const ObDropTriggerArg &arg)
   if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), K(ret));
-  } else if (ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode)) {
+  } else if (OB_FAIL(ObCompatModeGetter::check_is_oracle_mode_with_tenant_id(tenant_id, is_ora_mode))) {
     LOG_WARN("fail to check is oracle mode", K(ret));
   } else if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
@@ -34928,31 +34988,13 @@ int ObDDLService::update_oracle_tenant_sys_var(
       /*
        * In Oracle mode, we are only compatible with binary mode, so collate can only end with _bin
        */
-      if (CS_TYPE_UTF8MB4_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_LATIN1_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_GBK_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_UTF16_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_GB18030_BIN == tenant_schema.get_collation_type()
-          || CS_TYPE_GB18030_2022_BIN == tenant_schema.get_collation_type()) {
+      if (ObCharset::is_bin_sort(tenant_schema.get_collation_type())) {
         VAR_INT_TO_STRING(val_buf, tenant_schema.get_collation_type());
         SET_TENANT_VARIABLE(SYS_VAR_CHARACTER_SET_SERVER, val_buf);
         SET_TENANT_VARIABLE(SYS_VAR_CHARACTER_SET_DATABASE, val_buf);
-        if (CHARSET_UTF8MB4 == ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "AL32UTF8"));
-        } else if (CHARSET_GBK == ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS16GBK"));
-        } else if (CHARSET_UTF16 == ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "AL16UTF16"));
-        } else if (CHARSET_GB18030 ==
-                   ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS32GB18030"));
-        } else if (CHARSET_GB18030_2022 ==
-                   ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "ZHS32GB18030_2022"));
-        } else if (CHARSET_LATIN1 ==
-                   ObCharset::charset_type_by_coll(tenant_schema.get_collation_type())) {
-          OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s", "WE8MSWIN1252"));
-        }
+        ObCharsetType charset_type = ObCharset::charset_type_by_coll(tenant_schema.get_collation_type());
+        OZ(databuff_printf(val_buf, OB_MAX_SYS_PARAM_VALUE_LENGTH, "%s",
+                           ObCharset::get_oracle_charset_name_by_charset_type(charset_type)));
         SET_TENANT_VARIABLE(SYS_VAR_NLS_CHARACTERSET, val_buf);
       } else {
         ret = OB_ERR_UNEXPECTED;

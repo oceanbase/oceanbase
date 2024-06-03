@@ -1916,6 +1916,62 @@ int ObSysVarOnCheckFuncs::check_and_convert_collation_not_null(ObExecContext &ct
   return ret;
 }
 
+int ObSysVarOnCheckFuncs::check_default_value_for_utf8mb4(ObExecContext &ctx,
+                                                          const ObSetVar &set_var,
+                                                          const ObBasicSysVar &sys_var,
+                                                          const ObObj &in_val,
+                                                          ObObj &out_val)
+{
+  UNUSED(sys_var);
+  UNUSED(ctx);
+  int ret = OB_SUCCESS;
+  if (true == in_val.is_null()) {
+    ret = OB_ERR_WRONG_VALUE_FOR_VAR;
+    LOG_USER_ERROR(OB_ERR_WRONG_VALUE_FOR_VAR, sys_var.get_name().length(), sys_var.get_name().ptr(),
+                   (int)strlen("NULL"), "NULL");
+  } else {
+    ObString coll_name;
+    if (ObVarcharType == in_val.get_type()) {
+      coll_name = in_val.get_varchar();
+      ObCollationType coll_type = CS_TYPE_INVALID;
+      if (CS_TYPE_INVALID == (coll_type = ObCharset::collation_type(coll_name))) {
+        ret = OB_ERR_UNKNOWN_COLLATION;
+        LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name.length(), coll_name.ptr());
+      } else if (coll_type != CS_TYPE_UTF8MB4_GENERAL_CI) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,"only utf8mb4_general_ci is supported, other collation");
+      } else {
+        out_val.set_int(static_cast<int64_t>(coll_type));
+      }
+    } else if (ObIntType == in_val.get_type()) {
+      int64_t int64_val = in_val.get_int();
+      if (false == ObCharset::is_valid_collation(int64_val)) {
+        ret = OB_ERR_UNKNOWN_COLLATION;
+        int p_ret = OB_SUCCESS;
+        const static int64_t val_buf_len = 1024;
+        char val_buf[val_buf_len];
+        int64_t pos = 0;
+        if (OB_SUCCESS != (p_ret = databuff_printf(val_buf, val_buf_len, pos, "%ld", int64_val))) {
+          // p_ret不覆盖ret
+          LOG_WARN("fail to databuff_printf", K(ret), K(p_ret), K(int64_val));
+        } else {
+          ObString coll_name_str(val_buf);
+          LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, coll_name_str.length(), coll_name_str.ptr());
+        }
+      } else if (int64_val != 45) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,"only utf8mb4_general_ci is supported, other collation");
+      } else {
+        out_val = in_val;
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid type", K(ret), K(in_val));
+    }
+  }
+  return ret;
+}
+
 int ObSysVarOnCheckFuncs::check_and_convert_timeout_too_large(ObExecContext &ctx,
                                                               const ObSetVar &set_var,
                                                               const ObBasicSysVar &sys_var,
@@ -2006,6 +2062,7 @@ int ObSysVarOnCheckFuncs::check_and_convert_tx_read_only(ObExecContext &ctx,
   }
   return ret;
 }
+
 
 int ObSysVarOnCheckFuncs::check_update_resource_manager_plan(ObExecContext &ctx,
                                                              const ObSetVar &set_var,

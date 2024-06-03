@@ -23,6 +23,7 @@
 #define OB_UTF8MB4_GENERAL_CS OB_UTF8MB4 "_general_cs"
 #define OB_UTF8MB4_BIN        OB_UTF8MB4 "_bin"
 #define OB_UTF8MB4_UNICODE_CI OB_UTF8MB4 "_unicode_ci"
+#define OB_UTF8MB4_0900_AI_CI OB_UTF8MB4 "_0900_ai_ci"
 
 #define OB_UTF16                 "utf16"
 
@@ -194,7 +195,7 @@ typedef struct ObUnicaseInfo
 
 typedef struct ObCharsetHandler
 {
-  //my_bool (*init)(struct ObCharsetInfo *, MY_CHARSET_LOADER *loader);
+  bool (*init)(struct ObCharsetInfo *, ObCharsetLoader *loader);
   /* Multibyte routines */
   unsigned int    (*ismbchar)(const struct ObCharsetInfo *, const char *,
                       const char *);
@@ -319,6 +320,17 @@ typedef struct ObCollationHandler
                        size_t len);
 } ObCollationHandler;
 
+typedef struct OB_UNI_IDX {
+  uint16 from;
+  uint16 to;
+  const uchar *tab;
+} OB_UNI_IDX;
+
+typedef struct {
+  int nchars;
+  OB_UNI_IDX uidx;
+} uni_idx;
+
 struct ObCharsetInfo
 {
   unsigned int      number;
@@ -335,8 +347,8 @@ struct ObCharsetInfo
   unsigned char    *to_upper;
   unsigned char    *sort_order;
   ObUCAInfo *uca;
-  //uint16      *tab_to_uni;
-  //MY_UNI_IDX  *tab_from_uni;
+  uint16      *tab_to_uni;
+  OB_UNI_IDX  *tab_from_uni;
   ObUnicaseInfo *caseinfo;
   unsigned char     *state_map;
   unsigned char     *ident_map;
@@ -402,7 +414,17 @@ static inline unsigned int ob_ismbchar(const ObCharsetInfo *cs, const unsigned c
 }
 #define ob_mbcharlen(s, a)            ((s)->cset->mbcharlen((s),(a)))
 
+#define test_all_bits(a, b) (((a) & (b)) == (b))
 
+#define OB_COLL_ALLOW_SUPERSET_CONV 1
+#define OB_COLL_ALLOW_COERCIBLE_CONV 2
+#define OB_COLL_DISALLOW_NONE 4
+#define OB_COLL_ALLOW_NUMERIC_CONV 8
+#define OB_COLL_ALLOW_NEW_CONV 16 //allow new rule set for charset aggregation
+
+#define OB_COLL_ALLOW_CONV \
+  (OB_COLL_ALLOW_SUPERSET_CONV | OB_COLL_ALLOW_COERCIBLE_CONV | OB_COLL_ALLOW_NEW_CONV)
+#define OB_COLL_CMP_CONV (OB_COLL_ALLOW_CONV | OB_COLL_DISALLOW_NONE)
 
 typedef struct ob_uni_ctype
 {
@@ -437,15 +459,22 @@ extern ObCharsetInfo ob_charset_gb18030_2022_radical_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_ci;
 extern ObCharsetInfo ob_charset_gb18030_2022_stroke_cs;
 extern ObCharsetInfo ob_charset_gb18030_2022_bin;
-extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
-extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_zh_0900_as_cs;
 extern ObCharsetInfo ob_charset_utf8mb4_zh2_0900_as_cs;
 extern ObCharsetInfo ob_charset_utf8mb4_zh3_0900_as_cs;
+extern ObCharsetInfo ob_charset_utf8mb4_unicode_ci;
 extern ObCharsetInfo ob_charset_utf8mb4_0900_bin;
+extern ObCharsetInfo ob_charset_utf8mb4_0900_ai_ci;
+extern ObCharsetInfo ob_charset_utf16_unicode_ci;
 extern ObCharsetInfo ob_charset_latin1;
 extern ObCharsetInfo ob_charset_latin1_bin;
-
+extern ObCharsetInfo ob_charset_utf8mb4_croatian_uca_ci;
+extern ObCharsetInfo ob_charset_utf8mb4_unicode_520_ci;
+extern ObCharsetInfo ob_charset_utf8mb4_czech_uca_ci;
+extern ObCharsetInfo ob_charset_ascii;
+extern ObCharsetInfo ob_charset_ascii_bin;
+extern ObCharsetInfo ob_charset_tis620_thai_ci;
+extern ObCharsetInfo ob_charset_tis620_bin;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
@@ -624,7 +653,10 @@ size_t ob_strxfrm_pad(const ObCharsetInfo *cs, unsigned char *str, unsigned char
                       unsigned char *strend, unsigned int nweights, unsigned int flags);
 
 size_t ob_strnxfrmlen_simple(const struct ObCharsetInfo *, size_t);
-
+int ob_wildcmp_8bit(const ObCharsetInfo* cs, const char* str, const char* str_end, const char* wildstr,
+                    const char* wildend, int escape, int w_one, int w_many);
+uint32_t ob_instr_simple(const ObCharsetInfo* cs , const char* b, size_t b_length,
+    const char* s, size_t s_length, ob_match_t* match, unsigned int nmatch);
 size_t ob_strnxfrmlen_unicode_full_bin(const struct ObCharsetInfo *, size_t);
 
 size_t ob_strnxfrmlen_utf8mb4(const struct ObCharsetInfo *, size_t);
@@ -661,11 +693,21 @@ char *strmake(char *, const char *, size_t);
 size_t ob_casedn_8bit(const ObCharsetInfo *cs __attribute__((unused)),
     char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
     char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
-
+int ob_strcasecmp_8bit(const ObCharsetInfo *cs, const char *s, const char *t);
 size_t ob_caseup_8bit(const ObCharsetInfo *cs __attribute__((unused)),
     char* str __attribute__((unused)), size_t srclen __attribute__((unused)),
     char* dst __attribute__((unused)), size_t dstlen __attribute__((unused)));
 
+bool ob_cset_init_8bit(ObCharsetInfo *cs, ObCharsetLoader *loader);
+bool ob_coll_init_simple(ObCharsetInfo *cs, ObCharsetLoader *loader);
+size_t ob_well_formed_len_ascii(const ObCharsetInfo *cs,
+                                const char *start, const char *end,
+                                size_t nchars,
+                                int *error);
+int ob_8bit(const ObCharsetInfo *cs, ob_wc_t *wc, const uchar *str,
+                  const uchar *end);
+int ob_wc_mb_8bit(const ObCharsetInfo *cs, ob_wc_t wc, uchar *str, uchar *end);
+int ob_mb_wc_8bit(const ObCharsetInfo *cs, ob_wc_t *wc, const uchar *str,const uchar *end);
 extern "C" void right_to_die_or_duty_to_live_c();
 
 

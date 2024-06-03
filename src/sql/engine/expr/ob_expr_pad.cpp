@@ -84,12 +84,13 @@ int ObExprPad::calc_result_type3(ObExprResType &type,
         LOG_WARN("failed to push back source type", K(ret));
       } else if (OB_FAIL(types.push_back(padding_str))) {
         LOG_WARN("failed to push back padding source type", K(ret));
-      } else if (OB_FAIL(aggregate_charsets_for_string_result(
-              type, &types.at(0), 2, type_ctx.get_coll_type()))) {
+      } else if (OB_FAIL(aggregate_charsets_for_string_result(type, &types.at(0), 2, type_ctx))) {
         LOG_WARN("failed to set collation", K(ret));
       } else {
         source.set_calc_collation_type(type.get_collation_type());
+        source.set_calc_collation_level(type.get_collation_level());
         padding_str.set_calc_collation_type(type.get_collation_type());
+        padding_str.set_calc_collation_level(type.get_collation_level());
       }
     }
   }

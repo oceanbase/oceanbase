@@ -3631,10 +3631,9 @@ int ObSchemaGetterGuard::check_table_show(const ObSessionPrivInfo &session_priv,
   return ret;
 }
 
-
-
 int ObSchemaGetterGuard::check_user_priv(const ObSessionPrivInfo &session_priv,
-                                         const ObPrivSet priv_set)
+                                         const ObPrivSet priv_set,
+                                         bool check_all)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session_priv.tenant_id_;
@@ -3646,7 +3645,8 @@ int ObSchemaGetterGuard::check_user_priv(const ObSessionPrivInfo &session_priv,
     LOG_WARN("fail to check tenant schema guard", KR(ret), K(tenant_id), K_(tenant_id));
   } else if (OB_FAIL(check_lazy_guard(tenant_id, mgr))) {
     LOG_WARN("fail to check lazy guard", KR(ret), K(tenant_id));
-  } else if (!OB_TEST_PRIVS(user_priv_set, priv_set)) {
+  } else if ((!OB_TEST_PRIVS(user_priv_set, priv_set) && check_all)
+             || (!OB_PRIV_HAS_ANY(user_priv_set, priv_set) && !check_all)) {
     if ((priv_set == OB_PRIV_ALTER_TENANT
         || priv_set == OB_PRIV_ALTER_SYSTEM
         || priv_set == OB_PRIV_CREATE_RESOURCE_POOL
@@ -3663,7 +3663,7 @@ int ObSchemaGetterGuard::check_user_priv(const ObSessionPrivInfo &session_priv,
         LOG_WARN("fail to collect privs in roles", K(ret));
       } else {
         user_priv_set |= collected_privs.priv_set_;
-        if (!check_succ) {
+        if ((!check_succ && check_all) || (!OB_PRIV_HAS_ANY(user_priv_set, priv_set) && !check_all)) {
           ret = OB_ERR_NO_PRIVILEGE;
         }
       }
@@ -3689,6 +3689,10 @@ int ObSchemaGetterGuard::check_user_priv(const ObSessionPrivInfo &session_priv,
         } else {
           LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, priv_name_with_prefix.ptr());
         }
+      } else if (priv_set == (OB_PRIV_CREATE_ROLE | OB_PRIV_CREATE_USER) && !check_all) {
+        LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "CREATE USER or CREATE ROLE");
+      } else if (priv_set == (OB_PRIV_DROP_ROLE | OB_PRIV_CREATE_USER) && !check_all) {
+        LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, "CREATE USER or DROP ROLE");
       } else {
         LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE, priv_name);
       }
@@ -4381,12 +4385,14 @@ int ObSchemaGetterGuard::check_priv(const ObSessionPrivInfo &session_priv,
       const ObNeedPriv &need_priv = need_privs.at(i);
       switch (need_priv.priv_level_) {
         case OB_PRIV_USER_LEVEL: {
-          if (OB_FAIL(check_user_priv(session_priv, need_priv.priv_set_))) {
+          if (OB_FAIL(check_user_priv(session_priv,
+                                      need_priv.priv_set_,
+                                      OB_PRIV_CHECK_ALL == need_priv.priv_check_type_))) {
             LOG_WARN("No privilege", "tenant_id", session_priv.tenant_id_,
-                "user_id", session_priv.user_id_,
-                "need_priv", need_priv.priv_set_,
-                "user_priv", session_priv.user_priv_set_,
-                KR(ret));//need print priv
+                     "user_id", session_priv.user_id_,
+                     "need_priv", need_priv.priv_set_,
+                     "user_priv", session_priv.user_priv_set_,
+                     KR(ret));//need print priv
           }
           break;
         }

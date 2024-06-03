@@ -1070,6 +1070,9 @@
       ObCastCtx cast_ctx(&allocator, no_dtc_params ? NULL : &dtc_params, CM_NONE, column.get_collation_type());\
       if (is_cur_default_value && column.is_default_expr_v2_column())\
       { \
+        if (lib::is_mysql_mode()) { \
+          res_obj.set_collation_type(CS_TYPE_UTF8MB4_BIN); \
+        } \
         res_obj.set_varchar(str_value); \
         ret = (class_obj).set_##column_name(res_obj); \
       } \

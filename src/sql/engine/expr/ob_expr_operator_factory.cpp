@@ -441,6 +441,7 @@
 #include "sql/engine/expr/ob_expr_inner_table_option_printer.h"
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
+#include "sql/engine/expr/ob_expr_can_access_trigger.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -971,6 +972,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTimestampToScn);
     REG_OP(ObExprScnToTimestamp);
     REG_OP(ObExprSqlModeConvert);
+    REG_OP(ObExprCanAccessTrigger);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
@@ -1078,6 +1080,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprAuditLogRemoveFilter);
     REG_OP(ObExprAuditLogSetUser);
     REG_OP(ObExprAuditLogRemoveUser);
+    REG_OP(ObExprIsEnabledRole);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

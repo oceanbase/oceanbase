@@ -111,10 +111,13 @@ INTERVAL {
 
 _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
+_UTF8MB3                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB3); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
 _GB18030_2022                 { REPUT_TOKEN_NEG_SIGN(_GB18030_2022); }
 _LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
+_ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
+_TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
 NOT {

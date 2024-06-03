@@ -2882,6 +2882,28 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_OP_GET_SYS_VAR: {
+        int64_t param_num = expr->get_param_count();
+        ObRawExpr *name_expr = NULL;
+        ObRawExpr *scope_expr = NULL;
+        if (OB_UNLIKELY(2 != param_num) ||
+            OB_ISNULL(name_expr = expr->get_param_expr(0)) ||
+            OB_ISNULL(scope_expr = expr->get_param_expr(1))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid param count", K(ret), K(expr->get_param_count()));
+        } else if (OB_UNLIKELY(!name_expr->is_const_raw_expr()) ||
+                   OB_UNLIKELY(!static_cast<ObConstRawExpr*>(name_expr)->get_value().is_varchar()) ||
+                   OB_UNLIKELY(!scope_expr->is_const_raw_expr()) ||
+                   OB_UNLIKELY(!static_cast<ObConstRawExpr*>(scope_expr)->get_value().is_int())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid user variable name", K(ret));
+        } else {
+          DATA_PRINTF("@@");
+          func_name = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_varchar();
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        }
+        break;
+      }
       case T_FUN_COLUMN_CONV: {
         int64_t param_num = expr->get_param_count();
         if ((param_num != ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO

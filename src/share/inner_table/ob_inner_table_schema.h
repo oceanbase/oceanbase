@@ -1332,6 +1332,9 @@ public:
   static int engines_schema(share::schema::ObTableSchema &table_schema);
   static int routines_schema(share::schema::ObTableSchema &table_schema);
   static int profiling_schema(share::schema::ObTableSchema &table_schema);
+  static int optimizer_trace_schema(share::schema::ObTableSchema &table_schema);
+  static int plugins_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_columns_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_event_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_wait_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_wait_history_schema(share::schema::ObTableSchema &table_schema);
@@ -1754,6 +1757,9 @@ public:
   static int innodb_sys_virtual_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_temp_table_info_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_metrics_schema(share::schema::ObTableSchema &table_schema);
+  static int role_table_grants_schema(share::schema::ObTableSchema &table_schema);
+  static int role_column_grants_schema(share::schema::ObTableSchema &table_schema);
+  static int role_routine_grants_schema(share::schema::ObTableSchema &table_schema);
   static int dba_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
@@ -4093,6 +4099,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::engines_schema,
   ObInnerTableSchema::routines_schema,
   ObInnerTableSchema::profiling_schema,
+  ObInnerTableSchema::optimizer_trace_schema,
+  ObInnerTableSchema::plugins_schema,
+  ObInnerTableSchema::innodb_sys_columns_schema,
   ObInnerTableSchema::gv_session_event_schema,
   ObInnerTableSchema::gv_session_wait_schema,
   ObInnerTableSchema::gv_session_wait_history_schema,
@@ -4515,6 +4524,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::innodb_sys_virtual_schema,
   ObInnerTableSchema::innodb_temp_table_info_schema,
   ObInnerTableSchema::innodb_metrics_schema,
+  ObInnerTableSchema::role_table_grants_schema,
+  ObInnerTableSchema::role_column_grants_schema,
+  ObInnerTableSchema::role_routine_grants_schema,
   ObInnerTableSchema::dba_scheduler_job_run_details_schema,
   ObInnerTableSchema::cdb_scheduler_job_run_details_schema,
   ObInnerTableSchema::dba_synonyms_schema,
@@ -5860,6 +5872,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ENGINES_TID,
   OB_ROUTINES_TID,
   OB_PROFILING_TID,
+  OB_OPTIMIZER_TRACE_TID,
+  OB_PLUGINS_TID,
+  OB_INNODB_SYS_COLUMNS_TID,
   OB_GV_SESSION_EVENT_TID,
   OB_GV_SESSION_WAIT_TID,
   OB_GV_SESSION_WAIT_HISTORY_TID,
@@ -6168,6 +6183,9 @@ const uint64_t tenant_space_tables [] = {
   OB_INNODB_SYS_VIRTUAL_TID,
   OB_INNODB_TEMP_TABLE_INFO_TID,
   OB_INNODB_METRICS_TID,
+  OB_ROLE_TABLE_GRANTS_TID,
+  OB_ROLE_COLUMN_GRANTS_TID,
+  OB_ROLE_ROUTINE_GRANTS_TID,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
@@ -8402,6 +8420,9 @@ const char* const tenant_space_table_names [] = {
   OB_ENGINES_TNAME,
   OB_ROUTINES_TNAME,
   OB_PROFILING_TNAME,
+  OB_OPTIMIZER_TRACE_TNAME,
+  OB_PLUGINS_TNAME,
+  OB_INNODB_SYS_COLUMNS_TNAME,
   OB_GV_SESSION_EVENT_TNAME,
   OB_GV_SESSION_WAIT_TNAME,
   OB_GV_SESSION_WAIT_HISTORY_TNAME,
@@ -8710,6 +8731,9 @@ const char* const tenant_space_table_names [] = {
   OB_INNODB_SYS_VIRTUAL_TNAME,
   OB_INNODB_TEMP_TABLE_INFO_TNAME,
   OB_INNODB_METRICS_TNAME,
+  OB_ROLE_TABLE_GRANTS_TNAME,
+  OB_ROLE_COLUMN_GRANTS_TNAME,
+  OB_ROLE_ROUTINE_GRANTS_TNAME,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
@@ -12672,10 +12696,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 280;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 799;
-const int64_t OB_SYS_VIEW_COUNT = 895;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1979;
+const int64_t OB_SYS_VIEW_COUNT = 901;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1985;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1982;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1988;
 
 } // end namespace share
 } // end namespace oceanbase

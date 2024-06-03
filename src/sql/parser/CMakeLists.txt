@@ -8,6 +8,8 @@ set(ob_sql_parser_charset_object_list
     ob_ctype.cc
     ob_ctype_gbk.cc
     ob_ctype_latin1.cc
+    ob_ctype_ascii.cc
+    ob_ctype_tis620.cc
     ob_ctype_mb.cc
     ob_ctype_simple.cc
     ob_ctype_utf8.cc
@@ -50,17 +52,17 @@ if (OB_BUILD_ORACLE_PARSER)
     sql_parser_oracle_gbk_mode_lex.h
     sql_parser_oracle_gbk_mode_tab.c
     sql_parser_oracle_gbk_mode_tab.h
-    sql_parser_oracle_latin1_mode_lex.c
-    sql_parser_oracle_latin1_mode_lex.h
-    sql_parser_oracle_latin1_mode_tab.c
-    sql_parser_oracle_latin1_mode_tab.h
+    sql_parser_oracle_single_byte_mode_lex.c
+    sql_parser_oracle_single_byte_mode_lex.h
+    sql_parser_oracle_single_byte_mode_tab.c
+    sql_parser_oracle_single_byte_mode_tab.h
   )
 
   set(ob_inner_sql_parser_object_list
     ${ob_inner_sql_parser_object_list}
     non_reserved_keywords_oracle_utf8_mode.c
     non_reserved_keywords_oracle_gbk_mode.c
-    non_reserved_keywords_oracle_latin1_mode.c
+    non_reserved_keywords_oracle_single_byte_mode.c
   )
 endif()
 

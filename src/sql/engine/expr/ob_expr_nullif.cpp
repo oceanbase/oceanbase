@@ -85,7 +85,7 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
   if (ob_is_enumset_tc(type.get_type()) || ob_is_enumset_inner_tc(type.get_type())) {
     type.set_varchar();
   }
-  OZ(calc_cmp_type2(cmp_type, type1, type2, type_ctx.get_coll_type()));
+  OZ(calc_cmp_type2(cmp_type, type1, type2, type_ctx));
   if (OB_SUCC(ret)) {
     if (ob_is_enumset_tc(type1.get_type()) || ob_is_enumset_tc(type2.get_type())) {
       ObObjType calc_type = enumset_calc_types_[OBJ_TYPE_TO_CLASS[cmp_type.get_calc_type()]];
@@ -101,11 +101,13 @@ int ObExprNullif::se_deduce_type(ObExprResType &type,
             // implicit cast from enum_inner to uint64 will be added on EnumToInner expression.
             type1.set_calc_type(calc_type);
             type1.set_calc_collation_type(cmp_type.get_calc_collation_type());
+            type1.set_calc_collation_level(cmp_type.get_calc_collation_level());
           }
         }
         // set calc type for type2 no matter whether calc_type is varchar or not, and no matther which param is enum.
         type2.set_calc_type(calc_type);
         type2.set_calc_collation_type(cmp_type.get_calc_collation_type());
+        type2.set_calc_collation_level(cmp_type.get_calc_collation_level());
       }
     }
     if (OB_SUCC(ret)) {

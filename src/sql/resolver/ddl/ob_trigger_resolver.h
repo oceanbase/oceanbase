@@ -14,7 +14,7 @@
 #define OCEANBASE_SQL_RESOLVER_DDL_OB_TRIGGER_RESOLVER_
 
 #include "sql/resolver/ob_stmt_resolver.h"
-
+#include "sql/resolver/ddl/ob_trigger_stmt.h"
 namespace oceanbase
 {
 namespace obrpc
@@ -95,6 +95,7 @@ private:
 
   int resolve_base_object(obrpc::ObCreateTriggerArg &trigger_arg, bool search_public_schema);
   int resolve_order_clause(const ParseNode *parse_node, obrpc::ObCreateTriggerArg &trigger_arg);
+  int get_drop_trigger_stmt_table_name(ObDropTriggerStmt *stmt);
 #ifdef OB_BUILD_ORACLE_PL
   int resolve_rename_trigger(const ParseNode &rename_clause,
                              ObSchemaGetterGuard &schema_guard,

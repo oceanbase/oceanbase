@@ -62,8 +62,7 @@ int ObExprOracleNullif::calc_result_type2(ObExprResType &type,
         type.set_length(type1.get_length());
       } else {
         ObExprResType cmp_type;
-        if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2,
-                                  type_ctx.get_coll_type()))) {
+        if (OB_FAIL(calc_cmp_type2(cmp_type, type1, type2, type_ctx))) {
           LOG_WARN("failed to calc cmp type", K(ret), K(type1), K(type2));
         } else {
           type.set_type(type1.get_type());

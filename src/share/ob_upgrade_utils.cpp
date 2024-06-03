@@ -55,7 +55,7 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 1UL, 7UL),  // 4.2.1.7
   CALC_VERSION(4UL, 2UL, 2UL, 0UL),  // 4.2.2.0
   CALC_VERSION(4UL, 2UL, 2UL, 1UL),  // 4.2.2.1
-  CALC_VERSION(4UL, 2UL, 3UL, 0UL),   // 4.2.3.0
+  CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
   CALC_VERSION(4UL, 2UL, 4UL, 0UL)   // 4.2.4.0
 };
 

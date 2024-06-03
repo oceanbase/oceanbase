@@ -266,6 +266,7 @@ struct TableItem
     json_table_def_ = nullptr;
     table_type_ = MAX_TABLE_TYPE;
     values_table_def_ = NULL;
+    sample_info_ = nullptr;
   }
 
   virtual TO_STRING_KV(N_TID, table_id_,
@@ -289,7 +290,8 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K_(exec_params));
+               K_(exec_params),
+               KPC_(sample_info));
 
   enum TableType
   {
@@ -336,6 +338,7 @@ struct TableItem
   bool is_generated_table() const { return GENERATED_TABLE == type_; }
   bool is_temp_table() const { return TEMP_TABLE == type_; }
   bool is_fake_cte_table() const { return CTE_TABLE == type_; }
+  bool is_has_sample_info() const { return sample_info_ != nullptr; }
   bool is_joined_table() const { return JOINED_TABLE == type_; }
   bool is_function_table() const { return FUNCTION_TABLE == type_; }
   bool is_link_table() const { return OB_INVALID_ID != dblink_id_; } // why not use type_, cause type_ will be changed in dblink transform rule, but dblink id don't change
@@ -429,9 +432,11 @@ struct TableItem
   common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> part_names_;
   common::ObSEArray<ObExecParamRawExpr*, 4, common::ModulePageAllocator, true> exec_params_;
   // json table
-  ObJsonTableDef* json_table_def_;
+  ObJsonTableDef *json_table_def_;
   // values table
   ObValuesTableDef *values_table_def_;
+  // sample scan infos
+  SampleInfo *sample_info_;
 };
 
 struct ColumnItem

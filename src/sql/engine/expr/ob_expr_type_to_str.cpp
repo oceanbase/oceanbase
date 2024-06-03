@@ -72,6 +72,8 @@ int ObExprTypeToStr::calc_result_type2(ObExprResType &type,
   type.set_collation_type(type1.get_collation_type());
   type.set_collation_level(CS_LEVEL_IMPLICIT);
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 
@@ -417,7 +419,10 @@ int ObExprSetToInnerType::calc_result_type2(ObExprResType &type,
   int ret = OB_SUCCESS;
   type.set_type(ObSetInnerType);
   type.set_collation_type(type1.get_collation_type());
+  type.set_collation_level(type1.get_collation_level());
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 
@@ -522,6 +527,8 @@ int ObExprEnumToInnerType::calc_result_type2(ObExprResType &type,
   type.set_type(ObEnumInnerType);
   type.set_collation_type(type1.get_collation_type());
   type.set_length(type1.get_length());
+  type1.set_calc_collation_type(type.get_collation_type());
+  type1.set_calc_collation_level(type.get_collation_level());
   return ret;
 }
 

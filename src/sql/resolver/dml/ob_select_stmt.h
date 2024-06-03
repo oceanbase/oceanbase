@@ -614,13 +614,6 @@ public:
   int add_search_item(const OrderItem &order_item) { return search_by_items_.push_back(order_item); }
   int add_cycle_item(const ColumnItem &col_item) { return cycle_by_items_.push_back(col_item); }
 
-  int add_sample_info(const SampleInfo &sample_info) { return sample_infos_.push_back(sample_info); }
-  common::ObIArray<SampleInfo> &get_sample_infos() { return sample_infos_; }
-  const common::ObIArray<SampleInfo> &get_sample_infos() const { return sample_infos_; }
-  const SampleInfo *get_sample_info_by_table_id(uint64_t table_id) const;
-  SampleInfo *get_sample_info_by_table_id(uint64_t table_id);
-  // check if a table is using sample scan
-  bool is_sample_scan(uint64_t table_id) const { return get_sample_info_by_table_id(table_id) != nullptr; }
   virtual int check_table_be_modified(uint64_t ref_table_id, bool& is_modified) const override;
 
   // check aggregation has distinct or group concat e.g.:
@@ -691,9 +684,6 @@ private:
   common::ObSEArray<ObGroupingSetsItem, 8, common::ModulePageAllocator, true> grouping_sets_items_;
   common::ObSEArray<ObRollupItem, 8, common::ModulePageAllocator, true> rollup_items_;
   common::ObSEArray<ObCubeItem, 8, common::ModulePageAllocator, true> cube_items_;
-
-  // sample scan infos
-  common::ObSEArray<SampleInfo, 4, common::ModulePageAllocator, true> sample_infos_;
 
   // for oracle mode only, for stmt print only
   common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> for_update_columns_;

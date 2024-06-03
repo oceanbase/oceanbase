@@ -8620,10 +8620,10 @@ static const _error _error_OB_CANT_AGGREGATE_2COLLATIONS = {
       .mysql_errno           = ER_CANT_AGGREGATE_2COLLATIONS,
       .sqlstate              = "HY000",
       .str_error             = "Illegal mix of collations",
-      .str_user_error        = "Illegal mix of collations",
+      .str_user_error        = "Illegal mix of collations (%s,%s), (%s,%s)",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5177, Illegal mix of collations (%s,%s), (%s,%s)"
 };
 static const _error _error_OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD = {
       .error_name            = "OB_ERR_FIELD_TYPE_NOT_ALLOWED_AS_PARTITION_FIELD",
@@ -10744,10 +10744,10 @@ static const _error _error_OB_CANT_AGGREGATE_3COLLATIONS = {
       .mysql_errno           = ER_CANT_AGGREGATE_3COLLATIONS,
       .sqlstate              = "HY000",
       .str_error             = "Illegal mix of collations",
-      .str_user_error        = "Illegal mix of collations",
+      .str_user_error        = "Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)",
       .oracle_errno          = 600,
       .oracle_str_error      = "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations",
-      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations"
+      .oracle_str_user_error = "ORA-00600: internal error code, arguments: -5356, Illegal mix of collations (%s, %s),(%s, %s),(%s, %s)"
 };
 static const _error _error_OB_CANT_AGGREGATE_NCOLLATIONS = {
       .error_name            = "OB_CANT_AGGREGATE_NCOLLATIONS",

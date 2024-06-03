@@ -47,7 +47,6 @@ ob_tosort_utf16(ObUnicaseInfo *uni_plane, ob_wc_t *wc)
 static unsigned int ob_mbcharlen_utf16(const ObCharsetInfo *cs  __attribute__((unused)),
                    unsigned int c __attribute__((unused)))
 {
-  ob_charset_assert(0);
   return OB_UTF16_HIGH_HEAD(c) ? 4 : 2;
 }
 
@@ -1128,6 +1127,7 @@ PAD_MIN_MAX:
 
 ObCharsetHandler ob_charset_utf16_handler=
 {
+  NULL,
   ob_ismbchar_utf16,   
   ob_mbcharlen_utf16,  
   ob_numchars_utf16,
@@ -1198,6 +1198,8 @@ ObCharsetInfo ob_charset_utf16_bin=
   NULL,                
   NULL,                
   NULL,                
+  NULL,
+  NULL,
   &ob_unicase_default, 
   NULL,                
   NULL,                
@@ -1230,6 +1232,8 @@ ObCharsetInfo ob_charset_utf16_general_ci=
   NULL,                
   NULL,                
   NULL,                
+  NULL,
+  NULL,
   NULL,
   &ob_unicase_default, 
   NULL,                
