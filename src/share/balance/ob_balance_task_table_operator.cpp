@@ -197,18 +197,24 @@ int ObBalanceTask::simple_init(const uint64_t tenant_id,
            const uint64_t ls_group_id,
            const ObLSID &src_ls_id,
            const ObLSID &dest_ls_id,
-           const ObTransferPartList &part_list)
+           const ObTransferPartList &part_list,
+           const ObBalanceStrategy &balance_strategy)
 {
   int ret = OB_SUCCESS;
   ObBalanceTaskStatus task_status(0);
   ObTransferTaskID current_transfer_task_id;
   ObString comment;
-  if (OB_FAIL(init_(tenant_id, job_id, balance_task_id, task_type, task_status, ls_group_id,
+  if (OB_UNLIKELY(!balance_strategy.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid balance_strategy", KR(ret), K(balance_strategy));
+  } else if (OB_FAIL(init_(tenant_id, job_id, balance_task_id, task_type, task_status, ls_group_id,
                     src_ls_id, dest_ls_id, current_transfer_task_id, comment))) {
     LOG_WARN("failed to init", KR(ret), K(tenant_id), K(job_id), K(balance_task_id),
     K(task_type), K(task_status), K(src_ls_id), K(current_transfer_task_id));
   } else if (OB_FAIL(part_list_.assign(part_list))) {
     LOG_WARN("failed to assign commet", KR(ret), K(part_list));
+  } else {
+    balance_strategy_ = balance_strategy;
   }
   return ret;
 }
@@ -226,7 +232,8 @@ int ObBalanceTask::init(const uint64_t tenant_id,
            const ObString &finished_part_list_str,
            const ObString &parent_list_str,
            const ObString &child_list_str,
-           const ObString &comment)
+           const ObString &comment,
+           const ObString &balance_strategy_str)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(init_(tenant_id, job_id, balance_task_id, task_type, task_status, ls_group_id,
@@ -241,42 +248,8 @@ int ObBalanceTask::init(const uint64_t tenant_id,
     LOG_WARN("failed to parse str into list", KR(ret), K(part_list_str));
   } else if (!finished_part_list_str.empty() && OB_FAIL(finished_part_list_.parse_from_display_str(finished_part_list_str))) {
     LOG_WARN("failed to parse str into list", KR(ret), K(finished_part_list_str));
-  } else if (!is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("balance task is invalid", KR(ret), "this", *this);
-  }
-  return ret;
-}
-
-
-int ObBalanceTask::init(const uint64_t tenant_id,
-           const ObBalanceJobID job_id,
-           const ObBalanceTaskID balance_task_id,
-           const ObBalanceTaskType task_type,
-           const ObBalanceTaskStatus task_status,
-           const uint64_t ls_group_id,
-           const ObLSID &src_ls_id,
-           const ObLSID &dest_ls_id,
-           const ObTransferTaskID curr_transfer_task_id,
-           const ObTransferPartList &part_list,
-           const ObTransferPartList &finished_part_list,
-           const ObBalanceTaskIDList &parent_list,
-           const ObBalanceTaskIDList &child_list,
-           const ObString &comment)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(init_(tenant_id, job_id, balance_task_id, task_type, task_status, ls_group_id,
-                    src_ls_id, dest_ls_id, curr_transfer_task_id, comment))) {
-    LOG_WARN("failed to init", KR(ret), K(tenant_id), K(job_id), K(balance_task_id),
-    K(task_type), K(task_status), K(src_ls_id), K(curr_transfer_task_id), K(comment));
-  } else if (OB_FAIL(part_list_.assign(part_list))) {
-    LOG_WARN("failed to assign commet", KR(ret), K(part_list));
-  } else if (OB_FAIL(finished_part_list_.assign(finished_part_list))) {
-    LOG_WARN("failed to assign finish part list", KR(ret), K(finished_part_list));
-  } else if (OB_FAIL(parent_list_.assign(parent_list))) {
-    LOG_WARN("failed to assign parent list", KR(ret), K(parent_list));
-  } else if (OB_FAIL(child_list_.assign(child_list))) {
-    LOG_WARN("failed to assign child list", KR(ret), K(child_list));
+  } else if (!balance_strategy_str.empty() && OB_FAIL(balance_strategy_.parse_from_str(balance_strategy_str))) {
+    LOG_WARN("parse from str failed", KR(ret), K(balance_strategy_str));
   } else if (!is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("balance task is invalid", KR(ret), "this", *this);
@@ -323,6 +296,7 @@ void ObBalanceTask::reset()
   parent_list_.reset();
   child_list_.reset();
   comment_.reset();
+  balance_strategy_.reset();
 }
 
 int ObBalanceTask::assign(const ObBalanceTask &other)
@@ -350,6 +324,7 @@ int ObBalanceTask::assign(const ObBalanceTask &other)
       task_status_ = other.task_status_;
       ls_group_id_ = other.ls_group_id_;
       current_transfer_task_id_ = other.current_transfer_task_id_;
+      balance_strategy_ = other.balance_strategy_;
     }
   }
   return ret;
@@ -569,6 +544,16 @@ int ObBalanceTaskTableOperator::fill_dml_spliter(share::ObDMLSqlSplicer &dml,
                || OB_FAIL(dml.add_column("child_list", child_list_str))) {
       LOG_WARN("failed to add column", KR(ret), K(part_list_str), K(finished_part_list_str),
                                       K(parent_list_str), K(child_list_str));
+    } else {
+      uint64_t data_version = 0;
+      if (FAILEDx(GET_MIN_DATA_VERSION(task.get_tenant_id(), data_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(task));
+      } else if (data_version < DATA_VERSION_4_2_4_0) {
+        // skip
+      } else if (task.get_balance_strategy().is_valid()
+          && OB_FAIL(dml.add_column("balance_strategy", ObString(task.get_balance_strategy().str())))) {
+        LOG_WARN("add column failed", KR(ret), K(task));
+      }
     }
   }
   return ret;
@@ -942,6 +927,7 @@ int ObBalanceTaskTableOperator::fill_cell(const uint64_t tenant_id,
     ObString part_list_str, finished_part_list_str;
     ObString parent_list_str, child_list_str;
     ObString comment;
+    ObString balance_strategy_str;
     EXTRACT_INT_FIELD_MYSQL(*result, "job_id", job_id, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "task_id", balance_task_id, int64_t);
     EXTRACT_INT_FIELD_MYSQL(*result, "src_ls", src_ls_id, int64_t);
@@ -959,12 +945,14 @@ int ObBalanceTaskTableOperator::fill_cell(const uint64_t tenant_id,
         part_list_str);
     EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "finished_part_list",
         finished_part_list_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "balance_strategy",
+        balance_strategy_str, true/*skip_null_error*/, true/*skip_column_error*/, ObString());
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get cell", KR(ret), K(job_id),
           K(task_type), K(task_status), K(ls_group_id),
           K(src_ls_id), K(dest_ls_id),
           K(transfer_task_id), K(part_list_str), K(finished_part_list_str),
-          K(parent_list_str), K(child_list_str));
+          K(parent_list_str), K(child_list_str), K(balance_strategy_str));
     } else if (OB_FAIL(task.init(
             tenant_id, ObBalanceJobID(job_id), ObBalanceTaskID(balance_task_id),
             ObBalanceTaskType(task_type),
@@ -972,11 +960,12 @@ int ObBalanceTaskTableOperator::fill_cell(const uint64_t tenant_id,
             ObLSID(src_ls_id), ObLSID(dest_ls_id),
             ObTransferTaskID(transfer_task_id),
             part_list_str, finished_part_list_str,
-            parent_list_str, child_list_str, comment))) {
+            parent_list_str, child_list_str, comment, balance_strategy_str))) {
       LOG_WARN("failed to init task", KR(ret), K(tenant_id), K(job_id),
           K(balance_task_id), K(task_type), K(task_status), K(ls_group_id),
           K(src_ls_id), K(dest_ls_id), K(transfer_task_id), K(comment),
-          K(part_list_str), K(finished_part_list_str), K(parent_list_str), K(child_list_str));
+          K(part_list_str), K(finished_part_list_str), K(parent_list_str),
+          K(child_list_str), K(balance_strategy_str));
     }
   }
 

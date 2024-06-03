@@ -68,6 +68,7 @@
 #include "pl/sys_package/ob_dbms_session.h"
 #include "pl/sys_package/ob_dbms_workload_repository.h"
 #include "pl/sys_package/ob_dbms_limit_calculator_mysql.h"
+#include "pl/sys_package/ob_dbms_balance.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -730,6 +731,10 @@
   INTERFACE_DEF(INTERFACE_UTL_RECOMP_DELETE_ERRORS, "UTL_RECOMP_DELETE_ERRORS", (ObUtlRecomp::delete_errors))
   // end of utl_recomp
 #endif
+
+  // start of dbms_balance
+  INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
+  // end of dbms_balance
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

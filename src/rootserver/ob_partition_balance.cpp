@@ -103,12 +103,12 @@ void ObPartitionBalance::destroy()
   task_mode_ = GEN_BG_STAT;
 }
 
-int ObPartitionBalance::process()
+int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
-  ObString balance_strategy("partition balance"); //TODO: specify strategy
+  ObBalanceStrategy balance_strategy;
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not init", KR(ret), K(this));
@@ -120,23 +120,43 @@ int ObPartitionBalance::process()
     // finish
   } else if (bg_map_.empty()) {
     LOG_INFO("PART_BALANCE balance group is empty do nothing", K(tenant_id_));
-  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_inner_())) {
+  } else if (job_generator_.need_gen_job()) {
+    balance_strategy = ObBalanceStrategy::PB_ATTR_ALIGN;
+  } else if (OB_FAIL(process_balance_partition_inner_())) {
     LOG_WARN("process_balance_partition_inner fail", KR(ret), K(tenant_id_));
-  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_extend_())) {
+  } else if (job_generator_.need_gen_job()) {
+    balance_strategy = ObBalanceStrategy::PB_INTRA_GROUP;
+  } else if (OB_FAIL(process_balance_partition_extend_())) {
     LOG_WARN("process_balance_partition_extend fail", KR(ret), K(tenant_id_));
-  } else if (!job_generator_.need_gen_job() && OB_FAIL(process_balance_partition_disk_())) {
+  } else if (job_generator_.need_gen_job()) {
+    balance_strategy = ObBalanceStrategy::PB_INTER_GROUP;
+  } else if (OB_FAIL(process_balance_partition_disk_())) {
     LOG_WARN("process_balance_partition_disk fail", KR(ret), K(tenant_id_));
+  } else if (job_generator_.need_gen_job()) {
+    balance_strategy = ObBalanceStrategy::PB_PART_DISK;
   }
 
-  if (OB_FAIL(ret) || GEN_BG_STAT == task_mode_ || !job_generator_.need_gen_job()) {
+  if (OB_FAIL(ret) || !balance_strategy.is_valid()) {
     // skip
-  } else if (OB_FAIL(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy))) {
-    LOG_WARN("gen balance job and tasks failed", KR(ret),
-        K(tenant_id_), K(job_type), K(balance_strategy));
+  } else if (OB_UNLIKELY(!balance_strategy.is_partition_balance_strategy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected balance strategy", KR(ret), K(balance_strategy));
+  } else {
+    // compatible scenario: observer is new but data_version has not been pushed up
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+      LOG_WARN("fail to get data version", KR(ret), K(tenant_id_));
+    } else if (data_version < DATA_VERSION_4_2_4_0) {
+      balance_strategy = ObBalanceStrategy::PB_COMPAT_OLD;
+    }
+    if (FAILEDx(job_generator_.gen_balance_job_and_tasks(job_type, balance_strategy, job_id, timeout))) {
+      LOG_WARN("gen balance job and tasks failed", KR(ret),
+          K(tenant_id_), K(job_type), K(balance_strategy), K(job_id), K(timeout));
+    }
   }
 
   int64_t end_time = ObTimeUtility::current_time();
-  LOG_INFO("PART_BALANCE process", KR(ret), K(tenant_id_), K(task_mode_),
+  LOG_INFO("PART_BALANCE process", KR(ret), K(tenant_id_), K(task_mode_), K(job_id), K(timeout),
       "cost", end_time - start_time, "need balance", job_generator_.need_gen_job());
   return ret;
 }

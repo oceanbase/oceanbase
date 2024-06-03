@@ -66,6 +66,7 @@
 #include "share/backup/ob_backup_config.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/scheduler/ob_sys_task_stat.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 
 #include "sql/executor/ob_executor_rpc_proxy.h"
 #include "sql/engine/cmd/ob_user_cmd_executor.h"
@@ -9996,26 +9997,16 @@ int ObRootService::set_config_pre_hook(obrpc::ObAdminSetConfigArg &arg)
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("config invalid", KR(ret), K(*item), K(balancer_idle_time), K(tenant_id));
         }
-      }
-    } else if (0 == STRCMP(item->name_.ptr(), BALANCER_IDLE_TIME)) {
-      const int64_t DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL = 2 * 3600 * 1000 * 1000L; // 2h
-      for (int i = 0; i < item->tenant_ids_.count() && valid; i++) {
-        const uint64_t tenant_id = item->tenant_ids_.at(i);
-        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-        int64_t interval = tenant_config.is_valid()
-            ? tenant_config->partition_balance_schedule_interval
-            : DEFAULT_PARTITION_BALANCE_SCHEDULE_INTERVAL;
-        int64_t idle_time = ObConfigTimeParser::get(item->value_.ptr(), valid);
-        if (valid && (idle_time > interval)) {
-          valid = false;
-          char err_msg[DEFAULT_BUF_LENGTH];
-          (void)snprintf(err_msg, sizeof(err_msg), "balancer_idle_time of tenant %ld, "
-              "it should not be longer than partition_balance_schedule_interval", tenant_id);
-          LOG_USER_ERROR(OB_INVALID_ARGUMENT, err_msg);
-        }
-        if (!valid) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("config invalid", KR(ret), K(*item), K(interval), K(tenant_id));
+        if (OB_SUCC(ret) && is_user_tenant(tenant_id)) {
+          // When dbms_scheduler job SCHEDULED_TRIGGER_PARTITION_BALANCE is enabled,
+          // modify partition_balance_schedule_interval to valid value is not allowed.
+          bool passed = false;
+          if (OB_FAIL(ObScheduledTriggerPartitionBalance::check_modify_schedule_interval(
+              tenant_id,
+              interval,
+              passed))) {
+            LOG_WARN("check schedule interval failed", KR(ret), K(tenant_id), K(interval));
+          }
         }
       }
     } else if (0 == STRCMP(item->name_.ptr(), LOG_DISK_UTILIZATION_LIMIT_THRESHOLD)) {

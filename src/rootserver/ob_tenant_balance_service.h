@@ -37,6 +37,7 @@ namespace share
 class ObBalanceJob;
 class ObBalanceTask;
 class ObLSTableOperator;
+class ObBalanceStrategy;
 namespace schema
 {
 class ObMultiVersionSchemaService;
@@ -45,6 +46,7 @@ class ObTenantSchema;
 }
 namespace rootserver
 {
+class ObPartitionBalance;
 
 /*description:
  * only one thread in threadpool
@@ -78,6 +80,7 @@ public:
     UNUSED(lsn);
     return OB_SUCCESS;
   }
+  int trigger_partition_balance(const uint64_t tenant_id, const int64_t timeout);
   static int gather_stat_primary_zone_num_and_units(
       const uint64_t &tenant_id,
       int64_t &primary_zone_num,
@@ -107,9 +110,11 @@ private:
   void reset();
   int persist_job_and_task_(const share::ObBalanceJob &job,
                             ObArray<share::ObBalanceTask> &tasks);
-  int persist_job_and_task_in_trans_(const share::ObBalanceJob &job,
-                            ObArray<share::ObBalanceTask> &tasks,
-                            common::ObMySQLTransaction &trans);
+  int persist_job_and_task_in_trans_(
+      const share::ObLSStatusInfoArray &ls_array,
+      const share::ObBalanceJob &job,
+      ObArray<share::ObBalanceTask> &tasks,
+      common::ObMySQLTransaction &trans);
   int construct_dependency_of_each_task_(ObArray<share::ObBalanceTask> &tasks);
   int lock_and_check_balance_job_(common::ObMySQLTransaction &trans, const uint64_t tenant_id);
   int try_update_job_comment_(const share::ObBalanceJob &job, const common::ObSqlString &comment);
@@ -123,6 +128,19 @@ private:
   int transfer_partition_(int64_t &job_cnt);
   int try_finish_transfer_partition_(const share::ObBalanceJob &job,
       common::ObMySQLTransaction &trans);
+  int finish_doing_and_canceling_job_(const share::ObBalanceJob &job);
+  int try_finish_doing_partition_balance_job_(
+      const share::ObBalanceJob &job,
+      bool &is_finished);
+  int update_job_and_insert_new_tasks_(
+      const share::ObBalanceJob &old_job,
+      const share::ObBalanceStrategy &new_strategy,
+      ObArray<share::ObBalanceTask> &tasks);
+  int check_inner_stat_();
+  int precheck_for_trigger_(const uint64_t tenant_id);
+  int init_partition_balance_for_trigger_(
+      const uint64_t tenant_id,
+      ObPartitionBalance &partition_balance);
 private:
   bool inited_;
   bool loaded_;

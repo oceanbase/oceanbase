@@ -42,11 +42,11 @@ int ObPartitionBalance::prepare_ls_()
   return OB_SUCCESS;
 }
 
-int ObPartitionBalance::process()
+int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t timeout)
 {
   int ret = OB_SUCCESS;
   ObBalanceJobType job_type(ObBalanceJobType::BALANCE_JOB_PARTITION);
-  ObString balance_strategy("partition balance");
+  ObBalanceStrategy balance_strategy(ObBalanceStrategy::PB_INTER_GROUP);
   if (OB_FAIL(prepare_balance_group_())) {
     LOG_WARN("prepare_balance_group fail", KR(ret));
   } else if (OB_FAIL(save_balance_group_stat_())) {

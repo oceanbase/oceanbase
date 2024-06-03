@@ -76,6 +76,7 @@
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/scn.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "pl/ob_pl_persistent.h"
 
 namespace oceanbase
@@ -5364,6 +5365,8 @@ int ObDDLOperator::init_tenant_env(
     LOG_WARN("insert default databases failed,", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_optimizer_stats_info(sys_variable, tenant_id, trans))) {
     LOG_WARN("failed to init tenant optimizer stats info", K(tenant_id), K(ret));
+  } else if (OB_FAIL(init_tenant_scheduled_job_(sys_variable, tenant_id, trans))) {
+    LOG_WARN("init tenant scheduled job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_tenant_spm_configure(tenant_id, trans))) {
     LOG_WARN("failed to init tenant spm configure", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_profile(tenant_id, sys_variable, trans))) {
@@ -12226,6 +12229,23 @@ int ObDDLOperator::try_add_dep_info_for_synonym(const ObSimpleSynonymSchema *syn
   return ret;
 }
 
+int ObDDLOperator::init_tenant_scheduled_job_(
+    const ObSysVariableSchema &sys_variable,
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (!is_user_tenant(tenant_id)) {
+    // do nothing
+  } else if (OB_FAIL(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
+      sys_variable,
+      tenant_id,
+      true/*is_enabled*/,
+      trans))) {
+    LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
 
 }//end namespace rootserver
 }//end namespace oceanbase

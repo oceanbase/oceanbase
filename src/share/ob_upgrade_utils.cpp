@@ -24,6 +24,7 @@
 #include "share/ob_rpc_struct.h"
 #include "share/ls/ob_ls_status_operator.h"//get max ls id
 #include "share/ob_tenant_info_proxy.h"//update max ls id
+#include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "ob_upgrade_utils.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "share/stat/ob_dbms_stats_preferences.h"
@@ -1311,6 +1312,8 @@ int ObUpgradeFor4240Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_optimizer_stats())) {
     LOG_WARN("failed to post upgrade for optimizer stats", K(ret));
+  } else if (OB_FAIL(post_upgrade_for_scheduled_trigger_partition_balance())) {
+    LOG_WARN("post for upgrade scheduled trigger partition balance failed", KR(ret));
   }
   return ret;
 }
@@ -1349,8 +1352,46 @@ int ObUpgradeFor4240Processor::post_upgrade_for_optimizer_stats()
   }
   return ret;
 }
-/* =========== 4240 upgrade processor end ============= */
 
+// The tenant upgraded from old version still relies on partition_balance_schedule_interval.
+// SCHEDULED_TRIGGER_PARTITION_BALANCE is disabled.
+int ObUpgradeFor4240Processor::post_upgrade_for_scheduled_trigger_partition_balance()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant= false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K(tenant_id_));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K(tenant_id_));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K(tenant_id_));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
+        *sys_variable_schema,
+        tenant_id_,
+        false/*is_enabled*/,
+        trans))) { // insert ignore
+      LOG_WARN("create scheduled trigger partition balance job failed", KR(ret), K(tenant_id_));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for scheduled_trigger_partition_balance finished", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+/* =========== 4240 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

@@ -79,9 +79,12 @@ public:
         || !normal_to_normal_part_map_.empty();
   }
 
+  // new balance job will be generated when job_id is not specified
   int gen_balance_job_and_tasks(
       const share::ObBalanceJobType &job_type,
-      const ObString &balance_strategy);
+      const share::ObBalanceStrategy &balance_strategy,
+      const share::ObBalanceJobID &job_id = share::ObBalanceJobID(),
+      const int64_t balance_timeout = 0);
 
   TO_STRING_KV(K_(tenant_id), K_(primary_zone_num), K_(unit_group_num),
       K_(dup_ls_ids), K_(balance_job), K_(balance_tasks));

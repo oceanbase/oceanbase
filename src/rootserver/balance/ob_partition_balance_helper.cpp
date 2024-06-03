@@ -250,35 +250,42 @@ int ObPartTransferJobGenerator::add_need_transfer_part_(
 
 int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
     const ObBalanceJobType &job_type,
-    const ObString &balance_strategy)
+    const ObBalanceStrategy &balance_strategy,
+    const ObBalanceJobID &job_id,
+    const int64_t balance_timeout)
 {
   int ret = OB_SUCCESS;
   balance_job_.reset();
   balance_tasks_.reset();
-  ObBalanceJobID job_id;
+  ObBalanceJobID new_job_id = job_id;
   ObBalanceJobStatus job_status(ObBalanceJobStatus::BALANCE_JOB_STATUS_DOING);
   ObString comment;
+  int64_t max_end_time = balance_timeout > 0
+      ? (ObTimeUtility::current_time() + balance_timeout)
+      : OB_INVALID_TIMESTAMP;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (OB_UNLIKELY(!job_type.is_valid()
-      || balance_strategy.empty())) {
+      || !balance_strategy.is_valid()
+      || balance_timeout < 0
+      || !need_gen_job())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(job_type), K(balance_strategy));
-  } else if (!need_gen_job()) {
-    // no partitions need to be transferred
-  } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
+    LOG_WARN("invalid args", KR(ret), K(job_type), K(balance_strategy),
+        K(balance_timeout), "need_gen_job", need_gen_job());
+  } else if (!new_job_id.is_valid() && OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, new_job_id))) {
     LOG_WARN("gen unique id failed", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(balance_job_.init(
       tenant_id_,
-      job_id,
+      new_job_id,
       job_type,
       job_status,
       primary_zone_num_,
       unit_group_num_,
       comment,
-      balance_strategy))) {
-    LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id), K(job_type), K(job_status),
-        K(primary_zone_num_), K(unit_group_num_), K(comment), K(balance_strategy));
+      balance_strategy,
+      max_end_time))) {
+    LOG_WARN("job init fail", KR(ret), K(tenant_id_), K(job_id), K(new_job_id), K(job_type), K(job_status),
+        K(primary_zone_num_), K(unit_group_num_), K(comment), K(balance_strategy), K(max_end_time));
   } else {
     if (OB_SUCC(ret) && !dup_to_normal_part_map_.empty()) {
       if (OB_FAIL(gen_transfer_tasks_from_dup_ls_to_normal_ls_())) {
@@ -308,7 +315,8 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
 #define ADD_ALTER_TASK(ls_group_id, src_ls_id)                                           \
   do {                                                                                   \
     if (FAILEDx(ObLSBalanceTaskHelper::add_ls_alter_task(tenant_id_,                     \
-        balance_job_.get_job_id(), ls_group_id, src_ls_id, balance_tasks_))) {           \
+        balance_job_.get_job_id(), ls_group_id, src_ls_id,                               \
+        balance_job_.get_balance_strategy(), balance_tasks_))) {                         \
       LOG_WARN("add ls alter task failed", KR(ret), K(tenant_id_), K(balance_job_),      \
           K(src_ls_id), K(dest_ls_id), K(ls_group_id), K(balance_tasks_));               \
     }                                                                                    \
@@ -317,7 +325,8 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
 #define ADD_TRANSFER_TASK(ls_group_id, src_ls_id, dest_ls_id, part_list)                           \
   do {                                                                                             \
     if (FAILEDx(ObLSBalanceTaskHelper::add_ls_transfer_task(tenant_id_, balance_job_.get_job_id(), \
-        ls_group_id, src_ls_id, dest_ls_id, part_list, balance_tasks_))) {                         \
+        ls_group_id, src_ls_id, dest_ls_id, part_list,                                             \
+        balance_job_.get_balance_strategy(), balance_tasks_))) {                                   \
       LOG_WARN("add ls transfer task failed", KR(ret), K(tenant_id_), K(balance_job_),             \
           K(src_ls_id), K(dest_ls_id), K(ls_group_id), K(part_list), K(balance_tasks_));           \
     }                                                                                              \
@@ -326,7 +335,8 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
 #define ADD_MERGE_TASK(ls_group_id, src_ls_id, dest_ls_id)                                 \
   do {                                                                                     \
     if (FAILEDx(ObLSBalanceTaskHelper::add_ls_merge_task(tenant_id_,                       \
-        balance_job_.get_job_id(), ls_group_id, src_ls_id, dest_ls_id, balance_tasks_))) { \
+        balance_job_.get_job_id(), ls_group_id, src_ls_id, dest_ls_id,                     \
+        balance_job_.get_balance_strategy(), balance_tasks_))) {                           \
       LOG_WARN("add ls merge task failed", KR(ret), K(tenant_id_), K(balance_job_),        \
           K(src_ls_id), K(dest_ls_id), K(ls_group_id), K(balance_tasks_));                 \
     }                                                                                      \
@@ -335,7 +345,8 @@ int ObPartTransferJobGenerator::gen_balance_job_and_tasks(
 #define ADD_SPLIT_TASK(ls_group_id, src_ls_id, part_list, dest_ls_id)                                 \
   do {                                                                                                \
     if (FAILEDx(ObLSBalanceTaskHelper::add_ls_split_task(sql_proxy_, tenant_id_,                      \
-        balance_job_.get_job_id(), ls_group_id, src_ls_id, part_list, dest_ls_id, balance_tasks_))) { \
+        balance_job_.get_job_id(), ls_group_id, src_ls_id, part_list,                                 \
+        balance_job_.get_balance_strategy(), dest_ls_id, balance_tasks_))) {                          \
       LOG_WARN("add ls split task failed", KR(ret), K(tenant_id_), K(balance_job_),                   \
           K(src_ls_id), K(dest_ls_id), K(ls_group_id), K(part_list), K(balance_tasks_));              \
     }                                                                                                 \

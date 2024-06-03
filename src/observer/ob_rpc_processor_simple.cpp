@@ -63,6 +63,7 @@
 #include "observer/ob_req_time_service.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
+#include "rootserver/ob_tenant_balance_service.h" // ObTenantBalanceService
 #include "storage/high_availability/ob_transfer_service.h" // ObTransferService
 #include "sql/udr/ob_udr_mgr.h"
 #ifdef OB_BUILD_SPM
@@ -363,6 +364,36 @@ int ObAdminDRTaskP::process()
     LOG_WARN("fail to handle ob admin command", KR(ret), K_(arg));
   }
   LOG_INFO("finish handle ls replica task triggered by ob_admin", K_(arg));
+  return ret;
+}
+
+int ObRpcTriggerPartitionBalanceP::process()
+{
+  int ret = OB_SUCCESS;
+  rootserver::ObTenantBalanceService *balance_service = nullptr;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  bool is_leader = false;
+  const int64_t start_time = ObTimeUtility::current_time();
+  LOG_INFO("start to trigger partition balance", K_(arg), K(start_time));
+  if (OB_UNLIKELY(tenant_id != MTL_ID())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("tenant not match", KR(ret), K_(arg), K(MTL_ID()));
+  } else if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K_(arg));
+  } else if (OB_ISNULL(balance_service = MTL(rootserver::ObTenantBalanceService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(balance_service));
+  } else if (OB_FAIL(storage::ObStorageHAUtils::check_ls_is_leader(tenant_id, SYS_LS, is_leader))) {
+    LOG_WARN("fail to check sys ls is leader", K(ret), K(tenant_id));
+  } else if (!is_leader) {
+    ret = OB_NOT_MASTER;
+    LOG_WARN("is not sys ls leader, need retry", K(ret), K(is_leader));
+  } else if (OB_FAIL(balance_service->trigger_partition_balance(tenant_id, arg_.get_balance_timeout()))) {
+    LOG_WARN("trigger partition balance failed", KR(ret), K_(arg));
+  }
+  LOG_INFO("finish trigger partition balance", KR(ret), K_(arg),
+      "cost", ObTimeUtility::current_time() - start_time);
   return ret;
 }
 

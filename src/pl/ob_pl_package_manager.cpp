@@ -456,6 +456,7 @@ static const ObSysPackageFile oracle_syspack_file_list[] = {
   {"xmlsequence", "xml_sequence_type.sql", nullptr},
   {"utl_recomp", "utl_recomp.sql", "utl_recomp_body.sql"},
   {"dbms_profiler", "dbms_profiler.sql", "dbms_profiler_body.sql"},
+  {"dbms_balance", "dbms_balance.sql", "dbms_balance_body.sql"},
 #endif
 };
 static const ObSysPackageFile mysql_syspack_file_list[] = {
@@ -472,7 +473,8 @@ static const ObSysPackageFile mysql_syspack_file_list[] = {
   {"dbms_udr", "dbms_udr_mysql.sql", "dbms_udr_body_mysql.sql"},
   {"dbms_workload_repository", "dbms_workload_repository_mysql.sql", "dbms_workload_repository_body_mysql.sql"},
   {"dbms_ob_limit_calculator", "dbms_ob_limit_calculator_mysql.sql", "dbms_ob_limit_calculator_body_mysql.sql"},
-  {"external_table_alert_log", "external_table_alert_log.sql", nullptr}
+  {"external_table_alert_log", "external_table_alert_log.sql", nullptr},
+  {"dbms_balance", "dbms_balance_mysql.sql", "dbms_balance_body_mysql.sql"},
 };
 
 // for now! we only have one special system package "__DBMS_UPGRADE"
