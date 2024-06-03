@@ -13,8 +13,8 @@
 #ifndef OCEABASE_STORAGE_OB_LS_META_
 #define OCEABASE_STORAGE_OB_LS_META_
 
+#include "lib/lock/ob_latch.h"
 #include "lib/utility/utility.h"           // ObTimeGuard
-#include "lib/lock/ob_spin_lock.h"
 #include "logservice/palf/lsn.h"
 #include "share/ob_ls_id.h"
 #include "lib/ob_define.h"
@@ -104,16 +104,41 @@ public:
 
   ObReplicaType get_replica_type() const
   { return unused_replica_type_; }
-  class ObSpinLockTimeGuard
+  // IF I have locked with W:
+  //    lock with R/W will be succeed do nothing.
+  // ELSE:
+  //    lock with R/W
+  class ObReentrantWLockGuard
   {
   public:
-    ObSpinLockTimeGuard(common::ObSpinLock &lock,
-                        const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
-    ~ObSpinLockTimeGuard() {}
+    ObReentrantWLockGuard(common::ObLatch &lock,
+                          const bool try_lock = false,
+                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
+    ~ObReentrantWLockGuard();
+    inline int get_ret() const { return ret_; }
     void click(const char *mod = NULL) { time_guard_.click(mod); }
+    bool locked() const { return common::OB_SUCCESS == ret_; }
   private:
+    bool first_locked_;
     ObTimeGuard time_guard_;
-    ObSpinLockGuard lock_guard_;
+    common::ObLatch &lock_;
+    int ret_;
+  };
+  class ObReentrantRLockGuard
+  {
+  public:
+    ObReentrantRLockGuard(common::ObLatch &lock,
+                          const bool try_lock = false,
+                          const int64_t warn_threshold = 100 * 1000 /* 100 ms */);
+    ~ObReentrantRLockGuard();
+    inline int get_ret() const { return ret_; }
+    void click(const char *mod = NULL) { time_guard_.click(mod); }
+    bool locked() const { return common::OB_SUCCESS == ret_; }
+  private:
+    bool first_locked_;
+    ObTimeGuard time_guard_;
+    common::ObLatch &lock_;
+    int ret_;
   };
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ls_create_status),
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
@@ -123,7 +148,8 @@ public:
 private:
   int check_can_update_();
 public:
-  mutable common::ObSpinLock lock_;
+  mutable common::ObLatch rw_lock_;     // only for atomic read/write in memory.
+  mutable common::ObLatch update_lock_; // only one process can update ls meta. both for write slog and memory
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
 private:
