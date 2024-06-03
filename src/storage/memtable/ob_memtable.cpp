@@ -1497,10 +1497,6 @@ void ObMemtable::lock_row_on_frozen_stores_on_failure(
       TRANS_LOG(WARN, "sstable conflict will occurred when lock operation",
                 K(ctx), KPC(this), K(writer_dml_flag));
     }
-  } else {
-    // Tip1: mvcc_write guarantee the tnode will not be inserted if error is reported
-    (void)mvcc_engine_.mvcc_undo(value);
-    res.is_mvcc_undo_ = true;
   }
   if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
     ret = post_row_write_conflict_(ctx.mvcc_acc_ctx_,
@@ -3063,9 +3059,12 @@ int ObMemtable::multi_set_(
       TRANS_LOG(WARN, "Failed to encode memory table key", K(ret));
     } else {
       ret = rows_info.get_error_code();
-      lock_row_on_frozen_stores_on_failure(blocksstable::ObDmlFlag::DF_INSERT, mtk,
-                                           ret, mvcc_rows[conflict_idx].mvcc_row_,
-                                           context, mvcc_rows[conflict_idx].write_result_);
+      lock_row_on_frozen_stores_on_failure(blocksstable::ObDmlFlag::DF_INSERT,
+                                           mtk,
+                                           ret,
+                                           mvcc_rows[conflict_idx].mvcc_row_,
+                                           context,
+                                           mvcc_rows[conflict_idx].write_result_);
     }
   }
 
@@ -3341,7 +3340,16 @@ int ObMemtable::mvcc_write_(
                                                                        context,
                                                                        value,
                                                                        res))) {
-    lock_row_on_frozen_stores_on_failure(arg.data_->dml_flag_, *key, ret, value, context, res);
+    lock_row_on_frozen_stores_on_failure(arg.data_->dml_flag_,
+                                         *key,
+                                         ret,
+                                         value,
+                                         context,
+                                         res);
+    if (res.has_insert()) {
+      (void)mvcc_engine_.mvcc_undo(value);
+      res.is_mvcc_undo_ = true;
+    }
   } else if (OB_FAIL(mvcc_engine_.ensure_kv(&stored_key, value))) {
     if (res.has_insert()) {
       (void)mvcc_engine_.mvcc_undo(value);
