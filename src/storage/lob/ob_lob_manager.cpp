@@ -638,7 +638,7 @@ int ObLobManager::compare(ObLobLocatorV2& lob_left,
                           ObLobCompareParams& cmp_params,
                           int64_t& result) {
   INIT_SUCC(ret);
-  ObArenaAllocator tmp_allocator("ObLobCmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  ObArenaAllocator tmp_allocator("LobCmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
   ObLobManager *lob_mngr = MTL(ObLobManager*);
   if (OB_ISNULL(lob_mngr)) {
     ret = OB_ERR_UNEXPECTED;
@@ -986,6 +986,8 @@ int ObLobManager::append(
     ObLobLocatorV2 &lob)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("LobTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  param.set_tmp_allocator(&tmp_allocator);
   bool is_char = param.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -1062,7 +1064,7 @@ int ObLobManager::append(
         SMART_VAR(ObLobAccessParam, read_param) {
           read_param.tx_desc_ = param.tx_desc_;
           read_param.tenant_id_ = param.src_tenant_id_;
-          if (OB_FAIL(build_lob_param(read_param, *param.allocator_, param.coll_type_,
+          if (OB_FAIL(build_lob_param(read_param, *param.get_tmp_allocator(), param.coll_type_,
                       0, UINT64_MAX, param.timeout_, lob))) {
             LOG_WARN("fail to build read param", K(ret), K(lob));
           } else if (OB_FAIL(query(read_param, data))) {
@@ -1096,6 +1098,7 @@ int ObLobManager::append(
       LOG_WARN("check_write_length fail", K(ret), K(param), K(lob), K(append_lob_len));
     }
   }
+  param.set_tmp_allocator(nullptr);
   return ret;
 }
 
@@ -1140,6 +1143,8 @@ int ObLobManager::append(
     ObString& data)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator("LobTmp", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
+  param.set_tmp_allocator(&tmp_allocator);
   bool save_is_reverse = param.scan_backward_;
   uint64_t save_param_len = param.len_;
   bool is_char = param.coll_type_ != common::ObCollationType::CS_TYPE_BINARY;
@@ -1221,6 +1226,7 @@ int ObLobManager::append(
     param.len_ = save_param_len;
     param.scan_backward_ = save_is_reverse;
   }
+  param.set_tmp_allocator(nullptr);
   return ret;
 }
 

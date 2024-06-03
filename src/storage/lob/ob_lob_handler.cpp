@@ -1085,10 +1085,10 @@ int ObLobWriteBaseHandler::prepare_data_buffer(ObLobAccessParam& param, ObString
 {
   int ret = OB_SUCCESS;
   char *ptr = nullptr;
-  if (OB_ISNULL(param.allocator_)) {
+  if (OB_ISNULL(param.get_tmp_allocator())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret), K(param));
-  } else if (OB_ISNULL(ptr = static_cast<char*>(param.allocator_->alloc(buffer_size)))) {
+  } else if (OB_ISNULL(ptr = static_cast<char*>(param.get_tmp_allocator()->alloc(buffer_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc buffer failed.", K(ret));
   } else {

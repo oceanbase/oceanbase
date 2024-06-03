@@ -31,7 +31,7 @@ public:
 public:
 
   ObLobAccessParam()
-    : allocator_(nullptr),
+    : tmp_allocator_(nullptr), allocator_(nullptr),
       tx_desc_(nullptr), snapshot_(), tx_id_(),
       sql_mode_(SMO_DEFAULT), dml_base_param_(nullptr),
       tenant_id_(MTL_ID()), src_tenant_id_(MTL_ID()),
@@ -44,7 +44,7 @@ public:
       read_latest_(false), scan_backward_(false), is_fill_zero_(false), from_rpc_(false),
       inrow_read_nocopy_(false), is_store_char_len_(true), need_read_latest_(false),
       inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD), schema_chunk_size_(OB_DEFAULT_LOB_CHUNK_SIZE),
-      access_ctx_(nullptr), addr_(), store_ctx_guard_(nullptr)
+      access_ctx_(nullptr), addr_()
   {}
   ~ObLobAccessParam();
 
@@ -101,11 +101,18 @@ public:
   int update_out_row_ctx(const ObLobMetaInfo *old_info, const ObLobMetaInfo& new_info);
   int init_seq_no(const uint64_t modified_len);
 
+  void set_tmp_allocator(ObIAllocator *tmp_allocator) { tmp_allocator_ = tmp_allocator; }
+  ObIAllocator* get_tmp_allocator() { return  nullptr != tmp_allocator_ ? tmp_allocator_ : allocator_; }
+
+
   TO_STRING_KV(KP(this), K_(tenant_id), K_(src_tenant_id), K_(ls_id), K_(tablet_id), K_(lob_meta_tablet_id), K_(lob_piece_tablet_id),
-    KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size), K_(timeout), KP_(allocator),
+    KPC_(lob_locator), KPC_(lob_common), KPC_(lob_data), K_(byte_size), K_(handle_size), K_(timeout), KP_(allocator), KP_(tmp_allocator),
     K_(coll_type), K_(scan_backward), K_(offset), K_(len), K_(parent_seq_no), K_(seq_no_st), K_(used_seq_cnt), K_(total_seq_cnt), K_(checksum),
     K_(update_len), K_(op_type), K_(is_fill_zero), K_(from_rpc), K_(snapshot), K_(tx_id), K_(read_latest), K_(is_total_quantity_log),
-    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest), KP_(access_ctx), K_(addr), KP_(store_ctx_guard));
+    K_(inrow_read_nocopy), K_(schema_chunk_size), K_(inrow_threshold), K_(is_store_char_len), K_(need_read_latest), KP_(access_ctx), K_(addr));
+
+private:
+  ObIAllocator *tmp_allocator_;
 
 public:
   ObIAllocator *allocator_;
@@ -182,7 +189,6 @@ public:
   ObObj ext_info_log_;
   ObLobAccessCtx *access_ctx_;
   ObAddr addr_;
-  ObStoreCtxGuard *store_ctx_guard_;
 };
 
 
