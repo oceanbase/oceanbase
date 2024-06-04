@@ -398,7 +398,6 @@ int ObMPBase::do_after_process(sql::ObSQLSessionInfo &session,
     session.reset_cur_sql_id();
     session.reset_current_plan_hash();
     session.reset_current_plan_id();
-    session.reset_query_string();
     session.reset_warnings_buf();
     session.set_session_sleep();
   }

@@ -158,7 +158,6 @@ void ObSqlEndTransCb::callback(int cb_param)
     session_info->reset_cur_sql_id();
     session_info->reset_current_plan_hash();
     session_info->reset_current_plan_id();
-    session_info->reset_query_string();
     session_info->set_session_sleep();
     if (OB_SUCCESS == ret) {
       if (need_disconnect_) {
