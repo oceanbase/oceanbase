@@ -343,10 +343,10 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
                           "                           :part1_type, "
                           "                           object_number); "
                           "end; ";
-  if (OB_ISNULL(dblink_proxy)) {
+  if (OB_ISNULL(dblink_proxy) || OB_ISNULL(dblink_conn) || OB_ISNULL(dblink_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dblink_proxy is NULL", K(ret));
-  } else if (OB_FAIL(dblink_proxy->dblink_prepare(dblink_conn, call_proc))) {
+    LOG_WARN("param is NULL", K(ret), K(dblink_proxy), K(dblink_conn), K(dblink_schema));
+  } else if (OB_FAIL(dblink_proxy->dblink_prepare(dblink_conn, call_proc, 7))) {
     LOG_WARN("prepare sql failed", K(ret), K(ObString(call_proc)));
   }
   if (OB_SUCC(ret)) {
@@ -363,27 +363,29 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
     memset(part1, 0, ident_size);
     memset(part2, 0, ident_size);
     memset(dblink, 0, ident_size);
-    int32_t oci_sql_str = static_cast<int32_t>(OciDataType::OCI_SQLT_STR);
-    int32_t oci_sql_int = static_cast<int32_t>(OciDataType::OCI_SQLT_INT);
-#define BIND_BASIC_BY_POS(param_pos, param, param_size, param_type)         \
+    bool is_oracle = (DblinkDriverProto::DBLINK_DRV_OCI
+                      == static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto()));
+#define BIND_BASIC_BY_POS(param_pos, param, param_size, param_type, is_out_param)         \
     if (FAILEDx(dblink_proxy->dblink_bind_basic_type_by_pos(dblink_conn,    \
                                                             param_pos,      \
                                                             param,          \
                                                             param_size,     \
                                                             param_type,     \
-                                                            indicator))) {  \
+                                                            indicator,      \
+                                                            is_out_param))) {  \
       LOG_WARN("bind param failed", K(ret), K(param_pos), K(param_size), K(param_type)); \
     }
-    BIND_BASIC_BY_POS(1, full_name_copy.ptr(), static_cast<int64_t>(full_name_copy.length() + 1), oci_sql_str);
-    BIND_BASIC_BY_POS(2, &context, static_cast<int64_t>(sizeof(int)), oci_sql_int);
-    BIND_BASIC_BY_POS(3, schema1, ident_size, oci_sql_str);
-    BIND_BASIC_BY_POS(4, part1, ident_size, oci_sql_str);
-    BIND_BASIC_BY_POS(5, part2, ident_size, oci_sql_str);
-    BIND_BASIC_BY_POS(6, dblink, ident_size, oci_sql_str);
-    BIND_BASIC_BY_POS(7, &part1_type, static_cast<int64_t>(sizeof(int)), oci_sql_int);
+    BIND_BASIC_BY_POS(1, full_name_copy.ptr(), static_cast<int64_t>(full_name_copy.length() + (is_oracle ? 1 : 0)), ObObjType::ObVarcharType, false);
+    BIND_BASIC_BY_POS(2, &context, static_cast<int64_t>(sizeof(int)), ObObjType::ObInt32Type, false);
+    BIND_BASIC_BY_POS(3, schema1, ident_size, ObObjType::ObVarcharType, true);
+    BIND_BASIC_BY_POS(4, part1, ident_size, ObObjType::ObVarcharType, true);
+    BIND_BASIC_BY_POS(5, part2, ident_size, ObObjType::ObVarcharType, true);
+    BIND_BASIC_BY_POS(6, dblink, ident_size, ObObjType::ObVarcharType, true);
+    BIND_BASIC_BY_POS(7, &part1_type, static_cast<int64_t>(sizeof(int)), ObObjType::ObInt32Type, true);
     if (FAILEDx(dblink_proxy->dblink_execute_proc(dblink_conn))) {
       const DblinkDriverProto link_type = static_cast<DblinkDriverProto>(dblink_schema->get_driver_proto());
-      if (OB_ERR_ILL_OBJ_FLAG == ret) {
+      if (OB_ERR_ILL_OBJ_FLAG == ret
+          || OB_ERR_MISSING_IDENTIFIER == ret) {
         ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
         LOG_WARN("invalid identifier", K(ret), K(full_name_copy));
         LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, full_name_copy.length(), full_name_copy.ptr());

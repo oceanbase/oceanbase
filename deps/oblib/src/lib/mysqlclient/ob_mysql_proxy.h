@@ -197,14 +197,18 @@ public:
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                           const ObTimeZoneInfo *tz_info,
-                          ObObj *result);
-  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
+                          ObObj *result,
+                          bool is_sql);
+  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
+                     const char *sql,
+                     int64_t param_count);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *param,
                                     int64_t param_size,
                                     int32_t datatype,
-                                    int32_t &indicator);
+                                    int32_t &indicator,
+                                    bool is_out_param);
   int dblink_bind_array_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *array,

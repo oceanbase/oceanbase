@@ -35,6 +35,9 @@
 #include "sql/plan_cache/ob_cache_object_factory.h"
 #include "pl/pl_cache/ob_pl_cache.h"
 #include "pl/pl_cache/ob_pl_cache_object.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "pl/ob_pl_call_stack_trace.h"
+#endif
 
 namespace test
 {
@@ -715,7 +718,6 @@ public:
     top_call_(top_call),
     need_reset_physical_plan_(false),
     top_context_(NULL),
-    current_line_(OB_INVALID_INDEX),
     loc_(loc),
     is_called_from_sql_(is_called_from_sql),
     dwarf_helper_(NULL),
@@ -756,9 +758,8 @@ public:
   inline bool is_top_call() const { return top_call_; }
   inline uint64_t get_loc() const { return loc_; }
   inline void set_loc(uint64_t loc) { loc_ = loc; }
-  inline uint64_t get_line_number() { return static_cast<uint64_t>(get_loc() >> 32 & 0xffffffff); }
 
-  inline uint64_t get_current_line() { return get_line_number() + 1; }
+  inline uint64_t get_current_line() { return (get_loc() >> 32) + 1; }
 
   inline void set_current_line(int64_t current_line)
   {
@@ -818,8 +819,6 @@ private:
   bool need_reset_physical_plan_;
 
   ObPLContext *top_context_;
-
-  int64_t current_line_;
   uint64_t loc_; // combine of line and column number
   bool is_called_from_sql_;
   jit::ObDWARFHelper *dwarf_helper_; // for decode dwarf debuginfo
@@ -829,11 +828,16 @@ private:
   ObPLProfilerTimeStack *profiler_time_stack_;
 };
 
+class ObPLCallStackTrace;
 class ObPLContext
 {
   friend class LinkPLStackGuard;
 public:
-  ObPLContext() { reset(); }
+  ObPLContext()
+#ifdef OB_BUILD_ORACLE_PL
+      : call_stack_trace_(nullptr)
+#endif
+      { reset(); }
   virtual ~ObPLContext() { reset(); }
   void reset()
   {
@@ -858,7 +862,10 @@ public:
     old_in_definer_ = false;
     has_output_arguments_ = false;
 #ifdef OB_BUILD_ORACLE_PL
-    call_trace_.reset();
+    if (call_stack_trace_ != nullptr) {
+      call_stack_trace_->~ObPLCallStackTrace();
+    }
+    call_stack_trace_ = nullptr;
 #endif
     old_worker_timeout_ts_ = 0;
     old_phy_plan_timeout_ts_ = 0;
@@ -942,12 +949,7 @@ public:
   void reset_role_id_array(int &ret);
 
   ObIArray<ObPLExecState *> &get_exec_stack() { return exec_stack_; }
-#ifdef OB_BUILD_ORACLE_PL
-  ObIArray<DbmsUtilityHelper::BtInfo*> &get_error_trace() { return call_trace_.error_trace; }
-  ObIArray<DbmsUtilityHelper::BtInfo*> &get_call_stack() { return call_trace_.call_stack; }
-  void set_call_trace_error_code(int errcode) { call_trace_.err_code = errcode; }
-  int get_call_trace_error_code() const { return call_trace_.err_code; }
-#endif
+
   ObPLExecState *get_current_state()
   {
     return exec_stack_.empty() ? NULL : exec_stack_.at(exec_stack_.count() - 1);
@@ -960,11 +962,6 @@ public:
   {
     return NULL == get_current_state() ? NULL : &get_current_state()->get_exec_ctx();
   }
-#ifdef OB_BUILD_ORACLE_PL
-  static int get_exact_error_msg(ObIArray<DbmsUtilityHelper::BtInfo*> &error_trace,
-                                   ObIArray<DbmsUtilityHelper::BtInfo*> &call_stack,
-                                   common::ObSqlString &err_msg);
-#endif
   bool has_output_arguments() { return has_output_arguments_; }
   void set_has_output_arguments(bool has_output_arguments)
   {
@@ -986,6 +983,10 @@ public:
   pl::ObPLContext *get_top_stack_ctx() { return top_stack_ctx_; }
   sql::ObExecContext *get_my_exec_ctx() { return my_exec_ctx_; }
   ObCurTraceId::TraceId get_trace_id() const { return trace_id_; }
+
+#ifdef OB_BUILD_ORACLE_PL
+  ObPLCallStackTrace *get_call_stack_trace();
+#endif
 
 private:
   ObPLContext* get_stack_pl_ctx();
@@ -1037,7 +1038,7 @@ private:
 
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
 #ifdef OB_BUILD_ORACLE_PL
-  DbmsUtilityHelper::BackTrace call_trace_;
+  ObPLCallStackTrace *call_stack_trace_;
 #endif
   ObPLContext *parent_stack_ctx_;
   ObPLContext *top_stack_ctx_;

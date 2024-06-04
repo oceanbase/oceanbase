@@ -675,6 +675,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
                                 jit::ObLLVMValue &allocator,
                                 jit::ObLLVMValue &src,
                                 jit::ObLLVMValue &dest,
+                                uint64_t location,
                                 bool in_notfound,
                                 bool in_warning,
                                 uint64_t package_id) const
@@ -706,7 +707,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
     jit::ObLLVMValue ret_err;
     if (OB_FAIL(generator.get_helper().create_call(ObString("spi_copy_datum"), generator.get_spi_service().spi_copy_datum_, args, ret_err))) {
       LOG_WARN("failed to create call", K(ret));
-    } else if (OB_FAIL(generator.check_success(ret_err, OB_INVALID_ID, in_notfound, in_warning))) {
+    } else if (OB_FAIL(generator.check_success(ret_err, location, in_notfound, in_warning))) {
       LOG_WARN("failed to check success", K(ret));
     } else { /*do nothing*/ }
   }

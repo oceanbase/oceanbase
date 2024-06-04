@@ -82,6 +82,7 @@ public:
     jit::ObLLVMFunction spi_construct_collection_;
     jit::ObLLVMFunction spi_clear_diagnostic_area_;
     jit::ObLLVMFunction spi_end_trans_;
+    jit::ObLLVMFunction spi_update_location_;
     jit::ObLLVMFunction spi_set_pl_exception_code_;
     jit::ObLLVMFunction spi_get_pl_exception_code_;
     jit::ObLLVMFunction spi_check_early_exit_;
@@ -351,6 +352,7 @@ public:
   int generate_update_package_changed_info(
     const ObPLStmt &s, uint64_t package_id, uint64_t var_idx);
   int restart_cg_when_goto_dest(const ObPLStmt &stmt);
+  int generate_update_location(const ObPLStmt &s);
 public:
   inline jit::ObLLVMHelper &get_helper() { return helper_; }
   inline jit::ObLLVMBasicBlock &get_entry() { return entry_; }

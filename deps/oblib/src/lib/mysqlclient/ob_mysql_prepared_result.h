@@ -50,6 +50,7 @@ public:
   int64_t get_result_column_count() const { return result_column_count_; }
 
   int bind_result(ObBindParam &param);
+  MYSQL_BIND *&get_bind() { return bind_; }
 private:
   ObMySQLPreparedStatement &stmt_;
   common::ObIAllocator &alloc_;

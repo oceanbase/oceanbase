@@ -55,6 +55,7 @@ int ObMySQLPreparedResult::init()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("out of memory, alloc mem for mysql bind error", K(ret));
   } else {
+    MEMSET(bind_, 0, sizeof(MYSQL_BIND) * result_column_count_);
     LOG_TRACE("statemen field count = ", K(result_column_count_));
   }
   return ret;
@@ -120,6 +121,7 @@ int ObMySQLPreparedResult::bind_result(ObBindParam &param)
     bind_[param.col_idx_].length = &param.length_;
     bind_[param.col_idx_].is_null = &param.is_null_;
     bind_[param.col_idx_].is_unsigned = param.is_unsigned_;
+    bind_[param.col_idx_].error = &bind_[param.col_idx_].error_value;
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index", K(param), K(result_column_count_));

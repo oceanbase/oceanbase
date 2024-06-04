@@ -135,8 +135,9 @@ public:
                         const share::schema::ObRoutineInfo &routine_info,
                         const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                         const ObTimeZoneInfo *tz_info,
-                        ObObj *result) = 0;
-  virtual int prepare(const char *sql) {
+                        ObObj *result,
+                        bool is_sql) = 0;
+  virtual int prepare(const char *sql, int64_t param_count) {
     UNUSED(sql);
     return OB_NOT_SUPPORTED;
   }
@@ -144,9 +145,10 @@ public:
                                      void *param,
                                      int64_t param_size,
                                      int32_t datatype,
-                                     int32_t &indicator)
+                                     int32_t &indicator,
+                                     bool is_out_param)
   {
-    UNUSEDx(position, param, param_size, datatype);
+    UNUSEDx(position, param, param_size, datatype, indicator, is_out_param);
     return OB_NOT_SUPPORTED;
   }
   virtual int bind_array_type_by_pos(uint64_t position,

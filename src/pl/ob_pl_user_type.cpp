@@ -68,7 +68,7 @@ int ObUserDefinedType::generate_default_value(
 int ObUserDefinedType::generate_copy(
   ObPLCodeGenerator &generator, const ObPLBlockNS &ns,
   jit::ObLLVMValue &allocator, jit::ObLLVMValue &src, jit::ObLLVMValue &dest,
-  bool in_notfound, bool in_warning, uint64_t package_id) const
+  uint64_t location, bool in_notfound, bool in_warning, uint64_t package_id) const
 {
   UNUSEDx(generator, ns, allocator, src, dest, in_notfound, in_warning, package_id);
   LOG_WARN_RET(OB_NOT_SUPPORTED, "Call virtual func of ObUserDefinedType! May forgot implement in SubClass", K(this));
@@ -844,13 +844,14 @@ int ObUserDefinedSubType::generate_copy(ObPLCodeGenerator &generator,
                                         jit::ObLLVMValue &allocator,
                                         jit::ObLLVMValue &src,
                                         jit::ObLLVMValue &dest,
+                                        uint64_t location,
                                         bool in_notfound,
                                         bool in_warning,
                                         uint64_t package_id) const
 {
   int ret = OB_SUCCESS;
   OZ (SMART_CALL(base_type_.generate_copy(
-    generator, ns, allocator, src, dest, in_notfound, in_warning, package_id)));
+    generator, ns, allocator, src, dest, location, in_notfound, in_warning, package_id)));
   return ret;
 }
 
@@ -1509,6 +1510,7 @@ int ObRecordType::generate_default_value(ObPLCodeGenerator &generator,
                                                    allocator,
                                                    src_datum,
                                                    ptr_elem,
+                                                   stmt->get_location(),
                                                    stmt->get_block()->in_notfound(),
                                                    stmt->get_block()->in_warning(),
                                                    OB_INVALID_ID));
@@ -2942,6 +2944,14 @@ int ObCollectionType::deserialize(ObSchemaGetterGuard &schema_guard,
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed",
                    K(ret), KPC(this), KPC(table), K(element_init_size), K(count), K(max_count));
+        }
+        if (OB_SUCC(ret)) {
+          // initialize all ObObj
+          ObObj *obj = reinterpret_cast<ObObj*>(table_data);
+          CK (OB_NOT_NULL(obj));
+          for (int64_t i = 0; OB_SUCC(ret) && i < max_count; i++) {
+            obj[i].reset();
+          }
         }
         if (OB_SUCC(ret) && element_type_.is_record_type()) {
           int table_data_pos_tmp = table_data_pos;

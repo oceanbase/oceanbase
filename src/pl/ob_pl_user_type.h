@@ -81,6 +81,7 @@ public:
                             jit::ObLLVMValue &allocator,
                             jit::ObLLVMValue &src,
                             jit::ObLLVMValue &dest,
+                            uint64_t location,
                             bool in_notfound,
                             bool in_warning,
                             uint64_t package_id = OB_INVALID_ID) const;
@@ -205,6 +206,7 @@ public:
                             jit::ObLLVMValue &allocator,
                             jit::ObLLVMValue &src,
                             jit::ObLLVMValue &dest,
+                            uint64_t location,
                             bool in_notfound,
                             bool in_warning,
                             uint64_t package_id = OB_INVALID_ID) const;

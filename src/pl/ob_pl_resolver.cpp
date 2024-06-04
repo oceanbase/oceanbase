@@ -4381,6 +4381,7 @@ int ObPLResolver::resolve_case(const ObStmtNodeTree *parse_tree, ObPLCaseStmt *s
           if (OB_FAIL(stmt_factory_.allocate(PL_SIGNAL, else_block, stmt))) {
             LOG_WARN("failed to alloc stmt", K(ret));
           } else if (OB_ISNULL(signal_stmt = static_cast<ObPLSignalStmt*>(stmt))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("failed to cast stmt", K(ret));
           } else {
             signal_stmt->set_cond_type(ERROR_CODE);
@@ -9934,10 +9935,9 @@ int ObPLResolver::set_udf_expr_line_number(ObRawExpr *expr, uint64_t line_number
     if (expr->is_udf_expr()) {
       ObUDFRawExpr *udf_expr = static_cast<ObUDFRawExpr *>(expr);
       udf_expr->set_loc(line_number);
-    } else {
-      for (int64_t i = 0; i < expr->get_children_count(); ++i) {
-        OZ (SMART_CALL(set_udf_expr_line_number(expr->get_param_expr(i), line_number)));
-      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_children_count(); ++i) {
+      OZ (SMART_CALL(set_udf_expr_line_number(expr->get_param_expr(i), line_number)));
     }
   }
   return ret;
@@ -10970,10 +10970,8 @@ int ObPLResolver::resolve_inner_call(
           }
         }
       } else {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not support inner call function type", K(ret), K(access_idxs.at(idx_cnt - 1)));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "inner call function type");
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, const_cast<char *> (func.get_name().ptr()));
+        ret = OB_ERR_UNDEFINED;
+        LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_idxs));
       }
     }
   }
@@ -11578,8 +11576,8 @@ int ObPLResolver::resolve_construct(const ObQualifiedName &q_name,
   int ret = OB_SUCCESS;
   if (user_type.is_nested_table_type() || user_type.is_varray_type()) {
     OZ (resolve_collection_construct(q_name, udf_info, &user_type, expr));
-  } else if (user_type.is_object_type() && user_type.is_udt_type()) {
-    OZ (resolve_object_construct(q_name, udf_info, &user_type, expr));
+  } else if (user_type.is_record_type() || user_type.is_opaque_type()) {
+    OZ (resolve_object_construct(q_name, udf_info, user_type, expr));
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("only allow collection construct and user define record construct", K(ret), K(user_type));
@@ -11588,51 +11586,21 @@ int ObPLResolver::resolve_construct(const ObQualifiedName &q_name,
   return ret;
 }
 
-int ObPLResolver::resolve_construct(const ObQualifiedName &q_name,
-                                   const ObUDFInfo &udf_info,
-                                   ObRawExpr *&expr)
-{
-  int ret = OB_SUCCESS;
-  const ObUserDefinedType *user_type = NULL;
-  CK (OB_NOT_NULL(current_block_));
-  ObString package_name
-    = udf_info.is_udf_udt_cons()
-      ? ObString("")
-        : udf_info.udf_package_ != udf_info.udf_name_ ? udf_info.udf_package_ : ObString(""); 
-  OZ (current_block_->get_namespace().get_pl_data_type_by_name(
-                      resolve_ctx_, udf_info.udf_database_, package_name,
-                      udf_info.udf_name_, user_type));
-  CK (OB_NOT_NULL(user_type));
-  // reset the error code, we have to try udf.
-  if (OB_FAIL(ret)) {
-    LOG_WARN("failed to get type", K(ret), K(package_name), K(udf_info), K(q_name));
-    ret = OB_ERR_SP_UNDECLARED_TYPE;
-  }
-  if (OB_SUCC(ret)) {
-    if (user_type->is_nested_table_type()
-        || user_type->is_varray_type()) {
-      OZ (resolve_collection_construct(q_name, udf_info, user_type, expr));
-    } else if (user_type->is_object_type() && user_type->is_udt_type()) {
-      OZ (resolve_object_construct(q_name, udf_info, user_type, expr));
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("only allow collection construct and user define record construct", K(ret), KPC(user_type));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "Constructs other than collection constructs and user-defined record constructs");
-    }
-  }
-  return ret;
-}
-
 int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
                                            const sql::ObUDFInfo &udf_info,
-                                           const ObUserDefinedType *user_type,
+                                           const ObUserDefinedType &user_type,
                                            ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  uint64_t type_id = OB_INVALID_ID;
-  OX (type_id = user_type->get_user_type_id());
-  if (OB_SUCC(ret)) {
-    ObUDFInfo &uinfo = const_cast<ObUDFInfo &>(udf_info);
+  ObUDFInfo &uinfo = const_cast<ObUDFInfo &>(udf_info);
+  bool try_udf_constructor = OB_NOT_NULL(uinfo.ref_expr_) && OB_INVALID_ID == uinfo.ref_expr_->get_udf_id() && user_type.is_object_type();
+  bool use_buildin_constructor = !try_udf_constructor ? true : false;
+
+  // try object or opaque type user define constructor first.
+  if (OB_NOT_NULL(uinfo.ref_expr_) && uinfo.ref_expr_->get_udf_id() != OB_INVALID_ID) {
+    CK (OB_NOT_NULL(expr = uinfo.ref_expr_));
+    OX (use_buildin_constructor = false);
+  } else if (try_udf_constructor) {
     if (uinfo.udf_package_.empty()) {
       // object type name should same as constructor name
       uinfo.udf_package_ = uinfo.udf_name_;
@@ -11644,34 +11612,23 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("type name is not same as constructor name", K(uinfo), K(ret));
       }
-    } else {
-      // do nothing
     }
-    if (OB_SUCC(ret) && OB_NOT_NULL(uinfo.ref_expr_) && uinfo.ref_expr_->get_udf_id() == OB_INVALID_ID) {
+    if (OB_SUCC(ret)) {
       SMART_VAR(ObPLFunctionAST, dummy_ast, resolve_ctx_.allocator_) {
         ObSEArray<ObObjAccessIdx, 1> access_idxs;
         OZ (resolve_udf_info(uinfo, access_idxs, dummy_ast));
       }
     }
-    //
-    // check is use default constructor
-    // for example: object(a number,  constructor object(a varchar));
-    // begin v object := object(4); resolve_udf will pick the user defined cons,
-    // actually, here we need to use the default construtor, that is: reolsve record construct
-    // on the other side: object(a number, constructor(a number) constructor object(a varchar));
-    // resolve_udf will pick the right one, we dont need to resolve record_construct.
+    // check if can use default buildin constructor, only object type should check this.
+    if (OB_SUCC(ret) && !uinfo.is_udt_overload_default_cons() && !user_type.is_opaque_type()) {
+      const ObRecordType *object_type = static_cast<const ObRecordType *>(&user_type);
+      CK (OB_NOT_NULL(object_type));
 
-    bool use_buildin_default_constructor = false;
-    if (OB_SUCC(ret)
-        && !uinfo.is_udt_overload_default_cons()
-        && !user_type->is_opaque_type()) { // opaque type has no member, do not check
-      const ObRecordType *object_type = NULL;
-      CK (OB_NOT_NULL(object_type = dynamic_cast<const ObRecordType *>(user_type)));
-
-      // must have same attribute and param, exclude self param
-      if (udf_info.ref_expr_->get_param_exprs().count() - 1 == object_type->get_member_count()) {
-        use_buildin_default_constructor = true;
-
+      // object type buildin constructor has no default parameter value,
+      // so only allow same parameter count with record member count.
+      // also, after resolve resolve_udf, first argument must be self parameter, here, ignore first argument
+      if (OB_SUCC(ret) && (udf_info.ref_expr_->get_param_exprs().count() - 1) == object_type->get_member_count()) {
+        use_buildin_constructor = true;
         for (int64_t i = 1; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
           const ObRawExpr *param_expr = udf_info.ref_expr_->get_param_exprs().at(i);
           if (OB_ISNULL(param_expr)) {
@@ -11685,7 +11642,7 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
                 && (param_res_type.get_type() == pl_type->get_meta_type()->get_type())) {
                 // do nothing
             } else {
-              use_buildin_default_constructor = false;
+              use_buildin_constructor = false;
               break;
             }
           }
@@ -11693,18 +11650,21 @@ int ObPLResolver::resolve_object_construct(const sql::ObQualifiedName &q_name,
       }
     }
     OX (expr = udf_info.ref_expr_);
-    // if cant find user define construtor, try default construct
-    if ((OB_SUCCESS == ret && use_buildin_default_constructor)
-     || OB_ERR_CALL_WRONG_ARG == ret
-     || OB_ERR_SP_WRONG_ARG_NUM == ret
-     || OB_ERR_FUNCTION_UNKNOWN == ret
-     || OB_ERR_SP_UNDECLARED_VAR == ret
-     || OB_ERR_INVALID_TYPE_FOR_OP == ret
-     || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret
-     || OB_ERR_SP_DOES_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
-      OZ (resolve_record_construct(q_name, udf_info, user_type, expr));
-    }
+  }
+
+  // try buildin constructor, for record type and object type only.
+  if (user_type.is_record_type()
+      && OB_NOT_NULL(udf_info.ref_expr_)
+      && ((OB_SUCCESS == ret && use_buildin_constructor)
+          || OB_ERR_CALL_WRONG_ARG == ret
+          || OB_ERR_SP_WRONG_ARG_NUM == ret
+          || OB_ERR_FUNCTION_UNKNOWN == ret
+          || OB_ERR_SP_UNDECLARED_VAR == ret
+          || OB_ERR_INVALID_TYPE_FOR_OP == ret
+          || OB_ERR_PACKAGE_DOSE_NOT_EXIST == ret
+          || OB_ERR_SP_DOES_NOT_EXIST == ret)) {
+    ret = OB_SUCCESS;
+    OZ (resolve_record_construct(q_name, udf_info, &user_type, expr));
   }
   return ret;
 }
@@ -11719,37 +11679,111 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   ObObjectConstructRawExpr *object_expr = NULL;
   ObExprResType res_type;
   int64_t rowsize = 0;
-  const ObUDTTypeInfo *udt_info = NULL;
-  uint64_t tenant_id = OB_INVALID_ID;
-  bool is_udt_type = false;
+  int64_t param_pos = udf_info.is_udf_udt_cons() && udf_info.is_contain_self_param_ ? 1 : 0; // ignore self param
+  int64_t total_assign_cnt = 0;
   CK (OB_NOT_NULL(user_type));
-  OX (is_udt_type = user_type->is_udt_type());
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   CK (OB_NOT_NULL(object_type = static_cast<const ObRecordType *>(user_type)));
-  if (OB_SUCC(ret) && udf_info.param_names_.count() > 0) { // 构造函数暂时不允许使用=>赋值
-    ret = OB_ERR_CALL_WRONG_ARG;
-    LOG_WARN("PLS-00306: wrong number or types of arguments in call procedure", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
-    int64_t member_cnt = object_type->is_opaque_type() ?  0 : object_type->get_member_count();
-    bool is_opaque_cons_and_no_self_param
-      = object_type->is_opaque_type() && (param_cnt - 2) == member_cnt && udf_info.is_udf_udt_cons();
-
-    if (OB_SUCC(ret)
-        && ((!udf_info.is_udf_udt_cons() && param_cnt != member_cnt)
-              || (udf_info.is_udf_udt_cons() && param_cnt - 1 != member_cnt))
-        && !is_opaque_cons_and_no_self_param) {
-      ret = OB_ERR_CALL_WRONG_ARG;
-      LOG_WARN("PLS-00306: wrong number or types of arguments in call",
-              K(ret),
-              K(q_name),
-              K(udf_info.ref_expr_->get_param_exprs().count()),
-              K(object_type->get_member_count()));
-    }
-  }
   OZ (expr_factory_.create_raw_expr(T_FUN_PL_OBJECT_CONSTRUCT, object_expr));
   CK (OB_NOT_NULL(object_expr));
+  if (OB_FAIL(ret)) {
+  } else if (!object_type->is_udt_type()
+             && udf_info.ref_expr_->get_param_exprs().empty()
+             && udf_info.param_exprs_.empty()) {
+    // record type with empty parameters is allowed.
+    ObConstRawExpr *null_expr = NULL;
+    OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
+    CK (OB_NOT_NULL(null_expr));
+    CK (0 == param_pos);
+    for (; OB_SUCC(ret) && param_pos < object_type->get_member_count(); ++param_pos) {
+      const ObRecordMember *member = object_type->get_record_member(param_pos);
+      CK (OB_NOT_NULL(member));
+      if (OB_FAIL(ret)) {
+      } else if (member->get_default() != OB_INVALID_INDEX) {
+        if (OB_NOT_NULL(member->get_default_expr())) {
+          OZ (object_expr->add_param_expr(member->get_default_expr()));
+        } else {
+          ObPLPackageManager &package_manager =
+            resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
+          ObRawExpr *expr = NULL;
+          OZ (package_manager.get_package_expr(resolve_ctx_,
+                                               expr_factory_,
+                                               extract_package_id(user_type->get_user_type_id()),
+                                               member->get_default(),
+                                               expr));
+          OZ (object_expr->add_param_expr(expr));
+        }
+      } else {
+        OZ (object_expr->add_param_expr(null_expr));
+      }
+    }
+  } else {
+    if (OB_SUCC(ret)) {
+      int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
+      int64_t member_cnt = object_type->get_member_count();
+      if ((udf_info.is_udf_udt_cons() && (param_cnt - 1) != member_cnt)
+          || (!udf_info.is_udf_udt_cons() && param_cnt > member_cnt)) {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+                K(ret),
+                K(q_name),
+                K(udf_info.ref_expr_->get_param_exprs().count()),
+                K(object_type->get_member_count()));
+      }
+    }
+    for (; OB_SUCC(ret) && param_pos < udf_info.ref_expr_->get_param_exprs().count(); ++param_pos) {
+      OZ (object_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(param_pos)));
+    }
+    CK (udf_info.param_names_.count() == udf_info.param_exprs_.count());
+    for (; OB_SUCC(ret) && param_pos < object_type->get_member_count(); ++param_pos) {
+      bool found = false;
+      const ObString *member_name = object_type->get_record_member_name(param_pos);
+      const ObRecordMember *member = object_type->get_record_member(param_pos);
+      int64_t i = 0;
+      CK (OB_NOT_NULL(member_name));
+      CK (OB_NOT_NULL(member));
+      for (; OB_SUCC(ret) && i < udf_info.param_names_.count(); ++i) {
+        if (ObCharset::case_compat_mode_equal(*member_name, udf_info.param_names_.at(i))) {
+          found = true;
+          total_assign_cnt++;
+          break;
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (found) {
+        OZ (object_expr->add_param_expr(udf_info.param_exprs_.at(i)));
+      } else if (member->get_default() != OB_INVALID_INDEX) {
+        if (OB_NOT_NULL(member->get_default_expr())) {
+          OZ (object_expr->add_param_expr(member->get_default_expr()));
+        } else {
+          ObPLPackageManager &package_manager =
+            resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
+          ObRawExpr *expr = NULL;
+          OZ (package_manager.get_package_expr(resolve_ctx_,
+                                               expr_factory_,
+                                               extract_package_id(user_type->get_user_type_id()),
+                                               member->get_default(),
+                                               expr));
+          OZ (object_expr->add_param_expr(expr));
+        }
+      } else {
+        ret = OB_ERR_CALL_WRONG_ARG;
+        LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+                K(ret),
+                K(q_name),
+                K(udf_info.ref_expr_->get_param_exprs().count()),
+                K(object_type->get_member_count()));
+      }
+    }
+    if (OB_SUCC(ret) && total_assign_cnt != udf_info.param_names_.count()) {
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+                K(ret),
+                K(q_name),
+                K(udf_info.ref_expr_->get_param_exprs().count()),
+                K(object_type->get_member_count()));
+    }
+  }
   OZ (user_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize));
   OX (object_expr->set_rowsize(rowsize));
   OX (res_type.set_type(ObExtendType));
@@ -11757,7 +11791,9 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   OX (res_type.set_udt_id(user_type->get_user_type_id()));
   OX (object_expr->set_udt_id(user_type->get_user_type_id()));
   OX (object_expr->set_result_type(res_type));
-  if (is_udt_type) {
+  if (OB_SUCC(ret) && user_type->is_udt_type()) {
+    const ObUDTTypeInfo *udt_info = NULL;
+    uint64_t tenant_id = OB_INVALID_ID;
     OX (tenant_id = get_tenant_id_by_object_id(user_type->get_user_type_id()));
     OZ (resolve_ctx_.schema_guard_.get_udt_info(
         tenant_id, user_type->get_user_type_id(), udt_info));
@@ -11784,10 +11820,6 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   }
   OZ (object_expr->set_access_names(q_name.access_idents_));
   OX (object_expr->set_func_name(object_type->get_name()));
-  int64_t i = udf_info.is_udf_udt_cons() && udf_info.is_contain_self_param_ ? 1 : 0; // ignore the self param
-  for (; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
-    OZ (object_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(i)));
-  }
   OX (expr = object_expr);
   return ret;
 }
@@ -12359,18 +12391,14 @@ int ObPLResolver::resolve_udf_info(
 
 #ifdef OB_BUILD_ORACLE_PL
       if (OB_SUCC(ret) && package_routine_info->is_udt_cons()) {
-        bool is_overloaded = false;
         const ObUDTTypeInfo *udt_info = NULL;
         const uint64_t tenant_id = package_routine_info->get_tenant_id();
         OZ (resolve_ctx_.schema_guard_.get_udt_info(
           tenant_id, package_routine_info->get_pkg_id(), udt_info));
         CK (OB_NOT_NULL(udt_info));
-        OZ (ObPLUDTObjectManager::check_overload_default_cons(package_routine_info,
-                                                              udt_info,
-                                                              is_overloaded));
-        if (is_overloaded) {
-          OX (udf_info.set_is_udt_overload_default_cons());
-        }
+        OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                              package_routine_info,
+                                                              udt_info));
       }
 #endif
 
@@ -12463,15 +12491,9 @@ int ObPLResolver::resolve_udf_info(
           OX (schema_version = udt_info->get_schema_version());
 
           // to check is this overload the default constructor
-          if (OB_SUCC(ret) && schema_routine_info->is_udt_cons()) {
-            bool is_overloaded = false;
-            OZ (ObPLUDTObjectManager::check_overload_default_cons(schema_routine_info,
-                                                                  udt_info,
-                                                                  is_overloaded));
-            if (is_overloaded) {
-              OX (udf_info.set_is_udt_overload_default_cons());
-            }
-          }
+          OZ (ObPLUDTObjectManager::check_overload_default_cons(udf_info,
+                                                                schema_routine_info,
+                                                                udt_info));
         }
 #endif
       }
@@ -14269,11 +14291,10 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
   ObRawExpr* expr = NULL;
   const ObUserDefinedType *user_type = NULL;
   ObObjAccessIdx access_idx;
-  if (!access_ident.is_pl_udf()) {
+  if ((!access_ident.is_pl_udf() && !access_ident.has_brackets_) || OB_ISNULL(access_ident.udf_info_.ref_expr_)) {
     ret = OB_ERR_UNDEFINED;
     LOG_WARN("object is not a procedure or is undefined", K(ret), K(access_ident));
   }
-  OV (access_ident.is_pl_udf(), OB_ERR_UNEXPECTED, K(access_ident));
   OZ (ns.get_pl_data_type_by_id(user_type_id, user_type));
   CK (OB_NOT_NULL(user_type));
   if (OB_FAIL(ret)) {

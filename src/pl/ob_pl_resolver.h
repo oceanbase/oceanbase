@@ -346,16 +346,13 @@ public:
                                     const ObUDFInfo &udf_info,
                                     const ObUserDefinedType &user_type,
                                     ObRawExpr *&expr);
-  int resolve_construct(const sql::ObQualifiedName &q_name,
-                        const sql::ObUDFInfo &udf_info,
-                        ObRawExpr *&expr);
   int resolve_record_construct(const sql::ObQualifiedName &q_name,
                                const sql::ObUDFInfo &udf_info,
                                const ObUserDefinedType *user_type,
                                ObRawExpr *&expr);
   int resolve_object_construct(const sql::ObQualifiedName &q_name,
                                const sql::ObUDFInfo &udf_info,
-                               const ObUserDefinedType *user_type,
+                               const ObUserDefinedType &user_type,
                                ObRawExpr *&expr);
   int resolve_collection_construct(const sql::ObQualifiedName &q_name,
                                    const sql::ObUDFInfo &udf_info,

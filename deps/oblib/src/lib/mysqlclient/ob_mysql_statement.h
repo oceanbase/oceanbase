@@ -31,7 +31,7 @@ public:
   ObMySQLConnection *get_connection();
   MYSQL *get_stmt_handler();
   MYSQL *get_conn_handler();
-  int init(ObMySQLConnection &conn, const char *sql);
+  int init(ObMySQLConnection &conn, const char *sql, int64_t param_count = 0);
 
   /*
    * close statement

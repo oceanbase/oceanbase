@@ -811,7 +811,7 @@ public:
                                           ObIAllocator *allocator,
                                           ObObj *result);
 
-  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf);
+  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level);
 
   static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code);
 

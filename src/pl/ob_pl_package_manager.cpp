@@ -781,6 +781,68 @@ int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
   return ret;
 }
 
+int ObPLPackageManager::get_package_expr(const ObPLResolveCtx &resolve_ctx,
+                                         ObRawExprFactory &expr_factory,
+                                         uint64_t package_id,
+                                         int64_t expr_idx,
+                                         ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  const ObPackageInfo *package_spec_info = NULL;
+  const ObPackageInfo *package_body_info = NULL;
+  CK (package_id != OB_INVALID_ID);
+  CK (expr_idx != OB_INVALID_ID);
+  OZ (get_package_schema_info(resolve_ctx.schema_guard_, package_id, package_spec_info, package_body_info));
+  CK (OB_NOT_NULL(package_spec_info));
+  CK (package_spec_info->get_package_id() == package_id);
+  if (OB_SUCC(ret)) {
+    ObPLCompiler compiler(resolve_ctx.allocator_,
+                          resolve_ctx.session_info_,
+                          resolve_ctx.schema_guard_,
+                          resolve_ctx.package_guard_,
+                          resolve_ctx.sql_proxy_);
+    const uint64_t tenant_id = package_spec_info->get_tenant_id();
+    uint64_t db_id = package_spec_info->get_database_id();
+    uint64_t package_spec_id = package_spec_info->get_package_id();
+    ObPLBlockNS *null_parent_ns = NULL;
+    const ObDatabaseSchema *db_schema = NULL;
+    uint64_t effective_tenant_id = resolve_ctx.session_info_.get_effective_tenant_id();
+    HEAP_VAR(ObPLPackageAST, package_spec_ast, resolve_ctx.allocator_) {
+      ObString source;
+      if (package_spec_info->is_for_trigger()) {
+        OZ (ObTriggerInfo::gen_package_source(package_spec_info->get_tenant_id(),
+                                              package_spec_info->get_package_id(),
+                                              source,
+                                              PACKAGE_TYPE,
+                                              resolve_ctx.schema_guard_,
+                                              resolve_ctx.allocator_));
+      } else {
+        source = package_spec_info->get_source();
+      }
+      OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
+        resolve_ctx.allocator_, resolve_ctx.session_info_.get_dtc_params(), source));
+      OZ (resolve_ctx.schema_guard_.get_database_schema(tenant_id, db_id, db_schema));
+      OZ (package_spec_ast.init(db_schema->get_database_name_str(),
+                                package_spec_info->get_package_name(),
+                                PL_PACKAGE_SPEC,
+                                package_spec_info->get_database_id(),
+                                package_spec_id,
+                                package_spec_info->get_schema_version(),
+                                NULL));
+      {
+        ObPLCompilerEnvGuard guard(
+          *package_spec_info, resolve_ctx.session_info_, resolve_ctx.schema_guard_, ret);
+        OZ (compiler.analyze_package(source, null_parent_ns,
+                                     package_spec_ast, package_spec_info->is_for_trigger()));
+      }
+      CK (expr_idx >= 0 && package_spec_ast.get_exprs().count() > expr_idx);
+      CK (OB_NOT_NULL(package_spec_ast.get_expr(expr_idx)));
+      OZ (ObPLExprCopier::copy_expr(expr_factory, package_spec_ast.get_expr(expr_idx), expr));
+    }
+  }
+  return ret;
+}
+
 int ObPLPackageManager::get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                                            uint64_t package_id,
                                            int64_t cursor_id,
@@ -1185,7 +1247,8 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
     // destoried by map's destructor
     ObCacheObjGuard* cacheobj_guard = NULL;
     void* buf = NULL;
-    if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(buf = resolve_ctx.package_guard_.alloc_.alloc(sizeof(ObCacheObjGuard)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory.", K(ret));
     } else if (FALSE_IT(cacheobj_guard = new (buf)ObCacheObjGuard(PACKAGE_BODY_HANDLE))) {

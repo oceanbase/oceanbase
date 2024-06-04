@@ -7021,7 +7021,7 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
             }
           }
         } else if (has_assign_expr) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
           LOG_WARN("can not get parameter after assign", K(ret));
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node, param_expr)))) {
           LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(param_node));

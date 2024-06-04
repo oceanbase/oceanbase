@@ -623,6 +623,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_stats_persistent",
   "innodb_strict_mode",
   "innodb_support_xa",
+  "innodb_sync_debug",
   "innodb_table_locks",
   "innodb_trx_purge_view_update_only_debug",
   "innodb_trx_rseg_n_slots_debug",
@@ -1100,6 +1101,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_STATS_PERSISTENT,
   SYS_VAR_INNODB_STRICT_MODE,
   SYS_VAR_INNODB_SUPPORT_XA,
+  SYS_VAR_INNODB_SYNC_DEBUG,
   SYS_VAR_INNODB_TABLE_LOCKS,
   SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG,
   SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG,
@@ -1762,6 +1764,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "skip_slave_start",
   "slave_load_tmpdir",
   "slave_skip_errors",
+  "innodb_sync_debug",
   "default_collation_for_utf8mb4",
   "_enable_old_charset_aggregation",
   "enable_sql_plan_monitor",
@@ -2404,6 +2407,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarSkipSlaveStart)
         + sizeof(ObSysVarSlaveLoadTmpdir)
         + sizeof(ObSysVarSlaveSkipErrors)
+        + sizeof(ObSysVarInnodbSyncDebug)
         + sizeof(ObSysVarDefaultCollationForUtf8mb4)
         + sizeof(ObSysVarEnableOldCharsetAggregation)
         + sizeof(ObSysVarEnableSqlPlanMonitor)
@@ -6124,6 +6128,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SLAVE_SKIP_ERRORS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSlaveSkipErrors));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncDebug())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncDebug", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_SYNC_DEBUG))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbSyncDebug));
       }
     }
     if (OB_SUCC(ret)) {
@@ -11209,6 +11222,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSlaveSkipErrors())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSlaveSkipErrors", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_SYNC_DEBUG: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbSyncDebug)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbSyncDebug)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbSyncDebug())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbSyncDebug", K(ret));
       }
       break;
     }
