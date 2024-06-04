@@ -49,7 +49,7 @@ ObBalanceStrategy &ObBalanceStrategy::operator=(const STRATEGY &val)
   return *this;
 }
 
-const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY] =
+const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1] =
 {
   "LS balance by migrate",
   "LS balance by alter",
@@ -61,14 +61,20 @@ const char* ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY] =
   "intragroup partition count balance",
   "intergroup partition count balance",
   "partition disk balance",
+  "invalid", // MAX_STRATEGY
 };
 
 const char *ObBalanceStrategy::str() const
 {
-  STATIC_ASSERT(ARRAYSIZEOF(BALANCE_STRATEGY_STR_ARRAY) == static_cast<int64_t>(MAX_STRATEGY),
+  STATIC_ASSERT(ARRAYSIZEOF(BALANCE_STRATEGY_STR_ARRAY) == static_cast<int64_t>(MAX_STRATEGY + 1),
       "BALANCE_STRATEGY_STR_ARRAY size mismatch STRATEGY count");
-  OB_ASSERT(val_ >= LB_MIGRATE && val_ < MAX_STRATEGY);
-  return BALANCE_STRATEGY_STR_ARRAY[val_];
+  const char *str = "unknown";
+  if (OB_UNLIKELY(val_ < LB_MIGRATE || val_ > MAX_STRATEGY)) {
+    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "fatal error, unknown balance strategy", K(val_));
+  } else {
+    str = BALANCE_STRATEGY_STR_ARRAY[val_];
+  }
+  return str;
 }
 
 int ObBalanceStrategy::parse_from_str(const ObString &str)

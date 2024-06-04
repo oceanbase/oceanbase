@@ -54,7 +54,7 @@ public:
     PB_PART_DISK = 9,
     MAX_STRATEGY
   };
-  static const char* BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY];
+  static const char* BALANCE_STRATEGY_STR_ARRAY[MAX_STRATEGY + 1];
 public:
   ObBalanceStrategy() : val_(MAX_STRATEGY) {}
   explicit ObBalanceStrategy(const STRATEGY &val) : val_(val) {}

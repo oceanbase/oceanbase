@@ -113,6 +113,17 @@ TEST_F(TestBalanceOperator, BalanceJob)
     ASSERT_EQ(OB_SUCCESS, result->get_time("finish_time", finish_time));
     LOG_INFO("[MITTEST]job status", K(start_time), K(finish_time));
   }
+
+  // test ObBalanceStrategy
+  ObBalanceStrategy strategy;
+  for(int64_t i = 0; i <= ObBalanceStrategy::MAX_STRATEGY; ++i) {
+    strategy = static_cast<ObBalanceStrategy::STRATEGY>(i);
+    ASSERT_TRUE(0 == strcmp(strategy.str(), ObBalanceStrategy::BALANCE_STRATEGY_STR_ARRAY[i]));
+    LOG_INFO("TEST: ObBalanceStrategy", K(i), K(strategy));
+  }
+  strategy = static_cast<ObBalanceStrategy::STRATEGY>(-1);
+  ASSERT_TRUE(0 == strcmp(strategy.str(), "unknown"));
+  LOG_INFO("TEST: ObBalanceStrategy unknown", K(strategy));
 }
 
 TEST_F(TestBalanceOperator, BalanceTask)
