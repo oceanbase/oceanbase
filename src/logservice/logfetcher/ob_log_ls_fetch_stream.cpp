@@ -1716,7 +1716,13 @@ int FetchStream::read_log_(const char *data,
       }
     }
 
-    if (OB_ITER_END == ret) {
+    // Rewrite OB_PARTIAL_LOG here, during the standby failover, iterator may return OB_PARTIAL_LOG
+    // 1. LogFetcher hasn't been destroyed immediately after the log in palf has been truncated;
+    // 2. LogFetcher use the end_lsn in palf after the log truncate to fetch log;
+    // 3. The type of log corresponding to the end_lsn in the original primary database could be a log entry;
+    // 4. But the LogGroupEntry is expected in the standby database, so the iterator returned OB_PARTITAL_LOG;
+    // 5. This error code won't cause any unexpected behavior in the standby database, so don't print error log;
+    if (OB_ITER_END == ret || OB_PARTIAL_LOG == ret) {
       ret = OB_SUCCESS;
     }
   }
