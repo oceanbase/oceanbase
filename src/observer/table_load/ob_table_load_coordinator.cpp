@@ -384,25 +384,16 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         }
       }
 
-      if (OB_SUCC(ret)) {
-        while (true) {
-          ret = OB_SUCCESS;
-          if (THIS_WORKER.is_timeout()) {
-            ret = OB_TIMEOUT;
-            LOG_WARN("gen_apply_arg wait too long", KR(ret));
-            break;
-          } else if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
-            LOG_WARN("fail to check status", KR(ret));
-            break;
-          } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
-            LOG_WARN("fail to check status", KR(ret));
-            break;
-          } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(GCONF.cluster_id,
-                                                                                         apply_arg.tenant_id_,
-                                                                                         share::SYS_LS,
-                                                                                         leader))) {
-            LOG_WARN("fail to get ls location leader", KR(ret), K(apply_arg.tenant_id_));
-          } else if (ctx_->schema_.is_heap_table_ || !ctx_->param_.need_sort_) {
+      while (OB_SUCC(ret)) {
+        if (THIS_WORKER.is_timeout()) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("gen_apply_arg wait too long", KR(ret));
+        } else if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+          LOG_WARN("fail to check status", KR(ret));
+        } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
+          LOG_WARN("fail to check status", KR(ret));
+        } else {
+          if (ctx_->schema_.is_heap_table_ || !ctx_->param_.need_sort_) {
             last_sort = false;
             for (int64_t i = 0; !last_sort && i < store_server_count; i++) {
               if (min_unsort_memory[i] > memory_limit) {
@@ -417,37 +408,33 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
                                              : min_unsort_memory[i]);
             }
           }
-          if (OB_SUCC(ret)) {
-            if (ObTableLoadUtils::is_local_addr(leader)) {
-              ret = ObTableLoadResourceService::apply_resource(apply_arg, apply_res);
-            } else {
-              TABLE_LOAD_RESOURCE_RPC_CALL(apply_resource, leader, apply_arg, apply_res);
+          if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
+            if (retry_count % 100 == 0) {
+              LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count));
             }
-            if (OB_SUCC(ret) && OB_SUCC(apply_res.error_code_)) {
-              ctx_->param_.need_sort_ = last_sort;
-              ctx_->param_.session_count_ = coordinator_session_count;
-              ctx_->param_.write_session_count_ = (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2)
-                                                                    : min_session_count);
-              ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ? (last_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT
-                                                                                  : ObTableLoadExeMode::FAST_HEAP_TABLE)
-                                                                     : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
-                                                                                  : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
-
-              if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
-                LOG_WARN("fail to add_assigned_task", KR(ret));
-              } else {
-                ctx_->set_assigned_resource();
-                LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(partitions), K(leader), K(apply_arg));
-                break;
-              }
-            } else {
+            if (ret == OB_EAGAIN) {
               retry_count++;
-              if (retry_count % 100 == 0) {
-                LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count));
-              }
+              ret = OB_SUCCESS;
             }
-            ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
+          } else {
+            ctx_->param_.need_sort_ = last_sort;
+            ctx_->param_.session_count_ = coordinator_session_count;
+            ctx_->param_.write_session_count_ = (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2)
+                                                                  : min_session_count);
+            ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ? (last_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT
+                                                                                : ObTableLoadExeMode::FAST_HEAP_TABLE)
+                                                                   : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
+                                                                                : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
+
+            if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
+              LOG_WARN("fail to add_assigned_task", KR(ret));
+            } else {
+              ctx_->set_assigned_resource();
+              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(partitions), K(leader), K(coordinator_addr), K(apply_arg));
+              break;
+            }
           }
+          ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
         }
       }
     }
