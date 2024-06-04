@@ -339,7 +339,7 @@ create or replace package body utl_recomp AS
     prepare_table(errors_table, errors_table_ddl, flags);
 
     init(schema);
-
+    delete_errors();
     execute immediate 'select o.object_id, o.owner, o.object_name, o.object_type from sys.all_objects o
                         where o.status = ''VALID''
                               and (:1 is null or :2 = owner)
@@ -347,7 +347,6 @@ create or replace package body utl_recomp AS
                               and o.object_id not in (select obj# from sys.utl_recomp_skip_list)
                               and o.object_id > 500000'
             bulk collect into obj_info_arr using schema, schema;
-    delete_errors();
     invalidate_objs(obj_info_arr);
 
     COMPUTE_NUM_THREADS(threads);
