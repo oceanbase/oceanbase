@@ -322,9 +322,7 @@ const ObIArray<ObString> *ObTableEntity::get_all_rowkey_names() const
 
 const ObIArray<ObString> *ObTableEntity::get_all_properties_names() const
 {
-  int ret = OB_NOT_IMPLEMENT;
-  LOG_WARN("not surpport", K(ret));
-  return nullptr;
+  return &properties_names_;
 }
 
 void ObTableEntity::set_is_same_properties_names(bool is_same_properties_names)
@@ -656,6 +654,134 @@ uint64_t ObTableOperation::get_checksum()
   return checksum;
 }
 
+const char *ObTableOperation::get_op_name(ObTableOperationType::Type op_type)
+{
+  const char *op_name = "unknown";
+  switch (op_type) {
+    case ObTableOperationType::Type::GET: {
+      op_name = "get";
+      break;
+    }
+    case ObTableOperationType::Type::INSERT: {
+      op_name = "insert";
+      break;
+    }
+    case ObTableOperationType::Type::DEL: {
+      op_name = "delete";
+      break;
+    }
+    case ObTableOperationType::Type::UPDATE: {
+      op_name = "update";
+      break;
+    }
+    case ObTableOperationType::Type::INSERT_OR_UPDATE: {
+      op_name = "insertOrUpdate";
+      break;
+    }
+    case ObTableOperationType::Type::REPLACE: {
+      op_name = "replace";
+      break;
+    }
+    case ObTableOperationType::Type::INCREMENT: {
+      op_name = "increment";
+      break;
+    }
+    case ObTableOperationType::Type::APPEND: {
+      op_name = "append";
+      break;
+    }
+    case ObTableOperationType::Type::CHECK_AND_INSERT_UP: {
+      op_name = "checkAndInsertUp";
+      break;
+    }
+    case ObTableOperationType::Type::PUT: {
+      op_name = "put";
+      break;
+    }
+    default: {
+      op_name = "unknown";
+    }
+  }
+
+  return op_name;
+}
+
+// statement is "insert test col1, col2, col3"
+int64_t ObTableOperation::get_stmt_length(const ObString &table_name) const
+{
+  int64_t len = 0;
+  ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
+
+  len += strlen(get_op_name(operation_type_)); // "insert"
+  len += 1; // blank
+  len += tmp_table_name.length(); // "table_name"
+  len += 1; // blank
+  const ObIArray<ObString> *propertiy_names = entity_->get_all_properties_names();
+  if (OB_NOT_NULL(propertiy_names)) {
+    int64_t N = propertiy_names->count();
+    for (int64_t index = 0; index < N - 1; ++index) {
+      len += propertiy_names->at(index).length(); // col1
+      len += 2; // "\"\"" double quote
+      len += 2; // ", "
+    }
+    if (0 < N) {
+      len += propertiy_names->at(N - 1).length(); // col_n
+      len += 2; // "\"\"" double quote
+    }
+  }
+
+  return len;
+}
+
+// statement is "insert test col1, col2, col3"
+int ObTableOperation::generate_stmt(const ObString &table_name,
+                                    char *buf,
+                                    int64_t buf_len,
+                                    int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
+
+  const char *op_name = get_op_name(operation_type_);
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else if (buf_len < strlen(op_name)) {
+    ret = OB_BUF_NOT_ENOUGH;
+    LOG_WARN("buffer not enough", K(ret), K(buf_len), K(strlen(op_name)));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "%s ", op_name); // "insert "
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, tmp_table_name.ptr(), tmp_table_name.length()); // $table_name
+      pos += tmp_table_name.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " ");
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        const ObIArray<ObString> *propertiy_names = entity_->get_all_properties_names();
+        if (OB_NOT_NULL(propertiy_names)) {
+          int64_t N = propertiy_names->count();
+          for (int64_t index = 0; index < N - 1; ++index) {
+            BUF_PRINTO(propertiy_names->at(index)); // pos will change in BUF_PRINTO
+            J_COMMA(); // ", "
+          }
+          if (0 < N) {
+            BUF_PRINTO(propertiy_names->at(N - 1));
+          }
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObTableOperation, operation_type_, const_cast<ObITableEntity&>(*entity_));
 
 ////////////////////////////////////////////////////////////////
@@ -681,7 +807,7 @@ int ObTableBatchOperation::add(const ObTableOperation &table_operation)
     }
     if (is_same_type_) {
       const int64_t N = table_operations_.count();
-      if (N >= 2 && table_operations_.at(N-1).type() != table_operations_.at(N-2).type()) {
+      if (N >= 2 && table_operations_.at(N - 1).type() != table_operations_.at(N-2).type()) {
         is_same_type_ = false;
       }
     }
@@ -999,6 +1125,8 @@ void ObTableQuery::reset()
   key_ranges_.reset();
   select_columns_.reset();
   filter_string_.reset();
+  scan_range_columns_.reset();
+  aggregations_.reset();
   limit_ = -1;  // no limit
   offset_ = 0;
   scan_order_ = ObQueryFlag::Forward;
@@ -1190,6 +1318,123 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     dst.batch_size_ = batch_size_;
     dst.max_result_size_ = max_result_size_;
   }
+  return ret;
+}
+
+// statement is: "query $table_name $column_0, $column_1, ..., $column_n range:$column_0, $column_1, ..., $column_n index:$index_name"
+int64_t ObTableQuery::get_stmt_length(const ObString &table_name) const
+{
+  int64_t len = 0;
+  ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
+  ObString tmp_index_name = index_name_.empty() ? ObString::make_string("(null)") : index_name_;
+
+  len += strlen("query"); // "query"
+  len += 1; // blank
+  len += tmp_table_name.length(); // "table_name"
+  len += 1; // blank
+
+  // select column
+  int64_t N = select_columns_.count();
+  for (int64_t index = 0; index < N - 1; ++index) {
+    len += select_columns_.at(index).length(); // column_0
+    len += 2; // "\"\"" double quote
+    len += 2; // ", "
+  }
+  if (0 < N) {
+    len += select_columns_.at(N - 1).length(); // column_n
+    len += 2; // "\"\"" double quote
+  }
+  len += 1; // blank
+
+  len += strlen("range:"); // "range:"
+  N = scan_range_columns_.count();
+  for (int64_t index = 0; index < N - 1; ++index) {
+    len += scan_range_columns_.at(index).length(); // column_0
+    len += 2; // "\"\"" double quote
+    len += 2; // ", "
+  }
+  if (0 < N) {
+    len += scan_range_columns_.at(N - 1).length(); // column_n
+    len += 2; // "\"\"" double quote
+  }
+  len += 1; // blank
+
+  // index
+  len += strlen("index:"); // "index:"
+  len += tmp_index_name.length();
+
+  return len;
+}
+
+// statement is: "query $table_name $column_0, $column_1, ..., $column_n range:$column_0, $column_1, ..., $column_n index:$index_name"
+// filter will add later
+int ObTableQuery::generate_stmt(const ObString &table_name,
+                                char *buf,
+                                int64_t buf_len,
+                                int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_table_name = table_name.empty() ? ObString::make_string("(null)") : table_name;
+  ObString tmp_index_name = index_name_.empty() ? ObString::make_string("(null)") : index_name_;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    // table name
+    int64_t n = snprintf(buf + pos, buf_len - pos, "query "); // "query "
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, tmp_table_name.ptr(), tmp_table_name.length());
+      pos += tmp_table_name.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " "); // " "
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+        // select column
+        int64_t N = select_columns_.count();
+        for (int64_t index = 0; index < N - 1; ++index) {
+          BUF_PRINTO(select_columns_.at(index)); // pos will change in BUF_PRINTO
+          J_COMMA(); // ", "
+        }
+        if (0 < N) {
+          BUF_PRINTO(select_columns_.at(N - 1));
+        }
+        // range column
+        n = snprintf(buf + pos, buf_len - pos, " range:");
+        if (n < 0 || n > buf_len - pos) {
+          ret = OB_BUF_NOT_ENOUGH;
+          LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+        } else {
+          pos += n;
+          N = scan_range_columns_.count();
+          for (int64_t index = 0; index < N - 1; ++index) {
+            BUF_PRINTO(scan_range_columns_.at(index)); // pos will change in BUF_PRINTO
+            J_COMMA(); // ", "
+          }
+          if (0 < N) {
+            BUF_PRINTO(scan_range_columns_.at(N - 1));
+          }
+          // index
+          n = snprintf(buf + pos, buf_len - pos, " index:");
+          if (n < 0 || n > buf_len - pos) {
+            ret = OB_BUF_NOT_ENOUGH;
+            LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+          } else {
+            pos += n;
+            strncat(buf + pos, tmp_index_name.ptr(), tmp_index_name.length());
+            pos += tmp_index_name.length();
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

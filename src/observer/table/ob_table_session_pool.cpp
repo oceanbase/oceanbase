@@ -15,6 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 
 using namespace oceanbase::share;
+using namespace oceanbase::share::schema;
 using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
@@ -663,8 +664,42 @@ int ObTableApiSessNode::init()
       LOG_WARN("unexpected null mem context ", K(ret));
     } else {
       mem_ctx_ = tmp_mem_ctx;
-      last_active_ts_ = ObTimeUtility::fast_current_time();
-      is_inited_ = true;
+      ObSchemaGetterGuard schema_guard;
+      const uint64_t tenant_id = credential_.tenant_id_;
+      const uint64_t user_id = credential_.user_id_;
+      const uint64_t database_id = credential_.database_id_;
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+        LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+      } else {
+        const ObSimpleTenantSchema *tenant_info = nullptr;
+        const ObUserInfo *user_info = nullptr;
+        const ObSimpleDatabaseSchema *db_info = nullptr;
+        if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+          LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
+        } else if (OB_ISNULL(tenant_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant info is null", K(ret));
+        } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+          LOG_WARN("fail to get user info", K(ret), K(tenant_id), K(user_id));
+        } else if (OB_ISNULL(user_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("user info is null", K(ret));
+        } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, db_info))) {
+          LOG_WARN("fail to get database info", K(ret), K(tenant_id), K(database_id));
+        } else if (OB_ISNULL(db_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("database info is null", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), tenant_info->get_tenant_name(), tenant_name_))) {
+          LOG_WARN("fail to deep copy tenant name", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), user_info->get_user_name(), user_name_))) {
+          LOG_WARN("fail to deep copy user name", K(ret));
+        } else if (OB_FAIL(ob_write_string(mem_ctx_->get_arena_allocator(), db_info->get_database_name(), db_name_))) {
+          LOG_WARN("fail to deep copy database name", K(ret));
+        } else {
+          last_active_ts_ = ObTimeUtility::fast_current_time();
+          is_inited_ = true;
+        }
+      }
     }
   }
 

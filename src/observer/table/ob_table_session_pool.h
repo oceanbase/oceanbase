@@ -198,6 +198,9 @@ public:
   OB_INLINE const ObTableApiCredential& get_credential() const { return credential_; }
   OB_INLINE int64_t get_last_active_ts() const { return last_active_ts_; }
   int remove_unused_sess();
+  OB_INLINE const ObString& get_tenant_name() const { return tenant_name_; }
+  OB_INLINE const ObString& get_database_name() const { return db_name_; }
+  OB_INLINE const ObString& get_user_name() const { return user_name_; }
 private:
   int extend_and_get_sess_val(ObTableApiSessGuard &guard);
 private:
@@ -206,6 +209,9 @@ private:
   SessList sess_lists_;
   int64_t last_active_ts_;
   ObTableApiCredential credential_;
+  ObString tenant_name_;
+  ObString db_name_;
+  ObString user_name_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiSessNode);
 };
@@ -246,6 +252,30 @@ public:
       credential = &sess_node_val_->owner_node_->get_credential();
     }
     return ret;
+  }
+  OB_INLINE const ObString get_tenant_name() const
+  {
+    ObString tenant_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      tenant_name = sess_node_val_->owner_node_->get_tenant_name();
+    }
+    return tenant_name;
+  }
+  OB_INLINE const ObString get_database_name() const
+  {
+    ObString database_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      database_name = sess_node_val_->owner_node_->get_database_name();
+    }
+    return database_name;
+  }
+  OB_INLINE const ObString get_user_name() const
+  {
+    ObString user_name = ObString::make_empty_string();
+    if (OB_NOT_NULL(sess_node_val_) && OB_NOT_NULL(sess_node_val_->owner_node_)) {
+      user_name = sess_node_val_->owner_node_->get_user_name();
+    }
+    return user_name;
   }
 private:
   ObTableApiSessNodeVal *sess_node_val_;

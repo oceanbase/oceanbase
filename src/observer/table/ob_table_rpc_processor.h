@@ -25,6 +25,7 @@
 #include "ob_table_schema_cache.h"
 #include "observer/ob_req_time_service.h"
 #include "ob_table_trans_utils.h"
+#include "ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -140,14 +141,6 @@ protected:
   virtual void reset_ctx();
   int get_ls_id(const ObTabletID &tablet_id, share::ObLSID &ls_id);
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
-
-  // audit
-  bool need_audit() const;
-  void start_audit(const rpc::ObRequest *req);
-  void end_audit();
-  virtual void audit_on_finish() {}
-  virtual void save_request_string() = 0;
-  virtual void generate_sql_id() = 0;
   // init schema guard for tablegroup
   int init_tablegroup_schema(const ObString &arg_tablegroup_name);
   // init schema guard
@@ -167,12 +160,7 @@ protected:
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int32_t stat_event_type_;
-  int64_t audit_row_count_;
-  bool need_audit_;
-  const char *request_string_;
-  int64_t request_string_len_;
-  sql::ObAuditRecordData audit_record_;
-  ObArenaAllocator audit_allocator_;
+  int64_t stat_row_count_;
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;
   bool is_tablegroup_req_; // is table name a tablegroup name
@@ -185,6 +173,7 @@ protected:
   transaction::ObTxReadSnapshot tx_snapshot_;
   ObAddr user_client_addr_;
   ObSessionStatEstGuard sess_stat_guard_;
+  table::ObTableAuditCtx audit_ctx_;
 };
 
 template<class T>
@@ -204,8 +193,6 @@ public:
 protected:
   virtual void set_req_has_wokenup() override;
   int64_t get_timeout_ts() const;
-  virtual void save_request_string() override;
-  virtual void generate_sql_id() override;
   virtual uint64_t get_request_checksum() = 0;
 };
 

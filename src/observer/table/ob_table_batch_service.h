@@ -17,6 +17,7 @@
 #include "share/table/ob_table_rpc_struct.h"
 #include "ob_table_trans_utils.h"
 #include "ob_table_executor.h"
+#include "ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -26,9 +27,10 @@ namespace table
 struct ObTableBatchCtx
 {
 public:
-  explicit ObTableBatchCtx(common::ObIAllocator &allocator)
+  explicit ObTableBatchCtx(common::ObIAllocator &allocator, ObTableAuditCtx &audit_ctx)
       : allocator_(allocator),
-        tb_ctx_(allocator_)
+        tb_ctx_(allocator_),
+        audit_ctx_(audit_ctx)
   {
     reset();
   }
@@ -101,6 +103,7 @@ public:
   ObITableEntityFactory *entity_factory_;
   ObITableEntity *result_entity_;
   ObTableApiCredential *credential_;
+  ObTableAuditCtx &audit_ctx_;
 };
 
 class ObTableBatchService
@@ -122,6 +125,20 @@ private:
   static int process_get(common::ObIAllocator &allocator,
                          ObTableCtx &tb_ctx,
                          ObTableOperationResult &result);
+  static int process_insert(ObTableCtx &tb_ctx,
+                            ObTableOperationResult &result);
+  static int process_delete(ObTableCtx &tb_ctx,
+                            ObTableOperationResult &result);
+  static int process_update(ObTableCtx &tb_ctx,
+                            ObTableOperationResult &result);
+  static int process_replace(ObTableCtx &tb_ctx,
+                             ObTableOperationResult &result);
+  static int process_insert_up(ObTableCtx &tb_ctx,
+                               ObTableOperationResult &result);
+  static int process_put(ObTableCtx &tb_ctx,
+                         ObTableOperationResult &result);
+  static int process_increment_or_append(ObTableCtx &tb_ctx,
+                                         ObTableOperationResult &result);
   static int process_htable_delete(const ObTableOperation &op,
                                    ObTableBatchCtx &ctx);
   static int process_htable_put(const ObTableOperation &op,

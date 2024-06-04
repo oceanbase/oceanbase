@@ -22,6 +22,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::sql::stmt;
 
 int ObTableBatchCtx::check_legality()
 {
@@ -230,6 +231,14 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
   ObTableApiScanRowIterator row_iter;
   const ObIArray<ObTableOperation> &ops = *ctx.ops_;
   const int64_t op_size = ops.count();
+  int64_t row_cnt = 0;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, ops);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(spec.create_executor(tb_ctx, executor))) {
     LOG_WARN("fail to create scan executor", K(ret));
@@ -285,6 +294,8 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
             } else {
               ret = OB_SUCCESS;
             }
+          } else {
+            row_cnt++;
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(row)) {
             ObSEArray<int64_t, 2> indexs;
@@ -321,6 +332,11 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
   }
   spec.destroy_executor(executor);
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_GET,
+                     return_rows, row_cnt,
+                     has_table_scan, true);
   return ret;
 }
 
@@ -356,6 +372,13 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   int64_t affected_rows = 0;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, *ctx.ops_);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -379,7 +402,7 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
-        table::ObTableApiUtil::replace_ret_code(ret);
+        ObTableApiUtil::replace_ret_code(ret);
       }
 
       affected_rows += op_result.get_affected_rows();
@@ -402,6 +425,10 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
     }
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_INSERT);
+
   return ret;
 }
 
@@ -413,6 +440,13 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   int64_t affected_rows = 0;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::DEL, *ctx.ops_);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -433,7 +467,7 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx)
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
-        table::ObTableApiUtil::replace_ret_code(ret);
+        ObTableApiUtil::replace_ret_code(ret);
       }
 
       affected_rows += op_result.get_affected_rows();
@@ -456,6 +490,10 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx)
     }
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_DELETE);
+
   return ret;
 }
 
@@ -467,6 +505,13 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   int64_t affected_rows = 0;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::REPLACE, *ctx.ops_);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -486,7 +531,7 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx)
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
-        table::ObTableApiUtil::replace_ret_code(ret);
+        ObTableApiUtil::replace_ret_code(ret);
       }
 
       affected_rows += op_result.get_affected_rows();
@@ -509,6 +554,10 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx)
     }
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_REPLACE);
+
   return ret;
 }
 
@@ -520,6 +569,13 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   int64_t affected_rows = 0;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, *ctx.ops_);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -543,7 +599,7 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx)
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
-        table::ObTableApiUtil::replace_ret_code(ret);
+        ObTableApiUtil::replace_ret_code(ret);
       }
 
       affected_rows += op_result.get_affected_rows();
@@ -565,6 +621,10 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx)
       }
     }
   }
+
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_PUT);
 
   return ret;
 }
@@ -598,7 +658,7 @@ int ObTableBatchService::htable_delete(ObTableBatchCtx &ctx)
   } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
     LOG_WARN("fail to create executor", K(ret));
   } else {
-    ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor));
+    ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor), ctx.audit_ctx_);
     if (OB_FAIL(delete_executor.open())) {
       LOG_WARN("fail to open htable delete executor", K(ret));
     } else if (OB_FAIL(delete_executor.get_next_row())) {
@@ -642,7 +702,16 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
+  // hbase put use 'put' in TABLE_API_EXEC_INSERT
+  tb_ctx.set_client_use_put(true);
   bool can_use_put = true;
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, *ctx.ops_);
+  OB_TABLE_START_AUDIT((*ctx.credential_),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        &ctx.audit_ctx_, multi_op);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -701,6 +770,9 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
     }
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, ctx.trans_param_->tx_snapshot_,
+                     stmt_type, StmtType::T_KV_MULTI_PUT);
   return ret;
 }
 
@@ -730,7 +802,7 @@ int ObTableBatchService::process_htable_delete(const ObTableOperation &op,
     } else if (OB_FAIL(spec->create_executor(tb_ctx, executor))) {
       LOG_WARN("fail to create executor", K(ret));
     } else {
-      ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor));
+      ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor), ctx.audit_ctx_);
       if (OB_FAIL(delete_executor.open())) {
         LOG_WARN("fail to open htable delete executor", K(ret));
       } else if (OB_FAIL(delete_executor.get_next_row())) {
@@ -782,7 +854,7 @@ int ObTableBatchService::process_htable_put(const ObTableOperation &op,
     } else if (OB_FAIL(tb_ctx.init_trans(ctx.trans_param_->trans_desc_,
                                          ctx.trans_param_->tx_snapshot_))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, single_op_result))) {
+    } else if (OB_FAIL(process_insert_up(tb_ctx, single_op_result))) {
       LOG_WARN("fail to process insertup op", K(ret));
     } else if (FALSE_IT(ctx.results_->reset())) {
     } else if (OB_FAIL(ctx.results_->push_back(single_op_result))) {
@@ -839,7 +911,7 @@ int ObTableBatchService::htable_mutate_row(ObTableBatchCtx &ctx)
   return ret;
 }
 
-int ObTableBatchService::init_table_ctx(table::ObTableCtx &tb_ctx,
+int ObTableBatchService::init_table_ctx(ObTableCtx &tb_ctx,
                                         const ObTableOperation &op,
                                         const ObTableBatchCtx &batch_ctx)
 {
@@ -851,6 +923,7 @@ int ObTableBatchService::init_table_ctx(table::ObTableCtx &tb_ctx,
   tb_ctx.set_schema_guard(batch_ctx.tb_ctx_.get_schema_guard());
   tb_ctx.set_simple_table_schema(batch_ctx.tb_ctx_.get_simple_table_schema());
   tb_ctx.set_sess_guard(batch_ctx.tb_ctx_.get_sess_guard());
+  tb_ctx.set_audit_ctx(&batch_ctx.audit_ctx_);
 
   if (OB_ISNULL(batch_ctx.credential_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -912,6 +985,12 @@ int ObTableBatchService::init_table_ctx(table::ObTableCtx &tb_ctx,
         }
         break;
       }
+      case ObTableOperationType::PUT: {
+        if (OB_FAIL(tb_ctx.init_put())) {
+          LOG_WARN("fail to init put ctx", K(ret), K(tb_ctx));
+        }
+        break;
+      }
       default: {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected operation type", "type", op_type);
@@ -934,6 +1013,15 @@ int ObTableBatchService::process_get(ObIAllocator &allocator,
                                      ObTableOperationResult &result)
 {
   int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::GET);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        tb_ctx.get_audit_ctx(), op);
   ObNewRow *row;
   ObITableEntity *result_entity = nullptr;
   const ObTableEntity *request_entity = static_cast<const ObTableEntity *>(tb_ctx.get_entity());
@@ -959,6 +1047,160 @@ int ObTableBatchService::process_get(ObIAllocator &allocator,
   }
   result.set_err(ret);
   result.set_type(tb_ctx.get_opertion_type());
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_GET,
+                     has_table_scan, true);
+  return ret;
+}
+
+int ObTableBatchService::process_insert(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::INSERT);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                       tb_ctx.get_user_name(),
+                       tb_ctx.get_tenant_name(),
+                       tb_ctx.get_database_name(),
+                       tb_ctx.get_table_name(),
+                       tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_insert_op(tb_ctx, result))) {
+    LOG_WARN("fail to process insert", K(ret));
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_INSERT);
+  return ret;
+}
+
+int ObTableBatchService::process_delete(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::DEL);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                       tb_ctx.get_user_name(),
+                       tb_ctx.get_tenant_name(),
+                       tb_ctx.get_database_name(),
+                       tb_ctx.get_table_name(),
+                       tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(tb_ctx, result))) {
+    LOG_WARN("fail to process delete", K(ret));
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_DELETE);
+  return ret;
+}
+
+int ObTableBatchService::process_update(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::UPDATE);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                       tb_ctx.get_user_name(),
+                       tb_ctx.get_tenant_name(),
+                       tb_ctx.get_database_name(),
+                       tb_ctx.get_table_name(),
+                       tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, result))) {
+    LOG_WARN("fail to process update", K(ret));
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_UPDATE);
+  return ret;
+}
+
+int ObTableBatchService::process_replace(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::REPLACE);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                       tb_ctx.get_user_name(),
+                       tb_ctx.get_tenant_name(),
+                       tb_ctx.get_database_name(),
+                       tb_ctx.get_table_name(),
+                       tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, result))) {
+    LOG_WARN("fail to process replace", K(ret));
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_REPLACE);
+  return ret;
+}
+
+int ObTableBatchService::process_insert_up(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(tb_ctx.get_opertion_type());
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                       tb_ctx.get_user_name(),
+                       tb_ctx.get_tenant_name(),
+                       tb_ctx.get_database_name(),
+                       tb_ctx.get_table_name(),
+                       tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, result))) {
+    LOG_WARN("fail to process insert or update", K(ret));
+  }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_INSERT_OR_UPDATE);
+  return ret;
+}
+
+int ObTableBatchService::process_put(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::PUT);
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_put_op(tb_ctx, result))) {
+    LOG_WARN("fail to process put", K(ret));
+  }
+
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_PUT);
+  return ret;
+}
+
+int ObTableBatchService::process_increment_or_append(ObTableCtx &tb_ctx, ObTableOperationResult &result)
+{
+  int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(tb_ctx.get_opertion_type());
+  op.set_entity(tb_ctx.get_entity());
+  OB_TABLE_START_AUDIT((*tb_ctx.get_credential()),
+                        tb_ctx.get_user_name(),
+                        tb_ctx.get_tenant_name(),
+                        tb_ctx.get_database_name(),
+                        tb_ctx.get_table_name(),
+                        tb_ctx.get_audit_ctx(), op);
+  if (OB_FAIL(ObTableOpWrapper::process_incr_or_append_op(tb_ctx, result))) {
+    LOG_WARN("fail to process increment or append", K(ret));
+  }
+
+  StmtType stmt_type = tb_ctx.is_inc() ? StmtType::T_KV_INCREMENT : StmtType::T_KV_APPEND;
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, stmt_type);
   return ret;
 }
 
@@ -975,7 +1217,7 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
       LOG_WARN("fail to alloc entity", K(ret));
     }
 
-    SMART_VAR(table::ObTableCtx, tb_ctx, ctx.allocator_) {
+    SMART_VAR(ObTableCtx, tb_ctx, ctx.allocator_) {
       if (OB_FAIL(init_table_ctx(tb_ctx, op, ctx))) {
         LOG_WARN("fail to init table ctx for single operation", K(ret));
       }  else if (OB_FAIL(tb_ctx.init_trans(ctx.trans_param_->trans_desc_,
@@ -990,23 +1232,26 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
             ret = process_get(ctx.allocator_, tb_ctx, op_result);
             break;
           case ObTableOperationType::INSERT:
-            ret = ObTableOpWrapper::process_insert_op(tb_ctx, op_result);
+            ret = process_insert(tb_ctx, op_result);
             break;
           case ObTableOperationType::DEL:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_DELETE>(tb_ctx, op_result);
+            ret = process_delete(tb_ctx, op_result);
             break;
           case ObTableOperationType::UPDATE:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_UPDATE>(tb_ctx, op_result);
+            ret = process_update(tb_ctx, op_result);
             break;
           case ObTableOperationType::REPLACE:
-            ret = ObTableOpWrapper::process_op<TABLE_API_EXEC_REPLACE>(tb_ctx, op_result);
+            ret = process_replace(tb_ctx, op_result);
             break;
           case ObTableOperationType::INSERT_OR_UPDATE:
-            ret = ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result);
+            ret = process_insert_up(tb_ctx, op_result);
             break;
           case ObTableOperationType::APPEND:
           case ObTableOperationType::INCREMENT:
-            ret = ObTableOpWrapper::process_incr_or_append_op(tb_ctx, op_result);
+            ret = process_increment_or_append(tb_ctx, op_result);
+            break;
+          case ObTableOperationType::PUT:
+            ret = process_put(tb_ctx, op_result);
             break;
           default:
             ret = OB_ERR_UNEXPECTED;

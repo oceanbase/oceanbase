@@ -20,6 +20,9 @@
 #include "ob_table_insert_up_executor.h"
 #include "ttl/ob_table_ttl_executor.h"
 #include "ob_table_query_common.h"
+#include "ob_table_audit.h"
+
+using namespace oceanbase::sql::stmt;
 
 namespace oceanbase
 {
@@ -30,6 +33,9 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
                                            ObTableOperationResult &op_result)
 {
   int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(tb_ctx.get_opertion_type());
+  op.set_entity(tb_ctx.get_entity());
   ObTableApiExecutor *executor = nullptr;
   if (OB_ISNULL(spec)) {
     ret = OB_ERR_UNEXPECTED;
@@ -475,6 +481,12 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
   ObTableQueryResult tmp_result;
   ObTableQueryResult *one_result = nullptr;
   ObTableApiExecutor *child = nullptr;
+  OB_TABLE_START_AUDIT((*tb_ctx_.get_credential()),
+                       tb_ctx_.get_user_name(),
+                       tb_ctx_.get_tenant_name(),
+                       tb_ctx_.get_database_name(),
+                       tb_ctx_.get_table_name(),
+                       &audit_ctx_, query);
 
   if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(tmp_allocator,
                                                                 query,
@@ -501,9 +513,18 @@ int ObHTableDeleteExecutor::query_and_delete(const ObTableQuery &query)
       LOG_WARN("one_result is NULL", K(ret));
     } else if (FALSE_IT(one_result->rewind())) {
       // do nothing
-    } else if (OB_FAIL(delete_rows(*one_result))) {
-      LOG_WARN("fail to delete rows", K(ret));
     }
+  }
+
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, tb_ctx_.get_exec_ctx().get_das_ctx().get_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, tmp_result.get_row_count(),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(result_iter) ? nullptr : result_iter->get_filter()));
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(one_result) && OB_FAIL(delete_rows(*one_result))) {
+    LOG_WARN("fail to delete rows", K(ret));
   }
 
   int tmp_ret = OB_SUCCESS;
@@ -522,12 +543,26 @@ int ObHTableDeleteExecutor::delete_rows(ObTableQueryResult &result)
   const ObITableEntity *entity = nullptr;
   executor_->set_skip_scan(true);
   while (OB_SUCC(result.get_next_entity(entity))) {
+    ObTableOperation op;
+    op.set_type(ObTableOperationType::Type::DEL);
+    op.set_entity(entity);
+    OB_TABLE_START_AUDIT((*tb_ctx_.get_credential()),
+                         tb_ctx_.get_user_name(),
+                         tb_ctx_.get_tenant_name(),
+                         tb_ctx_.get_database_name(),
+                         tb_ctx_.get_table_name(),
+                         &audit_ctx_,
+                         op);
+
     executor_->set_entity(entity);
     if (OB_FAIL(executor_->get_next_row())) {
       LOG_WARN("fail to call delete executor get next row", K(ret), K(entity));
     } else {
       affected_rows_++;
     }
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, tb_ctx_.get_exec_ctx().get_das_ctx().get_snapshot(),
+                       stmt_type, StmtType::T_KV_DELETE);
   }
   if (OB_FAIL(ret)) {
     if (ret != OB_ITER_END) {

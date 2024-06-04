@@ -44,7 +44,6 @@ protected:
   virtual int check_arg() override;
   virtual int try_process() override;
   virtual void reset_ctx() override;
-  virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
   virtual int before_response(int error_code) override;
 
@@ -94,15 +93,10 @@ private:
     }
     return ret;
   }
+  // put override all columns, so no need to attention TTL
   int process_put()
   {
-    int ret = OB_SUCCESS;
-    if (!tb_ctx_.is_ttl_table()) {
-      ret = process_dml_op<table::TABLE_API_EXEC_INSERT>();
-    } else {
-      ret = process_dml_op<table::TABLE_API_EXEC_TTL>();
-    }
-    return ret;
+    return process_dml_op<table::TABLE_API_EXEC_INSERT>();;
   }
   int process_insert_up()
   {

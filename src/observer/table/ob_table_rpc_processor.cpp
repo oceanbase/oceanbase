@@ -247,17 +247,14 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      req_timeinfo_guard_(),
      schema_cache_guard_(),
      stat_event_type_(-1),
-     audit_row_count_(0),
-     need_audit_(false),
-     request_string_(NULL),
-     request_string_len_(0),
+     stat_row_count_(0),
      need_retry_in_queue_(false),
      is_tablegroup_req_(false),
      retry_count_(0),
      user_client_addr_(),
-     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_)
+     sess_stat_guard_(MTL_ID(), ObActiveSessionGuard::get_stat().session_id_),
+     audit_ctx_(retry_count_, user_client_addr_)
 {
-  need_audit_ = GCONF.enable_sql_audit;
 }
 
 void ObTableApiProcessorBase::reset_ctx()
@@ -517,25 +514,6 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback,
   return ret;
 }
 
-bool ObTableApiProcessorBase::need_audit() const
-{
-  return need_audit_;
-}
-
-void ObTableApiProcessorBase::start_audit(const rpc::ObRequest *req)
-{
-
-  if (OB_LIKELY(NULL != req)) {
-    audit_record_.user_client_addr_ = ObCurTraceId::get_addr();
-    audit_record_.client_addr_ = RPC_REQ_OP.get_peer(req);
-
-    audit_record_.trace_id_ = req->get_trace_id();
-
-    save_request_string();
-    generate_sql_id();
-  }
-}
-
 static int set_audit_name(const char *info_name, char *&audit_name, int64_t &audit_name_length, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
@@ -558,135 +536,12 @@ static int set_audit_name(const char *info_name, char *&audit_name, int64_t &aud
   return ret;
 }
 
-void ObTableApiProcessorBase::end_audit()
-{
-  // credential info
-  audit_record_.tenant_id_ = credential_.tenant_id_;
-  audit_record_.effective_tenant_id_ = credential_.tenant_id_;
-  audit_record_.user_id_ = credential_.user_id_;
-  audit_record_.db_id_ = credential_.database_id_;
-
-  // update tenant_name, user_name, database_name
-  int ret = OB_SUCCESS;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(credential_.tenant_id_, schema_guard))) {
-    SERVER_LOG(WARN, "fail to get schema guard", K(ret), "tenant_id", credential_.tenant_id_);
-  } else {
-    { // set tenant name, ignore ret
-      const share::schema::ObSimpleTenantSchema *tenant_info = NULL;
-      if (OB_FAIL(schema_guard.get_tenant_info(credential_.tenant_id_, tenant_info))) {
-        SERVER_LOG(WARN, "fail to get tenant info", K(ret), K(credential_.tenant_id_));
-      } else if (OB_ISNULL(tenant_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "tenant info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(tenant_info->get_tenant_name(),
-          audit_record_.tenant_name_, audit_record_.tenant_name_len_, audit_allocator_))){
-        SERVER_LOG(WARN, "fail to set tenant name", K(ret), "tenant_name", tenant_info->get_tenant_name());
-      }
-    }
-
-    { // set user name, ignore ret
-      ret = OB_SUCCESS;
-      const share::schema::ObUserInfo *user_info = NULL;
-      if (OB_FAIL(schema_guard.get_user_info(credential_.tenant_id_, credential_.user_id_, user_info))) {
-        SERVER_LOG(WARN, "fail to get user info", K(ret), K(credential_));
-      } else if (OB_ISNULL(user_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "user info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(user_info->get_user_name(),
-          audit_record_.user_name_, audit_record_.user_name_len_, audit_allocator_))) {
-        SERVER_LOG(WARN, "fail to set user name", K(ret), "user_name", user_info->get_user_name());
-      }
-    }
-
-    { // set database name, ignore ret
-      ret = OB_SUCCESS;
-      const share::schema::ObSimpleDatabaseSchema *database_info = NULL;
-      if (OB_FAIL(schema_guard.get_database_schema(credential_.tenant_id_, credential_.database_id_, database_info))) {
-        SERVER_LOG(WARN, "fail to get database info", K(ret), K(credential_));
-      } else if (OB_ISNULL(database_info)) {
-        ret = OB_ERR_UNEXPECTED;
-        SERVER_LOG(WARN, "database info is null", K(ret));
-      } else if (OB_FAIL(set_audit_name(database_info->get_database_name(),
-          audit_record_.db_name_, audit_record_.db_name_len_, audit_allocator_))) {
-        SERVER_LOG(WARN, "fail to set database name", K(ret), "database_name", database_info->get_database_name());
-      }
-    }
-  }
-
-  // append request string to query_sql
-  if (NULL != request_string_ && request_string_len_ > 0) {
-    static const char request_print_prefix[] = ", \nrequest: ";
-    const int64_t buf_size = audit_record_.sql_len_ + sizeof(request_print_prefix) + request_string_len_;
-    char *buf = reinterpret_cast<char *>(audit_allocator_.alloc(buf_size));
-    if (NULL == buf) {
-      SERVER_LOG(WARN, "fail to alloc audit memory", K(buf_size), K(audit_record_.sql_), K(request_string_));
-    } else {
-      memset(buf, 0, buf_size);
-      if (OB_NOT_NULL(audit_record_.sql_)) {
-        strcat(buf, audit_record_.sql_);
-      }
-      strcat(buf, request_print_prefix);
-      strcat(buf, request_string_);
-      audit_record_.sql_ = buf;
-      audit_record_.sql_len_ = buf_size;
-      audit_record_.sql_cs_type_ = ObCharset::get_system_collation();
-    }
-  }
-
-  // request info
-  audit_record_.is_executor_rpc_ = false; // FIXME(wenqu): set false for print sql_id
-  audit_record_.is_hit_plan_cache_ = false;
-  audit_record_.is_inner_sql_ = false;
-  audit_record_.is_multi_stmt_ = false;
-  audit_record_.partition_cnt_ = 1; // always 1 for now;
-  audit_record_.plan_id_ = 0;
-  audit_record_.plan_type_ = OB_PHY_PLAN_UNINITIALIZED;
-
-  // in-process info
-  audit_record_.execution_id_ = 0; // not used for table api
-  audit_record_.request_id_ = 0; // not used for table api
-  audit_record_.seq_ = 0; // not used
-  audit_record_.session_id_ = 0; // not used  for table api
-
-  // tx info
-  audit_record_.trans_id_ = tx_snapshot_.core_.tx_id_.get_id();
-  audit_record_.snapshot_.version_ = tx_snapshot_.core_.version_;
-  audit_record_.snapshot_.tx_id_ = tx_snapshot_.core_.tx_id_.get_id();
-  audit_record_.snapshot_.scn_ = tx_snapshot_.core_.scn_.cast_to_int();
-  audit_record_.snapshot_.source_ = tx_snapshot_.get_source_name();
-
-  const int64_t elapsed_time = common::ObTimeUtility::fast_current_time() - audit_record_.exec_timestamp_.receive_ts_;
-  if (elapsed_time > GCONF.trace_log_slow_query_watermark) {
-    FORCE_PRINT_TRACE(THE_TRACE, "[table api][slow query]");
-  }
-
-  ret = OB_SUCCESS;
-  MTL_SWITCH(credential_.tenant_id_) {
-    obmysql::ObMySQLRequestManager *req_manager = MTL(obmysql::ObMySQLRequestManager*);
-    if (nullptr == req_manager) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get request manager for current tenant", K(ret));
-    } else if (OB_FAIL(req_manager->record_request(audit_record_, true,
-               ObSQLUtils::get_query_record_size_limit(credential_.tenant_id_)))) {
-      if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
-        LOG_DEBUG("cannot allocate mem for record", K(ret));
-        ret = OB_SUCCESS;
-      } else {
-        if (REACH_TIME_INTERVAL(100 * 1000)) { // in case logging is too frequent
-          LOG_WARN("failed to record request info in request manager", K(ret));
-        }
-      }
-    }
-  }
-
-}
-
 int ObTableApiProcessorBase::process_with_retry(const ObString &credential, const int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
-  audit_record_.exec_timestamp_.process_executor_ts_ = ObTimeUtility::fast_current_time();
-  ObWaitEventStat total_wait_desc;
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.process_executor_ts_ = ObTimeUtility::fast_current_time();
+  }
   if (OB_ISNULL(gctx_.ob_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
@@ -695,11 +550,6 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
   } else if (OB_FAIL(check_user_access(credential))) {
     LOG_WARN("check user access failed", K(ret));
   } else {
-    ObMaxWaitGuard max_wait_guard(&audit_record_.exec_record_.max_wait_event_);
-    ObTotalWaitGuard total_wait_guard(&total_wait_desc);
-    ObTenantStatEstGuard stat_guard(credential_.tenant_id_);
-    ObProcessMallocCallback pmcb(0, audit_record_.request_memory_used_);
-    ObMallocCallbackGuard malloc_guard_(pmcb);
     need_retry_in_queue_ = false;
     bool did_local_retry = false;
     do {
@@ -743,16 +593,7 @@ int ObTableApiProcessorBase::process_with_retry(const ObString &credential, cons
         }
       }
     } while (did_local_retry);
-    // record events
-    if (need_audit()) {
-      audit_on_finish();
-    }
   }
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.wait_time_end_ = total_wait_desc.time_waited_;
-    audit_record_.exec_record_.wait_count_end_ = total_wait_desc.total_waits_;
-  }
-  audit_record_.status_ = ret;
   return ret;
 }
 
@@ -768,26 +609,26 @@ template class oceanbase::observer::ObTableRpcProcessor<ObTableRpcProxy::ObRpc<O
 template<class T>
 int ObTableRpcProcessor<T>::deserialize()
 {
-  audit_record_.exec_timestamp_.run_ts_ = ObTimeUtility::fast_current_time();
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.run_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql run
+  }
   return RpcProcessor::deserialize();
 }
 
 template<class T>
 int ObTableRpcProcessor<T>::before_process()
 {
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.record_start();
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.before_process_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql before_process
+    if (OB_LIKELY(NULL != RpcProcessor::req_)) {
+      audit_ctx_.exec_timestamp_.rpc_send_ts_ = RpcProcessor::req_->get_send_timestamp(); // The timestamp of the rpc sent by the client
+      audit_ctx_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp(); // The timestamp of the request received by the server
+      audit_ctx_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp(); // The timestamp of the request to enter the tenant queue
+      IGNORE_RETURN audit_ctx_.generate_request_string(RpcProcessor::arg_);
+    }
   }
-  audit_record_.exec_timestamp_.before_process_ts_ = ObTimeUtility::fast_current_time();
-  if (OB_LIKELY(NULL != RpcProcessor::req_)) {
-    audit_record_.exec_timestamp_.rpc_send_ts_ = RpcProcessor::req_->get_send_timestamp();
-    audit_record_.exec_timestamp_.receive_ts_ = RpcProcessor::req_->get_receive_timestamp();
-    audit_record_.exec_timestamp_.enter_queue_ts_ = RpcProcessor::req_->get_enqueue_timestamp();
-  }
+
   user_client_addr_ = RPC_REQ_OP.get_peer(RpcProcessor::req_);
-  if (need_audit()) {
-    start_audit(RpcProcessor::req_);
-  }
   return RpcProcessor::before_process();
 }
 
@@ -795,13 +636,17 @@ template<class T>
 int ObTableRpcProcessor<T>::process()
 {
   int ret = OB_SUCCESS;
+  if (audit_ctx_.need_audit_) {
+    audit_ctx_.exec_timestamp_.single_process_ts_ = ObTimeUtility::fast_current_time(); // The start timestamp of a single sql do_process
+  }
   if (OB_FAIL(process_with_retry(RpcProcessor::arg_.credential_, get_timeout_ts()))) {
-    if (OB_NOT_NULL(request_string_)) { // request_string_ has been generated if enable sql_audit
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), K(request_string_), K(audit_record_.exec_timestamp_));
+    if (OB_NOT_NULL(audit_ctx_.req_buf_)) { // req_buf_ has been generated if enable sql_audit
+      ObString request(audit_ctx_.req_buf_len_, audit_ctx_.req_buf_);
+      LOG_WARN("fail to process table_api request", K(ret), K_(stat_event_type), K(request), K(audit_ctx_.exec_timestamp_));
     } else if (had_do_response()) { // req_ may be freed
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_),  K(audit_record_.exec_timestamp_));
+      LOG_WARN("fail to process table_api request", K(ret), K_(stat_event_type), K(audit_ctx_.exec_timestamp_));
     } else {
-      LOG_WARN("fail to process table_api request", K(ret), K(stat_event_type_), "request", RpcProcessor::arg_,  K(audit_record_.exec_timestamp_));
+      LOG_WARN("fail to process table_api request", K(ret), K_(stat_event_type), "request", RpcProcessor::arg_, K(audit_ctx_.exec_timestamp_));
     }
     // whether the client should refresh location cache and retry
     if (ObTableRpcProcessorUtil::is_require_rerouting_err(ret)) {
@@ -815,15 +660,8 @@ int ObTableRpcProcessor<T>::process()
 template<class T>
 int ObTableRpcProcessor<T>::before_response(int error_code)
 {
-  const int64_t curr_time = ObTimeUtility::fast_current_time();
-  audit_record_.exec_timestamp_.executor_end_ts_ = curr_time;
-  // timestamp of start get plan, no need for table_api, set euqal to process_executor_ts_
-  audit_record_.exec_timestamp_.single_process_ts_ = audit_record_.exec_timestamp_.process_executor_ts_;
-  if (need_audit()) {
-    const int64_t elapsed_us = curr_time - RpcProcessor::get_receive_timestamp();
-    ObTableRpcProcessorUtil::record_stat(audit_record_, stat_event_type_, elapsed_us, audit_row_count_);
-    // todo: distinguish hbase rows and ob rows.
-  }
+  const int64_t elapsed_us = ObTimeUtility::fast_current_time() - RpcProcessor::get_receive_timestamp();
+  ObTableRpcProcessorUtil::record_stat(stat_event_type_, elapsed_us, stat_row_count_);
   return RpcProcessor::before_response(error_code);
 }
 
@@ -857,19 +695,6 @@ int ObTableRpcProcessor<T>::after_process(int error_code)
 {
   int ret = OB_SUCCESS;
   NG_TRACE(process_end); // print trace log if necessary
-  // some statistics must be recorded for plan stat, even though sql audit disabled
-  audit_record_.exec_timestamp_.exec_type_ = ExecType::RpcProcessor;
-  audit_record_.exec_timestamp_.net_t_ = 0;
-  audit_record_.exec_timestamp_.net_wait_t_ =
-      audit_record_.exec_timestamp_.enter_queue_ts_ - audit_record_.exec_timestamp_.receive_ts_;
-  audit_record_.exec_timestamp_.update_stage_time();
-  if (lib::is_diagnose_info_enabled()) {
-    audit_record_.exec_record_.record_end();
-    audit_record_.update_event_stage_state();
-  }
-  if (need_audit()) {
-    end_audit();
-  }
   if (OB_FAIL(ObTableConnectionMgr::get_instance().update_table_connection(user_client_addr_,
                 credential_.tenant_id_, credential_.database_id_, credential_.user_id_))) {
        LOG_WARN("fail to update conn active time", K(ret), K_(user_client_addr), K_(credential_.tenant_id),
@@ -882,37 +707,6 @@ template<class T>
 void ObTableRpcProcessor<T>::set_req_has_wokenup()
 {
   RpcProcessor::req_ = NULL;
-}
-
-template<class T>
-void ObTableRpcProcessor<T>::save_request_string()
-{
-  int ret = OB_SUCCESS;
-  const char *arg_str = to_cstring(RpcProcessor::arg_);
-  if (OB_NOT_NULL(arg_str)) {
-    const int64_t buf_size = strlen(arg_str) + 1;
-    char *buf = reinterpret_cast<char *>(audit_allocator_.alloc(buf_size));
-    if (NULL == buf) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      SERVER_LOG(WARN, "fail to alloc audit memory", K(ret), K(buf_size), K(arg_str));
-    } else {
-      memset(buf, 0, buf_size);
-      strcpy(buf, arg_str);
-      request_string_ = buf;
-      request_string_len_ = buf_size;
-    }
-  }
-}
-
-template<class T>
-void ObTableRpcProcessor<T>::generate_sql_id()
-{
-  uint64_t checksum = get_request_checksum();
-  checksum = ob_crc64(checksum, &credential_.tenant_id_, sizeof(credential_.tenant_id_));
-  checksum = ob_crc64(checksum, &credential_.user_id_, sizeof(credential_.user_id_));
-  checksum = ob_crc64(checksum, &credential_.database_id_, sizeof(credential_.database_id_));
-  snprintf(audit_record_.sql_id_, (int32_t)sizeof(audit_record_.sql_id_),
-     "TABLEAPI0x%04Xvv%016lX", RpcProcessor::PCODE, checksum);
 }
 
 // only use for batch_execute and htable_mutate_row, to check if need to get the global snapshot

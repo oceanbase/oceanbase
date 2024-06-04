@@ -32,8 +32,9 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::sql::stmt;
 
-int QueryAndMutateHelper::init_tb_ctx(table::ObTableCtx &ctx,
+int QueryAndMutateHelper::init_tb_ctx(ObTableCtx &ctx,
                                       ObTableOperationType::Type op_type,
                                       const ObITableEntity &entity)
 {
@@ -49,6 +50,7 @@ int QueryAndMutateHelper::init_tb_ctx(table::ObTableCtx &ctx,
   ctx.set_simple_table_schema(simple_table_schema_);
   ctx.set_schema_cache_guard(schema_cache_guard_);
   ctx.set_sess_guard(sess_guard_);
+  ctx.set_audit_ctx(&audit_ctx_);
   const int64_t timeout_ts = -1;
 
   if (!ctx.is_init()) {
@@ -163,13 +165,14 @@ int QueryAndMutateHelper::init_scan_tb_ctx(ObTableApiCacheGuard &cache_guard)
 int QueryAndMutateHelper::execute_htable_delete()
 {
   int ret = OB_SUCCESS;
+  const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
+  const ObTableOperation &op = mutations.at(0);
+
   SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
     ObTableApiSpec *spec = nullptr;
     ObTableApiExecutor *executor = nullptr;
     observer::ObReqTimeGuard req_timeinfo_guard; // 引用cache资源必须加ObReqTimeGuard
     ObTableApiCacheGuard cache_guard;
-    const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
-    const ObTableOperation &op = mutations.at(0);
 
     if (OB_FAIL(init_tb_ctx(tb_ctx,
                             ObTableOperationType::Type::DEL,
@@ -182,7 +185,7 @@ int QueryAndMutateHelper::execute_htable_delete()
     } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
     } else {
-      ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor));
+      ObHTableDeleteExecutor delete_executor(tb_ctx, static_cast<ObTableApiDeleteExecutor *>(executor), audit_ctx_);
       if (OB_FAIL(delete_executor.open())) {
         LOG_WARN("fail to open htable delete executor", K(ret));
       } else if (OB_FAIL(delete_executor.get_next_row())) {
@@ -210,33 +213,31 @@ int QueryAndMutateHelper::execute_htable_put()
   int ret = OB_SUCCESS;
   const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
   int64_t N = mutations.count();
+  ObTableAuditMultiOp multi_op(ObTableOperationType::Type::PUT, mutations.get_table_operations());
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_->get_user_name(),
+                       sess_guard_->get_tenant_name(),
+                       sess_guard_->get_database_name(),
+                       simple_table_schema_->get_table_name_str(),
+                       &audit_ctx_, multi_op);
+
   for (int64_t i = 0; OB_SUCC(ret) && i < N; i++) {
     const ObTableOperation &op = mutations.at(i);
-    if (OB_FAIL(execute_htable_put(op.entity()))) {
-      LOG_WARN("fail to execute hatable insert", K(ret));
+    SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
+      ObTableOperationResult op_result;
+      if (OB_FAIL(init_tb_ctx(tb_ctx, ObTableOperationType::Type::INSERT_OR_UPDATE, op.entity()))) {
+        LOG_WARN("fail to init table ctx", K(ret));
+      } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+        LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
+      } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result))) {
+        LOG_WARN("fail to process insert up op", K(ret));
+      }
     }
   }
 
-  return ret;
-}
-
-int QueryAndMutateHelper::execute_htable_put(const ObITableEntity &new_entity)
-{
-  int ret = OB_SUCCESS;
-
-  SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
-    ObTableOperationResult op_result;
-    if (OB_FAIL(init_tb_ctx(tb_ctx,
-                            ObTableOperationType::Type::INSERT_OR_UPDATE,
-                            new_entity))) {
-      LOG_WARN("fail to init table ctx", K(ret));
-    } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
-      LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
-    } else if (OB_FAIL(ObTableOpWrapper::process_insert_up_op(tb_ctx, op_result))) {
-      LOG_WARN("fail to process insert up op", K(ret));
-    }
-  }
-
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_MULTI_PUT);
   return ret;
 }
 
@@ -250,7 +251,7 @@ public:
 };
 
 int QueryAndMutateHelper::sort_qualifier(common::ObIArray<ColumnIdx> &columns,
-                                         const table::ObTableBatchOperation &increment)
+                                         const ObTableBatchOperation &increment)
 {
   int ret = OB_SUCCESS;
   const int64_t N = increment.count();
@@ -317,6 +318,13 @@ int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
   int ret = OB_SUCCESS;
   ObTableApiExecutor *executor = nullptr;
   ObTableApiScanRowIterator row_iter;
+  OB_TABLE_START_AUDIT(credential_,
+                       tb_ctx_.get_user_name(),
+                       tb_ctx_.get_tenant_name(),
+                       tb_ctx_.get_database_name(),
+                       tb_ctx_.get_table_name(),
+                       &audit_ctx_,
+                       query_and_mutate_.get_query());
 
   if (OB_FAIL(scan_spec.create_executor(tb_ctx_, executor))) {
     LOG_WARN("fail to generate executor", K(ret), K(tb_ctx_));
@@ -339,6 +347,12 @@ int QueryAndMutateHelper::get_old_row(ObTableApiSpec &scan_spec, ObNewRow *&row)
   if (OB_NOT_NULL(executor)) {
     scan_spec.destroy_executor(executor);
   }
+
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, OB_ISNULL(row) ? 0 : 1,
+                     has_table_scan, true);
 
   return ret;
 }
@@ -381,7 +395,7 @@ int QueryAndMutateHelper::add_to_results(const ObObj &rk,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null query and mutate result", K(ret));
   } else {
-    table::ObTableQueryResult &results = query_and_mutate_result_->affected_entity_;
+    ObTableQueryResult &results = query_and_mutate_result_->affected_entity_;
     if (results.get_property_count() <= 0) {
       if (OB_FAIL(results.add_property_name(ObHTableConstants::ROWKEY_CNAME_STR))) {
         LOG_WARN("failed to copy name", K(ret));
@@ -549,14 +563,22 @@ int QueryAndMutateHelper::execute_htable_increment(ObTableApiSpec &scan_spe)
 int QueryAndMutateHelper::execute_htable_insert(const ObITableEntity &new_entity)
 {
   int ret = OB_SUCCESS;
+  ObTableOperation op;
+  op.set_type(ObTableOperationType::Type::INSERT);
+  op.set_entity(new_entity);
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_->get_user_name(),
+                       sess_guard_->get_tenant_name(),
+                       sess_guard_->get_database_name(),
+                       simple_table_schema_->get_table_name_str(),
+                       &audit_ctx_,
+                       op);
 
   SMART_VAR(ObTableCtx, tb_ctx, allocator_) {
     ObTableApiSpec *spec = nullptr;
     ObTableApiExecutor *executor = nullptr;
     ObTableOperationResult op_result;
-    if (OB_FAIL(init_tb_ctx(tb_ctx,
-                            ObTableOperationType::Type::INSERT,
-                            new_entity))) {
+    if (OB_FAIL(init_tb_ctx(tb_ctx, ObTableOperationType::Type::INSERT, new_entity))) {
       LOG_WARN("fail to init table ctx", K(ret));
     } else if (OB_FAIL(tb_ctx.init_trans(get_trans_desc(), get_tx_snapshot()))) {
       LOG_WARN("fail to init trans", K(ret), K(tb_ctx));
@@ -565,6 +587,9 @@ int QueryAndMutateHelper::execute_htable_insert(const ObITableEntity &new_entity
     }
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_INSERT);
   return ret;
 }
 
@@ -574,6 +599,13 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
   const ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
   const ObTableOperation &mutation = mutations.at(0);
   uint64_t table_id = tb_ctx_.get_ref_table_id();
+  OB_TABLE_START_AUDIT(credential_,
+                       tb_ctx_.get_user_name(),
+                       tb_ctx_.get_tenant_name(),
+                       tb_ctx_.get_database_name(),
+                       tb_ctx_.get_table_name(),
+                       &audit_ctx_,
+                       query_and_mutate_.get_query());
 
   ObTableQueryResult *one_result = nullptr;
   // htable queryAndXXX only check one row
@@ -598,6 +630,12 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
         check_passed = true;
       }
     }
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, get_tx_snapshot(),
+                       stmt_type, StmtType::T_KV_QUERY,
+                       return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
+                       has_table_scan, true,
+                       filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
     if (OB_SUCC(ret) && check_passed) {
       switch(mutation.type()) {
         case ObTableOperationType::DEL: { // checkAndDelete
@@ -661,7 +699,7 @@ int QueryAndMutateHelper::check_expected_value_is_null(ObTableQueryResultIterato
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("null filter operator", K(ret));
     } else {
-      hfilter = filter_op->get_hfiter();
+      hfilter = filter_op->get_filter();
       if OB_ISNULL(hfilter) {
         // do nothing, filter string is empty, only htable key is specified
       } else {
@@ -811,6 +849,13 @@ int QueryAndMutateHelper::execute_table_mutation(ObTableQueryResultIterator *res
     ObTableQueryResult *one_result = nullptr;
     bool end_in_advance = false;
     while (OB_SUCC(ret) && !end_in_advance) { // 在check and insert 情境下会有提前终止
+      OB_TABLE_START_AUDIT(credential_,
+                           tb_ctx_.get_user_name(),
+                           tb_ctx_.get_tenant_name(),
+                           tb_ctx_.get_database_name(),
+                           tb_ctx_.get_table_name(),
+                           &audit_ctx_,
+                           query_and_mutate_.get_query());
       if (ObTimeUtility::current_time() > get_timeout_ts()) {
         ret = OB_TRANS_TIMEOUT;
         LOG_WARN("exceed operatiton timeout", K(ret));
@@ -818,6 +863,16 @@ int QueryAndMutateHelper::execute_table_mutation(ObTableQueryResultIterator *res
         if (OB_ITER_END != ret) {
           LOG_WARN("fail to get next result", K(ret));
         }
+      }
+      OB_TABLE_END_AUDIT(ret_code, ret,
+                         snapshot, get_tx_snapshot(),
+                         stmt_type, StmtType::T_KV_QUERY,
+                         return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
+                         has_table_scan, true,
+                         filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
+
+      if (OB_FAIL(ret)) {
+        // do nothing
       } else if (OB_FAIL(execute_one_mutation(allocator_, *one_result, rowkey_column_names, affected_rows, end_in_advance))) {
         LOG_WARN("fail to execute one mutation", K(ret), K(rowkey_column_names));
       } else if (query_and_mutate_.return_affected_entity() && OB_NOT_NULL(query_and_mutate_result_)) {
@@ -934,12 +989,25 @@ int QueryAndMutateHelper::check_and_execute(ObTableQueryResultIterator *result_i
   bool check_exists = query_and_mutate_.is_check_exists();
   bool check_passed = false;
   int64_t affected_rows = 0;
+  OB_TABLE_START_AUDIT(credential_,
+                       tb_ctx_.get_user_name(),
+                       tb_ctx_.get_tenant_name(),
+                       tb_ctx_.get_database_name(),
+                       tb_ctx_.get_table_name(),
+                       &audit_ctx_,
+                       query_and_mutate_.get_query());
 
   if (OB_FAIL(result_iterator->get_next_result(one_result))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("fail to get next result", K(ret));
     }
   }
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, (OB_ISNULL(one_result) ? 0 : one_result->get_row_count()),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(result_iterator) ? nullptr : result_iterator->get_filter()));
 
   if (OB_SUCC(ret)) {
     if (one_result->get_row_count() > 0 && check_exists) {

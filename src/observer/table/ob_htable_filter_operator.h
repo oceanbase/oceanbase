@@ -284,12 +284,10 @@ public:
   void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
   // parse the filter string
   int parse_filter_string(common::ObIAllocator* allocator);
-  OB_INLINE table::hfilter::Filter *get_hfiter() { return hfilter_; }
 private:
   ObHTableRowIterator row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
-  table::hfilter::Filter *hfilter_;
   int32_t batch_size_;
   int64_t max_result_size_;
   bool is_first_result_;

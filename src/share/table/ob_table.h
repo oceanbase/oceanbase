@@ -432,6 +432,8 @@ public:
    */
   static ObTableOperation append(const ObITableEntity &entity);
 public:
+  int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
+  int64_t get_stmt_length(const common::ObString &table_name) const;
   void reset() { entity_ = nullptr; operation_type_ = ObTableOperationType::Type::INVALID; }
   const ObITableEntity &entity() const { return *entity_; }
   ObTableOperationType::Type type() const { return operation_type_; }
@@ -441,6 +443,8 @@ public:
   int get_entity(ObITableEntity *&entity);
   uint64_t get_checksum();
   TO_STRING_KV(K_(operation_type), "entity", to_cstring(entity_));
+public:
+  static const char *get_op_name(ObTableOperationType::Type op_type);
 private:
   const ObITableEntity *entity_;
   ObTableOperationType::Type operation_type_;
@@ -889,6 +893,8 @@ public:
   int deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const;
   const common::ObIArray<ObTableAggregation> &get_aggregations() const { return aggregations_; }
   bool is_aggregate_query() const { return !aggregations_.empty(); }
+  int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
+  int64_t get_stmt_length(const common::ObString &table_name) const;
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),

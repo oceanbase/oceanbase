@@ -104,19 +104,6 @@ int ObTableLSExecuteP::check_arg_for_query_and_mutate(const ObTableSingleOp &sin
   return ret;
 }
 
-void ObTableLSExecuteP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObConsistencyLevel::STRONG;
-  audit_record_.table_scan_ = true;
-  audit_record_.try_cnt_ = retry_count_ + 1;
-  for (int64_t i = 0; i < result_.count(); i++) {
-    for (int64_t j = 0; j < result_.at(i).count(); j++) {
-      audit_record_.affected_rows_ += result_.at(i).at(j).get_affected_rows();
-      audit_record_.return_rows_ += OB_ISNULL(result_.at(i).at(j).get_entity()) ? 0 : 1;
-    }
-  }
-}
-
 uint64_t ObTableLSExecuteP::get_request_checksum()
 {
   uint64_t checksum = arg_.ls_op_.get_ls_id().id();
@@ -334,7 +321,7 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
     LOG_WARN("unexpected operation count", KR(ret), K(tablet_op.count()));
   } else {
     ObSEArray<ObTableOperation, 16> table_operations;
-    SMART_VAR(ObTableBatchCtx, batch_ctx, allocator_) {
+    SMART_VAR(ObTableBatchCtx, batch_ctx, allocator_, audit_ctx_) {
       if (OB_FAIL(init_batch_ctx(batch_ctx, tablet_op, table_operations, tablet_result))) {
         LOG_WARN("fail to init batch ctx", K(ret));
       } else if (OB_FAIL(ObTableBatchService::execute(batch_ctx))) {
@@ -344,7 +331,7 @@ int ObTableLSExecuteP::execute_tablet_batch_ops(const ObTableTabletOp &tablet_op
       }
     }
     // record events
-    audit_row_count_ += tablet_op.count();
+    stat_row_count_ += tablet_op.count();
   }
   return ret;
 }
@@ -560,7 +547,7 @@ int ObTableLSExecuteP::execute_single_query_and_mutate(const uint64_t table_id,
       qm_param.simple_table_schema_ = simple_table_schema_;
       qm_param.schema_cache_guard_ = &schema_cache_guard_;
       qm_param.sess_guard_ = &sess_guard_;
-      SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param) {
+      SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param, audit_ctx_) {
         if (OB_FAIL(helper.execute_query_and_mutate())) {
           LOG_WARN("fail to execute query and mutate", K(ret), K(single_op));
         } else {}

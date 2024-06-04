@@ -28,6 +28,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::sql::stmt;
 
 ObTableQueryP::ObTableQueryP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
@@ -60,16 +61,6 @@ int ObTableQueryP::check_arg()
              "consistency_level", arg_.consistency_level_);
   }
   return ret;
-}
-
-void ObTableQueryP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
-      ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
-  audit_record_.affected_rows_ = 0;
-  audit_record_.try_cnt_ = retry_count_ + 1;
 }
 
 uint64_t ObTableQueryP::get_request_checksum()
@@ -169,6 +160,13 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   const int64_t timeout_ts = get_timeout_ts();
   ObTableApiScanRowIterator row_iter;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_.get_user_name(),
+                       sess_guard_.get_tenant_name(),
+                       sess_guard_.get_database_name(),
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       arg_.query_);
 
   // 1. create result iterator
   if (OB_FAIL(ObTableQueryUtils::generate_query_result_iterator(allocator_,
@@ -234,8 +232,6 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
     }
     this->set_result_compress_type(compressor_type);
 
-     ObTableQueryUtils::destroy_result_iterator(result_iter);
-
     LOG_DEBUG("last result", K(ret), "row_count", result_.get_row_count());
     NG_TRACE_EXT(tag1, OB_ID(return_rows), result_count, OB_ID(arg2), result_row_count_);
   }
@@ -246,7 +242,7 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
   } else {
     stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY;// table query
   }
-  audit_row_count_ = result_row_count_;
+  stat_row_count_ = result_row_count_;
 
   #ifndef NDEBUG
     // debug mode
@@ -258,6 +254,13 @@ int ObTableQueryP::query_and_result(ObTableApiScanExecutor *executor)
               "receive_ts", get_receive_timestamp(), K(result_count), K_(result_row_count));
   #endif
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, result_.get_row_count(),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(result_iter) ? nullptr : result_iter->get_filter()));
+  ObTableQueryUtils::destroy_result_iterator(result_iter);
   return ret;
 }
 

@@ -30,6 +30,7 @@ using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::sql;
+using namespace oceanbase::sql::stmt;
 
 /**
  * ---------------------------------------- ObTableQueryAsyncSession ----------------------------------------
@@ -315,17 +316,6 @@ int ObTableQueryAsyncP::check_arg()
   return ret;
 }
 
-void ObTableQueryAsyncP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_
-                                         ? ObConsistencyLevel::STRONG
-                                         : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = result_.get_row_count();
-  audit_record_.table_scan_ = is_full_table_scan_;
-  audit_record_.affected_rows_ = 0;
-  audit_record_.try_cnt_ = retry_count_ + 1;
-}
-
 uint64_t ObTableQueryAsyncP::get_request_checksum()
 {
   uint64_t checksum = 0;
@@ -565,7 +555,7 @@ int ObTableQueryAsyncP::query_scan_with_init()
   } else if (OB_FAIL(execute_query())) {
     LOG_WARN("fail to execute query", K(ret));
   } else {
-    audit_row_count_ = result_.get_row_count();
+    stat_row_count_ = result_.get_row_count();
     result_.query_session_id_ = query_session_id_;
     is_full_table_scan_ = tb_ctx.is_full_table_scan();
   }
@@ -584,6 +574,13 @@ int ObTableQueryAsyncP::query_scan_without_init()
   ObTableQueryAsyncCtx &query_ctx = query_session_->get_query_ctx();
   ObTableCtx &tb_ctx = query_ctx.tb_ctx_;
   ObCompressorType compressor_type = INVALID_COMPRESSOR;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_.get_user_name(),
+                       sess_guard_.get_tenant_name(),
+                       sess_guard_.get_database_name(),
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       query_session_->get_query());
 
   if (OB_ISNULL(result_iter)) {
     ret = OB_ERR_NULL_VALUE;
@@ -606,7 +603,6 @@ int ObTableQueryAsyncP::query_scan_without_init()
     } else {
       result_.is_end_ = !result_iter->has_more_result();
       result_.query_session_id_ = query_session_id_;
-      audit_row_count_ = result_.get_row_count();
       is_full_table_scan_ = tb_ctx.is_full_table_scan();
     }
 
@@ -620,6 +616,12 @@ int ObTableQueryAsyncP::query_scan_without_init()
     this->set_result_compress_type(compressor_type);
   }
 
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, result_.get_row_count(),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(result_iter) ? nullptr : result_iter->get_filter()));
   return ret;
 }
 
@@ -675,6 +677,14 @@ int ObTableQueryAsyncP::init_query_ctx(const ObString &arg_table_name) {
 int ObTableQueryAsyncP::process_query_start()
 {
   int ret = OB_SUCCESS;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_.get_user_name(),
+                       sess_guard_.get_tenant_name(),
+                       sess_guard_.get_database_name(),
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       arg_.query_);
+
   if (OB_FAIL(init_query_ctx(arg_.table_name_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
   } else if (OB_FAIL(query_scan_with_init())) {
@@ -682,6 +692,13 @@ int ObTableQueryAsyncP::process_query_start()
   } else {
     LOG_DEBUG("finish query start", K(ret), K(query_session_id_));
   }
+
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, StmtType::T_KV_QUERY,
+                     return_rows, result_.get_row_count(),
+                     has_table_scan, true,
+                     filter, (OB_ISNULL(query_session_->get_result_iterator()) ? nullptr : query_session_->get_result_iterator()->get_filter()));
   return ret;
 }
 

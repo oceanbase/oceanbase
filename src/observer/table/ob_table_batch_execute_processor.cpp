@@ -33,7 +33,7 @@ ObTableBatchExecuteP::ObTableBatchExecuteP(const ObGlobalContext &gctx)
     : ObTableRpcProcessor(gctx),
       default_entity_factory_("TableBatchEntFac", MTL_ID()),
       allocator_("TbBatExeP", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      batch_ctx_(allocator_)
+      batch_ctx_(allocator_, audit_ctx_)
 {
 }
 
@@ -113,20 +113,6 @@ int ObTableBatchExecuteP::check_arg()
              "consistency_level", arg_.consistency_level_);
   }
   return ret;
-}
-
-void ObTableBatchExecuteP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
-      ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.table_scan_ = false;
-  audit_record_.try_cnt_ = retry_count_ + 1;
-  audit_record_.return_rows_ = 0;
-  audit_record_.affected_rows_ = 0;
-  for (int i = 0; i < result_.count(); i++) {
-     audit_record_.return_rows_ += result_.at(i).get_return_rows();
-     audit_record_.affected_rows_ += result_.at(i).get_affected_rows();
-  }
 }
 
 uint64_t ObTableBatchExecuteP::get_request_checksum()
@@ -257,7 +243,7 @@ int ObTableBatchExecuteP::try_process()
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
 
   // record events
-  audit_row_count_ = arg_.batch_operation_.count();
+  stat_row_count_ = arg_.batch_operation_.count();
 
 #ifndef NDEBUG
   // debug mode

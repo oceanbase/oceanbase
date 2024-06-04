@@ -178,6 +178,7 @@ ob_set_subtarget(ob_server table
   table/group/ob_table_group_execute.cpp
   table/ob_table_ls_execute_processor.cpp
   table/ob_table_query_and_mutate_helper.cpp
+  table/ob_table_audit.cpp
 )
 
 ob_set_subtarget(ob_server table_load

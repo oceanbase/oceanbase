@@ -18,7 +18,7 @@
 
 using namespace oceanbase::common;
 using namespace oceanbase::table;
-
+using namespace oceanbase::table::hfilter;
 
 inline bool ObTableComparator::is_numeric(const ObString &value)
 {
@@ -149,6 +149,53 @@ int ObTableCompareFilter::filter_row(const ObIArray<ObString> &select_columns, c
       filtered = true;
     } else {
       LOG_WARN("compare failed", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+// statement is "ObTableCompareFilter $compare_op_name"
+int64_t ObTableCompareFilter::get_format_filter_string_length() const
+{
+  int64_t len = 0;
+
+  len += strlen("ObTableCompareFilter"); // "ObTableCompareFilter"
+  len += 1; // blank
+  len += (static_cast<ObTableComparator*>(comparator_))->get_column_name().length(); // "$column_name"
+  len += 1; // blank
+  len += strlen(FilterUtils::get_compare_op_name(cmp_op_)); // "$compare_op_name"
+
+  return len;
+}
+
+int ObTableCompareFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else if (OB_ISNULL(comparator_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("comparator is bull", KR(ret));
+  } else {
+    const ObString &column_name = (static_cast<ObTableComparator*>(comparator_))->get_column_name();
+    int64_t n = snprintf(buf + pos, buf_len - pos, "ObTableCompareFilter ");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+      strncat(buf + pos, column_name.ptr(), column_name.length());
+      pos += column_name.length();
+      int64_t n = snprintf(buf + pos, buf_len - pos, " %s", FilterUtils::get_compare_op_name(cmp_op_));
+      if (n < 0 || n > buf_len - pos) {
+        ret = OB_BUF_NOT_ENOUGH;
+        LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+      } else {
+        pos += n;
+      }
     }
   }
 
@@ -363,13 +410,13 @@ int ObTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
   int ret = OB_SUCCESS;
   const ObString &filter_str = query_->get_filter_string();
   if (filter_str.empty()) {
-    tfilter_ = NULL;
+    filter_ = NULL;
   } else if (NULL == allocator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr", K(ret));
   } else if (OB_FAIL(filter_parser_.init(allocator))) {
     LOG_WARN("failed to init filter_parser_", K(ret));
-  } else if (OB_FAIL(filter_parser_.parse_filter(filter_str, tfilter_))) {
+  } else if (OB_FAIL(filter_parser_.parse_filter(filter_str, filter_))) {
     LOG_WARN("failed to parse filter", K(ret), K(filter_str));
   }
 
@@ -485,7 +532,7 @@ int ObTableFilterOperator::get_aggregate_result(table::ObTableQueryResult *&next
       }
 
       bool filtered = false;
-      if (OB_FAIL(tfilter_->filter_row(select_columns, *row, filtered))) {
+      if (OB_FAIL(filter_->filter_row(select_columns, *row, filtered))) {
         LOG_WARN("filter row error", K(ret));
         continue;
       } else if (filtered) {
@@ -566,7 +613,7 @@ int ObTableFilterOperator::get_normal_result(table::ObTableQueryResult *&next_re
       }
 
       bool filtered = false;
-      if (OB_FAIL(tfilter_->filter_row(select_columns, *row, filtered))) {
+      if (OB_FAIL(filter_->filter_row(select_columns, *row, filtered))) {
         LOG_WARN("filter row error", K(ret));
         continue;
       } else if (filtered) {

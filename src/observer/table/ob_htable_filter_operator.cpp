@@ -1090,7 +1090,6 @@ ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
     : ObTableQueryResultIterator(&query),
       row_iterator_(query),
       one_result_(&one_result),
-      hfilter_(NULL),
       batch_size_(query.get_batch()),
       max_result_size_(std::min(query.get_max_result_size(),
                                 static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
@@ -1103,7 +1102,7 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
   one_result_->reset_except_property();
-  bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
+  bool has_filter_row = (NULL != filter_) && (filter_->has_filter_row());
   next_result = one_result_;
   ObTableQueryResult *htable_row = nullptr;
   row_iterator_.init_table_group_value();
@@ -1116,21 +1115,21 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
     LOG_DEBUG("[yzfdebug] got one row", "cells_count", htable_row->get_row_count());
     bool is_empty_row = (htable_row->get_row_count() == 0);
     if (is_empty_row) {
-      if (nullptr != hfilter_) {
-        hfilter_->reset();
+      if (nullptr != filter_) {
+        filter_->reset();
       }
       continue;
     }
     /*
-    if (NULL != hfilter_) {
+    if (NULL != filter_) {
       // for RowFilter etc. which filter according to rowkey
       if (OB_FAIL(htable_row->get_first_row(first_entity))) {
         LOG_WARN("failed to get first cell", K(ret));
       } else {
         ObHTableCellEntity first_cell_entity(&first_entity);
-        if (hfilter_->filter_row_key(first_cell_entity)) {
+        if (filter_->filter_row_key(first_cell_entity)) {
           // filter out the current row and fetch the next row
-          hfilter_->reset();
+          filter_->reset();
           LOG_DEBUG("[yzfdebug] skip the row", K(ret));
           continue;
         }
@@ -1140,19 +1139,19 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
     bool exclude = false;
     if (has_filter_row) {
       // FIXME @todo allows direct modification of the final list to be submitted
-      hfilter_->filter_row_cells(*htable_row);
+      filter_->filter_row_cells(*htable_row);
       is_empty_row = (htable_row->get_row_count() == 0);
       if (!is_empty_row) {
         // last chance to drop entire row based on the sequence of filter calls
-        if (hfilter_->filter_row()) {
+        if (filter_->filter_row()) {
           LOG_DEBUG("[yzfdebug] filter out the row");
           exclude = true;
         }
       }
     }
     if (is_empty_row || exclude) {
-      if (NULL != hfilter_) {
-        hfilter_->reset();
+      if (NULL != filter_) {
+        filter_->reset();
       }
       // fetch next row
       continue;
@@ -1162,8 +1161,8 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
     if (OB_FAIL(one_result_->add_all_row(*htable_row))) {
       LOG_WARN("failed to add cells to row", K(ret));
     }
-    if (NULL != hfilter_) {
-      hfilter_->reset();
+    if (NULL != filter_) {
+      filter_->reset();
     }
     if (OB_SUCC(ret)) {
       if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
@@ -1190,17 +1189,17 @@ int ObHTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
   int ret = OB_SUCCESS;
   const ObString &hfilter_string = query_->get_htable_filter().get_filter();
   if (hfilter_string.empty()) {
-    hfilter_ = NULL;
+    filter_ = NULL;
   } else if (NULL == allocator) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is nullptr", K(ret));
   } else if (OB_FAIL(filter_parser_.init(allocator))) {
     LOG_WARN("failed to init filter_parser", K(ret));
-  } else if (OB_FAIL(filter_parser_.parse_filter(hfilter_string, hfilter_))) {
+  } else if (OB_FAIL(filter_parser_.parse_filter(hfilter_string, filter_))) {
     LOG_WARN("failed to parse filter", K(ret), K(hfilter_string));
   } else {
-    LOG_DEBUG("[yzfdebug] parse filter success", K(hfilter_string), "hfilter", *hfilter_);
-    row_iterator_.set_hfilter(hfilter_);
+    LOG_DEBUG("parse filter success", K(hfilter_string), "hfilter", *filter_);
+    row_iterator_.set_hfilter(filter_);
   }
   return ret;
 }

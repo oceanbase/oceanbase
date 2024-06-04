@@ -23,7 +23,7 @@
 #include "ob_table_cache.h"
 #include "ob_table_op_wrapper.h"
 #include "ob_table_query_common.h"
-
+#include "ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -75,10 +75,13 @@ struct ObTableQMParam
 class QueryAndMutateHelper
 {
 public:
-  explicit QueryAndMutateHelper(common::ObIAllocator &allocator, ObTableQMParam &qm_param)
+  explicit QueryAndMutateHelper(common::ObIAllocator &allocator,
+                                ObTableQMParam &qm_param,
+                                table::ObTableAuditCtx &audit_ctx)
     : allocator_(allocator),
       query_and_mutate_(qm_param.query_and_mutate_),
-      tb_ctx_(allocator_)
+      tb_ctx_(allocator_),
+      audit_ctx_(audit_ctx)
     {
       schema_guard_ = qm_param.schema_guard_;
       simple_table_schema_ = qm_param.simple_table_schema_;
@@ -122,7 +125,6 @@ private:
   int execute_htable_put();
   int execute_htable_increment(table::ObTableApiSpec &scan_spec);
   int execute_htable_insert(const table::ObITableEntity &new_entity);
-  int execute_htable_put(const table::ObITableEntity &new_entity);
   int execute_htable_mutation(table::ObTableQueryResultIterator *result_iterator);
   int execute_table_mutation(table::ObTableQueryResultIterator *result_iterator);
   int execute_one_mutation(common::ObIAllocator &allocator,
@@ -145,6 +147,13 @@ private:
     int ret = OB_SUCCESS;
     const table::ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
     const table::ObTableOperation &mutation = mutations.at(0);
+    OB_TABLE_START_AUDIT(credential_,
+                         sess_guard_->get_user_name(),
+                         sess_guard_->get_tenant_name(),
+                         sess_guard_->get_database_name(),
+                         simple_table_schema_->get_table_name_str(),
+                         &audit_ctx_, mutation);
+
     SMART_VAR(table::ObTableCtx, tb_ctx, allocator_) {
       table::ObTableApiSpec *spec = nullptr;
       table::ObTableApiExecutor *executor = nullptr;
@@ -162,6 +171,9 @@ private:
       }
     }
 
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, get_tx_snapshot(),
+                       stmt_type, table::ObTableAuditUtils::get_stmt_type(mutation.type()));
     return ret;
   }
 
@@ -171,6 +183,13 @@ private:
     int ret = OB_SUCCESS;
     const table::ObTableBatchOperation &mutations = query_and_mutate_.get_mutations();
     const table::ObTableOperation &mutation = mutations.at(0);
+    OB_TABLE_START_AUDIT(credential_,
+                         sess_guard_->get_user_name(),
+                         sess_guard_->get_tenant_name(),
+                         sess_guard_->get_database_name(),
+                         simple_table_schema_->get_table_name_str(),
+                         &audit_ctx_, mutation);
+
     SMART_VAR(table::ObTableCtx, tb_ctx, allocator_) {
       table::ObTableApiSpec *spec = nullptr;
       table::ObTableApiExecutor *executor = nullptr;
@@ -188,6 +207,9 @@ private:
       }
     }
 
+    OB_TABLE_END_AUDIT(ret_code, ret,
+                       snapshot, get_tx_snapshot(),
+                       stmt_type, table::ObTableAuditUtils::get_stmt_type(mutation.type()));
     return ret;
   }
 
@@ -247,6 +269,7 @@ private:
   bool is_hkv_;
   table::ObTableQueryAndMutateResult *query_and_mutate_result_;
   table::ObTableSingleOpResult *single_op_result_;
+  table::ObTableAuditCtx &audit_ctx_;
 };
 
 } // end namespace observer

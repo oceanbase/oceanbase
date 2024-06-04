@@ -124,6 +124,7 @@ int ObTableApiExecuteP::init_tb_ctx()
   tb_ctx_.set_schema_guard(&schema_guard_);
   tb_ctx_.set_simple_table_schema(simple_table_schema_);
   tb_ctx_.set_sess_guard(&sess_guard_);
+  tb_ctx_.set_audit_ctx(&audit_ctx_);
   if (tb_ctx_.is_init()) {
     LOG_INFO("tb ctx has been inited", K_(tb_ctx));
   } else if (OB_FAIL(tb_ctx_.init_common(credential_,
@@ -217,7 +218,7 @@ int ObTableApiExecuteP::before_process()
 
   if (op_type == ObTableOperationType::Type::TRIGGER) {
     is_group_trigger_ = true;
-    need_audit_ = false; // no need audit when packet is group commit trigger packet
+    audit_ctx_.need_audit_ = false; // no need audit when packet is group commit trigger packet
   } else {
     // check group commit
     ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
@@ -277,6 +278,9 @@ int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx)
   ctx.failed_groups_ = &TABLEAPI_GROUP_COMMIT_MGR->get_failed_groups();
   ctx.group_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_group_factory();
   ctx.op_factory_ = &TABLEAPI_GROUP_COMMIT_MGR->get_op_factory();
+  ctx.retry_count_ = retry_count_;
+  ctx.user_client_addr_ = user_client_addr_;
+  ctx.audit_ctx_.exec_timestamp_ = audit_ctx_.exec_timestamp_;
 
   return ret;
 }
@@ -367,6 +371,14 @@ int ObTableApiExecuteP::try_process()
   stat_event_type_ = get_stat_event_type();
   table_id_ = arg_.table_id_; // init move response need
   tablet_id_ = arg_.tablet_id_;
+  OB_TABLE_START_AUDIT(credential_,
+                       sess_guard_.get_user_name(),
+                       sess_guard_.get_tenant_name(),
+                       sess_guard_.get_database_name(),
+                       arg_.table_name_,
+                       &audit_ctx_,
+                       table_operation);
+
   if (is_group_trigger_) {
     if (OB_FAIL(ObTableGroupService::process_trigger())) {
       LOG_WARN("fail to process group commit trigger", K(ret));
@@ -414,7 +426,7 @@ int ObTableApiExecuteP::try_process()
         LOG_WARN("invalid table operation type", K(ret), K(table_operation));
         break;
     }
-    audit_row_count_ = 1;
+    stat_row_count_ = 1;
   }
 
   if (OB_FAIL(ret)) {
@@ -431,17 +443,10 @@ int ObTableApiExecuteP::try_process()
   LOG_TRACE("[TABLE] execute operation", K(ret), K_(result),
               "receive_ts", get_receive_timestamp(), K_(retry_count));
 #endif
+  OB_TABLE_END_AUDIT(ret_code, ret,
+                     snapshot, get_tx_snapshot(),
+                     stmt_type, ObTableAuditUtils::get_stmt_type(table_operation.type()));
   return ret;
-}
-
-void ObTableApiExecuteP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObTableConsistencyLevel::STRONG == arg_.consistency_level_ ?
-      ObConsistencyLevel::STRONG : ObConsistencyLevel::WEAK;
-  audit_record_.return_rows_ = result_.get_return_rows();
-  audit_record_.table_scan_ = false;
-  audit_record_.affected_rows_ = result_.get_affected_rows();
-  audit_record_.try_cnt_ = retry_count_ + 1;
 }
 
 uint64_t ObTableApiExecuteP::get_request_checksum()

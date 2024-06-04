@@ -301,6 +301,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
                             const int64_t &timeout_ts)
 {
   int ret = OB_SUCCESS;
+  credential_ = &credential;
   tenant_id_ = credential.tenant_id_;
   database_id_ = credential.database_id_;
   if (OB_FAIL(init_schema_info_from_cache())) {

@@ -70,7 +70,8 @@ public:
                          bool &filtered) = 0;
   /// Primarily used to check for conflicts with scans(such as scans that do not read a full row at a time).
   virtual bool has_filter_row() = 0;
-
+  virtual int64_t get_format_filter_string_length() const = 0;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const = 0;
   void set_reversed(bool reversed) { is_reversed_ = reversed; }
   bool is_reversed() const { return is_reversed_; }
   VIRTUAL_TO_STRING_KV("filter", "Filter");
@@ -85,11 +86,18 @@ enum class CompareOperator
   EQUAL,
   GREATER,
   GREATER_OR_EQUAL,
-  LESS, LESS_OR_EQUAL,
+  LESS,
+  LESS_OR_EQUAL,
   NO_OP,
   NOT_EQUAL,
   IS/*table api only*/,
   IS_NOT/*table api only*/
+};
+
+class FilterUtils
+{
+public:
+  static const char *get_compare_op_name(const CompareOperator &op);
 };
 
 class FilterBase: public Filter
@@ -116,6 +124,8 @@ public:
   { UNUSED(select_columns); UNUSED(row); UNUSED(filtered); return common::OB_SUCCESS; }
 
   static const char* compare_operator_to_string(CompareOperator cmp_op);
+  virtual int64_t get_format_filter_string_length() const = 0;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(FilterBase);
 };
@@ -215,6 +225,8 @@ public:
   virtual ~CompareFilter();
   int check_arguments() const;
   static bool compare(CompareOperator op, int cmp_ret);
+  virtual int64_t get_format_filter_string_length() const = 0;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const = 0;
 protected:
   bool compare_row(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
   bool compare_qualifier(CompareOperator op, Comparable &comparator, const ObHTableCell &cell);
@@ -240,6 +252,8 @@ public:
   virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "RowFilter",
                "cmp_op", compare_operator_to_string(cmp_op_),
                "comparator", comparator_);
@@ -259,6 +273,8 @@ public:
   virtual ~QualifierFilter();
 
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "QualifierFilter",
                "cmp_op", compare_operator_to_string(cmp_op_),
                "comparator", comparator_);
@@ -276,6 +292,8 @@ public:
   {}
   virtual ~ValueFilter();
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "ValueFilter",
                "cmp_op", compare_operator_to_string(cmp_op_),
                "comparator", comparator_);
@@ -301,6 +319,9 @@ public:
   Operator get_operator() const { return op_; }
   virtual void reset() override;
   virtual bool has_filter_row() override { return true; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  virtual const char *filter_name() const { return "FilterListBase"; }
 
   TO_STRING_KV("filter", "FilterList",
                "op", operator_to_string(op_),
@@ -326,6 +347,7 @@ public:
   virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
+  virtual const char *filter_name() const override { return "FilterListAND"; }
 private:
   static ReturnCode merge_return_code(ReturnCode rc, ReturnCode local_rc);
   ObSEArray<Filter*, 8> seek_hint_filters_;
@@ -345,6 +367,7 @@ public:
   virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
+  virtual const char *filter_name() const override { return "FilterListOR"; }
 private:
   static ReturnCode merge_return_code(ReturnCode rc, ReturnCode local_rc);
   // disallow copy
@@ -366,6 +389,8 @@ public:
   virtual bool has_filter_row() override { return true; }
   virtual int transform_cell(const ObHTableCell &cell, const ObHTableCell *&new_cell) override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "SkipFilter",
                "sub_filter", filter_);
 private:
@@ -393,6 +418,8 @@ public:
   virtual int transform_cell(const ObHTableCell &cell, const ObHTableCell *&new_cell) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
 
   TO_STRING_KV("filter", "WhileMatchFilter",
                "sub_filter", filter_);
@@ -424,6 +451,8 @@ public:
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "SingleColumnValueFilter",
                K_(family),
                K_(qualifier),
@@ -461,6 +490,8 @@ public:
   virtual bool has_filter_row() override { return true; }
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_all_remaining() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "PageFilter", K_(page_size), K_(rows_accepted));
 private:
   int64_t page_size_;
@@ -482,6 +513,8 @@ public:
   virtual bool filter_row_key(const ObHTableCell &first_row_cell) override;
   virtual bool filter_all_remaining() override;
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "ColumnCountGetFilter",
                K_(limit));
 private:
@@ -513,6 +546,8 @@ public:
   virtual bool filter_row() override;
   virtual bool has_filter_row() override { return true; }
   OB_INLINE bool value_is_null() { return value_is_null_; }
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
   TO_STRING_KV("filter", "CheckAndMutateFilter",
                K_(family),
                K_(qualifier),

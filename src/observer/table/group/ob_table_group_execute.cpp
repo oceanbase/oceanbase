@@ -437,7 +437,7 @@ int ObTableGroupExecuteService::execute_read(const ObTableGroupCtx &ctx,
   ObTableEntity result_entity;
   OpFixedArray ops(tmp_allocator);
   ResultFixedArray results(tmp_allocator);
-  SMART_VAR(ObTableBatchCtx, batch_ctx, tmp_allocator) {
+  SMART_VAR(ObTableBatchCtx, batch_ctx, tmp_allocator, const_cast<ObTableAuditCtx&>(ctx.audit_ctx_)) {
     batch_ctx.trans_param_ = ctx.trans_param_;
     batch_ctx.stat_event_type_ = &stat_event_type;
     batch_ctx.ops_ = &ops;
@@ -518,7 +518,7 @@ int ObTableGroupExecuteService::execute_dml(const ObTableGroupCtx &ctx,
   ObArenaAllocator tmp_allocator("TbGroupDml", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   int32_t stat_event_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_INVALID;
   OpFixedArray ops(tmp_allocator);
-  SMART_VAR(ObTableBatchCtx, batch_ctx, tmp_allocator) {
+  SMART_VAR(ObTableBatchCtx, batch_ctx, tmp_allocator, const_cast<ObTableAuditCtx&>(ctx.audit_ctx_)) {
     batch_ctx.trans_param_ = ctx.trans_param_;
     batch_ctx.stat_event_type_ = &stat_event_type;
     batch_ctx.ops_ = &ops;

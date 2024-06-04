@@ -17,6 +17,7 @@
 #include "observer/table/ob_table_batch_service.h"
 #include "share/table/ob_table.h"
 #include "rpc/ob_request.h"
+#include "observer/table/ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -28,6 +29,8 @@ struct ObTableGroupCtx
 {
 public:
   ObTableGroupCtx()
+      : retry_count_(0),
+        audit_ctx_(retry_count_, user_client_addr_)
   {
     reset();
   }
@@ -46,6 +49,7 @@ public:
     failed_groups_ = nullptr;
     group_factory_ = nullptr;
     op_factory_ = nullptr;
+    retry_count_ = 0;
   }
   TO_STRING_KV(KPC_(key),
                K_(entity_type),
@@ -57,7 +61,10 @@ public:
                KPC_(schema_cache_guard),
                KPC_(failed_groups),
                KPC_(group_factory),
-               KPC_(op_factory));
+               KPC_(op_factory),
+               K_(retry_count),
+               K_(user_client_addr),
+               K_(audit_ctx));
 public:
   const ObTableGroupCommitKey *key_;
   ObTableEntityType entity_type_;
@@ -72,6 +79,11 @@ public:
   ObTableFailedGroups *failed_groups_;
   ObTableGroupFactory<ObTableGroupCommitOps> *group_factory_;
   ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory_;
+  // for sql audit start
+  int32_t retry_count_;
+  common::ObAddr user_client_addr_;
+  ObTableAuditCtx audit_ctx_;
+  // for sql audit end
 };
 
 

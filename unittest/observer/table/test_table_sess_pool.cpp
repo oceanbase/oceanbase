@@ -50,6 +50,7 @@ public:
   }
 private:
   void create_credential(uint64_t user_id, ObTableApiCredential *&cred);
+  int create_and_add_node(ObTableApiCredential &cred);
 private:
   ObArenaAllocator allocator_;
   ObTableApiCredential *mock_cred_;
@@ -68,6 +69,43 @@ void TestTableSessPool::create_credential(uint64_t user_id, ObTableApiCredential
   cred->database_id_ = 1;
   cred->expire_ts_ = 0;
   cred->hash(cred->hash_val_);
+}
+
+int TestTableSessPool::create_and_add_node(ObTableApiCredential &cred)
+{
+  int ret = OB_SUCCESS;
+  ObTableApiSessNode *tmp_node = nullptr;
+  void *buf = nullptr;
+
+  if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->create_session_pool_safe())) {
+  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObTableApiSessNode)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    tmp_node = new (buf) ObTableApiSessNode(cred);
+    MemoryContext tmp_mem_ctx = nullptr;
+    ContextParam param;
+    param.set_mem_attr(MTL_ID(), "TbSessNod", ObCtxIds::DEFAULT_CTX_ID)
+        .set_properties(lib::ALLOC_THREAD_SAFE);
+    if (OB_FAIL(ROOT_CONTEXT->CREATE_CONTEXT(tmp_mem_ctx, param))) {
+    } else if (OB_ISNULL(tmp_mem_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else {
+      tmp_node->mem_ctx_ = tmp_mem_ctx;
+      tmp_node->last_active_ts_ = ObTimeUtility::fast_current_time();
+      tmp_node->is_inited_ = true;
+      if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->pool_->key_node_map_.set_refactored(cred.hash_val_, tmp_node))) {
+        if (OB_HASH_EXIST != ret) {
+        } else {
+          ret = OB_SUCCESS; // replace error code
+        }
+        tmp_node->~ObTableApiSessNode();
+        allocator_.free(tmp_node);
+        tmp_node = nullptr;
+      }
+    }
+
+  }
+  return ret;
 }
 
 TEST_F(TestTableSessPool, test_mgr_init)
@@ -119,7 +157,7 @@ TEST_F(TestTableSessPool, mgr_get_session)
   ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
 
   // first time will create a new node
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*mock_cred_));
+  ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
   ASSERT_NE(nullptr, mgr->pool_);
   ASSERT_TRUE(mgr->pool_->is_inited_);
   ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
@@ -149,56 +187,11 @@ TEST_F(TestTableSessPool, mgr_get_session)
   mgr->destroy();
 }
 
-TEST_F(TestTableSessPool, mgr_update_session)
-{
-  ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
-  ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
-  // first time will create a new node
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*mock_cred_));
-  ASSERT_NE(nullptr, mgr->pool_);
-  ASSERT_TRUE(mgr->pool_->is_inited_);
-  ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
-  ObTableApiSessNode *node;
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
-  ASSERT_NE(nullptr, node);
-  ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
-  ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
-  ASSERT_NE(0, node->last_active_ts_);
-  // second time will do replace
-  ObTableApiCredential *new_cred = nullptr;
-  create_credential(1, new_cred);
-  ASSERT_NE(nullptr, new_cred);
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*new_cred));
-  ASSERT_NE(nullptr, mgr->pool_);
-  ASSERT_TRUE(mgr->pool_->is_inited_);
-  ASSERT_EQ(1, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
-  ASSERT_NE(nullptr, node);
-  ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
-  ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
-  ASSERT_NE(0, node->last_active_ts_);
-  // update another key is 2 node.
-  create_credential(2, new_cred);
-  ASSERT_NE(nullptr, new_cred);
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*new_cred));
-  ASSERT_NE(nullptr, mgr->pool_);
-  ASSERT_TRUE(mgr->pool_->is_inited_);
-  ASSERT_EQ(2, mgr->pool_->key_node_map_.size());
-  ASSERT_EQ(0, mgr->pool_->retired_nodes_.size_);
-  ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(new_cred->hash_val_, node));
-  ASSERT_NE(nullptr, node);
-  ASSERT_TRUE(node->sess_lists_.free_list_.is_empty());
-  ASSERT_TRUE(node->sess_lists_.used_list_.is_empty());
-  ASSERT_NE(0, node->last_active_ts_);
-}
-
 TEST_F(TestTableSessPool, mgr_destroy)
 {
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
   ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*mock_cred_));
+  ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
   ASSERT_NE(nullptr, mgr->pool_);
   ObTableApiSessNode *node;
   ASSERT_EQ(OB_SUCCESS, mgr->pool_->get_sess_node(mock_cred_->hash_val_, node));
@@ -213,7 +206,7 @@ TEST_F(TestTableSessPool, mgr_sess_recycle)
 {
   ASSERT_EQ(OB_SYS_TENANT_ID, MTL_ID());
   ObTableApiSessPoolMgr *mgr = TABLEAPI_SESS_POOL_MGR;
-  ASSERT_EQ(OB_SUCCESS, mgr->update_sess(*mock_cred_));
+  ASSERT_EQ(OB_SUCCESS, create_and_add_node(*mock_cred_));
   ASSERT_NE(nullptr, mgr->pool_);
 
   // add mock val to node

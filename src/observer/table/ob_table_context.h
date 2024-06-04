@@ -21,6 +21,7 @@
 #include "share/table/ob_table.h"
 #include "ob_table_session_pool.h"
 #include "ob_table_schema_cache.h"
+#include "ob_table_audit.h"
 namespace oceanbase
 {
 namespace table
@@ -235,6 +236,8 @@ public:
     index_col_ids_.set_attr(ObMemAttr(MTL_ID(), "KvIdxColIds"));
     table_index_info_.set_attr(ObMemAttr(MTL_ID(), "KvIdxInfos"));
     key_ranges_.set_attr(ObMemAttr(MTL_ID(), "KvRanges"));
+    credential_ = nullptr;
+    audit_ctx_ = nullptr;
   }
 
   void reset()
@@ -259,6 +262,8 @@ public:
     has_global_index_ = false;
     has_local_index_ = false;
     is_global_index_scan_ = false;
+    credential_ = nullptr;
+    audit_ctx_ = nullptr;
     // scan
     is_scan_ = false;
     is_index_scan_ = false;
@@ -343,7 +348,8 @@ public:
                K_(is_ttl_table),
                K_(is_skip_scan),
                K_(is_client_set_put),
-               K_(binlog_row_image_type));
+               K_(binlog_row_image_type),
+               KPC_(credential));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -371,9 +377,25 @@ public:
   }
   OB_INLINE ObTableApiSessGuard* get_sess_guard() const { return sess_guard_; }
   OB_INLINE sql::ObSQLSessionInfo& get_session_info()
-  { return sess_guard_->get_sess_info();}
+  {
+    return sess_guard_->get_sess_info();
+  }
   OB_INLINE const sql::ObSQLSessionInfo& get_session_info() const
-  { return sess_guard_->get_sess_info(); }
+  {
+    return sess_guard_->get_sess_info();
+  }
+  OB_INLINE const common::ObString get_tenant_name() const
+  {
+    return sess_guard_->get_tenant_name();
+  }
+  OB_INLINE const common::ObString get_user_name() const
+  {
+    return sess_guard_->get_user_name();
+  }
+  OB_INLINE const common::ObString get_database_name() const
+  {
+    return sess_guard_->get_database_name();
+  }
   OB_INLINE int64_t get_tenant_schema_version() const { return tenant_schema_version_; }
   OB_INLINE ObTableOperationType::Type get_opertion_type() const { return operation_type_; }
   OB_INLINE bool is_init() const { return is_init_; }
@@ -384,6 +406,8 @@ public:
   OB_INLINE ObIArray<ObTableAssignment>& get_assignments() { return assigns_; }
   OB_INLINE ObIArray<ObTableIndexInfo>& get_table_index_info() { return table_index_info_; }
   OB_INLINE const ObIArray<ObTableIndexInfo>& get_table_index_info() const { return table_index_info_; }
+  OB_INLINE const ObTableApiCredential* get_credential() const { return credential_; }
+  OB_INLINE ObTableAuditCtx* get_audit_ctx() { return audit_ctx_; }
 
   // for scan
   OB_INLINE bool is_scan() const { return is_scan_; }
@@ -483,6 +507,7 @@ public:
   OB_INLINE void set_simple_table_schema(const ObSimpleTableSchemaV2 *simple_table_schema) { simple_table_schema_ = simple_table_schema; }
   OB_INLINE void set_schema_cache_guard(ObKvSchemaCacheGuard *schema_cache_guard) { schema_cache_guard_ = schema_cache_guard; }
   OB_INLINE void set_ls_id(share::ObLSID &ls_id) { ls_id_ = ls_id; }
+  OB_INLINE void set_audit_ctx(ObTableAuditCtx *ctx) { audit_ctx_ = ctx; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
@@ -725,6 +750,8 @@ private:
   bool has_generated_column_;
   bool is_tablegroup_req_; // is table name a tablegroup name
   bool has_lob_column_;
+  ObTableApiCredential *credential_;
+  ObTableAuditCtx *audit_ctx_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

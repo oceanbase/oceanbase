@@ -96,15 +96,6 @@ int ObTableQueryAndMutateP::check_arg()
   return ret;
 }
 
-void ObTableQueryAndMutateP::audit_on_finish()
-{
-  audit_record_.consistency_level_ = ObConsistencyLevel::STRONG; // todo: exact consistency
-  audit_record_.return_rows_ = result_.affected_entity_.get_row_count();
-  audit_record_.table_scan_ = tb_ctx_.is_full_table_scan();
-  audit_record_.affected_rows_ = result_.affected_rows_;
-  audit_record_.try_cnt_ = retry_count_ + 1;
-}
-
 uint64_t ObTableQueryAndMutateP::get_request_checksum()
 {
   uint64_t checksum = 0;
@@ -176,7 +167,7 @@ int ObTableQueryAndMutateP::try_process()
     qm_param.simple_table_schema_ = simple_table_schema_;
     qm_param.schema_cache_guard_ = &schema_cache_guard_;
     qm_param.sess_guard_ = &sess_guard_;
-    SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param) {
+    SMART_VAR(QueryAndMutateHelper, helper, allocator_, qm_param, audit_ctx_) {
       if (OB_FAIL(helper.execute_query_and_mutate())) {
         LOG_WARN("fail to process query and mutate", KR(ret));
       } else {
@@ -195,7 +186,7 @@ int ObTableQueryAndMutateP::try_process()
   ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
 
   // record events
-  audit_row_count_ = 1;
+  stat_row_count_ = 1;
 
   int64_t rpc_timeout = 0;
   if (NULL != rpc_pkt_) {

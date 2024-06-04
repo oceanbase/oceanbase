@@ -17,6 +17,7 @@
 #include "ob_table_delete_executor.h"
 #include "ob_table_cache.h"
 #include "ob_table_cg_service.h"
+#include "ob_table_audit.h"
 
 namespace oceanbase
 {
@@ -69,6 +70,10 @@ public:
   static int get_insert_up_spec(ObTableCtx &tb_ctx, ObTableApiCacheGuard &cache_guard, ObTableApiSpec *&spec);
   static int process_insert_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
   static int process_insert_up_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
+  static int process_put_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result)
+  {
+    return process_op<TABLE_API_EXEC_INSERT>(tb_ctx, op_result);
+  }
   static int process_incr_or_append_op(ObTableCtx &tb_ctx, ObTableOperationResult &op_result);
 private:
   static int process_affected_entity(ObTableCtx &tb_ctx,
@@ -104,10 +109,12 @@ public:
 class ObHTableDeleteExecutor
 {
 public:
-  ObHTableDeleteExecutor(ObTableCtx& tb_ctx, ObTableApiDeleteExecutor *executor)
+  ObHTableDeleteExecutor(ObTableCtx& tb_ctx, ObTableApiDeleteExecutor *executor, ObTableAuditCtx &audit_ctx)
       : tb_ctx_(tb_ctx),
         executor_(executor),
-        affected_rows_(0) {}
+        affected_rows_(0),
+        audit_ctx_(audit_ctx)
+  {}
   virtual ~ObHTableDeleteExecutor() {}
 
 public:
@@ -129,6 +136,7 @@ private:
   int64_t affected_rows_;
   ObObj pk_objs_start_[3];
   ObObj pk_objs_end_[3];
+  ObTableAuditCtx &audit_ctx_;
 };
 
 } // end namespace table
