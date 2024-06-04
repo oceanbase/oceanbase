@@ -2854,6 +2854,18 @@ int ObOptimizerUtil::get_onetime_exprs(ObRawExpr* expr,
   return ret;
 }
 
+int ObOptimizerUtil::get_onetime_exprs(ObIArray<ObRawExpr *> &exprs,
+                                       ObIArray<ObExecParamRawExpr*> &onetime_exprs)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); i++) {
+    if (OB_FAIL(get_onetime_exprs(exprs.at(i), onetime_exprs))) {
+      LOG_WARN("failed to get onetime exprs", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::get_query_ref_exprs(ObIArray<ObRawExpr *> &exprs,
                                          ObIArray<ObRawExpr *> &subqueries,
                                          ObIArray<ObRawExpr *> &nested_subqueries)

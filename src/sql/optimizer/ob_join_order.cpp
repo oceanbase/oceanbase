@@ -8133,6 +8133,9 @@ int ObJoinOrder::generate_normal_subquery_paths()
         LOG_WARN("failed to push down filter into subquery", K(ret));
   } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
     LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_onetime_exprs(helper.pushdown_filters_,
+                                                        helper.exec_params_))) {
+    LOG_WARN("failed to get onetime exprs", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));
   }
@@ -8148,6 +8151,7 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
   const ObDMLStmt *parent_stmt = NULL;
   const ObDMLStmt *child_stmt = NULL;
   ObLogicalOperator *best_child_plan = NULL;
+  ObSEArray<ObExecParamRawExpr *, 4> pushdown_onetimes;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(parent_stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(child_stmt = static_cast<const ObDMLStmt*>(helper.child_stmt_))) {
     ret = OB_ERR_UNEXPECTED;
@@ -8158,6 +8162,10 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
     LOG_WARN("failed to create plan", K(ret));
   } else if (OB_FAIL(log_plan->add_pushdown_filters(helper.pushdown_filters_))) {
     LOG_WARN("failed to add pushdown filters", K(ret));
+  } else if (OB_FAIL(log_plan->add_exec_params_meta(helper.exec_params_,
+                                                    get_plan()->get_basic_table_metas(),
+                                                    get_plan()->get_selectivity_ctx()))) {
+    LOG_WARN("failed to prepare opt exec param meta", K(ret));
   } else {
     log_plan->set_is_subplan_scan(true);
     log_plan->set_nonrecursive_plan_for_fake_cte(get_plan()->get_nonrecursive_plan_for_fake_cte());
@@ -14372,6 +14380,11 @@ int ObJoinOrder::generate_inner_subquery_paths(const ObDMLStmt &parent_stmt,
                                                             helper.pushdown_filters_))) {
     LOG_WARN("failed to rename pushdown filter", K(ret));
   } else if (OB_FAIL(append(helper.filters_, candi_nonpushdown_quals))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::get_onetime_exprs(helper.pushdown_filters_,
+                                                        helper.exec_params_))) {
+    LOG_WARN("failed to get onetime exprs", K(ret));
+  } else if (OB_FAIL(append(helper.exec_params_, nl_params))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(generate_subquery_paths(helper))) {
     LOG_WARN("failed to generate subquery path", K(ret));

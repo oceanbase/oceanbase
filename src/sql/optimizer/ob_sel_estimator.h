@@ -622,7 +622,7 @@ public:
     variable_(NULL),
     pattern_(NULL),
     escape_(NULL),
-    can_calc_sel_(false),
+    can_calc_sel_by_prefix_(false),
     match_all_str_(false) {}
   virtual ~ObLikeSelEstimator() = default;
 
@@ -630,18 +630,21 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_by_prefix_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
   static int can_calc_like_sel(const OptSelectivityCtx &ctx, const ObRawExpr &expr, bool &can_calc_sel);
-
+  int get_wildcard_length(const OptSelectivityCtx &ctx, double &wildcard_length);
+  int calculate_like_sel_by_substr(const OptTableMetas &table_metas,
+                                   const OptSelectivityCtx &ctx,
+                                   double &selectivity);
 private:
   const ObRawExpr *variable_;
   const ObRawExpr *pattern_;
   const ObRawExpr *escape_;
-  bool can_calc_sel_;
+  bool can_calc_sel_by_prefix_;
   bool match_all_str_;
 private:
   DISABLE_COPY_ASSIGN(ObLikeSelEstimator);

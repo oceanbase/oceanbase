@@ -1327,6 +1327,8 @@ struct NullAwareAntiJoinInfo {
 
       ObSEArray<ObExprConstraint, 4> expr_constraints_;
       ObBaseTableEstMethod est_method_;
+      // include nl params and onetime params
+      ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
     };
 
     struct DeducedExprInfo {

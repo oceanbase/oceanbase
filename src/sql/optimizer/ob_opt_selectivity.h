@@ -337,6 +337,30 @@ enum OptTableStatType {
   DS_TABLE_STAT              //dynamic sampling table stat
 };
 
+class OptDynamicExprMeta
+{
+public:
+  OptDynamicExprMeta(): avg_len_(0) {}
+  void set_expr(const ObRawExpr *expr) { expr_ = expr; }
+  const ObRawExpr *get_expr() const { return expr_; }
+  void set_avg_len(double avg_len) { avg_len_ = avg_len; }
+  double get_avg_len() const { return avg_len_; }
+
+  int assign(const OptDynamicExprMeta &other)
+  {
+    int ret = OB_SUCCESS;
+    expr_ = other.expr_;
+    avg_len_ = other.avg_len_;
+    return ret;
+  }
+
+  TO_STRING_KV(KP_(expr), KPC_(expr), K_(avg_len));
+private:
+  const ObRawExpr *expr_;
+  double avg_len_;
+  DISALLOW_COPY_AND_ASSIGN(OptDynamicExprMeta);
+};
+
 class OptTableMeta
 {
 public:
@@ -530,11 +554,17 @@ public:
   OptTableMeta* get_table_meta_by_table_id(const uint64_t table_id);
   const OptColumnMeta* get_column_meta_by_table_id(const uint64_t table_id,
                                                    const uint64_t column_id) const;
+  const OptDynamicExprMeta* get_dynamic_expr_meta(const ObRawExpr *expr) const;
+  int add_dynamic_expr_meta(const OptDynamicExprMeta &dynamic_expr_meta) {
+    return dynamic_expr_metas_.push_back(dynamic_expr_meta);
+  }
+  const ObIArray<OptDynamicExprMeta> &get_dynamic_expr_metas() const { return dynamic_expr_metas_; }
 
   double get_rows(const uint64_t table_id) const;
-  TO_STRING_KV(K_(table_metas));
+  TO_STRING_KV(K_(table_metas), K_(dynamic_expr_metas));
 private:
   common::ObSEArray<OptTableMeta, 16, common::ModulePageAllocator, true> table_metas_;
+  common::ObSEArray<OptDynamicExprMeta, 4, common::ModulePageAllocator, true> dynamic_expr_metas_;
 };
 
 struct OptSelInfo
@@ -993,6 +1023,26 @@ public:
   static int remove_ignorable_func_for_est_sel(const ObRawExpr *&expr);
   static int remove_ignorable_func_for_est_sel(ObRawExpr *&expr);
   static double get_set_stmt_output_count(double count1, double count2, ObSelectStmt::SetOperator set_type);
+
+  static int calculate_expr_avg_len(const OptTableMetas &table_metas,
+                                    const OptSelectivityCtx &ctx,
+                                    const ObRawExpr *expr,
+                                    double &avg_len);
+  static int get_column_avg_len(const OptTableMetas &table_metas,
+                                const OptSelectivityCtx &ctx,
+                                const ObRawExpr *expr,
+                                double &avg_len);
+  static int calculate_substrb_info(const OptTableMetas &table_metas,
+                                    const OptSelectivityCtx &ctx,
+                                    const ObRawExpr *str_expr,
+                                    const double substrb_len,
+                                    const double cur_rows,
+                                    double &ndv,
+                                    double &nns);
+  static int calculate_expr_nns(const OptTableMetas &table_metas,
+                                const OptSelectivityCtx &ctx,
+                                const ObRawExpr *expr,
+                                double &nns);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOptSelectivity);

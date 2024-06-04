@@ -102,16 +102,17 @@ struct TableDependInfo {
 
 struct SubPlanInfo
 {
-  SubPlanInfo() : init_expr_(NULL), subplan_(NULL), init_plan_(false) {}
+  SubPlanInfo() : init_expr_(NULL), subplan_(NULL), init_plan_(false), allocated_(false) {}
   SubPlanInfo(ObQueryRefRawExpr *expr, ObLogPlan *plan, bool init_)
-  : init_expr_(expr), subplan_(plan), init_plan_(init_) {}
+  : init_expr_(expr), subplan_(plan), init_plan_(init_), allocated_(false) {}
   virtual ~SubPlanInfo() {}
   void set_subplan(ObLogPlan *plan) { subplan_ = plan; }
 
   ObQueryRefRawExpr *init_expr_;
   ObLogPlan *subplan_;
   bool init_plan_;
-  TO_STRING_KV(K_(init_expr), K_(subplan), K_(init_plan));
+  bool allocated_;
+  TO_STRING_KV(K_(init_expr), K_(subplan), K_(init_plan), K_(allocated));
 };
 
 struct ObDistinctAggrBatch
@@ -467,6 +468,13 @@ public:
   const ObInsertStmt *get_insert_stmt() const { return insert_stmt_; }
   void set_nonrecursive_plan_for_fake_cte(ObSelectLogPlan *plan) { nonrecursive_plan_for_fake_cte_ = plan; }
   ObSelectLogPlan *get_nonrecursive_plan_for_fake_cte() { return nonrecursive_plan_for_fake_cte_; }
+
+  int add_exec_params_meta(ObIArray<ObExecParamRawExpr *> &exec_params,
+                           const OptTableMetas &table_metas,
+                           const OptSelectivityCtx &ctx);
+  int add_query_ref_meta(ObQueryRefRawExpr *expr,
+                         const OptTableMetas &child_table_metas,
+                         const OptSelectivityCtx &child_ctx);
 public:
 
   struct All_Candidate_Plans

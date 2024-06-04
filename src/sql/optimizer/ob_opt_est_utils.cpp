@@ -205,7 +205,7 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
   is_start_with = false;
   all_is_percent_sign = false;
   bool get_value = false;
-  bool empty_escape = false;
+  bool valid_escape = true;
   char escape;
   ObObj value;
   ObObj esp_value;
@@ -218,32 +218,48 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
   } else if (!get_value || !esp_value.is_string_type()) {
     // do nothing
   } else {
-    if (esp_value.get_char().length() > 0) {
-      escape = esp_value.get_char()[0];
-    } else {
-      empty_escape = true;
+    size_t escape_length = ObCharset::strlen_char(esp_expr->get_collation_type(),
+                                                  esp_value.get_string().ptr(),
+                                                  esp_value.get_string().length());
+    int32_t escape_wc = 0;
+    if (1 != escape_length) {
+      valid_escape = false;
+    } else if (OB_FAIL(ObCharset::mb_wc(esp_expr->get_collation_type(), esp_value.get_string(), escape_wc))) {
+      ret = OB_SUCCESS;
+      valid_escape = false;
     }
     if (OB_FAIL(get_expr_value(params, *expr, exec_ctx, allocator, get_value, value))) {
       LOG_WARN("Failed to get expr value", K(ret));
     } else if (get_value && value.is_string_type() && value.get_string().length() > 0) {
       // 1. patten not start with `escape sign`
       // 2. patten start with `%` or `_` && `%` or `_` is not `escape sign`
-      char start_c = value.get_string()[0];
-      if (empty_escape) {
-        is_start_with = ('%' == start_c || '_' == start_c);
-      } else {
-        is_start_with = (escape != start_c && ('%' == start_c || '_' == start_c));
+      ObStringScanner scanner(value.get_string(), expr->get_collation_type());
+      ObString encoding;
+      int32_t wc = 0;
+      ObString first_c;
+      bool is_first_char = true;
+      all_is_percent_sign = true;
+      while (OB_SUCC(ret)
+            && scanner.next_character(encoding, wc, ret)
+            && all_is_percent_sign) {
+        if (is_first_char) {
+          bool is_wild = (static_cast<int32_t>('%') == wc || static_cast<int32_t>('_') == wc);
+          if (!valid_escape) {
+            is_start_with = is_wild;
+          } else {
+            is_start_with = (escape_wc != wc && is_wild);
+          }
+          is_first_char = false;
+        }
+        if (static_cast<int32_t>('%') != wc) {
+          all_is_percent_sign = false;
+        }
       }
-    } else { /* do nothing */ }
-  }
-  if (OB_SUCC(ret) && is_start_with) {
-    all_is_percent_sign = true;
-    const ObString &expr_str = value.get_string();
-    for (int64_t i = 0; all_is_percent_sign && i < expr_str.length(); i++) {
-      if (expr_str[i] != '%') {
+      if (OB_FAIL(ret)) {
+        ret = OB_SUCCESS;
         all_is_percent_sign = false;
       }
-    }
+    } else { /* do nothing */ }
   }
   return ret;
 }

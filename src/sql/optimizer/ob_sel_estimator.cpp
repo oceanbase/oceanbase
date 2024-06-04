@@ -1504,11 +1504,11 @@ int ObLikeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
                                                                 like_estimator->match_all_str_))) {
         LOG_WARN("failed to check if expr start with percent sign", K(ret));
       } else if (like_estimator->match_all_str_) {
-        like_estimator->can_calc_sel_ = true;
+        like_estimator->can_calc_sel_by_prefix_ = true;
       } else if (is_lob_storage(like_estimator->variable_->get_data_type())) {
         // do nothing
       } else if (!is_start_with) {
-        like_estimator->can_calc_sel_ = true;
+        like_estimator->can_calc_sel_by_prefix_ = true;
       }
     }
   }
@@ -1570,14 +1570,14 @@ int ObLikeSelEstimator::get_sel(const OptTableMetas &table_metas,
   if (OB_ISNULL(expr_) || OB_ISNULL(variable_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", KPC(this));
-  } else if (match_all_str_ && can_calc_sel_) {
+  } else if (match_all_str_ && can_calc_sel_by_prefix_) {
     double nns = 0.0;
     if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *variable_, NULL, &nns))) {
       LOG_WARN("failed to get nns");
     } else {
       selectivity = nns;
     }
-  } else if (can_calc_sel_) {
+  } else if (can_calc_sel_by_prefix_) {
     if (OB_UNLIKELY(!variable_->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected expr", KPC(variable_));
@@ -1588,15 +1588,133 @@ int ObLikeSelEstimator::get_sel(const OptTableMetas &table_metas,
     }
   } else if (is_lob_storage(variable_->get_data_type())) {
     // no statistics for lob type, use default selectivity
-    selectivity = DEFAULT_CLOB_LIKE_SEL;
+    selectivity = DEFAULT_LIKE_SEL;
+  } else if (!(ctx.get_compat_version() >= COMPAT_VERSION_4_2_4)) {
+    selectivity = DEFAULT_INEQ_SEL;
+  } else if (OB_FAIL(calculate_like_sel_by_substr(table_metas,
+                                                  ctx,
+                                                  selectivity))) {
+    LOG_WARN("failed to calculate like sel", K(ret));
+  }
+  return ret;
+}
+
+int ObLikeSelEstimator::get_wildcard_length(const OptSelectivityCtx &ctx, double &wildcard_length)
+{
+  int ret = OB_SUCCESS;
+  ObObj pattern_value;
+  bool got_result = false;
+  wildcard_length = 1.0; // default guess value
+  if (OB_ISNULL(pattern_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!pattern_->is_static_const_expr()) {
+    ObString percent_str = ObCharsetUtils::get_const_str(pattern_->get_collation_type(), '%');
+    wildcard_length = percent_str.length();
+  } else if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                               pattern_,
+                                                               pattern_value,
+                                                               got_result,
+                                                               ctx.get_allocator()))) {
+    LOG_WARN("failed to calc const or calculable expr", K(ret));
+  } else if (!got_result || !pattern_value.is_string_type() || pattern_value.is_null()) {
+    // do nothing
   } else {
-    //try find the calc sel from dynamic sampling
-    int64_t idx = -1;
-    if (ObOptimizerUtil::find_item(all_predicate_sel, ObExprSelPair(&qual, 0), &idx)) {
-      selectivity = all_predicate_sel.at(idx).sel_;
-    } else {
-      selectivity = DEFAULT_INEQ_SEL;
+    const ObString &expr_str = pattern_value.get_string();
+    ObStringScanner scanner(expr_str, pattern_->get_collation_type());
+    ObString percent_str = ObCharsetUtils::get_const_str(pattern_->get_collation_type(), '%');
+    ObString underline_str = ObCharsetUtils::get_const_str(pattern_->get_collation_type(), '_');
+    ObString encoding;
+    int32_t wc = 0;
+    wildcard_length = 0.0;
+    while (OB_SUCC(ret)
+           && scanner.next_character(encoding, wc, ret)) {
+      if (0 == percent_str.compare(encoding)) {
+        wildcard_length += percent_str.length();
+      }
+      if (0 == underline_str.compare(encoding)) {
+        wildcard_length += underline_str.length();
+      }
     }
+    if (OB_FAIL(ret)) {
+      ret = OB_SUCCESS;
+      wildcard_length = percent_str.length();
+    }
+  }
+  return ret;
+}
+
+/**
+ * try estimate the like selectivity by substr
+ * e.g.
+ * `c1 like '%abc'` <=> `substr(c1, -3) = 'abc'`
+ * Assumption:
+ * 1. All strings in the variable and pattern have the same length.
+ * 2. The positions of non-wildcard characters are fixed.
+ * 3. If the pattern is not a constant, then it contains exactly one wildcard.
+ * 4. The pattern will not be null
+*/
+int ObLikeSelEstimator::calculate_like_sel_by_substr(const OptTableMetas &table_metas,
+                                                     const OptSelectivityCtx &ctx,
+                                                     double &selectivity)
+{
+  int ret = OB_SUCCESS;
+  // default strategy, not reliable
+  double variable_len = 0;
+  double pattern_len = 0;
+  double substr_ndv = 1.0;
+  double pattern_ndv = 1.0;
+  double substr_nns = 1.0;
+  double pattern_nns = 1.0; // assume that the pattern is not null
+  double wildcard_length = 1.0;
+  selectivity = DEFAULT_LIKE_SEL;
+  if (OB_ISNULL(variable_) || OB_ISNULL(pattern_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!variable_->get_result_type().is_string_type() ||
+             !pattern_->get_result_type().is_string_type() ||
+             !variable_->is_column_ref_expr()) {
+    // The length is not reliable, use default selectivity
+  } else if (OB_FAIL(get_wildcard_length(ctx, wildcard_length))) {
+    LOG_WARN("failed to get wildcard count", K(ret));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_expr_avg_len(table_metas, ctx, pattern_, pattern_len))) {
+    LOG_WARN("failed to calc expr len", KPC(pattern_), K(ret));
+  } else if (pattern_len <= ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH + wildcard_length) {
+    // do nothing
+  } else if (FALSE_IT(pattern_len -= ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH)) {
+  } else if (OB_FAIL(ObOptSelectivity::calculate_substrb_info(
+      table_metas, ctx, variable_, pattern_len - wildcard_length, ctx.get_current_rows(), substr_ndv, substr_nns))) {
+    LOG_WARN("failed to calculate substrb ndv", KPC_(variable));
+  } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(table_metas, ctx, *pattern_, ctx.get_current_rows(), pattern_ndv))) {
+    LOG_WARN("failed to calcualte distinct", KPC_(pattern));
+  } else {
+    if (NULL == ctx.get_left_rel_ids() || NULL == ctx.get_right_rel_ids()) {
+      double combine_ndv = ObOptSelectivity::combine_two_ndvs(ctx.get_current_rows(), substr_ndv, pattern_ndv);
+      selectivity = std::min(substr_ndv, pattern_ndv) / std::max(1.0, combine_ndv);
+      selectivity *= substr_nns * pattern_nns;
+    } else {
+      double left_ndv = substr_ndv;
+      double right_ndv = pattern_ndv;
+      double left_nns = substr_nns;
+      double right_nns = pattern_nns;
+      if (variable_->get_relation_ids().overlap(*ctx.get_right_rel_ids()) ||
+          pattern_->get_relation_ids().overlap(*ctx.get_left_rel_ids())) {
+        std::swap(left_ndv, right_ndv);
+        std::swap(left_nns, right_nns);
+      }
+      if (IS_LEFT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+        selectivity = (std::min(left_ndv, right_ndv) / left_ndv) * left_nns;
+      } else if (IS_RIGHT_SEMI_ANTI_JOIN(ctx.get_join_type())) {
+        selectivity = (std::min(left_ndv, right_ndv) / right_ndv) * right_nns;
+      } else {
+        selectivity = left_nns * right_nns / std::max(left_ndv, right_ndv);
+      }
+      if (OB_SUCC(ret) && selectivity >= 1.0 && IS_ANTI_JOIN(ctx.get_join_type())) {
+        selectivity = 1 - DEFAULT_ANTI_JOIN_SEL;
+      }
+    }
+    LOG_WARN("succeed to calculate like selectivity by substr",
+        K(selectivity), K(substr_ndv), K(substr_nns), K(pattern_ndv), K(pattern_nns), K(wildcard_length));
   }
   return ret;
 }

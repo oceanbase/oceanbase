@@ -578,12 +578,19 @@ int OptTableMetas::add_generate_table_meta_info(const ObDMLStmt *parent_stmt,
           ObObj minobj;
           maxobj.set_max_value();
           minobj.set_min_value();
-          if (select_expr->is_column_ref_expr() &&
-              OB_FAIL(ObOptSelectivity::get_column_min_max(child_table_metas, child_ctx, *select_expr, minobj, maxobj))) {
-            LOG_WARN("failed to get column min max", K(ret));
-          } else {
+          avg_len = 0;
+          if (OB_FAIL(ObOptSelectivity::calculate_expr_avg_len(child_table_metas, child_ctx, select_expr, avg_len))) {
+            LOG_WARN("failed to get avg len", K(ret));
+          } else if (select_expr->is_column_ref_expr()) {
+            if (OB_FAIL(ObOptSelectivity::get_column_min_max(child_table_metas, child_ctx, *select_expr, minobj, maxobj))) {
+              LOG_WARN("failed to get column min max", K(ret));
+            }
+          }
+
+          if (OB_SUCC(ret)) {
             column_meta->set_min_value(minobj);
             column_meta->set_max_value(maxobj);
+            column_meta->set_avg_len(avg_len);
           }
         }
       }
@@ -743,6 +750,17 @@ const OptColumnMeta* OptTableMetas::get_column_meta_by_table_id(const uint64_t t
     column_meta = table_meta->get_column_meta(column_id);
   }
   return column_meta;
+}
+
+const OptDynamicExprMeta* OptTableMetas::get_dynamic_expr_meta(const ObRawExpr *expr) const
+{
+  const OptDynamicExprMeta* dynamic_expr_meta = NULL;
+  for (int64_t i = 0; NULL == dynamic_expr_meta && i < dynamic_expr_metas_.count(); ++i) {
+    if (expr == dynamic_expr_metas_.at(i).get_expr()) {
+      dynamic_expr_meta = &dynamic_expr_metas_.at(i);
+    }
+  }
+  return dynamic_expr_meta;
 }
 
 double OptTableMetas::get_rows(const uint64_t table_id) const
@@ -2816,7 +2834,7 @@ int ObOptSelectivity::calculate_distinct(const OptTableMetas &table_metas,
       }
     }
     //refine
-    if (OB_SUCC(ret) && need_refine) {
+    if (OB_SUCC(ret) && need_refine && origin_rows >= 0.0) {
       rows = std::min(rows, origin_rows);
     }
   } else {
@@ -3907,6 +3925,216 @@ double ObOptSelectivity::get_set_stmt_output_count(double count1, double count2,
     default: output_count = count1 + count2; break;
   }
   return output_count;
+}
+
+int ObOptSelectivity::calculate_expr_avg_len(const OptTableMetas &table_metas,
+                                             const OptSelectivityCtx &ctx,
+                                             const ObRawExpr *expr,
+                                             double &avg_len)
+{
+  int ret = OB_SUCCESS;
+  // default
+  avg_len = ObOptEstCost::get_estimate_width_from_type(expr->get_result_type());
+  const OptDynamicExprMeta *dynamic_expr_meta = NULL;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    if (OB_FAIL(get_column_avg_len(table_metas, ctx, expr, avg_len))) {
+      LOG_WARN("failed to get avg len", K(ret));
+    }
+  } else if (expr->is_static_const_expr()) {
+    ObObj value;
+    bool get_value = false;
+    if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                          expr,
+                                                          value,
+                                                          get_value,
+                                                          ctx.get_allocator()))) {
+      LOG_WARN("Failed to get const or calculable expr value", K(ret));
+    } else if (get_value) {
+      avg_len = ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH + value.get_deep_copy_size();
+    }
+  } else if (T_OP_CNN == expr->get_expr_type()) {
+    avg_len = ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i ++) {
+      double child_len = 0;
+      if (OB_FAIL(SMART_CALL(calculate_expr_avg_len(table_metas, ctx, expr->get_param_expr(i), child_len)))) {
+        LOG_WARN("failed to calc child avg len", K(ret), KPC(expr));
+      } else {
+        avg_len += child_len - ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
+      }
+    }
+  } else if (expr->is_sys_func_expr()) {
+    if (T_FUN_SYS_REPLACE == expr->get_expr_type() ||
+        (T_FUN_SYS_CAST == expr->get_expr_type() && CM_IS_IMPLICIT_CAST(expr->get_extra()) )) {
+      if (OB_UNLIKELY(expr->get_param_count() < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr param", KPC(expr));
+      } else if (OB_FAIL(SMART_CALL(calculate_expr_avg_len(table_metas, ctx, expr->get_param_expr(0), avg_len)))) {
+        LOG_WARN("failed to calc child avg len", K(ret), KPC(expr));
+      }
+    } else if (T_FUN_SYS_SUBSTR == expr->get_expr_type() || T_FUN_SYS_SUBSTRB == expr->get_expr_type()) {
+      double pos = 1;
+      double sub_len = -1;
+      double child_len = 0;
+      ObObj value;
+      bool get_value = false;
+      if (OB_UNLIKELY(expr->get_param_count() < 2) ||
+          OB_ISNULL(expr->get_param_expr(1)) ||
+          (expr->get_param_count() == 3 && OB_ISNULL(expr->get_param_expr(2)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected expr param", KPC(expr));
+      } else if (OB_FAIL(SMART_CALL(calculate_expr_avg_len(table_metas, ctx, expr->get_param_expr(0), child_len)))) {
+        LOG_WARN("failed to calc child avg len", K(ret), KPC(expr));
+      } else if (expr->get_param_expr(1)->is_static_const_expr()) {
+        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                              expr->get_param_expr(1),
+                                                              value,
+                                                              get_value,
+                                                              ctx.get_allocator()))) {
+          LOG_WARN("Failed to get const or calculable expr value", K(ret));
+        } else if (!get_value) {
+          // do nothing
+        } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&value, pos))) {
+          LOG_WARN("failed to convert obj to double", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (3 == expr->get_param_count() && expr->get_param_expr(2)->is_static_const_expr()) {
+        if (OB_FAIL(ObSQLUtils::calc_const_or_calculable_expr(ctx.get_opt_ctx().get_exec_ctx(),
+                                                              expr->get_param_expr(2),
+                                                              value,
+                                                              get_value,
+                                                              ctx.get_allocator()))) {
+          LOG_WARN("Failed to get const or calculable expr value", K(ret));
+        } else if (!get_value) {
+          // do nothing
+        } else if (OB_FAIL(ObOptEstObjToScalar::convert_obj_to_double(&value, sub_len))) {
+          LOG_WARN("failed to convert obj to double", K(ret));
+        }
+      }
+      avg_len = child_len;
+      if (OB_SUCC(ret)) {
+        avg_len -= ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
+        if (pos <= 0) {
+          avg_len = std::min(avg_len, -pos);
+        } else if (pos >= 1) {
+          avg_len -= pos - 1;
+        }
+        if (sub_len >= 0) {
+          avg_len = std::min(avg_len, sub_len);
+        }
+        avg_len += ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
+      }
+    }
+  } else if (OB_NOT_NULL(dynamic_expr_meta = table_metas.get_dynamic_expr_meta(expr))) {
+    avg_len = dynamic_expr_meta->get_avg_len();
+  } else if (expr->is_exec_param_expr()) {
+    if (OB_FAIL(SMART_CALL(calculate_expr_avg_len(
+        table_metas, ctx, static_cast<const ObExecParamRawExpr *>(expr)->get_ref_expr(), avg_len)))) {
+       LOG_WARN("failed to calc ref avg len", K(ret), KPC(expr));
+    }
+  } else { /*do nothing*/ }
+  return ret;
+}
+
+int ObOptSelectivity::get_column_avg_len(const OptTableMetas &table_metas,
+                                         const OptSelectivityCtx &ctx,
+                                         const ObRawExpr *expr,
+                                         double &avg_len)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnRefRawExpr *column_expr = static_cast<const ObColumnRefRawExpr *>(expr);
+  if (OB_ISNULL(expr) || OB_UNLIKELY(!expr->is_column_ref_expr()) ||
+      OB_ISNULL(ctx.get_opt_stat_manager()) ||
+      OB_ISNULL(ctx.get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null param", K(ret), KPC(expr), K(ctx.get_opt_stat_manager()));
+  } else {
+    uint64_t table_id = column_expr->get_table_id();
+    uint64_t column_id = column_expr->get_column_id();
+    uint64_t ref_table_id;
+    ObSEArray<int64_t, 1> part_ids;
+    ObSEArray<int64_t, 1> global_part_ids;
+    const OptTableMeta *table_meta = table_metas.get_table_meta_by_table_id(table_id);
+    ObGlobalColumnStat stat;
+    TableItem *table = NULL;
+    avg_len = ObOptEstCost::get_estimate_width_from_type(expr->get_result_type());
+    if (OB_NOT_NULL(table_meta)) {
+      const OptColumnMeta *column_meta = table_meta->get_column_meta(column_id);
+      if (OB_NOT_NULL(column_meta)) {
+        avg_len = column_meta->get_avg_len();
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptSelectivity::calculate_substrb_info(const OptTableMetas &table_metas,
+                                             const OptSelectivityCtx &ctx,
+                                             const ObRawExpr *str_expr,
+                                             const double substrb_len,
+                                             const double cur_rows,
+                                             double &substr_ndv,
+                                             double &nns)
+{
+  int ret = OB_SUCCESS;
+  double expr_len = 0.0;
+  double expr_ndv = 0.0;
+  nns = 1.0;
+  substr_ndv = 1.0;
+  if (OB_ISNULL(str_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (substrb_len <= 0) {
+    substr_ndv = 1.0;
+  } else if (OB_FAIL(calculate_expr_avg_len(table_metas,
+                                            ctx,
+                                            str_expr,
+                                            expr_len))) {
+    LOG_WARN("failed to get expr length", K(ret), KPC(str_expr));
+  } else if (OB_FAIL(calculate_distinct(table_metas,
+                                        ctx,
+                                        *str_expr,
+                                        cur_rows,
+                                        expr_ndv))) {
+    LOG_WARN("failed to calculate distinct", K(ret));
+  } else if (OB_FAIL(calculate_expr_nns(table_metas, ctx, str_expr, nns))) {
+    LOG_WARN("failed to calculate nns", KPC(str_expr));
+  } else {
+    expr_len -= ObOptEstCostModel::DEFAULT_FIXED_OBJ_WIDTH;
+    if (nns > OB_DOUBLE_EPSINON) {
+      expr_len /= nns;
+    }
+    if (expr_len < OB_DOUBLE_EPSINON || expr_len <= substrb_len) {
+      substr_ndv = expr_ndv;
+    } else {
+      substr_ndv = std::pow(expr_ndv, substrb_len / expr_len);
+    }
+  }
+  LOG_TRACE("succeed to calculate substrb ndv", K(substr_ndv), K(expr_ndv), K(substrb_len), K(expr_len));
+  return ret;
+}
+
+int ObOptSelectivity::calculate_expr_nns(const OptTableMetas &table_metas,
+                                         const OptSelectivityCtx &ctx,
+                                         const ObRawExpr *expr,
+                                         double &nns)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (expr->is_column_ref_expr()) {
+    if (OB_FAIL(get_column_ndv_and_nns(table_metas, ctx, *expr, NULL, &nns))) {
+      LOG_WARN("failed to get column ndv and nns", K(ret));
+    }
+  } else {
+    // todo: wuyuming.wym null propagate expr
+    nns = 1.0;
+  }
+  return ret;
 }
 
 }//end of namespace sql
