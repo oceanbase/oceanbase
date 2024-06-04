@@ -225,15 +225,27 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   SubObjectMgr *sub_mgr = nullptr;
   auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID,
                                                                         ObCtxIds::DEFAULT_CTX_ID);
-  auto &root_mgr = static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_;
   ObMemAttr attr;
   attr.tenant_id_ = OB_SERVER_TENANT_ID;
   attr.label_ = common::ObModIds::OB_TENANT_CTX_ALLOCATOR;
   attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
   attr.ignore_version_ = true;
-  root_mgr.lock();
+  class SubObjectMgrWrapper {
+  public:
+    SubObjectMgrWrapper(SubObjectMgr& sub_mgr)
+      : sub_mgr_(sub_mgr)
+    {}
+    AObject *realloc_object(AObject *obj,  const uint64_t size, const ObMemAttr &attr)
+    {
+      sub_mgr_.lock();
+      AObject *new_obj = sub_mgr_.realloc_object(obj, size, attr);
+      sub_mgr_.unlock();
+      return new_obj;
+    }
+  private:
+    SubObjectMgr& sub_mgr_;
+  } root_mgr(static_cast<ObjectMgr&>(ta->get_block_mgr()).root_mgr_);
   void *ptr = ObTenantCtxAllocator::common_realloc(NULL, sizeof(SubObjectMgr), attr, *(ta.ref_allocator()), root_mgr);
-  root_mgr.unlock();
   if (OB_NOT_NULL(ptr)) {
     sub_mgr = new (ptr) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
                                             ablock_size_, enable_dirty_list_, blk_mgr_);
