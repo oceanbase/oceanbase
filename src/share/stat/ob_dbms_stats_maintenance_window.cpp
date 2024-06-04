@@ -653,11 +653,12 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
   ObSqlString values_list;
   sql.reset();
   bool is_join_exists = false;
+  ObArenaAllocator allocator("AsyncStatsJob", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   if (OB_FAIL(check_async_gather_job_exists(sql_proxy, tenant_id, is_join_exists))) {
     LOG_WARN("failed to check async gather job exists", K(ret));
   } else if (is_join_exists) {
     //do nothing
-  } else if (OB_FAIL(get_async_gather_stats_job_id_and_exec_env(sql_proxy, tenant_id, job_id, exec_env))) {
+  } else if (OB_FAIL(get_async_gather_stats_job_id_and_exec_env(sql_proxy, allocator, tenant_id, job_id, exec_env))) {
     LOG_WARN("failed to get async gather stats job id and exec env", K(ret));
   } else if (OB_UNLIKELY(job_id > dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET ||
                          exec_env.empty())) {
@@ -685,6 +686,7 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
 }
 
 int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                                                             ObIAllocator &allocator,
                                                                              const uint64_t tenant_id,
                                                                              int64_t &job_id,
                                                                              ObString &exec_env)
@@ -719,6 +721,7 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(com
           int64_t fisrt_col = 0;
           int64_t second_col = 1;
           ObObj obj;
+          ObString tmp_exec_env;
           if (get_rows > 0) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected error, expected only one row", K(ret));
@@ -728,8 +731,10 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(com
             LOG_WARN("failed to get int", K(ret), K(obj));
           } else if (OB_FAIL(client_result->get_obj(second_col, obj))) {
             LOG_WARN("failed to get object", K(ret));
-          } else if (OB_FAIL(obj.get_varchar(exec_env))) {
+          } else if (OB_FAIL(obj.get_varchar(tmp_exec_env))) {
             LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(ob_write_string(allocator, tmp_exec_env, exec_env))) {
+            LOG_WARN("failed to ob write string", K(ret));
           } else {
             ++ get_rows;
           }

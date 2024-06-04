@@ -113,6 +113,7 @@ private:
                                             const ObString &exec_env,
                                             ObSqlString &raw_sql);
   static int get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                                        ObIAllocator &allocator,
                                                         const uint64_t tenant_id,
                                                         int64_t &job_id,
                                                         ObString &exec_env);
