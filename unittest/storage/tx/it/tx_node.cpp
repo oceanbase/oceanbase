@@ -262,11 +262,31 @@ void ObTxNode::dump_msg_queue_()
   int ret = OB_SUCCESS;
   MsgPack *msg = NULL;
   int i = 0;
-  while(OB_NOT_NULL((msg = (MsgPack*)msg_queue_.pop()))) {
+  while(OB_SUCC(msg_queue_.pop((ObLink*&)msg))) {
     ++i;
     MsgInfo msg_info;
     OZ (get_msg_info(msg, msg_info));
     TRANS_LOG(INFO,"[dump_msg]", K(i), K(msg_info), K(ret), KPC(this));
+  }
+}
+
+void ObTxNode::wait_all_msg_consumed()
+{
+  while (msg_queue_.size() > 0 || !msg_consumer_.is_idle()) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait msg_queue to be empty", K(msg_queue_.size()), KPC(this));
+    }
+    usleep(5_ms);
+  }
+}
+
+void ObTxNode::wait_tx_log_synced()
+{
+  while(fake_tx_log_adapter_->get_inflight_cnt() > 0) {
+    if (REACH_TIME_INTERVAL(200_ms)) {
+      TRANS_LOG(INFO, "wait tx log synced...", K(fake_tx_log_adapter_->get_inflight_cnt()), KPC(this));
+    }
+    usleep(5_ms);
   }
 }
 

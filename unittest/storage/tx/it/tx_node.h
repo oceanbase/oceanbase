@@ -49,7 +49,7 @@ class QueueConsumer : public share::ObThreadPool
 {
 public:
   QueueConsumer(ObString name,
-                ObSpScLinkQueue *q,
+                ObLinkQueue *q,
                 std::function<int(T*)> func):
     name_(name), queue_(q), func_(func), cond_() {}
   virtual int start() {
@@ -68,7 +68,8 @@ public:
   }
   void run1() {
     while(!stop_) {
-      ObLink *e = queue_->pop();
+      ObLink *e = NULL;
+      queue_->pop(e);
       if (e) {
         T *t = static_cast<T*>(e);
         func_(t);
@@ -82,11 +83,12 @@ public:
   }
   void wakeup() { if (ATOMIC_BCAS(&is_sleeping_, true, false)) { cond_.signal(); } }
   void set_name(ObString &name) { name_ = name; }
-  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->empty()), K_(stop));
+  bool is_idle() { return ATOMIC_LOAD(&is_sleeping_); }
+  TO_STRING_KV(KP(this), K_(name), KP_(queue), K(queue_->size()), K_(stop));
 private:
   ObString name_;
   bool stop_;
-  ObSpScLinkQueue *queue_;
+  ObLinkQueue *queue_;
   std::function<int(T*)> func_;
   common::SimpleCond cond_;
   bool is_sleeping_ = false;
@@ -255,11 +257,11 @@ public:
   // helpers
   int64_t ts_after_us(int64_t d) const { return ObTimeUtility::current_time() + d; }
   int64_t ts_after_ms(int64_t d) const { return ObTimeUtility::current_time() + d * 1000; }
+
 private:
   static void reset_localtion_adapter() {
     get_location_adapter_().reset();
   }
-
 public:
   void add_drop_msg_type(TX_MSG_TYPE type) {
     drop_msg_type_set_.set_refactored(type);
@@ -267,6 +269,8 @@ public:
   void del_drop_msg_type(TX_MSG_TYPE type) {
     drop_msg_type_set_.erase_refactored(type);
   }
+  void wait_all_msg_consumed();
+  void wait_tx_log_synced();
 public:
   ObString name_; char name_buf_[32];
   ObAddr addr_;
@@ -278,7 +282,7 @@ public:
   memtable::ObMemtable *memtable_;
   ObSEArray<ObColDesc, 2> columns_;
   // msg_handler
-  ObSpScLinkQueue msg_queue_;
+  ObLinkQueue msg_queue_;
   QueueConsumer<MsgPack> msg_consumer_;
   // fake objects
   storage::ObTenantMetaMemMgr t3m_;
