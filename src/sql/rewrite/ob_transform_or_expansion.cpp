@@ -2186,8 +2186,6 @@ int ObTransformOrExpansion::transform_or_expansion(ObSelectStmt *stmt,
     LOG_WARN("unexpect null stmt", K(ret), K(copy_stmt));
   } else if (OB_FAIL(copy_stmt->deep_copy(*stmt_factory, *expr_factory, *stmt))) {
     LOG_WARN("failed to deep copy child statement", K(ret));
-  } else if (OB_FAIL(copy_stmt->get_stmt_hint().reset_explicit_trans_hint(T_USE_CONCAT))) {
-    LOG_WARN("failed to reset explicit trans hint", K(ret));
   } else if (OB_FAIL(get_expand_conds(*copy_stmt, trans_id, conds_exprs))) {
     LOG_WARN("failed to get expand conds", K(ret));
   } else if (FALSE_IT(view_stmt = copy_stmt)) {

@@ -1350,23 +1350,6 @@ int ObStmtHint::merge_normal_hint(ObHint &hint,
   return ret;
 }
 
-int ObStmtHint::reset_explicit_trans_hint(ObItemType hint_type)
-{
-  int ret = OB_SUCCESS;
-  const ObHint *cur_hint = get_normal_hint(hint_type);
-  if (NULL == cur_hint) {
-    /* do nothing */
-  } else if (OB_UNLIKELY(!cur_hint->is_transform_hint())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected hint type", K(ret), K(*cur_hint));
-  } else if (!static_cast<const ObTransHint*>(cur_hint)->is_explicit()) {
-    /* do nothing */
-  } else if (OB_FAIL(remove_normal_hints(&hint_type, 1))) {
-    LOG_WARN("failed to remove hints", K(ret));
-  }
-  return ret;
-}
-
 bool ObStmtHint::has_enable_hint(ObItemType hint_type) const
 {
   const ObHint *cur_hint = get_normal_hint(hint_type);
