@@ -202,7 +202,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_BUF_NOT_ENOUGH)
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
-    EXPECT_EQ(OB_SUCCESS, submitter.serial_submit(false));
+    EXPECT_EQ(OB_EAGAIN, submitter.serial_submit(false));
   }
 }
 

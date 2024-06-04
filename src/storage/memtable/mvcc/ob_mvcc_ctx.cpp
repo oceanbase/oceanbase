@@ -281,7 +281,7 @@ ObMvccWriteGuard::~ObMvccWriteGuard()
         if (REACH_TIME_INTERVAL(100 * 1000)) {
           TRANS_LOG(WARN, "failed to submit log if neccesary", K(ret), K(is_freeze), KPC(tx_ctx));
         }
-        if (is_freeze) {
+        if (is_freeze && OB_BLOCK_FROZEN != ret) {
           memtable_->get_freezer()->set_need_resubmit_log(true);
         }
       }

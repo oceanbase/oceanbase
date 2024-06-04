@@ -850,11 +850,11 @@ bool ObTransCallbackMgr::check_list_has_min_epoch_(const int my_idx,
 // - OB_BLOCK_FROZEN: next to logging callback's memtable was logging blocked
 int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
                                       ObCallbackListLogGuard &lock_guard,
-                                      int &list_idx)
+                                      int &ret_list_idx)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(rwlock_);
-  list_idx = (write_seq.get_branch() % MAX_CALLBACK_LIST_COUNT);
+  const int list_idx = (write_seq.get_branch() % MAX_CALLBACK_LIST_COUNT);
   ObTxCallbackList *list = get_callback_list_(list_idx, true);
   if (OB_ISNULL(list)) {
     ret = OB_ENTRY_NOT_EXIST;
@@ -883,6 +883,7 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
                     K(list_idx), K(write_seq), K(my_epoch), K(min_epoch), K(min_epoch_idx), KP(to_log_memtable));
         }
       } else {
+        ret_list_idx = list_idx;
         lock_guard.set(log_lock);
       }
       if (OB_FAIL(ret) && log_lock) {
@@ -897,9 +898,8 @@ int ObTransCallbackMgr::get_log_guard(const transaction::ObTxSEQ &write_seq,
         if (REACH_TIME_INTERVAL(1_s)) {
           TRANS_LOG(INFO, "decide to flush callback list with min_epoch", KPC(this), K(min_epoch), K(min_epoch_idx));
         }
-        list_idx = min_epoch_idx;
+        ret_list_idx = min_epoch_idx;
         lock_guard.set(log_lock);
-        ret = OB_SUCCESS;
       }
     }
   }
@@ -991,7 +991,7 @@ int ObTransCallbackMgr::fill_from_one_list(ObTxFillRedoCtx &ctx,
 // - OB_SUCCESS: all callbacks from all callback-list filled
 // - OB_EAGAIN: due to parallel logging, must return to flush this list and retry others
 // - OB_BLOCK_FROZEN: stopped due to can not logging waiting memtable frozen
-// - OB_ITER_END: stopped due to has smaller write_epoch whos log isn't submitted
+// - OB_ITER_END: stopped due to has smaller write_epoch whose log hasn't submitted
 // - OB_BUF_NOT_ENOUGH: stopped due to buffer can not hold current node
 // return policy:
 // - if parallel_logging, return if need switch to next list and has

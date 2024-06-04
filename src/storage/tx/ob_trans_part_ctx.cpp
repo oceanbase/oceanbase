@@ -1817,45 +1817,49 @@ int ObPartTransCtx::submit_redo_after_write(const bool force, const ObTxSEQ &wri
 #define LOAD_PARALLEL_LOGGING parallel_logging = exec_info_.serial_final_scn_.atomic_load().is_valid()
     LOAD_PARALLEL_LOGGING;
     if (!parallel_logging) {
-      if (OB_SUCCESS == lock_.try_lock()) {
-        CtxLockGuard guard(lock_, false);
+      int submitted_cnt = 0;
+      if (force || OB_SUCCESS == lock_.try_lock()) {
+        CtxLockGuard guard(lock_, force /* need lock */);
         // double check parallel_logging is on
         LOAD_PARALLEL_LOGGING;
         if (!parallel_logging) {
-          ret = serial_submit_redo_after_write_();
-          if (OB_EAGAIN == ret) {
-            ret = OB_SUCCESS;
-          }
+          ret = serial_submit_redo_after_write_(submitted_cnt);
         }
       }
-      if (OB_BUF_NOT_ENOUGH == ret) {
-        // bufer full, try fill after switch to parallel logging
+      if (submitted_cnt > 0 && OB_EAGAIN == ret) {
+        // has remains, try fill after switch to parallel logging
         LOAD_PARALLEL_LOGGING;
       }
     }
 #undef LOAD_PARALLEL_LOGGING
-    //tg.click("serial_log");
-    if (parallel_logging) {
-      if (OB_SUCC(lock_.try_rdlock_flush_redo())) {
-        if (OB_SUCC(check_can_submit_redo_()) && !is_committing_()) {
+    if (parallel_logging && OB_SUCC(lock_.try_rdlock_flush_redo())) {
+      if (OB_SUCC(check_can_submit_redo_())) {
+        if (is_committing_()) {
+          ret = force ? OB_TRANS_HAS_DECIDED : OB_SUCCESS;
+        } else {
           ObTxRedoSubmitter submitter(*this, mt_ctx_);
           if (OB_FAIL(submitter.parallel_submit(write_seq_no))) {
-            if (OB_ITER_END == ret || OB_EAGAIN == ret) {
+            if (!force && (OB_ITER_END == ret          // blocked by others, current remains
+                           || OB_NEED_RETRY == ret     // acquire lock failed
+                           )) {
               ret = OB_SUCCESS;
             }
           }
         }
-        lock_.unlock_flush_redo();
       }
+      lock_.unlock_flush_redo();
     }
-  }
-  if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
-    ret = OB_SUCCESS;
+    if (!force && (OB_TRANS_HAS_DECIDED == ret // do committing
+                   || OB_BLOCK_FROZEN == ret   // memtable logging blocked
+                   || OB_EAGAIN == ret         // partial submitted or submit to log-service fail
+                   )) {
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
 
-int ObPartTransCtx::serial_submit_redo_after_write_()
+int ObPartTransCtx::serial_submit_redo_after_write_(int &submitted_cnt)
 {
   int ret = OB_SUCCESS;
   if (OB_SUCC(check_can_submit_redo_())) {
@@ -1863,7 +1867,8 @@ int ObPartTransCtx::serial_submit_redo_after_write_()
     bool should_switch = should_switch_to_parallel_logging_();
     ObTxRedoSubmitter submitter(*this, mt_ctx_);
     ret = submitter.serial_submit(should_switch);
-    if (should_switch && submitter.get_submitted_cnt() > 0) {
+    submitted_cnt = submitter.get_submitted_cnt();
+    if (should_switch && submitted_cnt > 0) {
       const share::SCN serial_final_scn = submitter.get_submitted_scn();
       int tmp_ret = switch_to_parallel_logging_(serial_final_scn, exec_info_.max_submitted_seq_no_);
       TRANS_LOG(INFO, "**leader switch to parallel logging**", K(tmp_ret),

@@ -493,7 +493,7 @@ private:
   void recovery_parallel_logging_();
   int check_can_submit_redo_();
   void force_no_need_replay_checksum_(const bool parallel_replay, const share::SCN &log_ts);
-  int serial_submit_redo_after_write_();
+  int serial_submit_redo_after_write_(int &submitted_cnt);
   int submit_big_segment_log_();
   int prepare_big_segment_submit_(ObTxLogCb *segment_cb,
                                   const share::SCN &base_scn,
