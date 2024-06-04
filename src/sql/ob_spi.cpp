@@ -7268,6 +7268,12 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             ret = OB_SUCCESS;
           } else {
             LOG_WARN("read result error", K(ret));
+            for (int64_t i = 0; i < tmp_result.count(); ++i) {
+              int tmp_ret = OB_SUCCESS;
+              if ((tmp_ret = ObUserDefinedType::destruct_obj(tmp_result.at(i), ctx->exec_ctx_->get_my_session())) != OB_SUCCESS) {
+                LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(i));
+              }
+            }
           }
         }
         OX (bulk_tables.reuse());

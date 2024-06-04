@@ -206,7 +206,8 @@ int ObPLCompiler::compile(
           } else if (!symbol->is_readonly()) {
             OZ (func.add_out_arg(i));
             if (OB_SUCC(ret)
-                && 0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_INOUT_ARG)) {
+                && (0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_INOUT_ARG)
+                    || 0 == symbol->get_name().case_compare(ObPLResolver::ANONYMOUS_SQL_ARG))) {
               OZ (func.add_in_arg(i));
             }
           } else {
