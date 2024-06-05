@@ -2999,6 +2999,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
             ObRawExpr *original_expr = c_expr;
             OZ (ObResolverUtils::resolve_external_param_info(*ctx_.external_param_info_,
+                                                             *session_info,
                                                              ctx_.expr_factory_,
                                                              ctx_.prepare_param_count_,
                                                              original_expr));
