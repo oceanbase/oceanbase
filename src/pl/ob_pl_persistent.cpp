@@ -562,7 +562,8 @@ int ObRoutinePersistentInfo::process_storage_dll(ObIAllocator &alloc,
 
 int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
                                               uint64_t tenant_id,
-                                              uint64_t key_id)
+                                              uint64_t key_id,
+                                              uint64_t database_id)
 {
   int ret = OB_SUCCESS;
 
@@ -592,7 +593,7 @@ int ObRoutinePersistentInfo::delete_dll_from_disk(common::ObISQLClient &trans,
     if (OB_INVALID_ID == key_id) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected key id.", K(ret));
-    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where key_id = %ld", OB_ALL_NCOMP_DLL_TNAME, key_id))) {
+    } else if (OB_FAIL(sql.assign_fmt("delete FROM %s where database_id = %ld and key_id = %ld", OB_ALL_NCOMP_DLL_TNAME, database_id, key_id))) {
       LOG_WARN("delete from __all_ncomp_dll table failed.", K(ret), K(key_id));
     } else {
       if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {

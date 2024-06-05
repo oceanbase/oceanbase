@@ -850,6 +850,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
                                                                            package_schema->get_package_id(),
                                                                            new_schema_version, trans))) {
            LOG_WARN("drop package failed", KR(ret), "package_id", package_schema->get_package_id());
+         } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                              tenant_id,
+                                                                              package_schema->get_package_id(),
+                                                                              package_schema->get_database_id()))) {
+          LOG_WARN("fail to delete ddl from disk", K(ret));
          } else {
            // delete audit in package
            audits.reuse();
@@ -915,6 +920,11 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_FAIL(schema_service_impl->get_routine_sql_service().drop_routine(
                            *routine_info, new_schema_version, trans))) {
           LOG_WARN("drop routine failed", KR(ret), "routine_id", routine_id);
+        } else if (OB_FAIL(pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                             routine_info->get_tenant_id(),
+                                                                             routine_info->get_routine_id(),
+                                                                             routine_info->get_database_id()))) {
+          LOG_WARN("fail to delete ddl from disk", K(ret));
         } else {
           // delete audit in routine
           audits.reuse();
@@ -978,6 +988,25 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
         } else if (OB_FAIL(schema_service_impl->get_udt_sql_service().drop_udt(
                            *udt_info, new_schema_version, trans))) {
           LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
+        }
+        if (OB_SUCC(ret)) {
+          if (udt_info->is_object_spec_ddl() &&
+              OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id))) {
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                          ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id)),
+                          udt_info->get_database_id()));
+            if (udt_info->has_type_body() &&
+                OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
+              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                            ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
+                            udt_info->get_database_id()));
+            }
+          } else if (udt_info->is_object_body_ddl() &&
+                    OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
+                                      ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
+                                      udt_info->get_database_id()));
+          }
         }
       }
     }
@@ -8673,7 +8702,8 @@ int ObDDLOperator::replace_routine(ObRoutineInfo &routine_info,
   if (OB_SUCC(ret) && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
     OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
                                                           old_routine_info->get_tenant_id(),
-                                                          old_routine_info->get_routine_id()));
+                                                          old_routine_info->get_routine_id(),
+                                                          old_routine_info->get_database_id()));
   }
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, old_routine_info->get_tenant_id(),
                                      old_routine_info->get_routine_id(),
@@ -8735,7 +8765,8 @@ int ObDDLOperator::drop_routine(const ObRoutineInfo &routine_info,
                      routine_info, new_schema_version, trans, ddl_stmt_str))) {
     LOG_WARN("drop routine info failed", K(routine_info), K(ret));
   }
-  OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, routine_info.get_tenant_id(), routine_info.get_routine_id()));
+  OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, routine_info.get_tenant_id(),
+                            routine_info.get_routine_id(), routine_info.get_database_id()));
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, routine_info.get_tenant_id(),
                                      routine_info.get_routine_id(),
                                      new_schema_version,
@@ -8964,12 +8995,18 @@ int ObDDLOperator::create_package(const ObPackageInfo *old_package_info,
                                                     del_package_info))) {
             LOG_WARN("get package body info failed", K(ret));
           } else if (OB_NOT_NULL(del_package_info)) {
-            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, del_package_info->get_package_id()));
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                                  tenant_id,
+                                                                  del_package_info->get_package_id(),
+                                                                  del_package_info->get_database_id()));
           }
         } else {
           // do nothing
         }
-        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, old_package_info->get_package_id()));
+        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans,
+                                                              tenant_id,
+                                                              old_package_info->get_package_id(),
+                                                              old_package_info->get_database_id()));
       }
       OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                      old_package_info->get_package_id(),
@@ -9097,17 +9134,20 @@ int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
                                                         package_info.get_package_id(),
                                                         new_schema_version,
                                                         package_info.get_object_type()));
-        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id()));
+        OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id(),
+                                                              package_info.get_database_id()));
         if (OB_NOT_NULL(package_body_info)) {
           OZ (ObDependencyInfo::delete_schema_object_dependency(trans, tenant_id,
                                                         package_body_info->get_package_id(),
                                                         new_schema_version,
                                                         package_body_info->get_object_type()));
-          OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_body_info->get_package_id()));
+          OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_body_info->get_package_id(),
+                                                                package_body_info->get_database_id()));
         }
       }
     } else {
-      OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id()));
+      OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id(),
+                                                            package_info.get_database_id()));
     }
   }
 
@@ -9253,9 +9293,11 @@ int ObDDLOperator::create_trigger(ObTriggerInfo &trigger_info,
 
     if (OB_SUCC(ret) && is_replace && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id())));
+                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id()),
+                                                            trigger_info.get_database_id()));
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id())));
+                    share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id()),
+                                                            trigger_info.get_database_id()));
     }
   }
   if (OB_SUCC(ret)) {
@@ -9288,9 +9330,11 @@ int ObDDLOperator::drop_trigger(const ObTriggerInfo &trigger_info,
                                                         new_schema_version,
                                                         trigger_info.get_object_type()));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id())));
+                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id()),
+                trigger_info.get_database_id()));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id())));
+                share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id()),
+                trigger_info.get_database_id()));
   if (OB_SUCC(ret) && !trigger_info.is_system_type() && is_update_table_schema_version) {
     uint64_t base_table_id = trigger_info.get_base_object_id();
     OZ (schema_service->get_table_sql_service().update_data_table_schema_version(trans,
@@ -9329,9 +9373,11 @@ int ObDDLOperator::alter_trigger(ObTriggerInfo &trigger_info,
           base_table_id, trigger_info.get_trigger_name());
   }
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id())));
+                share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id()),
+                                                        trigger_info.get_database_id()));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id())));
+                share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id()),
+                                                        trigger_info.get_database_id()));
   ObErrorInfo error_info;
   OZ (error_info.handle_error_info(trans, &trigger_info), error_info);
   return ret;
@@ -9703,11 +9749,13 @@ int ObDDLOperator::replace_udt(ObUDTTypeInfo &udt_info,
   if (OB_SUCC(ret) && public_routine_infos.count() > 0 && ERROR_STATUS_NO_ERROR == error_info.get_error_status()) {
     if (OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id))) {
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id))));
+                    ObUDTObjectType::mask_object_id(old_udt_info->get_object_spec_id(tenant_id)),
+                                                            old_udt_info->get_database_id()));
       if (old_udt_info->has_type_body() &&
           OB_INVALID_ID != ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id))) {
         OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                      ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id))));
+                      ObUDTObjectType::mask_object_id(old_udt_info->get_object_body_id(tenant_id)),
+                                                              old_udt_info->get_database_id()));
       }
     }
   }
@@ -9807,16 +9855,19 @@ int ObDDLOperator::drop_udt(const ObUDTTypeInfo &udt_info,
     if (udt_info.is_object_spec_ddl() &&
         OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id))) {
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id))));
+                    ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id)),
+                    udt_info.get_database_id()));
       if (udt_info.has_type_body() &&
           OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))) {
         OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                      ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))));
+                      ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id)),
+                      udt_info.get_database_id()));
       }
     } else if (udt_info.is_object_body_ddl() &&
                OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))) {
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))));
+                    ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id)),
+                    udt_info.get_database_id()));
     }
   }
 
