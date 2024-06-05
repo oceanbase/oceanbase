@@ -3650,6 +3650,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   CK (OB_NOT_NULL(top_context_ = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
   if (OB_SUCC(ret)
       && !is_called_from_sql_
+      && !is_anonymous
       && !ObTriggerInfo::is_trigger_package_id(func_.get_package_id())
       && top_context_->get_exec_stack().count() > 0) {
     ObPLExecState *parent = top_context_->get_exec_stack().at(top_context_->get_exec_stack().count() - 1);

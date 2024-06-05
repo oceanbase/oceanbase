@@ -11686,103 +11686,75 @@ int ObPLResolver::resolve_record_construct(const ObQualifiedName &q_name,
   CK (OB_NOT_NULL(object_type = static_cast<const ObRecordType *>(user_type)));
   OZ (expr_factory_.create_raw_expr(T_FUN_PL_OBJECT_CONSTRUCT, object_expr));
   CK (OB_NOT_NULL(object_expr));
-  if (OB_FAIL(ret)) {
-  } else if (!object_type->is_udt_type()
-             && udf_info.ref_expr_->get_param_exprs().empty()
-             && udf_info.param_exprs_.empty()) {
-    // record type with empty parameters is allowed.
-    ObConstRawExpr *null_expr = NULL;
-    OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
-    CK (OB_NOT_NULL(null_expr));
-    CK (0 == param_pos);
-    for (; OB_SUCC(ret) && param_pos < object_type->get_member_count(); ++param_pos) {
-      const ObRecordMember *member = object_type->get_record_member(param_pos);
-      CK (OB_NOT_NULL(member));
-      if (OB_FAIL(ret)) {
-      } else if (member->get_default() != OB_INVALID_INDEX) {
-        if (OB_NOT_NULL(member->get_default_expr())) {
-          OZ (object_expr->add_param_expr(member->get_default_expr()));
-        } else {
-          ObPLPackageManager &package_manager =
-            resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
-          ObRawExpr *expr = NULL;
-          OZ (package_manager.get_package_expr(resolve_ctx_,
-                                               expr_factory_,
-                                               extract_package_id(user_type->get_user_type_id()),
-                                               member->get_default(),
-                                               expr));
-          OZ (object_expr->add_param_expr(expr));
-        }
-      } else {
-        OZ (object_expr->add_param_expr(null_expr));
-      }
-    }
-  } else {
-    if (OB_SUCC(ret)) {
-      int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
-      int64_t member_cnt = object_type->get_member_count();
-      if ((udf_info.is_udf_udt_cons() && (param_cnt - 1) != member_cnt)
-          || (!udf_info.is_udf_udt_cons() && param_cnt > member_cnt)) {
-        ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_WARN("PLS-00306: wrong number or types of arguments in call",
-                K(ret),
-                K(q_name),
-                K(udf_info.ref_expr_->get_param_exprs().count()),
-                K(object_type->get_member_count()));
-      }
-    }
-    for (; OB_SUCC(ret) && param_pos < udf_info.ref_expr_->get_param_exprs().count(); ++param_pos) {
-      OZ (object_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(param_pos)));
-    }
-    CK (udf_info.param_names_.count() == udf_info.param_exprs_.count());
-    for (; OB_SUCC(ret) && param_pos < object_type->get_member_count(); ++param_pos) {
-      bool found = false;
-      const ObString *member_name = object_type->get_record_member_name(param_pos);
-      const ObRecordMember *member = object_type->get_record_member(param_pos);
-      int64_t i = 0;
-      CK (OB_NOT_NULL(member_name));
-      CK (OB_NOT_NULL(member));
-      for (; OB_SUCC(ret) && i < udf_info.param_names_.count(); ++i) {
-        if (ObCharset::case_compat_mode_equal(*member_name, udf_info.param_names_.at(i))) {
-          found = true;
-          total_assign_cnt++;
-          break;
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (found) {
-        OZ (object_expr->add_param_expr(udf_info.param_exprs_.at(i)));
-      } else if (member->get_default() != OB_INVALID_INDEX) {
-        if (OB_NOT_NULL(member->get_default_expr())) {
-          OZ (object_expr->add_param_expr(member->get_default_expr()));
-        } else {
-          ObPLPackageManager &package_manager =
-            resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
-          ObRawExpr *expr = NULL;
-          OZ (package_manager.get_package_expr(resolve_ctx_,
-                                               expr_factory_,
-                                               extract_package_id(user_type->get_user_type_id()),
-                                               member->get_default(),
-                                               expr));
-          OZ (object_expr->add_param_expr(expr));
-        }
-      } else {
-        ret = OB_ERR_CALL_WRONG_ARG;
-        LOG_WARN("PLS-00306: wrong number or types of arguments in call",
-                K(ret),
-                K(q_name),
-                K(udf_info.ref_expr_->get_param_exprs().count()),
-                K(object_type->get_member_count()));
-      }
-    }
-    if (OB_SUCC(ret) && total_assign_cnt != udf_info.param_names_.count()) {
+  if (OB_SUCC(ret)) {
+    int64_t param_cnt = udf_info.ref_expr_->get_param_exprs().count();
+    int64_t member_cnt = object_type->get_member_count();
+    if ((udf_info.is_udf_udt_cons() && (param_cnt - 1) != member_cnt)
+        || (!udf_info.is_udf_udt_cons() && param_cnt > member_cnt)) {
       ret = OB_ERR_CALL_WRONG_ARG;
       LOG_WARN("PLS-00306: wrong number or types of arguments in call",
-                K(ret),
-                K(q_name),
-                K(udf_info.ref_expr_->get_param_exprs().count()),
-                K(object_type->get_member_count()));
+              K(ret),
+              K(q_name),
+              K(udf_info.ref_expr_->get_param_exprs().count()),
+              K(object_type->get_member_count()));
     }
+  }
+  for (; OB_SUCC(ret) && param_pos < udf_info.ref_expr_->get_param_exprs().count(); ++param_pos) {
+    OZ (object_expr->add_param_expr(udf_info.ref_expr_->get_param_exprs().at(param_pos)));
+  }
+  ObConstRawExpr *null_expr = NULL;
+  OZ (expr_factory_.create_raw_expr(T_NULL, null_expr));
+  CK (OB_NOT_NULL(null_expr));
+  CK (udf_info.param_names_.count() == udf_info.param_exprs_.count());
+  for (; OB_SUCC(ret) && param_pos < object_type->get_member_count(); ++param_pos) {
+    bool found = false;
+    const ObString *member_name = object_type->get_record_member_name(param_pos);
+    const ObRecordMember *member = object_type->get_record_member(param_pos);
+    int64_t i = 0;
+    CK (OB_NOT_NULL(member_name));
+    CK (OB_NOT_NULL(member));
+    for (; OB_SUCC(ret) && i < udf_info.param_names_.count(); ++i) {
+      if (ObCharset::case_compat_mode_equal(*member_name, udf_info.param_names_.at(i))) {
+        found = true;
+        total_assign_cnt++;
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (found) {
+      OZ (object_expr->add_param_expr(udf_info.param_exprs_.at(i)));
+    } else if (member->get_default() != OB_INVALID_INDEX) {
+      if (OB_NOT_NULL(member->get_default_expr())) {
+        OZ (object_expr->add_param_expr(member->get_default_expr()));
+      } else {
+        ObPLPackageManager &package_manager =
+          resolve_ctx_.session_info_.get_pl_engine()->get_package_manager();
+        ObRawExpr *expr = NULL;
+        OZ (package_manager.get_package_expr(resolve_ctx_,
+                                             expr_factory_,
+                                             extract_package_id(user_type->get_user_type_id()),
+                                             member->get_default(),
+                                             expr));
+        OZ (object_expr->add_param_expr(expr));
+      }
+    } else if (!object_type->is_udt_type()) {
+      OZ (object_expr->add_param_expr(null_expr));
+    } else {
+      ret = OB_ERR_CALL_WRONG_ARG;
+      LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+              K(ret),
+              K(q_name),
+              K(udf_info.ref_expr_->get_param_exprs().count()),
+              K(object_type->get_member_count()));
+    }
+  }
+  if (OB_SUCC(ret) && total_assign_cnt != udf_info.param_names_.count()) {
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_WARN("PLS-00306: wrong number or types of arguments in call",
+              K(ret),
+              K(q_name),
+              K(udf_info.ref_expr_->get_param_exprs().count()),
+              K(object_type->get_member_count()));
   }
   OZ (user_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize));
   OX (object_expr->set_rowsize(rowsize));
