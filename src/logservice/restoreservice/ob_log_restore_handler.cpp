@@ -1188,7 +1188,10 @@ void ObLogRestoreHandler::deep_copy_source_(ObRemoteSourceGuard &source_guard)
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "parent_ is NULL", K(ret));
   } else if (OB_ISNULL(source = ObResSrcAlloctor::alloc(parent_->get_source_type(), share::ObLSID(id_)))) {
+    CLOG_LOG(WARN, "alloc restore source failed");
   } else if (FALSE_IT(parent_->deep_copy_to(*source))) {
+  } else if (! source->is_valid()) {
+    CLOG_LOG(WARN, "source is invalid", K(*source));
   } else if (FALSE_IT(source_guard.set_source(source))) {
   }
 }
