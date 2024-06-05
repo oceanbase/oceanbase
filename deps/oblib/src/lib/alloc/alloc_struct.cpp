@@ -137,7 +137,7 @@ bool is_ob_mem_mgr_path()
 
 void enable_memleak_light_backtrace(const bool enable)
 {
-#if defined(ENABLE_LIGHT_BACKTRACE)
+#if defined(__x86_64__) || defined(__aarch64__)
   g_memleak_light_backtrace_enabled = enable;
 #else
   UNUSED(enable);
