@@ -128,6 +128,7 @@ private:
   int add_path_node(PumpNode &pump_node);
   int check_cycle_path();
   int free_path_stack();
+  int free_pump_node(PumpNode &node);
   int free_pump_node_stack(ObSegmentArray<PumpNode> &stack);
   void set_allocator(common::ObIAllocator &alloc) { allocator_.set_allocator(alloc); }
 private:
