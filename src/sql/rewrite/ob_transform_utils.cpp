@@ -1899,11 +1899,47 @@ int ObNotNullContext::generate_stmt_context(int64_t stmt_context)
     }
   }
 
-  if (OB_SUCC(ret) && stmt_context >= NULLABLE_SCOPE::NS_TOP &&
-      stmt->is_select_stmt()) {
-    if (OB_FAIL(having_filters_.assign(
-                  static_cast<const ObSelectStmt *>(stmt)->get_having_exprs()))) {
+  if (OB_SUCC(ret) && stmt_context >= NULLABLE_SCOPE::NS_TOP && stmt->is_select_stmt()) {
+    // Exprs in "in_group_clause" mean different things when used in basic expressions with added NULLs versus in aggregate functions without NULLs.
+    // Thus, aggregate functions with such group exprs cannot be used to infer a not-null attribute.
+    // e.g. select c1, max(c2) from t1 group by rollup(c1) having max(c1) > 0 and nvl(c1, 0) is null);
+    // can't deduce `c1 is not null` by `max(c1) > 0` to simplify nvl(c1, 0)
+    const ObSelectStmt *sel_stmt = static_cast<const ObSelectStmt *>(stmt);
+    if (OB_FAIL(ObTransformUtils::get_having_filters_for_deduce(sel_stmt,
+                                                                sel_stmt->get_having_exprs(),
+                                                                group_clause_exprs_,
+                                                                having_filters_))) {
+      LOG_WARN("failed to get having filters for deduce", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformUtils::get_having_filters_for_deduce(const ObSelectStmt *sel_stmt,
+                                                    const ObIArray<ObRawExpr*> &raw_having_exprs,
+                                                    const ObIArray<ObRawExpr*> &group_clause_exprs,
+                                                    ObIArray<ObRawExpr*> &having_exprs_for_deduce)
+{
+  int ret = OB_SUCCESS;
+  bool has_target = false;
+  if (OB_ISNULL(sel_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (sel_stmt->get_rollup_expr_size() == 0 && sel_stmt->get_cube_items_size() == 0 &&
+             sel_stmt->get_grouping_sets_items_size() == 0) {
+    if (OB_FAIL(having_exprs_for_deduce.assign(raw_having_exprs))) {
       LOG_WARN("failed to assign having exprs", K(ret));
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < raw_having_exprs.count(); ++i) {
+      if (OB_ISNULL(raw_having_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (raw_having_exprs.at(i)->has_flag(CNT_AGG)) {
+        // do nothing
+      } else if (OB_FAIL(having_exprs_for_deduce.push_back(raw_having_exprs.at(i)))) {
+        LOG_WARN("failed to push back having expr", K(ret));
+      }
     }
   }
   return ret;

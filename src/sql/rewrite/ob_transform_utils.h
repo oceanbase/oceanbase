@@ -1885,6 +1885,10 @@ public:
                                              bool &is_valid);
   // check if a constant or parameterized constant is NULL.
   static bool is_const_null(ObRawExpr &expr);
+  static int get_having_filters_for_deduce(const ObSelectStmt* sel_stmt,
+                                           const ObIArray<ObRawExpr*> &raw_having_exprs,
+                                           const ObIArray<ObRawExpr*> &group_clause_exprs,
+                                           ObIArray<ObRawExpr*> &having_exprs_for_deduce);
 
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,

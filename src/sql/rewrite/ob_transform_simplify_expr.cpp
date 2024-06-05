@@ -240,12 +240,14 @@ int ObTransformSimplifyExpr::replace_is_null_condition(ObDMLStmt *stmt, bool &tr
       }
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
+        bool exist_in_ctx = ObOptimizerUtil::find_item(not_null_ctx.having_filters_,
+                                                       sel_stmt->get_having_exprs().at(i));
+        if (exist_in_ctx && OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
           LOG_WARN("failed to remove filter", K(ret));
         } else if (OB_FAIL(inner_replace_is_null_condition(
                       sel_stmt, sel_stmt->get_having_exprs().at(i), not_null_ctx, is_happened))) {
           LOG_WARN("failed to replace is null expr", K(ret));
-        } else if (OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
+        } else if (exist_in_ctx && OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
           LOG_WARN("failed to add filter", K(ret));
         } else {
           trans_happened |= is_happened;
@@ -1281,7 +1283,9 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
     if (OB_SUCC(ret) && stmt->is_select_stmt() && !static_cast<ObSelectStmt *>(stmt)->is_scala_group_by()) {
       ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
       for (int64_t i = 0; OB_SUCC(ret) && i < sel_stmt->get_having_expr_size(); ++i) {
-        if (OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
+        bool exist_in_ctx = ObOptimizerUtil::find_item(not_null_ctx.having_filters_,
+                                                       sel_stmt->get_having_exprs().at(i));
+        if (exist_in_ctx && OB_FAIL(not_null_ctx.remove_having_filter(sel_stmt->get_having_exprs().at(i)))){
           LOG_WARN("failed to remove filter", K(ret));
         } else if (OB_FAIL(inner_remove_dummy_nvl(stmt,
                                                   sel_stmt->get_having_exprs().at(i),
@@ -1289,7 +1293,7 @@ int ObTransformSimplifyExpr::remove_dummy_nvl(ObDMLStmt *stmt,
                                                   ignore_exprs,
                                                   trans_happened))) {
           LOG_WARN("failed to remove dummy nvl", K(ret));
-        } else if (OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
+        } else if (exist_in_ctx && OB_FAIL(not_null_ctx.add_having_filter(sel_stmt->get_having_exprs().at(i)))) {
           LOG_WARN("failed to add filter", K(ret));
         }
       }
