@@ -241,23 +241,6 @@ int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directiv
     total_mgmt += d.mgmt_p1_;
   }
 
-  // 计算：cfs_cpu_quota 值
-  // 公式
-  //  {
-  //   cfs_cpu_quota = d.utilization_limit_percent_ * tenant.cfs_cpu_peroid * unit_min_cpu / 100
-  //   unit_min_cpu = tenant.cpu.shares / 1024   # 租户的 shares 值是根据 unit 的 min_cpu 计算而得，
-  //  }
-  //  =>
-  //  {
-  //   cfs_cpu_quota = d.utilization_limit_percent_ * tenant.cfs_cpu_peroid * / 100 * tenant.cpu.shares / 1024
-  //                 = d.utilization_limit_ * 100 / total * tenant.cfs_cpu_peroid * / 100 * tenant.cpu.shares / 1024
-  //                 = (d.utilization_limit_ / total) * tenant.cfs_cpu_peroid *  (tenant.cpu.shares / 1024)
-  //  }
-  //
-  // 特殊值考虑：
-  //  如果 mgmt 设置为 0，意味着用户希望它的 share 尽可能小
-  //  如果 limit 设置为 0，意味着用户希望它的 cpu quota 尽可能小
-  //  注意：mgmt, limit 的默认值都不是 0
   for (int64_t i = 0; i < directives.count(); ++i) {
     ObPlanDirective &d = directives.at(i);
     if (0 == total_mgmt) {
@@ -265,23 +248,18 @@ int ObResourcePlanManager::normalize_cpu_directives(ObPlanDirectiveSet &directiv
     } else {
       d.mgmt_p1_ = d.mgmt_p1_ / total_mgmt;
     }
-    double tenant_shares_cpu = 0;
+    double tenant_quota_cpu = 0;
     int32_t cfs_period_us = 0;
-    if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_shares(
-            d.tenant_id_,
-            tenant_shares_cpu,
-            OB_INVALID_GROUP_ID,
-            GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP
-                                                              : ""))) {
+    if (d.utilization_limit_ == 100) {
+      // 不限制
+      d.utilization_limit_ = -1;
+    } else if (OB_FAIL(GCTX.cgroup_ctrl_->get_cpu_cfs_quota(d.tenant_id_,
+                   tenant_quota_cpu,
+                   OB_INVALID_GROUP_ID,
+                   GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
       LOG_WARN("fail get cpu shares", K(d), K(ret));
     } else {
-      if (d.utilization_limit_ == 100) {
-        // 不限制
-        d.utilization_limit_ = -1;
-      } else {
-        d.utilization_limit_ =
-            tenant_shares_cpu * d.utilization_limit_ / 100;
-      }
+      d.utilization_limit_ = tenant_quota_cpu * d.utilization_limit_ / 100;
     }
   }
   return ret;

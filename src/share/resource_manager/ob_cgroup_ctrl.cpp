@@ -668,7 +668,8 @@ int ObCgroupCtrl::get_cpu_cfs_quota(const uint64_t tenant_id, double &cpu, const
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
   } else if (OB_FAIL(get_cpu_cfs_quota_by_path_(group_path, cpu))) {
     LOG_WARN("get cpu cfs quota failed", K(ret), K(group_path), K(tenant_id));
-  }
+  }    LOG_INFO("get cpu quota success",
+             K(group_path), K(cpu), K(tenant_id), K(group_id));
   return ret;
 }
 
