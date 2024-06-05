@@ -1200,11 +1200,11 @@ int ObRestoreUtil::get_restore_log_piece_array_from_multi_path_(
 {
   int ret = OB_SUCCESS;
   ObArray<ObPieceKey> piece_keys;
-  ObArray<share::ObRestoreLogPieceBriefInfo> piece_array;
   common::hash::ObHashMap<ObPieceKey, ObString> multi_path_map;
   bool is_empty_piece = true;
   ObExternPieceWholeInfo piece_whole_info;
   ObBackupDest dest;
+  backup_piece_list.reset();
   if (multi_path_array.empty()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invaldi argument", K(ret));
@@ -1224,13 +1224,9 @@ int ObRestoreUtil::get_restore_log_piece_array_from_multi_path_(
   } else if (OB_FAIL(piece_whole_info.his_frozen_pieces_.push_back(piece_whole_info.current_piece_))) {
     LOG_WARN("failed to push backup piece", K(ret));
   } else if (OB_FAIL(get_piece_paths_in_range_from_multi_path_(piece_whole_info.his_frozen_pieces_,
-                      multi_path_map, restore_start_scn, restore_end_scn, time_zone_wrap, piece_array))) {
+                      multi_path_map, restore_start_scn, restore_end_scn, time_zone_wrap, backup_piece_list))) {
     LOG_WARN("fail to get pieces paths in range from multi path", K(ret),
                 K(piece_whole_info), K(restore_start_scn), K(restore_end_scn));
-  } else if (OB_FAIL(dest.set(multi_path_array.at(0)))) {
-    LOG_WARN("fail to set backup dest", K(ret));
-  } else if (OB_FAIL(get_restore_backup_piece_list_(dest, piece_array, backup_piece_list))){
-    LOG_WARN("fail to get restore backup piece list", K(ret), K(dest), K(piece_array));
   }
   return ret;
 }
@@ -1387,6 +1383,9 @@ int ObRestoreUtil::get_piece_paths_in_range_from_multi_path_(
             }
           } else if (OB_FAIL(dest.set(path))) {
             LOG_WARN("fail to set backup dest", K(ret), K(path));
+          } else if (OB_FAIL(dest.get_backup_dest_str(piece_brief_info.piece_path_.ptr(),
+                                                      piece_brief_info.piece_path_.capacity()))) {
+            LOG_WARN("fail to get backup dest str from multi path", K(ret), K(dest));
           } else if (OB_FAIL(piece_brief_info.piece_path_.assign(dest.get_root_path()))) {
             LOG_WARN("failed to assign piece path", K(ret));
           } else if (OB_FALSE_IT(piece_brief_info.piece_id_ = cur.key_.piece_id_)) {

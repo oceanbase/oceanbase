@@ -64,7 +64,21 @@ int ObPhysicalRestoreTenantExecutor::execute(
   }
   if (OB_FAIL(ret)) {
   } else {
-    if (!is_preview) {
+    const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
+    const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
+    const int64_t cur_time_us = ObTimeUtility::current_time();
+    ObTimeoutCtx timeout_ctx;
+    ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
+    if (ObTimeUtility::current_time() > abs_timeout) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("physical restore tenant timeout", K(ret), "tenant_name",
+        restore_tenant_arg.tenant_name_, K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
+    } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+      LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
+    } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
+      LOG_WARN("failed to set abs timeout", K(ret));
+    } else if (!is_preview) {
       if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
         ret = OB_NOT_INIT;
         LOG_WARN("get task executor context failed", K(ret));
@@ -98,21 +112,12 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
     ObExecContext &ctx, const ObString &tenant_name, const int64_t job_id)
 {
   int ret = OB_SUCCESS;
-  const int64_t timeout = 10 * 60 * 1000 * 1000; // 10min
-  const int64_t abs_timeout = ObTimeUtility::current_time() + timeout;
-  const int64_t cur_time_us = ObTimeUtility::current_time();
-  ObTimeoutCtx timeout_ctx;
   common::ObMySQLProxy *sql_proxy = nullptr;
-  ctx.get_physical_plan_ctx()->set_timeout_timestamp(abs_timeout);
-  LOG_INFO("sync wait tenant created start", K(timeout), K(abs_timeout), K(tenant_name));
+  const int64_t cur_time_us = ObTimeUtility::current_time();
+  LOG_INFO("sync wait tenant created start", K(tenant_name));
   if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy must not be null", K(ret));
-  } else if (OB_FALSE_IT(THIS_WORKER.set_timeout_ts(abs_timeout))) {
-  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
-    LOG_WARN("failed to set trx timeout us", K(ret), K(timeout));
-  } else if (OB_FAIL(timeout_ctx.set_abs_timeout(abs_timeout))) {
-    LOG_WARN("failed to set abs timeout", K(ret));
   } else {
     ObSchemaGetterGuard schema_guard;
     ObSchemaGetterGuard meta_tenant_scheam_guard;
@@ -122,10 +127,7 @@ int ObPhysicalRestoreTenantExecutor::sync_wait_tenant_created_(
       schema_guard.reset();
       meta_tenant_scheam_guard.reset();
       const ObTenantSchema *tenant_info = nullptr;
-      if (ObTimeUtility::current_time() > abs_timeout) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("wait restore tenant timeout", K(ret), K(tenant_name), K(abs_timeout), "cur_time_us", ObTimeUtility::current_time());
-      } else if (OB_FAIL(ctx.check_status())) {
+      if (OB_FAIL(ctx.check_status())) {
         LOG_WARN("check exec ctx failed", K(ret));
       } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(OB_SYS_TENANT_ID, schema_guard))) {
         LOG_WARN("failed to get_tenant_schema_guard", KR(ret));
