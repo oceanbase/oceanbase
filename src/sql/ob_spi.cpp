@@ -2478,10 +2478,8 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
             ret = OB_ERR_MISSING_INTO_KEYWORD;
             LOG_WARN("ORA-00925: missing INTO keyword", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "missing INTO keyword");
-          } else {
-            remove_into = true;
           }
-        } else if (stmt::T_SELECT == stmt_type) {
+        } else if (stmt::T_SELECT == stmt_type || pl_prepare_result.result_set_->is_returning()) {
           /*
             * 动态语句如果是select into，INTO子句会被忽略掉，INTO子句里面占位符的也不需要绑定实参
             * 例如：
@@ -3469,6 +3467,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
 
   HEAP_VAR(ObSPIResultSet, spi_result) {
+    ObSPICursor* spi_cursor = NULL;
     OZ (spi_result.init(session_info));
     OZ (spi_result.start_nested_stmt_if_need(ctx, sql, static_cast<stmt::StmtType>(type), for_update));
 
@@ -3480,7 +3479,6 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
 
       do {
         ret = OB_SUCCESS;
-        ObSPICursor* spi_cursor = NULL;
         uint64_t size = 0;
         {
           ObPLSubPLSqlTimeGuard guard(ctx);
@@ -3528,15 +3526,15 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           if (OB_SUCC(ret) && OB_NOT_NULL(spi_result.get_result_set()) && OB_NOT_NULL(spi_result.get_result_set()->get_physical_plan())) {
             cursor.set_packed(spi_result.get_result_set()->get_physical_plan()->is_packed());
           }
-          OX (cursor.open(spi_cursor));
-          OX (for_update ? cursor.set_for_update() : (void)NULL);
-          OX (for_update ? cursor.set_trans_id(session_info.get_tx_id()) : (void)NULL);
-          OX (has_hidden_rowid ? cursor.set_hidden_rowid() : (void)NULL);
           if (OB_SUCC(ret) && lib::is_oracle_mode()) {
             transaction::ObTxReadSnapshot &snapshot =
               spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
             OZ (cursor.set_and_register_snapshot(snapshot));
           }
+          OX (cursor.open(spi_cursor));
+          OX (for_update ? cursor.set_for_update() : (void)NULL);
+          OX (for_update ? cursor.set_trans_id(session_info.get_tx_id()) : (void)NULL);
+          OX (has_hidden_rowid ? cursor.set_hidden_rowid() : (void)NULL);
           if (!cursor.is_ps_cursor()) {
             retry_guard.test();
           }
@@ -3548,6 +3546,9 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
         ret = (OB_SUCCESS == ret ? close_ret : ret);
 
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(spi_cursor)) {
+      spi_cursor->~ObSPICursor();
     }
     if (!is_dbms_cursor) {
       spi_result.destruct_exec_params(session_info);
@@ -6240,7 +6241,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
       }
       if (OB_SUCC(ret)) {
         WITH_CONTEXT(spi_result.get_memory_ctx()) {
-          if (exec_params.count() <= 0 && !sql.empty() && !is_dynamic_sql) {
+          if (exec_params.count() <= 0 && !sql.empty()) {
             spi_result.get_result_set()->set_user_sql(true);
             OZ (GCTX.sql_engine_->handle_pl_execute(sql,
                                                     *session,
@@ -6248,7 +6249,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     false /* is_prepare_protocol */,
-                                                    false /* is_dynamic_sql*/), K(ps_sql), K(exec_params));
+                                                    false /* is_dynamic_sql*/), K(sql), K(ps_sql), K(exec_params));
           } else {
             spi_result.get_result_set()->set_stmt_type(static_cast<stmt::StmtType>(type));
             OZ (GCTX.sql_engine_->handle_pl_execute(ps_sql,
@@ -6257,7 +6258,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     true /* is_prepare_protocol */,
-                                                    is_dynamic_sql /* is_dynamic_sql */), K(ps_sql), K(exec_params));
+                                                    is_dynamic_sql /* is_dynamic_sql */), K(sql), K(ps_sql), K(exec_params));
             OZ (adjust_out_params(*spi_result.get_result_set(), out_params));
           }
         }
