@@ -195,15 +195,28 @@ class ObPsStmtInfoDerefAtomicOp
 {
   typedef common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo *> PsStmtInfoKV;
 public:
-  ObPsStmtInfoDerefAtomicOp() : ret_(common::OB_SUCCESS), is_erase_(false) {}
+  ObPsStmtInfoDerefAtomicOp() : ret_(common::OB_SUCCESS) {}
   virtual ~ObPsStmtInfoDerefAtomicOp() {}
   void operator()(const PsStmtInfoKV &entry);
   int get_ret() const { return ret_; }
-  inline bool is_erase() const { return is_erase_; }
 private:
   int ret_;
-  bool is_erase_;
   DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoDerefAtomicOp);
+};
+
+class ObPsStmtInfoDestroyAtomicOp
+{
+  typedef common::hash::HashMapPair<ObPsStmtId, ObPsStmtInfo *> PsStmtInfoKV;
+public:
+  ObPsStmtInfoDestroyAtomicOp() : ret_(common::OB_SUCCESS), marked_erase_(false) {}
+  virtual ~ObPsStmtInfoDestroyAtomicOp() {}
+  void operator()(const PsStmtInfoKV &entry);
+  int get_ret() const { return ret_; }
+  bool marked_erase() const { return marked_erase_; }
+private:
+  int ret_;
+  bool marked_erase_;
+  DISALLOW_COPY_AND_ASSIGN(ObPsStmtInfoDestroyAtomicOp);
 };
 
 
