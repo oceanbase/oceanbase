@@ -639,6 +639,13 @@ int ObLSTabletService::table_scan(ObTabletHandle &tablet_handle, ObTableScanIter
   int ret = OB_SUCCESS;
   NG_TRACE(S_table_scan_begin);
   AllowToReadMgr::AllowToReadInfo read_info;
+  FLOG_WARN("asdfasdf tablet table scan id: ", K(param.table_param_->get_table_id()), K(param.tablet_id_));
+  if (param.ss_key_ranges_.count() > 0) {
+    FLOG_WARN("asdfasdf tablet table scan ss key range: ", K(param.ss_key_ranges_.at(0).start_key_), K(param.ss_key_ranges_.at(0).end_key_));
+  }
+  if (param.key_ranges_.count() > 0) {
+    FLOG_WARN("asdfasdf tablet table scan key range: ", K(param.key_ranges_.at(0).start_key_), K(param.key_ranges_.at(0).end_key_));
+  }
 
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;

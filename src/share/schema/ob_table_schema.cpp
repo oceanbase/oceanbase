@@ -7943,9 +7943,7 @@ int ObTableSchema::get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, con
       const ObAuxTableMetaInfo &index_info = simple_index_infos_.at(i);
       const uint64_t index_tid = index_info.table_id_;
       const ObTableSchema *index_schema = NULL;
-      if (!is_unique_index(index_info.index_type_)) {
-        // do nothing
-      } else if (OB_FAIL(schema_guard.get_table_schema(get_tenant_id(),
+      if (OB_FAIL(schema_guard.get_table_schema(get_tenant_id(),
                                                 index_tid,
                                                 index_schema))) {
         LOG_WARN("fail to get table schema", K(ret));

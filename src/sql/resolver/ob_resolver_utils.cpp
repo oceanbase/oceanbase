@@ -6695,12 +6695,12 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
       // 当出现自依赖的情况, 父表的 index 信息需要从子表的 CreateTableArg 中获取,
       // 因为父表和子表为同一张表，所以父表信息此时还没有 publish 到 table schema 中
       // 现在把子表里的所有索引依次拿出来和父表的外键列作比较，查看是否满足自引用
+      // *允许匹配非unique index
       for (int64_t i = 0; OB_SUCC(ret) && !is_match && i < index_arg_list.count(); ++i) {
         SMART_VAR(ObCreateIndexArg, index_arg) {
           if (OB_FAIL(index_arg.assign(index_arg_list.at(i)))) {
             LOG_WARN("fail to assign schema", K(ret));
-          } else if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
-              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+          } else {
             ObSEArray<ObString, 8> uk_columns;
             // 通过 index_arg 把子表有唯一约束的列的列名拿出来，然后放到 uk_columns 里面
             for (int64_t j = 0; OB_SUCC(ret) && j < index_arg.index_columns_.count(); ++j) {
@@ -6713,7 +6713,12 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
             if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
               LOG_WARN("Failed to check_match_columns", K(ret));
             } else if (is_match) {
-              ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+              if (INDEX_TYPE_UNIQUE_LOCAL == index_arg.index_type_
+              || INDEX_TYPE_UNIQUE_GLOBAL == index_arg.index_type_) {
+                ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+              } else {
+                ref_cst_type = CONSTRAINT_TYPE_INVALID;
+              }
               // RS 端会在 ObDDLService::get_uk_cst_id_for_self_ref 填上 arg.ref_cst_id_
             }
           }
@@ -6721,7 +6726,8 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
       }
     } else {
       // 如果外键列不是参考父表的 pk 列，那么还需要继续比较是否是父表的 uk 列
-      // 检查 parent columns 是否和父表的 unique key columns 匹配
+      // 检查 parent columns 是否和父表的 key columns 匹配
+      // *允许匹配非unique key columns
       ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
       if (OB_FAIL(parent_table_schema.get_simple_index_infos(simple_index_infos))) {
         LOG_WARN("get simple_index_infos failed", K(ret));
@@ -6733,7 +6739,7 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
         } else if (OB_ISNULL(index_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema should not be null", K(ret));
-        } else if (index_table_schema->is_unique_index()) {
+        } else {
           const ObColumnSchemaV2 *index_col = NULL;
           const ObIndexInfo &index_info = index_table_schema->get_index_info();
           ObSEArray<ObString, 8> uk_columns;
@@ -6752,7 +6758,11 @@ int ObResolverUtils::foreign_key_column_match_uk_pk_column(const ObTableSchema &
             if (OB_FAIL(check_match_columns(parent_columns, uk_columns, is_match))) {
               LOG_WARN("Failed to check_match_columns", K(ret));
             } else if (is_match) {
-              ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+              if (index_table_schema->is_unique_index()) {
+                ref_cst_type = CONSTRAINT_TYPE_UNIQUE_KEY;
+              } else {
+                ref_cst_type = CONSTRAINT_TYPE_INVALID;
+              }
               ref_cst_id = index_table_schema->get_table_id();
             }
           }
