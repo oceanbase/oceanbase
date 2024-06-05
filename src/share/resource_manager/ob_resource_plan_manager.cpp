@@ -68,13 +68,26 @@ int ObResourcePlanManager::switch_resource_plan(const uint64_t tenant_id, ObStri
         LOG_WARN("fail reset all group rules",K(ret));
       }
     }
+
     if (OB_SUCC(ret)) {
-      if (GCTX.cgroup_ctrl_->is_valid() &&
-          OB_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(tenant_id,
-              OB_INVALID_GROUP_ID,
-              GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-        LOG_WARN("remove tenant cgroup failed", K(ret), K(tenant_id));
-      } else if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite
+      ObRefHolder<ObTenantIOManager> tenant_holder;
+      if (OB_FAIL(OB_IO_MANAGER.get_tenant_io_manager(tenant_id, tenant_holder))) {
+        LOG_WARN("get tenant io manager failed", K(ret), K(tenant_id));
+      } else {
+        int tmp_ret = OB_SUCCESS;
+        for (int64_t i = 0; i < tenant_holder.get_ptr()->get_group_num(); i++) {
+          uint64_t group_id = tenant_holder.get_ptr()->get_io_config().group_ids_.at(i);
+          if (GCTX.cgroup_ctrl_->is_valid() &&
+              OB_TMP_FAIL(GCTX.cgroup_ctrl_->remove_both_cgroup(
+                  tenant_id, group_id, GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
+            LOG_WARN("remove tenant cgroup failed", K(tmp_ret), K(tenant_id));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tenant_plan_map_.set_refactored(tenant_id, cur_plan, 1))) {  // overrite
         LOG_WARN("set plan failed", K(ret), K(tenant_id));
       } else {
         LOG_INFO("switch resource plan success", K(tenant_id), K(origin_plan), K(cur_plan));
