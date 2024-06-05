@@ -653,7 +653,8 @@ int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common:
   ObSqlString values_list;
   sql.reset();
   bool is_join_exists = false;
-  ObArenaAllocator allocator("AsyncStatsJob", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
+  //bug:
+  ObArenaAllocator allocator("AsyncStatsJob");
   if (OB_FAIL(check_async_gather_job_exists(sql_proxy, tenant_id, is_join_exists))) {
     LOG_WARN("failed to check async gather job exists", K(ret));
   } else if (is_join_exists) {
