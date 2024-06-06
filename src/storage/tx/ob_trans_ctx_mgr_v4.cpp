@@ -431,7 +431,9 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     TRANS_LOG(WARN, "switch_to_leader processing is not finished", KR(ret), K(tenant_id_), K(ls_id_));
   } else if (!arg.for_replay_ && OB_FAIL(tx_log_adapter_->get_role(leader, epoch))) {
     TRANS_LOG(WARN, "get replica role fail", K(ret));
-  } else if (!arg.for_replay_ && !leader) {
+  } else if (!arg.for_replay_ && OB_ISNULL(arg.move_arg_) && !leader) {
+  /* when transfer move tx register phase create tx_ctx, switch_to_follower_forcedly may remove it
+   * so on_redo callback need create tx_ctx ignore log role check */
     ret = OB_NOT_MASTER;
     TRANS_LOG(WARN, "replica not leader", K(ret));
   } else if (OB_ISNULL(tmp_ctx = ObTransCtxFactory::alloc(ObTransCtxType::PARTICIPANT))) {
