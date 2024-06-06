@@ -147,6 +147,7 @@ private:
   uint64_t old_db_id_;
   bool need_reset_exec_env_;
   bool need_reset_default_database_;
+  ObArenaAllocator alloc_;
 };
 
 }

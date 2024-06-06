@@ -171,7 +171,7 @@ int ObPLCompiler::compile(
     if (OB_SUCC(ret)) {
       func.set_proc_type(STANDALONE_ANONYMOUS);
       func.set_ns(ObLibCacheNameSpace::NS_ANON);
-      OZ (func.get_exec_env().load(session_info_));
+      OZ (func.get_exec_env().load(session_info_, &func.get_allocator()));
     }
     //Step 3：Code Generator
     if (OB_SUCC(ret)) {
@@ -268,7 +268,7 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
     }
     // 设置环境变量
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(old_exec_env.load(session_info_))) {
+      if (OB_FAIL(old_exec_env.load(session_info_, &allocator_))) {
         LOG_WARN("failed to load exec_env", K(old_exec_env), K(func.get_exec_env()), K(ret));
       } else if (OB_UNLIKELY(old_exec_env != func.get_exec_env())) {
         if (OB_FAIL(func.get_exec_env().store(session_info_))) { //设置环境变量
@@ -1349,7 +1349,7 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObPackageInfo &info,
                                            ObSQLSessionInfo &session_info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
                                            int &ret)
-  : ret_(ret), session_info_(session_info)
+  : ret_(ret), session_info_(session_info), alloc_(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   init(info, session_info, schema_guard, ret);
 }
@@ -1358,7 +1358,7 @@ ObPLCompilerEnvGuard::ObPLCompilerEnvGuard(const ObRoutineInfo &info,
                                            ObSQLSessionInfo &session_info,
                                            share::schema::ObSchemaGetterGuard &schema_guard,
                                            int &ret)
-  : ret_(ret), session_info_(session_info)
+  : ret_(ret), session_info_(session_info), alloc_(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 {
   init(info, session_info, schema_guard, ret);
 }
@@ -1370,7 +1370,7 @@ void ObPLCompilerEnvGuard::init(const Info &info, ObSQLSessionInfo &session_info
   bool need_set_db = true;
   OX (need_reset_exec_env_ = false);
   OX (need_reset_default_database_ = false);
-  OZ (old_exec_env_.load(session_info_));
+  OZ (old_exec_env_.load(session_info_, &alloc_));
   OZ (env.init(info.get_exec_env()));
   if (OB_SUCC(ret) && old_exec_env_ != env) {
     OZ (env.store(session_info_));

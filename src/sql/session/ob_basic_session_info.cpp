@@ -6443,11 +6443,8 @@ int ObExecEnv::load(ObBasicSessionInfo &session, ObIAllocator *alloc)
       }
       break;
       case PLSQL_CCFLAGS: {
-        if (OB_NOT_NULL(alloc)) {
-          OZ (ob_write_string(*alloc, val.get_varchar(), plsql_ccflags_));
-        } else {
-          plsql_ccflags_ = val.get_varchar();
-        }
+        CK (OB_NOT_NULL(alloc));
+        OZ (ob_write_string(*alloc, val.get_varchar(), plsql_ccflags_));
       }
       break;
       default: {
