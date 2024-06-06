@@ -7189,6 +7189,19 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
       LOG_WARN("get null table info", K(ret));
     } else if (NULL == origin_table_ids ||
                ObOptimizerUtil::find_item(*origin_table_ids, table_info->table_id_)) {
+      if (del_upd_stmt->is_merge_stmt()) {
+        ObMergeTableInfo *merge_table_info = static_cast<ObMergeTableInfo*>(table_info);
+        if (merge_table_info->target_table_id_ == table_info->table_id_) {
+          merge_table_info->target_table_id_ = view_table_item.table_id_;
+        }
+        if (merge_table_info->source_table_id_ == table_info->table_id_) {
+          merge_table_info->source_table_id_ = view_table_item.table_id_;
+        }
+      }
+      TableItem *base_item = view_stmt->get_table_item_by_id(table_info->table_id_);
+      if (NULL != base_item) {
+        view_table_item.view_base_item_ = base_item;
+      }
       table_info->table_id_ = view_table_item.table_id_;
       uint64_t loc_table_id = table_info->loc_table_id_;
       // create partition exprs for index dml infos
