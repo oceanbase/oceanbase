@@ -118,10 +118,10 @@ int ObPartitionBalance::process(const ObBalanceJobID &job_id, const int64_t time
     LOG_WARN("save balance group stat fail", KR(ret), K(tenant_id_));
   } else if (GEN_BG_STAT == task_mode_) {
     // finish
-  } else if (bg_map_.empty()) {
-    LOG_INFO("PART_BALANCE balance group is empty do nothing", K(tenant_id_));
   } else if (job_generator_.need_gen_job()) {
     balance_strategy = ObBalanceStrategy::PB_ATTR_ALIGN;
+  } else if (bg_map_.empty()) {
+    LOG_INFO("PART_BALANCE balance group is empty do nothing", K(tenant_id_));
   } else if (OB_FAIL(process_balance_partition_inner_())) {
     LOG_WARN("process_balance_partition_inner fail", KR(ret), K(tenant_id_));
   } else if (job_generator_.need_gen_job()) {
