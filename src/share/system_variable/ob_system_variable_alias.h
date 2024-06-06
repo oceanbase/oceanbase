@@ -277,7 +277,6 @@ namespace share
   static const char* const OB_SV_COMPATIBILITY_CONTROL = "ob_compatibility_control";
   static const char* const OB_SV_COMPATIBILITY_VERSION = "ob_compatibility_version";
   static const char* const OB_SV_SECURITY_VERSION = "ob_security_version";
-  static const char* const OB_SV_PLSQL_OPTIMIZE_LEVEL = "plsql_optimize_level";
 
 }
 }

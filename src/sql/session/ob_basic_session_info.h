@@ -2474,7 +2474,6 @@ public:
     COLLATION_CONNECTION,
     COLLATION_DATABASE,
     PLSQL_CCFLAGS,
-    PLSQL_OPTIMIZE_LEVEL,
     MAX_ENV,
   };
 
@@ -2484,7 +2483,6 @@ public:
     share::SYS_VAR_COLLATION_CONNECTION,
     share::SYS_VAR_COLLATION_DATABASE,
     share::SYS_VAR_PLSQL_CCFLAGS,
-    share::SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
     share::SYS_VAR_INVALID
   };
 
@@ -2493,9 +2491,7 @@ public:
     charset_client_(CS_TYPE_INVALID),
     collation_connection_(CS_TYPE_INVALID),
     collation_database_(CS_TYPE_INVALID),
-    plsql_ccflags_(),
-    plsql_optimize_level_(2)  // default PLSQL_OPTIMIZE_LEVEL = 2
-  { }
+    plsql_ccflags_() {}
 
   virtual ~ObExecEnv() {}
 
@@ -2503,8 +2499,7 @@ public:
                K_(charset_client),
                K_(collation_connection),
                K_(collation_database),
-               K_(plsql_ccflags),
-               K_(plsql_optimize_level));
+               K_(plsql_ccflags));
 
   void reset();
 
@@ -2529,16 +2524,12 @@ public:
 
   void set_plsql_ccflags(ObString &plsql_ccflags) { plsql_ccflags_ = plsql_ccflags; }
 
-  int64_t get_plsql_optimize_level() { return plsql_optimize_level_; }
-  void set_plsql_optimize_level(int64_t level) { plsql_optimize_level_ = plsql_optimize_level_; }
-
 private:
   ObSQLMode sql_mode_;
   ObCollationType charset_client_;
   ObCollationType collation_connection_;
   ObCollationType collation_database_;
   ObString plsql_ccflags_;
-  int64_t plsql_optimize_level_;
 };
 
 

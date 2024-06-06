@@ -3691,26 +3691,13 @@ static struct VarsInit{
     ObSysVars[260].alias_ = "OB_SV_SECURITY_VERSION" ;
     }();
 
-    [&] (){
-      ObSysVars[261].default_value_ = "2" ;
-      ObSysVars[261].info_ = "PLSQL_OPTIMIZE_LEVEL specifies the optimization level that will be used to compile PL/SQL library units. The higher the setting of this parameter, the more effort the compiler makes to optimize PL/SQL library units." ;
-      ObSysVars[261].name_ = "plsql_optimize_level" ;
-      ObSysVars[261].data_type_ = ObIntType ;
-      ObSysVars[261].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[261].id_ = SYS_VAR_PLSQL_OPTIMIZE_LEVEL ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_PLSQL_OPTIMIZE_LEVEL] = 261 ;
-      ObSysVars[261].base_value_ = "2" ;
-    ObSysVars[261].alias_ = "OB_SV_PLSQL_OPTIMIZE_LEVEL" ;
-    }();
-
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 262;
+static int64_t var_amount = 261;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}
