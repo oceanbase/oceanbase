@@ -761,6 +761,7 @@ public:
   }
   inline void set_in_window_func() { in_window_func_ = true; }
   inline bool has_distinct() const { return has_distinct_; }
+  inline bool has_extra() const { return has_extra_; }
   inline bool has_order_by() const { return has_order_by_; }
 
   RemovalInfo &get_removal_info() { return removal_info_; }
