@@ -92,6 +92,11 @@ private:
   /* functions */
   int wait_msg(int64_t child_dfo_id, int64_t timeout_ts);
   int reserve_msg_set_array_size(int64_t size);
+  bool is_msg_set(int64_t child_dfo_id)
+  {
+    ObLockGuard<ObSpinLock> lock_guard(lock_);
+    return msg_set_[child_dfo_id];
+  }
 private:
   static const int64_t MSG_SET_DEFAULT_SIZE = 16;
 private:
