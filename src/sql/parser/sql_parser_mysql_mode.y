@@ -16474,6 +16474,11 @@ SET DEFAULT signed_literal
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $3);
 }
+| SET DEFAULT '(' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CONSTR_DEFAULT, 1, $4);
+  dup_expr_string($$, result, @4.first_column, @4.last_column);
+}
 | DROP DEFAULT
 {
   malloc_terminal_node($$, result->malloc_pool_, T_CONSTR_NULL);

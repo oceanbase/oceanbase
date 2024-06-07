@@ -7013,7 +7013,9 @@ int ObDDLService::modify_generated_column_default_value(ObColumnSchemaV2 &genera
               LOG_WARN("print expr definition failed", K(ret));
             } else if (FALSE_IT(expr_def.assign_ptr(expr_str_buf, static_cast<int32_t>(pos)))) {
             } else if (FALSE_IT(default_value.set_varchar(expr_def))) {
-            } else if (OB_FAIL(generated_column.set_cur_default_value(default_value))) {
+            } else if (OB_FAIL(generated_column.set_cur_default_value(
+                           default_value,
+                           generated_column.is_default_expr_v2_column()))) {
               LOG_WARN("set cur default value failed", K(ret));
             } else if (OB_FAIL(generated_column.set_orig_default_value(default_value))) {
               LOG_WARN("set original default value failed", K(ret));
@@ -7889,7 +7891,9 @@ int ObDDLService::fill_new_column_attributes(
     new_column_schema.set_data_precision(alter_column_schema.get_data_precision());
     new_column_schema.set_data_scale(alter_column_schema.get_data_scale());
     if (!is_oracle_mode() || alter_column_schema.is_set_default_) {
-      new_column_schema.set_cur_default_value(alter_column_schema.get_cur_default_value());
+      new_column_schema.set_cur_default_value(
+          alter_column_schema.get_cur_default_value(),
+          alter_column_schema.is_default_expr_v2_column());
     }
     new_column_schema.set_zero_fill(alter_column_schema.is_zero_fill());
     new_column_schema.set_is_hidden(alter_column_schema.is_hidden());
@@ -8788,12 +8792,14 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                 ObObj default_value;
                 if (alter_column_schema->is_drop_default_) {
                   default_value.set_null();
-                  new_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
-                  if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
-                    RS_LOG(WARN, "failed to set current default value");
+                  if (OB_FAIL(new_column_schema.set_cur_default_value(default_value, false))) {
+                    RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value));
+                  } else {
+                    new_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
                   }
                 } else {
                   default_value = alter_column_schema->get_cur_default_value();
+                  bool is_default_expr_v2 = alter_column_schema->is_default_expr_v2_column();
                   if (!default_value.is_null() && ob_is_text_tc(new_column_schema.get_data_type())) {
                     ret = OB_INVALID_DEFAULT;
                     LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
@@ -8812,6 +8818,9 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                     LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
                                    new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "not null column with default value null!", K(ret));
+                  } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value,
+                                                                             is_default_expr_v2))) {
+                    RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value), K(is_default_expr_v2));
                   } else if (OB_FAIL(ObDDLResolver::check_default_value(default_value,
                                                                         tz_info_wrap,
                                                                         nls_formats,
@@ -8824,8 +8833,6 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                                         !alter_column_schema->is_generated_column(), /* allow_sequence */
                                                                         &schema_checker))) {
                     LOG_WARN("fail to check default value", KPC(alter_column_schema),K(ret));
-                  } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
-                    RS_LOG(WARN, "failed to set current default value");
                   }
                 }
               }
@@ -9279,11 +9286,13 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                 ObObj default_value;
                 if (alter_column_schema->is_drop_default_) {
                   default_value.set_null();
-                  new_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
-                  if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
-                    RS_LOG(WARN, "failed to set current default value");
+                  if (OB_FAIL(new_column_schema.set_cur_default_value(default_value, false))) {
+                    RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value));
+                  } else {
+                    new_column_schema.del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
                   }
                 } else {
+                  bool is_default_expr_v2 = alter_column_schema->is_default_expr_v2_column();
                   default_value = alter_column_schema->get_cur_default_value();
                   if (!default_value.is_null() && ob_is_text_tc(new_column_schema.get_data_type())) {
                     ret = OB_INVALID_DEFAULT;
@@ -9303,6 +9312,9 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                     LOG_USER_ERROR(OB_INVALID_DEFAULT, new_column_schema.get_column_name_str().length(),
                                    new_column_schema.get_column_name_str().ptr());
                     RS_LOG(WARN, "not null column with default value null!", K(ret));
+                  } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value,
+                                                                             is_default_expr_v2))) {
+                    RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value), K(is_default_expr_v2));
                   } else if (OB_FAIL(ObDDLResolver::check_default_value(default_value,
                                                                         tz_info_wrap,
                                                                         nls_formats,
@@ -9315,8 +9327,6 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                                                                         !alter_column_schema->is_generated_column(), /* allow_sequence */
                                                                         &schema_checker))) {
                     LOG_WARN("fail to check default value", K(new_column_schema),K(ret));
-                  } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value))) {
-                    RS_LOG(WARN, "failed to set current default value");
                   }
                 }
               }

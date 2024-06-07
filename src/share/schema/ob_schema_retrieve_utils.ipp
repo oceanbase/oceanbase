@@ -1347,7 +1347,7 @@ int fill_column_schema_default_value(T &result,
   lib::CompatModeGuard guard(compat_mode);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value, default_type,
                                     column,false, false, tenant_id);
-  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value, default_type,
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL_V2(result, default_type,
                                     column, true, false, tenant_id);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value_v2, default_type,
                                     column, false, true, tenant_id);

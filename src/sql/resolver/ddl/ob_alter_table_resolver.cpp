@@ -4968,7 +4968,9 @@ int ObAlterTableResolver::resolve_alter_table_column_definition(AlterColumnSchem
                               schema_checker_,
                               NULL == node->children_[1]))) {
     SQL_RESV_LOG(WARN, "failed to check default value", K(column), K(ret));
-  } else if (OB_FAIL(column.set_cur_default_value(dummy_column.get_cur_default_value()))) {
+  } else if (OB_FAIL(column.set_cur_default_value(
+                 dummy_column.get_cur_default_value(),
+                 dummy_column.is_default_expr_v2_column()))) {
     LOG_WARN("failed to set default value", K(ret));
   }
   // else if (OB_FAIL(process_default_value(stat, column))) {
@@ -5064,8 +5066,32 @@ int ObAlterTableResolver::resolve_alter_column(const ParseNode &node)
         } else if (OB_FAIL(resolve_default_value(default_node, resolve_res))) {
           SQL_RESV_LOG(WARN, "failed to resolve default value!", K(ret));
         }
+        if (OB_SUCC(ret) && !resolve_res.is_literal_) {
+          uint64_t data_version = 0;
+          if (OB_FAIL(ret)) {
+          } else if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session info is NULL", KR(ret));
+          } else if (OB_FAIL(GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version))) {
+            LOG_WARN("fail to get tenant data version", KR(ret), K(session_info_->get_effective_tenant_id()), K(data_version));
+          } else if (data_version >= DATA_VERSION_4_2_4_0) {
+            ObString expr_str(default_node->str_len_, default_node->str_value_);
+            if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(
+                                  *allocator_, session_info_->get_dtc_params(), expr_str))) {
+              LOG_WARN("fail to copy and convert string charset", K(ret));
+            } else {
+              default_value.set_varchar(expr_str);
+              default_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+              default_value.set_param_meta();
+            }
+          } else {
+            ret = OB_ERR_ILLEGAL_TYPE;
+            SQL_RESV_LOG(WARN, "Illegal type of default value",K(ret));
+          }
+        }
+
         if (OB_SUCCESS == ret &&
-          OB_FAIL(alter_column_schema.set_cur_default_value(default_value))) {
+          OB_FAIL(alter_column_schema.set_cur_default_value(default_value, !resolve_res.is_literal_))) {
             SQL_RESV_LOG(WARN, "failed to set current default to alter column schema!", K(ret));
         }
       }

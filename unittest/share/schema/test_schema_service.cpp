@@ -60,7 +60,7 @@ TEST_F(TestSchemaService, ColumnSchema_test)
   default_value.set_int(100);
   column_schema.set_orig_default_value(default_value);
   default_value.set_int(101);
-  column_schema.set_cur_default_value(default_value);
+  column_schema.set_cur_default_value(default_value, false);
   column_schema.set_comment("black gives me black eyes");
 
   char buff[BUFF_SIZE];
@@ -124,7 +124,7 @@ TEST_F(TestSchemaService, TableSchema_test)
   value.set_int(100);
   column_schema.set_orig_default_value(value);
   value.set_int(101);
-  column_schema.set_cur_default_value(value);
+  column_schema.set_cur_default_value(value, false);
   column_schema.set_comment("black gives me black eyes");
 
   ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column_schema));
@@ -190,7 +190,7 @@ TEST_F(TestSchemaService, other_test)
   obj.set_int(100);
   column_schema.set_orig_default_value(obj);
   obj.set_int(101);
-  column_schema.set_cur_default_value(obj);
+  column_schema.set_cur_default_value(obj, false);
   column_schema.set_comment("black gives me black eyes");
 
   ASSERT_EQ(OB_SUCCESS, table_schema.add_column(column_schema));

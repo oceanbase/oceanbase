@@ -49,7 +49,7 @@ void ObIndexBuilderUtil::del_column_flags_and_default_value(ObColumnSchemaV2 &co
     }
     ObObj obj;
     obj.set_null();
-    column.set_cur_default_value(obj);
+    column.set_cur_default_value(obj, column.is_default_expr_v2_column());
     column.set_orig_default_value(obj);
   }
   return;
@@ -154,7 +154,8 @@ int ObIndexBuilderUtil::set_shadow_column_info(
   shadow_column_schema.set_column_flags(0);
   ObObj default_obj;
   default_obj.set_null();
-  shadow_column_schema.set_cur_default_value(default_obj);
+  shadow_column_schema.set_cur_default_value(
+      default_obj, shadow_column_schema.is_default_expr_v2_column());
   shadow_column_schema.set_orig_default_value(default_obj);
   shadow_column_schema.set_tbl_part_key_pos(0);
   shadow_column_schema.set_column_id(src_column_id);
@@ -1005,7 +1006,9 @@ int ObIndexBuilderUtil::generate_fulltext_column(
           LOG_WARN("set column name failed", K(ret));
         } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
           LOG_WARN("set orig default value failed", K(ret));
-        } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+        } else if (OB_FAIL(column_schema.set_cur_default_value(
+                       default_value,
+                       column_schema.is_default_expr_v2_column()))) {
           LOG_WARN("set current default value failed", K(ret));
         } else if (OB_FAIL(data_schema.add_column(column_schema))) {
           LOG_WARN("add column schema to data table failed", K(ret));
@@ -1129,7 +1132,9 @@ int ObIndexBuilderUtil::generate_ordinary_generated_column(
           LOG_WARN("set column name failed", K(ret));
         } else if (OB_FAIL(tmp_gen_col.set_orig_default_value(default_value))) {
           LOG_WARN("set orig default value failed", K(ret));
-        } else if (OB_FAIL(tmp_gen_col.set_cur_default_value(default_value))) {
+        } else if (OB_FAIL(tmp_gen_col.set_cur_default_value(
+                       default_value,
+                       tmp_gen_col.is_default_expr_v2_column()))) {
           LOG_WARN("set current default value failed", K(ret));
         } else if (OB_FAIL(data_schema.add_column(tmp_gen_col))) {
           LOG_WARN("add column schema to data table failed", K(ret));
@@ -1200,7 +1205,9 @@ int ObIndexBuilderUtil::generate_prefix_column(
         LOG_WARN("set column name failed", K(ret));
       } else if (OB_FAIL(prefix_column.set_orig_default_value(default_value))) {
         LOG_WARN("set orig default value failed", K(ret));
-      } else if (OB_FAIL(prefix_column.set_cur_default_value(default_value))) {
+      } else if (OB_FAIL(prefix_column.set_cur_default_value(
+                     default_value,
+                     prefix_column.is_default_expr_v2_column()))) {
         LOG_WARN("set current default value to prefix column failed", K(ret));
       } else if (OB_FAIL(prefix_column.add_cascaded_column_id(old_column->get_column_id()))) {
         LOG_WARN("add cascaded column id failed", K(ret));
@@ -1367,7 +1374,9 @@ int ObIndexBuilderUtil::generate_spatial_cellid_column(
         LOG_WARN("set column name failed", K(ret));
       } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
         LOG_WARN("set orig default value failed", K(ret));
-      } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+      } else if (OB_FAIL(column_schema.set_cur_default_value(
+                     default_value,
+                     column_schema.is_default_expr_v2_column()))) {
         LOG_WARN("set current default value failed", K(ret));
       } else if (OB_FAIL(data_schema.add_column(column_schema))) {
         LOG_WARN("add cellid column schema to data table failed", K(ret));
@@ -1428,7 +1437,9 @@ int ObIndexBuilderUtil::generate_spatial_mbr_column(
         LOG_WARN("set column name failed", K(ret));
       } else if (OB_FAIL(column_schema.set_orig_default_value(default_value))) {
         LOG_WARN("set orig default value failed", K(ret));
-      } else if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+      } else if (OB_FAIL(column_schema.set_cur_default_value(
+                     default_value,
+                     column_schema.is_default_expr_v2_column()))) {
         LOG_WARN("set current default value failed", K(ret));
       } else if (OB_FAIL(data_schema.add_column(column_schema))) {
         LOG_WARN("add mbr column schema to data table failed", K(ret));

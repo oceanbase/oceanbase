@@ -337,7 +337,7 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                 }
               } else if (col->is_default_expr_v2_column()) {
                 ObString default_value = col->get_cur_default_value().get_string();
-                if (OB_FAIL(databuff_printf(buf, buf_len, pos, " DEFAULT %.*s", default_value.length(), default_value.ptr()))) {
+                if (OB_FAIL(databuff_printf(buf, buf_len, pos, " DEFAULT (%.*s)", default_value.length(), default_value.ptr()))) {
                   SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", K(default_value), K(ret));
                 }
               } else {

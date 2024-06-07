@@ -520,10 +520,11 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         break;
       case T_OP_NEG: {
         ObObjParam old_obj;
-        ret = SMART_CALL(resolve_default_value(def_val->children_[0], resolve_res));
+        ObDefaultValueRes old_res(old_obj);
+        ret = SMART_CALL(resolve_default_value(def_val->children_[0], old_res));
         if (OB_FAIL(ret)) {
           SQL_RESV_LOG(WARN, "Resolve default const value failed", K(ret));
-        } else if (!resolve_res.is_literal_) {
+        } else if (!old_res.is_literal_) {
           // do nothing
         } else if (ObIntType == old_obj.get_type()) {
           int64_t value = 0;
@@ -573,6 +574,21 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify default value for interval_ym/interval_ds/urowid");
         break;
       }
+      case T_FUN_SUM:
+      case T_FUN_MAX:
+      case T_FUN_MIN:
+      case T_FUN_AVG: {
+        resolve_res.is_literal_ = false;
+        ObObjParam arg;
+        ObDefaultValueRes arg_res(arg);
+        if (def_val->num_child_ != 2) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "Invalid expression", K(ret), K(def_val->type_), K(def_val->num_child_));
+        } else if (OB_FAIL(SMART_CALL(resolve_default_value(def_val->children_[1], arg_res)))) {
+          SQL_RESV_LOG(WARN, "Resolve expression failed", K(ret), K(def_val->type_));
+        }
+        break;
+      }
       case T_OP_ADD:
       case T_OP_MINUS:
       case T_OP_MUL:
@@ -585,13 +601,20 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_OP_GE:
       case T_OP_GT:
       case T_OP_NE:
-      case T_FUN_SYS_INTERVAL:
+      case T_OP_AND:
+      case T_OP_OR:
       case T_OP_IN:
       case T_OP_NOT_IN:
-      case T_OP_CNN:
+      case T_OP_BIT_OR:
+      case T_OP_BIT_AND:
+      case T_OP_BIT_XOR:
+      case T_OP_BIT_LEFT_SHIFT:
+      case T_OP_BIT_RIGHT_SHIFT:
       case T_WHEN:
+      case T_FUN_SYS_INTERVAL:
       case T_FUN_SYS_IF:
-      case T_FUN_SYS_ISNULL: {
+      case T_FUN_SYS_ISNULL:
+      case T_FUN_SYS_POINT: {
         resolve_res.is_literal_ = false;
         ObObjParam first;
         ObDefaultValueRes first_res(first);
@@ -632,6 +655,7 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_OP_NOT:
       case T_OP_BIT_NEG:
       case T_FUN_SYS_UTC_TIMESTAMP:
+      case T_FUN_SYS_CUR_TIME:
       case T_FUN_SYS_UTC_TIME:
       case T_FUN_SYS_SYSDATE: {
         resolve_res.is_literal_ = false;
@@ -707,10 +731,18 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
         resolve_res.is_literal_ = false;
         break;
       }
+      case T_OP_CNN: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Connect operator in default value expression");
+        break;
+      }
       case T_COLUMN_REF: {
         resolve_res.is_literal_ = false;
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Column reference in default value expression");
+        break;
+      }
+      case T_SFU_DOUBLE: {
         break;
       }
       default:
@@ -3116,7 +3148,9 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
               default_value.set_varchar(expr_str);
               default_value.set_collation_type(ObCharset::get_system_collation());
               default_value.set_collation_level(CS_LEVEL_COERCIBLE);
-              if (OB_FAIL(column.set_cur_default_value(default_value))) {
+              if (OB_FAIL(column.set_cur_default_value(
+                      default_value,
+                      column.is_default_expr_v2_column()))) {
                 LOG_WARN("set current default value failed", K(ret));
               } else if ((node->children_[4] != NULL && node->children_[4]->type_ == T_STORED_COLUMN)
                          || (node->children_[4] == NULL && is_external_table)) {
@@ -3149,7 +3183,7 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         default_value.set_varchar(mock_gen_column_str);
         default_value.set_collation_type(ObCharset::get_system_collation());
         default_value.set_collation_level(CS_LEVEL_COERCIBLE);
-        if (OB_FAIL(column.set_cur_default_value(default_value))) {
+        if (OB_FAIL(column.set_cur_default_value(default_value, column.is_default_expr_v2_column()))) {
           LOG_WARN("set current default value failed", K(ret));
         } else {
           column.add_column_flag(STORED_GENERATED_COLUMN_FLAG);
@@ -3365,10 +3399,9 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
         //TODO:@yanhua do it next
         LOG_WARN("not support set orig default now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify orig default value for column");
-      } else if (OB_FAIL(column.set_cur_default_value(default_value))) {
+      // In oracle mode, default value always be expression
+      } else if (OB_FAIL(column.set_cur_default_value(default_value, true))) {
         LOG_WARN("set current default value failed", K(ret));
-      } else {
-        column.add_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
       }
     }
   } else {
@@ -3395,7 +3428,6 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
           default_value.set_varchar(expr_str);
           default_value.set_collation_type(CS_TYPE_UTF8MB4_BIN);
           default_value.set_param_meta();
-          column.add_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG);
         }
       } else {
         ret = OB_ERR_ILLEGAL_TYPE;
@@ -3433,7 +3465,7 @@ int ObDDLResolver::resolve_normal_column_attribute_constr_default(ObColumnSchema
           SQL_RESV_LOG(WARN, "cannot set current default value twice", K(ret));
         } else {
           is_set_cur_default = true;
-          column.set_cur_default_value(default_value);
+          column.set_cur_default_value(default_value, !resolve_res.is_literal_);
         }
       } else {
         // T_CONSTR_ORIG_DEFAULT == column.get_data_type_class()
@@ -4656,7 +4688,8 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
       }
     } else if (IS_DEFAULT_NOW_OBJ(default_value)) {
       if (ObDateTimeTC == column_schema.get_data_type_class()) {
-        if (OB_FAIL(column_schema.set_cur_default_value(default_value))) {
+        if (OB_FAIL(column_schema.set_cur_default_value(
+                default_value, column_schema.is_default_expr_v2_column()))) {
           SQL_RESV_LOG(WARN, "set current default value failed", K(ret));
         }
       } else {
@@ -5778,7 +5811,9 @@ int ObDDLResolver::print_expr_to_default_value(ObRawExpr &expr,
     } else if (FALSE_IT(default_value.set_varchar(expr_def))) {
     } else if (FALSE_IT(default_value.set_collation_type(ObCharset::get_system_collation()))) {
     } else if (FALSE_IT(default_value.set_collation_level(CS_LEVEL_COERCIBLE))) {
-    } else if (OB_FAIL(column.set_cur_default_value(default_value))) {
+    } else if (OB_FAIL(column.set_cur_default_value(
+                default_value,
+                column.is_default_expr_v2_column()))) {
       LOG_WARN("set orig default value failed", K(ret));
     } else {
       LOG_DEBUG("succ to print_expr_to_default_value", K(expr), K(column), K(default_value), K(expr_def), K(ret));
@@ -6078,8 +6113,19 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     } else if (lib::is_oracle_mode() && column.get_meta_type().is_blob() && ob_is_numeric_type(tmp_default_value.get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", "expected", data_type, "got", tmp_default_value.get_type(), K(ret));
-    } else if(OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
-      LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
+    } else if (ob_is_enumset_tc(column.get_data_type())) {
+      if (OB_FAIL(cast_enum_or_set_default_value(column, cast_ctx, tmp_default_value))) {
+        LOG_WARN("fail to cast enum or set default value", K(input_default_value), K(column), K(ret));
+      } else {
+        tmp_res_obj = &tmp_default_value;
+      }
+    } else {
+      if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, tmp_default_value, tmp_dest_obj, tmp_res_obj))) {
+        LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (OB_ISNULL(tmp_res_obj)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cast obj failed, ", "src type", tmp_default_value.get_type(), "dest type", data_type, K(tmp_default_value), K(ret));
@@ -6092,7 +6138,8 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       //FIXME::when observer differentiate '' and null, we can delete this code @yanhua
       tmp_dest_obj_null.set_varchar(input_default_value.get_string());
       tmp_dest_obj_null.set_collation_type(ObCharset::get_system_collation());
-      if (OB_FAIL(column.set_cur_default_value(tmp_dest_obj_null))) {
+      if (OB_FAIL(column.set_cur_default_value(
+              tmp_dest_obj_null, column.is_default_expr_v2_column()))) {
         LOG_WARN("set orig default value failed", K(ret));
       }
     } else if (OB_FAIL(print_expr_to_default_value(*expr, column, schema_checker, tz_info_wrap.get_time_zone_info()))) {
@@ -6223,8 +6270,16 @@ int ObDDLResolver::calc_default_value(share::schema::ObColumnSchemaV2 &column,
         ObObj dest_obj;
         const ObDataTypeCastParams dtc_params(tz_info_wrap.get_time_zone_info(), nls_formats, CS_TYPE_INVALID, CS_TYPE_INVALID, CS_TYPE_UTF8MB4_GENERAL_CI);
         ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
-        if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
-          LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", data_type, K(default_value), K(ret));
+        if (ob_is_enumset_tc(data_type)) {
+          if (OB_FAIL(cast_enum_or_set_default_value(column, cast_ctx, default_value))) {
+            LOG_WARN("fail to cast enum or set default value", K(default_value), K(column), K(ret));
+          }
+        } else {
+          if (OB_FAIL(ObObjCaster::to_type(data_type, cast_ctx, default_value, dest_obj))) {
+            LOG_WARN("cast obj failed, ", "src type", default_value.get_type(), "dest type", data_type, K(default_value), K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else {
           // remove lob header for lob
           if (dest_obj.has_lob_header()) {
@@ -6513,7 +6568,8 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
     } else if (0 == input_default_value.get_string().compare("''")) {
       tmp_dest_obj_null.set_varchar(input_default_value.get_string());
       tmp_dest_obj_null.set_collation_type(ObCharset::get_system_collation());
-      if (OB_FAIL(column.set_cur_default_value(tmp_dest_obj_null))) {
+      if (OB_FAIL(column.set_cur_default_value(
+              tmp_dest_obj_null, column.is_default_expr_v2_column()))) {
         LOG_WARN("set orig default value failed", K(ret));
       }
     } else if (OB_FAIL(print_expr_to_default_value(*expr, column, schema_checker, tz_info_wrap.get_time_zone_info()))) {

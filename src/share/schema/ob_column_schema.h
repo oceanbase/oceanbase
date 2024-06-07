@@ -128,7 +128,10 @@ public:
   inline void set_collation_type(const common::ObCollationType type) { meta_type_.set_collation_type(type); }
   inline int set_orig_default_value(const common::ObObj default_value) { return deep_copy_obj(default_value, orig_default_value_); }
   inline int set_orig_default_value_v2(const common::ObObj default_value) { return deep_copy_obj(default_value, orig_default_value_); }
-  inline int set_cur_default_value(const common::ObObj default_value) { return deep_copy_obj(default_value, cur_default_value_); }
+  inline int set_cur_default_value(const common::ObObj default_value, bool is_default_expr_v2) {
+    add_or_del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG, is_default_expr_v2);
+    return deep_copy_obj(default_value, cur_default_value_);
+  }
   inline int set_cur_default_value_v2(const common::ObObj default_value) { return deep_copy_obj(default_value, cur_default_value_); }
   inline int set_column_name(const char *col_name) { return deep_copy_str(col_name, column_name_); }
   inline int set_column_name(const common::ObString &col_name) { return deep_copy_str(col_name, column_name_); }
