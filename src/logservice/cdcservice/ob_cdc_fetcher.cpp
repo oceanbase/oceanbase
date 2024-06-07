@@ -1035,12 +1035,17 @@ int ObCdcFetcher::calc_raw_read_size_(const obrpc::ObCdcLSFetchMissLogReq::MissL
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cur_idx is greater than miss_log_array count", K(cur_idx), "count", miss_log_array.count());
   } else {
+    // target_idx and read_size would be calculated here, the logs in [cur_idx, target_idx) would be read;
+    // To minimize read size of archive log, here is the principle:
+    // 1. The read size should be less than read_buf_len;
+    // 2. The mininal size of one read is MAX_LOG_BUFFER_SIZE to make sure the complete LogEntry has been read;
+    // 3. If gap between two adjacent missing_lsn is less than MAX_LOG_BUFFER_SIZE, try to read them in one read;
     const palf::LSN &start_lsn = miss_log_array.at(cur_idx).miss_lsn_;
     const int64_t arr_cnt = miss_log_array.count();
     bool find_end = false;
     read_size = MAX_LOG_BUFFER_SIZE;
 
-    for (target_idx = cur_idx + 1; !find_end && target_idx < arr_cnt && OB_SUCC(ret); target_idx++) {
+    for (target_idx = cur_idx + 1; !find_end && target_idx < arr_cnt && OB_SUCC(ret);) {
       const palf::LSN curr_lsn = miss_log_array.at(target_idx).miss_lsn_;
       if (curr_lsn <= start_lsn) {
         ret = OB_ERR_UNEXPECTED;
@@ -1048,7 +1053,10 @@ int ObCdcFetcher::calc_raw_read_size_(const obrpc::ObCdcLSFetchMissLogReq::MissL
       } else if (curr_lsn < start_lsn + read_size) {
         const int64_t next_read_size = read_size + static_cast<int64_t>(curr_lsn - start_lsn);
         if (next_read_size <= read_buf_len) {
+          // target_idx should be updated only when we can make sure the corresponding logentry could
+          // be read out of archive log;
           read_size = max(read_size, next_read_size);
+          target_idx++;
         } else {
           find_end = true;
         }
