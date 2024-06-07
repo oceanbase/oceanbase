@@ -737,6 +737,22 @@ int ObBackupCleanTaskMgr::delete_minor_data_info_dir_()
   return ret;
 }
 
+// file:///obbackup/backup_set_1_full/infos/table_list/
+int ObBackupCleanTaskMgr::delete_table_list_dir_()
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath path;
+  ObBackupSetDesc desc;
+  desc.backup_set_id_ = backup_set_info_.backup_set_id_;
+  desc.backup_type_ = backup_set_info_.backup_type_;
+  if (OB_FAIL(ObBackupPathUtil::get_table_list_dir_path(backup_dest_, desc, path))) {
+    LOG_WARN("failed to get table list path", K(ret));
+  } else if (OB_FAIL(share::ObBackupCleanUtil::delete_backup_dir_files(path, backup_dest_.get_storage_info()))) {
+    LOG_WARN("failed to delete backup file", K(ret), K(task_attr_), K(path));
+  }
+  return ret;
+}
+
 // file:///obbackup/backup_set_1_full/single_backup_set_info.obbak
 int ObBackupCleanTaskMgr::delete_single_backup_set_info_()
 {
@@ -882,6 +898,8 @@ int ObBackupCleanTaskMgr::delete_backup_set_meta_info_files_()
     LOG_WARN("failed to delete major data info file", K(ret));
   } else if (OB_FAIL(delete_minor_data_info_dir_())) {
     LOG_WARN("failed to delete minor data info file", K(ret));
+  } else if (OB_FAIL(delete_table_list_dir_())) {
+    LOG_WARN("fail to delete table list dir", K(ret));
   } else if (OB_FAIL(ObBackupPathUtil::get_ls_info_dir_path(backup_dest_, desc, infos_path))) {
     LOG_WARN("failed to get backup log stream info path", K(ret));
   } else if (OB_FAIL(delete_data_info_turn_files_(infos_path))) {
