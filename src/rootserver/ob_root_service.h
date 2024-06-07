@@ -814,15 +814,15 @@ public:
 #ifdef OB_BUILD_TDE_SECURITY
   int handle_get_root_key(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
 #endif
+  static int check_parallel_ddl_conflict(
+             share::schema::ObSchemaGetterGuard &schema_guard,
+             const obrpc::ObDDLArg &arg);
 private:
 #ifdef OB_BUILD_TDE_SECURITY
   int get_root_key_from_obs_(const obrpc::ObRootKeyArg &arg, obrpc::ObRootKeyResult &result);
   int try_check_encryption_zone_cond(
       const obrpc::ObAdminZoneArg &arg);
 #endif
-  int check_parallel_ddl_conflict(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const obrpc::ObDDLArg &arg);
   int fetch_sys_tenant_ls_info();
   // create system table in mysql backend for debugging mode.
   int init_debug_database();

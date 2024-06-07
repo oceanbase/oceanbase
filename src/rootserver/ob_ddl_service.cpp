@@ -13979,6 +13979,8 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
     } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id,
                                                                           schema_guard))) {
       LOG_WARN("fail to get schema guard with version in inner table", K(ret), K(tenant_id));
+    } else if (OB_FAIL(ObRootService::check_parallel_ddl_conflict(schema_guard, alter_table_arg))) {
+      LOG_WARN("check parallel ddl conflict failed", KR(ret));
     } else if (false == is_alter_sess_active_time) {
       const ObString &origin_database_name = alter_table_schema.get_origin_database_name();
       const ObString &origin_table_name = alter_table_schema.get_origin_table_name();
@@ -13996,7 +13998,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
                   K(origin_table_name));
         } else if (NULL == orig_table_schema) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("NULL ptr", K(orig_table_schema), K(ret));
+          LOG_WARN("NULL ptr", KR(ret), KP(orig_table_schema));
         } else if (OB_FAIL(orig_table.assign(*orig_table_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
         }
