@@ -31,7 +31,7 @@ public:
   int switch_tenant(const uint64_t tenant_id);
   uint64_t get_tenant_id();
   uint64_t get_session_id();
-  void reset_session();
+  void reset_session(const bool reset_wait_stat = true);
   inline ObDISessionCollect *get_curr_session() {return session_collect_;}
   inline ObDITenantCollect *get_curr_tenant() {return curr_tenant_collect_;}
   inline ObDIThreadTenantCache &get_tenant_cache() {return tenant_cache_;}
@@ -47,7 +47,8 @@ class ObSessionStatEstGuard
 {
 public:
   ObSessionStatEstGuard(const uint64_t tenant_id,
-                        const uint64_t session_id);
+                        const uint64_t session_id,
+                        const bool reset_wait_stat = true);
   virtual ~ObSessionStatEstGuard();
 private:
   uint64_t prev_tenant_id_;
@@ -55,6 +56,7 @@ private:
   ObSessionDIBuffer *buffer_;
   ObWaitEventDesc *prev_max_wait_;
   ObWaitEventStat *prev_total_wait_;
+  bool reset_wait_stat_;
 };
 
 class ObTenantStatEstGuard
@@ -148,9 +150,13 @@ inline uint64_t ObSessionDIBuffer::get_session_id()
   return sess_id;
 }
 
-inline void ObSessionDIBuffer::reset_session()
+inline void ObSessionDIBuffer::reset_session(const bool reset_wait_stat /* = true */)
 {
   if (NULL != session_collect_) {
+    if (reset_wait_stat) {
+      session_collect_->base_value_.reset_max_wait();
+      session_collect_->base_value_.reset_total_wait();
+    }
     session_collect_->lock_.unlock();
     session_collect_ = NULL;
   }

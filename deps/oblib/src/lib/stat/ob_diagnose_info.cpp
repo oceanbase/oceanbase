@@ -902,19 +902,23 @@ ObMaxWaitGuard::~ObMaxWaitGuard()
           di_ = current_di;
         }
       } else {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", KPC(this), K(current_di));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "max wait missing!", KPC(this), K(current_di), K(di_), K(max_wait_));
       }
-      if (OB_LIKELY(NULL != prev_wait_)) {
-        ObWaitEventDesc *max_wait = di_->get_max_wait();
-        if (NULL != max_wait) {
-          if (max_wait->wait_time_ > prev_wait_->wait_time_) {
-            *prev_wait_ = *max_wait;
-          }
-          di_->set_max_wait(prev_wait_);
+    }
+
+    if (OB_LIKELY(NULL != prev_wait_)) {
+      ObWaitEventDesc *max_wait = di_->get_max_wait();
+      if (NULL != max_wait) {
+        if (max_wait_ != max_wait) {
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this), K(di_), K(max_wait));
         }
-      } else {
-        di_->reset_max_wait();
+        if (max_wait->wait_time_ > prev_wait_->wait_time_) {
+          *prev_wait_ = *max_wait;
+        }
+        di_->set_max_wait(prev_wait_);
       }
+    } else {
+      di_->reset_max_wait();
     }
   }
 }
@@ -952,19 +956,22 @@ ObTotalWaitGuard::~ObTotalWaitGuard()
           di_ = current_di;
         }
       } else {
-        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", KPC(this), K(current_di));
+        LOG_ERROR_RET(OB_ERR_UNEXPECTED, "total wait missing!", KPC(this), K(current_di), K(di_), K(total_wait_));
       }
+    }
 
-      if (OB_LIKELY(NULL != prev_wait_)) {
-        ObWaitEventStat *total_wait = di_->get_total_wait();
-        if (NULL != total_wait) {
-          prev_wait_->total_waits_ += total_wait->total_waits_;
-          prev_wait_->time_waited_ += total_wait->time_waited_;
-          di_->set_total_wait(prev_wait_);
+    if (OB_LIKELY(NULL != prev_wait_)) {
+      ObWaitEventStat *total_wait = di_->get_total_wait();
+      if (NULL != total_wait) {
+        if (total_wait_ != total_wait) {
+          LOG_ERROR_RET(OB_ERR_UNEXPECTED, "di session info mismatch!", KPC(this), K(di_), K(total_wait));
         }
-      } else {
-        di_->reset_total_wait();
+        prev_wait_->total_waits_ += total_wait->total_waits_;
+        prev_wait_->time_waited_ += total_wait->time_waited_;
+        di_->set_total_wait(prev_wait_);
       }
+    } else {
+      di_->reset_total_wait();
     }
   }
 }

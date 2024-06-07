@@ -36,11 +36,12 @@ ObSessionDIBuffer::~ObSessionDIBuffer()
 /**
  *--------------------------------------------------------ObSessionStatEstGuard---------------------------------------------
  */
-ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id)
+ObSessionStatEstGuard::ObSessionStatEstGuard(const uint64_t tenant_id, const uint64_t session_id, const bool reset_wait_stat /* = true */)
   : prev_tenant_id_(OB_SYS_TENANT_ID),
     prev_session_id_(0),
     prev_max_wait_(nullptr),
-    prev_total_wait_(nullptr)
+    prev_total_wait_(nullptr),
+    reset_wait_stat_(reset_wait_stat)
 {
   if (oceanbase::lib::is_diagnose_info_enabled()) {
     buffer_ = GET_TSI(ObSessionDIBuffer);
@@ -67,7 +68,7 @@ ObSessionStatEstGuard::~ObSessionStatEstGuard()
     if (0 != prev_session_id_) {
       buffer_->switch_session(prev_session_id_);
     } else {
-      buffer_->reset_session();
+      buffer_->reset_session(reset_wait_stat_);
     }
     if (OB_NOT_NULL(buffer_->get_curr_session())) {
       if (OB_UNLIKELY(buffer_->get_curr_session()->base_value_.get_max_wait() || buffer_->get_curr_session()->base_value_.get_total_wait())) {

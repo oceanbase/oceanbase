@@ -273,7 +273,7 @@ void ObActiveSessionStat::calc_db_time(ObActiveSessionStat &stat, const int64_t 
           EVENT_ADD(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
           EVENT_ADD(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, delta_idle_wait_time);
         } else {
-          ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_);
+          ObSessionStatEstGuard guard(stat.tenant_id_, stat.session_id_, false /* reset_wait_stat*/);
           EVENT_ADD(SYS_TIME_MODEL_DB_TIME, stat.delta_db_time_);
           EVENT_ADD(SYS_TIME_MODEL_DB_CPU, stat.delta_cpu_time_);
           EVENT_ADD(SYS_TIME_MODEL_NON_IDLE_WAIT_TIME, delta_non_idle_wait_time);
