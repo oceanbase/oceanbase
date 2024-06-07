@@ -33,6 +33,7 @@ ObColumnRedefinitionTask::ObColumnRedefinitionTask()
   : ObDDLRedefinitionTask(ObDDLType::DDL_COLUMN_REDEFINITION), has_rebuild_index_(false), has_rebuild_constraint_(false), has_rebuild_foreign_key_(false),
     allocator_(lib::ObLabel("RedefTask"))
 {
+  maybe_parent_task_ = true;
 }
 
 ObColumnRedefinitionTask::~ObColumnRedefinitionTask()

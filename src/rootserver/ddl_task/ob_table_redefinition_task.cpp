@@ -42,6 +42,7 @@ ObTableRedefinitionTask::ObTableRedefinitionTask()
     is_ignore_errors_(false), is_do_finish_(false), target_cg_cnt_(0), use_heap_table_ddl_plan_(false),
     is_ddl_retryable_(true)
 {
+  maybe_parent_task_ = true;
 }
 
 ObTableRedefinitionTask::~ObTableRedefinitionTask()
@@ -775,6 +776,7 @@ int ObTableRedefinitionTask::copy_table_dependent_objects(const ObDDLTaskStatus 
       LOG_WARN("copy table foreign keys failed", K(ret));
     } else {
       // copy triggers(at current, not supported, skip it)
+      maybe_parent_task_ = (dependent_task_result_map_.size() > 0);
     }
   }
 
