@@ -4382,7 +4382,7 @@ def_table_schema(
     ('interval#', 'varchar:4000', 'false'),
     ('failures', 'int', 'true', '0'),
     ('flag', 'int', 'false'),
-    ('what', 'varchar:4000', 'true'),
+    ('what', 'varchar:65536', 'true'),
     ('nlsenv', 'varchar:4000', 'true'),
     ('charenv', 'varchar:4000', 'true'),
     ('field1', 'varchar:MAX_ZONE_LENGTH', 'true'),
@@ -4391,7 +4391,7 @@ def_table_schema(
     ('job_style', 'varchar:128', 'true'),
     ('program_name', 'varchar:128', 'true'),
     ('job_type', 'varchar:128', 'true'),
-    ('job_action', 'varchar:4000', 'true'),
+    ('job_action', 'varchar:65536', 'true'),
     ('number_of_argument', 'int', 'true'),
     ('start_date', 'timestamp', 'true'),
     ('repeat_interval', 'varchar:4000', 'true'),
@@ -4404,10 +4404,12 @@ def_table_schema(
     ('retry_count', 'int', 'true'),
     ('last_run_duration', 'int', 'true'),
     ('max_run_duration', 'int', 'true'),
-    ('comments', 'varchar:128', 'true'),
+    ('comments', 'varchar:4096', 'true'),
     ('credential_name', 'varchar:128', 'true'),
     ('destination_name', 'varchar:128', 'true'),
     ('interval_ts', 'int', 'true'),
+    ('user_id', 'int', 'true', 'OB_INVALID_ID'),
+    ('database_id', 'int', 'true', 'OB_INVALID_ID')
   ],
 )
 
@@ -34669,7 +34671,45 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 21580: EVENTS
+def_table_schema(
+  owner = 'huangrenhuang.hrh',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'EVENTS',
+  table_id        = '21580',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+      CAST("def" AS CHARACTER(64)) AS EVENT_CATALOG,
+      CAST(T.cowner AS CHARACTER(128)) AS EVENT_SCHEMA,
+      CAST(SUBSTRING_INDEX(T.job_name, '.', -1) AS CHARACTER(64)) AS EVENT_NAME,
+      CAST(T.powner AS CHARACTER(93)) AS DEFINER,
+      CAST("SYSTEM" AS CHARACTER(64)) AS TIME_ZONE,
+      CAST("SQL" AS CHARACTER(8)) AS EVENT_BODY,
+      CAST(T.what AS CHARACTER(65536)) AS EVENT_DEFINITION,
+      CAST(CASE WHEN T.interval_ts > 0 THEN "RECURRING" ELSE "ONE TIME" END AS CHARACTER(9)) AS EVENT_TYPE,
+      CAST(CASE WHEN T.interval_ts > 0 THEN "NULL" ELSE T.start_date END AS DATETIME)  AS EXECUTE_AT,
+      CAST(CASE WHEN T.interval_ts > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'INTERVAL=', -1), ';', 1) ELSE NULL END AS CHARACTER(256)) AS INTERVAL_VALUE,
+      CAST(CASE WHEN T.interval_ts > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'FREQ=', -1),'LY', 1) ELSE NULL END AS CHARACTER(18))  AS INTERVAL_FIELD,
+      CAST("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION" AS CHARACTER(8192))  AS SQL_MODE,
+      CAST(CASE WHEN T.interval_ts > 0 THEN T.start_date ELSE NULL END AS DATETIME) AS STARTS,
+      CAST(CASE WHEN T.interval_ts > 0 THEN T.end_date ELSE NULL END AS DATETIME) AS ENDS,
+      CAST(CASE WHEN T.enabled = 1 THEN "ENABLED" ELSE "DISABLED" END AS CHARACTER(18)) AS STATUS,
+      CAST(CASE WHEN T.auto_drop = 1 THEN "NOT PRESERVE" ELSE "PRESERVE" END AS CHARACTER(12)) AS ON_COMPLETION,
+      CAST(T.gmt_create AS DATETIME) AS CREATED,
+      CAST(T.gmt_modified AS DATETIME) AS LAST_ALTERED,
+      CAST(T.last_date AS DATETIME) AS LAST_EXECUTED,
+      CAST(T.comments AS CHARACTER(4096)) AS EVENT_COMMENT,
+      CAST(NULL AS UNSIGNED) AS ORIGINATOR,
+      CAST(NULL AS CHARACTER(32)) AS CHARACTER_SET_CLIENT,
+      CAST(NULL AS CHARACTER(32)) AS COLLATION_CONNECTION,
+      CAST(NULL AS CHARACTER(32)) AS DATABASE_COLLATION
+    FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0 AND T.JOB_CLASS = 'MYSQL_EVENT_JOB_CLASS'
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'linyi.cl',

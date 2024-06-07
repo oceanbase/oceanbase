@@ -223,6 +223,8 @@ public:
   int scheduler_job(ObDBMSSchedJobKey *job_key);
   int64_t calc_next_date(ObDBMSSchedJobInfo &job_info);
   int64_t run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJobKey *job_key, int64_t next_date);
+  bool mysql_event_scheduler_is_off(ObDBMSSchedJobInfo &job_info);
+  bool mysql_event_check_databse_exist(ObDBMSSchedJobInfo &job_info);
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;

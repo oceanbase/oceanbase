@@ -38,6 +38,20 @@ class ObMySQLResult;
 }
 
 }
+namespace sql
+{
+class ObExecEnv;
+class ObSQLSessionInfo;
+class ObFreeSessionCtx;
+}
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+class ObUserInfo;
+}
+}
 
 namespace dbms_scheduler
 {
@@ -47,6 +61,8 @@ class ObDBMSSchedJobInfo
 public:
   ObDBMSSchedJobInfo() :
     tenant_id_(common::OB_INVALID_ID),
+    user_id_(common::OB_INVALID_ID),
+    database_id_(common::OB_INVALID_ID),
     job_(common::OB_INVALID_ID),
     lowner_(),
     powner_(),
@@ -89,6 +105,8 @@ public:
     is_oracle_tenant_(true) {}
 
   TO_STRING_KV(K(tenant_id_),
+               K(user_id_),
+               K(database_id_),
                K(job_),
                K(job_name_),
                K(lowner_),
@@ -123,6 +141,8 @@ public:
   }
 
   uint64_t get_tenant_id() { return tenant_id_; }
+  uint64_t get_user_id() { return user_id_; }
+  uint64_t get_database_id() { return database_id_; }
   uint64_t get_job_id() { return job_; }
   uint64_t get_job_id_with_tenant() { return common::combine_two_ids(tenant_id_, job_); }
   int64_t  get_this_date() { return this_date_; }
@@ -142,6 +162,7 @@ public:
   common::ObString &get_what() { return what_; }
   common::ObString &get_exec_env() { return exec_env_; }
   common::ObString &get_lowner() { return lowner_; }
+  common::ObString &get_powner() { return powner_; }
   common::ObString &get_cowner() { return cowner_; }
   common::ObString &get_zone() { return field1_; }
   common::ObString &get_interval() { return interval_; }
@@ -150,11 +171,14 @@ public:
   common::ObString &get_job_class() { return job_class_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
+  bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare("MYSQL_EVENT_JOB_CLASS")); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
 public:
   uint64_t tenant_id_;
+  uint64_t user_id_;
+  uint64_t database_id_;
   uint64_t job_;
   common::ObString lowner_;
   common::ObString powner_;
@@ -195,6 +219,9 @@ public:
   common::ObString destination_name_;
   int64_t interval_ts_;
   bool is_oracle_tenant_;
+
+public:
+  static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;
 };
 
 class ObDBMSSchedJobClassInfo
@@ -241,6 +268,41 @@ public:
   bool is_oracle_tenant_;
 };
 
+class ObDBMSSchedJobUtils
+{
+public:
+  static int generate_job_id(int64_t tenant_id, int64_t &max_job_id);
+  static int disable_dbms_sched_job(common::ObISQLClient &sql_client,
+                                    const uint64_t tenant_id,
+                                    const common::ObString &job_name,
+                                    const bool if_exists = false);
+  static int remove_dbms_sched_job(common::ObISQLClient &sql_client,
+                                  const uint64_t tenant_id,
+                                  const common::ObString &job_name,
+                                  const bool if_exists = false);
+  static int create_dbms_sched_job(common::ObISQLClient &sql_client,
+                                   const uint64_t tenant_id,
+                                   const int64_t job_id,
+                                   const ObDBMSSchedJobInfo &job_info);
+  static int add_dbms_sched_job(common::ObISQLClient &sql_client,
+                                const uint64_t tenant_id,
+                                const int64_t job_id,
+                                const ObDBMSSchedJobInfo &job_info);
+  static int update_dbms_sched_job(common::ObISQLClient &sql_client,
+                                   const uint64_t tenant_id,
+                                   const ObString &job_name,
+                                   int is_auto_drop,
+                                   int is_enable,
+                                   int64_t start_date,
+                                   int64_t end_date,
+                                   int64_t repeat_ts,
+                                   const ObString &repeat_interval,
+                                   const ObString &definer,
+                                   const ObString &job_rename,
+                                   const ObString &comments,
+                                   const ObString &job_action);
+  static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
+};
 }
 }
 

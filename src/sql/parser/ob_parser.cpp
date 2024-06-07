@@ -362,6 +362,7 @@ ObParser::State ObParser::transform_normal(ObString &normal)
   ELSIF(9, S_PROCEDURE, "procedure")
   ELSIF(7, S_PACKAGE, "package")
   ELSIF(7, S_TRIGGER, "trigger")
+  ELSIF(5, S_EVENT, "event")
   ELSIF(4, S_TYPE, "type")
   ELSIF(2, S_OR, "or")
   ELSIF(7, S_REPLACE, "replace")
@@ -412,6 +413,7 @@ ObParser::State ObParser::transform_normal(
         case S_FUNCTION:
         case S_PACKAGE:
         case S_TRIGGER:
+        case S_EVENT:
         case S_TYPE:
         case S_SIGNAL:
         case S_RESIGNAL: {
@@ -444,6 +446,7 @@ ObParser::State ObParser::transform_normal(
         case S_PROCEDURE:
         case S_PACKAGE:
         case S_TRIGGER:
+        case S_EVENT:
         case S_TYPE:
         case S_DEFINER: {
           is_pl = true;
@@ -484,7 +487,7 @@ ObParser::State ObParser::transform_normal(
     case S_ALTER: {
       State token = transform_normal(normal);
       if (S_PROCEDURE == token || S_FUNCTION == token
-          || S_PACKAGE == token || S_TRIGGER == token || S_TYPE == token) {
+          || S_PACKAGE == token || S_TRIGGER == token ||  S_EVENT == token || S_TYPE == token) {
         is_pl = true;
       } else {
         is_not_pl = true;

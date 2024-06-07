@@ -83,6 +83,8 @@ Reserved Keyword: PROCEDURE
 Test PL procedure name Sql:create procedure PROCEDURE () select 1;
 Reserved Keyword: READS
 Test PL procedure name Sql:create procedure READS () select 1;
+Reserved Keyword: RENAME
+Test PL procedure name Sql:create procedure RENAME () select 1;
 Reserved Keyword: REPEAT
 Test PL procedure name Sql:create procedure REPEAT () select 1;
 Reserved Keyword: REPLACE
@@ -181,7 +183,7 @@ Reserved Keyword: DO
 Test PL procedure name Sql:create procedure DO () select 1;
 Reserved Keyword: UNTIL
 Test PL procedure name Sql:create procedure UNTIL () select 1;
-************** Total Count of Reserved Keyword:91   ***************
+************** Total Count of Reserved Keyword:92   ***************
 **************   End Test Reserved Keyword   ***************
 **************   Begin Test Non-Reserved Keyword  ***************
 **************   End Test Non-Reserved Keyword  ***************

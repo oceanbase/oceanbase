@@ -131,6 +131,7 @@ enum State {
   S_PROCEDURE,
   S_PACKAGE,
   S_TRIGGER,
+  S_EVENT,
   S_TYPE,
   S_OR,
   S_REPLACE,

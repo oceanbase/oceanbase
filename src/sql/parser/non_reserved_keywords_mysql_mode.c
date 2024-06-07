@@ -1076,7 +1076,6 @@ static const NonReservedKeyword Mysql_sql_keywords_in_pl[] =
   {"do", DO},
   {"drop", DROP},
   {"errors", ERRORS},
-  {"event", EVENT},
   {"events", EVENTS},
   {"flush", FLUSH},
   {"function", FUNCTION},

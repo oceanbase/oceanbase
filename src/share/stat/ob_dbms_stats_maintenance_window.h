@@ -58,8 +58,6 @@ public:
 
   static bool is_stats_job(const ObString &job_name);
 
-  static int reset_opt_stats_user_infos(ObIArray<const ObUserInfo *> &user_infos);
-
   static int get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
                                                     const uint64_t tenant_id,
                                                     ObSqlString &sql);

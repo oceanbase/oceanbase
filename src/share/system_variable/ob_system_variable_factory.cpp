@@ -490,6 +490,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "enforce_gtid_consistency",
   "error_count",
   "error_on_overlap_time",
+  "event_scheduler",
   "expire_logs_days",
   "explicit_defaults_for_timestamp",
   "flush",
@@ -968,6 +969,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_ENFORCE_GTID_CONSISTENCY,
   SYS_VAR_ERROR_COUNT,
   SYS_VAR_ERROR_ON_OVERLAP_TIME,
+  SYS_VAR_EVENT_SCHEDULER,
   SYS_VAR_EXPIRE_LOGS_DAYS,
   SYS_VAR_EXPLICIT_DEFAULTS_FOR_TIMESTAMP,
   SYS_VAR_FLUSH,
@@ -1831,6 +1833,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "innodb_autoinc_lock_mode",
   "skip_external_locking",
   "super_read_only",
+  "event_scheduler",
   "low_priority_updates",
   "max_error_count",
   "max_insert_delayed_threads"
@@ -2474,6 +2477,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarInnodbAutoincLockMode)
         + sizeof(ObSysVarSkipExternalLocking)
         + sizeof(ObSysVarSuperReadOnly)
+        + sizeof(ObSysVarEventScheduler)
         + sizeof(ObSysVarLowPriorityUpdates)
         + sizeof(ObSysVarMaxErrorCount)
         + sizeof(ObSysVarMaxInsertDelayedThreads)
@@ -6731,6 +6735,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_SUPER_READ_ONLY))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarSuperReadOnly));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_EVENT_SCHEDULER))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarEventScheduler));
       }
     }
     if (OB_SUCC(ret)) {
@@ -11959,6 +11972,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarSuperReadOnly())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarSuperReadOnly", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_EVENT_SCHEDULER: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarEventScheduler)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarEventScheduler)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarEventScheduler())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarEventScheduler", K(ret));
       }
       break;
     }

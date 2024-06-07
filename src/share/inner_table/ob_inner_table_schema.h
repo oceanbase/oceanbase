@@ -1757,6 +1757,7 @@ public:
   static int innodb_sys_virtual_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_temp_table_info_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_metrics_schema(share::schema::ObTableSchema &table_schema);
+  static int events_schema(share::schema::ObTableSchema &table_schema);
   static int role_table_grants_schema(share::schema::ObTableSchema &table_schema);
   static int role_column_grants_schema(share::schema::ObTableSchema &table_schema);
   static int role_routine_grants_schema(share::schema::ObTableSchema &table_schema);
@@ -4525,6 +4526,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::innodb_sys_virtual_schema,
   ObInnerTableSchema::innodb_temp_table_info_schema,
   ObInnerTableSchema::innodb_metrics_schema,
+  ObInnerTableSchema::events_schema,
   ObInnerTableSchema::role_table_grants_schema,
   ObInnerTableSchema::role_column_grants_schema,
   ObInnerTableSchema::role_routine_grants_schema,
@@ -6185,6 +6187,7 @@ const uint64_t tenant_space_tables [] = {
   OB_INNODB_SYS_VIRTUAL_TID,
   OB_INNODB_TEMP_TABLE_INFO_TID,
   OB_INNODB_METRICS_TID,
+  OB_EVENTS_TID,
   OB_ROLE_TABLE_GRANTS_TID,
   OB_ROLE_COLUMN_GRANTS_TID,
   OB_ROLE_ROUTINE_GRANTS_TID,
@@ -8734,6 +8737,7 @@ const char* const tenant_space_table_names [] = {
   OB_INNODB_SYS_VIRTUAL_TNAME,
   OB_INNODB_TEMP_TABLE_INFO_TNAME,
   OB_INNODB_METRICS_TNAME,
+  OB_EVENTS_TNAME,
   OB_ROLE_TABLE_GRANTS_TNAME,
   OB_ROLE_COLUMN_GRANTS_TNAME,
   OB_ROLE_ROUTINE_GRANTS_TNAME,

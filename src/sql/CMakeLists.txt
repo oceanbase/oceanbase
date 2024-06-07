@@ -221,6 +221,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_variable_set_executor.cpp
   engine/cmd/ob_xa_executor.cpp
   engine/cmd/ob_context_executor.cpp
+  engine/cmd/ob_event_executor.cpp
   engine/cmd/ob_table_direct_insert_ctx.cpp
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_mock_executor.cpp
@@ -1014,6 +1015,12 @@ ob_set_subtarget(ob_sql resolver
 
 ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_switch_tenant_resolver.cpp
+  resolver/cmd/ob_alter_event_stmt.cpp
+  resolver/cmd/ob_alter_event_resolver.cpp
+  resolver/cmd/ob_create_event_stmt.cpp
+  resolver/cmd/ob_create_event_resolver.cpp
+  resolver/cmd/ob_drop_event_stmt.cpp
+  resolver/cmd/ob_drop_event_resolver.cpp
   resolver/cmd/ob_alter_system_resolver.cpp
   resolver/cmd/ob_alter_system_stmt.cpp
   resolver/cmd/ob_anonymous_block_resolver.cpp
@@ -1038,7 +1045,6 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_show_resolver.cpp
   resolver/cmd/ob_variable_set_resolver.cpp
   resolver/cmd/ob_variable_set_stmt.cpp
-  resolver/cmd/ob_alter_system_resolver.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

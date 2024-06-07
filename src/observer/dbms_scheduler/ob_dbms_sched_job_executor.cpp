@@ -25,7 +25,6 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
-#include "share/stat/ob_dbms_stats_maintenance_window.h"
 
 namespace oceanbase
 {
@@ -119,17 +118,37 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
   CK (job_info.valid());
   OZ (schema_service_->get_tenant_schema_guard(job_info.get_tenant_id(), schema_guard));
   OZ (schema_guard.get_tenant_info(job_info.get_tenant_id(), tenant_info));
-  OZ (schema_guard.get_user_info(
-    job_info.get_tenant_id(), job_info.get_lowner(), user_infos));
   OZ (schema_guard.get_database_schema(
     job_info.get_tenant_id(), job_info.get_cowner(), database_schema));
-  if (OB_SUCC(ret) &&
-      user_infos.count() > 1 &&
-      ObDbmsStatsMaintenanceWindow::is_stats_job(job_info.get_job_name())) {
-    OZ(ObDbmsStatsMaintenanceWindow::reset_opt_stats_user_infos(user_infos));
+  if (OB_SUCC(ret)) {
+    if (job_info.is_oracle_tenant()) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_powner(), user_infos));
+      OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+      CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else {
+      ObString user = job_info.get_powner();
+      if (OB_SUCC(ret)) {
+        const char *c = user.reverse_find('@');
+        if (OB_ISNULL(c)) {
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user, user_infos));
+          if (OB_SUCC(ret) && user_infos.count() > 1) {
+            OZ(ObDBMSSchedJobUtils::reserve_user_with_minimun_id(user_infos));
+          }
+          OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
+          CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+        } else {
+          ObString user_name;
+          ObString host_name;
+          user_name = user.split_on(c);
+          host_name = user;
+          OZ (schema_guard.get_user_info(
+            job_info.get_tenant_id(), user_name, host_name, user_info));
+        }
+      }
+    }
   }
-  OV (1 == user_infos.count(), 0 == user_infos.count() ? OB_USER_NOT_EXIST : OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
-  CK (OB_NOT_NULL(user_info = user_infos.at(0)));
   CK (OB_NOT_NULL(user_info));
   CK (OB_NOT_NULL(tenant_info));
   CK (OB_NOT_NULL(database_schema));
@@ -218,6 +237,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       if (job_info.is_oracle_tenant_) {
         OZ (what.append_fmt("BEGIN %.*s; END;",
             job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_mysql_event_job_class()) { //mysql event
+            OZ (what.append_fmt("%.*s",
+                  job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",
@@ -321,7 +343,24 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
-      OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+      if (OB_SUCC(ret) && job_info.is_mysql_event_job_class()) {
+        ObArenaAllocator allocator("MYSQL_EVENT_TMP");
+        ObParser parser(allocator, session_info->get_sql_mode(), session_info->get_charsets4parser());
+        ObSEArray<ObString, 1> queries;
+        ObMPParseStat parse_stat;
+        if (OB_FAIL(parser.split_multiple_stmt(what.string().ptr(), queries, parse_stat))) {
+          LOG_WARN("failed to split multiple stmt", K(ret));
+        } else if (parse_stat.parse_fail_) {
+          ret = parse_stat.fail_ret_;
+          LOG_WARN("failed to split multiple stmt", K(ret));
+        } else {
+          for (int i = 0; i < queries.count() && OB_SUCC(ret); i++) {
+            OZ (conn->execute_write(tenant_id, queries[i].ptr(), affected_rows));
+          }
+        }
+      } else {
+        OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
+      }
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);
       }

@@ -1325,6 +1325,56 @@ int ObInnerTableSchema::innodb_metrics_schema(ObTableSchema &table_schema)
   return ret;
 }
 
+int ObInnerTableSchema::events_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_INFORMATION_SCHEMA_ID);
+  table_schema.set_table_id(OB_EVENTS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_EVENTS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT        CAST("def" AS CHARACTER(64)) AS EVENT_CATALOG,       CAST(T.cowner AS CHARACTER(128)) AS EVENT_SCHEMA,       CAST(SUBSTRING_INDEX(T.job_name, '.', -1) AS CHARACTER(64)) AS EVENT_NAME,       CAST(T.powner AS CHARACTER(93)) AS DEFINER,       CAST("SYSTEM" AS CHARACTER(64)) AS TIME_ZONE,       CAST("SQL" AS CHARACTER(8)) AS EVENT_BODY,       CAST(T.what AS CHARACTER(65536)) AS EVENT_DEFINITION,       CAST(CASE WHEN T.interval_ts > 0 THEN "RECURRING" ELSE "ONE TIME" END AS CHARACTER(9)) AS EVENT_TYPE,       CAST(CASE WHEN T.interval_ts > 0 THEN "NULL" ELSE T.start_date END AS DATETIME)  AS EXECUTE_AT,       CAST(CASE WHEN T.interval_ts > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'INTERVAL=', -1), ';', 1) ELSE NULL END AS CHARACTER(256)) AS INTERVAL_VALUE,       CAST(CASE WHEN T.interval_ts > 0 THEN SUBSTRING_INDEX(SUBSTRING_INDEX(T.repeat_interval, 'FREQ=', -1),'LY', 1) ELSE NULL END AS CHARACTER(18))  AS INTERVAL_FIELD,       CAST("ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION" AS CHARACTER(8192))  AS SQL_MODE,       CAST(CASE WHEN T.interval_ts > 0 THEN T.start_date ELSE NULL END AS DATETIME) AS STARTS,       CAST(CASE WHEN T.interval_ts > 0 THEN T.end_date ELSE NULL END AS DATETIME) AS ENDS,       CAST(CASE WHEN T.enabled = 1 THEN "ENABLED" ELSE "DISABLED" END AS CHARACTER(18)) AS STATUS,       CAST(CASE WHEN T.auto_drop = 1 THEN "NOT PRESERVE" ELSE "PRESERVE" END AS CHARACTER(12)) AS ON_COMPLETION,       CAST(T.gmt_create AS DATETIME) AS CREATED,       CAST(T.gmt_modified AS DATETIME) AS LAST_ALTERED,       CAST(T.last_date AS DATETIME) AS LAST_EXECUTED,       CAST(T.comments AS CHARACTER(4096)) AS EVENT_COMMENT,       CAST(NULL AS UNSIGNED) AS ORIGINATOR,       CAST(NULL AS CHARACTER(32)) AS CHARACTER_SET_CLIENT,       CAST(NULL AS CHARACTER(32)) AS COLLATION_CONNECTION,       CAST(NULL AS CHARACTER(32)) AS DATABASE_COLLATION     FROM oceanbase.__all_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' AND T.JOB > 0 AND T.JOB_CLASS = 'MYSQL_EVENT_JOB_CLASS' )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::role_table_grants_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

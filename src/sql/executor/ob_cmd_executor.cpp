@@ -147,6 +147,10 @@
 #include "sql/resolver/ddl/ob_create_context_resolver.h"
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/engine/cmd/ob_context_executor.h"
+#include "sql/resolver/cmd/ob_create_event_stmt.h"
+#include "sql/resolver/cmd/ob_alter_event_stmt.h"
+#include "sql/resolver/cmd/ob_drop_event_stmt.h"
+#include "sql/engine/cmd/ob_event_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -1056,6 +1060,18 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_TRANSFER_PARTITION: {
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_CREATE: {
+        DEFINE_EXECUTE_CMD(ObCreateEventStmt, ObCreateEventExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_ALTER: {
+        DEFINE_EXECUTE_CMD(ObAlterEventStmt, ObAlterEventExecutor);
+        break;
+      }
+      case stmt::T_EVENT_JOB_DROP: {
+        DEFINE_EXECUTE_CMD(ObDropEventStmt, ObDropEventExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

@@ -205,7 +205,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
         ALTER BEFORE BY CALL CASE CONDITION CONTINUE CREATE CURRENT_USER CURSOR DECLARE
         DEFAULT DELETE DETERMINISTIC DROP EACH ELSE ELSEIF EXISTS EXIT FETCH FOR FROM IF IN
         INDEX INOUT INSERT INTO IS ITERATE LEAVE LIMIT LONG LOOP MODIFIES  NOT ON OR OUT
-        PROCEDURE READS REPEAT REPLACE RESIGNAL RETURN SELECT SIGNAL SQL SQLEXCEPTION
+        PROCEDURE READS RENAME REPEAT REPLACE RESIGNAL RETURN SELECT SIGNAL SQL SQLEXCEPTION
         SQLSTATE SQLWARNING TABLE THEN TRIGGER UPDATE USING WHEN WHILE
         TINYINT SMALLINT MEDIUMINT INTEGER BIGINT FLOAT DOUBLE PRECISION DEC DECIMAL NUMERIC
         CHARACTER VARCHAR BINARY VARBINARY UNSIGNED
@@ -218,12 +218,12 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 /* non reserved key words */
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
-      AFTER AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT
+      AFTER AT AUTHID BEGIN_KEY BINARY_INTEGER BODY C CATALOG_NAME CLASS_ORIGIN CLOSE COLUMN_NAME COMMENT COMPLETION
       CONSTRAINT_CATALOG CONSTRAINT_NAME CONSTRAINT_ORIGIN CONSTRAINT_SCHEMA CONTAINS COUNT CURSOR_NAME
-      DATA DEFINER END_KEY EXTEND FOLLOWS FOUND FUNCTION HANDLER INTERFACE INVOKER JSON LANGUAGE
-      MESSAGE_TEXT MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES RECORD RETURNS ROW ROWTYPE
-      SCHEMA_NAME SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE DATETIME TIMESTAMP TIME DATE YEAR
-      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED ROLE USER
+      DATA DATE DAY DEFINER DISABLE ENABLE ENDS END_KEY EVENT EVERY EXTEND FOLLOWS FOUND FUNCTION HANDLER HOUR INTERFACE INVOKER JSON LANGUAGE
+      MESSAGE_TEXT MINUTE MONTH MYSQL_ERRNO NATIONAL NEXT NO OF OPEN PACKAGE PRAGMA PRECEDES PRESERVE RECORD RETURNS ROW ROWTYPE
+      SCHEDULE SCHEMA_NAME SECOND SECURITY SUBCLASS_ORIGIN TABLE_NAME TYPE VALUE DATETIME TIMESTAMP TIME YEAR
+      TEXT NCHAR NVARCHAR BOOL BOOLEAN ENUM BIT FIXED SIGNED STARTS INTERVAL ROLE USER TO
 //-----------------------------non_reserved keyword end---------------------------------------------
 %right END_KEY
 %left ELSE IF ELSEIF
@@ -276,6 +276,9 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> create_trigger_stmt drop_trigger_stmt plsql_trigger_source
 %type <node> trigger_definition trigger_event trigger_body pl_obj_access_ref
 %type <ival> trigger_time
+%type <node> create_event_stmt event_schedule opt_event_time_range event_start_time event_end_time opt_event_interval event_on_completion opt_event_on_completion opt_event_status opt_event_comment event_body_stmts event_body
+%type <node> alter_event_stmt opt_event_alter_on_schedule_completion opt_event_rename opt_event_body
+%type <node> drop_event_stmt
 /*SQL data type*/
 %type <node> scalar_data_type opt_charset collation opt_collation charset_name collation_name
 %type <node> number_literal literal charset_key opt_float_precision opt_number_precision opt_binary
@@ -284,7 +287,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <ival> opt_bit_length_i opt_datetime_fsp_i opt_year_i
 %type <ival> int_type_i float_type_i datetime_type_i date_year_type_i text_type_i blob_type_i
 %type <ival> nchar_type_i nvarchar_type_i
-%type <node> variable number_type
+%type <node> variable number_type date_unit
 %%
 /*****************************************************************************
  *
@@ -359,6 +362,9 @@ outer_stmt:
   | create_package_stmt { $$ = $1; }
   | create_package_body_stmt { $$ = $1; }
   | drop_package_stmt { $$ = $1; }
+  | create_event_stmt { $$ = $1; }
+  | alter_event_stmt { $$ = $1; }
+  | drop_event_stmt { $$ = $1; }
   | sql_stmt { $$ = $1; }
   | call_sp_stmt { $$ = $1; }
   | do_sp_stmt { $$ = $1; }
@@ -444,6 +450,13 @@ sql_stmt:
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
     }
   | ALTER sql_keyword /*sql stmt tail*/
+    {
+      //read sql query string直到读到token';'或者END_P
+      ParseNode *sql_stmt = NULL;
+      do_parse_sql_stmt(sql_stmt, parse_ctx, @1.first_column, @1.last_column, 2, ';', END_P);
+      malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SQL_STMT, 1, sql_stmt);
+    }
+  | RENAME sql_keyword /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
       ParseNode *sql_stmt = NULL;
@@ -716,6 +729,7 @@ ident:
 
 unreserved_keyword:
     AFTER
+  | AT
   | AUTHID
   | BEGIN_KEY %prec LOWER_PARENS
   | BINARY_INTEGER
@@ -726,6 +740,7 @@ unreserved_keyword:
   | CLOSE
   | COLUMN_NAME
   | COMMENT
+  | COMPLETION
   | CONSTRAINT_CATALOG
   | CONSTRAINT_NAME
   | CONSTRAINT_ORIGIN
@@ -735,6 +750,11 @@ unreserved_keyword:
   | CURSOR_NAME
   | DATA
   | DEFINER
+  | DISABLE
+  | ENABLE
+  | ENDS
+  | EVENT
+  | EVERY
   | END_KEY %prec LOWER_PARENS
   | EXTEND
   | FOUND
@@ -758,14 +778,18 @@ unreserved_keyword:
   | ROW
   | ROWTYPE
   | ROLE
+  | SCHEDULE
   | SCHEMA_NAME
   | SECURITY
+  | STARTS
   | SUBCLASS_ORIGIN
   | TABLE_NAME
+  | TO
   | TYPE
   | VALUE
   | FOLLOWS
   | PRECEDES
+  | PRESERVE
   | NATIONAL
   | DATETIME
   | TIMESTAMP
@@ -781,6 +805,12 @@ unreserved_keyword:
   | BIT
   | FIXED
   | SIGNED
+  | MONTH
+  | DAY
+  | HOUR
+  | MINUTE
+  | SECOND
+  | INTERVAL
 ;
 
 /*****************************************************************************
@@ -1966,6 +1996,234 @@ opt_if_not_exists:
   | IF NOT EXISTS { $$ = 1; }
 ;
 
+/*****************************************************************************
+ *
+ *	EVENT grammar
+ *
+ *****************************************************************************/
+create_event_stmt:
+CREATE opt_sp_definer EVENT opt_if_not_exists sp_name ON SCHEDULE event_schedule opt_event_on_completion opt_event_status opt_event_comment DO event_body
+{
+  ParseNode *if_not_exists = NULL;
+  if ($4 == 1) {
+    malloc_terminal_node(if_not_exists, parse_ctx->mem_pool_, T_IF_NOT_EXISTS);
+  }
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_CREATE, 8, $2, if_not_exists, $5, $8, $9, $10, $11, $13);
+}
+;
+
+event_schedule:
+AT STRING opt_event_interval
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_WITH_ON, 2, $2, $3);
+  $$->value_ = 1;
+}
+| EVERY INTNUM date_unit opt_event_time_range
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_WITH_ON, 3, $2, $3, $4);
+  $$->value_ = 2;
+}
+;
+
+opt_event_interval:
+/* empty */
+{
+  $$ = NULL;
+}
+| '+' INTERVAL INTNUM date_unit
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $3, $4);
+}
+;
+
+opt_event_time_range:
+{
+  $$ = NULL;
+}
+| event_start_time
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $1, NULL);
+}
+| event_end_time
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, NULL, $1);
+}
+| event_start_time event_end_time
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $1, $2);
+}
+;
+
+event_start_time:
+STARTS STRING opt_event_interval
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $2, $3);
+}
+;
+
+event_end_time:
+ENDS STRING opt_event_interval
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $2, $3);
+}
+;
+
+opt_event_on_completion:
+/*Empty*/
+{
+  $$ = NULL;
+}
+| event_on_completion
+{
+  $$ = $1;
+}
+
+event_on_completion:
+ON COMPLETION NOT PRESERVE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_IDENT);
+  $$->value_ = 0;
+}
+| ON COMPLETION PRESERVE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_IDENT);
+  $$->value_ = 1;
+}
+;
+
+opt_event_status:
+/*Empty*/
+{
+  $$ = NULL;
+}
+| ENABLE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_IDENT);
+  $$->value_ = 1;
+}
+| DISABLE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_IDENT);
+  $$->value_ = 0;
+}
+/*
+| DISABLE ON SLAVE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_IDENT);
+  $$->value_ = 0;
+}
+*/
+;
+
+opt_event_comment:
+/*Empty*/
+{
+  $$ = NULL;
+}
+| COMMENT STRING
+{
+  $$ = $2;
+}
+;
+
+event_body_stmts:
+sql_stmt ';'
+{
+  $$ = $1;
+  check_ptr($$);
+  const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($$->str_value_);
+  $$->str_len_ = str_len;
+}
+| event_body_stmts sql_stmt ';'
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_LINK_NODE, 2, $1, $2);
+  check_ptr($2);
+  const char *stmt_str = parse_ctx->stmt_str_ + @2.first_column;
+  int32_t str_len = @2.last_column - @2.first_column + 1;
+  $2->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($2->str_value_);
+  $2->str_len_ = str_len;
+}
+
+event_body:
+sql_stmt
+{
+  check_ptr($1);
+  const char *stmt_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $1->str_value_ = parse_strndup(stmt_str, str_len, parse_ctx->mem_pool_);
+  check_ptr($1->str_value_);
+  $1->str_len_ = str_len;
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_STMT_LIST, 1, $1);
+}
+| BEGIN_KEY event_body_stmts END_KEY
+{
+  ParseNode *event_job_stmts = NULL;
+  merge_nodes(event_job_stmts, parse_ctx->mem_pool_, T_STMT_LIST, $2);
+  $$ = event_job_stmts;
+}
+;
+
+alter_event_stmt:
+ALTER opt_sp_definer EVENT sp_name opt_event_alter_on_schedule_completion opt_event_rename opt_event_status opt_event_comment opt_event_body
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_ALTER, 7, $2, $4, $5, $6, $7, $8, $9);
+}
+;
+
+opt_event_alter_on_schedule_completion:
+{
+  $$ = NULL;
+}
+| ON SCHEDULE event_schedule
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $3, NULL);
+}
+| event_on_completion
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, NULL, $1);
+}
+| ON SCHEDULE event_schedule event_on_completion
+{
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_IDENT, 2, $3, $4);
+}
+;
+
+opt_event_rename:
+{
+  $$ = NULL;
+}
+| RENAME TO sp_name
+{
+  $$ = $3;
+}
+;
+
+opt_event_body:
+{
+  $$ = NULL;
+}
+| DO event_body
+{
+  $$ = $2;
+}
+;
+
+drop_event_stmt:
+DROP EVENT opt_if_exists sp_name
+{
+  ParseNode *if_exists = NULL;
+  if ($3 == 1) {
+    malloc_terminal_node(if_exists, parse_ctx->mem_pool_, T_IF_EXISTS);
+  }
+  malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_EVENT_JOB_DROP, 2, if_exists, $4);
+}
+;
+
+
 scalar_data_type:
     int_type_i opt_int_length_i %prec LOWER_PARENS
     {
@@ -2717,6 +2975,75 @@ scond_info_item_name:
   | CURSOR_NAME { $$ = DIAG_CURSOR_NAME; }
   | MESSAGE_TEXT { $$ = DIAG_MESSAGE_TEXT; }
   | MYSQL_ERRNO { $$ = DIAG_MYSQL_ERRNO; }
+;
+
+date_unit:
+YEAR
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_YEAR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
+| MONTH
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MONTH;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
+| DAY
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_DAY;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
+| HOUR
+{
+ malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_HOUR;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
+| MINUTE
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_MINUTE;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
+| SECOND
+{
+  malloc_terminal_node($$, parse_ctx->mem_pool_, T_INT);
+  $$->value_ = DATE_UNIT_SECOND;
+  $$->is_hidden_const_ = 1;
+  $$->is_date_unit_ = 1;
+  const char *time_str = parse_ctx->stmt_str_ + @1.first_column;
+  int32_t str_len = @1.last_column - @1.first_column + 1;
+  $$->str_value_ = parse_strndup(time_str, str_len, parse_ctx->mem_pool_);
+  $$->str_len_ = str_len;
+}
 ;
 
 %%

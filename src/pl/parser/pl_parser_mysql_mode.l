@@ -97,6 +97,7 @@ TABLE                         { return TABLE; }
 UPDATE                        { return UPDATE; }
 JSON                          { return JSON; }
 REPLACE                       { return REPLACE; }
+RENAME                        { return RENAME; }
 TRIGGER {
   ObParseCtx *parse_ctx = (ObParseCtx *)yyextra;
   parse_ctx->is_for_trigger_ = 1;

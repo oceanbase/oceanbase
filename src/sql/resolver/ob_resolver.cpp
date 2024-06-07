@@ -126,6 +126,9 @@
 #include "sql/resolver/cmd/ob_get_diagnostics_resolver.h"
 #include "sql/resolver/cmd/ob_switch_tenant_resolver.h"
 #include "sql/resolver/cmd/ob_mock_resolver.h"
+#include "sql/resolver/cmd/ob_create_event_resolver.h"
+#include "sql/resolver/cmd/ob_alter_event_resolver.h"
+#include "sql/resolver/cmd/ob_drop_event_resolver.h"
 #include "sql/resolver/dcl/ob_alter_role_resolver.h"
 #include "sql/resolver/dml/ob_multi_table_insert_resolver.h"
 #include "sql/resolver/ddl/ob_create_directory_resolver.h"
@@ -1222,6 +1225,18 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CHECKSUM_TABLE: {
         REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_EVENT_JOB_CREATE: {
+        REGISTER_STMT_RESOLVER(CreateEvent);
+        break;
+      }
+      case T_EVENT_JOB_ALTER: {
+        REGISTER_STMT_RESOLVER(AlterEvent);
+        break;
+      }
+      case T_EVENT_JOB_DROP: {
+        REGISTER_STMT_RESOLVER(DropEvent);
         break;
       }
       default: {
