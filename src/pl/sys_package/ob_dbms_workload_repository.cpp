@@ -89,7 +89,6 @@ int ObDbmsWorkloadRepository::create_snapshot(
                                  user_submit_snap_arg, user_submit_snapshot_resp))) {
         if (OB_NEED_RETRY == ret) {
           ob_usleep(SLEEP_INTERVAL_US);
-          continue;
         } else {
           LOG_WARN("failed to send sync snapshot task", KR(ret), K(OB_SYS_TENANT_ID),
               K(user_submit_snapshot_resp));
@@ -111,7 +110,6 @@ int ObDbmsWorkloadRepository::create_snapshot(
           LOG_WARN("failed to check all tenants' last snapshot status", K(ret), K(is_all_finished));
         } else if (!is_all_finished) {
           ob_usleep(SLEEP_INTERVAL_US);
-          continue;
         }
       }
       if (OB_SUCC(ret)) {
@@ -255,7 +253,6 @@ int ObDbmsWorkloadRepository::drop_snapshot_range(
           LOG_WARN("failed to check drop task state ", K(low_snap_id), K(high_snap_id), K(is_all_finished));
         } else if (!is_all_finished) {
           ob_usleep(SLEEP_INTERVAL_US);
-          continue;
         }
       }
     }
@@ -278,8 +275,8 @@ int ObDbmsWorkloadRepository::check_drop_task_success_for_snap_id_range(
     {
       ObMySQLResult *result = nullptr;
       if (OB_FAIL(sql.assign_fmt("SELECT COUNT(*) AS CNT FROM %s where "
-                                  "cluster_id=%ld and snap_id between %ld and %ld and status=%ld",
-              OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, cluster_id, low_snap_id, high_snap_id, ObWrSnapshotStatus::DELETED))) {
+                                  "cluster_id=%ld and snap_id between %ld and %ld and (status=%ld or status=%ld)",
+              OB_ALL_VIRTUAL_WR_SNAPSHOT_TNAME, cluster_id, low_snap_id, high_snap_id, ObWrSnapshotStatus::DELETED, ObWrSnapshotStatus::SUCCESS))) {
         LOG_WARN("failed to format sql", KR(ret));
       } else if (OB_FAIL(GCTX.sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
         LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
@@ -1905,7 +1902,7 @@ int ObDbmsWorkloadRepository::print_ash_top_group(const AshReportParams &ash_rep
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql_proxy_ is nullptr", K(ret));
-  } else if (OB_FAIL(print_section_header(ash_report_params, buff, "Top groups"))) {
+  } else if (OB_FAIL(print_section_header(ash_report_params, buff, "Top Groups"))) {
     LOG_WARN("failed to push string into buff", K(ret));
   } else if (OB_FAIL(print_section_explaination_begin(ash_report_params, buff))) {
     LOG_WARN("failed to push string into buff", K(ret));

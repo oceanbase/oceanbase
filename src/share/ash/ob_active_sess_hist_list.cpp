@@ -111,7 +111,7 @@ int ObActiveSessHistList::allocate_ash_buffer(int64_t ash_size, common::ObShared
   if (OB_FAIL(ob_make_shared<ObAshBuffer>(ash_buffer))) {
     LOG_WARN("failed to make ash buffer", KR(ret));
   } else {
-    ash_buffer->set_label("ash_list");
+    ash_buffer->set_label("ASHListBuffer");
     ash_buffer->set_tenant_id(OB_SYS_TENANT_ID);
     if (OB_FAIL(ash_buffer->prepare_allocate(ash_size / sizeof(ObActiveSessionStatItem)))) {
       LOG_WARN("fail init ASH circular buffer", K(ret));
