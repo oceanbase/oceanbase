@@ -76,7 +76,7 @@ int ObTableApiScanExecutor::init_tsc_rtdef()
   mem_attr.label_ = "ScanDASCtx";
   das_ref_.set_mem_attr(mem_attr);
   das_ref_.set_expr_frame_info(scan_spec_.get_expr_frame_info());
-  das_ref_.set_execute_directly(true);
+  das_ref_.set_execute_directly(!tb_ctx_.need_dist_das());
   // init rtdef
   const ObDASScanCtDef &scan_ctdef = scan_spec_.get_ctdef().scan_ctdef_;
   ObDASScanRtDef &scan_rtdef = tsc_rtdef_.scan_rtdef_;

@@ -571,6 +571,14 @@ ObTableOperation ObTableOperation::insert(const ObITableEntity &entity)
   return op;
 }
 
+ObTableOperation ObTableOperation::put(const ObITableEntity &entity)
+{
+  ObTableOperation op;
+  op.operation_type_ = ObTableOperationType::PUT;
+  op.entity_ = &entity;
+  return op;
+}
+
 ObTableOperation ObTableOperation::del(const ObITableEntity &entity)
 {
   ObTableOperation op;
@@ -851,6 +859,12 @@ int ObTableBatchOperation::insert(const ObITableEntity &entity)
   return add(op);
 }
 
+int ObTableBatchOperation::put(const ObITableEntity &entity)
+{
+  ObTableOperation op = ObTableOperation::put(entity);
+  return add(op);
+}
+
 int ObTableBatchOperation::del(const ObITableEntity &entity)
 {
   ObTableOperation op = ObTableOperation::del(entity);
@@ -990,7 +1004,8 @@ int ObTableResult::assign(const ObTableResult &other)
 ObTableOperationResult::ObTableOperationResult()
     :operation_type_(ObTableOperationType::GET),
      entity_(NULL),
-     affected_rows_(0)
+     affected_rows_(0),
+     flags_(0)
 {}
 
 void ObTableOperationResult::reset()
@@ -999,6 +1014,7 @@ void ObTableOperationResult::reset()
   operation_type_ = ObTableOperationType::GET;
   entity_->reset();
   affected_rows_ = 0;
+  flags_ = 0;
 }
 
 int ObTableOperationResult::get_entity(const ObITableEntity *&entity) const
@@ -1029,7 +1045,8 @@ DEF_TO_STRING(ObTableOperationResult)
   J_OBJ_START();
   J_KV(K_(errno),
        K_(operation_type),
-       K_(affected_rows));
+       K_(affected_rows),
+       K_(flags));
   J_COMMA();
   if (NULL == entity_) {
     J_NAME("entity");
@@ -1064,6 +1081,7 @@ int ObTableOperationResult::deep_copy(common::ObIAllocator &allocator,
     operation_type_ = other.operation_type_;
     entity_ = dest_entity;
     affected_rows_ = other.affected_rows_;
+    flags_ = other.flags_;
   }
   return ret;
 }
@@ -1317,6 +1335,15 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     dst.scan_order_ = scan_order_;
     dst.batch_size_ = batch_size_;
     dst.max_result_size_ = max_result_size_;
+  }
+  return ret;
+}
+
+int ObTableQuery::add_aggregation(ObTableAggregation &aggregation)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(aggregations_.push_back(aggregation))) {
+    LOG_WARN("failed to add rowkey range", K(ret), K(aggregation));
   }
   return ret;
 }

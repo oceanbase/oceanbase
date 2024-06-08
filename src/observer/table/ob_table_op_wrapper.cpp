@@ -69,6 +69,15 @@ int ObTableOpWrapper::process_op_with_spec(ObTableCtx &tb_ctx,
 
   op_result.set_err(ret);
   op_result.set_type(tb_ctx.get_opertion_type());
+  if (!tb_ctx.is_htable() && ObTableOperationType::Type::INSERT_OR_UPDATE == tb_ctx.get_opertion_type()) {
+    // not duplicated then do insert, duplicated do update
+    if (tb_ctx.is_ttl_table()) {
+      op_result.set_insertup_do_insert(!static_cast<ObTableApiTTLExecutor*>(executor)->is_insert_duplicated());
+    } else {
+      op_result.set_insertup_do_insert(!static_cast<ObTableApiInsertUpExecutor*>(executor)->is_insert_duplicated());
+      op_result.set_insertup_do_put(static_cast<ObTableApiInsertUpExecutor*>(executor)->is_use_put());
+    }
+  }
   spec->destroy_executor(executor);
   return ret;
 }

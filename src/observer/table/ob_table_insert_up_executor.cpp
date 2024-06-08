@@ -59,7 +59,6 @@ bool ObTableApiInsertUpExecutor::is_duplicated()
 int ObTableApiInsertUpExecutor::generate_insert_up_rtdefs()
 {
   int ret = OB_SUCCESS;
-  bool use_put = false;
 
   if (OB_FAIL(insert_up_rtdefs_.allocate_array(allocator_, insert_up_spec_.get_ctdefs().count()))) {
     LOG_WARN("allocate insert up rtdef failed", K(ret), K(insert_up_spec_.get_ctdefs().count()));
@@ -75,15 +74,15 @@ int ObTableApiInsertUpExecutor::generate_insert_up_rtdefs()
     } else if (OB_FAIL(generate_upd_rtdef(insup_ctdef->upd_ctdef_,
                                           insup_rtdef.upd_rtdef_))) {
       LOG_WARN("fail to generate update rtdef", K(ret));
-    } else if (OB_FAIL(tb_ctx_.check_insert_up_can_use_put(use_put))) {
+    } else if (OB_FAIL(tb_ctx_.check_insert_up_can_use_put(use_put_))) {
     LOG_WARN("fail to check insert up use put", K(ret));
     } else {
       insup_rtdef.ins_rtdef_.das_rtdef_.table_loc_->is_writing_ = true;
-      insup_rtdef.ins_rtdef_.das_rtdef_.use_put_ = use_put;
+      insup_rtdef.ins_rtdef_.das_rtdef_.use_put_ = use_put_;
     }
   }
 
-  if (!use_put) {
+  if (!use_put_) {
     set_need_fetch_conflict();
   }
 

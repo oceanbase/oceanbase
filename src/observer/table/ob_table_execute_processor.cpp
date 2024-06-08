@@ -386,6 +386,10 @@ int ObTableApiExecuteP::try_process()
     result_.set_err(ret);
   } else if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema guard", K(ret), K(arg_.table_name_));
+  } else if (simple_table_schema_->get_table_id() != table_id_) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("info from request is not up to date, need to refresh schema info",
+              K(ret), K(table_id_), K(tablet_id_));
   } else if (OB_FAIL(check_arg2())) {
     LOG_WARN("fail to check arg", K(ret));
   } else if (is_group_commit_) {

@@ -178,6 +178,21 @@ ob_set_subtarget(ob_server table
   table/group/ob_table_group_execute.cpp
   table/ob_table_ls_execute_processor.cpp
   table/ob_table_query_and_mutate_helper.cpp
+  table/ob_redis_execute_processor.cpp
+  table/redis/ob_redis_command_factory.cpp
+  table/redis/ob_redis_service.cpp
+  table/redis/cmd/ob_redis_list_cmd.cpp
+  table/redis/operator/ob_redis_list_operator.cpp
+  table/redis/operator/ob_redis_operator.cpp
+  table/redis/cmd/ob_redis_set_cmd.cpp
+  table/redis/cmd/ob_redis_cmd.cpp
+  table/redis/operator/ob_redis_set_operator.cpp
+  table/redis/cmd/ob_redis_zset_cmd.cpp
+  table/redis/operator/ob_redis_zset_operator.cpp
+  table/redis/cmd/ob_redis_hash_cmd.cpp
+  table/redis/operator/ob_redis_hash_operator.cpp
+  table/redis/cmd/ob_redis_string_cmd.cpp
+  table/redis/operator/ob_redis_string_operator.cpp
   table/ob_table_audit.cpp
 )
 

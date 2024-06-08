@@ -58,7 +58,8 @@ public:
         conflict_checker_(allocator_, eval_ctx_, spec.get_conflict_checker_ctdef()),
         is_duplicated_(false),
         cur_idx_(0),
-        is_row_changed_(false)
+        is_row_changed_(false),
+        use_put_(false)
   {
   }
   virtual ~ObTableApiInsertUpExecutor()
@@ -81,6 +82,10 @@ public:
   OB_INLINE bool is_insert_duplicated()
   {
     return is_duplicated_;
+  }
+  OB_INLINE bool is_use_put()
+  {
+    return use_put_;
   }
 private:
   bool is_duplicated();
@@ -127,6 +132,7 @@ private:
   bool is_duplicated_;
   int64_t cur_idx_;
   bool is_row_changed_;
+  bool use_put_;
 };
 
 } // end namespace table

@@ -178,7 +178,8 @@ public:
         has_auto_inc_(false),
         has_global_index_(false),
         has_local_index_(false),
-        is_global_index_scan_(false)
+        is_global_index_scan_(false),
+        need_dist_das_(false)
   {
     // common
     is_init_ = false;
@@ -208,6 +209,7 @@ public:
     offset_ = 0;
     tenant_schema_version_ = -1;
     is_for_update_ = false;
+    operation_type_ = ObTableOperationType::Type::INVALID;
     is_for_insertup_ = false;
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
@@ -276,6 +278,7 @@ public:
     offset_ = 0;
     tenant_schema_version_ = -1;
     is_for_update_ = false;
+    operation_type_ = ObTableOperationType::Type::INVALID;
     is_for_insertup_ = false;
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
@@ -309,6 +312,7 @@ public:
     table_index_info_.reset();
     key_ranges_.reset();
     phy_plan_ctx_.get_autoinc_params().reset();
+    need_dist_das_ = false;
   }
 
   virtual ~ObTableCtx()
@@ -349,6 +353,7 @@ public:
                K_(is_skip_scan),
                K_(is_client_set_put),
                K_(binlog_row_image_type),
+               K_(need_dist_das),
                KPC_(credential));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
@@ -486,7 +491,7 @@ public:
   OB_INLINE bool has_global_index() { return has_global_index_; }
   OB_INLINE bool is_global_index_scan() const { return is_global_index_scan_; }
   OB_INLINE bool is_global_index_back() const { return is_global_index_scan_ && is_index_back_;}
-  OB_INLINE bool need_dist_das() { return has_global_index_ || (is_global_index_scan_ && is_index_back_); }
+  OB_INLINE bool need_dist_das() const { return need_dist_das_ || has_global_index_ || (is_global_index_scan_ && is_index_back_); }
   // for local index
   OB_INLINE bool has_local_index() { return has_local_index_; }
   OB_INLINE bool has_secondary_index() { return has_local_index_ || has_global_index_; }
@@ -553,6 +558,7 @@ public:
   {
     inc_append_stage_ = inc_append_stage;
   }
+  OB_INLINE void set_need_dist_das(bool need_dist_das) { need_dist_das_ = need_dist_das; }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -608,6 +614,9 @@ public:
   int cons_column_items_for_cg();
   // only for genarate spec or exprs, to generate full table_schema
   int generate_table_schema_for_cg();
+  // for common
+  int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
+                           common::ObTabletID &tablet_id);
   int init_insert_when_inc_append();
 public:
   // convert lob的allocator需要保证obj写入表达式后才能析构
@@ -616,9 +625,6 @@ public:
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
   int adjust_entity();
 private:
-  // for common
-  int get_tablet_by_rowkey(const common::ObRowkey &rowkey,
-                           common::ObTabletID &tablet_id);
   // for scan
   int generate_column_infos(common::ObIArray<const ObTableColumnInfo*> &columns_infos);
   int init_index_info(const common::ObString &index_name, const uint64_t arg_table_id);
@@ -750,6 +756,7 @@ private:
   bool has_generated_column_;
   bool is_tablegroup_req_; // is table name a tablegroup name
   bool has_lob_column_;
+  bool need_dist_das_; // used for init das_ref
   ObTableApiCredential *credential_;
   ObTableAuditCtx *audit_ctx_;
 private:

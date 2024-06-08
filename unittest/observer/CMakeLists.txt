@@ -12,5 +12,6 @@ ob_unittest(test_obkv_config tableapi/test_obkv_config.cpp)
 ob_unittest(test_uniq_task_queue)
 ob_unittest(test_table_connection tableapi/test_table_connection.cpp)
 ob_unittest(test_check_os_params test_check_os_params.cpp)
+ob_unittest(test_redis_parser tableapi/test_redis_parser.cpp)
 
 add_subdirectory(rpc EXCLUDE_FROM_ALL)

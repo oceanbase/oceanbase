@@ -110,6 +110,9 @@ class ObTableBatchService
 {
 public:
   static int execute(ObTableBatchCtx &ctx);
+  static int process_get(common::ObIAllocator &allocator,
+                         ObTableCtx &tb_ctx,
+                         ObTableOperationResult &result);
 private:
   static int multi_get(ObTableBatchCtx &ctx);
   static int multi_get_fuse_key_range(ObTableBatchCtx &ctx, ObTableApiSpec &spec);
@@ -122,9 +125,6 @@ private:
   static int htable_put(ObTableBatchCtx &ctx);
   static int htable_mutate_row(ObTableBatchCtx &ctx);
   static int batch_execute(ObTableBatchCtx &ctx);
-  static int process_get(common::ObIAllocator &allocator,
-                         ObTableCtx &tb_ctx,
-                         ObTableOperationResult &result);
   static int process_insert(ObTableCtx &tb_ctx,
                             ObTableOperationResult &result);
   static int process_delete(ObTableCtx &tb_ctx,

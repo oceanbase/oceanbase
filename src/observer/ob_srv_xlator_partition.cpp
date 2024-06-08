@@ -48,6 +48,7 @@
 #include "observer/table/ob_table_query_async_processor.h"
 #include "observer/table/ob_table_direct_load_processor.h"
 #include "observer/table/ob_table_ls_execute_processor.h"
+#include "observer/table/ob_redis_execute_processor.h"
 #include "storage/ob_storage_rpc.h"
 
 #include "logservice/restoreservice/ob_log_restore_rpc_define.h"
@@ -208,6 +209,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTableDirectLoadP, gctx_);
   RPC_PROCESSOR(ObTenantTTLP, gctx_);
   RPC_PROCESSOR(ObTableLSExecuteP, gctx_);
+  RPC_PROCESSOR(ObRedisExecuteP, gctx_);
 
   // HA GTS
   RPC_PROCESSOR(ObHaGtsPingRequestP, gctx_);

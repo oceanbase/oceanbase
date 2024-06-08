@@ -326,6 +326,7 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
   bool is_cache_hit = false;
   const ObTenantSchema *tenant_schema = nullptr;
   ObTabletID tablet_id = arg_tablet_id;
+  bool is_tablet_exists = true;
 
   if (OB_ISNULL(simple_table_schema_) || OB_ISNULL(schema_guard_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
@@ -352,6 +353,12 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
         LOG_WARN("fail to get tablet id by rowkey", K(ret), K(entity_->get_rowkey()));
       }
     }
+  } else if (OB_FAIL(simple_table_schema_->check_if_tablet_exists(arg_tablet_id, is_tablet_exists))) {
+    LOG_WARN("fail to check if tablet exists");
+  } else if (!is_tablet_exists) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("tablet id not exist, need to refresh schema info",
+              K(ret), K(arg_tablet_id));
   }
 
   if (OB_FAIL(ret)) {
@@ -502,7 +509,7 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
       LOG_USER_ERROR(OB_BAD_NULL_ERROR, column_info.column_name_.length(), column_info.column_name_.ptr());
     }
   } else if (obj.is_null() || is_inc_or_append()) { // increment or append check in init_increment() and init_append()
-    if (is_append() && ob_is_string_type(obj.get_type())) {
+    if (is_inc_or_append() && ob_is_string_type(obj.get_type())) {
       obj.set_type(column_type.get_type()); // set obj to column type to add lob header when column type is lob, obj is varchar(varchar will not add lob header).
       obj.set_collation_type(cs_type);
     }
@@ -1542,27 +1549,26 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
         LOG_WARN("not support increment auto increment column", K(ret), K(assign));
       } else if (assign.column_info_->auto_filled_timestamp_) {
         // do nothing
-      } else if (OB_UNLIKELY(!ob_is_int_tc(assign.column_info_->type_.get_type()))) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-integer types for increment operation");
-        LOG_WARN("invalid type for increment", K(ret), K(assign));
-      } else if (!ob_is_int_tc(delta.get_type())) {
-        ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
-        const char *schema_type_str = "intTc";
-        const char *obj_type_str = ob_obj_type_str(delta.get_type());
-        LOG_USER_ERROR(OB_KV_COLUMN_TYPE_NOT_MATCH, assign.column_info_->column_name_.length(), assign.column_info_->column_name_.ptr(),
-            static_cast<int>(strlen(schema_type_str)), schema_type_str, static_cast<int>(strlen(obj_type_str)), obj_type_str);
-        LOG_WARN("delta should only be signed integer type", K(ret), K(delta));
       } else {
         const ObString &column_name = assign.column_info_->column_name_;
-        const int64_t total_len = strlen("IFNULL(``, 0) + ``") + 1
+        int64_t total_len = 0;
+        ObString format_str;
+        if (ob_is_varbinary_type(delta.get_type(), delta.get_collation_type())) {
+          // for Redis varbinary increment
+          total_len = strlen("trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`` AS DECIMAL(65,17)), 0) + CAST(`` AS DECIMAL(65,17))))")
+                          + 1 + column_name.length() + column_name.length();
+          format_str = "trim(trailing '.' from trim(trailing '0' from IFNULL(CAST(`%s` AS DECIMAL(65,17)), 0) + CAST(`%s` AS DECIMAL(65,17))))";
+        } else {
+          total_len = strlen("IFNULL(``, 0) + ``") + 1
             + column_name.length() + column_name.length();
+          format_str = "IFNULL(`%s`, 0) + `%s`";
+        }
         int64_t actual_len = -1;
         char *buf = NULL;
         if (OB_ISNULL(buf = static_cast<char*>(allocator_.alloc(total_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("fail to alloc memory", K(ret), K(total_len));
-        } else if ((actual_len = snprintf(buf, total_len, "IFNULL(`%s`, 0) + `%s`",
+        } else if ((actual_len = snprintf(buf, total_len, format_str.ptr(),
             column_name.ptr(), column_name.ptr())) < 0) {
           ret = OB_SIZE_OVERFLOW;
           LOG_WARN("fail to construct increment expr string", K(ret), K(total_len), K(delta));

@@ -346,6 +346,7 @@ struct ObTableOperationType
     CHECK_AND_INSERT_UP = 10,
     PUT = 11,
     TRIGGER = 12, // internal type for group commit trigger
+    REDIS = 13,
     INVALID = 15
   };
   static bool is_group_support_type(ObTableOperationType::Type type)
@@ -369,6 +370,16 @@ public:
    * Other common error code: OB_TIMEOUT indicates time out; OB_TRY_LOCK_ROW_CONFLICT indicate row lock conflict
    */
   static ObTableOperation insert(const ObITableEntity &entity);
+
+  /**
+   * put the entity.
+   * @return ObTableOperationResult
+   * In the case of put success, the return errno is OB_SUCCESS, affected_rows is 1
+   * In the case of put failed, the affected_rows is 0
+   * If the option returning_affected_rows is false (default value), then the return value of affected_rows is undefined, but with better performance.
+   * Other common error code: OB_TIMEOUT indicates time out; OB_TRY_LOCK_ROW_CONFLICT indicate row lock conflict
+   */
+  static ObTableOperation put(const ObITableEntity &entity);
   /**
    * delete the entity.
    * @return ObTableOperationResult
@@ -532,11 +543,16 @@ public:
   ObITableEntity *get_entity() { return entity_; }
   int64_t get_affected_rows() const { return affected_rows_; }
   int get_return_rows() { return ((entity_ == NULL || entity_->is_empty()) ? 0 : 1); }
+  OB_INLINE bool get_insertup_do_insert() { return is_insertup_do_insert_; }
+  OB_INLINE bool get_is_insertup_do_put() { return is_insertup_do_put_; }
+  OB_INLINE bool get_is_insertup_do_update() { return !is_insertup_do_put_ && !is_insertup_do_insert_; }
 
   void set_entity(ObITableEntity &entity) { entity_ = &entity; }
   void set_entity(ObITableEntity *entity) { entity_ = entity; }
   void set_type(ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   void set_affected_rows(int64_t affected_rows) { affected_rows_ = affected_rows; }
+  void set_insertup_do_insert(bool do_insert) { is_insertup_do_insert_ = do_insert;}
+  void set_insertup_do_put(bool do_put) { is_insertup_do_put_ = do_put;}
 
   int deep_copy(common::ObIAllocator &allocator, ObITableEntityFactory &entity_factory, const ObTableOperationResult &other);
   DECLARE_TO_STRING;
@@ -544,6 +560,15 @@ private:
   ObTableOperationType::Type operation_type_;
   ObITableEntity *entity_;
   int64_t affected_rows_;
+  // for client compatibility, not serialize flags_ currently
+  union {
+    uint64_t flags_;
+    struct {
+      uint64_t is_insertup_do_insert_           : 1;
+      uint64_t is_insertup_do_put_              : 1;
+      uint64_t reserved_                        : 62;
+    };
+  };
 };
 
 class ObIRetryPolicy
@@ -643,6 +668,8 @@ public:
   void set_entity_factory(ObITableEntityFactory *entity_factory) { entity_factory_ = entity_factory; }
   /// insert the entity if not exists
   int insert(const ObITableEntity &entity);
+  /// put the entity if not exists
+  int put(const ObITableEntity &entity);
   /// delete the entity if exists
   int del(const ObITableEntity &entity);
   /// update the entity if exists
@@ -813,6 +840,10 @@ public:
       : type_(ObTableAggregationType::INVAILD),
         column_()
   {}
+  ObTableAggregation(ObTableAggregationType type, const ObString &column)
+      : type_(type),
+        column_(column)
+  {}
   ObTableAggregationType get_type() const { return type_; }
   const common::ObString &get_column() const { return column_; }
   bool is_agg_all_column() const { return column_ == "*"; };
@@ -875,6 +906,7 @@ public:
   /// The default is -1; this means that no specific maximum result size will be set for this query.
   /// @param max_result_size - The maximum result size in bytes.
   int set_max_result_size(int64_t max_result_size);
+  int add_aggregation(ObTableAggregation &aggregation);
 
   const ObIArray<ObString> &get_select_columns() const { return select_columns_; }
   const ObIArray<common::ObNewRange> &get_scan_ranges() const { return key_ranges_; }
@@ -907,6 +939,7 @@ public:
                K_(htable_filter),
                K_(scan_range_columns),
                K_(aggregations));
+
 public:
   static ObString generate_filter_condition(const ObString &column, const ObString &op, const ObObj &value);
   static ObString combile_filters(const ObString &filter1, const ObString &op, const ObString &filter2);

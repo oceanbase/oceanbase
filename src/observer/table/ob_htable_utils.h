@@ -312,6 +312,7 @@ public:
   // lock the check row in the given lock mode with the given lock hanle,
   // for increment, append, and check operation in check_and_xxx
   static int lock_htable_row(uint64_t table_id, const ObTableQuery &htable_query, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
+  static int lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode);
   static int check_htable_schema(const share::schema::ObTableSchema &table_schema);
   static OB_INLINE bool is_tablegroup_req(const ObString &table_name, ObTableEntityType entity_type)
   {

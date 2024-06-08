@@ -1031,9 +1031,7 @@ int ObTableBatchService::process_get(ObIAllocator &allocator,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_cache_cache is NULL or not inited", K(ret));
   } else if (OB_FAIL(ObTableOpWrapper::process_get(tb_ctx, row))) {
-    if (ret == OB_ITER_END) {
-      ret = OB_SUCCESS;
-    } else {
+    if (ret != OB_ITER_END) {
       LOG_WARN("fail to process get", K(ret));
     }
   } else if (OB_FAIL(result.get_entity(result_entity))) {
@@ -1230,6 +1228,10 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
         switch(op.type()) {
           case ObTableOperationType::GET:
             ret = process_get(ctx.allocator_, tb_ctx, op_result);
+            if (ret == OB_ITER_END) {
+              ret = OB_SUCCESS;
+              op_result.set_err(ret);
+            }
             break;
           case ObTableOperationType::INSERT:
             ret = process_insert(tb_ctx, op_result);

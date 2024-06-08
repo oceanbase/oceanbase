@@ -379,6 +379,22 @@ int ObHTableUtils::lock_htable_row(uint64_t table_id, const ObTableQuery &htable
   }
   return ret;
 }
+
+int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, ObHTableLockHandle &handle, ObHTableLockMode lock_mode)
+{
+  int ret = OB_SUCCESS;
+  if (table_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid table id", K(ret));
+  } else if (lock_key.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null redis lock_key", K(ret));
+  } else if (OB_FAIL(HTABLE_LOCK_MGR->lock_row(table_id, lock_key, lock_mode, handle))) {
+    LOG_WARN("fail to lock redis key", K(ret), K(table_id), K(lock_key), K(lock_mode));
+  }
+
+  return ret;
+}
 int ObHTableUtils::check_htable_schema(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
