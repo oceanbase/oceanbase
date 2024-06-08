@@ -85,3 +85,7 @@
     when_come_from: [4.2.2.0]
 
 - version: 4.2.3.0
+  can_be_upgraded_to:
+      - 4.2.3.1
+
+- version: 4.2.3.1

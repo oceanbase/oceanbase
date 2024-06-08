@@ -11,7 +11,7 @@ import time
 
 class UpgradeParams:
   log_filename = 'upgrade_checker.log'
-  old_version = '4.0.0.0'
+  old_version = '4.2.1.0'
 #### --------------start : my_error.py --------------
 class MyError(Exception):
   def __init__(self, value):
