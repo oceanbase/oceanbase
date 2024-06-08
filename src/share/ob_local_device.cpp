@@ -1733,6 +1733,9 @@ int ObLocalDevice::convert_sys_errno()
     case EAGAIN:
       ret = OB_EAGAIN;
       break;
+    case ENOSPC:
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      break;
     default:
       use_warn_log = true;
       break;
