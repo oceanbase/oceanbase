@@ -197,7 +197,9 @@ int ObPLCompiler::compile(
   #endif
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
         uint64_t lock_idx = stmt_id != OB_INVALID_ID ? stmt_id : block_hash;
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), lock_idx);
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, lock_idx * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (lock_idx % GCONF._ob_pl_compile_max_concurrency) * 8);
         // check session status after get lock
         if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
           LOG_WARN("query or session is killed after get PL jit lock", K(ret));
@@ -478,7 +480,9 @@ int ObPLCompiler::compile(const uint64_t id, ObPLFunction &func)
         } else if (0 != func.get_action()) {
           SET_FUNC;
         } else {
-          ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), id);
+          // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+          ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, id * 8);
+          ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (id % GCONF._ob_pl_compile_max_concurrency) * 8);
           // check session status after get lock
           if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
             LOG_WARN("query or session is killed after get PL jit lock", K(ret));
@@ -786,7 +790,10 @@ int ObPLCompiler::generate_package(const ObString &exec_env, ObPLPackageAST &pac
       if (op == ObRoutinePersistentInfo::ObPLOperation::SUCC) {
         //do nothing
       } else {
-        ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+        // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+        ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
+        ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
+
         OZ (ObPL::check_session_alive(session_info_));
         if (OB_SUCC(ret)) {
           if (enable_persistent) {
@@ -866,7 +873,11 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
                lib::is_oracle_mode()) {
 #endif
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_CODE_GEN)));
-      ObBucketHashWLockGuard compile_guard(GCTX.pl_engine_->get_jit_lock(), package.get_id());
+
+      // latch_id = (bucket_id % bucket_cnt_) / 8, so it is needed to multiply 8 to avoid consecutive ids being mapped to the same latch
+      ObBucketHashWLockGuard compile_id_guard(GCTX.pl_engine_->get_jit_lock().first, package.get_id() * 8);
+      ObBucketHashWLockGuard compile_num_guard(GCTX.pl_engine_->get_jit_lock().second, (package.get_id() % GCONF._ob_pl_compile_max_concurrency) * 8);
+
       // check session status after get lock
       OZ (ObPL::check_session_alive(session_info_));
 

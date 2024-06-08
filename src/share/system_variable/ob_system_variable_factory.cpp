@@ -333,6 +333,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "parallel_servers_target",
   "performance_schema",
   "plsql_ccflags",
+  "plsql_optimize_level",
   "plsql_warnings",
   "plugin_dir",
   "privilege_features_enable",
@@ -597,6 +598,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_PARALLEL_SERVERS_TARGET,
   SYS_VAR_PERFORMANCE_SCHEMA,
   SYS_VAR_PLSQL_CCFLAGS,
+  SYS_VAR_PLSQL_OPTIMIZE_LEVEL,
   SYS_VAR_PLSQL_WARNINGS,
   SYS_VAR_PLUGIN_DIR,
   SYS_VAR_PRIVILEGE_FEATURES_ENABLE,
@@ -933,7 +935,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "stored_program_cache",
   "ob_compatibility_control",
   "ob_compatibility_version",
-  "ob_security_version"
+  "ob_security_version",
+  "plsql_optimize_level"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -1363,6 +1366,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObCompatibilityControl)
         + sizeof(ObSysVarObCompatibilityVersion)
         + sizeof(ObSysVarObSecurityVersion)
+        + sizeof(ObSysVarPlsqlOptimizeLevel)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -3718,6 +3722,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_SECURITY_VERSION))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObSecurityVersion));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_OPTIMIZE_LEVEL))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlOptimizeLevel));
       }
     }
 
@@ -6598,6 +6611,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObSecurityVersion())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObSecurityVersion", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_PLSQL_OPTIMIZE_LEVEL: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarPlsqlOptimizeLevel)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarPlsqlOptimizeLevel)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlOptimizeLevel())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarPlsqlOptimizeLevel", K(ret));
       }
       break;
     }
