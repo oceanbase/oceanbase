@@ -2476,7 +2476,7 @@ public:
                           int64_t &pos);
 
   int init(const ObString &exec_env);
-  int load(ObBasicSessionInfo &session, ObIAllocator *alloc = NULL);
+  int load(ObBasicSessionInfo &session, ObIAllocator *alloc);
   int store(ObBasicSessionInfo &session);
 
   ObSQLMode get_sql_mode() const { return sql_mode_; }
