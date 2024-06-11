@@ -389,9 +389,6 @@ int ObTableLockOp::lock_row_to_das()
     if (OB_FAIL(ObDMLService::process_lock_row(lock_ctdef, lock_rtdef, is_skipped, *this))) {
       LOG_WARN("process lock row failed", K(ret));
     } else if (OB_UNLIKELY(is_skipped)) {
-      //this row has been skipped, so can not write to DAS buffer
-      //but need record into affected_rows
-      plan_ctx->add_affected_rows(1LL);
     } else if (OB_FAIL(calc_tablet_loc(lock_ctdef, lock_rtdef, tablet_loc))) {
       LOG_WARN("calc partition key failed", K(ret));
     } else if (OB_FAIL(ObDMLService::lock_row(lock_ctdef, lock_rtdef, tablet_loc, dml_rtctx_))) {
@@ -402,8 +399,6 @@ int ObTableLockOp::lock_row_to_das()
       } else if (MY_SPEC.is_nowait() && OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
         ret = OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT;
       }
-    } else {
-      plan_ctx->add_affected_rows(1LL);
     }
   }
   return ret;
