@@ -370,7 +370,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
     int tmp_ret = OB_SUCCESS;
     {
       ObSQLSessionInfo::LockGuard lock_guard(session_info->get_thread_data_lock());
-      OX (session_info->set_job_info(nullptr));
+      session_info->set_job_info(nullptr);
     }
     if (OB_TMP_FAIL(destroy_session(free_session_ctx, session_info))) {
       LOG_WARN("failed to destroy session", KR(tmp_ret));
