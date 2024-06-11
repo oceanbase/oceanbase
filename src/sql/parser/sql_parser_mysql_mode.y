@@ -6562,7 +6562,11 @@ table_option
 }
 | table_option  table_option_list_space_seperated
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
+  } else {
+    $$ = $2;
+  }
 }
 ;
 
@@ -6573,7 +6577,11 @@ table_option_list_space_seperated
 }
 | table_option ',' table_option_list
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($1 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $3;
+  }
 }
 ;
 
@@ -15856,7 +15864,11 @@ alter_table_action
 }
 | alter_table_actions ',' alter_table_action
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  if ($3 != NULL) {
+    malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+  } else {
+    $$ = $1;
+  }
 }
 ;
 
