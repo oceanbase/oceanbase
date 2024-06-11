@@ -1591,6 +1591,8 @@ int ObMySQLProcStatement::process_proc_output_params(ObIAllocator &allocator,
               tmp_buf_len = sizeof(float);
             } else if (MYSQL_TYPE_DOUBLE ==  out_param->buffer_type_) {
               tmp_buf_len = sizeof(double);
+            } else if (MYSQL_TYPE_LONG == out_param->buffer_type_) {
+              tmp_buf_len = sizeof(int64_t);
             }
             if (tmp_buf_len > 0) {
               if (OB_ISNULL(tmp_buf = allocator.alloc(tmp_buf_len))) {

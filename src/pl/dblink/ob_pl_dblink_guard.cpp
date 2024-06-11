@@ -59,6 +59,7 @@ int ObPLDbLinkGuard::get_routine_infos_with_synonym(sql::ObSQLSessionInfo &sessi
   OZ (ObPLDblinkUtil::init_dblink(dblink_proxy, dblink_conn, session_info, schema_guard, dblink_name, link_type, false));
   CK (OB_NOT_NULL(dblink_proxy));
   CK (OB_NOT_NULL(dblink_conn));
+  OZ (check_remote_version(*dblink_proxy, *dblink_conn));
   OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
   OZ (dblink_name_resolve(dblink_proxy,
                           dblink_conn,
@@ -195,6 +196,7 @@ int ObPLDbLinkGuard::get_dblink_type_with_synonym(sql::ObSQLSessionInfo &session
     const ObDbLinkSchema *dblink_schema = NULL;
     OZ (schema_guard.get_dblink_schema(MTL_ID(), dblink_name, dblink_schema), dblink_name);
     OV (OB_NOT_NULL(dblink_schema), OB_ERR_UNEXPECTED, dblink_name);
+    OZ (check_remote_version(*dblink_proxy, *dblink_conn));
     OZ (ObPLDblinkUtil::print_full_name(alloc_, full_name, part1, part2, part3));
     OZ (dblink_name_resolve(dblink_proxy,
                             dblink_conn,
@@ -591,6 +593,41 @@ int ObPLDbLinkGuard::get_dblink_info(const uint64_t dblink_id,
       LOG_WARN("dblink_info is null", K(ret), K(i));
     } else if (dblink_infos_.at(i)->get_dblink_id() == dblink_id) {
       dblink_info = dblink_infos_.at(i);
+    }
+  }
+  return ret;
+}
+
+int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
+                                          common::sqlclient::ObISQLConnection &dblink_conn)
+{
+  int ret = OB_SUCCESS;
+  if (DblinkDriverProto::DBLINK_DRV_OB == dblink_conn.get_dblink_driver_proto()) {
+    int part1 = 0;
+    int part2 = 0;
+    int part3 = 0;
+    int32_t ind = 0;
+    int64_t size = static_cast<int64_t>(sizeof(int));
+    const char *anonymous_block = "declare  "
+                                  "   version_str varchar2(100); "
+                                  " begin "
+                                  "   select OB_VERSION() into version_str from dual; "
+                                  "   :1 := TO_NUMBER(REGEXP_SUBSTR(version_str, '[^.]+', 1, 1)); "
+                                  "   :2 := TO_NUMBER(REGEXP_SUBSTR(version_str, '[^.]+', 1, 2)); "
+                                  "   :3 := TO_NUMBER(REGEXP_SUBSTR(version_str, '[^.]+', 1, 3)); "
+                                  " end; ";
+    OZ (dblink_proxy.dblink_prepare(&dblink_conn, anonymous_block, 3));
+    OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 1, &part1, size, ObObjType::ObInt32Type, ind, true));
+    OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 2, &part2, size, ObObjType::ObInt32Type, ind, true));
+    OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 3, &part3, size, ObObjType::ObInt32Type, ind, true));
+    OZ (dblink_proxy.dblink_execute_proc(&dblink_conn));
+    if (OB_SUCC(ret)) {
+      if (part1 < 4 || part2 < 2 || part3 < 4) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support dblink", K(ret), K(part1), K(part2), K(part3));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+          "oceanbase PL dblink oceanbase PL oracle mode, remote database version less then 4.2.4.0");
+      }
     }
   }
   return ret;
