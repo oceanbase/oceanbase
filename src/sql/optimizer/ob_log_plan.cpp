@@ -12355,7 +12355,7 @@ int ObLogPlan::calc_plan_resource()
                                  get_optimizer_context().get_minimal_worker_map()))) {
       LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
     } else {
-      LOG_TRACE("max parallel thread group count",
+      LOG_TRACE("[PxResAnaly]max parallel thread group count",
                K(max_parallel_thread_count), K(max_parallel_group_count));
       get_optimizer_context().set_expected_worker_count(max_parallel_thread_count);
       get_optimizer_context().set_minimal_worker_count(max_parallel_group_count);

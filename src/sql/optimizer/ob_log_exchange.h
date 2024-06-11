@@ -15,6 +15,7 @@
 #include "lib/allocator/page_arena.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/engine/px/ob_px_basic_info.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -59,7 +60,8 @@ public:
       need_null_aware_shuffle_(false),
       is_old_unblock_mode_(true),
       sample_type_(NOT_INIT_SAMPLE_TYPE),
-      in_server_cnt_(0)
+      in_server_cnt_(0),
+      px_info_(NULL)
   {
     repartition_table_id_ = 0;
   }
@@ -187,6 +189,10 @@ public:
                             const ObIArray<ObRawExpr *> &keys);
   inline void set_in_server_cnt(int64_t in_server_cnt) {  in_server_cnt_ = in_server_cnt;  }
   inline int64_t get_in_server_cnt() {  return in_server_cnt_;  }
+  virtual int open_px_resource_analyze(OPEN_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
+  virtual int close_px_resource_analyze(CLOSE_PX_RESOURCE_ANALYZE_DECLARE_ARG) override;
+  void set_px_info(ObPxResourceAnalyzer::PxInfo *px_info) { px_info_ = px_info; }
+  ObPxResourceAnalyzer::PxInfo *get_px_info() { return px_info_; }
 private:
   int prepare_px_pruning_param(ObLogicalOperator *op, int64_t &count,
       common::ObIArray<const ObDMLStmt *> &stmts, common::ObIArray<int64_t> &drop_expr_idxs);
@@ -263,6 +269,7 @@ private:
   ObPxSampleType sample_type_;
   // -end pkey range/range
   int64_t in_server_cnt_; // for producer, need use exchange in server cnt to compute cost
+  ObPxResourceAnalyzer::PxInfo *px_info_;
   DISALLOW_COPY_AND_ASSIGN(ObLogExchange);
 };
 } // end of namespace sql

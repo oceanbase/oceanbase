@@ -30,7 +30,8 @@ public:
   virtual int compute_fd_item_set() override;
   virtual int est_cost() override;
   virtual int est_width() override;
-  virtual bool is_block_op() const override { return true; }
+  virtual bool is_block_op() const override { return false; }
+  virtual bool is_block_input(const int64_t child_idx) const override { return child_idx != get_num_of_child() - 1; }
   virtual int compute_op_parallel_and_server_info() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
   int get_temp_table_exprs(ObIArray<ObRawExpr *> &set_exprs) const;
