@@ -1268,9 +1268,6 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_SUCCESS != (tmp_ret = update_tenant_dag_scheduler_config())) {
         LOG_WARN("failed to update tenant dag scheduler config", K(tmp_ret), K(tenant_id));
       }
-      if (OB_SUCCESS != (tmp_ret = resize_tenant_query_response_time_multi_way_size())) {
-        LOG_WARN("failed to resize tenant query response time multi way size", K(tmp_ret), K(tenant_id));
-      }
       if (OB_SUCCESS != (tmp_ret = update_tenant_query_response_time_flush_config())) {
         LOG_WARN("failed to update tenant query response time flush config", K(tmp_ret), K(tenant_id));
       }
@@ -1361,22 +1358,7 @@ int ObMultiTenant::update_tenant_query_response_time_flush_config()
   }
   return ret;
 }
-int ObMultiTenant::resize_tenant_query_response_time_multi_way_size()
-{
-  int ret = OB_SUCCESS;
-  observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_ISNULL(t_query_resp_time_collector)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("t_query_resp_time_collector should not be null", K(ret));
-  } else if (t_query_resp_time_collector->get_multi_ways_count() <= MTL_CPU_COUNT() * 2) {
-    if (OB_FAIL(t_query_resp_time_collector->resize())) {
-      LOG_WARN("failed to resize tenant query response time", K(ret));
-    }
-  }
-  return ret;
-}
+
 int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
                                                 const int64_t tenant_min_mem,
                                                 const int64_t tenant_max_mem)

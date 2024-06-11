@@ -115,7 +115,7 @@ private:
 
 class ObTenantQueryRespTimeCollector {
 public:
-  ObTenantQueryRespTimeCollector() {};
+  ObTenantQueryRespTimeCollector(): multi_collector_(),rwlock_(),flush_config_version_(0),multi_ways_count_(64) {};
   ~ObTenantQueryRespTimeCollector() {};
   int init();
   void destroy();
@@ -128,7 +128,6 @@ public:
   int flush();
   int64_t get_flush_config_version() const { return flush_config_version_; };
   void set_flush_config_version(int64_t version) { ATOMIC_SET(&flush_config_version_, version); };
-  int64_t get_multi_ways_count() const { return ATOMIC_LOAD(&multi_ways_count_);};
 
 private:
   typedef common::RWLock::RLockGuard RLockGuard;
@@ -136,7 +135,7 @@ private:
   ObArray<ObRespTimeInfoCollector> multi_collector_;
   common::RWLock rwlock_; //for leader revoke/takeover submit log
   int64_t flush_config_version_;
-  int64_t multi_ways_count_;
+  const int64_t multi_ways_count_;
   DISALLOW_COPY_AND_ASSIGN(ObTenantQueryRespTimeCollector);
 }; // end of class ObTenantQueryRespTimeCollector
 

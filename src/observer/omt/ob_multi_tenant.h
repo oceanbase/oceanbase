@@ -117,7 +117,6 @@ public:
   int update_tenant_config(uint64_t tenant_id);
   int update_palf_config();
   int update_tenant_dag_scheduler_config();
-  int resize_tenant_query_response_time_multi_way_size();
   int update_tenant_query_response_time_flush_config();
   int get_tenant(const uint64_t tenant_id, ObTenant *&tenant) const;
   int get_tenant_with_tenant_lock(const uint64_t tenant_id, common::ObLDHandle &handle, ObTenant *&tenant) const;

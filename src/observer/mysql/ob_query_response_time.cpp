@@ -251,11 +251,9 @@ int ObTenantQueryRespTimeCollector::init()
 {
   int ret = OB_SUCCESS;
   flush_config_version_ = 0;
-  const int64_t multi_ways_count = MTL_CPU_COUNT() * 4; // 4* max_cpu_cnt
   multi_collector_.set_tenant_id(MTL_ID());
   multi_collector_.set_attr(ObMemAttr(MTL_ID(), "RespTimeColl"));
-  multi_collector_.prepare_allocate(multi_ways_count); // Memory is allocated in advance and objects are constructed in advance.
-  ATOMIC_SET(&multi_ways_count_, multi_ways_count);
+  multi_collector_.prepare_allocate(multi_ways_count_); // Memory is allocated in advance and objects are constructed in advance.
   return ret;
 }
 
@@ -263,7 +261,6 @@ void ObTenantQueryRespTimeCollector::destroy()
 {
   multi_collector_.destroy();
   flush_config_version_ = 0;
-  ATOMIC_SET(&multi_ways_count_, 0);
 }
 
 int ObTenantQueryRespTimeCollector::mtl_init(ObTenantQueryRespTimeCollector *&t_resp_time_collector)
@@ -291,7 +288,7 @@ void ObTenantQueryRespTimeCollector::mtl_destroy(ObTenantQueryRespTimeCollector 
 int ObTenantQueryRespTimeCollector::collect(const sql::stmt::StmtType sql_type, const bool is_inner_sql, const uint64_t resp_time)
 {
   int ret = OB_SUCCESS;
-  const size_t pos = (GETTID() * 1013) % ATOMIC_LOAD(&multi_ways_count_);
+  const size_t pos = std::abs(GETTID()) % multi_ways_count_;
   if (OB_FAIL(multi_collector_.at(pos).collect(sql_type, is_inner_sql, resp_time))) {
     LOG_WARN("failed to collect response time",K(ret), K(pos), K(sql_type), K(resp_time), K(is_inner_sql));
   }
@@ -306,8 +303,7 @@ int ObTenantQueryRespTimeCollector::get_sum_value(ObRespTimeInfoCollector &total
   if (OB_FAIL(total_collector.flush(multi_collector_.at(0).utility().base()))) {
     LOG_WARN("failed to flush total collector", K(ret), K(MTL_ID()));
   } else {
-    const int64_t multi_ways_count = ATOMIC_LOAD(&multi_ways_count_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count_; i++) {
       for (int64_t j = 0; OB_SUCC(ret) && j < total_collector.utility().bound_count(); j++) {
 #define DEF_RESP_TIME_SQL_TYPE(name)           \
         total_collector.name##_info_.count_[j] +=  \
@@ -323,23 +319,11 @@ int ObTenantQueryRespTimeCollector::get_sum_value(ObRespTimeInfoCollector &total
   return ret;
 }
 
-int ObTenantQueryRespTimeCollector::resize()
-{
-  int ret = OB_SUCCESS;
-  WLockGuard wlock_guard(rwlock_);
-  if (MTL_CPU_COUNT() * 2 >= multi_ways_count_) {
-    const int64_t multi_ways_count = MTL_CPU_COUNT() * 4; // 4* max_cpu_cnt
-    multi_collector_.prepare_allocate(multi_ways_count); // Memory is allocated in advance and objects are constructed in advance.
-    ATOMIC_SET(&multi_ways_count_, multi_ways_count);
-  }
-  return ret;
-}
 int ObTenantQueryRespTimeCollector::flush()
 {
   int ret = OB_SUCCESS;
   WLockGuard wlock_guard(rwlock_);
-  const int64_t multi_ways_count = ATOMIC_LOAD(&multi_ways_count_);
-  for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < multi_ways_count_; i++) {
     if (OB_FAIL(multi_collector_.at(i).flush())) {
       LOG_WARN("failed to flush resp time info collector", K(ret), K(i));
     }
