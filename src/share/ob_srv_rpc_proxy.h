@@ -251,6 +251,7 @@ public:
   RPC_S(PR5 session_info_diagnosis, OB_SESS_INFO_DIAGNOSIS, (ObSessInfoDiagnosisArg));
   RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
   RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);
+  RPC_AP(PR5 refresh_service_name, OB_REFRESH_SERVICE_NAME, (obrpc::ObRefreshServiceNameArg), obrpc::ObRefreshServiceNameRes);
   RPC_AP(PR5 get_tenant_logical_resource, OB_CAL_STANDBY_TENANT_PHY_RESOURCE, (obrpc::ObGetTenantResArg), obrpc::ObTenantLogicalRes);
 
   RPC_S(PR5 phy_res_calculate_by_unit, OB_CAL_UNIT_PHY_RESOURCE, (obrpc::Int64), share::ObMinPhyResourceResult);

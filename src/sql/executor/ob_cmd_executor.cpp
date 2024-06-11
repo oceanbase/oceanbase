@@ -1062,6 +1062,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
         break;
       }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
+        break;
+      }
       case stmt::T_EVENT_JOB_CREATE: {
         DEFINE_EXECUTE_CMD(ObCreateEventStmt, ObCreateEventExecutor);
         break;

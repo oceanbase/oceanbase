@@ -386,6 +386,7 @@ const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle
 const uint64_t OB_MAX_INTERVAL_PARTITIONS = 1048575; // interval parted table max partitions
 const int64_t OB_MAX_BALANCE_GROUP_NAME_LENGTH = 512;
+const int64_t OB_SERVICE_NAME_LENGTH = 64;
 
 //plan cache
 const int64_t OB_PC_NOT_PARAM_COUNT = 8;
@@ -1456,6 +1457,11 @@ const char *const OB_MYSQL_PROXY_VEERSION = "__proxy_version";
 
 const char *const OB_MYSQL_CLIENT_VERSION = "__ob_client_version";
 const char *const OB_MYSQL_CLIENT_NAME = "__ob_client_name";
+
+const char *const OB_MYSQL_FAILOVER_MODE = "__proxy_failover_mode";
+const char *const OB_MYSQL_FAILOVER_MODE_OFF = "off";
+const char *const OB_MYSQL_FAILOVER_MODE_ON = "on";
+const char *const OB_MYSQL_SERVICE_NAME = "__proxy_service_name";
 
 const char *const OB_MYSQL_JDBC_CLIENT_NAME = "OceanBase Connector/J";
 const char *const OB_MYSQL_OCI_CLIENT_NAME = "OceanBase Connector/C";

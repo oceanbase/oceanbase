@@ -692,6 +692,10 @@ DEFINE_ERROR_EXT_DEP(OB_LS_WAITING_SAFE_DESTROY, -4766, -1, "HY000", "ls waiting
 DEFINE_ERROR(OB_LS_NOT_LEADER, -4767, -1, "HY000", "log stream is not leader log stream");
 DEFINE_ERROR_EXT_DEP(OB_LS_LOCK_CONFLICT, -4768, -1, "HY000", "ls lock conflict", "ls lock conflict, %s");
 DEFINE_ERROR_EXT_DEP(OB_INVALID_ROOT_KEY, -4769, -1, "HY000", "invalid root key", "%s");
+DEFINE_ERROR(OB_SERVICE_NAME_NOT_FOUND, -4780, -1, "HY000", "This service_name is not found in the tenant");
+DEFINE_ERROR(OB_SERVICE_NOT_FULLY_STARTED, -4781, -1, "HY000", "The service has not started on all servers");
+DEFINE_ERROR(OB_NOT_PRIMARY_TENANT, -4782, -1, "HY000", "The tenant is not PRIMARY");
+DEFINE_ERROR(OB_SERVICE_STOPPED, -4783, -1, "HY000", "The service has stopped");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

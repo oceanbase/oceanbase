@@ -459,6 +459,10 @@ constexpr int OB_SKIP_CHECKING_LS_STATUS = -4762;
 constexpr int OB_ERR_USE_ROWID_FOR_UPDATE = -4763;
 constexpr int OB_ERR_UNKNOWN_SET_OPTION = -4764;
 constexpr int OB_LS_NOT_LEADER = -4767;
+constexpr int OB_SERVICE_NAME_NOT_FOUND = -4780;
+constexpr int OB_SERVICE_NOT_FULLY_STARTED = -4781;
+constexpr int OB_NOT_PRIMARY_TENANT = -4782;
+constexpr int OB_SERVICE_STOPPED = -4783;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -2417,6 +2421,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__USER_ERROR_MSG "log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__USER_ERROR_MSG "ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__USER_ERROR_MSG "%s"
+#define OB_SERVICE_NAME_NOT_FOUND__USER_ERROR_MSG "This service_name is not found in the tenant"
+#define OB_SERVICE_NOT_FULLY_STARTED__USER_ERROR_MSG "The service has not started on all servers"
+#define OB_NOT_PRIMARY_TENANT__USER_ERROR_MSG "The tenant is not PRIMARY"
+#define OB_SERVICE_STOPPED__USER_ERROR_MSG "The service has stopped"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -4642,6 +4650,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_LS_NOT_LEADER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4767, log stream is not leader log stream"
 #define OB_LS_LOCK_CONFLICT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4768, ls lock conflict, %s"
 #define OB_INVALID_ROOT_KEY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4769, %s"
+#define OB_SERVICE_NAME_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4780, This service_name is not found in the tenant"
+#define OB_SERVICE_NOT_FULLY_STARTED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4781, The service has not started on all servers"
+#define OB_NOT_PRIMARY_TENANT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4782, The tenant is not PRIMARY"
+#define OB_SERVICE_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4783, The service has stopped"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5002, Resolve error"
@@ -6304,7 +6316,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2221];
+extern int g_all_ob_errnos[2225];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

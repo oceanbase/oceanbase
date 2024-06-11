@@ -10820,5 +10820,104 @@ int ObDumpServerUsageResult::assign(const ObDumpServerUsageResult &rhs)
   }
   return ret;
 }
+OB_SERIALIZE_MEMBER(ObRefreshServiceNameArg, tenant_id_, epoch_, from_server_, target_service_name_id_,
+    service_name_list_, service_op_, update_tenant_info_arg_);
+int ObRefreshServiceNameArg::init(
+      const uint64_t tenant_id,
+      const uint64_t epoch,
+      const ObAddr &from_server,
+      const share::ObServiceNameID &target_service_name_id,
+      const common::ObIArray<share::ObServiceName> &service_name_list,
+      const share::ObServiceNameArg::ObServiceOp &service_op,
+      const share::ObAllTenantInfo &tenant_info,
+      const int64_t ora_rowscn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || 0 == epoch || INT64_MAX == epoch
+      || !from_server.is_valid() || !target_service_name_id.is_valid() || service_name_list.count() <= 0
+      || !ObServiceNameArg::is_valid_service_op(service_op))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(epoch), K(from_server), K(target_service_name_id),
+        K(service_name_list), K(service_op));
+  } else {
+    tenant_id_ = tenant_id;
+    epoch_ = epoch;
+    from_server_ = from_server;
+    target_service_name_id_ = target_service_name_id;
+    service_op_ = service_op;
+    for (int64_t i = 0; i < service_name_list.count(); ++i) {
+      const ObServiceName &service_name = service_name_list.at(i);
+      if (OB_UNLIKELY(!service_name.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid service_name", KR(ret), K(service_name), K(i), K(service_name_list));
+      } else if (OB_FAIL(service_name_list_.push_back(service_name))) {
+        LOG_WARN("fail to push back", KR(ret), K(service_name), K(service_name_list_));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && is_start_service()) {
+    if (OB_FAIL(update_tenant_info_arg_.init(tenant_id, tenant_info, ora_rowscn))) {
+      LOG_WARN("fail to init update_tenant_info_arg_", KR(ret), K(tenant_id), K(tenant_info), K(ora_rowscn));
+    }
+  }
+  return ret;
+}
+bool ObRefreshServiceNameArg::is_valid() const
+{
+  bool service_name_list_valid = service_name_list_.count() > 0;
+  for (int64_t i = 0; i < service_name_list_.count() && service_name_list_valid; ++i) {
+      if (OB_UNLIKELY(!service_name_list_.at(i).is_valid())) {
+        service_name_list_valid = false;
+      }
+  }
+  return is_valid_tenant_id(tenant_id_)
+      && 0 != epoch_ && INT64_MAX != epoch_ && from_server_.is_valid()
+      && target_service_name_id_.is_valid() && service_name_list_valid
+      && ObServiceNameArg::is_valid_service_op(service_op_)
+      && (!is_start_service() || update_tenant_info_arg_.is_valid());
+}
+int ObRefreshServiceNameArg::assign(const ObRefreshServiceNameArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(service_name_list_.assign(other.service_name_list_))) {
+      LOG_WARN("fail to assign service_name_str_", KR(ret), K(other));
+    } else if (OB_FAIL(update_tenant_info_arg_.assign(other.update_tenant_info_arg_))) {
+      LOG_WARN("fail to assign update_tenant_info_arg_", KR(ret), K(other));
+    } else {
+      tenant_id_ = other.tenant_id_;
+      epoch_ = other.epoch_;
+      from_server_ = other.from_server_;
+      target_service_name_id_ = other.target_service_name_id_;
+      service_op_ = other.service_op_;
+    }
+  }
+  return ret;
+}
+OB_SERIALIZE_MEMBER(ObRefreshServiceNameRes, tenant_id_);
+int ObRefreshServiceNameRes::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+bool ObRefreshServiceNameRes::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_);
+}
+int ObRefreshServiceNameRes::assign(const ObRefreshServiceNameRes &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
 }//end namespace obrpc
 }//end namepsace oceanbase

@@ -35,6 +35,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/ob_errno.h"
 #include "share/oracle_errno.h"//oracle error code
+#include "rootserver/ob_service_name_command.h"
 
 namespace oceanbase
 {
@@ -350,6 +351,8 @@ int ObTenantRoleTransitionService::do_failover_to_primary_(const share::ObAllTen
     Then the tenant fetching log will no longer utilize tenant_sync_scn + 3s as a reference point.
   **/
   if (OB_FAIL(ret) || is_verify_) {
+  } else if (OB_FAIL(clear_service_name_())) {
+    LOG_WARN("fail to execute clear_service_name", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(ObAllTenantInfoProxy::update_tenant_role(
       tenant_id_, sql_proxy_, tenant_info.get_switchover_epoch(),
       share::STANDBY_TENANT_ROLE, tenant_info.get_switchover_status(),
@@ -393,7 +396,11 @@ int ObTenantRoleTransitionService::do_prepare_flashback_(share::ObAllTenantInfo 
       LOG_WARN("failed to do_prepare_flashback_for_switch_to_primary_", KR(ret), K(tenant_info));
     }
   } else if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY == switch_optype_) {
-    if (OB_FAIL(do_prepare_flashback_for_failover_to_primary_(tenant_info))) {
+    if (OB_FAIL(double_check_service_name_(tenant_info))) {
+      // do double check here
+      // so_status is not normal, service name related commands is not allowed
+      LOG_WARN("fail to execute double_check_service_name_", KR(ret), K(tenant_info));
+    } else if (OB_FAIL(do_prepare_flashback_for_failover_to_primary_(tenant_info))) {
       LOG_WARN("failed to do_prepare_flashback_for_failover_to_primary_", KR(ret), K(tenant_info));
     }
   } else {
@@ -494,6 +501,62 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_failover_to_primary_
     LOG_WARN("switchover is concurrency", KR(ret), K(tenant_info), K_(switchover_epoch));
   }
 
+  return ret;
+}
+
+int ObTenantRoleTransitionService::clear_service_name_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObServiceName> all_service_names;
+  int64_t epoch = 0;
+  if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY != switch_optype_) {
+    // do nothing
+  } else if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id_))) {
+    if (OB_NOT_SUPPORTED == ret) {
+      ret = OB_SUCCESS;
+    }
+    LOG_WARN("service_name is not enabled, no need to execute clear_service_name", KR(ret), K(tenant_id_));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names(tenant_id_, epoch, all_service_names))) {
+    LOG_WARN("fail to execute select_all_service_names", KR(ret), K(tenant_id_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_service_names.count(); i++) {
+      const ObServiceName &service_name = all_service_names.at(i);
+      if (OB_FAIL(ObServiceNameCommand::stop_service(tenant_id_, service_name.get_service_name_str()))) {
+        LOG_WARN("fail to execute stop_service", KR(ret), K(tenant_id_), K(service_name));
+      } else if (OB_FAIL(ObServiceNameCommand::delete_service(tenant_id_, service_name.get_service_name_str()))) {
+        LOG_WARN("fail to execute delete_service", KR(ret), K(tenant_id_), K(service_name));
+      }
+    }
+  }
+  return ret;
+}
+int ObTenantRoleTransitionService::double_check_service_name_(const share::ObAllTenantInfo &tenant_info)
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObServiceName> all_service_names;
+  int64_t service_num = 0;
+  if (obrpc::ObSwitchTenantArg::OpType::FAILOVER_TO_PRIMARY != switch_optype_) {
+    // do nothing
+  } else if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id_))) {
+    if (OB_NOT_SUPPORTED == ret) {
+      ret = OB_SUCCESS;
+    }
+    LOG_WARN("service_name is not enabled, no need to execute double_check_service_name_", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(tenant_info.is_normal_status())) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("not allowed to do double check when switchover status is NORMAL", KR(ret), K(tenant_info));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(ObServiceNameProxy::get_tenant_service_name_num(*GCTX.sql_proxy_, tenant_id_, service_num))) {
+    LOG_WARN("fail to execute get_tenant_service_name_num", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(0 != service_num)) {
+    ret = OB_NEED_RETRY;
+    LOG_WARN("the tenant should have zero service_name", KR(ret), K(service_num));
+  }
   return ret;
 }
 

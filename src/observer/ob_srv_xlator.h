@@ -157,6 +157,7 @@ protected:
   int get_mp_connect_processor(ObReqProcessor *&ret_proc);
 
 private:
+  int check_service_name_(rpc::ObRequest &req);
   const ObGlobalContext &gctx_;
   DISALLOW_COPY_AND_ASSIGN(ObSrvMySQLXlator);
 }; // end of class ObSrvMySQLXlator

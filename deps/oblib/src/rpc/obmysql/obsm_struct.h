@@ -77,6 +77,7 @@ public:
     pkt_rec_wrapper_.init();
     client_type_ = common::OB_CLIENT_INVALID_TYPE;
     client_version_ = 0;
+    has_service_name_ = false;
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -209,6 +210,7 @@ public:
   obmysql::ObPacketRecordWrapper pkt_rec_wrapper_;
   ObClientType client_type_;
   uint64_t client_version_;
+  bool has_service_name_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

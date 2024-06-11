@@ -47,6 +47,8 @@
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/plan_cache/ob_ps_cache.h"
 #include "share/table/ob_ttl_util.h"
+#include "rootserver/ob_service_name_command.h"
+#include "rootserver/ob_tenant_event_def.h"
 namespace oceanbase
 {
 using namespace common;
@@ -54,7 +56,7 @@ using namespace obrpc;
 using namespace share;
 using namespace omt;
 using namespace obmysql;
-
+using namespace tenant_event;
 namespace sql
 {
 int ObFreezeExecutor::execute(ObExecContext &ctx, ObFreezeStmt &stmt)
@@ -2080,6 +2082,7 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
   } else {
     ObSwitchTenantArg &arg = stmt.get_arg();
     arg.set_stmt_str(first_stmt);
+    ObSQLSessionInfo *session_info = ctx.get_my_session();
 
     //left 200ms to return result
     const int64_t remain_timeout_interval_us = THIS_WORKER.get_timeout_remain();
@@ -2091,6 +2094,14 @@ int ObSwitchTenantExecutor::execute(ObExecContext &ctx, ObSwitchTenantStmt &stmt
 
     // TODO support specify ALL
     if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(session_info)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session_info is null", KR(ret), KP(session_info));
+    } else if (OB_UNLIKELY(!session_info->get_service_name().is_empty())) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("switching tenant role cannot be executed in the session which is created via service_name",
+          KR(ret), K(session_info->get_service_name()));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "This session is created via service_name, switching tenant is");
     } else if (OB_FAIL(OB_STANDBY_SERVICE.switch_tenant(arg))) {
       LOG_WARN("failed to switch_tenant", KR(ret), K(arg));
     }
@@ -2729,6 +2740,50 @@ int ObTransferPartitionExecutor::execute(ObExecContext& ctx, ObTransferPartition
     LOG_WARN("invaid argument", KR(ret), K(arg));
   } else if (OB_FAIL(command.execute(arg))) {
     LOG_WARN("fail to execute command", KR(ret), K(arg));
+  }
+  return ret;
+}
+int ObServiceNameExecutor::execute(ObExecContext& ctx, ObServiceNameStmt& stmt)
+{
+  int ret = OB_SUCCESS;
+  const ObServiceNameArg &arg = stmt.get_arg();
+  const ObServiceNameString &service_name_str = arg.get_service_name_str();
+  const ObServiceNameArg::ObServiceOp &service_op = arg.get_service_op();
+  const uint64_t tenant_id = arg.get_target_tenant_id();
+  ObSQLSessionInfo *session_info = ctx.get_my_session();
+  if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id))) {
+    LOG_WARN("fail to execute check_is_service_name_enabled", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The tenant's or meta tenant's data_version is smaller than 4_2_4_0, service name related command is");
+  } else if (OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session_info is null", KR(ret), KP(session_info));
+  } else if (OB_UNLIKELY(!session_info->get_service_name().is_empty())) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("service_name related commands cannot be executed in the session which is created via service_name",
+        KR(ret), K(session_info->get_service_name()));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "This session is created via service_name, service name related command is");
+  } else if (arg.is_create_service()) {
+    if (OB_FAIL(ObServiceNameCommand::create_service(tenant_id, service_name_str))) {
+      LOG_WARN("fail to create service", KR(ret), K(tenant_id), K(service_name_str));
+    }
+  } else if (arg.is_delete_service()) {
+    if (OB_FAIL(ObServiceNameCommand::delete_service(tenant_id, service_name_str))) {
+      LOG_WARN("fail to delete service", KR(ret), K(tenant_id), K(service_name_str));
+    }
+  } else if (arg.is_start_service()) {
+    if (OB_FAIL(ObServiceNameCommand::start_service(tenant_id, service_name_str))) {
+      LOG_WARN("fail to start service", KR(ret), K(tenant_id), K(service_name_str));
+    }
+  } else if (arg.is_stop_service()) {
+    if (OB_FAIL(ObServiceNameCommand::stop_service(tenant_id, service_name_str))) {
+      LOG_WARN("fail to stop service", KR(ret), K(tenant_id), K(service_name_str));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unknown service operation", KR(ret), K(arg));
   }
   return ret;
 }

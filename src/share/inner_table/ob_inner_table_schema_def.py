@@ -6934,6 +6934,26 @@ def_table_schema(**all_user_proxy_role_info_def)
 def_table_schema(**gen_history_table_def(515, all_user_proxy_role_info_def))
 
 def_table_schema(
+  owner = 'linqiucen.lqc',
+  table_name    = '__all_service',
+  table_id = '516',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('service_name_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('service_name', 'varchar:OB_SERVICE_NAME_LENGTH'),
+    ('service_status', 'varchar:64', 'false'),
+  ],
+)
+
+def_table_schema(
   owner = 'fyy280124',
   table_name     = '__all_scheduler_job_run_detail_v2',
   table_id       = '519',
@@ -6980,9 +7000,7 @@ def_table_schema(
 ################################################################################
 
 ################################### 占位须知 ###################################
-# 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
 # TABLE_ID: TABLE_NAME
-#
 # FARM 会基于占位校验开发分支TABLE_ID和TABLE_NAME是否匹配，如果不匹配，FARM就会拦截报错
 #
 # 注意：
@@ -7227,6 +7245,7 @@ def_table_schema(
   ('out_bytes', 'bigint'),
   ('user_client_port', 'int', ' false', '0'),
   ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
+  ('service_name', 'varchar:64', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14059,6 +14078,12 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_user_proxy_role_info_history',
   keywords = all_def_keywords['__all_user_proxy_role_info_history']))
 
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12480',
+  table_name = '__all_virtual_service',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_service']))
+
 def_table_schema(
   owner = 'yanyuan.cxf',
   table_name     = '__all_virtual_tenant_resource_limit',
@@ -14112,7 +14137,6 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_scheduler_job_run_detail_v2',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
 
-# 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -14567,6 +14591,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444'
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15446', all_def_keywords['__all_user_proxy_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15447', all_def_keywords['__all_user_proxy_role_info'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15449', all_def_keywords['__all_virtual_service'])))
 # 余留位置
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
@@ -23373,7 +23398,8 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  SERVICE_NAME
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -23423,7 +23449,8 @@ def_table_schema(
     IN_BYTES,
     OUT_BYTES,
     USER_CLIENT_PORT,
-    PROXY_USER
+    PROXY_USER,
+    SERVICE_NAME
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -33935,6 +33962,49 @@ def_table_schema(
     FROM oceanbase.__all_virtual_compatibility_control
 """.replace("\n", " "),
   normal_columns  = [],
+)
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_SERVICES',
+  table_id        = '21548',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS CREATE_TIME,
+    gmt_modified AS MODIFIED_TIME,
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM oceanbase.__all_virtual_service
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'CDB_OB_SERVICES',
+  table_id        = '21549',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS `CREATE_TIME`,
+    gmt_modified AS 'MODIFIED_TIME',
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM oceanbase.__all_virtual_service
+  """.replace("\n", " ")
 )
 
 def_table_schema(
@@ -54309,8 +54379,29 @@ where U1.TENANT_ID = U2.TENANT_ID
   and V.CLIENT_USER_ID = P.CLIENT_USER_ID
 """.replace("\n", " ")
 )
-
-
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_SERVICES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25302',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS "CREATE_TIME",
+    gmt_modified AS "MODIFIED_TIME",
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM SYS.ALL_VIRTUAL_SERVICE
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -54318,7 +54409,6 @@ where U1.TENANT_ID = U2.TENANT_ID
 # End of Oracle Data Dictionary View (25000, 28000]
 ################################################################################
 
-################################### 占位须知 ###################################
 # 占位示例: 顶格写注释，说明要占用哪个TABLE_ID，对应的名字是什么
 # TABLE_ID: TABLE_NAME
 #
@@ -58964,7 +59054,8 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  SERVICE_NAME
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -59016,7 +59107,8 @@ def_table_schema(
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  SERVICE_NAME
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")

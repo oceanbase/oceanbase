@@ -18,6 +18,7 @@
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
 #include "rootserver/ob_transfer_partition_command.h"
+#include "share/ob_service_name_proxy.h"
 
 namespace oceanbase
 {
@@ -1360,6 +1361,15 @@ private:
   rootserver::ObTransferPartitionArg arg_;
 };
 
+class ObServiceNameStmt : public ObSystemCmdStmt
+{
+public:
+  ObServiceNameStmt() : ObSystemCmdStmt(stmt::T_SERVICE_NAME), arg_() {}
+  virtual ~ObServiceNameStmt() {}
+  share::ObServiceNameArg &get_arg() { return arg_; }
+private:
+  share::ObServiceNameArg arg_;
+};
 
 } // end namespace sql
 } // end namespace oceanbase

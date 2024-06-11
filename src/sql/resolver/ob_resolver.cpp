@@ -1219,6 +1219,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(TransferPartition);
         break;
       }
+      case T_SERVICE_NAME: {
+        REGISTER_STMT_RESOLVER(ServiceName);
+        break;
+      }
       case T_REPAIR_TABLE: {
         REGISTER_STMT_RESOLVER(Mock);
         break;

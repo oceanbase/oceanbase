@@ -164,6 +164,7 @@ int ObSMHandler::on_disconnect(easy_connection_t *c)
       } else {
         sess_info->set_session_state(sql::SESSION_KILLED);
         sess_info->set_shadow(true);
+        conn->has_service_name_ = false;
       }
     }
     LOG_INFO("kill and revert session", K(conn->sessid_),

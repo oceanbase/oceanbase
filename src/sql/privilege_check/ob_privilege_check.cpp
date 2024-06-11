@@ -2551,7 +2551,8 @@ int get_sys_tenant_alter_system_priv(
              stmt::T_RECOVER != basic_stmt->get_stmt_type() &&
              stmt::T_TABLE_TTL != basic_stmt->get_stmt_type() &&
              stmt::T_TRANSFER_PARTITION != basic_stmt->get_stmt_type() &&
-             stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type()) {
+             stmt::T_ALTER_LS_REPLICA != basic_stmt->get_stmt_type() &&
+             stmt::T_SERVICE_NAME != basic_stmt->get_stmt_type()) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("Only sys tenant can do this operation",
              K(ret), "stmt type", basic_stmt->get_stmt_type());

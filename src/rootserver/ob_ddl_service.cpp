@@ -23001,7 +23001,8 @@ int ObDDLService::create_sys_tenant(
           0, /*freeze_service_epoch*/
           0, /*arbitration_service_epoch*/
           0, /*server_zone_op_service_epoch*/
-          0 /*heartbeat_service_epoch*/))) {
+          0, /*heartbeat_service_epoch*/
+          0 /* service_name_epoch */))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       }
       if (trans.is_started()) {
@@ -24447,7 +24448,8 @@ int ObDDLService::init_tenant_schema(
           0, /*freeze_service_epoch*/
           0, /*arbitration_service_epoch*/
           0, /*server_zone_op_service_epoch*/
-          0 /*heartbeat_service_epoch*/))) {
+          0, /*heartbeat_service_epoch*/
+          0 /* service_name_epoch */))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       } else if (is_creating_standby && OB_FAIL(set_log_restore_source(gen_user_tenant_id(tenant_id), log_restore_source, trans))) {
         LOG_WARN("fail to set_log_restore_source", KR(ret), K(tenant_id), K(log_restore_source));

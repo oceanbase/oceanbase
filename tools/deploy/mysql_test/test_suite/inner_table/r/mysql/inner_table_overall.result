@@ -282,6 +282,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 513	__all_user_proxy_info_history	0	201001	1
 514	__all_user_proxy_role_info	0	201001	1
 515	__all_user_proxy_role_info_history	0	201001	1
+516	__all_service	0	201001	1
 519	__all_scheduler_job_run_detail_v2	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -717,6 +718,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12475	__all_virtual_user_proxy_info_history	2	201001	1
 12476	__all_virtual_user_proxy_role_info	2	201001	1
 12477	__all_virtual_user_proxy_role_info_history	2	201001	1
+12480	__all_virtual_service	2	201001	1
 12481	__all_virtual_tenant_resource_limit	2	201001	1
 12482	__all_virtual_tenant_resource_limit_detail	2	201001	1
 12488	__all_virtual_scheduler_job_run_detail_v2	2	201001	1
@@ -1134,6 +1136,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21543	GV$OB_TRACEPOINT_INFO	1	201001	1
 21544	V$OB_TRACEPOINT_INFO	1	201001	1
 21545	V$OB_COMPATIBILITY_CONTROL	1	201001	1
+21548	DBA_OB_SERVICES	1	201001	1
+21549	CDB_OB_SERVICES	1	201001	1
 21550	GV$OB_TENANT_RESOURCE_LIMIT	1	201001	1
 21551	V$OB_TENANT_RESOURCE_LIMIT	1	201001	1
 21552	GV$OB_TENANT_RESOURCE_LIMIT_DETAIL	1	201001	1

@@ -51,7 +51,8 @@ public:
                                 const int64_t freeze_service_epoch,
                                 const int64_t arbitration_service_epoch,
                                 const int64_t server_zone_op_service_epoch,
-                                const int64_t heartbeat_service_epoch);
+                                const int64_t heartbeat_service_epoch,
+                                const int64_t service_name_epoch);
 
   static int insert_service_epoch(common::ObISQLClient &sql_proxy,
                                   const int64_t tenant_id,
@@ -94,6 +95,7 @@ public:
   constexpr static const char * const ARBITRATION_SERVICE_EPOCH = "arbitration_service_epoch";
   constexpr static const char * const SERVER_ZONE_OP_SERVICE_EPOCH = "server_zone_op_service_epoch";
   constexpr static const char * const HEARTBEAT_SERVICE_EPOCH = "heartbeat_service_epoch";
+  constexpr static const char * const SERVICE_NAME_EPOCH = "service_name_epoch";
 
 private:
   static int inner_get_service_epoch_(common::ObISQLClient &sql_proxy,

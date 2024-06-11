@@ -165,6 +165,8 @@ public:
                                   obrpc::ObEstBlockRes &res) const;
   int update_tenant_info_cache(const obrpc::ObUpdateTenantInfoCacheArg &arg,
                                   obrpc::ObUpdateTenantInfoCacheRes &result);
+  int refresh_service_name(const obrpc::ObRefreshServiceNameArg &arg,
+                           obrpc::ObRefreshServiceNameRes &result);
   ////////////////////////////////////////////////////////////////
   // ObRpcMinorFreezeP @RS minor freeze
   int minor_freeze(const obrpc::ObMinorFreezeArg &arg,

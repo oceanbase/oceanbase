@@ -3052,6 +3052,17 @@ int ObForceDumpServerUsageP::process()
   return ret;
 }
 
+int ObRefreshServiceNameP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->refresh_service_name(arg_, result_))) {
+    COMMON_LOG(WARN, "fail to refresh_service_name", KR(ret), K(arg_));
+  }
+  return ret;
+}
 int ObResourceLimitCalculatorP::process()
 {
   int ret = OB_SUCCESS;

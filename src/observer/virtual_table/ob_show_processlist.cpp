@@ -452,6 +452,15 @@ bool ObShowProcesslist::FillScanner::operator()(sql::ObSQLSessionMgr::Key key, O
                                          ObCharset::get_default_charset()));
             break;
           }
+          case SERVICE_NAME: {
+            if (!sess_info->get_service_name().is_empty()) {
+              cur_row_->cells_[cell_idx].set_varchar(sess_info->get_service_name().ptr());
+              cur_row_->cells_[cell_idx].set_collation_type(default_collation);
+            } else {
+              cur_row_->cells_[cell_idx].set_null();
+            }
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),

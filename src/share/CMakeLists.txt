@@ -182,6 +182,7 @@ ob_set_subtarget(ob_share common
   ob_throttling_utils.cpp
   ob_storage_ha_diagnose_struct.cpp
   ob_storage_ha_diagnose_operator.cpp
+  ob_service_name_proxy.cpp
   ob_compatibility_control.cpp
 )
 

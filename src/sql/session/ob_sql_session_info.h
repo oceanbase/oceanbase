@@ -47,6 +47,7 @@
 #include "sql/monitor/flt/ob_flt_span_mgr.h"
 #include "storage/tx/ob_tx_free_route.h"
 #include "sql/session/ob_sess_info_verify.h"
+#include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 
 namespace oceanbase
@@ -85,6 +86,7 @@ namespace share
 {
 struct ObSequenceValue;
 }
+using share::ObServiceNameString;
 using common::ObPsStmtId;
 namespace sql
 {
@@ -1518,6 +1520,13 @@ public:
   ObOptimizerTraceImpl& get_optimizer_tracer() { return optimizer_tracer_; }
   int64_t get_plsql_exec_time();
   void update_pure_sql_exec_time(int64_t elapsed_time);
+  const ObServiceNameString& get_service_name() const { return service_name_; }
+  bool get_failover_mode() const { return failover_mode_; }
+  void set_failover_mode(const bool failover_mode) { failover_mode_ = failover_mode; }
+  void reset_service_name() { service_name_.reset(); }
+  int set_service_name(const ObString& service_name);
+  int check_service_name_and_failover_mode() const;
+  int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
 private:
@@ -1789,6 +1798,8 @@ private:
   share::schema::ObUserLoginInfo login_info_;
   ObExecutingSqlStatRecord executing_sql_stat_record_;
   dbms_scheduler::ObDBMSSchedJobInfo *job_info_; // dbms_scheduler related.
+  bool failover_mode_;
+  ObServiceNameString service_name_;
   common::ObString audit_filter_name_;
 };
 

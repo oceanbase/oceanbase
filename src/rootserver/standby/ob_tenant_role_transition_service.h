@@ -293,6 +293,8 @@ private:
 
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
+  int clear_service_name_();
+  int double_check_service_name_(const share::ObAllTenantInfo &tenant_info);
   int check_and_update_sys_ls_recovery_stat_in_switchover_(
       const uint64_t tenant_id,
       const bool switch_to_primary,

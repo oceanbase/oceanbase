@@ -535,7 +535,7 @@ END_P SET_VAR DELIMITER
 %type <node> show_plugin_stmt merge_insert_types
 %type <node> create_server_stmt server_options_list server_option alter_server_stmt drop_server_stmt create_logfile_group_stmt logfile_group_info add_log_file lg_undofile lg_redofile logfile_group_options  opt_ts_initial_size opt_ts_undo_buffer_size opt_ts_redo_buffer_size opt_ts_engine opt_ts_comment
 %type <node> alter_logfile_group_stmt alter_logfile_group_info alter_logfile_group_option_list alter_logfile_group_options alter_logfile_group_option drop_logfile_group_stmt drop_ts_options_list drop_ts_options drop_ts_option opt_ts_nodegroup logfile_group_option logfile_group_option_list
-
+%type <node> service_name_stmt service_op
 
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
@@ -708,6 +708,7 @@ stmt:
   | recover_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   | mock_stmt {$$ = $1; check_question_mark($$, result);}
+  | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -20214,6 +20215,43 @@ part_info
 | ALL
 {
   malloc_terminal_node($$, result->malloc_pool_, T_ALL);
+}
+;
+/*===========================================================
+ *
+ * 租户 SERVICE_NAME 管理
+ *
+ *===========================================================*/
+service_name_stmt:
+alter_with_opt_hint SYSTEM service_op SERVICE relation_name opt_tenant_name
+{
+  (void)($1);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_SERVICE_NAME, 3,
+                           $3,                   /* service operation */
+                           $5,                   /* service name */
+                           $6);                  /* tenant name */
+}
+;
+service_op :
+CREATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| DELETE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| START
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+}
+| STOP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
 }
 ;
 /*===========================================================

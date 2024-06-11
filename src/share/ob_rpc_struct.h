@@ -75,6 +75,7 @@
 #include "sql/session/ob_sess_info_verify.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "storage/ob_storage_schema.h"  // ObCreateTabletSchema
+#include "share/ob_service_name_proxy.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 
 namespace oceanbase
@@ -11062,6 +11063,70 @@ public:
   ObServerInfo server_info_;
   // unit info
   ObSArray<ObUnitInfo> unit_info_;
+};
+
+struct ObRefreshServiceNameArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshServiceNameArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      epoch_(0),
+      from_server_(),
+      target_service_name_id_(),
+      service_name_list_(),
+      service_op_(share::ObServiceNameArg::INVALID_SERVICE_OP),
+      update_tenant_info_arg_() {}
+  ~ObRefreshServiceNameArg() {}
+  int init(
+      const uint64_t tenant_id,
+      const uint64_t epoch,
+      const ObAddr &from_server,
+      const share::ObServiceNameID &target_service_name_id,
+      const common::ObIArray<share::ObServiceName> &service_name_list,
+      const share::ObServiceNameArg::ObServiceOp &service_op,
+      const share::ObAllTenantInfo &tenant_info,
+      const int64_t ora_rowscn);
+  bool is_valid() const;
+  int assign(const ObRefreshServiceNameArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_epoch() const { return epoch_; }
+  const ObAddr &get_from_server() const { return from_server_; }
+  const share::ObServiceNameID &get_target_service_name_id() const { return target_service_name_id_; }
+  const common::ObSArray<share::ObServiceName> &get_service_name_list() const { return service_name_list_; }
+  const ObUpdateTenantInfoCacheArg &get_update_tenant_info_arg() const { return update_tenant_info_arg_; }
+  bool is_start_service() const {return share::ObServiceNameArg::START_SERVICE == service_op_; }
+  bool is_stop_service() const {return share::ObServiceNameArg::STOP_SERVICE == service_op_; }
+  TO_STRING_KV(K_(tenant_id), K_(epoch), K_(from_server),
+      "target_service_name_id", target_service_name_id_.id(), K_(service_name_list),
+      "service_op_to_str", share::ObServiceNameArg::service_op_to_str(service_op_), K_(update_tenant_info_arg));
+private:
+  uint64_t tenant_id_;
+  uint64_t epoch_; // __all_service snapshot corresponding epoch
+  ObAddr from_server_; // the server which sends broadcasting request
+  share::ObServiceNameID target_service_name_id_; // indicate which service name to operate
+  common::ObSArray<share::ObServiceName> service_name_list_; // __all_service snapshot
+  share::ObServiceNameArg::ObServiceOp service_op_; // the operation which triggered broadcasting
+  ObUpdateTenantInfoCacheArg update_tenant_info_arg_; // only used if the op is START_SERVICE
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshServiceNameArg);
+};
+
+struct ObRefreshServiceNameRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshServiceNameRes() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObRefreshServiceNameRes() {}
+  int init(const uint64_t tenant_id);
+  bool is_valid() const;
+  int assign(const ObRefreshServiceNameRes &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  uint64_t tenant_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshServiceNameRes);
 };
 }//end namespace obrpc
 }//end namespace oceanbase
