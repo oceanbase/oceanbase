@@ -61,7 +61,6 @@
 #include "pl/sys_package/ob_sdo_geometry.h"
 #include "pl/sys_package/ob_xml_type.h"
 #include "pl/sys_package/ob_json_array_type.h"
-#include "pl/sys_package/ob_utl_recomp.h"
 #include "pl/sys_package/ob_dbms_profiler.h"
 #endif
 #include "pl/sys_package/ob_pl_dbms_resource_manager.h"
@@ -725,12 +724,6 @@
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_UNIT, "PHY_RES_CALCULATE_BY_UNIT", (ObDBMSLimitCalculator::phy_res_calculate_by_unit))
   INTERFACE_DEF(INTERFACE_DBMS_OB_LIMIT_CALCULATOR_PHY_RES_CALCULATE_BY_STADNBY_TENANT, "PHY_RES_CALCULATE_BY_STANDBY_TENANT", (ObDBMSLimitCalculator::phy_res_calculate_by_standby_tenant))
   // end of dbms_ob_limit_calculator
-#ifdef OB_BUILD_ORACLE_PL
-  // start of utl_recomp
-  INTERFACE_DEF(INTERFACE_UTL_RECOMP_INVALIDATE_OBJS, "UTL_RECOMP_INVALIDATE_OBJS", (ObUtlRecomp::invalidate_objs))
-  INTERFACE_DEF(INTERFACE_UTL_RECOMP_DELETE_ERRORS, "UTL_RECOMP_DELETE_ERRORS", (ObUtlRecomp::delete_errors))
-  // end of utl_recomp
-#endif
 
   // start of dbms_balance
   INTERFACE_DEF(INTERFACE_DBMS_BALANCE_TRIGGER_PARTITION_BALANCE, "DBMS_BALANCE_TRIGGER_PARTITION_BALANCE", (ObDBMSBalance::trigger_partition_balance))
