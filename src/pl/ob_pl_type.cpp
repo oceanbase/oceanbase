@@ -76,7 +76,7 @@ int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
   ObPLType type = ObPLType::PL_INVALID_TYPE;
   OZ (schema_guard.get_udt_info(tenant_id, owner_id, OB_INVALID_ID, udt, udt_info));
   if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
-    uint64_t object_owner_id = session_info.get_database_id();
+    uint64_t object_owner_id = owner_id;
     ObString object_name = udt;
     bool exist = false;
     OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));
@@ -133,7 +133,7 @@ int ObPLDataType::get_pkg_type_by_name(uint64_t tenant_id,
   OZ (schema_guard.get_package_info(tenant_id, owner_id, pkg, share::schema::PACKAGE_TYPE,
                                     compatible_mode, package_info));
   if (OB_SUCC(ret) && OB_ISNULL(package_info)) {
-    uint64_t object_owner_id = session_info.get_database_id();
+    uint64_t object_owner_id = owner_id;
     ObString object_name = pkg;
     bool exist = false;
     OZ (get_synonym_object(tenant_id, object_owner_id, object_name, exist, session_info, schema_guard, deps));

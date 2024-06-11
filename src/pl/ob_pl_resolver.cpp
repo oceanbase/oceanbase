@@ -6681,14 +6681,9 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
             } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup, desc))) {
               LOG_WARN("failed to check duplication", K(value), K(ret));
             } else if (dup) {
-              if (lib::is_mysql_mode()) {
-                ret = OB_ERR_SP_DUP_HANDLER;
-                LOG_USER_ERROR(OB_ERR_SP_DUP_HANDLER);
-                LOG_WARN("Duplicate handler declared in the same block", K(value), K(dup), K(ret));
-              } else {
-                // In Oracle mode, 'EXCEPTION WHEN NO_DATA_FOUND OR NO_DATA_FOUND THEN' is legal.
-                // do nothing ...
-              }
+              ret = OB_ERR_SP_DUP_HANDLER;
+              LOG_USER_ERROR(OB_ERR_SP_DUP_HANDLER);
+              LOG_WARN("Duplicate handler declared in the same block", K(value), K(dup), K(ret));
             } else if (OB_FAIL(ObPLResolver::analyze_actual_condition_type(value, actual_type))) {
               LOG_WARN("failed to analyze actual condition type", K(value), K(ret));
             } else if (lib::is_oracle_mode()
@@ -15513,7 +15508,7 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       break;
     }
   }
-  if (OB_NOT_NULL(cur_desc)) {
+  if (OB_NOT_NULL(cur_desc) && lib::is_mysql_mode()) {
     for (int64_t j = 0; !dup && j < cur_desc->get_conditions().count(); ++j) {
       if (value.type_ == cur_desc->get_condition(j).type_ &&
           value.error_code_ == cur_desc->get_condition(j).error_code_ &&

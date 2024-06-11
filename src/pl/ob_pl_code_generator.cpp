@@ -5654,15 +5654,19 @@ int ObPLCodeGenerator::generate_bound_and_check(const ObPLForLoopStmt &s,
 int ObPLCodeGenerator::generate_update_location(const ObPLStmt &s)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObLLVMValue, 2> args;
-  ObLLVMValue location;
-  ObLLVMValue ret_err;
-  OZ (args.push_back(get_vars().at(CTX_IDX)));
-  OZ (get_helper().get_int64(s.get_location(), location));
-  OZ (args.push_back(location));
-  OZ (get_helper().create_call(ObString("spi_update_location"), get_spi_service().spi_update_location_, args, ret_err));
-  OZ (check_success(
-      ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+  if (NULL == get_current().get_v()) {
+      //控制流已断，后面的语句不再处理
+  } else {
+    ObSEArray<ObLLVMValue, 2> args;
+    ObLLVMValue location;
+    ObLLVMValue ret_err;
+    OZ (args.push_back(get_vars().at(CTX_IDX)));
+    OZ (get_helper().get_int64(s.get_location(), location));
+    OZ (args.push_back(location));
+    OZ (get_helper().create_call(ObString("spi_update_location"), get_spi_service().spi_update_location_, args, ret_err));
+    OZ (check_success(
+        ret_err, s.get_stmt_id(), s.get_block()->in_notfound(), s.get_block()->in_warning()));
+  }
   return ret;
 }
 

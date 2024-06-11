@@ -2478,6 +2478,8 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
             ret = OB_ERR_MISSING_INTO_KEYWORD;
             LOG_WARN("ORA-00925: missing INTO keyword", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "missing INTO keyword");
+          } else {
+            remove_into = true;
           }
         } else if (stmt::T_SELECT == stmt_type || pl_prepare_result.result_set_->is_returning()) {
           /*
