@@ -112,18 +112,36 @@ public:
       index_(0),
       table_(&table),
       tmp_table_(NULL),
-      table_array_(NULL)
+      table_array_(NULL),
+      current_allocator_("ScheRetri"),
+      another_allocator_("ScheRetri"),
+      current_schema_(&current_allocator_),
+      another_schema_(&another_allocator_)
     {}
   ObSchemaRetrieveHelper(common::ObArray<TABLE_SCHEMA *> &tables)
     : mode_(Mode::MULTIPLE_TABLE),
       index_(0),
       table_(NULL),
       tmp_table_(NULL),
-      table_array_(&tables)
+      table_array_(&tables),
+      current_allocator_("ScheRetri"),
+      another_allocator_("ScheRetri"),
+      current_schema_(&current_allocator_),
+      another_schema_(&another_allocator_)
     {}
 
   ~ObSchemaRetrieveHelper() {}
-  SCHEMA &get_current() { return schemas_[index_]; }
+  SCHEMA &get_and_reset_current()
+  {
+    if (0 == index_) {
+      current_schema_.reset();
+      current_allocator_.reuse();
+    } else {
+      another_schema_.reset();
+      another_allocator_.reuse();
+    }
+    return 0 == index_ ? current_schema_ : another_schema_;
+  }
   int64_t get_curr_schema_id();
   void rotate() { index_ = 1 - index_; }
   int get_table(const uint64_t table_id, TABLE_SCHEMA *&table);
@@ -142,7 +160,10 @@ private:
   //for multi table
   TABLE_SCHEMA *tmp_table_;
   ObArray<TABLE_SCHEMA *> *table_array_;
-  SCHEMA schemas_[2];
+  ObArenaAllocator current_allocator_;
+  ObArenaAllocator another_allocator_;
+  SCHEMA current_schema_;
+  SCHEMA another_schema_;
 };
 
 
@@ -163,7 +184,11 @@ public:
       tmp_table_(NULL),
       table_array_(NULL),
       partition_(NULL),
-      is_subpart_template_(is_subpart_template)
+      is_subpart_template_(is_subpart_template),
+      current_allocator_("SubScheRetri"),
+      another_allocator_("SubScheRetri"),
+      current_schema_(&current_allocator_),
+      another_schema_(&another_allocator_)
     {}
   ObSubPartSchemaRetrieveHelper(common::ObArray<TABLE_SCHEMA *> &tables,
                                 const bool is_subpart_template = true)
@@ -173,11 +198,25 @@ public:
       tmp_table_(NULL),
       table_array_(&tables),
       partition_(NULL),
-      is_subpart_template_(is_subpart_template)
+      is_subpart_template_(is_subpart_template),
+      current_allocator_("SubScheRetri"),
+      another_allocator_("SubScheRetri"),
+      current_schema_(&current_allocator_),
+      another_schema_(&another_allocator_)
     {}
 
   ~ObSubPartSchemaRetrieveHelper() {}
-  ObSubPartition &get_current() { return schemas_[index_]; }
+  ObSubPartition &get_and_reset_current()
+  {
+    if (0 == index_) {
+      current_schema_.reset();
+      current_allocator_.reuse();
+    } else {
+      another_schema_.reset();
+      another_allocator_.reuse();
+    }
+    return 0 == index_ ? current_schema_ : another_schema_;
+  }
   int64_t get_curr_schema_id();
   void rotate() { index_ = 1 - index_; }
   int get_table(const uint64_t table_id, TABLE_SCHEMA *&table);
@@ -197,10 +236,13 @@ private:
   //for multi table
   TABLE_SCHEMA *tmp_table_;
   ObArray<TABLE_SCHEMA *> *table_array_;
-  ObSubPartition schemas_[2];
   // for is_subpart_template = false
   ObPartition *partition_;
   bool is_subpart_template_;
+  ObArenaAllocator current_allocator_;
+  ObArenaAllocator another_allocator_;
+  ObSubPartition current_schema_;
+  ObSubPartition another_schema_;
 };
 
 struct VersionHisVal;

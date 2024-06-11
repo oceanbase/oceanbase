@@ -139,8 +139,7 @@ int ObSchemaRetrieveUtils::retrieve_schema(
   ObSchemaRetrieveHelper<TABLE_SCHEMA, SCHEMA> helper(table_schema_array);
   while (OB_SUCC(ret) && common::OB_SUCCESS == (ret = result.next())) {
     bool is_deleted = false;
-    SCHEMA &current = helper.get_current();
-    current.reset();
+    SCHEMA &current = helper.get_and_reset_current();
     if (OB_FAIL(helper.fill_current(tenant_id, check_deleted, result, current, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fill schema failed", K(ret));
     } else if (current.get_table_id() == last_table_id
@@ -511,7 +510,7 @@ int ObSubPartSchemaRetrieveHelper<TABLE_SCHEMA>::add(ObSubPartition &p)
 template<typename TABLE_SCHEMA>
 int64_t ObSubPartSchemaRetrieveHelper<TABLE_SCHEMA>::get_curr_schema_id()
 {
-  return schemas_[index_].get_sub_part_id();
+  return index_ == 0 ? current_schema_.get_sub_part_id() : another_schema_.get_sub_part_id();
 }
 
 template<typename TABLE_SCHEMA>
@@ -590,7 +589,7 @@ int ObSchemaRetrieveHelper<TABLE_SCHEMA, SCHEMA>::add(SCHEMA &p)
 template<typename TABLE_SCHEMA, typename SCHEMA>
 int64_t ObSchemaRetrieveHelper<TABLE_SCHEMA, SCHEMA>::get_curr_schema_id()
 {
-  return ObSchemaRetrieveHelperBase<TABLE_SCHEMA, SCHEMA>::get_schema_id(schemas_[index_]);
+  return ObSchemaRetrieveHelperBase<TABLE_SCHEMA, SCHEMA>::get_schema_id(index_ == 0 ? current_schema_ : another_schema_);
 }
 
 template<typename TABLE_SCHEMA, typename SCHEMA>
@@ -623,8 +622,7 @@ int ObSchemaRetrieveUtils::retrieve_schema(const uint64_t tenant_id,
     ObSchemaRetrieveHelper<TABLE_SCHEMA, SCHEMA> helper(*table_schema);
     while (OB_SUCC(ret) && common::OB_SUCCESS == (ret = result.next())) {
       bool is_deleted = false;
-      SCHEMA &current = helper.get_current();
-      current.reset();
+      SCHEMA &current = helper.get_and_reset_current();
       if (OB_FAIL(helper.fill_current(tenant_id, check_deleted, result, current, is_deleted))) {
         SHARE_SCHEMA_LOG(WARN, "fill schema fail", K(ret));
       } else if (table_id != current.get_table_id()) {
@@ -764,8 +762,7 @@ int ObSchemaRetrieveUtils::retrieve_subpart_schema(
                                                      is_subpart_template);
   while (OB_SUCC(ret) && OB_SUCC(result.next())) {
     bool is_deleted = false;
-    ObSubPartition &current = helper.get_current();
-    current.reset();
+    ObSubPartition &current = helper.get_and_reset_current();
     if (OB_FAIL(helper.fill_current(tenant_id, check_deleted,
                                     result, current, is_deleted))) {
       SHARE_SCHEMA_LOG(WARN, "fill schema fail", K(ret));
@@ -814,8 +811,7 @@ int ObSchemaRetrieveUtils::retrieve_subpart_schema(
                                                        is_subpart_template);
     while (OB_SUCC(ret) && OB_SUCC(result.next())) {
       bool is_deleted = false;
-      ObSubPartition &current = helper.get_current();
-      current.reset();
+      ObSubPartition &current = helper.get_and_reset_current();
       if (OB_FAIL(helper.fill_current(tenant_id, check_deleted,
                                       result, current, is_deleted))) {
         SHARE_SCHEMA_LOG(WARN, "fill schema fail", K(ret));
