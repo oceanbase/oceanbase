@@ -484,7 +484,8 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret), KP(buf));
     } else if (FALSE_IT(writer = new(buf) ObStorageHAMacroBlockWriter())) {
-    } else if (OB_FAIL(writer->init(copy_ctx_->tenant_id_, reader, index_block_rebuilder))) {
+    } else if (OB_FAIL(writer->init(copy_ctx_->tenant_id_, this->get_dag()->get_dag_id(),
+                                    reader, index_block_rebuilder))) {
       STORAGE_LOG(WARN, "failed to init ob reader", K(ret), KPC(copy_ctx_));
     }
 
