@@ -131,7 +131,6 @@ enum State {
   S_PROCEDURE,
   S_PACKAGE,
   S_TRIGGER,
-  S_EVENT,
   S_TYPE,
   S_OR,
   S_REPLACE,
@@ -154,6 +153,7 @@ enum State {
   S_VALUES,
   S_TABLE,
   S_INTO,
+  S_EVENT,
   // add new states above me
   S_MAX
 };
