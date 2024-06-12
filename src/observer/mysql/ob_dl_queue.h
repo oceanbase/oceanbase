@@ -77,7 +77,7 @@ public:
     void* ret = NULL;
     if (NULL != array_) {
       void** addr = get_addr(seq);
-      SlotLock_[seq].rlock()->lock();
+      SlotLock_[seq % N_ROOT_SIZE].rlock()->lock();
       ATOMIC_STORE(&ret, *addr);
       if (NULL == ret) {
         ATOMIC_STORE(addr, NULL);
@@ -97,7 +97,7 @@ public:
       uint64_t idx = ref->idx_;
       ref->reset();
       if (NULL != array_) {
-        SlotLock_[idx].rlock()->unlock();
+        SlotLock_[idx % N_ROOT_SIZE].rlock()->unlock();
       }
     }
   }
@@ -107,7 +107,7 @@ public:
       // ret = OB_NOT_INIT;
     } else {
       uint64_t pop_limit = 0;
-      bool lock_succ = !SlotLock_[pop_].wlock()->trylock();
+      bool lock_succ = !SlotLock_[pop_ % N_ROOT_SIZE].wlock()->trylock();
       if (lock_succ) {
         uint64_t pop_idx = faa_bounded(&pop_, &push_, pop_limit);
         if (pop_idx < pop_limit) {
