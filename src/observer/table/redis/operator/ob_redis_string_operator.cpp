@@ -248,6 +248,7 @@ int StringCommandOperator::do_incrby(int64_t db, const ObString &key, const ObSt
   int64_t expire_ts = -1;
   int64_t old_value = 0;
   ObString err_msg;
+  int64_t incr_num = 0;
   if (OB_FAIL(get_value(db, key, old_str, expire_ts))) {
     LOG_WARN("fail to get old value", K(ret), K(db), K(key));
   } else {
@@ -259,13 +260,17 @@ int StringCommandOperator::do_incrby(int64_t db, const ObString &key, const ObSt
           ObFastAtoi<int64_t>::atoi(old_str.ptr(), old_str.ptr() + old_str.length(), is_valid_val);
     }
     bool is_valid_incr = false;
-    int64_t incr_num = 0;
     if (is_incr) {
       incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr(), incr.ptr() + incr.length(), is_valid_incr);
+    } else if (incr.length() < 1) {
+      // send redis err_msg instead of observer error
+      LOG_WARN("invalid old value", K(ret), K(old_str));
+      err_msg = "ERR value is not an integer or out of range";
     } else if (incr[0] == '-') {
-      incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr() + 1, incr.ptr() + incr.length() - 1, is_valid_incr);
+      const int SKIP_NEG_FLAG = 1;
+      incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr() + SKIP_NEG_FLAG, incr.ptr() + incr.length(), is_valid_incr);
     } else {
-      incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr() + 1, incr.ptr() + incr.length() - 1, is_valid_incr);
+      incr_num = ObFastAtoi<int64_t>::atoi(incr.ptr(), incr.ptr() + incr.length(), is_valid_incr);
       incr_num = -incr_num;
     }
     if (!is_valid_val || !is_valid_incr || is_incr_out_of_range(old_value, incr_num)) {
@@ -273,12 +278,13 @@ int StringCommandOperator::do_incrby(int64_t db, const ObString &key, const ObSt
       LOG_WARN("invalid old value", K(ret), K(old_str));
       err_msg = "ERR value is not an integer or out of range";
     }
-
   }
 
+  ObFastFormatInt ffi(incr_num);
+  ObString real_incr(ffi.length(), ffi.ptr());
   ObITableEntity *entity = nullptr;
   if (OB_FAIL(ret) || !err_msg.empty()) {
-  } else if (OB_FAIL(build_key_value_entity(db, key, incr, entity))) {
+  } else if (OB_FAIL(build_key_value_entity(db, key, real_incr, entity))) {
     LOG_WARN("fail to build rowkey entity", K(ret), K(db), K(key));
   } else {
     ObTableOperation op = ObTableOperation::increment(*entity);

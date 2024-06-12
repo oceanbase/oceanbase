@@ -997,7 +997,7 @@ int ZSetCommandOperator::do_zinter_store(int64_t db, const ObString &dest,
   // 2. store ms_map to dest zset
   redis_ctx_.tb_ctx_.set_need_dist_das(false);
   if (OB_FAIL(ret)) {
-  } else if (delete_key(db, dest)) {
+  } else if (OB_FAIL(delete_key(db, dest))) {
     LOG_WARN("fail to delete dest", K(ret), K(db), K(dest));
   } else if (OB_FAIL(do_zadd(db, dest, ms_map))) {
     LOG_WARN("fail to do zadd", K(ret), K(db), K(dest));
