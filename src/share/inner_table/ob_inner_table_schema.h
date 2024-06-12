@@ -12743,10 +12743,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 280;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 799;
-const int64_t OB_SYS_VIEW_COUNT = 902;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1986;
+const int64_t OB_SYS_VIEW_COUNT = 903;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 1987;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1989;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 1990;
 
 } // end namespace share
 } // end namespace oceanbase
