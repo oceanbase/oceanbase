@@ -847,21 +847,21 @@ call dbms_stats.gather_table_stats('test','t_p');
 call dbms_stats.gather_table_stats('test','t_s');
 explain basic delete /*+no_use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 Query Plan
-======================================================
-|ID|OPERATOR                                |NAME    |
-------------------------------------------------------
-|0 |DISTRIBUTED DELETE                      |        |
-|1 |└─PX COORDINATOR                        |        |
-|2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
-|3 |    └─NESTED-LOOP JOIN CARTESIAN        |        |
-|4 |      ├─EXCHANGE IN DISTR               |        |
-|5 |      │ └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
-|6 |      │   └─PX BLOCK ITERATOR           |        |
-|7 |      │     └─TABLE FULL SCAN           |t_p4    |
-|8 |      └─MATERIAL                        |        |
-|9 |        └─PX BLOCK ITERATOR             |        |
-|10|          └─TABLE GET                   |t_p     |
-======================================================
+========================================================
+|ID|OPERATOR                                  |NAME    |
+--------------------------------------------------------
+|0 |DISTRIBUTED DELETE                        |        |
+|1 |└─PX COORDINATOR                          |        |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001|
+|3 |    └─NESTED-LOOP JOIN CARTESIAN          |        |
+|4 |      ├─PX BLOCK ITERATOR                 |        |
+|5 |      │ └─TABLE GET                       |t_p     |
+|6 |      └─MATERIAL                          |        |
+|7 |        └─EXCHANGE IN DISTR               |        |
+|8 |          └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |            └─PX BLOCK ITERATOR           |        |
+|10|              └─TABLE FULL SCAN           |t_p4    |
+========================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -871,21 +871,21 @@ Outputs & filters:
       dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output(nil), filter(nil), rowset=16
-  5 - output(nil), filter(nil), rowset=16
-      dop=10
-  6 - output(nil), filter(nil), rowset=16
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=16
-      access([t_p4.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t_p4.c1]), range(MIN ; MAX)always true
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t_p.c1]), range[4 ; 4], 
       range_cond([t_p.c1 = 4])
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter(nil), rowset=16
+  8 - output(nil), filter(nil), rowset=16
+      dop=10
+  9 - output(nil), filter(nil), rowset=16
+ 10 - output(nil), filter([t_p4.c2 = 4]), rowset=16
+      access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
 explain basic delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 Query Plan
 ===========================================
@@ -893,12 +893,11 @@ Query Plan
 -------------------------------------------
 |0 |DELETE                       |        |
 |1 |└─NESTED-LOOP JOIN CARTESIAN |        |
-|2 |  ├─PX COORDINATOR           |        |
-|3 |  │ └─EXCHANGE OUT DISTR     |:EX10000|
-|4 |  │   └─PX PARTITION ITERATOR|        |
-|5 |  │     └─TABLE FULL SCAN    |t_p4    |
-|6 |  └─MATERIAL                 |        |
-|7 |    └─TABLE GET              |t_p     |
+|2 |  ├─TABLE GET                |t_p     |
+|3 |  └─PX COORDINATOR           |        |
+|4 |    └─EXCHANGE OUT DISTR     |:EX10000|
+|5 |      └─PX PARTITION ITERATOR|        |
+|6 |        └─TABLE FULL SCAN    |t_p4    |
 ===========================================
 Outputs & filters:
 -------------------------------------
@@ -906,21 +905,20 @@ Outputs & filters:
       table_columns([{t_p: ({t_p: (t_p.c1, t_p.c2, t_p.c3)}), hash_distinct}])
   1 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  2 - output(nil), filter(nil), rowset=16
-  3 - output(nil), filter(nil), rowset=16
-      dop=1
-  4 - output(nil), filter(nil), rowset=16
-      force partition granule
-  5 - output(nil), filter([t_p4.c2 = 4]), rowset=16
-      access([t_p4.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t_p4.c1]), range(MIN ; MAX)always true
-  6 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
-  7 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  2 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t_p.c1]), range[4 ; 4], 
       range_cond([t_p.c1 = 4])
+  3 - output(nil), filter(nil), rowset=16
+  4 - output(nil), filter(nil), rowset=16
+      dop=1
+  5 - output(nil), filter(nil), rowset=16
+      force partition granule
+  6 - output(nil), filter([t_p4.c2 = 4]), rowset=16
+      access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
 delete /*+use_px, parallel(1)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 select * from t_p order by c1;
 +----+------+------+
@@ -942,21 +940,21 @@ call dbms_stats.gather_table_stats('test','t_p');
 call dbms_stats.gather_table_stats('test','t_s');
 explain basic delete /*+use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 Query Plan
-======================================================
-|ID|OPERATOR                                |NAME    |
-------------------------------------------------------
-|0 |DISTRIBUTED DELETE                      |        |
-|1 |└─PX COORDINATOR                        |        |
-|2 |  └─EXCHANGE OUT DISTR                  |:EX10001|
-|3 |    └─NESTED-LOOP JOIN CARTESIAN        |        |
-|4 |      ├─EXCHANGE IN DISTR               |        |
-|5 |      │ └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
-|6 |      │   └─PX BLOCK ITERATOR           |        |
-|7 |      │     └─TABLE FULL SCAN           |t_p4    |
-|8 |      └─MATERIAL                        |        |
-|9 |        └─PX BLOCK ITERATOR             |        |
-|10|          └─TABLE GET                   |t_p     |
-======================================================
+========================================================
+|ID|OPERATOR                                  |NAME    |
+--------------------------------------------------------
+|0 |DISTRIBUTED DELETE                        |        |
+|1 |└─PX COORDINATOR                          |        |
+|2 |  └─EXCHANGE OUT DISTR                    |:EX10001|
+|3 |    └─NESTED-LOOP JOIN CARTESIAN          |        |
+|4 |      ├─PX BLOCK ITERATOR                 |        |
+|5 |      │ └─TABLE GET                       |t_p     |
+|6 |      └─MATERIAL                          |        |
+|7 |        └─EXCHANGE IN DISTR               |        |
+|8 |          └─EXCHANGE OUT DISTR (BROADCAST)|:EX10000|
+|9 |            └─PX BLOCK ITERATOR           |        |
+|10|              └─TABLE FULL SCAN           |t_p4    |
+========================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil)
@@ -966,21 +964,21 @@ Outputs & filters:
       dop=10
   3 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
-  4 - output(nil), filter(nil), rowset=16
-  5 - output(nil), filter(nil), rowset=16
-      dop=10
-  6 - output(nil), filter(nil), rowset=16
-  7 - output(nil), filter([t_p4.c2 = 4]), rowset=16
-      access([t_p4.c2]), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
-      range_key([t_p4.c1]), range(MIN ; MAX)always true
-  8 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
-  9 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
- 10 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  4 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
+  5 - output([t_p.c1], [t_p.c2], [t_p.c3]), filter(nil), rowset=16
       access([t_p.c1], [t_p.c2], [t_p.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t_p.c1]), range[4 ; 4], 
       range_cond([t_p.c1 = 4])
+  6 - output(nil), filter(nil), rowset=16
+  7 - output(nil), filter(nil), rowset=16
+  8 - output(nil), filter(nil), rowset=16
+      dop=10
+  9 - output(nil), filter(nil), rowset=16
+ 10 - output(nil), filter([t_p4.c2 = 4]), rowset=16
+      access([t_p4.c2]), partitions(p[0-3])
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t_p4.c1]), range(MIN ; MAX)always true
 delete /*+use_px, parallel(10)*/ t_p from t_p4,t_p where t_p.c1 = t_p4.c2 and t_p4.c2 = 4;
 select * from t_p order by c1;
 +----+------+------+
