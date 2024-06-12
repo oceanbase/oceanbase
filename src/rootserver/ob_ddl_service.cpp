@@ -8821,7 +8821,11 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                   } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value,
                                                                              is_default_expr_v2))) {
                     RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value), K(is_default_expr_v2));
-                  } else if (OB_FAIL(ObDDLResolver::check_default_value(default_value,
+                  // The check_default_value function not only verifies the
+                  // default value but also performs type conversion on it.
+                  // Therefore, the cur_default_value from the column_schema
+                  // should be passed when calling this function.
+                  } else if (OB_FAIL(ObDDLResolver::check_default_value(new_column_schema.get_cur_default_value(),
                                                                         tz_info_wrap,
                                                                         nls_formats,
                                                                         &alter_table_arg.local_session_var_,
@@ -9315,7 +9319,11 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
                   } else if (OB_FAIL(new_column_schema.set_cur_default_value(default_value,
                                                                              is_default_expr_v2))) {
                     RS_LOG(WARN, "failed to set current default value", K(ret), K(default_value), K(is_default_expr_v2));
-                  } else if (OB_FAIL(ObDDLResolver::check_default_value(default_value,
+                    // The check_default_value function not only verifies the
+                    // default value but also performs type conversion on it.
+                    // Therefore, the cur_default_value from the column_schema
+                    // should be passed when calling this function.
+                  } else if (OB_FAIL(ObDDLResolver::check_default_value(new_column_schema.get_cur_default_value(),
                                                                         tz_info_wrap,
                                                                         nls_formats,
                                                                         &alter_table_arg.local_session_var_,

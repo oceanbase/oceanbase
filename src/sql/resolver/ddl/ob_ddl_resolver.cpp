@@ -5962,6 +5962,7 @@ int ObDDLResolver::resolve_generated_column_expr(ObString &expr_str,
   return ret;
 }
 
+// Verifies the default value and performs type conversion on it.
 // this function is called in ddl service, which can not access user session_info, so need to
 // construct an empty session
 int ObDDLResolver::check_default_value(ObObj &default_value,
