@@ -1082,12 +1082,18 @@ int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
   share::ObLSStatusInfo ls_status;
   SCN readble_scn;
   replay_finish = true;
+  uint64_t data_version = 0;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
         || !src_ls.is_valid() || !dest_ls.is_valid()
         || !transfer_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls),
         K(dest_ls), K(transfer_scn));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get min data version", KR(ret), K(tenant_id));
+  } else if (DATA_VERSION_4_2_4_0 > data_version) {
+    replay_finish = true;
+    LOG_INFO("no need check all ls replica", K(tenant_id), K(data_version));
   } else if (OB_FAIL(check_ls_transfer_replay_(tenant_id, src_ls, transfer_scn, replay_finish))) {
     LOG_WARN("failed to check ls transfer replay", KR(ret), K(tenant_id), K(src_ls), K(transfer_scn));
   } else if (!replay_finish) {
