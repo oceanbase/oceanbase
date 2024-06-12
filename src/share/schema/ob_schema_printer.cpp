@@ -603,11 +603,10 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         // is_alter_table_add for dbms_metadata.get_ddl getting uk cst info
         SHARE_SCHEMA_LOG(WARN, "fail to print comma", K(ret));
       } else if (index_schema->is_multivalue_index()) {
-        if (!index_schema->is_unique_index() &&
-            OB_FAIL(databuff_printf(buf, buf_len, pos, " MULTIVALUE KEY "))) {
+        if (index_schema->is_unique_index() &&
+          OB_FAIL(databuff_printf(buf, buf_len, pos, " UNIQUE "))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
-        } else if (index_schema->is_unique_index() &&
-          OB_FAIL(databuff_printf(buf, buf_len, pos, " UNIQUE MULTIVALUE KEY "))) {
+        } else if (OB_FAIL(OB_FAIL(databuff_printf(buf, buf_len, pos, " INDEX ")))) {
           SHARE_SCHEMA_LOG(WARN, "fail to print FULLTEXT KEY", K(ret));
         }
       } else if (index_schema->is_unique_index()) {
@@ -670,7 +669,16 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret), KPC(index_schema));
           } else if (index_schema->is_fts_index() && col->is_doc_id_column()) {
             // skip doc id for fts index.
+          } else if (index_schema->is_multivalue_index_aux() && col->is_doc_id_column()) {
+            // skip doc id for multivalue index.
           } else if (!col->is_shadow_column()) {
+            const ObColumnSchemaV2 *tmp_column = NULL;
+            if (index_schema->is_multivalue_index_aux() &&
+                OB_NOT_NULL(tmp_column = table_schema.get_column_schema(col->get_column_id()))) {
+              if (tmp_column->is_rowkey_column()) {
+                continue;
+              }
+            }
             if (OB_SUCC(ret) && is_valid_col) {
               if (OB_FAIL(print_index_column(table_schema, last_col, false /* not last one */, buf, buf_len, pos))) {
                 SHARE_SCHEMA_LOG(WARN, "fail to print index column", K(last_col), K(ret));
@@ -697,7 +705,8 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
           } else { /*do nothing*/ }
         }
         // show storing columns in index
-        if (OB_SUCC(ret) && !strict_compat_ && !is_no_key_options(sql_mode) && !index_schema->is_fts_index()) {
+        if (OB_SUCC(ret) && !strict_compat_ && !is_no_key_options(sql_mode)
+            && !index_schema->is_fts_index() && !index_schema->is_multivalue_index()) {
           int64_t column_count = index_schema->get_column_count();
           if (column_count >= rowkey_count) {
             bool first_storing_column = true;
@@ -966,6 +975,26 @@ int ObSchemaPrinter::print_fulltext_index_column(const ObTableSchema &table_sche
   return ret;
 }
 
+int ObSchemaPrinter::print_multivalue_index_column(const ObTableSchema &table_schema,
+                                                   const ObColumnSchemaV2 &column,
+                                                   bool is_last,
+                                                   char *buf,
+                                                   int64_t buf_len,
+                                                   int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  ObString expr_def;
+  if (OB_FAIL(column.get_cur_default_value().get_string(expr_def))) {
+    LOG_WARN("get expr def from current default value failed", K(ret), K(column.get_cur_default_value()));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+                                     is_last ? "(%.*s))" : "(%.*s), ",
+                                     expr_def.length(),
+                                     expr_def.ptr()))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to print index column expr", K(ret), K(expr_def));
+  }
+  return ret;
+}
+
 int ObSchemaPrinter::print_spatial_index_column(const ObTableSchema &table_schema,
                                                 const ObColumnSchemaV2 &column,
                                                 char *buf,
@@ -1111,6 +1140,15 @@ int ObSchemaPrinter::print_index_column(const ObTableSchema &table_schema,
   } else if (column.is_hidden() && column.is_generated_column()) { //automatic generated column
     if (column.is_fulltext_column()) {
       if (OB_FAIL(print_fulltext_index_column(table_schema,
+                                              column,
+                                              is_last,
+                                              buf,
+                                              buf_len,
+                                              pos))) {
+        LOG_WARN("print fulltext index column failed", K(ret));
+      }
+    } else if (column.is_multivalue_generated_column()) {
+      if (OB_FAIL(print_multivalue_index_column(table_schema,
                                               column,
                                               is_last,
                                               buf,

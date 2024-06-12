@@ -595,7 +595,7 @@ public:
                                          ObSQLSessionInfo *session_info,
                                          bool& is_done_replace);
 
-  static int replace_qual_param_if_need(ObRawExpr* qual, ObColumnRefRawExpr *col_expr);
+  static int replace_qual_param_if_need(ObRawExpr* qual, int64_t qual_idx, ObColumnRefRawExpr *col_expr);
 
   static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,

@@ -192,6 +192,12 @@ public:
                                   char *buf,
                                   int64_t buf_len,
                                   int64_t &pos) const;
+  int print_multivalue_index_column(const ObTableSchema &table_schema,
+                                  const ObColumnSchemaV2 &column,
+                                  bool is_last,
+                                  char *buf,
+                                  int64_t buf_len,
+                                  int64_t &pos) const;
   int print_spatial_index_column(const ObTableSchema &table_schema,
                                  const ObColumnSchemaV2 &column,
                                  char *buf,

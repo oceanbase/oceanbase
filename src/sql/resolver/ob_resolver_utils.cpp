@@ -5823,6 +5823,7 @@ int ObResolverUtils::check_unique_index_cover_partition_column(const ObTableSche
   if (!table_schema.is_partitioned_table()
       || (INDEX_TYPE_PRIMARY != arg.index_type_
           && INDEX_TYPE_UNIQUE_LOCAL != arg.index_type_
+          && INDEX_TYPE_UNIQUE_MULTIVALUE_LOCAL != arg.index_type_
           && INDEX_TYPE_UNIQUE_GLOBAL != arg.index_type_)) {
     //nothing to do
   } else {

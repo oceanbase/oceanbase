@@ -4152,7 +4152,11 @@ bool ObSysFunRawExpr::inner_same_as(
 {
   bool bool_ret = false;
   if (get_expr_type() != expr.get_expr_type()) {
-    if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
+    if (expr.get_expr_type() ==  T_OP_BOOL && expr.is_domain_json_expr() &&
+        IS_QUERY_JSON_EXPR(get_expr_type())) {
+      const ObRawExpr* right_expr = ObRawExprUtils::skip_inner_added_expr(&expr);
+      bool_ret = inner_json_expr_same_as(*right_expr, check_context);
+    } else if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
       bool_ret = inner_json_expr_same_as(expr, check_context);
     } else if (check_context != NULL && check_context->ora_numeric_compare_ && expr.is_const_raw_expr()
         && T_FUN_SYS_CAST == get_expr_type() && lib::is_oracle_mode()) {

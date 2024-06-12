@@ -201,6 +201,7 @@ extern ObRawExpr *USELESS_POINTER;
    || ((op) == T_FUN_SYS_JSON_CONTAINS_PATH) \
    || ((op) == T_FUN_SYS_JSON_QUOTE) \
    || ((op) == T_FUN_SYS_JSON_UNQUOTE) \
+   || ((op) == T_FUN_SYS_JSON_QUERY) \
    || ((op) == T_FUN_SYS_JSON_OVERLAPS) \
    || ((op) == T_FUN_SYS_JSON_MEMBER_OF) \
    || ((op) == T_FUN_SYS_JSON_VALUE))

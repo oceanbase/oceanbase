@@ -1884,6 +1884,11 @@ int ObOptEstCostModel::range_scan_cpu_cost(const ObCostTableScanInfo &est_cost_i
     double range_count = est_cost_info.ranges_.count();
     if (range_count > 1 && est_cost_info.at_most_one_range_) {
       range_count = 1;
+    } else if (range_count > 1 && est_cost_info.index_meta_info_.is_multivalue_index_) {
+      // json contains/json overlaps may extract any equal pred
+      // range cost needn't grow liner with range-count
+      // alse do a discount with param 0.25
+      range_count = 1 + (range_count) * 0.25;
     }
     range_cost = range_count * cost_params_.get_range_cost(sys_stat_);
     cpu_cost = row_count * cost_params_.get_cpu_tuple_cost(sys_stat_);
@@ -2237,7 +2242,7 @@ double ObOptEstCostModel::cost_quals(double rows, const ObIArray<ObRawExpr *> &q
     } else if (qual->is_multivalue_expr()) {
       cost_per_row += cost_params_.get_comparison_cost(sys_stat_, ObJsonTC) * factor;
       if (need_scale) {
-        factor /= 10.0;
+        factor /= 25.0;
       }
     } else {
       ObObjTypeClass calc_type = qual->get_result_type().get_calc_type_class();

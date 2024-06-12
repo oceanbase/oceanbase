@@ -14930,6 +14930,50 @@ int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *qual,
   return ret;
 }
 
+int ObJoinOrder::try_get_json_generated_col_index_expr(ObRawExpr *depend_expr,
+                                                       ObColumnRefRawExpr *col_expr,
+                                                       ObRawExprCopier& copier,
+                                                       ObRawExprFactory& expr_factory,
+                                                       ObSQLSessionInfo *session_info,
+                                                       ObRawExpr *&qual,
+                                                       int64_t qual_pos,
+                                                       ObRawExpr *&new_qual)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObRawExprUtils::replace_domain_wrapper_expr(depend_expr,
+    col_expr, copier, expr_factory, session_info, qual, qual_pos, new_qual))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  }
+
+  for ( ++qual_pos; OB_SUCC(ret) && qual_pos < qual->get_param_count(); ++qual_pos) {
+    ObRawExpr *child = qual->get_param_expr(qual_pos);
+    ObExprEqualCheckContext equal_ctx;
+    equal_ctx.override_const_compare_ = true;
+    bool is_same = false;
+    if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child is null", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(child, child))) {
+      LOG_WARN("fail to get real child without lossless cast", K(ret));
+    } else if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("real child is null", K(ret));
+    } else if (depend_expr->same_as(*child, &equal_ctx)) {
+      if (ObRawExprUtils::is_domain_expr_need_special_replace(child, depend_expr)) {
+        ObRawExpr *tmp_qual = new_qual;
+        new_qual = nullptr;
+        if (OB_FAIL(ObRawExprUtils::replace_domain_wrapper_expr(depend_expr,
+          col_expr, copier, expr_factory, session_info, tmp_qual, qual_pos, new_qual))) {
+          LOG_WARN("failed to replace expr", K(ret));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
                                                 ObRawExpr *depend_expr,
                                                 ObColumnRefRawExpr *col_expr,
@@ -14973,7 +15017,7 @@ int ObJoinOrder::try_get_generated_col_index_expr(ObRawExpr *qual,
         ObSQLSessionInfo *session_info = OPT_CTX.get_session_info();
 
         if (ObRawExprUtils::is_domain_expr_need_special_replace(child, depend_expr)) {
-          if (OB_FAIL(ObRawExprUtils::replace_domain_wrapper_expr(depend_expr,
+          if (OB_FAIL(try_get_json_generated_col_index_expr(depend_expr,
             col_expr, copier, expr_factory, session_info, qual, j, new_qual))) {
             LOG_WARN("failed to replace expr", K(ret));
           }
