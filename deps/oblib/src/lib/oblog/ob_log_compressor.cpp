@@ -462,8 +462,8 @@ int ObLogCompressor::compress_single_file_(const char *file_name, char *src_buf,
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("failed to get compressed file name", K(ret), K(file_name));
     } else if (NULL == (input_file = fopen(file_name, "r"))) {
-      ret = OB_ERR_SYS;
-      LOG_ERROR("failed to open file", K(ret), K(errno), K(file_name));
+      ret = OB_FILE_NOT_EXIST;
+      LOG_WARN("failed to open file", K(ret), K(errno), K(file_name));
     } else if (NULL == (output_file = fopen(compressed_file_name, "w"))) {
       ret = OB_ERR_SYS;
       fclose(input_file);
