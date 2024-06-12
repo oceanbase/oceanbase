@@ -173,7 +173,7 @@ int ObInnerSqlRpcP::process_read(
           if (OB_SUCC(ret)) {
             if (need_flush) { // last row is not be used
               if (OB_FAIL(obrpc::ObRpcProcessor< obrpc::ObInnerSQLRpcProxy::ObRpc<
-                  obrpc::OB_INNER_SQL_SYNC_TRANSMIT> >::flush(THIS_WORKER.get_timeout_remain()))) {
+                  obrpc::OB_INNER_SQL_SYNC_TRANSMIT> >::flush(THIS_WORKER.get_timeout_remain(), &arg_.get_ctrl_svr()))) {
                 LOG_WARN("fail to flush", K(ret));
               } else {
                 LOG_DEBUG("flush scanner successfully", K(scanner), K(scanner.get_found_rows()));

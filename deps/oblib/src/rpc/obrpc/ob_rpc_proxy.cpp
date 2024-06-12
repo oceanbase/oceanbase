@@ -35,6 +35,7 @@ using namespace oceanbase::rpc::frame;
 
 ObAddr ObRpcProxy::myaddr_;
 
+
 Handle::Handle()
     : has_more_(false),
       dst_(),
@@ -42,7 +43,8 @@ Handle::Handle()
       opts_(),
       transport_(NULL),
       proxy_(),
-      pcode_(OB_INVALID_RPC_CODE)
+      pcode_(OB_INVALID_RPC_CODE),
+      first_pkt_id_(INVALID_RPC_PKT_ID)
 {}
 
 int ObRpcProxy::init(const ObReqTransport *transport,
@@ -333,7 +335,7 @@ int ObRpcProxy::create_request(
   return transport.create_request(req, addr, size, timeout, local_addr, do_ratelimit, is_bg_flow, ob_ssl_invited_nodes, cb);
 }
 
-void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id) {
+void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id, int64_t pkt_id, int64_t send_ts) {
   if (handle) {
     handle->pcode_ = pcode;
     handle->opts_ = opts;
@@ -344,5 +346,9 @@ void ObRpcProxy::set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, c
     handle->do_ratelimit_ = do_ratelimit_;
     handle->is_bg_flow_ = is_bg_flow_;
     handle->transport_ = NULL;
+    if (is_stream_next) {
+      handle->first_pkt_id_ = pkt_id;
+      stream_rpc_register(pkt_id, send_ts);
+    }
   }
 }

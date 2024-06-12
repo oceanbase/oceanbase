@@ -24,6 +24,7 @@
 #include "share/resource_limit_calculator/ob_resource_commmon.h"
 #include "observer/table_load/control/ob_table_load_control_rpc_struct.h"
 #include "observer/table_load/resource/ob_table_load_resource_rpc_struct.h"
+#include "rpc/obrpc/ob_rpc_reverse_keepalive_struct.h"
 
 namespace oceanbase
 {
@@ -255,6 +256,7 @@ public:
   RPC_AP(PR5 get_tenant_logical_resource, OB_CAL_STANDBY_TENANT_PHY_RESOURCE, (obrpc::ObGetTenantResArg), obrpc::ObTenantLogicalRes);
 
   RPC_S(PR5 phy_res_calculate_by_unit, OB_CAL_UNIT_PHY_RESOURCE, (obrpc::Int64), share::ObMinPhyResourceResult);
+  RPC_S(PR5 rpc_reverse_keepalive, OB_RPC_REVERSE_KEEPALIVE, (obrpc::ObRpcReverseKeepaliveArg), obrpc::ObRpcReverseKeepaliveResp);
 }; // end of class ObSrvRpcProxy
 
 } // end of namespace rpc

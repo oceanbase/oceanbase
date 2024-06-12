@@ -153,7 +153,7 @@ public:
     rcode_.warnings_.reset();
     rcode_.warnings_ = retcode.warnings_;
   }
-  void set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id);
+  void set_handle_attr(Handle* handle, const ObRpcPacketCode& pcode, const ObRpcOpts& opts, bool is_stream_next, int64_t session_id, int64_t pkt_id, int64_t send_ts);
 
   bool need_increment_request_level(int pcode) const {
     return ((pcode > OB_SQL_PCODE_START && pcode < OB_SQL_PCODE_END)
@@ -299,7 +299,7 @@ protected:
   ObRpcPacketCode pcode_;
   bool do_ratelimit_;
   int8_t is_bg_flow_;
-
+  int64_t first_pkt_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(Handle);
 };

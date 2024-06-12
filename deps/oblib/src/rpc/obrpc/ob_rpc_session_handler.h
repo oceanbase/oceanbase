@@ -30,6 +30,7 @@ class ObRequest;
 namespace obrpc
 {
 
+struct ObRpcReverseKeepaliveArg;
 class ObRpcSessionHandler
 {
 public:
@@ -53,7 +54,8 @@ public:
    */
   virtual int wait_for_next_request(int64_t session_id,
                                     rpc::ObRequest *&req,
-                                    const int64_t timeout);
+                                    const int64_t timeout,
+                                    const ObRpcReverseKeepaliveArg& reverse_keepalive_arg);
 
   bool wakeup_next_thread(rpc::ObRequest &req);
 

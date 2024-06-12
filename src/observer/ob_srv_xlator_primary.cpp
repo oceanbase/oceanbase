@@ -45,6 +45,7 @@
 #include "observer/table/ob_table_batch_execute_processor.h"
 #include "observer/table/ob_table_query_processor.h"
 #include "observer/table/ob_table_query_and_mutate_processor.h"
+#include "observer/net/ob_rpc_reverse_keepalive.h"
 
 #include "observer/dbms_job/ob_dbms_job_rpc_processor.h"
 #include "storage/tx_storage/ob_tenant_freezer_rpc.h"
@@ -119,6 +120,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcStopDBMSSchedJobP, gctx_);
 
   RPC_PROCESSOR(ObRpcGetServerResourceInfoP, gctx_);
+  RPC_PROCESSOR(ObRpcReverseKeepaliveP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator *xlator) {

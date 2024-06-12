@@ -306,7 +306,7 @@ int ObRemoteBaseExecuteP<T>::sync_send_result(ObExecContext &exec_ctx,
           } else {
             has_send_result_ = true;
             // override error code
-            if (OB_FAIL(ObRpcProcessor<T>::flush(THIS_WORKER.get_timeout_remain()))) {
+            if (OB_FAIL(ObRpcProcessor<T>::flush(THIS_WORKER.get_timeout_remain(), &ObRpcProcessor<T>::arg_.get_ctrl_server()))) {
               LOG_WARN("fail to flush", K(ret));
             } else {
               // 超过1个scanner的情况，每次发送都打印一条日志

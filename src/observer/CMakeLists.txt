@@ -50,6 +50,7 @@ ob_set_subtarget(ob_server common_mixed
   net/ob_net_endpoint_ingress_rpc_proccessor.cpp
   net/ob_net_endpoint_ingress_rpc_struct.cpp
   net/ob_net_queue_traver.cpp
+  net/ob_rpc_reverse_keepalive.cpp
   dbms_job/ob_dbms_job_executor.cpp
   dbms_job/ob_dbms_job_master.cpp
   dbms_job/ob_dbms_job_rpc_processor.cpp
