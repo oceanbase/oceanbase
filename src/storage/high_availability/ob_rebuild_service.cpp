@@ -1098,6 +1098,7 @@ int ObLSRebuildMgr::generate_rebuild_task_()
 
     if (OB_FAIL(ret)) {
     } else {
+      DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
       task_id.init(GCONF.self_addr_);
       ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp);
@@ -1116,6 +1117,14 @@ int ObLSRebuildMgr::generate_rebuild_task_()
         LOG_WARN("failed to add ls migration task", K(ret), K(arg), KPC(ls));
       }
     }
+#ifdef ERRSIM
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_ADD("storage_ha", "generate_rebuild_task",
+                       "tenant_id", tenant_id,
+                       "ls_id", ls->get_ls_id().id(),
+                       "is_failed", ret);
+    }
+#endif
   }
   return ret;
 }
