@@ -93,6 +93,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
     bool perserve_lettercase = false; // lib::is_oracle_mode() ? true : (mode != OB_LOWERCASE_AND_INSENSITIVE);
     ObArray<ObString> column_list;
     bool has_dblink_node = false;
+    bool resolve_succ = true;
     if (OB_FAIL(resolve_table_relation_node(parse_tree.children_[VIEW_NODE],
                                             view_name, db_name,
                                             false, false, &dblink_name_ptr, &dblink_name_len, &has_dblink_node))) {
@@ -148,6 +149,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                            ObCharset::COPY_STRING_ON_SAME_CHARSET))) {
         LOG_WARN("write view define failed", K(ret));
       } else if (OB_FAIL(view_table_resolver.resolve(*select_stmt_node))) {
+        resolve_succ = false;
         if (is_force_view) {
           // create force view, ignore resolve error
           if (OB_FAIL(try_add_error_info(ret, create_arg.error_info_))) {
@@ -184,13 +186,20 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(view_table_resolver.get_select_stmt()));
       } else if (OB_ISNULL(select_stmt->get_real_stmt())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get real stmt", K(ret), K(*select_stmt));
+        if (!resolve_succ) {
+          //if set query resolve failed, child stmt is null
+          //do not persist column schema
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get real stmt", K(ret), KPC(select_stmt));
+        }
       } else if (OB_FAIL(check_view_columns(*select_stmt, view_columns_node,
                                             create_arg.error_info_, is_force_view))) {
         LOG_WARN("failed to check view columns", K(ret));
       } else if (OB_FAIL(add_column_infos(session_info_->get_effective_tenant_id(), *select_stmt, table_schema, *allocator_, *session_info_, column_list))) {
         LOG_WARN("failed to add column infos", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(collect_dependency_infos(params_.query_ctx_, create_arg))) {
         LOG_WARN("failed to collect dependency infos", K(ret));
       } else {
@@ -240,7 +249,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
           // In mysql mode, only support create view as ... with check option in syntax.
           // In oracle mode, support create view v as (select * from (select * from t with check option))
           // so we have to check in oracle mode even if check_option of view_schema is NONE.
-          if ((with_check_option || lib::is_oracle_mode())
+          if ((with_check_option || lib::is_oracle_mode()) && !(select_stmt == NULL && !resolve_succ)
               && OB_FAIL(ObResolverUtils::view_with_check_option_allowed(select_stmt,
                                                                           with_check_option))) {
             LOG_WARN("view with check option not allowed", K(ret));
@@ -264,6 +273,7 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
 
     // 权限添加需要拿到完整stmt信息，慎重调整本段代码位置
     if (OB_SUCC(ret) && !(is_sync_ddl_user && session_info_->is_inner())
+        && !(select_stmt == NULL && !resolve_succ)
         && OB_FAIL(check_privilege_needed(*stmt, *select_stmt, is_force_view))) {
       LOG_WARN("fail to check privilege needed", K(ret));
     }
