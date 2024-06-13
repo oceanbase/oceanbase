@@ -1268,7 +1268,7 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       // todo yanli:检查主备库
     }
     
-    if (OB_SUCC(ret) && stmt->is_dml_stmt()) {
+    if (OB_SUCC(ret) && stmt->is_dml_stmt() && !params_.session_info_->is_varparams_sql_prepare()) {
       ObDMLStmt *dml_stmt = static_cast<ObDMLStmt*>(stmt);
       ObRawExprWrapEnumSet enum_set_wrapper(*params_.expr_factory_, params_.session_info_);
       if (OB_FAIL(enum_set_wrapper.wrap_enum_set(*dml_stmt))) {

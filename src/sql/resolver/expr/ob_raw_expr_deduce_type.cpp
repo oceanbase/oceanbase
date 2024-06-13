@@ -696,6 +696,14 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     expr.set_result_type(result_type);
   } else if (T_OP_ROW == expr.get_expr_type()) {
     expr.set_data_type(ObNullType);
+  // During the prepare phase, some boolean expressions do not undergo recursive type deduction.
+  // T_OP_EQ, T_OP_NSEQ, T_OP_LE, T_OP_LT, T_OP_GE, T_OP_GT, T_OP_NE.
+  } else if (my_session_->is_varparams_sql_prepare() && T_OP_EQ <= expr.get_expr_type() && expr.get_expr_type() <= T_OP_NE) {
+    ObExprResType result_type;
+    result_type.set_tinyint();
+    result_type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+    result_type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+    expr.set_result_type(result_type);
   } else {
     ObExprOperator *op = expr.get_op();
     if (NULL == op) {
