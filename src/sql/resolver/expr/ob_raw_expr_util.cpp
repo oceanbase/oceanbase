@@ -1389,7 +1389,8 @@ int ObRawExprUtils::make_raw_expr_from_str(const ObString &expr_str,
 }
 
 int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
-  ObCharsets4Parser expr_str_cs_type, ObIAllocator &allocator, const ParseNode *&node)
+  ObCharsets4Parser expr_str_cs_type, ObIAllocator &allocator, const ParseNode *&node,
+  bool is_for_trigger)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_str;
@@ -1410,6 +1411,7 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
   parse_result.is_not_utf8_connection_ = ObCharset::is_valid_collation(expr_str_cs_type.string_collation_) ?
         (ObCharset::charset_type_by_coll(expr_str_cs_type.string_collation_) != CHARSET_UTF8MB4) : false;
   parse_result.connection_collation_ = expr_str_cs_type.string_collation_;
+  parse_result.is_for_trigger_ = is_for_trigger;
 
   if (OB_FAIL(sql_str.append_fmt("DO %.*s", expr_str.length(), expr_str.ptr()))) {
     LOG_WARN("failed to concat expr str", K(expr_str), K(ret));

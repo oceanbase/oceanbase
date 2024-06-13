@@ -169,13 +169,20 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
     const ParseNode *default_node = NULL;
     ObRawExpr *default_expr = NULL;
     ObString default_value = param.get_default_value();
+    bool is_for_trigger = false;
+    if (resolve_ctx_.session_info_.is_for_trigger_package()
+        && lib::is_oracle_mode()
+        && ObTriggerInfo::is_trigger_body_package_id(func_ast.get_package_id())) {
+      is_for_trigger = true;
+    }
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(
           resolve_ctx_.allocator_, resolve_ctx_.session_info_.get_dtc_params(), default_value));
     OZ (ObRawExprUtils::parse_default_expr_from_str(
       default_value,
       resolve_ctx_.session_info_.get_charsets4parser(),
       resolve_ctx_.allocator_,
-      default_node));
+      default_node,
+      is_for_trigger));
     CK (OB_NOT_NULL(default_node));
     OZ (resolve_expr(default_node, func_ast, default_expr,
          combine_line_and_col(default_node->stmt_loc_), true, &expected_type));

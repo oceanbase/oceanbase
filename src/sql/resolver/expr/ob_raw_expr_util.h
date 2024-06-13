@@ -217,7 +217,8 @@ public:
   static int parse_default_expr_from_str(const common::ObString &expr_str,
                                          ObCharsets4Parser expr_str_cs_type,
                                          common::ObIAllocator &allocator,
-                                         const ParseNode *&node);
+                                         const ParseNode *&node,
+                                         bool is_for_trigger = false);
   static int parse_expr_list_node_from_str(const common::ObString &expr_str,
                                            ObCharsets4Parser expr_str_cs_type,
                                            common::ObIAllocator &allocator,
