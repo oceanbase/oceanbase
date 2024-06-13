@@ -702,8 +702,6 @@ int ObTableBatchService::htable_put(ObTableBatchCtx &ctx)
   ObTableApiCacheGuard cache_guard;
   ObHTableLockHandle *&trans_lock_handle = ctx.trans_param_->lock_handle_;
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
-  // hbase put use 'put' in TABLE_API_EXEC_INSERT
-  tb_ctx.set_client_use_put(true);
   bool can_use_put = true;
   ObTableAuditMultiOp multi_op(ObTableOperationType::Type::GET, *ctx.ops_);
   OB_TABLE_START_AUDIT((*ctx.credential_),
