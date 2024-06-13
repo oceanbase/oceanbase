@@ -99,6 +99,11 @@ mysql_compatible_comment_end \*\/
 ColumnStorePattern  (WITH{whitespace}COLUMN{whitespace}GROUP)
 
 %%
+MASTER_POST_WAIT { 
+  REPUT_TOKEN_NEG_SIGN(MASTER_POS_WAIT); 
+  return MASTER_POS_WAIT;
+}
+
 {ColumnStorePattern}                { REPUT_TOKEN_NEG_SIGN(WITH_COLUMN_GROUP); }
 INTERVAL {
 

@@ -10283,6 +10283,7 @@ int ObLogPlan::init_plan_info()
   return ret;
 }
 
+// ob_log_plan.cpp:10286
 int ObLogPlan::generate_plan()
 {
   int ret = OB_SUCCESS;

@@ -3370,6 +3370,12 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         OZ(print_sql_udt_attr_access(expr));
         break;
       }
+      // simply use default strategy
+      case T_FUN_MASTER_POS_WAIT: {
+        DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        OZ(inner_print_fun_params(*expr));
+        break;
+      }
       default: {
         DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
         OZ(inner_print_fun_params(*expr));

@@ -374,6 +374,8 @@ END_P SET_VAR DELIMITER
         YEAR
 
         ZONE ZONE_LIST ZONE_TYPE
+
+        MASTER_POS_WAIT
 //-----------------------------non_reserved keyword end---------------------------------------------
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt
@@ -544,6 +546,7 @@ END_P SET_VAR DELIMITER
 %type <node> geometry_collection
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
+%type <node> number_param
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -3204,6 +3207,27 @@ MOD '(' expr ',' expr ')'
 | SUM_OPNSIZE '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SUM_OPNSIZE, 2, NULL, $3);
+}
+| MASTER_POS_WAIT '(' STRING_VALUE ',' number_param ')' 
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MASTER_POS_WAIT, 2, $3, $5);
+}
+| MASTER_POS_WAIT '(' STRING_VALUE ',' number_param ',' number_param ')' 
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MASTER_POS_WAIT, 3, $3, $5, $7);
+}
+| MASTER_POS_WAIT '(' STRING_VALUE ',' number_param ',' number_param ',' STRING_VALUE ')' 
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_MASTER_POS_WAIT, 4, $3, $5, $7, $9);
+}
+;
+
+number_param:
+INTNUM { $$ = $1; }
+| '-' INTNUM
+{
+  $2->value_ = -$2->value_;
+  $$ = $2;
 }
 ;
 
@@ -21826,6 +21850,7 @@ ACCOUNT
 |       TRANSFER
 |       SUM_OPNSIZE
 |       VALIDATION
+|       MASTER_POS_WAIT
 ;
 
 unreserved_keyword_special:

@@ -911,6 +911,7 @@ typedef enum ObItemType
   T_FUN_SYS_RB_AND_NULL2EMPTY = 2043,
   T_FUN_SYS_RB_OR_NULL2EMPTY = 2044,
   T_FUN_SYS_RB_ANDNOT_NULL2EMPTY = 2045,
+  T_FUN_MASTER_POS_WAIT = 2046,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2499,7 +2500,6 @@ typedef enum ObItemType
   T_SHOW_CHECK_TABLE,
   T_SHARED_STORAGE_INFO,
   T_XA_RECOVER,
-
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

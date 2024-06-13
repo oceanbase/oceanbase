@@ -734,6 +734,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_last_refresh_scn.cpp
   engine/expr/ob_expr_json_utils.cpp
+  engine/expr/ob_expr_master_pos_wait.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

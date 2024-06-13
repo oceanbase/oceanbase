@@ -375,6 +375,7 @@
 #include "ob_expr_st_symdifference.h"
 #include "ob_expr_priv_st_asmvtgeom.h"
 #include "ob_expr_priv_st_makevalid.h"
+#include "ob_expr_master_pos_wait.h"
 
 namespace oceanbase
 {
@@ -1193,6 +1194,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRbOrNull2empty::eval_rb_or_null2empty,               /* 714 */
   NULL, // ObExprRbAndnotNull2empty::eval_rb_andnot_null2empty,       /* 715 */
   NULL, //ObExprSdoRelate::eval_sdo_relate                            /* 716 */
+  ObExprMasterPosWait::eval_master_pos_wait,                           /* 717 */                         
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
