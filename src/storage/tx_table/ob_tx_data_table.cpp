@@ -1010,6 +1010,14 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
                 K(max_decided_scn),
                 K(calc_upper_info_),
                 K(min_start_scn_in_tx_data_memtable));
+  } else {
+    STORAGE_LOG(TRACE,
+                "do calculate upper trans version.",
+                K(need_skip),
+                K(sstable_end_scn),
+                K(max_decided_scn),
+                K(calc_upper_info_),
+                K(min_start_scn_in_tx_data_memtable));
   }
 
   return need_skip;
@@ -1084,7 +1092,7 @@ void ObTxDataTable::update_calc_upper_info_(const SCN &max_decided_scn)
         calc_upper_info_ = tmp_calc_upper_info;
       }
 
-      STORAGE_LOG(INFO, "GENGLI update calc upper info once", K(calc_upper_info_));
+      STORAGE_LOG(INFO, "update calc upper info once", K(calc_upper_info_));
     }
   }
 }
