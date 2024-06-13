@@ -2263,6 +2263,34 @@ const ObGetStmtNeedPrivsFunc ObPrivilegeCheck::priv_check_funcs_[] =
 #undef OB_STMT_TYPE_DEF
 };
 
+int ObPrivilegeCheck::check_read_only(const ObSqlCtx &ctx,
+                                      const stmt::StmtType stmt_type,
+                                      const bool has_global_variable,
+                                      const ObStmtNeedPrivs &stmt_need_privs)
+{
+  int ret = OB_SUCCESS;
+  const bool is_mysql_mode = lib::is_mysql_mode();
+  if (OB_ISNULL(ctx.session_info_) || OB_ISNULL(ctx.schema_guard_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Session is NULL");
+  } else if (ctx.session_info_->has_user_super_privilege()) {
+    // super priv is only supported in mysql mode on design firstly. But some customer may use it in oracle mode to avoid this check in later time.
+    // for upgrade compatibility, we still retain the oracle mode super priv checking here
+  } else if (is_mysql_mode) {
+    if (ObStmt::is_write_stmt(stmt_type, has_global_variable) &&
+        OB_FAIL(ctx.schema_guard_->verify_read_only(ctx.session_info_->get_effective_tenant_id(),
+                                                    stmt_need_privs))) {
+      LOG_WARN("database or table is read only, cannot execute this stmt", K(ret));
+    }
+  } else if (!is_mysql_mode) {
+    if (ObStmt::is_dml_write_stmt(stmt_type) &&
+        OB_FAIL(ctx.schema_guard_->verify_read_only(ctx.session_info_->get_effective_tenant_id(),
+                                                    stmt_need_privs))) {
+      LOG_WARN("database or table is read only, cannot execute this stmt", K(ret));
+    }
+  }
+  return ret;
+}
 
 /* 新的检查权限总入口。
   mysql mode, 或者 oracle mode的_enable_priv_check = false，沿用老的权限check逻辑，
@@ -2301,6 +2329,7 @@ int ObPrivilegeCheck::check_privilege_new(
         common::ObSEArray<ObNeedPriv, 4> tmp_need_privs;
         common::ObSEArray<ObOraNeedPriv, 4> tmp_ora_need_privs;
         ObSessionPrivInfo session_priv;
+        bool has_global_variable = false;
         ctx.session_info_->get_session_priv_info(session_priv);
         session_priv.set_effective_tenant_id(ctx.session_info_->get_effective_tenant_id());
         OZ (get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs));
@@ -2317,22 +2346,11 @@ int ObPrivilegeCheck::check_privilege_new(
                                     tmp_ora_need_privs,
                                     CHECK_FLAG_NORMAL));
         OZ (stmt_ora_need_privs.need_privs_.assign(tmp_ora_need_privs));
-        if (OB_SUCC(ret) && !ctx.session_info_->has_user_super_privilege()) {
-          bool has_global_variable = false;
-          if (basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
-            has_global_variable =
-              static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
-          }
-          if (ObStmt::is_write_stmt(basic_stmt->get_stmt_type(), has_global_variable)
-              && OB_FAIL(ctx.schema_guard_->verify_read_only(
-                        ctx.session_info_->get_effective_tenant_id(),
-                        stmt_need_privs))) {
-            LOG_WARN("database or table is read only, cannot execute this stmt", K(ret));
-          }
-        } else {
-          //do nothing
+        if (OB_SUCC(ret) && basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
+          has_global_variable =
+                           static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
         }
-        //OZ (check_privilege(ctx, stmt_need_privs));
+        OZ (check_read_only(ctx, basic_stmt->get_stmt_type(), has_global_variable, stmt_need_privs));
         OZ (check_ora_privilege(ctx, stmt_ora_need_privs));
       }
     }
@@ -2393,26 +2411,18 @@ int ObPrivilegeCheck::check_privilege(
     if (OB_SUCC(ret)) {
       common::ObSEArray<ObNeedPriv, 4> tmp_need_privs;
       ObSessionPrivInfo session_priv;
+      bool has_global_variable = false;
       ctx.session_info_->get_session_priv_info(session_priv);
       session_priv.set_effective_tenant_id(ctx.session_info_->get_effective_tenant_id());
       if (OB_FAIL(get_stmt_need_privs(session_priv, basic_stmt, tmp_need_privs))) {
         LOG_WARN("Get stmt need privs error", K(ret));
       } else if (OB_FAIL(stmt_need_privs.need_privs_.assign(tmp_need_privs))) {
         LOG_WARN("fail to assign need_privs", K(ret));
-      } else if (!ctx.session_info_->has_user_super_privilege()) {
-        bool has_global_variable = false;
-        if (basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
-          has_global_variable = static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
-        }
-        if (ObStmt::is_write_stmt(basic_stmt->get_stmt_type(), has_global_variable)
-            && OB_FAIL(ctx.schema_guard_->verify_read_only(
-                       ctx.session_info_->get_effective_tenant_id(),
-                       stmt_need_privs))) {
-          LOG_WARN("database or table is read only, cannot execute this stmt", K(ret));
-        }
-      } else {
-        //do nothing
+      } else if (basic_stmt->get_stmt_type() == stmt::T_VARIABLE_SET) {
+        has_global_variable =
+                           static_cast<const ObVariableSetStmt*>(basic_stmt)->has_global_variable();
       }
+      OZ (check_read_only(ctx, basic_stmt->get_stmt_type(), has_global_variable, stmt_need_privs));
       if (OB_SUCC(ret) && OB_FAIL(check_privilege(ctx, stmt_need_privs))) {
         LOG_WARN("privilege check not passed", K(ret));
       }
